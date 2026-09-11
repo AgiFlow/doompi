@@ -1,9 +1,7 @@
 export {
-  type ConnectDoomCordisHostOptions,
   connectDoomCordisHost,
   DOOM_CORDIS_HOST_ABI_VERSION,
   DOOM_CORDIS_HOST_QUERY_CHANNEL,
-  DOOM_CORDIS_HOST_REQUIRED_ENV,
   DOOM_CORDIS_RUNTIME_SERVICE,
   DOOM_CORDIS_SESSION_SERVICE,
   type DoomCordisHostConnection,

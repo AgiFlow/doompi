@@ -25,7 +25,11 @@ function fixture(fakeTimers = false) {
     sessionId: 'session',
     clientConnectWaitMs: 0,
     now: () => (fakeTimers ? Date.now() : now),
-    wakePublisher: { publish: wakePublish },
+    directEvents: {
+      publish: (_frameType: string, _sessionId: string, payload: unknown) => wakePublish(payload),
+      subscribe: () => () => undefined,
+      close: () => undefined,
+    },
   });
   disposers.push(() => api.close());
   const post = (route: string, body: object, authorized = true) =>

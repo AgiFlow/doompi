@@ -23,10 +23,7 @@ function ownPackageRoot(): string {
 const packageRoot = ownPackageRoot();
 
 export const BUILTIN_CLIENT_MODULE = path.join('src', 'web', 'app', 'webPlugins.generated.ts');
-export const BUILTIN_HUB_MODULE = path.join('src', 'adapters', 'webHubPlugins.generated.ts');
 export const BUILTIN_CSS_MODULE = path.join('src', 'web', 'styles', 'webPluginSources.generated.css');
-/** The server-side registry a synced bundle carries next to its assets. */
-export const SERVER_REGISTRY_FILE = 'webPlugins.server.json';
 
 export function webHostPackageRoot(): string {
   return packageRoot;
@@ -60,29 +57,6 @@ function renderClientModule(plugins: readonly DeclaredWebPlugin[], style: 'relat
   return lines.join('\n');
 }
 
-function renderBuiltinHubModule(plugins: readonly DeclaredWebPlugin[]): string {
-  const lines = [HEADER, "import type { WebHubChannel } from '@agimon-ai/doompi-web-contracts';"];
-  const names: string[] = [];
-  for (const plugin of plugins) {
-    if (plugin.hub === undefined || !plugin.isHost) continue;
-    const name = `${camel(plugin.pluginId)}Channels`;
-    names.push(name);
-    const specifier = relativeImport(
-      path.join(packageRoot, 'src', 'adapters'),
-      path.join(plugin.packageDir, plugin.hub.entry),
-    );
-    lines.push(`import { webHubChannels as ${name} } from '${specifier}';`);
-  }
-  lines.push('');
-  lines.push(
-    names.length === 0
-      ? 'export const BUILTIN_HUB_CHANNELS: readonly WebHubChannel[] = [];'
-      : `export const BUILTIN_HUB_CHANNELS: readonly WebHubChannel[] = [${names.map((name) => `...${name}`).join(', ')}];`,
-  );
-  lines.push('');
-  return lines.join('\n');
-}
-
 /**
  * The directory Tailwind scans for a plugin's class names.
  *
@@ -111,40 +85,17 @@ function renderCssModule(plugins: readonly DeclaredWebPlugin[], leadingSourceRoo
   return lines.join('\n');
 }
 
-export interface ServerRegistryEntry {
-  pluginId: string;
-  channels: string[];
-  /** Absolute path to the built hub entry exporting webHubChannels. */
-  hubEntry: string;
-}
-
-function renderServerRegistry(plugins: readonly DeclaredWebPlugin[]): string {
-  const entries: ServerRegistryEntry[] = [];
-  for (const plugin of plugins) {
-    if (plugin.hub === undefined) continue;
-    // Host channels are compiled into the server; only externals need loading.
-    if (plugin.isHost) continue;
-    entries.push({
-      pluginId: plugin.pluginId,
-      channels: plugin.channels,
-      hubEntry: path.join(plugin.packageDir, plugin.hub.dist ?? plugin.hub.entry),
-    });
-  }
-  return `${JSON.stringify(entries, null, 2)}\n`;
-}
-
-/** The committed builtin registry, rendered from the host package alone. */
+/** The committed client registry, rendered from the host package alone. */
 export function renderBuiltinWebPluginModules(): Map<string, string> {
   const plugins = scanWebPlugins(packageRoot);
   return new Map([
     [BUILTIN_CLIENT_MODULE, renderClientModule(plugins, 'relative')],
-    [BUILTIN_HUB_MODULE, renderBuiltinHubModule(plugins)],
     [BUILTIN_CSS_MODULE, renderCssModule(plugins, [])],
   ]);
 }
 
 /**
- * Keeps the committed builtin registry fresh: write-if-changed locally,
+ * Keeps the committed client registry fresh: write-if-changed locally,
  * check-only (throw) in CI. Both vite.config.ts and tsdown.config.ts call
  * this at config-load time.
  */
@@ -172,14 +123,12 @@ export interface SyncGeneratedModules {
   clientModulePath: string;
   compositionModulePath: string;
   cssModulePath: string;
-  serverRegistry: string;
 }
 
 /**
- * The sync-time variant: renders the full plugin set (host built-ins plus the
- * installed composition's packages) into a generation directory the bundler
- * aliases over the committed builtin modules, plus the server-side registry
- * the hub loads at startup.
+ * The sync-time variant: renders the full client plugin set (host built-ins plus
+ * the installed composition's packages) into a generation directory the bundler
+ * aliases over the committed builtin modules.
  */
 export function writeSyncWebPluginModules(
   plugins: readonly DeclaredWebPlugin[],
@@ -199,6 +148,5 @@ export function writeSyncWebPluginModules(
     clientModulePath,
     compositionModulePath,
     cssModulePath,
-    serverRegistry: renderServerRegistry(plugins),
   };
 }

@@ -16,8 +16,7 @@ function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 16);
 }
 
-function writeChangedFiles(registryDir: string, agentDir: string): void {
-  const record = JSON.parse(fs.readFileSync(path.join(registryDir, 'sessions', 's1.json'), 'utf8')) as { cwd: string };
+function writeChangedFiles(cwd: string, agentDir: string): void {
   const relPaths = [
     'src/Newest.ts',
     'src/Second.ts',
@@ -29,7 +28,7 @@ function writeChangedFiles(registryDir: string, agentDir: string): void {
   const events: Array<Record<string, unknown>> = [];
 
   relPaths.forEach((relPath, index) => {
-    const filePath = path.join(record.cwd, relPath);
+    const filePath = path.join(cwd, relPath);
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     fs.writeFileSync(filePath, `content for ${relPath}\n`);
     events.push({
@@ -42,20 +41,20 @@ function writeChangedFiles(registryDir: string, agentDir: string): void {
     });
   });
 
-  const hiddenPath = path.join(record.cwd, 'src/HiddenTarget.ts');
+  const hiddenPath = path.join(cwd, 'src/HiddenTarget.ts');
   events.push({ version: 2, path: hiddenPath, tool: 'write', at: 1, origin: 'scan', verified: true });
 
   // One location, whether or not the fixture happens to be a git repository,
   // which is the whole point of FileEditPaths no longer asking git.
   const timelineDir = path.join(agentDir, 'doom-file-edit');
   fs.mkdirSync(timelineDir, { recursive: true });
-  const timelinePath = path.join(timelineDir, `${hash(fs.realpathSync(record.cwd))}-${hash('s1')}.jsonl`);
+  const timelinePath = path.join(timelineDir, `${hash(fs.realpathSync(cwd))}-${hash('s1')}.jsonl`);
   fs.writeFileSync(timelinePath, `${events.map((event) => JSON.stringify(event)).join('\n')}\n`);
   writtenTimelines.add(timelinePath);
 }
 
 test('files browser searches and opens the complete changed-file list', async ({ page, cockpit }) => {
-  writeChangedFiles(cockpit.registryDir, cockpit.agentDir);
+  writeChangedFiles(cockpit.session.cwd, cockpit.agentDir);
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
   cockpit.session.emit({
@@ -137,7 +136,7 @@ test('files browser searches and opens the complete changed-file list', async ({
 });
 
 test('a message opens the files this session changed, and leaves other code alone', async ({ page, cockpit }) => {
-  writeChangedFiles(cockpit.registryDir, cockpit.agentDir);
+  writeChangedFiles(cockpit.session.cwd, cockpit.agentDir);
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
   cockpit.session.emit({

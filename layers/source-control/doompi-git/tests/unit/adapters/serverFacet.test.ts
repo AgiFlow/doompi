@@ -22,8 +22,14 @@ function hostContext(scope: DoomServerHostService['scope']) {
         },
       };
     },
+    registerChannel() {
+      return { dispose: () => undefined };
+    },
     mounted() {
       return registered.map((api) => api.basePath);
+    },
+    mountedChannels() {
+      return [];
     },
   };
   const context = {

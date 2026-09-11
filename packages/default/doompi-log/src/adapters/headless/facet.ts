@@ -37,7 +37,7 @@ export const logHeadlessFacet = {
           serviceName: 'pi',
           packageName: PACKAGE_SOURCE,
           cwd: execution.cwd,
-          env: { ...process.env, PI_SESSION_ID: execution.sessionId },
+          env: { ...execution.environment, PI_SESSION_ID: execution.sessionId },
           enableLogs: true,
           enableTraces: true,
         });

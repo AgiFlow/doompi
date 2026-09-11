@@ -83,14 +83,7 @@ describe('doompi-computer-use package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual([
-      '.',
-      './extensions/pi',
-      './extensions/server',
-      './session-api',
-      './extensions/headless',
-      './package.json',
-    ]);
+    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(conditions(exportsMap['.'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/pi'])).toEqual(['types', 'import', 'require']);
@@ -98,7 +91,7 @@ describe('doompi-computer-use package contract', () => {
     expect(manifest.doompiServer).toEqual({
       entry: './src/exports/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['session'],
+      scopes: ['hub', 'session'],
     });
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });

@@ -52,20 +52,20 @@ describe('doompi-hook package contract', () => {
     expect(new Set(keywords).size).toBe(keywords.length);
   });
 
-  it('publishes Pi and headless entries through a closed exports map', async () => {
+  it('publishes Pi and server entries through a closed exports map', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/headless', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).not.toContain('./extensions/doom');
-    for (const subpath of ['.', './extensions/pi', './extensions/headless']) {
+    for (const subpath of ['.', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
     expect(manifest.doompiServer).toMatchObject({
-      entry: './src/exports/extensions/headless.ts',
-      dist: './dist/extensions/headless.mjs',
+      entry: './src/exports/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
       scopes: ['session'],
     });
   });

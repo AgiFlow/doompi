@@ -1,0 +1,54 @@
+# Architecture
+
+DoomPi has three runtime surfaces:
+
+1. Pi terminal extensions run in the terminal process.
+2. Browser plugins run in the browser.
+3. Server facets run in one client-neutral headless process.
+
+DoomPi Web belongs only to the second surface and its delivery boundary.
+
+## Process ownership
+
+```text
+Browser
+  | HTTP and WebSocket
+  v
+DoomPi Web
+  | transparent authenticated proxy
+  v
+doompi-server
+  | direct typed calls
+  v
+sessions, native Team children, APIs, channels, history, security, events
+```
+
+| Component       | Owns                                                                 | Does not own                                    |
+| --------------- | -------------------------------------------------------------------- | ----------------------------------------------- |
+| Browser         | Navigation, session focus, timeline, composer, plugin UI, PWA        | Credentials, processes, server modules          |
+| DoomPi Web      | Static assets, browser bundling, development serving, proxying       | Sessions, APIs, channels, authorization, replay |
+| `doompi-server` | Hub, sessions, native Team children, APIs, security, history, events | Browser rendering and browser asset compilation |
+
+Browser disconnects do not stop the headless process or its sessions. Cleanup and replay policy remain headless responsibilities.
+
+## Extension paths
+
+```text
+doompiWeb.client  --> browser composition
+./extensions/pi   --> Pi terminal process
+doompiServer      --> headless server facets
+```
+
+The browser manifest contains browser code only. A browser plugin communicates through the headless HTTP/WebSocket contract. Packages needing host-side behavior declare a server facet rather than adding Node.js code to the browser manifest.
+
+## HTTP and WebSocket boundary
+
+DoomPi Web serves non-API paths from the selected asset directory. It forwards `/api/*` requests to the configured headless URL and adds the configured headless credential. It relays the binary `/api/pi` protocol WebSocket without interpreting or retaining frames.
+
+The headless process authenticates callers, routes package APIs and channels, owns replay, and performs disconnect cleanup. Browser code never receives the proxy credential.
+
+## Composition boundary
+
+`doompi sync` builds browser assets and a separate server facet descriptor. DoomPi Web can read and serve browser output, but it does not import the server descriptor. The headless process loads admitted server facets and invokes them through typed services.
+
+See [Web bundling and serving](bundle.md) for browser artifacts and [Package APIs](package-apis.md) for headless API routing.

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { expect, test } from '../support/cockpit.ts';
 
 const COMMANDS = {
@@ -14,14 +15,6 @@ const COMMANDS = {
     ],
   },
 };
-
-/** The fake session's real working directory, read from its registry record. */
-function sessionCwd(registryDir: string, sessionId: string): string {
-  const record = JSON.parse(fs.readFileSync(path.join(registryDir, 'sessions', `${sessionId}.json`), 'utf8')) as {
-    cwd: string;
-  };
-  return record.cwd;
-}
 
 test('the input grows with a multi-line draft instead of hiding it', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
@@ -141,7 +134,7 @@ test('typing $ completes the skills, and / leaves them out', async ({ page, cock
   await expect(page.getByTestId('composer-completion')).not.toContainText('skill:playwriter');
 });
 test('typing @ completes files from the session working directory', async ({ page, cockpit }) => {
-  const cwd = sessionCwd(cockpit.registryDir, cockpit.session.id);
+  const cwd = cockpit.session.cwd;
   fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
   fs.writeFileSync(path.join(cwd, 'src', 'gateKeeper.ts'), '');
   fs.writeFileSync(path.join(cwd, 'notes.md'), '');

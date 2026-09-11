@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import {
   doomApiCallerFrom,
   type DoomApi,
@@ -7,6 +8,7 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 import {
   API_BASE_PATH,
+  computerUseChannelType,
   COMPUTER_USE_CONFIRMATION_WINDOW_MS,
   COMPUTER_USE_MAX_DURATION_MS,
   COMPUTER_USE_ROUTES,
@@ -89,6 +91,7 @@ export interface ComputerUseApiOptions {
   readonly sessionId?: string;
   readonly internalToken?: string;
   readonly hubToken?: string;
+  readonly directEvents: DoomDirectEventBus;
   readonly requestTimeoutMs?: number;
 }
 
@@ -96,6 +99,7 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
   private readonly sessionId: string;
   private readonly internalToken?: string;
   private readonly hubToken?: string;
+  private readonly directEvents: DoomDirectEventBus;
   private readonly requestTimeoutMs: number;
   private revision = 0;
   private wake = 0;
@@ -114,6 +118,7 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
     this.sessionId = options.sessionId ?? 'unknown';
     this.internalToken = options.internalToken;
     this.hubToken = options.hubToken;
+    this.directEvents = options.directEvents;
     this.requestTimeoutMs = options.requestTimeoutMs ?? ComputerUseRequestBroker.DEFAULT_REQUEST_TIMEOUT_MS;
   }
 
@@ -139,6 +144,7 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
   private changed(): void {
     this.revision += 1;
     this.wake = (this.wake + 1) % COMPUTER_USE_WAKE_LIMIT;
+    this.directEvents.publish(computerUseChannelType, this.sessionId, this.state());
   }
 
   private authorized(request: Request, token: string | undefined): boolean {
@@ -321,17 +327,19 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
   }
 }
 
-export function createComputerUseApi(options: ComputerUseApiOptions = {}): ComputerUseRequestBroker {
+export function createComputerUseApi(options: ComputerUseApiOptions): ComputerUseRequestBroker {
   return new ComputerUseRequestBroker(options);
 }
 
 export const api: DoomApi = {
   basePath: API_BASE_PATH,
   start(context: DoomApiContext): DoomApiHandler {
+    if (context.directEvents === undefined) throw new Error('Computer-use API requires the session direct event bus.');
     return createComputerUseApi({
       ...(context.sessionId === undefined ? {} : { sessionId: context.sessionId }),
       ...(context.internalToken === undefined ? {} : { internalToken: context.internalToken }),
       ...(context.hubToken === undefined ? {} : { hubToken: context.hubToken }),
+      directEvents: context.directEvents,
     });
   },
 };

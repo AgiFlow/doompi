@@ -1,8 +1,8 @@
 # Session APIs
 
-Session APIs let a DoomPi package add HTTP behavior beside the agent it extends. The handler runs in `doompi-server`, receives session context from the host, and is reached through a local Unix socket. A browser never loads the server module directly.
+Session APIs let a DoomPi package add HTTP behavior beside the direct headless runtime it extends. A package facet is loaded from the admitted `server.bundle.json` descriptor, registered in `doompi-server`, and called in process. The public client route is `/api/sessions/<session-id>/api/<base-path>/...`.
 
-This guide also covers the package's TypeScript exports. They are a separate surface for Node.js callers that want to compose the server services themselves.
+This guide also covers the package's TypeScript exports for Node.js callers that want to compose the same in-process services.
 
 ## The design
 
@@ -10,35 +10,29 @@ This guide also covers the package's TypeScript exports. They are a separate sur
 package.json doompiServer declaration
                 |
                 v
-       doompi sync generation
+        doompi sync generation
+                |
+                v
          server.bundle.json
                 |
                 v
-         doompi-server
-      start(context) per API
+       direct headless host
+       start(context) per API
                 |
                 v
-    HTTP over local api.sock
+       in-process Request dispatch
                 |
-         DoomPi Web proxy
-                |
-              browser
+                v
+ /api/sessions/<id>/api/<base-path>/...
 ```
 
-The descriptor and its pinned facet modules are part of the synchronized composition. That matters for two reasons:
+The descriptor and its pinned facet modules are part of the synchronized generation. This ensures:
 
-- the API implementation follows the same repository and package selection as the agent
-- discovery and validation happen during sync instead of by scanning arbitrary modules at request time
+- the API implementation follows the same repository, mode, and package selection as the session runtime;
+- module paths remain confined to the admitted generation; and
+- discovery and validation happen during synchronization and startup, not by scanning arbitrary modules at request time.
 
-The server starts each handler once, routes requests to it by a fixed base path, and calls `close()` during shutdown. One broken optional API is isolated so it does not take down the agent or unrelated packages.
-
-## Why the API is process-local
-
-A session API may inspect session state, read bounded files, or control a package service. It therefore runs next to the session and receives trusted host context. The server exposes it on `api.sock`, not on a network port.
-
-DoomPi Web owns browser authentication and proxies approved requests to that socket. Keeping those responsibilities separate avoids teaching every package about device cookies, tunnels, and session discovery. It also means a handler must not mistake local transport for validation: package code still has to validate input and enforce its own resource bounds.
-
-Hub-wide APIs are a different scope and run in DoomPi Web. See the web package API guide when an operation belongs to the machine or repository rather than one live agent session.
+The server starts each handler once, routes requests by a fixed base path, and calls `close()` during shutdown. A broken optional API is isolated so it does not take down the runtime or unrelated packages.
 
 ## Declare a session API
 
@@ -54,9 +48,9 @@ A package declares one `doompiServer` facet in `package.json`:
 }
 ```
 
-Publish a default-exported `DoomServerFacet` object plugin through that entry. In its `apply`, use `requireDoomServerHost(context).registerApi(api)` and return a disposer that calls the registration's `dispose()`. Declare the host service in `inject` and check scope before registering. The API implementation owns its base path; no separate legacy API manifest field is needed.
+Publish a default-exported `DoomServerFacet` through that entry. In its `apply`, use `requireDoomServerHost(context).registerApi(api)` and return a disposer that calls the registration's `dispose()`. Declare the host service in `inject` and check scope before registering. The API implementation owns its base path.
 
-Paths are package-relative and cannot escape the package. The host filters scope and effective package ownership before importing any facet. See the [complete facet example](../../../../clients/doompi-web/docs/package-apis.md#declare-an-api).
+Paths are package-relative and cannot escape the package. The synchronized descriptor records the built module path and the package ownership used for admission. See the [complete facet example](../../../../clients/doompi-web/docs/package-apis.md#declare-an-api).
 
 ## Implement the handler
 
@@ -74,97 +68,77 @@ interface DoomApi {
 
 `start()` creates session-owned resources once. `fetch()` handles requests relative to the package mount. `close()` must release timers, watchers, streams, and other resources created during startup.
 
-Keep the API adapter reusable and have the server facet import it. The facet's disposer closes the registration.
+Keep the API adapter reusable and have the facet import it. The facet's disposer closes the registration.
 
 ## Selecting the API composition
 
-The server resolves the synchronized repository containing the session working directory and loads its `server.bundle.json` descriptor. If no repository registration is available, it checks the installation that launched it. `DOOMPI_API_DIR` is an explicit operator override. A selected malformed descriptor fails admission, never silently falls back. Read-only aggregate compatibility is limited to explicitly admitted older generations.
+The server accepts only an admitted synchronized generation or the installation generation that explicitly contains a valid `server.bundle.json`. It validates the descriptor's version, generation, fingerprint, entries, ownership, and confined module paths before importing facets.
 
-This keeps APIs aligned with the agent instead of borrowing handlers from another live repository. A running server loads its API registry at startup; rebuild and restart the session after changing a server-side API.
+The descriptor is the only composition source. A missing, malformed, stale, or mismatched descriptor fails admission. The server never scans arbitrary package manifests at request time and never silently falls back to an older API registry or an alternate module directory. Re-run `doompi sync` and restart after changing a server-side API.
 
-An empty descriptor is a valid no-API state. Without mounted APIs, the server does not create `api.sock` and the registry record has no `apiSocketPath`. This is distinct from a failed required facet, which prevents readiness.
+An empty descriptor is a valid no-API state. In that case package API requests return `404`; the server still provides the typed session protocol. A required eligible facet failure prevents readiness. An optional facet failure is reported and does not remove unrelated APIs.
 
-## Routing
+## Routing and isolation
 
-The socket accepts only paths under:
+The public path is:
 
 ```text
-/api/plugin/<basePath>/<package route>
+/api/sessions/<session-id>/api/<base-path>/<package route>
 ```
 
-The host removes `/api/plugin/<basePath>` before calling the handler. A request to `/api/plugin/runner/runs/r1/log` therefore arrives as `/runs/r1/log`, with its remaining headers and body intact.
+The server removes the session and package mount prefix before calling the handler. A path outside the route returns `404`. An unknown base path returns a JSON `404`. A handler exception becomes a generic JSON `500`; other APIs remain mounted. Invalid base paths are rejected before dispatch.
 
-A path outside `/api/plugin/` returns `404`. An unknown base path returns a JSON `404`. A handler exception becomes a generic JSON `500`; the other APIs remain mounted.
-
-When two eligible APIs claim the same base path, the first keeps it and the later registration is skipped. Optional import and installation failures receive package-attributed notices; required facet failures prevent readiness. Disabled candidates are not imported and do not reserve mount paths.
+When two eligible APIs claim the same base path, the first keeps it and the later registration is skipped. Disabled candidates are not imported and do not reserve mount paths.
 
 ## Host context and authority
 
 A session handler receives:
 
-| Field           | Meaning                                                     |
-| --------------- | ----------------------------------------------------------- |
-| `scope`         | Always `session`                                            |
-| `sessionId`     | Resolved identity of the owning server                      |
-| `cwd`           | Agent working directory                                     |
-| `internalToken` | Random token shared with the child session environment      |
-| `hubToken`      | Configured attach token shared with trusted cockpit context |
-| `onNotice`      | Host-visible diagnostic callback                            |
+| Field           | Meaning                                                 |
+| --------------- | ------------------------------------------------------- |
+| `scope`         | Always `session`                                        |
+| `sessionId`     | Identity of the owning session                          |
+| `cwd`           | Session working directory                               |
+| `internalToken` | Optional process context for trusted child coordination |
+| `hubToken`      | Optional context for trusted cockpit coordination       |
+| `onNotice`      | Host-visible diagnostic callback                        |
 
-The server does not pass a browser credential to the package API. `internalToken` and `hubToken` are process context for trusted package code, not automatic route authorization. If a handler needs caller locality, device identity, or step-up status from DoomPi Web, it must use the trusted caller context stamped by that proxy rather than accept browser-supplied authorization headers.
+These values are process context for trusted package code, not automatic route authorization. A handler must validate its own inputs and enforce resource bounds. It must not accept browser-supplied authorization headers as proof of identity. If caller identity or step-up state matters, use the trusted context supplied by DoomPi Web.
 
-Package APIs are executable trusted code. Validate bodies, bound reads and streams, constrain file paths to the intended scope, and do not return secrets merely because the request arrived on a Unix socket.
+Package APIs are executable trusted code. They can access the session's authority, journal, and working directory according to their implementation. Treat generated modules like extensions and review their path, body, stream, and secret handling.
 
 ## TypeScript server exports
 
-The core package publishes the server building blocks through `@agimon-ai/doompi/server`:
+The core package publishes the in-process building blocks through `@agimon-ai/doompi/server`:
 
-| Export                                    | Responsibility                                                   |
-| ----------------------------------------- | ---------------------------------------------------------------- |
-| `spawnAgentProcess`                       | Start one RPC agent with piped stdin/stdout and inherited stderr |
-| `serveSessionSocket`                      | Serve the token-protected framed socket and reconnect backlog    |
-| `serveProtocolSocket`                     | Serve the Pi 0.85 routed host over a Unix socket                 |
-| `createAgentServerService`                | Compose management and session services around one agent         |
-| `createAgentSessionRuntime`               | Project agent frames into replicated state and progress          |
-| `createRpcTranscript`                     | Reduce Pi RPC events into the transcript model                   |
-| `createFrameDecoder`, `encodeFrame`       | Decode and encode newline-delimited frames                       |
-| `createDetachedBacklog`                   | Maintain the bounded detached-client window                      |
-| `evaluateHandshake`                       | Validate the first attach frame and token                        |
-| `parseServeOptions`, `SERVE_USAGE`        | Parse executable options                                         |
-| `SESSION_RECORD_VERSION`, `SessionRecord` | Describe the discovery record                                    |
+| Export                              | Responsibility                                                   |
+| ----------------------------------- | ---------------------------------------------------------------- |
+| `createHeadlessSessionManager`      | Own direct session hosts and dispose them                        |
+| `createHeadlessHub`                 | Aggregate sessions, channels, and package API dispatch           |
+| `serveHeadlessServer`               | Expose HTTP and authenticated `/api/pi` WebSocket routes         |
+| `createAgentSessionRuntime`         | Project a direct runtime into typed session state and operations |
+| `createAgentServerService`          | Adapt one typed session service to the Pi protocol host          |
+| `createRpcTranscript`               | Reduce runtime events into the authoritative transcript          |
+| `createHeadlessChildSessionService` | Provide explicitly requested child-session capabilities          |
 
-A minimal routed protocol composition looks like this:
+A minimal composition is:
 
 ```ts
-import { createAgentServerService, serveProtocolSocket, spawnAgentProcess } from '@agimon-ai/doompi/server';
+import { createHeadlessHub, createHeadlessSessionManager, serveHeadlessServer } from '@agimon-ai/doompi/server';
 
-const agent = spawnAgentProcess({ command, args, cwd, env });
-const service = createAgentServerService({
-  agent,
-  sessionId: 'session-id',
-  sessionName: 'work',
-  cwd,
-  createdAt: Date.now(),
-});
-const protocol = await serveProtocolSocket({ socketPath: '/private/session.sock.pi', service });
-```
-
-For the lower-level framed transport, load the token from an owner-only file:
-
-```ts
-import { serveSessionSocket } from '@agimon-ai/doompi/server';
-
-const socket = serveSessionSocket({
-  socketPath: '/private/session.sock',
+const manager = createHeadlessSessionManager();
+const hub = createHeadlessHub({ manager });
+const server = await serveHeadlessServer({
+  headlessHub: hub,
+  port: 7433,
   token: tokenFromOwnerOnlyFile,
-  agent,
 });
 ```
 
-Call `close()` on every returned service during shutdown. The executable's ordering and cleanup behavior are described in [Lifecycle](lifecycle.md).
+The caller remains responsible for creating admitted direct session hosts, closing `server`, closing `hub`, and closing `manager` in that order. The executable performs that lifecycle for the command-line case.
 
 ## Related guides
 
-- [IPC](ipc.md) explains the package API socket beside the other session transports.
-- [Lifecycle](lifecycle.md) explains when API modules load and close.
-- [Security](security.md) describes context tokens and the local trust boundary.
+- [IPC](ipc.md) explains `/api/pi`, typed operations, package dispatch, and replay.
+- [Lifecycle](lifecycle.md) explains when facets load and close.
+- [Security](security.md) describes trusted package code and context capabilities.

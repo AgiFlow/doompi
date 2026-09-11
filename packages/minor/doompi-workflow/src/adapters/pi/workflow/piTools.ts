@@ -89,6 +89,7 @@ export interface LaunchedRunQuery {
 }
 
 export interface WorkflowLaunchExecutorDependencies {
+  readonly environment: Readonly<Record<string, string | undefined>>;
   activeRunCount?: () => Promise<number>;
   onLaunch?: (ctx: ExtensionContext) => Promise<void> | void;
   observeSession?: (sessionId: string | undefined) => void;
@@ -118,6 +119,7 @@ export interface WorkflowLaunchExecutor {
 }
 
 export interface WorkflowPiToolDependencies {
+  readonly environment: Readonly<Record<string, string | undefined>>;
   launchExecutor?: WorkflowLaunchExecutor;
   onLaunch?: (ctx: ExtensionContext) => Promise<void> | void;
   activeRunCount?: () => Promise<number>;
@@ -275,7 +277,7 @@ function reportLateFailure(
 export function createWorkflowLaunchExecutor(dependencies: WorkflowLaunchExecutorDependencies): WorkflowLaunchExecutor {
   return {
     async execute(input, ctx, onUpdate) {
-      const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId());
+      const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId(), dependencies.environment);
       dependencies.observeSession?.(sessionId);
       const agiflowJobKind = input.env?.[AGIFLOW_JOB_KIND_ENV]?.trim();
       const agiflowJobId = input.env?.[AGIFLOW_JOB_ID_ENV]?.trim();
@@ -295,7 +297,7 @@ export function createWorkflowLaunchExecutor(dependencies: WorkflowLaunchExecuto
         );
       }
       reportProgress(onUpdate, LAUNCH_WORKFLOW_TOOL_NAME, 'Checking workflow capacity...');
-      const maxConcurrent = resolveMaxConcurrent();
+      const maxConcurrent = resolveMaxConcurrent(dependencies.environment);
       const active = (await dependencies.activeRunCount?.()) ?? 0;
       if (active >= maxConcurrent) {
         throw new Error(
@@ -313,8 +315,8 @@ export function createWorkflowLaunchExecutor(dependencies: WorkflowLaunchExecuto
       }
       reportProgress(onUpdate, LAUNCH_WORKFLOW_TOOL_NAME, `Launching workflow ${input.workflowPath}...`);
       const workflowEnv = { ...input.env };
-      const dispatcherContextFile = process.env.AGIFLOW_DISPATCH_CONTEXT_FILE;
-      const dispatcherProjectId = process.env[AGIFLOW_PROJECT_ID_ENV]?.trim();
+      const dispatcherContextFile = dependencies.environment.AGIFLOW_DISPATCH_CONTEXT_FILE;
+      const dispatcherProjectId = dependencies.environment[AGIFLOW_PROJECT_ID_ENV]?.trim();
       if (
         dispatcherContextFile &&
         agiflowJobKind &&
@@ -334,7 +336,7 @@ export function createWorkflowLaunchExecutor(dependencies: WorkflowLaunchExecuto
           'BACKEND_AGIFLOW_API_ENDPOINT',
           'AGIFLOW_DISPATCH_SECRET_FILE',
         ] as const) {
-          const hostValue = process.env[key];
+          const hostValue = dependencies.environment[key];
           if (hostValue) workflowEnv[key] = hostValue;
         }
       }
@@ -383,7 +385,7 @@ export function createWorkflowLaunchExecutor(dependencies: WorkflowLaunchExecuto
   };
 }
 
-export function registerWorkflowPiTools(pi: ExtensionAPI, dependencies: WorkflowPiToolDependencies = {}): void {
+export function registerWorkflowPiTools(pi: ExtensionAPI, dependencies: WorkflowPiToolDependencies): void {
   const feature = dependencies.feature ?? createEmbeddedWorkflowFeature();
   const runTool = dependencies.runTool ?? feature.runTool;
   const listWorkflowsTool = dependencies.listWorkflowsTool ?? feature.listWorkflowsTool;
@@ -393,6 +395,7 @@ export function registerWorkflowPiTools(pi: ExtensionAPI, dependencies: Workflow
   const launchExecutor =
     dependencies.launchExecutor ??
     createWorkflowLaunchExecutor({
+      environment: dependencies.environment,
       activeRunCount: dependencies.activeRunCount,
       onLaunch: dependencies.onLaunch,
       observeSession: dependencies.observeSession,
@@ -494,7 +497,7 @@ export function registerWorkflowPiTools(pi: ExtensionAPI, dependencies: Workflow
       ),
     async execute(_toolCallId, rawParams, _signal, onUpdate, ctx) {
       const input = workflowRunInputSchema.parse(rawParams);
-      const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId());
+      const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId(), dependencies.environment);
       dependencies.observeSession?.(sessionId);
       const selector: WorkflowRunSelector = { runKey: input.runKey, workspace: input.workspace };
       const requireOwnedRun = async (): Promise<WorkflowRunRecord> => {

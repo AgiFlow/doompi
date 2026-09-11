@@ -40,6 +40,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import { Check } from 'typebox/value';
 
 import type { AsyncJobTrackerContract, TrackedAsyncJobsContract } from '../../asyncJobTracker';
+import type { SessionScope } from '../../filesystem/paths';
 import type { SubagentWaiterContract } from '../../runs/background/subagentWait';
 import type { AvailableModelInfo, ParentModel } from '../../runs/shared/modelFallback';
 import type { PollSchedulerContract } from '../../pollScheduler';
@@ -77,6 +78,7 @@ interface ActiveDelegation {
 /** What the bridge needs from the session it is bound to, read fresh per call. */
 export interface DelegationSessionContext {
   sessionId: string;
+  sessionScope: SessionScope;
   availableModels: AvailableModelInfo[];
   parentModel?: ParentModel;
   /**
@@ -128,7 +130,7 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
   const stop = (entry: ActiveDelegation, reason: string): string | undefined => {
     if (!entry.runId) return undefined;
     try {
-      deps.management.stop(entry.runId, reason);
+      void deps.management.stop(entry.runId, reason);
       return undefined;
     } catch (error) {
       return error instanceof Error ? error.message : String(error);
@@ -141,6 +143,7 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
     ctx: Context,
     jobs: TrackedAsyncJobsContract,
     sessionId: string,
+    sessionScope: SessionScope,
   ): Promise<void> => {
     const runId = entry.runId;
     if (!runId) return;
@@ -177,6 +180,7 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
     const wait = await deps.waiter.wait({
       target: { id: runId },
       sessionId,
+      sessionScope,
       waitFor: 'completion',
       timeoutMs,
       signal: entry.controller.signal,
@@ -265,8 +269,15 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
           },
           cwd: request.cwd,
           agentScope: 'both',
+          sessionScope: session.sessionScope,
           parentSessionId: session.sessionId,
-          ...(forkSource ? { parentSessionFile: forkSource.sessionFile, parentLeafId: forkSource.leafId } : {}),
+          ...(forkSource
+            ? {
+                parentForkSource: forkSource.terminalSource,
+                ...(forkSource.sessionFile ? { parentSessionFile: forkSource.sessionFile } : {}),
+                parentLeafId: forkSource.leafId,
+              }
+            : {}),
           availableModels: session.availableModels,
           ...(session.parentModel ? { parentModel: session.parentModel } : {}),
         },
@@ -288,17 +299,17 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
       }
 
       entry.runId = outcome.runId;
-      const jobs = deps.tracker.forSession(session.sessionId);
+      const jobs = deps.tracker.forSession(session.sessionId, session.sessionScope);
       jobs.track(outcome.runId);
       // A cancel that landed while the spawn was in flight already settled this
       // entry; the run exists now, so it has to be stopped rather than tracked.
       if (entry.settled) {
-        stop(entry, 'Delegation was cancelled before launch completed.');
+        void stop(entry, 'Delegation was cancelled before launch completed.');
         return;
       }
       entry.runtimeStartedAt = Date.now();
       ctx.emit(DOOM_DELEGATION_STARTED_EVENT, { requestId: request.requestId, runId: outcome.runId });
-      await monitor(entry, request, ctx, jobs, session.sessionId);
+      await monitor(entry, request, ctx, jobs, session.sessionId, session.sessionScope);
     } catch (error) {
       finish(
         entry,

@@ -42,6 +42,7 @@ function fixture(cwd = root) {
     cwd,
     repoRoot: root,
     sessionId: 'autocompact-test',
+    environment: {},
     selection: { majorMode: 'development', activeLayers: [], domains: [], minorModes: [] },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {
@@ -118,6 +119,7 @@ describe('autocompact headless configuration projection', () => {
       cwd: root,
       repoRoot: root,
       sessionId: 'autocompact-test',
+      environment: {},
       selection: { majorMode: 'development', activeLayers: [], domains: [], minorModes: [] },
       client: { notify: vi.fn(), request: vi.fn(), setStatus },
       session: {

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRunnerLogApi } from '../src/adapters/runnerLogApi.ts';
-import { runnerStateDirFor } from '../src/adapters/webRunnerWatcher.ts';
+import { runnerStateDirFor } from '../src/adapters/RunnerPaths.ts';
 import type { RunnerRecord } from '../src/types/runnerRegistry';
 import type { ILogTail, LogTailHandle, LogTailOptions } from '../src/types/logTail.ts';
 import type { IRmuxBackend } from '../src/types/rmuxBackend.ts';

@@ -24,12 +24,6 @@ export function worktreesRoot(homeDir: string = os.homedir()): string {
 }
 
 /** One registry file per repository, keyed by the shared git directory. */
-/** Where a worktree's parent/child channel lives, outside the worktree itself. */
-export function channelRoot(worktreeId: string, homeDir: string = os.homedir()): string {
-  // Outside the worktree on purpose: closing a worktree deletes its directory,
-  // and a channel inside it would take undelivered messages down with it.
-  return `${doomGitRoot(homeDir)}/channels/${worktreeId}`;
-}
 
 export function registryFile(repositoryRoot: string, homeDir: string = os.homedir()): string {
   const key = `${repositoryLabel(repositoryRoot)}--${repositoryId(repositoryRoot)}`;

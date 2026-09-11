@@ -10,8 +10,6 @@ const LOCK_TIMEOUT_MS = 2000;
 const LOCK_STALE_MS = 10_000;
 const LOCK_RETRY_BASE_MS = 10;
 const LOCK_RETRY_MAX_MS = 60;
-const WATCH_DEBOUNCE_MS = 150;
-const POLL_INTERVAL_MS = 2000;
 const UTF8_ENCODING = 'utf8';
 const MISSING_FILE_CODE = 'ENOENT';
 const LOCK_EXISTS_CODE = 'EEXIST';
@@ -21,12 +19,9 @@ export type TaskStoreCommitListener = (previous: TaskDocument, committed: TaskDo
 
 export interface TaskStoreOptions {
   cwd?: string;
-  env?: NodeJS.ProcessEnv;
+  env?: Readonly<Record<string, string | undefined>>;
   storePath?: string;
   onCommitted?: TaskStoreCommitListener;
-  /** Backstop poll cadence for change detection. Lowered in tests so they do
-   * not depend on `fs.watch`, whose delivery timing is platform-dependent. */
-  pollIntervalMs?: number;
   /** How long to wait for the advisory lock before proceeding lock-free. */
   lockTimeoutMs?: number;
   /** Where swallowed failures go, so silent degradation stays visible. */
@@ -74,17 +69,9 @@ export class TaskStore {
   storePath: string;
 
   private readonly cwd: string;
-  private readonly env: NodeJS.ProcessEnv;
+  private readonly env: Readonly<Record<string, string | undefined>>;
   private cached: TaskDocument = emptyDocument();
-  private lastKnownRev = -1;
-  private watcher?: fs.FSWatcher;
-  private pollTimer?: NodeJS.Timeout;
-  private debounceTimer?: NodeJS.Timeout;
-  private checkInFlight?: Promise<void>;
-  private checkQueued = false;
-  private watchGeneration = 0;
   private readonly listeners = new Set<(document: TaskDocument) => void>();
-  private readonly pollIntervalMs: number;
   private readonly lockTimeoutMs: number;
   private readonly report?: TaskFailureReporter;
   private readonly onCommitted?: TaskStoreCommitListener;
@@ -93,19 +80,16 @@ export class TaskStore {
     this.cwd = options.cwd ?? process.cwd();
     this.env = options.env ?? process.env;
     this.storePath = options.storePath ?? resolveStorePath(this.cwd, this.env);
-    this.pollIntervalMs = options.pollIntervalMs ?? POLL_INTERVAL_MS;
     this.lockTimeoutMs = options.lockTimeoutMs ?? LOCK_TIMEOUT_MS;
     this.report = options.report;
     this.onCommitted = options.onCommitted;
   }
 
-  /** Bind a default store to the current session tree before reading or watching it. */
+  /** Bind a default store to the current session tree before reading it. */
   configureSession(sessionKey: string): void {
     if (this.env[STORE_PATH_ENV]?.trim()) return;
-    this.stopWatching();
     this.storePath = resolveStorePath(this.cwd, this.env, sessionKey);
     this.cached = emptyDocument();
-    this.lastKnownRev = -1;
   }
 
   /** Last document read from disk, without hitting the filesystem. */
@@ -126,7 +110,6 @@ export class TaskStore {
       }
       this.cached = emptyDocument();
     }
-    this.lastKnownRev = this.cached.rev;
     return this.cached;
   }
 
@@ -135,7 +118,6 @@ export class TaskStore {
     const document = await this.readDocumentAsync(storePath);
     if (!shouldApply()) return document;
     this.cached = document;
-    this.lastKnownRev = document.rev;
     return document;
   }
 
@@ -190,6 +172,13 @@ export class TaskStore {
     } catch (error) {
       this.report?.error(TASK_EVENT.storeCommitListenerFailed, error, { [STORE_PATH_ATTRIBUTE]: this.storePath });
     }
+    for (const listener of this.listeners) {
+      try {
+        listener(committed);
+      } catch (error) {
+        this.report?.error(TASK_EVENT.storeListenerFailed, error, { [STORE_PATH_ATTRIBUTE]: this.storePath });
+      }
+    }
   }
 
   private write(document: TaskDocument): TaskDocument {
@@ -199,7 +188,6 @@ export class TaskStore {
     fs.writeFileSync(temp, `${JSON.stringify(next, undefined, 2)}\n`, UTF8_ENCODING);
     fs.renameSync(temp, this.storePath);
     this.cached = next;
-    this.lastKnownRev = next.rev;
     return next;
   }
 
@@ -258,101 +246,17 @@ export class TaskStore {
   }
 
   /**
-   * Notify when another process changes the store.
+   * Listen for commits made through this store instance.
    *
-   * `fs.watch` alone is unreliable across the rename-based write (and on some
-   * network filesystems), so a slow poll backs it up. Writes made by this
-   * process are filtered out by revision so the UI does not redraw twice.
+   * Live cross-process updates use the owning session's direct event bus. This
+   * listener remains for local terminal views and never watches the filesystem.
    */
   onExternalChange(listener: (document: TaskDocument) => void): () => void {
     this.listeners.add(listener);
-    this.startWatching();
-    return () => {
-      this.listeners.delete(listener);
-      if (this.listeners.size === 0) this.stopWatching();
-    };
-  }
-
-  private startWatching(): void {
-    if (this.watcher || this.pollTimer) return;
-    this.watchGeneration += 1;
-    const directory = path.dirname(this.storePath);
-    const fileName = path.basename(this.storePath);
-
-    try {
-      fs.mkdirSync(directory, { recursive: true });
-      this.watcher = fs.watch(directory, (_event, changed) => {
-        if (changed && changed !== fileName) return;
-        this.scheduleCheck();
-      });
-    } catch (error) {
-      // Polling still covers change detection, just more slowly.
-      this.report?.warn(TASK_EVENT.storeWatchFailed, error, { [STORE_PATH_ATTRIBUTE]: this.storePath });
-    }
-
-    this.pollTimer = setInterval(() => this.queueChangeCheck(), this.pollIntervalMs);
-    this.pollTimer.unref?.();
-  }
-
-  private scheduleCheck(): void {
-    clearTimeout(this.debounceTimer);
-    this.debounceTimer = setTimeout(() => this.queueChangeCheck(), WATCH_DEBOUNCE_MS);
-    this.debounceTimer.unref?.();
-  }
-
-  private queueChangeCheck(): void {
-    if (this.checkInFlight) {
-      this.checkQueued = true;
-      return;
-    }
-    const generation = this.watchGeneration;
-    const execution = (async () => {
-      do {
-        this.checkQueued = false;
-        await this.checkForChange(generation);
-      } while (this.checkQueued && generation === this.watchGeneration);
-    })().finally(() => {
-      if (this.checkInFlight === execution) this.checkInFlight = undefined;
-    });
-    this.checkInFlight = execution;
-  }
-
-  private async checkForChange(generation: number): Promise<void> {
-    const previousRev = this.lastKnownRev;
-    const document = await this.readDocumentAsync();
-    if (generation !== this.watchGeneration) return;
-    if (this.lastKnownRev !== previousRev) {
-      this.checkQueued = true;
-      return;
-    }
-    this.cached = document;
-    this.lastKnownRev = document.rev;
-    if (document.rev === previousRev) return;
-    for (const listener of this.listeners) {
-      try {
-        listener(document);
-      } catch (error) {
-        // This runs from a timer and from the fs.watch callback, so an
-        // unguarded listener throw is an uncaught exception that takes the
-        // harness down rather than a handled render failure.
-        this.report?.error(TASK_EVENT.storeListenerFailed, error, { [STORE_PATH_ATTRIBUTE]: this.storePath });
-      }
-    }
-  }
-
-  private stopWatching(): void {
-    this.watchGeneration += 1;
-    this.checkQueued = false;
-    this.watcher?.close();
-    this.watcher = undefined;
-    if (this.pollTimer) clearInterval(this.pollTimer);
-    this.pollTimer = undefined;
-    clearTimeout(this.debounceTimer);
-    this.debounceTimer = undefined;
+    return () => this.listeners.delete(listener);
   }
 
   dispose(): void {
     this.listeners.clear();
-    this.stopWatching();
   }
 }

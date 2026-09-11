@@ -50,10 +50,10 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
-    "./extensions/headless": {
-      "types": "./dist/extensions/headless.d.mts",
-      "import": "./dist/extensions/headless.mjs",
-      "require": "./dist/extensions/headless.cjs"
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -93,8 +93,8 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/headless.ts",
-    "dist": "./dist/extensions/headless.mjs",
+    "entry": "./src/exports/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
     ]

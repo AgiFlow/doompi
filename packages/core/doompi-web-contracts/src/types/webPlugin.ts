@@ -203,7 +203,7 @@ export interface WebPluginSlotProps {
   /**
    * The host's live conversation view of one thread of the focused session,
    * rendered like the session's own timeline and subscribed while mounted. A
-   * plugin's hub source names the thread's journal (HubChannelSource.threadJournal).
+   * The server-owned channel source names the thread's journal.
    */
   renderThread: (threadId: string, options?: ThreadViewOptions) => ReactNode;
   /** Appends text to the focused session's current composer draft. Bound, so a component may destructure it. */

@@ -91,22 +91,14 @@ describe('doompi-git package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    // './api/git' is the hub-scoped package API the cockpit's worktrees panel
-    // calls; './extensions/server' is the facet the hub and session host install;
+    // './extensions/server' is the facet the hub and session host install;
     // 'src/web' and the web client entry ship as source because the cockpit
     // bundles the browser half itself.
-    expect(Object.keys(exportsMap)).toEqual([
-      '.',
-      './api/git',
-      './extensions/pi',
-      './extensions/server',
-      './package.json',
-    ]);
+    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(conditions(exportsMap['.'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/pi'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/server'])).toEqual(['types', 'import', 'require']);
-    expect(conditions(exportsMap['./api/git'])).toEqual(['types', 'import', 'require']);
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
     expect(manifest.doompiServer).toEqual({
       entry: './src/exports/extensions/server.ts',

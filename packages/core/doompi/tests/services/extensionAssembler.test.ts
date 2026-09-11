@@ -160,8 +160,9 @@ describe('standard extension composition', () => {
     const config = modes({ feature: layer({ packages: ['feature-package'] }) });
     const entries = assembleExtensions(context(config));
 
-    expect(entries.slice(0, 5)).toEqual([
+    expect(entries.slice(0, 6)).toEqual([
       '/own/cordisHost.ts',
+      '/own/terminalChildSession.ts',
       '/own/modeCatalog.ts',
       '/package/@agimon-ai/doompi-config/extensions/pi.mjs',
       '/own/transitionCoordinator.ts',
@@ -462,7 +463,8 @@ describe('standard extension composition', () => {
     expect(composition.parentActivation.filter((entry) => featurePaths.includes(entry))).toEqual(featurePaths);
     expect(composition.childActivation.filter((entry) => featurePaths.includes(entry))).toEqual(featurePaths);
     expect(composition.childActivation[0]).toBe('/own/cordisHost.ts');
-    expect(composition.childActivation[1]).toBe('/package/@agimon-ai/doompi-config/extensions/pi.mjs');
+    expect(composition.childActivation[1]).toBe('/own/terminalChildSession.ts');
+    expect(composition.childActivation[2]).toBe('/package/@agimon-ai/doompi-config/extensions/pi.mjs');
     expect(composition.childActivation.at(-1)).toBe('/own/cordisFinalizer.ts');
     expect(composition.childActivation).not.toContain('/package/@agimon-ai/doompi-ui/extensions/pi.mjs');
     expect(composition.childActivation).not.toContain('/own/transitionCoordinator.ts');

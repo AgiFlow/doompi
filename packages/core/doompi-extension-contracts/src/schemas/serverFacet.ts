@@ -6,14 +6,13 @@
  * installs, through which the package contributes its HTTP surface and any
  * behaviour that has to run outside the agent.
  *
- * It supersedes the two-entry `doompiApi` declaration rather than sitting
- * beside it. `doompiApi` names one module per scope and carries no lifecycle,
- * so a package that needs to start something on the server has nowhere to put
- * it and no disposer to unwind it. A facet is installed and disposed like every
- * other Doom contribution, and registers its API from inside that lifecycle.
+ * A facet is installed and disposed like every other Doom contribution. It
+ * registers its API from inside that lifecycle, so server behaviour has a clear
+ * owner and disposer.
  */
 
 import type { Context } from '@deepseek-ai/cordis';
+import type { DoomHubChannel } from './hubChannel.ts';
 import type { DoomApi, DoomApiContext, DoomApiScope } from './packageApi.ts';
 
 /** The host a server facet contributes to. */
@@ -43,8 +42,12 @@ export interface DoomServerHostService {
    * failure posture applies when the API cannot start or the host is disposed.
    */
   registerApi(api: DoomApi): DoomServerRegistration;
+  /** Register a live event source under this host's lifecycle. */
+  registerChannel(channel: DoomHubChannel): DoomServerRegistration;
   /** Base paths currently mounted, in mount order. */
   mounted(): readonly string[];
+  /** Channel frame types currently mounted, in mount order. */
+  mountedChannels(): readonly string[];
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -141,8 +144,8 @@ function normalizeScopes(packageDir: string, value: unknown): readonly DoomApiSc
 /**
  * Validates one package.json's `doompiServer` block.
  *
- * `dist` is required for the same reason a declared API's is: a host imports
- * the built entry a package ships, never its source.
+ * `dist` is required because a host imports the built entry the package ships,
+ * never its source.
  */
 export function declaredServerFacetsOf(packageDir: string, manifest: Record<string, unknown>): DeclaredServerFacet[] {
   const declared = manifest[DOOM_SERVER_FACET_MANIFEST_FIELD];

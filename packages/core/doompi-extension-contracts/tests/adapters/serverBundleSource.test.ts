@@ -75,15 +75,12 @@ describe('explicit server bundle source admission', () => {
     fs.symlinkSync(outside.descriptorPath, fixture.descriptorPath);
     expect(() => resolveServerBundleSource({ directoryOverride: fixture.directory })).toThrow(/escapes/);
   });
-  it('retains an explicitly selected legacy directory without mixing formats', () => {
+  it('rejects a selected directory without the canonical descriptor', () => {
     const fixture = generation();
     fs.rmSync(fixture.descriptorPath);
-    expect(resolveServerBundleSource({ directoryOverride: fixture.directory })).toEqual({
-      kind: 'legacy',
-      directory: fs.realpathSync(fixture.directory),
-    });
-    expect(
-      resolveServerBundleSource({ registration: { apiDirectory: fixture.directory, generation: 'old' } }).kind,
-    ).toBe('legacy');
+    expect(() => resolveServerBundleSource({ directoryOverride: fixture.directory })).toThrow(/descriptor is missing/u);
+    expect(() =>
+      resolveServerBundleSource({ registration: { apiDirectory: fixture.directory, generation: 'old' } }),
+    ).toThrow(/descriptor is missing/u);
   });
 });

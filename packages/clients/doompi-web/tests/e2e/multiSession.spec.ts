@@ -1,6 +1,4 @@
-import { spawn } from 'node:child_process';
 import { expect, test } from '../support/cockpit.ts';
-import { startFakeSession } from '../support/fakeSession.ts';
 
 test.use({ sessionCount: 2 });
 
@@ -50,36 +48,6 @@ test('leaves the name alone when a title edit is abandoned', async ({ page, cock
   await page.keyboard.press('Escape');
 
   await expect(page.getByTestId('session-title')).toHaveText(before);
-});
-
-test('stops a session from its card once the stop is confirmed', async ({ page, cockpit }) => {
-  // A throwaway process stands in for the session's server: the hub signals
-  // its pid, and the watcher withdraws the dead record on its next poll.
-  const server = spawn('sleep', ['60'], { stdio: 'ignore' });
-  if (server.pid === undefined) throw new Error('could not start the stand-in server process');
-  const doomed = await startFakeSession({
-    id: 'doomed',
-    name: 'doomed',
-    registryDir: cockpit.registryDir,
-    pid: server.pid,
-  });
-  try {
-    await page.goto(cockpit.url);
-    const card = page.getByTestId('session-card-doomed');
-    await expect(card).toBeVisible();
-
-    await card.hover();
-    await page.getByTestId('session-menu-doomed').click();
-    await page.getByTestId('session-stop-doomed').click();
-    await expect(page.getByTestId('session-stop-dialog-doomed')).toBeVisible();
-    await page.getByTestId('session-stop-confirm-doomed').click();
-
-    await expect(card).toHaveCount(0, { timeout: 10_000 });
-    await expect.poll(() => server.exitCode !== null || server.signalCode !== null).toBe(true);
-  } finally {
-    await doomed.close();
-    if (server.exitCode === null && server.signalCode === null) server.kill();
-  }
 });
 
 test('lists every session in the rail with its ordinal', async ({ page, cockpit }) => {
@@ -162,103 +130,8 @@ test('keeps a refusal scoped to the session it hits', async ({ page, cockpit }) 
   await page.getByTestId('session-card-s2').click();
   await expect(page.getByTestId('refused-card')).toBeVisible();
 
-  release();
+  await release();
   // Recovery rides the hub's backoff, whose ceiling is 4s.
   await expect(page.getByTestId('refused-card')).toBeHidden({ timeout: 15_000 });
   await expect(page.getByTestId('composer-input')).toBeEnabled({ timeout: 15_000 });
-});
-
-test('searches Pi history and replaces the card with the selected thread', async ({ page, cockpit }) => {
-  let resumed: Awaited<ReturnType<typeof startFakeSession>> | undefined;
-  await page.route('**/api/sessions/s1/history', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        sessions: [
-          {
-            id: 'history-id',
-            name: 'Earlier gate work',
-            firstMessage: 'Fix the release gate',
-            createdAt: '2026-08-01T10:00:00.000Z',
-            updatedAt: '2026-08-02T10:00:00.000Z',
-            messageCount: 8,
-          },
-          {
-            id: 'other-history',
-            firstMessage: 'Unrelated thread',
-            createdAt: '2026-07-01T10:00:00.000Z',
-            updatedAt: '2026-07-02T10:00:00.000Z',
-            messageCount: 2,
-          },
-        ],
-      }),
-    });
-  });
-  await page.route('**/api/sessions/s1/resume', async (route) => {
-    expect(route.request().postDataJSON()).toEqual({ targetSessionId: 'history-id' });
-    resumed = await startFakeSession({ id: 'history-id', name: 'Earlier gate work', registryDir: cockpit.registryDir });
-    await route.fulfill({
-      contentType: 'application/json',
-      status: 202,
-      body: JSON.stringify({ sessionId: 'history-id' }),
-    });
-  });
-
-  try {
-    await page.goto(cockpit.url);
-    await page.getByTestId('session-card-s1').hover();
-    await page.getByTestId('session-menu-s1').click();
-    await page.getByTestId('session-resume-s1').click();
-    await expect(page.getByTestId('session-resume-dialog-s1')).toBeVisible();
-
-    await page.getByTestId('session-history-search').fill('gate');
-    await expect(page.getByTestId('session-history-history-id')).toContainText('Earlier gate work');
-    await expect(page.getByTestId('session-history-other-history')).toHaveCount(0);
-    await page.getByTestId('session-history-history-id').click();
-    await page.getByTestId('session-resume-confirm').click();
-
-    await expect(page).toHaveURL(/\/session\/history-id$/, { timeout: 10_000 });
-  } finally {
-    await resumed?.close();
-  }
-});
-
-test('creates a session from the dialog and lands on it', async ({ page, cockpit }) => {
-  await page.goto(cockpit.url);
-  await expect(page.getByTestId('session-card-s1')).toHaveAttribute('data-active', 'true');
-
-  await page.getByTestId('new-session-open').click();
-  await expect(page.getByTestId('new-session-dialog')).toBeVisible();
-  // The cwd is prefilled from the focused session; any real directory works
-  // for the registering stand-in.
-  await page.getByTestId('new-session-name').fill('fresh');
-  await page.getByTestId('new-session-create').click();
-
-  await expect(page).toHaveURL(/\/session\/[0-9a-f-]{36}$/, { timeout: 15_000 });
-  await expect(page.getByTestId('session-title')).toHaveText('fresh');
-});
-
-test('opens the dialog with ctrl+t and closes it with escape', async ({ page, cockpit }) => {
-  await page.goto(cockpit.url);
-  await expect(page.getByTestId('session-card-s1')).toBeVisible();
-
-  await page.keyboard.press('Control+t');
-  await expect(page.getByTestId('new-session-dialog')).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(page.getByTestId('new-session-dialog')).toBeHidden();
-});
-
-test.describe('when the server cannot be launched', () => {
-  test.use({ spawnStub: 'fail' });
-
-  test('shows the failure in the dialog instead of navigating', async ({ page, cockpit }) => {
-    await page.goto(cockpit.url);
-    await expect(page.getByTestId('session-card-s1')).toBeVisible();
-
-    await page.getByTestId('new-session-open').click();
-    await page.getByTestId('new-session-create').click();
-
-    await expect(page.getByTestId('new-session-error')).toContainText('exited with code 3', { timeout: 15_000 });
-    await expect(page.getByTestId('new-session-dialog')).toBeVisible();
-  });
 });

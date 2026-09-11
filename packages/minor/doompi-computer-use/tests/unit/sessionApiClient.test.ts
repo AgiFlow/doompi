@@ -1,34 +1,31 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createComputerUseSessionClient,
-  UnixComputerUseSessionClient,
+  type ComputerUseSessionClient,
 } from '../../src/adapters/pi/sessionApiClient.ts';
 
-describe('computer-use session API client discovery', () => {
-  it('fails closed unless both host-issued connection values exist', () => {
-    expect(createComputerUseSessionClient({})).toBeUndefined();
-    expect(createComputerUseSessionClient({ DOOMPI_SESSION_API_SOCKET: '/tmp/session.sock' })).toBeUndefined();
-    expect(createComputerUseSessionClient({ DOOMPI_SESSION_API_INTERNAL_TOKEN: 'token' })).toBeUndefined();
+const host: ComputerUseSessionClient = {
+  state: vi.fn(async () => ({ sessionId: 'session', revision: 0, wake: 0, phase: 'inactive' as const })),
+  observe: vi.fn(async () => ({
+    runId: 'run',
+    snapshotId: 'snapshot',
+    targetGeneration: 'target',
+    applicationName: 'Test App',
+    bundleId: 'com.example.test',
+    windowTitle: 'Test Window',
+    elements: [],
+    screenshot: { mimeType: 'image/png' as const, data: '' },
+  })),
+  act: vi.fn(async () => ({ applied: true })),
+  stop: vi.fn(async () => ({ sessionId: 'session', revision: 1, wake: 1, phase: 'inactive' as const })),
+};
+
+describe('computer-use session service injection', () => {
+  it('uses the injected typed service without discovering a socket or token', () => {
+    expect(createComputerUseSessionClient(host)).toBe(host);
   });
 
-  it('creates the Unix-socket client only from complete host configuration', () => {
-    expect(
-      createComputerUseSessionClient({
-        DOOMPI_SESSION_API_SOCKET: '/tmp/session.sock',
-        DOOMPI_SESSION_API_INTERNAL_TOKEN: 'token',
-      }),
-    ).toBeInstanceOf(UnixComputerUseSessionClient);
-  });
-
-  it('propagates Unix socket connection failures for every operation', async () => {
-    const client = new UnixComputerUseSessionClient({
-      socketPath: `/tmp/doompi-computer-use-missing-${process.pid}.sock`,
-      token: 'token',
-    });
-
-    await expect(client.state()).rejects.toThrow();
-    await expect(client.observe()).rejects.toThrow();
-    await expect(client.act({ kind: 'press', snapshotId: 'snapshot-1', elementRef: 'button-1' })).rejects.toThrow();
-    await expect(client.stop()).rejects.toThrow();
+  it('does not invent an unavailable transport when no host is provided', () => {
+    expect(createComputerUseSessionClient()).toBeUndefined();
   });
 });

@@ -13,14 +13,15 @@ async function readStdin(): Promise<string> {
 
 export async function main(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
   const startedAt = Date.now();
+  const environment = Object.freeze({ ...process.env });
   const telemetry = createDoomTelemetry({
     serviceName: 'doom-runner-cli',
     packageName: '@agimon-ai/doompi-runner',
-    env: process.env,
+    env: environment,
     enableLogs: true,
     enableTraces: true,
   });
-  const container = createRunnerContainer();
+  const container = createRunnerContainer({ environment });
   const registry = container.runnerRegistry;
   let stdoutBytes = 0;
   let stderrBytes = 0;
@@ -30,7 +31,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
       launcher: container.launcher,
       rmuxBackend: container.rmuxBackend,
       logReader: container.logReader,
-      env: process.env,
+      env: environment,
       stdout: (text) => {
         const output = text.endsWith('\n') ? text : `${text}\n`;
         stdoutBytes += Buffer.byteLength(output, 'utf8');

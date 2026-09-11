@@ -114,8 +114,10 @@ describe('doom file edit package boundary', () => {
     expect(manifest.doompiServer).toEqual({
       entry: './src/exports/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['session'],
+      scopes: ['session', 'hub'],
     });
+    expect(exportsMap['./session-api']).toBeUndefined();
+    expect(exportsMap['./web-hub']).toBeUndefined();
   });
 
   it('keeps exports closed and resolves every allowlisted package resource', async () => {

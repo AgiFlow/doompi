@@ -2,69 +2,50 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { reattachDelayMs } from '../../src/services/retryPolicy.ts';
 import { parseServeOptions } from '../../src/services/serveOptions.ts';
-import { createFrameDecoder, encodeFrame } from '../../src/services/sessionFraming.ts';
 import { contentTypeFor, resolveAssetPath } from '../../src/services/staticAssets.ts';
 
 describe('parseServeOptions', () => {
-  it('needs no arguments at all: the bare executable is a loopback hub', () => {
+  it('defaults to a loopback presentation server and the local headless endpoint', () => {
     expect(parseServeOptions([])).toEqual({
-      registryDir: undefined,
-      spawnCommand: undefined,
       port: 7433,
       host: '127.0.0.1',
       assetsDir: undefined,
+      headlessUrl: undefined,
+      headlessToken: undefined,
+      help: false,
+      version: false,
     });
   });
 
-  it('reads the overrides it offers', () => {
-    expect(parseServeOptions(['--registry-dir', '/custom/run']).registryDir).toBe('/custom/run');
-    expect(parseServeOptions(['--spawn-command', '/opt/fake-server']).spawnCommand).toBe('/opt/fake-server');
-    expect(parseServeOptions(['--port', '9000', '--host', '0.0.0.0', '--assets', '/srv/web'])).toMatchObject({
+  it('reads presentation and headless endpoint overrides', () => {
+    expect(
+      parseServeOptions([
+        '--port',
+        '9000',
+        '--host',
+        '0.0.0.0',
+        '--assets',
+        '/srv/web',
+        '--headless-url',
+        'http://127.0.0.1:7440',
+        '--headless-token',
+        'secret',
+      ]),
+    ).toMatchObject({
       port: 9000,
       host: '0.0.0.0',
       assetsDir: '/srv/web',
+      headlessUrl: 'http://127.0.0.1:7440',
+      headlessToken: 'secret',
     });
   });
 
   it('rejects malformed input rather than guessing', () => {
     expect(() => parseServeOptions(['--port', 'http'])).toThrow(/expects a port number/);
     expect(() => parseServeOptions(['--port', '70000'])).toThrow(/expects a port number/);
-    expect(() => parseServeOptions(['--registry-dir', '--port'])).toThrow(/needs a value/);
+    expect(() => parseServeOptions(['--headless-url', '--port'])).toThrow(/needs a value/);
     expect(() => parseServeOptions(['--nonsense'])).toThrow(/Unknown option/);
-  });
-});
-
-describe('frame codec', () => {
-  it('reassembles frames split across chunks', () => {
-    const decode = createFrameDecoder();
-    expect(decode('{"type":"a"}\n{"ty')).toEqual([{ type: 'a' }]);
-    expect(decode('pe":"b"}\n')).toEqual([{ type: 'b' }]);
-  });
-
-  it('skips blank lines and non-object frames', () => {
-    const decode = createFrameDecoder();
-    expect(decode('\n\n[1,2]\n"text"\n{"type":"c"}\n')).toEqual([{ type: 'c' }]);
-  });
-
-  it('round-trips through the encoder', () => {
-    const decode = createFrameDecoder();
-    expect(decode(encodeFrame({ type: 'prompt', message: 'hi' }))).toEqual([{ type: 'prompt', message: 'hi' }]);
-  });
-
-  it('throws on malformed JSON so the caller can refuse the stream', () => {
-    const decode = createFrameDecoder();
-    expect(() => decode('{oops\n')).toThrow();
-  });
-});
-
-describe('reattachDelayMs', () => {
-  it('starts immediately, then backs off to a ceiling', () => {
-    expect(reattachDelayMs(0)).toBe(0);
-    expect(reattachDelayMs(1)).toBe(150);
-    expect(reattachDelayMs(2)).toBe(300);
-    expect(reattachDelayMs(40)).toBe(4000);
   });
 });
 
@@ -95,6 +76,7 @@ describe('static assets', () => {
     expect(contentTypeFor('/x/index.html')).toBe('text/html; charset=utf-8');
     expect(contentTypeFor('/x/app.JS')).toBe('text/javascript; charset=utf-8');
     expect(contentTypeFor('/x/font.woff2')).toBe('font/woff2');
+    expect(contentTypeFor('/x/runtime.wasm')).toBe('application/wasm');
     expect(contentTypeFor('/x/thing.bin')).toBe('application/octet-stream');
   });
 });

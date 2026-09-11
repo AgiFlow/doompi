@@ -20,7 +20,7 @@ export default defineConfig([
     entry: {
       index: 'src/exports/index.ts',
       env: 'src/exports/env.ts',
-      'extensions/headless': 'src/exports/extensions/headless.ts',
+      'extensions/server': 'src/exports/extensions/server.ts',
     },
     clean: true,
     dts: { incremental: true, parallel: false, eager: true },

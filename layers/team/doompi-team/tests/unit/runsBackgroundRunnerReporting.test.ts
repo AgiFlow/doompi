@@ -5,6 +5,8 @@ import type { AsyncRunStatus } from '../../src/adapters/runs/background/asyncExe
 import type { RunResultFile } from '../../src/adapters/resultWatcher';
 import type { CoalescedStatusWriterContract } from '../../src/adapters/runs/background/statusWriter';
 import type { TerminalTrigger } from '../../src/adapters/runs/background/terminalPersistence';
+import type { SessionScope } from '../../src/adapters/filesystem/paths';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 /**
  * Records every call this test cares about, in the order they actually
@@ -13,7 +15,7 @@ import type { TerminalTrigger } from '../../src/adapters/runs/background/termina
  */
 class RecordingStatusWriter implements CoalescedStatusWriterContract<AsyncRunStatus> {
   calls: string[] = [];
-  open(): void {
+  open(_scope: SessionScope, _runId: string, _initialStatus: AsyncRunStatus): void {
     this.calls.push('open');
   }
   update(): void {
@@ -48,7 +50,7 @@ class TestableRunnerReporting extends RunnerReporting {
     return 1_000;
   }
 
-  protected override writeResultFile(_runId: string, result: RunResultFile): void {
+  protected override writeResultFile(_scope: SessionScope, _runId: string, result: RunResultFile): void {
     this.sharedCalls.push('writeResultFile');
     this.writtenResults.push(result);
   }
@@ -85,7 +87,7 @@ describe('RunnerReporting', () => {
   it('flushes the status write before writing the result file', () => {
     reporting.prepareResult({ success: true, summary: 'done' });
 
-    reporting.mutateTerminalStatus(baseStatus(), undefined);
+    reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, baseStatus(), undefined);
 
     expect(calls).toEqual(['updateSync', 'writeResultFile']);
   });
@@ -99,7 +101,7 @@ describe('RunnerReporting', () => {
     })(statusWriter, calls);
     reporting.prepareResult({ success: true, summary: 'done' });
 
-    expect(() => reporting.mutateTerminalStatus(baseStatus(), undefined)).toThrow('disk full');
+    expect(() => reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, baseStatus(), undefined)).toThrow('disk full');
     // The status flush is the first entry and is unaffected by the later throw.
     expect(calls[0]).toBe('updateSync');
     expect(calls[1]).toBe('writeResultFile-threw');
@@ -109,7 +111,7 @@ describe('RunnerReporting', () => {
     reporting.prepareResult({ success: true, summary: 'all good' });
     const status = baseStatus();
 
-    reporting.mutateTerminalStatus(status, undefined);
+    reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, undefined);
 
     expect(status.state).toBe('completed');
     expect(status.endedAt).toBe(1_000);
@@ -130,7 +132,7 @@ describe('RunnerReporting', () => {
     reporting.prepareResult({ success: false, summary: 'gave up' });
     const status = baseStatus();
 
-    reporting.mutateTerminalStatus(status, undefined);
+    reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, undefined);
 
     expect(status.state).toBe('failed');
     expect(reporting.writtenResults[0]?.success).toBe(false);
@@ -141,7 +143,7 @@ describe('RunnerReporting', () => {
     reporting.prepareResult({ success: false, state: 'stopped', summary: 'Stopped before completion.' });
     const status = baseStatus();
 
-    reporting.mutateTerminalStatus(status, undefined);
+    reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, undefined);
 
     expect(status.state).toBe('stopped');
     expect(reporting.writtenResults[0]).toMatchObject({
@@ -154,7 +156,7 @@ describe('RunnerReporting', () => {
   it('finalizing without ever calling prepareResult() still produces a result, marked failed', () => {
     const status = baseStatus();
 
-    reporting.mutateTerminalStatus(status, undefined);
+    reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, undefined);
 
     expect(status.state).toBe('failed');
     expect(status.error).toBe('Run finalized without ever calling prepareResult().');
@@ -167,7 +169,7 @@ describe('RunnerReporting', () => {
     const status = baseStatus();
     const trigger: TerminalTrigger = { kind: 'signal', signal: 'SIGTERM' };
 
-    reporting.mutateTerminalStatus(status, trigger);
+    reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, trigger);
 
     expect(status.state).toBe('stopped');
     expect(status.error).toBe('Terminated by signal SIGTERM.');
@@ -180,7 +182,7 @@ describe('RunnerReporting', () => {
     const status = baseStatus();
     const trigger: TerminalTrigger = { kind: 'uncaughtException', error: new Error('boom') };
 
-    reporting.mutateTerminalStatus(status, trigger);
+    reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, trigger);
 
     expect(status.state).toBe('failed');
     expect(status.error).toBe('boom');
@@ -191,7 +193,7 @@ describe('RunnerReporting', () => {
     const status = baseStatus();
     const trigger: TerminalTrigger = { kind: 'unhandledRejection', reason: new Error('rejected') };
 
-    reporting.mutateTerminalStatus(status, trigger);
+    reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, trigger);
 
     expect(status.error).toBe('rejected');
   });
@@ -200,7 +202,7 @@ describe('RunnerReporting', () => {
     const status = baseStatus();
     const trigger: TerminalTrigger = { kind: 'unhandledRejection', reason: 'plain string reason' };
 
-    reporting.mutateTerminalStatus(status, trigger);
+    reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, trigger);
 
     expect(status.error).toBe('plain string reason');
   });
@@ -209,7 +211,7 @@ describe('RunnerReporting', () => {
     const status = baseStatus();
     const trigger: TerminalTrigger = { kind: 'unhandledRejection', reason: { weird: true } };
 
-    reporting.mutateTerminalStatus(status, trigger);
+    reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, trigger);
 
     expect(status.error).toBe('Unhandled rejection with no error message.');
   });
@@ -220,7 +222,7 @@ describe('RunnerReporting', () => {
       reporting.prepareResult({ success: true, summary: 'done' });
       const status = baseStatus();
 
-      reporting.mutateTerminalStatus(status, undefined);
+      reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, undefined);
 
       expect(status.sessionFile).toBe('/sessions/run-1.json');
     });
@@ -229,7 +231,7 @@ describe('RunnerReporting', () => {
       reporting.prepareResult({ success: true, summary: 'done' });
       const status = baseStatus();
 
-      reporting.mutateTerminalStatus(status, undefined);
+      reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, undefined);
 
       expect('sessionFile' in status).toBe(false);
     });
@@ -240,7 +242,7 @@ describe('RunnerReporting', () => {
       reporting.prepareResult({ success: true, summary: 'done' });
       const status = baseStatus();
 
-      reporting.mutateTerminalStatus(status, undefined);
+      reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, undefined);
 
       expect(status.sessionFile).toBeUndefined();
     });
@@ -250,7 +252,7 @@ describe('RunnerReporting', () => {
       const status = baseStatus();
       const trigger: TerminalTrigger = { kind: 'signal', signal: 'SIGTERM' };
 
-      reporting.mutateTerminalStatus(status, trigger);
+      reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, trigger);
 
       expect(status.sessionFile).toBe('/sessions/run-1.json');
     });
@@ -265,7 +267,7 @@ describe('RunnerReporting', () => {
       >,
     });
 
-    reporting.mutateTerminalStatus(baseStatus(), undefined);
+    reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, baseStatus(), undefined);
 
     expect(reporting.writtenResults[0]?.acceptance).toEqual({ verdict: 'pass', checks: [] });
   });
@@ -273,7 +275,7 @@ describe('RunnerReporting', () => {
   it('omits the acceptance field entirely when none was prepared', () => {
     reporting.prepareResult({ success: true, summary: 'done' });
 
-    reporting.mutateTerminalStatus(baseStatus(), undefined);
+    reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, baseStatus(), undefined);
 
     expect('acceptance' in reporting.writtenResults[0]!).toBe(false);
   });
@@ -283,7 +285,7 @@ describe('RunnerReporting', () => {
       reporting.prepareResult({ success: true, summary: 'a short summary' });
       const status = baseStatus();
 
-      reporting.mutateTerminalStatus(status, undefined);
+      reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, undefined);
 
       expect(status.summary).toBe('a short summary');
       expect(reporting.writtenResults[0]?.summary).toBe('a short summary');
@@ -294,7 +296,7 @@ describe('RunnerReporting', () => {
       reporting.prepareResult({ success: true, summary: longSummary });
       const status = baseStatus();
 
-      reporting.mutateTerminalStatus(status, undefined);
+      reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, undefined);
 
       expect(status.summary!.length).toBeLessThan(longSummary.length);
       expect(status.summary!.length).toBeLessThanOrEqual(4_000);
@@ -308,7 +310,7 @@ describe('RunnerReporting', () => {
       reporting.prepareResult({ success: true, summary: exactSummary });
       const status = baseStatus();
 
-      reporting.mutateTerminalStatus(status, undefined);
+      reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, undefined);
 
       expect(status.summary).toBe(exactSummary);
     });
@@ -316,7 +318,7 @@ describe('RunnerReporting', () => {
     it('writes the truncated summary onto status even for a fallback (no prepareResult) outcome', () => {
       const status = baseStatus();
 
-      reporting.mutateTerminalStatus(status, undefined);
+      reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, undefined);
 
       expect(status.summary).toBe('Run finalized without ever calling prepareResult().');
     });
@@ -331,7 +333,7 @@ describe('RunnerReporting', () => {
       });
       const status = baseStatus();
 
-      reporting.mutateTerminalStatus(status, undefined);
+      reporting.mutateTerminalStatus(TEST_SESSION_SCOPE, status, undefined);
 
       expect('acceptance' in status).toBe(false);
     });

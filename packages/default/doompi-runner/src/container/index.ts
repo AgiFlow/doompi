@@ -16,7 +16,7 @@ import { RunnerPaths } from '../adapters/RunnerPaths';
 import { RunnerRegistry, createDefaultProcessRegistry } from '../adapters/RunnerRegistry/RunnerRegistry';
 import { NodeSpawner } from '../adapters/Spawner/NodeSpawner';
 import type { RunnerDependencies } from './types';
-
+import { createRunnerServerFacet } from '../adapters/server/facet';
 /** Build once on first access, then hand back the same instance. */
 function memoize<T>(build: () => T): () => T {
   let value: T | undefined;
@@ -41,7 +41,12 @@ function memoize<T>(build: () => T): () => T {
  * behaviour: nothing is constructed until it is asked for, so opening the SQLite
  * process registry stays deferred until something actually needs a runner.
  */
-export function createRunnerContainer(overrides: Partial<RunnerDependencies> = {}): RunnerDependencies {
+export function createRunnerContainer(
+  overrides: Partial<RunnerDependencies> & {
+    environment: Readonly<Record<string, string | undefined>>;
+  },
+): RunnerDependencies {
+  const environment = overrides.environment;
   const clock = memoize(() => overrides.clock ?? new SystemClock());
   const spawner = memoize(() => overrides.spawner ?? new NodeSpawner());
   const processControl = memoize(() => overrides.processControl ?? new NodeProcessControl());
@@ -50,7 +55,7 @@ export function createRunnerContainer(overrides: Partial<RunnerDependencies> = {
   const lifeline = memoize(() => overrides.lifeline ?? new NodeLifeline(paths()));
   const processRegistry = memoize(() => overrides.processRegistry ?? createDefaultProcessRegistry());
   const runnerRegistry = memoize(
-    () => overrides.runnerRegistry ?? new RunnerRegistry(paths(), processControl(), processRegistry()),
+    () => overrides.runnerRegistry ?? new RunnerRegistry(paths(), processControl(), processRegistry(), environment),
   );
   const namer = memoize(() => overrides.namer ?? new RunnerNamer(runnerRegistry()));
   const logFile = memoize(() => overrides.logFile ?? new LogFile(paths()));
@@ -70,6 +75,7 @@ export function createRunnerContainer(overrides: Partial<RunnerDependencies> = {
   );
 
   return {
+    environment,
     get clock() {
       return clock();
     },
@@ -120,3 +126,8 @@ export function createRunnerContainer(overrides: Partial<RunnerDependencies> = {
     },
   };
 }
+
+const runnerServerEnvironment = Object.freeze({ ...process.env });
+export const runnerServerFacet = createRunnerServerFacet(() =>
+  createRunnerContainer({ environment: runnerServerEnvironment }),
+);

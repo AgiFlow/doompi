@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PLUGIN_ROOTS_FILE } from '../services/webDevRoots.ts';
 import { bundleAssetPolicyPlugin } from './bundleAssetPolicy.ts';
-import { SERVER_REGISTRY_FILE, webHostPackageRoot, writeSyncWebPluginModules } from './webPluginGenerate.ts';
+import { webHostPackageRoot, writeSyncWebPluginModules } from './webPluginGenerate.ts';
 import { scanWebPlugins } from './webPluginScan.ts';
 import {
   WEB_PLUGIN_RUNTIME_SPECIFIERS,
@@ -53,9 +53,8 @@ export interface BundleCockpitWebResult {
  * roots (no hardcoded plugin dependencies anywhere), the generated entry
  * modules are aliased over the committed builtin registry, and Vite compiles
  * everything (host shell plus each plugin's shipped web source) into one
- * bundle. The server registry written next to the assets tells the hub which
- * built hub entries to load, and the roots file beside the bundle lets the
- * dev server serve the same composition with hot reload.
+ * installed composition's packages) into one browser bundle. The roots file beside
+ * the bundle lets the dev server serve the same composition with hot reload.
  */
 export async function bundleCockpitWeb(options: BundleCockpitWebOptions): Promise<BundleCockpitWebResult> {
   const notice = options.onNotice ?? ((): void => {});
@@ -131,6 +130,5 @@ export async function bundleCockpitWeb(options: BundleCockpitWebOptions): Promis
   });
   fs.writeFileSync(path.join(pluginsDir, 'index.html'), '<!doctype html>\n<title>DoomPi plugin composition</title>\n');
 
-  fs.writeFileSync(path.join(options.outDir, SERVER_REGISTRY_FILE), generated.serverRegistry);
   return { assetsDir, pluginsDir, pluginIds: plugins.map((plugin) => plugin.pluginId) };
 }

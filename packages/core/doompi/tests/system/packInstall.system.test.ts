@@ -267,7 +267,6 @@ function packedOwnedRuntimeClosure(seedNames: readonly string[]): ReadonlyMap<st
     const dependencies = {
       ...candidate.packedManifest.dependencies,
       ...candidate.packedManifest.optionalDependencies,
-      ...candidate.packedManifest.peerDependencies,
     };
     for (const dependency of Object.keys(dependencies)) {
       if (packedPackages.has(dependency) && !closure.has(dependency)) pending.push(dependency);
@@ -1599,17 +1598,28 @@ describe('consumer ownership boundaries', () => {
   });
 
   it(
-    'installs and imports the packed root without selectable Doom packages',
+    'installs and imports the packed root without selectable Doom packages or browser dependencies',
     async () => {
       const isolatedConsumer = createConsumerRoot('dp-core-only-');
       try {
         const rootClosure = packedOwnedRuntimeClosure(['@agimon-ai/doompi']);
+        const browserOnlyPackages = [
+          '@agimon-ai/doompi-web',
+          '@agimon-ai/doompi-web-components',
+          '@agimon-ai/doompi-web-contracts',
+          'react',
+          'react-dom',
+        ];
         for (const name of selectablePackageNames) expect(rootClosure.has(name), name).toBe(false);
+        for (const name of browserOnlyPackages) expect(rootClosure.has(name), name).toBe(false);
 
         const install = await installLocalPackages(isolatedConsumer, rootClosure);
         const diagnostics = [install.stderr, install.stdout].filter(Boolean).join('\n');
         expect(install.code, diagnostics || 'core-only consumer installation failed without output').toBe(0);
         for (const name of selectablePackageNames) {
+          expect(fs.existsSync(installedPackageRoot(isolatedConsumer.root, name)), name).toBe(false);
+        }
+        for (const name of browserOnlyPackages) {
           expect(fs.existsSync(installedPackageRoot(isolatedConsumer.root, name)), name).toBe(false);
         }
 

@@ -62,16 +62,16 @@ This reuse is an implementation choice, not a privilege boundary. The child proc
 
 ## Runtime environment
 
-The launcher constructs a controlled environment for the cockpit:
+The launcher constructs a controlled environment for the headless server and presentation proxy:
 
 - packaged server, DoomPi, web, catalog, npm CLI, resource, and binary paths
-- selected loopback port
+- selected loopback ports
 - `DOOMPI_CLIENT=desktop`
 - an agent command that reuses the Electron executable in Node mode
-- the shared session runtime directory
+- a short-lived attach token in Electron's user-data directory
 - a cache directory inside Electron's user-data directory
 
-Inherited `DOOMPI_*` values are removed before these settings are applied, except that an explicit `DOOMPI_RUNTIME_DIR` selects the shared registry location. Provider credentials and unrelated operating-system variables are not part of that prefix and continue to follow the normal DoomPi configuration model.
+Inherited `DOOMPI_*` values are removed before these settings are applied. Provider credentials and unrelated operating-system variables are not part of that prefix and continue to follow the normal DoomPi configuration model.
 
 ## macOS signing and notarization
 
@@ -110,13 +110,13 @@ Windows and macOS x64 are not supported release targets. Build producers reject 
 
 The application contains no in-app updater implementation. A new version is delivered as a new whole-application artifact. Documentation and release automation must not imply an automatic update channel until one is implemented and verified.
 
-Because the runtime is staged with the application, the shell, server, DoomPi code, and packaged catalog form one tested desktop generation. User data and the session registry remain outside the application bundle. Replacing the application therefore replaces its runtime generation without relocating normal user state.
+Because the runtime is staged with the application, the shell, server, DoomPi code, and packaged catalog form one tested desktop generation. User data remains outside the application bundle. Replacing the application therefore replaces its runtime generation without relocating normal user state.
 
 ## Tradeoffs
 
 The staged-runtime approach provides repeatable installation and avoids dependence on a source checkout. Its costs are larger release artifacts, platform-specific assembly, nested signing, and duplicated package material inside the artifact.
 
-Using the same cockpit code prevents a desktop-only protocol fork. Its cost is a multi-process application whose readiness and shutdown must be supervised rather than a single embedded renderer bundle.
+Using the same headless and web code prevents a desktop-only protocol fork. Its cost is a multi-process application whose readiness and shutdown must be supervised rather than a single renderer process.
 
 ## Related guides
 

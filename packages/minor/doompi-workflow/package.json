@@ -57,16 +57,6 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
-    "./web-hub": {
-      "types": "./dist/webHub.d.mts",
-      "import": "./dist/webHub.mjs",
-      "require": "./dist/webHub.cjs"
-    },
-    "./extensions/headless": {
-      "types": "./dist/extensions/headless.d.mts",
-      "import": "./dist/extensions/headless.mjs",
-      "require": "./dist/extensions/headless.cjs"
-    },
     "./package.json": "./package.json",
     "./skills/workflow-recovery/SKILL.md": "./skills/workflow-recovery/SKILL.md"
   },
@@ -137,11 +127,7 @@
       "workflow_runs",
       "workflow_catalog"
     ],
-    "client": "./src/exports/webClient.ts",
-    "hub": {
-      "entry": "./src/exports/webHub.ts",
-      "dist": "./dist/webHub.mjs"
-    }
+    "client": "./src/exports/webClient.ts"
   },
   "pi": {
     "extensions": [

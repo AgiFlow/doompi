@@ -33,8 +33,8 @@ function resultContent(result: unknown): DoomHeadlessContent[] {
   });
 }
 
-function readConfig(cwd: string): string {
-  const config = readSessionConfig(process.env, cwd);
+function readConfig(environment: Readonly<Record<string, string | undefined>>, cwd: string): string {
+  const config = readSessionConfig(environment, cwd);
   const groups = buildMcpConfigGroups(config);
   return JSON.stringify(
     {
@@ -58,7 +58,7 @@ export const mcpHeadlessFacet = {
     const resource: DoomHeadlessResource = {
       name: 'doompi/mcp-config',
       kind: 'context',
-      read: (execution) => readConfig(execution.cwd),
+      read: (execution) => readConfig(execution.environment, execution.cwd),
     };
     const activity: DoomHeadlessActivity = {
       name: 'doompi-mcp-runtime',
@@ -66,7 +66,7 @@ export const mcpHeadlessFacet = {
         const owner = new McpRuntimeOwner();
         runtime = owner;
         try {
-          const config = readSessionConfig(process.env, execution.cwd);
+          const config = readSessionConfig(execution.environment, execution.cwd);
           const groups = buildMcpConfigGroups(config);
           const sources = [...groups.shared.configSources, ...groups.sessionLocal.configSources];
           await owner.start({
@@ -145,7 +145,7 @@ export const mcpHeadlessFacet = {
         }
         await execution.client.notify({
           title: 'DoomPi MCP',
-          body: readConfig(execution.cwd),
+          body: readConfig(execution.environment, execution.cwd),
           level: subcommand === 'status' ? 'info' : 'warning',
         });
       },

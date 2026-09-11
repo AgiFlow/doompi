@@ -53,7 +53,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { writeAtomicJson } from '../../atomicJson';
-import { currentRunsDir } from '../../filesystem/paths';
+import { scopeRunsDir, type SessionScope } from '../../filesystem/paths';
 import type { CoalescedStatusWriterContract, StatusWithRecentEntries } from './statusWriter';
 
 /**
@@ -82,8 +82,8 @@ interface CrashMarkerRecord {
   startedAt: number;
 }
 
-function crashMarkerPath(runId: string): string {
-  return path.join(currentRunsDir(), runId, CRASH_MARKER_FILE_NAME);
+function crashMarkerPath(scope: SessionScope, runId: string): string {
+  return path.join(scopeRunsDir(scope), runId, CRASH_MARKER_FILE_NAME);
 }
 
 /** `128 + signal number`, the shell convention for a process killed by a signal. */
@@ -106,7 +106,11 @@ export interface TerminalPersistenceContract<TStatus extends StatusWithRecentEnt
    * `CoalescedStatusWriterContract.open()` before the run's terminal state can be
    * reached; this class only mutates and flushes, it does not open.
    */
-  begin(runId: string, mutateTerminalStatus: (status: TStatus, trigger: TerminalTrigger | undefined) => void): void;
+  begin(
+    scope: SessionScope,
+    runId: string,
+    mutateTerminalStatus: (status: TStatus, trigger: TerminalTrigger | undefined) => void,
+  ): void;
   /** Track a spawned `pi` child so it is killed when this run finalizes. */
   trackChild(pid: number): void;
   /** Stop tracking a child that already exited on its own. */
@@ -138,6 +142,7 @@ export class TerminalPersistenceService<
   constructor(private readonly statusWriter: CoalescedStatusWriterContract<TStatus>) {}
 
   private runId: string | undefined;
+  private scope: SessionScope | undefined;
   private mutateTerminalStatus: ((status: TStatus, trigger: TerminalTrigger | undefined) => void) | undefined;
   /**
    * Starts `true` so that a call to `finalize()` or a delivered signal before
@@ -213,15 +218,20 @@ export class TerminalPersistenceService<
   // Public API
   // ---------------------------------------------------------------------
 
-  begin(runId: string, mutateTerminalStatus: (status: TStatus, trigger: TerminalTrigger | undefined) => void): void {
+  begin(
+    scope: SessionScope,
+    runId: string,
+    mutateTerminalStatus: (status: TStatus, trigger: TerminalTrigger | undefined) => void,
+  ): void {
     // A second begin() is a reset: tear down whatever this instance was
     // previously guarding before starting the new one.
     this.dispose();
+    this.scope = scope;
     this.runId = runId;
     this.mutateTerminalStatus = mutateTerminalStatus;
     this.finalized = false;
     this.trackedChildPids.clear();
-    this.writeCrashMarker(runId);
+    this.writeCrashMarker(scope, runId);
     this.installHandlers();
   }
 
@@ -318,25 +328,24 @@ export class TerminalPersistenceService<
     this.trackedChildPids.clear();
   }
 
-  private writeCrashMarker(runId: string): void {
+  private writeCrashMarker(scope: SessionScope, runId: string): void {
     const marker: CrashMarkerRecord = {
       version: CRASH_MARKER_VERSION,
       runId,
       pid: process.pid,
       startedAt: this.now(),
     };
-    writeAtomicJson(crashMarkerPath(runId), marker);
+    writeAtomicJson(crashMarkerPath(scope, runId), marker);
   }
 
   private clearCrashMarker(): void {
     // Excluded from coverage: unreachable by construction. triggerFinalize
     // only reaches here once `finalized` has been observed false, which only
-    // happens after begin() has already set runId - kept as a defensive
-    // check instead of a non-null assertion, not as a reachable branch.
+    // happens after begin() has already set runId and scope.
     /* v8 ignore next */
-    if (!this.runId) return;
+    if (!this.runId || !this.scope) return;
     try {
-      fs.rmSync(crashMarkerPath(this.runId), { force: true });
+      fs.rmSync(crashMarkerPath(this.scope, this.runId), { force: true });
     } catch {
       // Best effort: a marker that resists removal still correctly reads as
       // "this run may have crashed" to a later reader, which is the safe

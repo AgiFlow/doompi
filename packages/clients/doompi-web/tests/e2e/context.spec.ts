@@ -216,7 +216,7 @@ test('reports the estimate as an estimate', async ({ page, cockpit }) => {
 });
 
 // A row is a question as much as a figure, so it has to be answerable. The
-// fake session behind these tests serves no package API, which is exactly the
+// headless fixture behind these tests serves no package API, which is exactly the
 // case a reader must not be left staring at a spinner for.
 test('opens a row and says so when the session cannot describe it', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);

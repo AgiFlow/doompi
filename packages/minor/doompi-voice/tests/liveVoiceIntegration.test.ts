@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createVoiceMediaApi } from '../src/adapters/clientMediaApi.ts';
+import { createTestVoiceMediaApi as createVoiceMediaApi } from './support.ts';
 import { LiveVoiceController } from '../src/adapters/pi/liveVoiceController.ts';
 import type { RealtimeHost } from '../src/adapters/realtime/realtimeHost.ts';
 import type { AutoCaptureUi, IClock } from '../src/types/index.ts';

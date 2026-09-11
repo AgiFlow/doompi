@@ -267,11 +267,6 @@
       "import": "./dist/services/Spawner/NodeSpawner.mjs",
       "require": "./dist/services/Spawner/NodeSpawner.cjs"
     },
-    "./session-api": {
-      "types": "./dist/sessionApi.d.mts",
-      "import": "./dist/sessionApi.mjs",
-      "require": "./dist/sessionApi.cjs"
-    },
     "./session": {
       "types": "./dist/session.d.mts",
       "import": "./dist/session.mjs",
@@ -311,11 +306,6 @@
       "types": "./dist/types.d.mts",
       "import": "./dist/types.mjs",
       "require": "./dist/types.cjs"
-    },
-    "./web-hub": {
-      "types": "./dist/webHub.d.mts",
-      "import": "./dist/webHub.mjs",
-      "require": "./dist/webHub.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -387,6 +377,7 @@
     "entry": "./src/exports/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
+      "hub",
       "session"
     ]
   },
@@ -395,11 +386,7 @@
     "channels": [
       "runner_runs"
     ],
-    "client": "./src/exports/webClient.ts",
-    "hub": {
-      "entry": "./src/exports/webHub.ts",
-      "dist": "./dist/webHub.mjs"
-    }
+    "client": "./src/exports/webClient.ts"
   },
   "pi": {
     "extensions": [

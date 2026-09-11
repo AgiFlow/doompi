@@ -102,10 +102,6 @@ export interface SessionSummary {
   awaitingInput: boolean;
   /** ISO 8601 of the last settled run, once one finished. */
   lastSettledAt?: string;
-  /** Shown in the refused overlay so the user can find the competing client. */
-  socketPath: string;
-  /** Where this session serves its package APIs, when it serves any; the hub proxies there. */
-  apiSocketPath?: string;
   /** Omitted when the cwd is not a git repository or git is unavailable. */
   git?: SessionGitStatus;
   /** Signed plugin composition independently resolved for this session. */
@@ -121,13 +117,6 @@ export interface SessionSummary {
    */
   sessionProvenance?: string;
 }
-
-/**
- * Per-plugin session data travels as ChannelFrame: the channel name is the
- * frame type and the payload shape belongs to the plugin. Re-exported so in-package code keeps importing wire shapes
- * from this one root.
- */
-export type { ChannelFrame } from '@agimon-ai/doompi-web-contracts';
 
 export const HUB_HELLO_TYPE = 'hub_hello';
 export const SESSIONS_SNAPSHOT_TYPE = 'sessions_snapshot';

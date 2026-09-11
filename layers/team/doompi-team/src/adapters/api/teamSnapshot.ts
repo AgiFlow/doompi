@@ -1,15 +1,11 @@
-import {
-  type NativeTeamMemberSnapshot,
-  type NativeTeamSnapshot,
-  readActiveNativeTeamSnapshot,
-} from '../intercom/nativeTeamChannel';
+import type { NativeTeamMemberSnapshot, NativeTeamRuntime, NativeTeamSnapshot } from '../intercom/nativeTeamChannel';
 
 export type TeamMemberSnapshot = NativeTeamMemberSnapshot;
 export type TeamSnapshot = NativeTeamSnapshot;
 
 /** Read the active package-owned Team runtime without exposing its transport implementation. */
-export function readActiveTeamSnapshot(now?: number): TeamSnapshot | undefined {
-  return now === undefined ? readActiveNativeTeamSnapshot() : readActiveNativeTeamSnapshot(now);
+export function readActiveTeamSnapshot(runtime?: NativeTeamRuntime): TeamSnapshot | undefined {
+  return runtime?.snapshot();
 }
 
 /** Render only the bounded, resumable Team state safe to carry across compaction. */

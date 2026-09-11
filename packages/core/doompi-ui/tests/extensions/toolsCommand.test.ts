@@ -72,8 +72,8 @@ async function register(tools: readonly ToolInfo[]) {
       sessionHandlers.set(event, [...(sessionHandlers.get(event) ?? []), handler]);
     }),
   } as unknown as ExtensionAPI;
-  await doomPiUiExtension(pi, telemetry());
   const connection = await connectDoomCordisHost(pi, '@agimon-ai/doompi-ui/tools-test');
+  await doomPiUiExtension(pi, telemetry());
 
   const fire = async (event: string): Promise<void> => {
     for (const handler of sessionHandlers.get(event) ?? []) await handler({}, headlessContext());

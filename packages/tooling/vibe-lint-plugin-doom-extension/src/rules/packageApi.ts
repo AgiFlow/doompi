@@ -1,12 +1,23 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
-import { readManifest } from './webPlugin.js';
+import ts from 'typescript';
+import { normalizeEntry, pluginBlocks, readManifest } from './webPlugin.js';
 
 const PACKAGE_MANIFEST_NAME = 'package.json';
-const SERVER_ENTRY_PATTERN = /^\.\/src\/exports\/extensions\/(server|headless)\.ts$/u;
-const SERVER_DIST_PATTERN = /^\.\/dist\/extensions\/(server|headless)\.mjs$/u;
+const SERVER_ENTRY = './src/exports/extensions/server.ts';
+const SERVER_DIST = './dist/extensions/server.mjs';
 const SERVER_SCOPES = new Set(['session', 'hub']);
+const LEGACY_EXPORT_KEYS = new Set([
+  './extensions/headless',
+  './package-api-loader',
+  './server-facet-loader',
+  './session-api',
+  './sessionApi',
+  './hub-api',
+  './api/git',
+]);
+const LEGACY_EXPORT_TARGET_PATTERN = /(?:packageApiLoader|serverFacetLoader|legacyApiFiles|\.routes\.|\.facets\.)/iu;
 
 interface LegacyApiManifest {
   doompiApi?: unknown;
@@ -14,6 +25,8 @@ interface LegacyApiManifest {
 
 interface ServerCompositionManifest {
   doompiServer?: unknown;
+  doompiWeb?: unknown;
+  pi?: { extensions?: unknown };
   exports?: unknown;
 }
 
@@ -30,16 +43,46 @@ function hasServerImplementation(configRoot: string): boolean {
     'src/adapters/server',
     'src/adapters/headless',
     'src/exports/extensions/server.ts',
-    'src/exports/extensions/headless.ts',
     'src/extensions/server.ts',
     'src/extensions/headless.ts',
-    'src/exports/sessionApi.ts',
   ].some((relativePath) => hasFile(configRoot, relativePath));
 }
 
-function serverEntryKind(entry: unknown): 'server' | 'headless' | null {
-  const match = typeof entry === 'string' ? SERVER_ENTRY_PATTERN.exec(entry) : null;
-  return match?.[1] === 'server' || match?.[1] === 'headless' ? match[1] : null;
+function isPureExportFacade(configRoot: string, entry: string): boolean {
+  const sourcePath = path.join(configRoot, entry.replace(/^\.\//u, ''));
+  if (!fs.existsSync(sourcePath)) return true;
+  const source = ts.createSourceFile(sourcePath, fs.readFileSync(sourcePath, 'utf8'), ts.ScriptTarget.Latest, true);
+  return source.statements.length > 0 && source.statements.every((statement) => ts.isExportDeclaration(statement));
+}
+
+function canonicalSurfaceViolations(manifest: ServerCompositionManifest, configRoot: string): string[] {
+  const violations: string[] = [];
+  const exportsMap = isRecord(manifest.exports) ? manifest.exports : {};
+  for (const [key, target] of Object.entries(exportsMap)) {
+    if (LEGACY_EXPORT_KEYS.has(key) || LEGACY_EXPORT_TARGET_PATTERN.test(JSON.stringify(target))) {
+      violations.push(`Remove legacy package export ${key}; only canonical extension surfaces may be host-loaded.`);
+    }
+  }
+  for (const block of pluginBlocks(manifest)) {
+    if (block.hub !== undefined) violations.push('Remove doompiWeb.hub; server facets own hub runtime behavior.');
+  }
+
+  const entries = new Set<string>();
+  if ('./extensions/pi' in exportsMap) entries.add('./src/exports/extensions/pi.ts');
+  const server = isRecord(manifest.doompiServer) ? manifest.doompiServer.entry : undefined;
+  if (typeof server === 'string') entries.add(server);
+  for (const block of pluginBlocks(manifest)) {
+    const client = normalizeEntry(block.client);
+    if (client) entries.add(client);
+  }
+  for (const entry of entries) {
+    if (!isPureExportFacade(configRoot, entry)) {
+      violations.push(
+        `Canonical surface entry ${entry} must contain forwarding exports only; move executable composition into an adapter or container.`,
+      );
+    }
+  }
+  return violations;
 }
 
 function serverCompositionViolations(manifest: ServerCompositionManifest, configRoot: string): string[] {
@@ -56,22 +99,15 @@ function serverCompositionViolations(manifest: ServerCompositionManifest, config
   if (!isRecord(block)) return ['doompiServer must be an object with entry, dist, and scopes'];
 
   const entry = typeof block.entry === 'string' ? block.entry : undefined;
-  const kind = serverEntryKind(entry);
-  if (kind === null) {
-    violations.push(
-      'doompiServer.entry must be ./src/exports/extensions/server.ts or ./src/exports/extensions/headless.ts',
-    );
-  } else if (entry !== undefined && !hasFile(configRoot, entry.slice(2))) {
+  if (entry !== SERVER_ENTRY) {
+    violations.push(`doompiServer.entry must be ${SERVER_ENTRY}`);
+  } else if (!hasFile(configRoot, entry.slice(2))) {
     violations.push(`doompiServer.entry has no source file: ${entry}`);
   }
 
   const dist = block.dist;
-  if (
-    typeof dist !== 'string' ||
-    !SERVER_DIST_PATTERN.test(dist) ||
-    (kind !== null && !dist.includes(`/${kind}.mjs`))
-  ) {
-    violations.push('doompiServer.dist must match its canonical server or headless entry under ./dist/extensions');
+  if (dist !== SERVER_DIST) {
+    violations.push(`doompiServer.dist must be ${SERVER_DIST}`);
   }
 
   if (!Array.isArray(block.scopes) || block.scopes.length === 0) {
@@ -83,8 +119,8 @@ function serverCompositionViolations(manifest: ServerCompositionManifest, config
     if (new Set(scopes).size !== scopes.length) violations.push('doompiServer.scopes must not contain duplicates');
   }
 
-  if (kind === null) return violations;
-  const exportKey = `./extensions/${kind}`;
+  if (entry !== SERVER_ENTRY) return violations;
+  const exportKey = './extensions/server';
   const exportsMap = isRecord(manifest.exports) ? manifest.exports : undefined;
   const exported = exportsMap?.[exportKey];
   if (!isRecord(exported)) {
@@ -92,9 +128,9 @@ function serverCompositionViolations(manifest: ServerCompositionManifest, config
     return violations;
   }
   const expected = {
-    types: `./dist/extensions/${kind}.d.mts`,
-    import: `./dist/extensions/${kind}.mjs`,
-    require: `./dist/extensions/${kind}.cjs`,
+    types: './dist/extensions/server.d.mts',
+    import: './dist/extensions/server.mjs',
+    require: './dist/extensions/server.cjs',
   };
   for (const [condition, target] of Object.entries(expected)) {
     if (exported[condition] !== target) {
@@ -111,9 +147,9 @@ function serverCompositionViolations(manifest: ServerCompositionManifest, config
  */
 export const packageApiManifest: RuleDefinition = {
   preflight: true,
-  rule: 'HTTP APIs use a DoomServerFacet instead of the legacy doompiApi manifest field',
+  rule: 'Packages expose only canonical Pi, browser-client, and server extension surfaces',
   rationale:
-    'A DoomServerFacet registers the package DoomApi through the host lifecycle and is declared once under doompiServer. The legacy doompiApi field names separate entries without a facet or disposer, so accepting it would keep teaching an unmanaged API path.',
+    'Canonical host ownership uses Pi entries, doompiWeb.client, and one DoomServerFacet. Legacy manifests, web-owned hub runtimes, loader exports, headless aliases, and executable entry wrappers preserve competing lifecycle paths.',
   check(filePath, configRoot) {
     if (path.basename(filePath) !== PACKAGE_MANIFEST_NAME) return null;
     const manifest = readManifest(configRoot) as (LegacyApiManifest & ServerCompositionManifest) | null;
@@ -125,6 +161,7 @@ export const packageApiManifest: RuleDefinition = {
             'Remove the legacy doompiApi manifest declaration and register the API through a DoomServerFacet under doompiServer.',
           ]),
       ...serverCompositionViolations(manifest, configRoot),
+      ...canonicalSurfaceViolations(manifest, configRoot),
     ];
     return violations.length > 0 ? violations.join(' ') : null;
   },

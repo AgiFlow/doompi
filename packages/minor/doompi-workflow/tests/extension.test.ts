@@ -3,7 +3,7 @@ import {
   SUBAGENT_PARENT_SESSION_ENV,
   SUBAGENT_ROOT_SESSION_ENV,
 } from '@agimon-ai/doompi-extension-contracts/child-process';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
 import type { LeaderContribution } from '@agimon-ai/doompi-extension-contracts/leader';
 import {
@@ -14,7 +14,7 @@ import type { DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-
 import { DoomLeaderRegistry } from '@agimon-ai/doompi-ui/leaderRegistry';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
+const TEST_ENVIRONMENT = Object.freeze({});
 import {
   createDispatcherBridge,
   dispatcherToolRestriction,
@@ -58,6 +58,7 @@ describe('doom workflow extension', () => {
       on,
     } as unknown as ExtensionAPI;
 
+    const cordisHost = await installDoomCordisHost(pi, { mode: 'composed', source: 'workflow-test-host' });
     await workflowExtension(pi);
     const connection = await connectDoomCordisHost(pi, 'workflow-contributions-test');
     const help = createDoomHelpService('workflow-help-test');
@@ -121,6 +122,7 @@ describe('doom workflow extension', () => {
     replacementHelp.dispose();
     replacementSkills.dispose();
     await connection.dispose();
+    await cordisHost.shutdown();
   });
 });
 
@@ -161,7 +163,7 @@ describe('workflow dispatcher bridge', () => {
     const pi = { registerTool } as unknown as ExtensionAPI;
     const tool = { name: 'list_workflows' } as Parameters<ExtensionAPI['registerTool']>[0];
 
-    const bridge = createDispatcherBridge(pi, undefined);
+    const bridge = createDispatcherBridge(pi, undefined, TEST_ENVIRONMENT);
     bridge.registerTool(tool);
 
     expect((bridge as unknown as { events?: unknown }).events).toBeUndefined();
@@ -173,7 +175,7 @@ describe('workflow dispatcher bridge', () => {
     const pi = { registerTool } as unknown as ExtensionAPI;
     const tool = { name: 'list_workflows' } as Parameters<ExtensionAPI['registerTool']>[0];
 
-    createDispatcherBridge(pi, 'parent-session').registerTool(tool);
+    createDispatcherBridge(pi, 'parent-session', TEST_ENVIRONMENT).registerTool(tool);
 
     expect(registerTool).toHaveBeenCalledWith(tool);
   });
@@ -185,7 +187,7 @@ describe('workflow dispatcher bridge', () => {
         registered = tool;
       }),
     } as unknown as ExtensionAPI;
-    const bridge = createDispatcherBridge(pi, 'parent-session');
+    const bridge = createDispatcherBridge(pi, 'parent-session', TEST_ENVIRONMENT);
     bridge.registerTool({
       name: 'launch_workflow',
       label: 'Launch',
@@ -212,9 +214,13 @@ describe('workflow dispatcher bridge', () => {
         registered = tool;
       }),
     } as unknown as ExtensionAPI;
-    const bridge = createDispatcherBridge(pi, 'parent-session', {
-      [SUBAGENT_ROOT_SESSION_ENV]: 'root-session',
-    });
+    const bridge = createDispatcherBridge(
+      pi,
+      'parent-session',
+      Object.freeze({
+        [SUBAGENT_ROOT_SESSION_ENV]: 'root-session',
+      }),
+    );
     bridge.registerTool({
       name: 'launch_workflow',
       label: 'Workflow',
@@ -235,7 +241,11 @@ describe('workflow dispatcher bridge', () => {
 
   it('keeps dispatcher tools limited to list_workflows and launch_workflow', () => {
     const registerTool = vi.fn();
-    const bridge = createDispatcherBridge({ registerTool } as unknown as ExtensionAPI, 'parent-session');
+    const bridge = createDispatcherBridge(
+      { registerTool } as unknown as ExtensionAPI,
+      'parent-session',
+      TEST_ENVIRONMENT,
+    );
 
     bridge.registerTool({ name: 'list_workflows' } as Parameters<ExtensionAPI['registerTool']>[0]);
     bridge.registerTool({ name: 'launch_workflow' } as Parameters<ExtensionAPI['registerTool']>[0]);

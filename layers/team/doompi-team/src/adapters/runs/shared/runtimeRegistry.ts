@@ -74,13 +74,7 @@ export function resolveRuntimeTable(configured: RuntimeTable | undefined): Runti
   return { ...DEFAULT_RUNTIMES, ...configured };
 }
 
-/**
- * The binary to run, most explicit source first.
- *
- * The env override exists for the same reason `piSpawn.ts` has one: a
- * developer testing against a locally built CLI must be able to point a run at
- * it without editing shared config.
- */
+/** Resolve the bounded external runtime binary, with an explicit test/development override. */
 function resolveCommand(runtime: string, definition: RuntimeDefinition, env: NodeJS.ProcessEnv): string {
   const override = env[runtimeBinaryEnvVar(runtime)]?.trim();
   return override || definition.command;

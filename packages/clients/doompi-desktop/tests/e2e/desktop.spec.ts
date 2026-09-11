@@ -14,6 +14,7 @@ const HUB_STOP_TIMEOUT_MS = 2_000;
 interface HubMarker {
   readonly event: string;
   readonly pid?: number;
+  readonly role?: string;
   readonly message?: string;
 }
 
@@ -34,10 +35,12 @@ function readMarkers(markerPath: string): HubMarker[] {
     .map((line) => JSON.parse(line) as HubMarker);
 }
 
-async function waitForMarker(markerPath: string, event: string): Promise<HubMarker> {
+async function waitForMarker(markerPath: string, event: string, role?: string): Promise<HubMarker> {
   const deadline = Date.now() + MARKER_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    const marker = readMarkers(markerPath).find((entry) => entry.event === event);
+    const marker = readMarkers(markerPath).find(
+      (entry) => entry.event === event && (role === undefined || entry.role === role),
+    );
     if (marker !== undefined) return marker;
     await new Promise<void>((resolve) => setTimeout(resolve, MARKER_POLL_MS));
   }
@@ -58,31 +61,31 @@ function processIsAlive(pid: number): boolean {
 }
 
 async function stopFakeHub(markerPath: string): Promise<void> {
-  const markers = readMarkers(markerPath);
-  const started = markers.find((marker) => marker.event === 'started');
-  const pid = started?.pid;
-  if (!isSafePid(pid) || markers.some((marker) => marker.event === 'stopped' && marker.pid === pid)) return;
-  if (!processIsAlive(pid)) return;
+  const started = readMarkers(markerPath).filter((marker) => marker.event === 'started' && isSafePid(marker.pid));
+  for (const marker of started) {
+    const pid = marker.pid as number;
+    if (readMarkers(markerPath).some((entry) => entry.event === 'stopped' && entry.pid === pid)) continue;
+    if (!processIsAlive(pid)) continue;
 
-  try {
-    process.kill(pid, 'SIGTERM');
-  } catch {
-    return;
-  }
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      continue;
+    }
+    const deadline = Date.now() + HUB_STOP_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const currentMarkers = readMarkers(markerPath);
+      if (currentMarkers.some((entry) => entry.event === 'stopped' && entry.pid === pid)) break;
+      if (!processIsAlive(pid)) break;
+      await new Promise<void>((resolve) => setTimeout(resolve, MARKER_POLL_MS));
+    }
 
-  const deadline = Date.now() + HUB_STOP_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    const currentMarkers = readMarkers(markerPath);
-    if (currentMarkers.some((marker) => marker.event === 'stopped' && marker.pid === pid)) return;
-    if (!processIsAlive(pid)) return;
-    await new Promise<void>((resolve) => setTimeout(resolve, MARKER_POLL_MS));
-  }
-
-  if (!processIsAlive(pid)) return;
-  try {
-    process.kill(pid, 'SIGKILL');
-  } catch {
-    return;
+    if (!processIsAlive(pid)) continue;
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      // The process exited between the liveness check and the kill.
+    }
   }
 }
 
@@ -90,11 +93,9 @@ const test = base.extend<{ desktop: DesktopFixture }>({
   desktop: async ({ browserName: _browserName }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'd-'));
     const home = path.join(root, 'home');
-    const registryDirectory = path.join(root, 'run');
     const userDataDirectory = path.join(root, 'user-data');
     const markerPath = path.join(root, 'hub.jsonl');
     fs.mkdirSync(home, { recursive: true });
-    fs.mkdirSync(registryDirectory, { recursive: true });
     fs.mkdirSync(userDataDirectory, { recursive: true });
 
     let app: ElectronApplication | undefined;
@@ -107,15 +108,16 @@ const test = base.extend<{ desktop: DesktopFixture }>({
           ...process.env,
           HOME: home,
           USERPROFILE: home,
-          DOOMPI_RUNTIME_DIR: registryDirectory,
           DOOMPI_DESKTOP_E2E_HUB_ENTRY: fakeHubEntry,
+          DOOMPI_DESKTOP_E2E_HEADLESS_ENTRY: fakeHubEntry,
           DESKTOP_E2E_HUB_MARKER: markerPath,
         },
       });
       appProcess = app.process();
       const page = await app.firstWindow();
       await expect(page.getByTestId('fake-hub')).toBeVisible();
-      await waitForMarker(markerPath, 'started');
+      await waitForMarker(markerPath, 'started', 'headless');
+      await waitForMarker(markerPath, 'started', 'web');
       await use({ app, process: appProcess, page, markerPath, hubOrigin: new URL(page.url()).origin });
     } finally {
       try {
@@ -138,11 +140,11 @@ const test = base.extend<{ desktop: DesktopFixture }>({
   },
 });
 
-test('starts the desktop cockpit through the development fake hub seam', async ({ desktop }) => {
+test('starts the desktop headless server and web proxy through the development seam', async ({ desktop }) => {
   await expect(desktop.page).toHaveTitle('DoomPi desktop fake hub');
   await expect(desktop.page.getByTestId('hub-status')).toHaveText('ready');
   expect(desktop.hubOrigin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/u);
-  expect(readMarkers(desktop.markerPath).map((marker) => marker.event)).toContain('started');
+  expect(readMarkers(desktop.markerPath).map((marker) => marker.role)).toEqual(['headless', 'web']);
 });
 
 test('keeps the preload sandboxed while exposing the desktop bridge', async ({ desktop }) => {
@@ -169,7 +171,7 @@ test('keeps the preload sandboxed while exposing the desktop bridge', async ({ d
   expect(bridge.version).toBe(electronVersion);
 });
 
-test('confines navigation to the fake hub origin', async ({ desktop }) => {
+test('confines navigation to the web proxy origin', async ({ desktop }) => {
   const homeUrl = desktop.page.url();
   await desktop.page.getByTestId('same-origin-link').click();
   await expect(desktop.page.getByTestId('same-origin-page')).toBeVisible();
@@ -187,13 +189,17 @@ test('confines navigation to the fake hub origin', async ({ desktop }) => {
   expect(desktop.app.windows()).toHaveLength(1);
 });
 
-test('stops the fake hub before clean Electron shutdown', async ({ desktop }) => {
-  const started = await waitForMarker(desktop.markerPath, 'started');
-  expect(started.pid).toEqual(expect.any(Number));
+test('stops the web proxy and headless server before clean Electron shutdown', async ({ desktop }) => {
+  const started = readMarkers(desktop.markerPath).filter((marker) => marker.event === 'started');
+  expect(started).toHaveLength(2);
+  expect(started.every((marker) => isSafePid(marker.pid))).toBe(true);
 
   await desktop.app.close();
-  await waitForMarker(desktop.markerPath, 'stopped');
+  for (const marker of started) await waitForMarker(desktop.markerPath, 'stopped', marker.role);
 
-  expect(readMarkers(desktop.markerPath).map((marker) => marker.event)).toEqual(['started', 'stopping', 'stopped']);
+  const events = readMarkers(desktop.markerPath).map((marker) => marker.event);
+  expect(events.filter((event) => event === 'started')).toHaveLength(2);
+  expect(events.filter((event) => event === 'stopping')).toHaveLength(2);
+  expect(events.filter((event) => event === 'stopped')).toHaveLength(2);
   expect(desktop.process.exitCode).toBe(0);
 });

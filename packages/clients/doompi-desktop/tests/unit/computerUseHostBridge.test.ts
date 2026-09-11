@@ -73,4 +73,11 @@ describe('computer-use host bridge', () => {
     await vi.waitFor(() => expect(activationSignal()?.aborted).toBe(true));
     await bridge.close();
   });
+
+  it('fails explicitly when the headless child has no IPC channel', () => {
+    const { host } = backendFixture();
+    expect(() => attachComputerUseHostBridge(new EventEmitter() as never, host)).toThrow(
+      'Desktop computer-use requires the headless server IPC boundary.',
+    );
+  });
 });

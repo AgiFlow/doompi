@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { type Alias, defineConfig, type Plugin } from 'vite';
+import { bundleAssetPolicyPlugin } from './src/adapters/bundleAssetPolicy.ts';
 import { ensureBuiltinWebPluginModules, writeSyncWebPluginModules } from './src/adapters/webPluginGenerate.ts';
 import { scanWebPlugins } from './src/adapters/webPluginScan.ts';
 import { readDevPluginRoots, webPluginCssAlias, webPluginOverridePlugin } from './src/adapters/webPluginVite.ts';
@@ -42,7 +43,7 @@ export default defineConfig(({ command }) => {
   const dev = devPluginOverrides(command);
   return {
     root: clientRoot,
-    plugins: [...dev.plugins, react(), tailwindcss()],
+    plugins: [...dev.plugins, react(), tailwindcss(), bundleAssetPolicyPlugin()],
     resolve: {
       // One instance of each shared runtime even when a plugin package declares
       // its own copies for typechecking.

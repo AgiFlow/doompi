@@ -78,6 +78,7 @@ import {
   type IClock,
   type ITemporaryWorkspace,
   type ITranscriberRegistry,
+  type IVoiceMediaHostConnection,
   type IVoiceSessionController,
   type VoiceDependencies,
   type RecordingHandle,
@@ -892,7 +893,7 @@ export function createVoiceContainer(overrides: Partial<VoiceDependencies> = {})
   const executables = overrides.executables ?? new ExecutableResolver();
   const spawner = overrides.spawner ?? new NodeProcessSpawner();
   const binarySpawner = overrides.binarySpawner ?? new NodeBinaryProcessSpawner();
-  const clientMedia = voiceMediaHostConnection();
+  const clientMedia = voiceMediaHostConnection(overrides.clientMedia);
 
   const configs = overrides.configs ?? new PiVoiceConfigService();
   const whisperCpp = overrides.whisperCpp ?? new WhisperCppAdapter(executables, spawner);
@@ -901,6 +902,7 @@ export function createVoiceContainer(overrides: Partial<VoiceDependencies> = {})
   const registry = overrides.registry ?? new TranscriberRegistry(whisperCpp, openAiWhisper, mlxWhisper);
 
   return {
+    ...(clientMedia === undefined ? {} : { clientMedia }),
     clock,
     executables,
     spawner,
@@ -946,10 +948,11 @@ export function voiceToolRestriction(enabled: boolean, narrationEnabled = true):
 }
 
 export interface VoiceExtensionOptions {
+  clientMedia?: IVoiceMediaHostConnection;
+  ownershipHost?: VoiceOwnershipSessionHost;
   footer?: VoiceFooterContributionHandle;
   leader?: VoiceLeaderContributionHandle;
   container?: VoiceDependencies;
-  ownershipHost?: VoiceOwnershipSessionHost;
   autoClientFactory?: VoiceWorkerSessionClientFactory;
   identityNonceFactory?: AutonomousTurnNonceFactory;
   waitUntilConfigured?: (context: ExtensionContext, signal?: AbortSignal) => Promise<void>;
@@ -959,7 +962,7 @@ export interface VoiceExtensionOptions {
 
 export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: VoiceExtensionOptions = {}): void {
   cordis.effect(function* () {
-    const container = options.container ?? createVoiceContainer();
+    const container = options.container ?? createVoiceContainer({ clientMedia: options.clientMedia });
     const ownershipHost = options.ownershipHost;
     const controller = container.sessionController;
     const configs = container.configs;
@@ -1096,7 +1099,7 @@ export function installVoiceRuntime(cordis: Context, pi: ExtensionAPI, options: 
       ...(options.identityNonceFactory ? { identityNonceFactory: options.identityNonceFactory } : {}),
     });
     const liveController = new LiveVoiceController({
-      host: options.liveHost ?? realtimeHostConnection(),
+      host: realtimeHostConnection(options.liveHost),
       clock: container.clock,
       manualState: () => controller.state,
       isBusy: () => activeContext?.isIdle() === false,

@@ -435,7 +435,7 @@ features:
       - src/adapters/*Api.ts
       - src/exports/sessionApi.ts
   - name: scaffold-doom-web-plugin
-    description: Add this package's cockpit (web) plugin under web/ with its per-session store, hub data channel, shared view types, and store test.
+    description: Add this package's browser-only cockpit plugin under web/ with its per-session store, shared view types, and component tests.
     variables_schema:
       type: object
       properties:
@@ -469,33 +469,29 @@ features:
       - src/web/tsconfig.json
       - src/exports/webClient.ts
       - src/types/webTopic.ts->src/types/web{{ topic | pascalCase }}.ts
-      - src/adapters/webTopicChannel.ts->src/adapters/web{{ topic | pascalCase }}Channel.ts
-      - src/exports/webHub.ts
       - tests/unit/webTopicStore.test.ts->tests/unit/web{{ topic | pascalCase }}Store.test.ts
       - tests/web/topicPanel.test.ts->tests/web/{{ topic | camelCase }}Panel.test.ts
     instruction: |-
-      Generate the package's cockpit plugin: src/web/index.ts exporting webPlugin through defineWebPlugin, src/web/stores/{{ topic | camelCase }}Store.ts holding the per-session record through defineSessionStore with its channel, src/web/components/{{ topic | pascalCase }}Panel.tsx as the tab, src/exports/webClient.ts re-exporting the entry as the package's public browser surface, src/types/web{{ topic | pascalCase }}.ts with the wire-JSON view types both halves share, src/adapters/web{{ topic | pascalCase }}Channel.ts as the hub's data source, and src/exports/webHub.ts as the built hub entry.
+      Generate the package's browser-only cockpit plugin: src/web/index.ts exporting webPlugin through defineWebPlugin, src/web/stores/{{ topic | camelCase }}Store.ts holding the per-session record through defineSessionStore with its declared channel, src/web/components/{{ topic | pascalCase }}Panel.tsx as the tab, src/exports/webClient.ts re-exporting the entry as the package's public browser surface, and src/types/web{{ topic | pascalCase }}.ts with the wire-JSON view types shared with the server facet.
 
       The browser vocabulary is fixed: components for rendering, stores for reactive state and channel reducers, hooks for React subscriptions and effects, api for browser HTTP or streaming clients, and lib for stateless formatting and view calculations. Dependencies point inward in that order: lib, api, stores, hooks, components. Keep only index.ts and tsconfig.json at src/web root; index.ts is the composition root.
 
       The rules: the store record is the whole per-session state (the hub's last payload plus this page's ephemeral state), components read it with useStore over the store's select and act through props.sendSessionFrame, tool cards receive the session statuses as props, and no src/web module keeps a top-level let. src/web may import only react, @tanstack/store, @tanstack/react-store, @agimon-ai/doompi-web-contracts, @agimon-ai/doompi-web-components, its own src/web/** and src/types/**; plugins never import each other. Plugins are independent: open a slot with slots: [defineSlot({ slot: '{{ pluginId }}.<name>' })] and render it with props.renderSlot; fill another plugin's or the host's slot with fills; every relation resolves by name after install, so never depend on order, and a collision is an install diagnostic, not a failure.
 
       Complete the package integration after generation:
-      - Add the doompiWeb block to package.json: pluginId "{{ pluginId }}", channels ["{{ channelName }}"], client "./src/exports/webClient.ts", hub { entry "./src/exports/webHub.ts", dist "./dist/webHub.mjs" }, and registrationOrder only if this plugin must install before or after another for a tool matcher or start hook (it is an optional tiebreak, default 1000).
-      - Add "src/web", "src/exports/webClient.ts", and "src/types/web{{ topic | pascalCase }}.ts" to the files allowlist, and a "./web-hub" export pointing at dist/webHub.d.mts, dist/webHub.mjs, dist/webHub.cjs (tsdown builds it from src/exports). The client is not an npm export subpath: the cockpit resolves doompiWeb.client and bundles it from source, so it ships as source and is never built.
-      - Keep src/exports/webClient.ts out of the node build and the node typecheck. tsdown's entry negates it and the package tsconfig excludes it alongside src/web, because a file the root project includes drags its whole import graph in even when the target folder is excluded, and React under platform 'node' is not what dist should carry. src/web/tsconfig.json includes it instead, so it is still typechecked.
+      - Add the doompiWeb block to package.json: pluginId "{{ pluginId }}", channels ["{{ channelName }}"], client "./src/exports/webClient.ts", and registrationOrder only if this plugin must install before or after another for a tool matcher or start hook. Never add doompiWeb.hub. Register the channel source through a DoomServerFacet declared by doompiServer.
+      - Add "src/web", "src/exports/webClient.ts", and "src/types/web{{ topic | pascalCase }}.ts" to the files allowlist. Do not add a package export for the client or a web-hub entry. The cockpit resolves doompiWeb.client and bundles it from source.
+      - Keep src/exports/webClient.ts out of the node build and node typecheck. The package web tsconfig includes it, so it remains typechecked.
       - Add @agimon-ai/doompi-web-contracts and @agimon-ai/doompi-web-components (both workspace:*) to dependencies; add @tanstack/store 0.11.1, @tanstack/react-store 0.11.1, react 19.2.8, @types/react 19.2.7, react-dom 19.2.8, and @types/react-dom 19.2.3 to devDependencies. react-dom is what renders a component to markup in tests/web.
       - Component tests live in tests/web, never under src/web: the web-plugin import allowlist governs every file under src/web and would reject react-dom/server. The scaffolded tsconfigs already route them, the package tsconfig excluding tests/web and src/web/tsconfig.json including it, so the JSX project compiles them and no third tsc invocation is needed.
       - Change the typecheck script to "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json".
-      - Replace the placeholder item view and the hub watcher stub with the package's real records and source; the channel name constant in src/types must equal the doompiWeb channels entry.
+      - Replace the placeholder item view with the package's real records. The channel constant in src/types must equal the doompiWeb channels entry, and the server facet must register its runtime producer.
       - Every Pi tool this package registers needs a timeline item: scaffold one per tool with scaffold-doom-web-tool-card and list it under toolRenderers (web-plugin-tool-renderers checks package.json against src/**). The shell owns the frame, tone, badge, and expand toggle; a card supplies the header summary and the body.
       - Run pnpm install, pnpm fixcode, then lint, typecheck, test, build, and pnpm vibe-lint check --preflight-only on src/web, src/exports, src/types, src/adapters/web*, and package.json.
       - To iterate with hot reload, run the cockpit's dev loop: the hub on 7433, then pnpm dev in packages/clients/doompi-web with DOOMPI_WEB_PLUGIN_ROOTS naming this package (or after a doompi sync), and open port 7434.
     patterns:
       - src/web/**
       - src/types/web*.ts
-      - src/adapters/web*Channel.ts
-      - src/exports/webHub.ts
       - src/exports/webClient.ts
   - name: scaffold-doom-web-tool-card
     description: Add the cockpit timeline item for one Pi tool this package registers, a message renderer on the shared MessageItem shell, with its pure view module and a unit test.

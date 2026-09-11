@@ -136,13 +136,11 @@ test('surfaces an agent error in the timeline', async ({ page, cockpit }) => {
 test('previews the files a prompt mentions and renders the reply as markdown', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
-  const record = JSON.parse(
-    fs.readFileSync(path.join(cockpit.registryDir, 'sessions', `${cockpit.session.id}.json`), 'utf8'),
-  ) as { cwd: string };
-  fs.mkdirSync(path.join(record.cwd, 'docs'), { recursive: true });
-  fs.mkdirSync(path.join(record.cwd, 'notes'), { recursive: true });
-  fs.writeFileSync(path.join(record.cwd, 'docs', 'happy-jump.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
-  fs.writeFileSync(path.join(record.cwd, 'notes', 'plan.md'), '# Plan\n');
+  const cwd = cockpit.session.cwd;
+  fs.mkdirSync(path.join(cwd, 'docs'), { recursive: true });
+  fs.mkdirSync(path.join(cwd, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'docs', 'happy-jump.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  fs.writeFileSync(path.join(cwd, 'notes', 'plan.md'), '# Plan\n');
   await page.getByTestId('composer-input').fill('@docs/happy-jump.svg and @notes/plan.md look');
   await page.getByTestId('composer-send').click();
   await cockpit.session.waitForCommand('prompt');

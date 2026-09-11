@@ -7,7 +7,7 @@ import {
   renderWorkflowToolResult,
   type WorkflowToolName,
 } from '../../src/tui/workflow/workflowToolRender.ts';
-
+const TEST_ENVIRONMENT = Object.freeze({});
 function plainTheme(): Theme {
   return {
     bold: (text: string) => text,
@@ -84,7 +84,7 @@ describe('workflow tool registration', () => {
       registerTool: (tool: RegisteredTool) => tools.set(tool.name, tool),
     } as unknown as ExtensionAPI;
 
-    registerWorkflowPiTools(pi);
+    registerWorkflowPiTools(pi, { environment: TEST_ENVIRONMENT });
 
     for (const name of WORKFLOW_PI_TOOL_NAMES) {
       expect(tools.get(name)).toMatchObject({

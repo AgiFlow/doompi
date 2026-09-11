@@ -101,6 +101,7 @@
  */
 
 import type { ActivityState } from '../../../types';
+import type { SessionScope } from '../../filesystem/paths';
 import type { AsyncJobTrackerContract, TrackedAsyncJobsContract } from '../../asyncJobTracker';
 
 /** States `AsyncJobTracker` (mirroring `staleRunReconciler.ts`) treats as finished. */
@@ -114,8 +115,9 @@ export type WaitForMode = 'completion' | 'attention' | 'any';
 
 export interface WaitRequest {
   target: WaitTarget;
-  /** Pi context that owns the targeted run collection. */
-  sessionId?: string;
+  /** Explicit Pi session and immutable owner scope for the targeted run collection. */
+  sessionId: string;
+  sessionScope: SessionScope;
   /** Defaults to `'any'`. */
   waitFor?: WaitForMode;
   /** Defaults to 30 minutes. */
@@ -209,7 +211,7 @@ export class SubagentWaiter implements SubagentWaiterContract {
       request.timeoutMs !== undefined && request.timeoutMs > 0 ? request.timeoutMs : this.defaultTimeoutMs;
     const waitFor = request.waitFor ?? 'any';
 
-    const jobs = request.sessionId ? this.tracker.forSession(request.sessionId) : this.tracker;
+    const jobs = this.tracker.forSession(request.sessionId, request.sessionScope);
     const runIds = this.resolveTargetIds(request.target, jobs);
     for (const runId of runIds) jobs.track(runId);
 

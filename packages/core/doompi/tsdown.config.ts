@@ -35,6 +35,7 @@ export default defineConfig({
     // Pi loads this one by path, so it has to exist as its own module rather
     // than folded into whichever entry happens to reference it.
     'src/extensions/entries/launcherBootstrap': 'src/extensions/entries/launcherBootstrap.ts',
+    'src/extensions/entries/terminalChildSession': 'src/extensions/entries/terminalChildSession.ts',
     'src/extensions/entries/transitionCoordinator': 'src/extensions/entries/transitionCoordinator.ts',
     'src/services/extensionAssembler': 'src/services/extensionAssembler.ts',
   },

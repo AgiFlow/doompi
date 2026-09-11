@@ -10,13 +10,7 @@ import {
 import type { DoomApi, DoomApiContext } from '../../src/schemas/packageApi.ts';
 import { DOOM_SERVER_HOST_SERVICE, type DoomServerFacet } from '../../src/schemas/serverFacet.ts';
 import { createDoomServerHost } from '../../src/services/serverFacet.ts';
-import {
-  installServerFacets,
-  type LoadedServerFacet,
-  loadServerBundle,
-  loadServerFacets,
-  serverFacetsModulePath,
-} from '../../src/adapters/serverFacetLoader.ts';
+import { installServerFacets, type LoadedServerFacet, loadServerBundle } from '../../src/adapters/serverFacetLoader.ts';
 
 const directories: string[] = [];
 afterEach(() => {
@@ -240,59 +234,6 @@ describe('installServerFacets', () => {
     await installed.dispose();
     await installed.dispose();
     expect(events).toEqual(['apply:first', 'apply:second', 'dispose:second', 'dispose:first']);
-  });
-});
-
-describe('loadServerFacets', () => {
-  it('resolves the module beside the generated route modules', () => {
-    expect(serverFacetsModulePath('hub', {}, '/home/dev', '/gen/api')).toBe(path.resolve('/gen/api', 'hub.facets.mjs'));
-  });
-
-  it('returns nothing when the module has not been synced', async () => {
-    expect(await loadServerFacets('session', { apiDirectory: temporaryDirectory(), env: {} })).toEqual([]);
-  });
-
-  it('loads the facets a sync generation wrote', async () => {
-    const directory = temporaryDirectory();
-    fs.writeFileSync(
-      path.join(directory, 'session.facets.mjs'),
-      'export const facets = [{ apply: () => undefined }, { apply: () => undefined }];\n',
-    );
-
-    expect(await loadServerFacets('session', { apiDirectory: directory, env: {} })).toHaveLength(2);
-  });
-
-  it('skips an entry that is not a facet', async () => {
-    const notices: string[] = [];
-    const directory = temporaryDirectory();
-    fs.writeFileSync(path.join(directory, 'session.facets.mjs'), 'export const facets = [{ apply: 1 }];\n');
-
-    expect(
-      await loadServerFacets('session', { apiDirectory: directory, env: {}, onNotice: (m) => notices.push(m) }),
-    ).toEqual([]);
-    expect(notices).toEqual(['a session facet entry is not a server facet and is skipped']);
-  });
-
-  it('reports a module exporting no facets array', async () => {
-    const notices: string[] = [];
-    const directory = temporaryDirectory();
-    fs.writeFileSync(path.join(directory, 'hub.facets.mjs'), 'export const facets = 3;\n');
-
-    expect(
-      await loadServerFacets('hub', { apiDirectory: directory, env: {}, onNotice: (m) => notices.push(m) }),
-    ).toEqual([]);
-    expect(notices[0]).toContain('exports no facets array');
-  });
-
-  it('reports a module that fails to load rather than refusing to start', async () => {
-    const notices: string[] = [];
-    const directory = temporaryDirectory();
-    fs.writeFileSync(path.join(directory, 'hub.facets.mjs'), 'throw new Error("boom");\n');
-
-    expect(
-      await loadServerFacets('hub', { apiDirectory: directory, env: {}, onNotice: (m) => notices.push(m) }),
-    ).toEqual([]);
-    expect(notices).toEqual(['hub server facets are unavailable (boom)']);
   });
 });
 

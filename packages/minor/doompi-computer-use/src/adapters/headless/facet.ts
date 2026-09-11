@@ -48,7 +48,7 @@ export const computerUseHeadlessFacet: HeadlessFacet = {
   apply(context: Context) {
     const host = requireDoomHeadlessHost(context);
     const client = createComputerUseSessionClient();
-    const allowedScriptPaths = (process.env[SCRIPT_PATHS_ENV] ?? '')
+    const allowedScriptPaths = (host.context.environment[SCRIPT_PATHS_ENV] ?? '')
       .split(path.delimiter)
       .filter((entry) => entry.length > 0);
     const scriptRunner = client === undefined ? undefined : new ComputerScriptRunner({ client, allowedScriptPaths });
@@ -59,6 +59,14 @@ export const computerUseHeadlessFacet: HeadlessFacet = {
     let modeOwner: MinorModeOwnerHandle | undefined;
     const modeSelected = (): boolean => host.context.selection.minorModes.includes(COMPUTER_USE_MODE_ID);
     const publishMode = (): void => modeOwner?.publish(modeState(state, modeSelected()));
+    const applyState = (next: ComputerUseSessionView | undefined): void => {
+      state = next;
+      host.context.client.setStatus(
+        SOURCE,
+        next === undefined || next.phase === 'inactive' ? undefined : `computer use: ${next.phase}`,
+      );
+      publishMode();
+    };
     const selectMode = async (enabled: boolean): Promise<void> => {
       const modes = host.context.selection.minorModes.filter((mode) => mode !== COMPUTER_USE_MODE_ID);
       await host.select({ minorModes: enabled ? [...modes, COMPUTER_USE_MODE_ID] : modes });
@@ -66,18 +74,14 @@ export const computerUseHeadlessFacet: HeadlessFacet = {
     };
     const refresh = async (signal?: AbortSignal): Promise<void> => {
       if (!client) {
-        state = undefined;
-        publishMode();
+        applyState(undefined);
         return;
       }
       try {
-        state = await client.state(signal);
-        host.context.client.setStatus(SOURCE, state.phase === 'inactive' ? undefined : `computer use: ${state.phase}`);
+        applyState(await client.state(signal));
       } catch {
-        state = undefined;
-        host.context.client.setStatus(SOURCE, undefined);
+        applyState(undefined);
       }
-      publishMode();
     };
 
     const requireActive = (): NonNullable<typeof client> => {
@@ -154,11 +158,10 @@ export const computerUseHeadlessFacet: HeadlessFacet = {
         name: SOURCE,
         async start() {
           await refresh();
-          const timer = setInterval(() => void refresh(), 250);
-          timer.unref?.();
+          const unsubscribe = client?.subscribeStatus?.(applyState);
           stopActivity = () => {
-            clearInterval(timer);
-            host.context.client.setStatus(SOURCE, undefined);
+            unsubscribe?.();
+            applyState(undefined);
           };
           return () => {
             stopActivity?.();

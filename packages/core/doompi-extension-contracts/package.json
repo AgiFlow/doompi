@@ -154,11 +154,6 @@
       "import": "./dist/packageApi.mjs",
       "require": "./dist/packageApi.cjs"
     },
-    "./package-api-loader": {
-      "types": "./dist/packageApiLoader.d.mts",
-      "import": "./dist/packageApiLoader.mjs",
-      "require": "./dist/packageApiLoader.cjs"
-    },
     "./profile-identity": {
       "types": "./dist/profileIdentity.d.mts",
       "import": "./dist/profileIdentity.mjs",
@@ -184,20 +179,25 @@
       "import": "./dist/sandboxHarness.mjs",
       "require": "./dist/sandboxHarness.cjs"
     },
+    "./child-session": {
+      "types": "./dist/childSession.d.mts",
+      "import": "./dist/childSession.mjs",
+      "require": "./dist/childSession.cjs"
+    },
     "./headless": {
       "types": "./dist/headless.d.mts",
       "import": "./dist/headless.mjs",
       "require": "./dist/headless.cjs"
     },
+    "./hub-channel": {
+      "types": "./dist/hubChannel.d.mts",
+      "import": "./dist/hubChannel.mjs",
+      "require": "./dist/hubChannel.cjs"
+    },
     "./server-facet": {
       "types": "./dist/serverFacet.d.mts",
       "import": "./dist/serverFacet.mjs",
       "require": "./dist/serverFacet.cjs"
-    },
-    "./server-facet-loader": {
-      "types": "./dist/serverFacetLoader.d.mts",
-      "import": "./dist/serverFacetLoader.mjs",
-      "require": "./dist/serverFacetLoader.cjs"
     },
     "./session-protocol": {
       "types": "./dist/sessionProtocol.d.mts",

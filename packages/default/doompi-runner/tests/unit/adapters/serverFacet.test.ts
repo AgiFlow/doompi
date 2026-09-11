@@ -4,13 +4,14 @@ import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHostService,
 } from '@agimon-ai/doompi-extension-contracts/headless';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import {
   DOOM_SERVER_HOST_SERVICE,
   type DoomServerHostService,
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { runnerServerFacet } from '../../../src/exports/extensions/server.ts';
+import { createRunnerServerFacet, type RunnerContainerFactory } from '../../../src/adapters/server/facet.ts';
 
 const lifecycleMocks = vi.hoisted(() => {
   const container = {
@@ -35,6 +36,8 @@ const lifecycleMocks = vi.hoisted(() => {
           hostPid: 7,
         },
       ]),
+      listAll: vi.fn(async () => []),
+      subscribe: vi.fn(() => () => undefined),
       complete: vi.fn(async () => undefined),
       close: vi.fn(),
     },
@@ -61,12 +64,15 @@ vi.mock('../../../src/services/runs/reconcile.ts', () => ({
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
-function hostContext(scope: DoomServerHostService['scope']) {
+function hostContext(scope: DoomServerHostService['scope'], directEvents?: DoomDirectEventBus) {
   const registered: MountedApi[] = [];
   const state = { disposed: 0 };
   const host: DoomServerHostService = {
     scope,
-    context: { locality: 'local' } as unknown as DoomServerHostService['context'],
+    context: {
+      locality: 'local',
+      ...(directEvents === undefined ? {} : { directEvents }),
+    } as unknown as DoomServerHostService['context'],
     registerApi(api) {
       registered.push(api);
       return {
@@ -75,8 +81,14 @@ function hostContext(scope: DoomServerHostService['scope']) {
         },
       };
     },
+    registerChannel() {
+      return { dispose: () => undefined };
+    },
     mounted() {
       return registered.map((api) => api.basePath);
+    },
+    mountedChannels() {
+      return [];
     },
   };
   const context = {
@@ -88,7 +100,12 @@ function hostContext(scope: DoomServerHostService['scope']) {
 }
 
 function headlessFacetContext() {
-  const server = hostContext('session');
+  const directEvents: DoomDirectEventBus = {
+    publish: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
+    close: vi.fn(),
+  };
+  const server = hostContext('session', directEvents);
   const execution = {
     cwd: '/repo',
     sessionId: 'session-a',
@@ -129,10 +146,13 @@ function headlessFacetContext() {
       if (activity === undefined) throw new Error('runner activity was not registered');
       return activity;
     },
+    directEvents,
   };
 }
 
 beforeEach(() => vi.clearAllMocks());
+
+const runnerServerFacet = createRunnerServerFacet(lifecycleMocks.createContainer as unknown as RunnerContainerFactory);
 
 describe('runnerServerFacet', () => {
   it('injects the server host so the facet mounts as one fiber', () => {
@@ -162,7 +182,7 @@ describe('runnerServerFacet', () => {
     const dispose = runnerServerFacet.apply(harness.context);
 
     expect(harness.registered).toEqual([]);
-    expect(dispose).toBeUndefined();
+    expect(typeof dispose).toBe('function');
   });
 
   it('retains runner ownership across activation changes and cleans it on session disposal', async () => {
@@ -171,6 +191,9 @@ describe('runnerServerFacet', () => {
     const activity = harness.activity();
 
     const firstStop = await activity.start(harness.execution);
+    await vi.waitFor(() =>
+      expect(harness.directEvents.publish).toHaveBeenCalledWith('runner_runs', 'session-a', { runs: [] }),
+    );
     expect(lifecycleMocks.container.paths.setSessionId).toHaveBeenCalledWith('session-a');
     expect(lifecycleMocks.container.paths.setSessionId.mock.invocationCallOrder[0]).toBeLessThan(
       lifecycleMocks.container.lifeline.arm.mock.invocationCallOrder[0]!,

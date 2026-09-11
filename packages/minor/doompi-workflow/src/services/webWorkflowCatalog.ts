@@ -4,7 +4,6 @@ import type {
   WorkflowCatalogInputView,
   WorkflowCatalogJobView,
 } from '../types/webWorkflows.ts';
-
 /**
  * The cockpit's view of the workflows a session can launch.
  *
@@ -13,11 +12,10 @@ import type {
  * module only shapes that answer for the wire and remembers what it read.
  *
  * WHY A CACHE:
- * A session's catalog is recomputed on a slow tick and again on every
- * subscribe, and parsing every workflow file each time is wasted work on files
- * that change a few times a week. Entries are kept per path and reused while
- * the file's size and modification time are unchanged, which is the same test
- * a build tool makes and costs one stat per file.
+ * A session reads the catalog for its initial projection and when its lifecycle
+ * publishes a workflow update. Entries are kept per path and reused while the
+ * file's size and modification time are unchanged, which is the same test a
+ * build tool makes and costs one stat per file.
  */
 
 /** What the engine reports for one workflow file before it is parsed. */

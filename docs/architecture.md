@@ -128,7 +128,17 @@ doompi could not read its synchronized state. Run doompi sync.
 existing repository Pi settings and removes a legacy repository alias. `dpi` supplies its overlay
 in memory and uses the same repository-isolated publication without requiring persisted settings.
 
-The web hub serves the package-owned browser shell unless an explicit asset override is configured. For each session, it resolves a complete web generation from that session's repository, then uses the global generation as a web-only fallback. That selection keeps the client plugin composition, hub channels, and session-associated hub APIs together. A `session` selector proxies to the API socket owned by the session server; `hubSession` selects hub APIs from the session's web generation; no selector uses the deterministic default hub API generation. `--assets`, `DOOMPI_WEB_DIST`, and `DOOMPI_API_DIR` remain explicit operator overrides. See [Web bundling and serving](../packages/clients/doompi-web/docs/bundle.md).
+The web hub serves the package-owned browser shell unless an explicit asset override is configured. For each session, it resolves a complete web generation from that session's repository, then uses the global generation as a web-only fallback. That selection keeps the client plugin composition, hub channels, and session-associated hub APIs together. A session selector connects to the canonical headless server's authenticated `/api/pi` WebSocket and typed session services. Session package APIs are dispatched in the headless server process from the admitted `server.bundle.json`; hub APIs use the web generation. There is no separate session transport or API-directory override.
+
+## Canonical client-neutral headless server
+
+`doompi-server` is the canonical process boundary for a headless session. It creates a `DirectHarnessRuntime`, installs server facets from the admitted `server.bundle.json`, and exposes an authenticated loopback HTTP and WebSocket listener. `/api/pi` carries the Pi 0.85 protocol for client-neutral consumers, including the browser cockpit, while the runtime remains in process.
+
+The protocol publishes typed management, hub, and session services. Session operations include prompt, steer, follow-up, abort, queue management, model and thinking changes, compaction, rewind, extension UI responses, and typed state and statistics queries. The session state contains the authoritative transcript snapshot, transient progress, in-flight work, and bounded presentation projections.
+
+The journal is the durable history source. Reconnect uses replicated state and a bounded in-memory presentation window with dropped-event reporting, not a durable transport log. The listener defaults to loopback and requires a token for control routes. DoomPi Web provides the separate browser and remote-access security boundary.
+
+Configuration and descriptor failures fail closed. The server does not select an alternate module directory or another runtime generation when the admitted `server.bundle.json` is missing, malformed, or mismatched.
 
 Configuration drift and missing synchronization are diagnosed separately. `doompi sync --check` is read-only: it re-resolves configuration and package paths, compares the active fingerprint, and validates the registration, bootstrap, and full bundle map.
 

@@ -84,7 +84,7 @@ test('explains a refused attach instead of sitting blank', async ({ page, cockpi
   // The rail card carries the same story.
   await expect(page.getByTestId('session-status')).toHaveText('another cockpit holds this session');
 
-  intruder();
+  await intruder();
   // Recovery rides the hub's backoff, whose ceiling is 4s.
   await expect(page.getByTestId('refused-card')).toBeHidden({ timeout: 15_000 });
   await expect(page.getByTestId('composer-input')).toBeEnabled({ timeout: 15_000 });

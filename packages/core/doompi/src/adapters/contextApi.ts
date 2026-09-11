@@ -30,6 +30,8 @@ function isItemKind(value: string | null): value is 'tool' | 'skill' {
 export interface ContextApiOptions {
   /** The session these routes answer for; absent when the host is the hub. */
   sessionId?: string;
+  /** Session environment admitted by the host. */
+  environment?: Readonly<Record<string, string | undefined>>;
   /** Injectable for tests; defaults to the file the agent writes. */
   readDetail?: typeof readContextDetail;
 }
@@ -48,7 +50,11 @@ export function createContextApi(options: ContextApiOptions = {}): DoomApiHandle
       if (!isItemKind(itemKind)) return json({ error: 'Ask for a tool or a skill.' }, 400);
       if (name === null || name === '') return json({ error: 'Name the item to describe.' }, 400);
 
-      const file = readDetail(options.sessionId);
+      const file = options.readDetail
+        ? options.readDetail(options.sessionId, options.environment)
+        : options.environment === undefined
+          ? undefined
+          : readDetail(options.sessionId, options.environment);
       // A session that has not published yet is the ordinary state for the
       // first half-second of its life, and says so rather than looking broken.
       if (file === undefined) {
@@ -65,6 +71,9 @@ export function createContextApi(options: ContextApiOptions = {}): DoomApiHandle
 export const api: DoomApi = {
   basePath: API_BASE_PATH,
   start(context: DoomApiContext): DoomApiHandler {
-    return createContextApi(context.sessionId === undefined ? {} : { sessionId: context.sessionId });
+    return createContextApi({
+      ...(context.sessionId === undefined ? {} : { sessionId: context.sessionId }),
+      ...(context.environment === undefined ? {} : { environment: context.environment }),
+    });
   },
 };

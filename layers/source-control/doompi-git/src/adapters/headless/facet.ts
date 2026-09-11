@@ -6,10 +6,12 @@ import {
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { Context } from '@deepseek-ai/cordis';
+import { DOOM_SERVER_HOST_SERVICE, requireDoomServerHost } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { readFile } from 'node:fs/promises';
 import { RunWorktreeParams, type RunWorktreeToolParams } from '../../schemas/runWorktreeTool.ts';
 import { createWorktreeGit } from '../worktree/gitCli.ts';
 import { createWorktreeOperations } from '../worktree/worktreeOperations.ts';
+import { createWorktreeMessageInbox } from '../worktree/worktreeEvents.ts';
 import {
   executeRunWorktreeTool,
   RUN_WORKTREE_DESCRIPTION,
@@ -32,10 +34,21 @@ function progressResult(action: RunWorktreeToolParams['action'], label: string):
 }
 
 export const gitHeadlessFacet = {
-  inject: [DOOM_HEADLESS_HOST_SERVICE],
+  inject: [DOOM_HEADLESS_HOST_SERVICE, DOOM_SERVER_HOST_SERVICE],
   apply(context: Context) {
     const host = requireDoomHeadlessHost(context);
-    const operations = createWorktreeOperations({ git: createWorktreeGit() });
+    const serverHost = requireDoomServerHost(context);
+    if (serverHost.context.directEvents === undefined)
+      throw new Error('Git headless facet requires the session direct event bus.');
+    if (serverHost.context.sessionId === undefined) throw new Error('Git headless facet requires a session identity.');
+    const sessionId = serverHost.context.sessionId;
+    const directEvents = serverHost.context.directEvents;
+    const messageInbox = createWorktreeMessageInbox(directEvents, sessionId);
+    const operations = createWorktreeOperations({
+      git: createWorktreeGit(),
+      sessionService: serverHost.context.sessionService,
+      messageInbox,
+    });
     const resources: DoomHeadlessResource[] = [
       { name: 'doompi-git', kind: 'context', read: () => readPackageResource('llms.txt') },
       { name: 'doompi-use-git', kind: 'skill', read: () => readPackageResource('src/prompts/doompi-use-git/SKILL.md') },
@@ -58,6 +71,7 @@ export const gitHeadlessFacet = {
     };
     const registrations = [...resources.map((resource) => host.registerResource(resource)), host.registerTool(tool)];
     return () => {
+      messageInbox.close();
       for (const registration of registrations.reverse()) registration.dispose();
     };
   },

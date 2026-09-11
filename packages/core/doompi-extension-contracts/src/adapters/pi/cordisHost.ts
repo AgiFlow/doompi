@@ -9,11 +9,8 @@ import { createDoomToolSurface } from '../../services/toolSurface.ts';
 
 export const DOOM_CORDIS_HOST_ABI_VERSION = 1 as const;
 export const DOOM_CORDIS_HOST_QUERY_CHANNEL = 'doom:cordis:host:v1:query';
-export const DOOM_CORDIS_HOST_REQUIRED_ENV = 'DOOMPI_CORDIS_HOST_REQUIRED';
 export const DOOM_CORDIS_RUNTIME_SERVICE = 'doom/runtime';
 export const DOOM_CORDIS_SESSION_SERVICE = 'doom/session';
-
-const ENABLED_FLAG = '1';
 const HOST_PROTOCOL = 'doom.cordis.host';
 const DEFAULT_HOST_SOURCE = '@agimon-ai/doompi/cordis-host';
 
@@ -45,12 +42,6 @@ export interface DoomCordisHostController {
   readonly runtime: DoomCordisRuntimeService;
   /** Recursively disposes the session and application plugin tree. */
   shutdown(): Promise<void>;
-}
-
-export interface ConnectDoomCordisHostOptions {
-  readonly environment?: Readonly<Record<string, string | undefined>>;
-  /** Host/finalizer entries disable fallback so a malformed composition fails closed. */
-  readonly allowStandalone?: boolean;
 }
 
 export interface InstallDoomCordisHostOptions {
@@ -291,23 +282,11 @@ export async function installDoomCordisHost(
   return controller;
 }
 
-/** Resolves the composed host, or installs one shared standalone fallback. */
-export async function connectDoomCordisHost(
-  pi: ExtensionAPI,
-  source: string,
-  options: ConnectDoomCordisHostOptions = {},
-): Promise<DoomCordisHostConnection> {
-  let responder = exactlyOneHost(discoverHosts(pi, source), source);
-  if (!responder) {
-    const environment = options.environment ?? process.env;
-    const fallbackAllowed = options.allowStandalone ?? environment[DOOM_CORDIS_HOST_REQUIRED_ENV] !== ENABLED_FLAG;
-    if (!fallbackAllowed) {
-      throw new Error('The composed Doom Cordis host is unavailable. Ensure cordisHost is the first extension.');
-    }
-    await installDoomCordisHost(pi, { mode: 'standalone', source: `${source}:standalone-host` });
-    responder = exactlyOneHost(discoverHosts(pi, source), source);
-  }
-  if (!responder) throw new Error('The Doom Cordis standalone host could not be installed.');
+/** Resolves the composed host installed by the canonical runtime. */
+export async function connectDoomCordisHost(pi: ExtensionAPI, source: string): Promise<DoomCordisHostConnection> {
+  const responder = exactlyOneHost(discoverHosts(pi, source), source);
+  if (!responder)
+    throw new Error('The composed Doom Cordis host is unavailable. Ensure cordisHost is the first extension.');
   await responder.ready;
   return responder.acquire();
 }

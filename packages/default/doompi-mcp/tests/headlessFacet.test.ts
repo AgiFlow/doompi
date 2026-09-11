@@ -9,8 +9,10 @@ import {
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { describe, expect, it, vi } from 'vitest';
+import { sessionConfigEnvironment } from '../src/adapters/process/sessionConfig.ts';
 
 const runtimeState = vi.hoisted(() => ({
+  startError: undefined as unknown,
   services: undefined as
     | {
         clientManager: {
@@ -26,6 +28,7 @@ vi.mock('../src/adapters/node/mcpRuntime.ts', () => ({
       onAuthorizationUrl: (url: URL, serverName: string) => void;
       onServerStateChange: (change: { serverName: string; state: string }) => void;
     }): Promise<void> {
+      if (runtimeState.startError !== undefined) throw runtimeState.startError;
       options.onAuthorizationUrl(new URL('https://mcp.example/authorize'), 'example');
       options.onServerStateChange({ serverName: 'example', state: 'connected' });
     }
@@ -46,10 +49,12 @@ function contextFor(host: DoomHeadlessHostService): Context {
   } as unknown as Context;
 }
 
-function execution(): DoomHeadlessExecutionContext {
+function execution(environment: Readonly<Record<string, string | undefined>> = {}): DoomHeadlessExecutionContext {
   return {
     cwd: '/tmp',
+    repoRoot: '/tmp',
     sessionId: 'mcp-headless-test',
+    environment,
     client: {
       notify: vi.fn(),
       request: vi.fn(),
@@ -169,7 +174,43 @@ describe('MCP headless facet', () => {
     await stop();
     expect(testExecution.client.setStatus).toHaveBeenCalledWith('doompi-mcp', undefined);
 
+    runtimeState.startError = new Error('startup failed');
+    const stopFailedRuntime = await activity.start(testExecution);
+    expect(testExecution.client.notify).toHaveBeenLastCalledWith({
+      title: 'DoomPi MCP unavailable',
+      body: 'startup failed',
+      level: 'warning',
+    });
+    await stopFailedRuntime();
+    runtimeState.startError = undefined;
+
     close();
     expect(disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
+  });
+
+  it('reads each session MCP configuration from its admitted environment', async () => {
+    const resources: DoomHeadlessResource[] = [];
+    const register = () => ({ dispose: vi.fn() });
+    const host = {
+      registerResource: (resource: DoomHeadlessResource) => {
+        resources.push(resource);
+        return register();
+      },
+      registerActivity: vi.fn(() => register()),
+      registerCommand: vi.fn(() => register()),
+      registerTool: vi.fn(() => register()),
+    } as unknown as DoomHeadlessHostService;
+    const close = mcpHeadlessFacet.apply(contextFor(host));
+    const resource = resources[0];
+    if (!resource) throw new Error('MCP config resource was not registered');
+
+    const first = execution(sessionConfigEnvironment({ repoRoot: '/first-repo', stagingDirectory: '/tmp/first-mcp' }));
+    const second = execution(
+      sessionConfigEnvironment({ repoRoot: '/second-repo', stagingDirectory: '/tmp/second-mcp' }),
+    );
+
+    expect(JSON.parse(await resource.read(first))).toMatchObject({ repoRoot: '/first-repo' });
+    expect(JSON.parse(await resource.read(second))).toMatchObject({ repoRoot: '/second-repo' });
+    close?.();
   });
 });

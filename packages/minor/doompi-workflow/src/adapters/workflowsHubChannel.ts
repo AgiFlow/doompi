@@ -1,57 +1,75 @@
-import type { HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
-import { type ParsedWorkflowRun, presentWorkflowRuns, runBelongsToSession } from '../services/workflowRuns.ts';
-import { WORKFLOW_RUNS_TYPE, type WorkflowRunView } from '../types/webWorkflows.ts';
-import { createWorkflowCatalogChannel } from './workflowCatalogChannel.ts';
-import { watchWorkflowRuns } from './workflowWatcher.ts';
+import type {
+  DoomHubChannelSource,
+  DoomHubSessionScope,
+  DoomHubChannel,
+} from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import { presentWorkflowRuns, runBelongsToSession, type ParsedWorkflowRun } from '../services/workflowRuns.ts';
+import { readWorkflowRuns, type ReadWorkflowRunsOptions } from './workflowWatcher.ts';
+import { WORKFLOW_RUNS_TYPE, type WorkflowRunView, type WorkflowRunsPayload } from '../types/webWorkflows.ts';
 
 export interface WorkflowsChannelOptions {
-  /** Injectable for tests; defaults to watching workflow-mcp's registry. */
-  watch?: typeof watchWorkflowRuns;
+  /** Injectable durable initial snapshot reader for tests. */
+  read?: (options: ReadWorkflowRunsOptions) => ParsedWorkflowRun[];
+}
+
+function isWorkflowRunsPayload(value: unknown): value is WorkflowRunsPayload {
+  return typeof value === 'object' && value !== null && Array.isArray((value as { runs?: unknown }).runs);
 }
 
 /**
- * The workflows data channel: one hub-wide registry watcher, filtered and
- * presented per session on demand, published as { runs } payloads under the
- * 'workflow_runs' frame type. Live announcements are deduped per session by
- * JSON fingerprint; the subscribe-time snapshot is recomputed so retention
- * keeps moving between registry changes.
+ * The workflow runs data channel. Durable registry state seeds each session
+ * once; subsequent updates arrive through the host-owned direct event bus.
  */
-export function createWorkflowsChannel(options: WorkflowsChannelOptions = {}): WebHubChannel {
+export function createWorkflowsChannel(options: WorkflowsChannelOptions = {}): DoomHubChannel {
+  const read = options.read ?? readWorkflowRuns;
   return {
     frameType: WORKFLOW_RUNS_TYPE,
     start(host) {
-      let parsed: ParsedWorkflowRun[] = [];
-      const lastPublished = new Map<string, string>();
-      const runsFor = (scope: HubSessionScope): WorkflowRunView[] =>
+      const scopes = new Map<string, DoomHubSessionScope>();
+      const latest = new Map<string, WorkflowRunsPayload>();
+      const subscriptions = new Map<string, () => void>();
+      const runsFor = (scope: DoomHubSessionScope, parsed: readonly ParsedWorkflowRun[]): WorkflowRunView[] =>
         presentWorkflowRuns(
           parsed.filter((run) => runBelongsToSession(run, scope.sessionId)).map((run) => run.view),
           Date.now(),
         );
-      const watcher = (options.watch ?? watchWorkflowRuns)((runs) => {
-        parsed = runs;
-        for (const scope of host.sessions()) {
-          const view = runsFor(scope);
-          const json = JSON.stringify(view);
-          if (json === lastPublished.get(scope.sessionId)) continue;
-          lastPublished.set(scope.sessionId, json);
-          host.publish(scope.sessionId, { runs: view });
-        }
-      });
-      const channelSource: HubChannelSource = {
+      const publish = (scope: DoomHubSessionScope, payload: WorkflowRunsPayload): void => {
+        latest.set(scope.sessionId, payload);
+        host.publish(scope.sessionId, payload);
+      };
+      const source: DoomHubChannelSource = {
         payloadFor(scope) {
-          return { runs: runsFor(scope) };
+          return scopes.has(scope.sessionId) ? latest.get(scope.sessionId) : undefined;
+        },
+        sessionAdded(scope) {
+          scopes.set(scope.sessionId, scope);
+          subscriptions.get(scope.sessionId)?.();
+          const unsubscribe = host.directEvents.subscribe(
+            WORKFLOW_RUNS_TYPE,
+            scope.sessionId,
+            (value) => {
+              if (isWorkflowRunsPayload(value)) publish(scope, value);
+            },
+            { replayLatest: true },
+          );
+          subscriptions.set(scope.sessionId, unsubscribe);
+          const payload = { runs: runsFor(scope, read({ environment: scope.environment })) };
+          publish(scope, payload);
         },
         sessionRemoved(sessionId) {
-          lastPublished.delete(sessionId);
+          subscriptions.get(sessionId)?.();
+          subscriptions.delete(sessionId);
+          scopes.delete(sessionId);
+          latest.delete(sessionId);
         },
         close() {
-          watcher.close();
+          for (const unsubscribe of subscriptions.values()) unsubscribe();
+          subscriptions.clear();
+          scopes.clear();
+          latest.clear();
         },
       };
-      return channelSource;
+      return source;
     },
   };
 }
-
-/** The named export the generated hub registry imports. */
-export const webHubChannels: readonly WebHubChannel[] = [createWorkflowsChannel(), createWorkflowCatalogChannel()];

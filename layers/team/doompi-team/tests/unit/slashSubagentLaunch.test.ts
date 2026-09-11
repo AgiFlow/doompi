@@ -11,9 +11,9 @@ import type { PollSchedulerContract, PollSubscription } from '../../src/adapters
 import {
   launchParallelSubagents,
   launchSingleSubagent,
-  requestSlashRunStop,
   watchTrackedRunUntilTerminal,
 } from '../../src/adapters/pi/commands/slash/subagentLaunch';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 const config: ExtensionConfig = {};
 
@@ -78,7 +78,7 @@ describe('launchSingleSubagent', () => {
     const result = await launchSingleSubagent(
       planner,
       tracker,
-      { agent: 'worker', task: 'do it', cwd: '/work', agentScope: 'both' },
+      { agent: 'worker', task: 'do it', cwd: '/work', agentScope: 'both', sessionScope: TEST_SESSION_SCOPE },
       config,
     );
 
@@ -99,7 +99,7 @@ describe('launchSingleSubagent', () => {
     await launchSingleSubagent(
       planner,
       tracker,
-      { agent: 'worker', task: 'x', cwd: '/work', agentScope: 'both' },
+      { agent: 'worker', task: 'x', cwd: '/work', agentScope: 'both', sessionScope: TEST_SESSION_SCOPE },
       config,
     );
 
@@ -118,6 +118,7 @@ describe('launchSingleSubagent', () => {
         task: 'x',
         cwd: '/work',
         agentScope: 'both',
+        sessionScope: TEST_SESSION_SCOPE,
         model: 'sonnet',
         context: 'fork',
         parentModel: { provider: 'openai-codex', id: 'gpt-5.6-luna' },
@@ -157,6 +158,7 @@ describe('launchParallelSubagents', () => {
         cwd: '/work',
         agentScope: 'both',
         concurrency: 2,
+        sessionScope: TEST_SESSION_SCOPE,
       },
       config,
     );
@@ -164,40 +166,6 @@ describe('launchParallelSubagents', () => {
     expect(planner.spawnCalls[0]?.tasks).toHaveLength(2);
     expect(planner.spawnCalls[0]?.concurrency).toBe(2);
     expect(tracker.tracked).toEqual(['run-a', 'run-b']);
-  });
-});
-
-describe('requestSlashRunStop', () => {
-  it('writes a stop request by default', () => {
-    // No fs seam is exposed here deliberately - requestAsyncStop itself is
-    // already covered by control-channel.test.ts; this test only proves
-    // requestSlashRunStop calls the right one, not the write mechanics.
-    expect(() => requestSlashRunStop('nonexistent-run')).not.toThrow();
-  });
-
-  it('propagates a real write failure rather than swallowing it', async () => {
-    const controlChannel = await import('../../src/adapters/intercom/supervisorControlChannel');
-    const spy = vi.spyOn(controlChannel, 'requestAsyncStop').mockImplementation(() => {
-      throw new Error('disk full');
-    });
-    try {
-      expect(() => requestSlashRunStop('run-1')).toThrow('disk full');
-    } finally {
-      spy.mockRestore();
-    }
-  });
-
-  it('calls requestAsyncInterrupt instead when mode is interrupt', async () => {
-    const controlChannel = await import('../../src/adapters/intercom/supervisorControlChannel');
-    const interruptSpy = vi.spyOn(controlChannel, 'requestAsyncInterrupt').mockImplementation(() => 'path');
-    const stopSpy = vi.spyOn(controlChannel, 'requestAsyncStop');
-    try {
-      requestSlashRunStop('run-1', 'interrupt', 'user requested stop');
-      expect(interruptSpy).toHaveBeenCalledWith(expect.stringContaining('run-1'), { reason: 'user requested stop' });
-      expect(stopSpy).not.toHaveBeenCalled();
-    } finally {
-      interruptSpy.mockRestore();
-    }
   });
 });
 

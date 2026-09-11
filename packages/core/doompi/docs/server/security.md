@@ -1,6 +1,6 @@
 # Security and trust boundaries
 
-`doompi-server` protects access to one local agent. It is not a sandbox and it is not a public gateway. The agent may run shell commands with the account's authority, so reaching its control interfaces is equivalent to controlling that agent.
+`doompi-server` protects access to one local agent runtime. It is not a sandbox and it is not a public gateway. The harness may run shell commands with the account's authority, so reaching its control surface is equivalent to controlling that session.
 
 ## The trust model
 
@@ -8,103 +8,94 @@
 trusted owner account
   |
   +-- doompi-server
-  |     +-- configured agent command and extensions
-  |     +-- generated package APIs
-  |     +-- Unix sockets and registry files
+        +-- DirectHarnessRuntime
+        +-- configured extensions and server facets
+        +-- session journal and in-process APIs
+        +-- authenticated HTTP/WebSocket listener
   |
-  +-- trusted local client or DoomPi Web hub
-          |
-          +-- browser boundary owned by DoomPi Web
+  +-- trusted local client or DoomPi Web
+        +-- browser boundary owned by DoomPi Web
 ```
 
-The server answers one question: which local processes can reach the session. Filesystem permissions and an attach token narrow that set. They do not defend against root, a compromised owner account, hostile code already running as that owner, or a malicious extension loaded into the agent.
+The server answers which callers can reach the session. Loopback binding and a random token narrow that set. They do not defend against root, a compromised owner account, hostile code already running as that owner, or a malicious extension loaded into the runtime.
 
-Remote browser authentication, tunnel policy, passkeys, and containment belong to DoomPi Web. Adding `--web` does not turn the session server itself into a network security boundary.
+Remote browser authentication, tunnel policy, passkeys, and containment belong to DoomPi Web. The server's listener is not a replacement for those controls.
 
 ## Security goals
 
 The design aims to:
 
-- keep session transports off public network interfaces
-- avoid placing the attach token in process arguments or registry records
-- let the web hub attach without giving the token to browser JavaScript
-- make discovery records owner-only and atomically replaceable
-- isolate a broken optional package API from the agent and other APIs
+- keep the default listener on loopback;
+- keep the session token out of process arguments and application state sent to clients;
+- authenticate direct HTTP and `/api/pi` protocol access with a random capability;
+- load only modules from an admitted, generation-pinned `server.bundle.json`;
+- keep package handlers in process while isolating optional facet failures; and
+- preserve session history ownership so two runtimes cannot write the same journal concurrently.
 
 It does not attempt to:
 
-- contain the agent or trusted package code
-- protect data from the account running the server
-- encrypt local Unix-socket traffic
-- authorize arbitrary TCP forwarding of a socket
+- contain the harness or trusted package code;
+- protect data from the account running the server;
+- encrypt traffic when the listener is exposed without TLS; or
+- authorize arbitrary reverse proxies or tunnels.
 
 ## Capability map
 
-| Asset                 | Protection                                                               | Remaining trust                                                                     |
-| --------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| Framed session socket | Created under a `0177` umask with mode `0600`; attach token required     | Owner, root, token holder, and anyone able to replace a socket in a writable parent |
-| Attach token          | Read from a file and compared with a timing-safe equal-length check      | Caller creates and protects the file                                                |
-| Registry record       | Session directory `0700`; atomic record mode `0600`; token value omitted | Paths remain sensitive; existing custom directories are not tightened               |
-| Pi protocol socket    | Requested mode `0600`                                                    | Filesystem access is the authorization boundary; there is no token handshake        |
-| Package API socket    | Local Unix socket beside the session socket                              | Creation permissions follow the process umask; handlers are trusted executable code |
-| Agent process         | Child of the server with the session working directory and environment   | Command, configuration, repository, and dependencies are trusted inputs             |
+| Asset                       | Protection                                                             | Remaining trust                                                       |
+| --------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| HTTP and `/api/pi` listener | Loopback by default; token required except health                      | Owner, root, token holder, and any exposed reverse proxy              |
+| Listener token              | Read from a file and compared as a bearer capability                   | Caller creates and protects the file                                  |
+| Server bundle               | Admitted generation, fingerprint, confined descriptor and module paths | Synchronized repository and package contents are trusted inputs       |
+| Session journal             | Explicit history ownership and v4 JSONL storage                        | Owner and any process able to access the session directory            |
+| Package APIs                | In-process registration and fixed route mounts                         | Handlers are trusted executable code                                  |
+| Direct harness              | Same-process runtime with configured working directory and environment | Command, configuration, repository, model providers, and dependencies |
 
-Use a private parent directory and a restrictive umask. Changing `--registry-dir` or `DOOMPI_RUNTIME_DIR` changes a location, not the authorization model.
-
-## Why the framed socket also has a token
-
-The framed socket is the lowest-level control path. After attachment, a client can send Pi RPC commands directly to the agent. Requiring both filesystem reachability and a random token gives the hub a deliberate capability to present rather than treating any process that discovers the path as attached.
-
-The server reads and trims `--auth-token-file` during startup and rejects an empty value. The token never needs to appear in the command line. An attached connection is authenticated once, not on every frame. Rotating the token therefore requires stopping the server, replacing the protected file, and starting the session again.
-
-The server does not create or chmod the token file. Create it before launch with an owner-only umask:
+Create the token before launch with an owner-only umask:
 
 ```bash
-(umask 077; openssl rand -base64 32 > "$runtime_dir/token")
+(umask 077; openssl rand -base64 32 > "$token_file")
 ```
 
-Do not store it in the repository, a shared runtime directory, a public environment variable, or an argument list.
+Do not store it in the repository, a shared runtime directory, a public environment variable, or an argument list. Rotating it requires stopping the server, replacing the protected file, and starting the session again.
 
-## Registry records are capabilities by reference
+## Listener authentication
 
-A session record does not contain the token bytes, but it names `tokenFile`, `socketPath`, `protocolSocketPath`, optional `apiSocketPath`, `cwd`, and the server process ID. DoomPi Web trusts these values after confirming that the recorded process is alive.
+`/api/health` is intentionally unauthenticated so a local supervisor can check readiness. Every other HTTP route and the `/api/pi` upgrade require the configured token. HTTP clients should use `Authorization: Bearer <token>` or `x-doompi-token`. A WebSocket client may use the same capability in its upgrade headers or query string. Prefer a header because URLs can appear in logs.
 
-The registry must therefore remain private. Reading it reveals where the session and its credential live; modifying it can redirect a watcher toward attacker-chosen paths. Atomic owner-only records prevent partial reads, but they do not make a writable custom parent safe.
+A token authenticates the caller to the session. It is not a per-operation permission system. A holder can prompt, steer, abort, change configuration, rewind, answer extension UI, and invoke mounted package APIs. Treat it as full session control.
 
-## Internal API credentials
+## Descriptor and package trust
 
-The server creates an internal API token and passes it to the child as `DOOMPI_SESSION_API_INTERNAL_TOKEN` with the API socket path. Trusted session APIs also receive the attach token as `hubToken` context.
+The server does not compile or discover package code while serving a request. It loads the admitted `server.bundle.json`, checks generation and fingerprint identity, confines each module path to that generation, filters ownership and scope, and then starts each eligible facet.
 
-These values coordinate trusted child and package code. They are not automatic HTTP authorization, and the server does not send them to a browser or write them into the registry. A package API can still misuse its context, so generated API modules must be treated like extensions: executable code with the owner's authority.
+Required facet failures prevent readiness. Optional failures are reported and isolated. A malformed or missing descriptor never selects an alternate directory or legacy module set. This fail-closed behavior protects against accidentally running package code from a different repository generation.
+
+Package handlers receive trusted process context, not automatic browser authorization. Validate bodies, bound reads and streams, constrain file paths to the intended scope, and do not return secrets merely because a request arrived with a valid server token.
 
 ## Browser and remote access
 
-With `--web`, the server either joins an existing DoomPi Web hub or starts one on loopback. The hub reads the token file and owns the one framed session attachment. Browser pages do not receive the Unix attach token and cannot perform that handshake themselves.
+DoomPi Web owns browser authentication and proxies `/api/pi` to the session server. It can add the server token on the upstream request without exposing that token to browser JavaScript. A remote browser receives DoomPi Web's separate device and session credentials, which can still grant powerful session control.
 
-A remote browser receives a separate DoomPi Web device cookie. That cookie authorizes the cockpit, which can in turn control the agent. The distinction prevents exposing the session credential to browser JavaScript, but it does not make remote cockpit access less powerful.
+Before putting the cockpit behind a tunnel, review the web package's pairing, origin, cookie, passkey, sealed transport, signed bundle, and optional container controls. Do not publish the server listener through an unauthenticated TCP forwarder. A tunnel changes reachability, not authority.
 
-Before putting the cockpit behind a tunnel, review the web package's pairing, origin, cookie, passkey, sealed transport, signed bundle, and optional container design. Do not publish `session.sock`, `<listen>.pi`, or `api.sock` through an unauthenticated TCP forwarder.
+## Data, replay, and diagnostics
 
-An SSH or local process tunnel changes reachability, not authority. Anyone given a path and token should be treated as a session controller.
+The session journal contains conversation and tool history according to the upstream v4 JSONL format. The runtime also keeps current transcript state, in-flight work, and bounded presentation events in process memory. Presentation history is limited to 1,024 events or 8 MiB and reports dropped events; current projections are retained separately. This supports reconnect recovery but is not a durable audit log.
 
-## Data and diagnostics
-
-The framed socket forwards Pi RPC content without redaction. The routed service keeps transcript and session state in memory. Agent stderr is inherited by the launching terminal and may contain diagnostics produced by the agent or extensions.
-
-Server telemetry records lifecycle, transport, and coarse assistant usage events. Its transcript aggregate omits message and tool content. This is a telemetry property, not a guarantee that terminals, clients, extensions, or package APIs do not log their own data.
+Server telemetry records lifecycle and coarse usage events. Its transcript aggregate omits message and tool content. This is a telemetry property, not a guarantee that clients, extensions, package APIs, or the harness do not log their own data.
 
 ## Operating posture
 
-1. Create the runtime and token under an owner-only directory.
-2. Keep socket parents, registry files, token files, and generated API directories private.
-3. Treat `DOOMPI_AGENT_COMMAND`, repository-local DoomPi packages, generated API modules, and agent configuration as executable inputs.
-4. Give the protocol and package API sockets only to trusted local processes.
+1. Create the token under an owner-only directory.
+2. Keep the session journal, synchronized generation, and package modules private.
+3. Treat repository configuration, model providers, extensions, and server facets as executable inputs.
+4. Bind direct servers to loopback unless an authenticated TLS boundary is already in place.
 5. Use DoomPi Web's documented controls for browser and remote access.
-6. Rotate the attach token by replacing the file while the server is stopped.
-7. Do not rely on an obscure path, custom registry, or non-default port as authentication.
+6. Rotate the token by replacing the file while the server is stopped.
+7. Do not rely on an obscure path, port, or URL as authentication.
 
 ## Known limits
 
-Unix permissions do not defend against root or the owner account. Unix sockets have no built-in TLS. A holder of the attach token can control the session. Package APIs and agent extensions run as trusted code. The reconnect backlog and transcript projection keep data in process memory. None of these controls contain what the agent can do inside its working environment.
+Loopback and file permissions do not defend against root or the owner account. A token holder can control the session. Package APIs and extensions run as trusted code. The replay window and transcript projection keep data in process memory, while the journal persists session history. None of these controls contain what the harness can do inside its working environment.
 
-See [IPC](ipc.md) for exact socket behavior and [Lifecycle](lifecycle.md) for startup, cleanup, and crash recovery.
+See [IPC](ipc.md) for exact protocol behavior and [Lifecycle](lifecycle.md) for startup, cleanup, and history recovery.

@@ -421,6 +421,7 @@ describe('Doom configuration', () => {
     vi.stubEnv('DOOMPI_ROOT', repo);
     vi.stubEnv('DOOMPI_MAJOR_MODE', 'copilot');
     vi.stubEnv('DOOMPI_DOMAINS', 'default');
+    vi.stubEnv('DOOMPI_PROFILE', '');
 
     const selected = configContext(repo, {
       version: 1,
@@ -450,6 +451,7 @@ describe('Doom configuration', () => {
     vi.stubEnv('DOOMPI_ROOT', repo);
     vi.stubEnv('DOOMPI_MAJOR_MODE', 'copilot');
     vi.stubEnv('DOOMPI_DOMAINS', 'default');
+    vi.stubEnv('DOOMPI_PROFILE', '');
 
     const context = configContext(repo, { version: 1, majorMode: 'copilot', domains: ['default'] });
 
@@ -464,6 +466,7 @@ describe('Doom configuration', () => {
     vi.stubEnv('DOOMPI_ROOT', repo);
     vi.stubEnv('DOOMPI_MAJOR_MODE', 'copilot');
     vi.stubEnv('DOOMPI_DOMAINS', 'default');
+    vi.stubEnv('DOOMPI_PROFILE', '');
     vi.stubEnv('DOOMPI_COMPOSITION_FINGERPRINT', TARGET_COMPOSITION_FINGERPRINT);
     const pendingSelection: DoomConfigPendingSelection = {
       version: 1,

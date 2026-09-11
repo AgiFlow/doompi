@@ -2,8 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { assertDeclaredApi, mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
+import { mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createPlanApi, api, MAX_PLAN_BYTES } from '../../src/adapters/planApi.ts';
 import {
@@ -19,8 +18,6 @@ import {
   SESSION_QUERY_PARAM,
 } from '../../src/types/planApi.ts';
 import type { PlanPointerPort } from '../../src/types/planPointer.ts';
-
-const PACKAGE_ROOT = path.resolve(fileURLToPath(import.meta.url), '..', '..', '..');
 
 /**
  * The routes over a real plan file, because what they promise is about a file:
@@ -251,11 +248,5 @@ describe('the plans API as a host mounts it', () => {
     expect((await mounted.fetch(`/api/plugin/${API_BASE_PATH}${currentPath()}`)).status).toBe(404);
     expect((await mounted.fetch('/api/plugin/elsewhere/current')).status).toBe(404);
     mounted.close();
-  });
-
-  it('declares a session facet for the API-owned base path', () => {
-    expect(assertDeclaredApi({ packageRoot: PACKAGE_ROOT, api, scope: 'session' })).toMatchObject({
-      basePath: API_BASE_PATH,
-    });
   });
 });

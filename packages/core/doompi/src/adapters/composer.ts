@@ -9,7 +9,6 @@ import { PERSONA_ENTRY, packageAttribution, resolveExtensionComposition } from '
 import type { HarnessPreset } from '../types/interfaces/harness';
 import { findSyncedRoot, readBundleStatus } from './bootstrapLocator.ts';
 import { alreadyComposed } from '@agimon-ai/doompi-extension-contracts/child-process';
-import { DOOM_CORDIS_HOST_REQUIRED_ENV } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { COMPOSED_ENV, EXTERNAL_EXTENSIONS_ENV, MUTE_ENV } from './compositionState.ts';
 import {
   createHarnessSession,
@@ -293,7 +292,6 @@ export async function composeRuntimeLoadPlan(
     ...context,
     mute: environment[MUTE_ENV] === ENABLED_FLAG,
   });
-  environment[DOOM_CORDIS_HOST_REQUIRED_ENV] = ENABLED_FLAG;
   updateHarnessState(
     {
       childExtensions: [...composition.childActivation],

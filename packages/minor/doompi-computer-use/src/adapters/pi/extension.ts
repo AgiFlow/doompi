@@ -360,7 +360,7 @@ export async function activateComputerUseExtension(
   pi: ExtensionAPI,
   dependencies: ComputerUseExtensionDependencies = createComputerUseContainer(),
 ): Promise<void> {
-  const connection = await connectDoomCordisHost(pi, PACKAGE_SOURCE, { allowStandalone: true });
+  const connection = await connectDoomCordisHost(pi, PACKAGE_SOURCE);
   const fiber = connection.root.plugin(computerUsePlugin, { pi, dependencies });
   try {
     await fiber;

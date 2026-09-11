@@ -11,9 +11,8 @@ import type { DoomLeaderContributionHandle, LeaderBinding } from '@agimon-ai/doo
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { voiceMediaHostConnection } from '../audio/clientMedia.ts';
 import { VoiceConfigController } from '../../adapters/pi/voiceConfig';
-import { createVoiceContainer, installVoiceRuntime, voiceLeaderBindings } from './voice.ts';
+import { createVoiceContainer, installVoiceRuntime, voiceLeaderBindings, type VoiceExtensionOptions } from './voice.ts';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-voice';
 const FOOTER_ID = 'voice-activity';
@@ -41,9 +40,10 @@ async function waitForOperation(operation: Promise<void>, signal?: AbortSignal):
 
 interface VoicePluginConfig {
   readonly pi: ExtensionAPI;
+  readonly options: VoiceExtensionOptions;
 }
 
-function voicePlugin(cordis: Context, { pi }: VoicePluginConfig): void {
+function voicePlugin(cordis: Context, { pi, options }: VoicePluginConfig): void {
   cordis.inject([DOOM_HELP_SERVICE], (helpContext) => {
     const contribution = requireDoomHelpService(helpContext).register({
       source: PACKAGE_SOURCE,
@@ -60,7 +60,7 @@ function voicePlugin(cordis: Context, { pi }: VoicePluginConfig): void {
   });
 
   cordis.effect(function* () {
-    const container = createVoiceContainer();
+    const container = options.container ?? createVoiceContainer({ clientMedia: options.clientMedia });
     let active = true;
     let generation = 0;
     let readiness:
@@ -99,10 +99,10 @@ function voicePlugin(cordis: Context, { pi }: VoicePluginConfig): void {
     const leader = { update: (bindings: readonly LeaderBinding[]) => activeLeader?.update(bindings) };
 
     installVoiceRuntime(cordis, pi, {
+      ...options,
       footer,
       leader,
       container,
-      ownershipHost: voiceMediaHostConnection(),
       waitUntilConfigured,
     });
 
@@ -202,9 +202,9 @@ function voicePlugin(cordis: Context, { pi }: VoicePluginConfig): void {
 }
 
 /** The package's single standard Pi factory, including all optional typed host integrations. */
-export async function voicePiExtension(pi: ExtensionAPI): Promise<void> {
+export async function voicePiExtension(pi: ExtensionAPI, options: VoiceExtensionOptions = {}): Promise<void> {
   const connection = await connectDoomCordisHost(pi, PACKAGE_SOURCE);
-  const fiber = connection.root.plugin(voicePlugin, { pi });
+  const fiber = connection.root.plugin(voicePlugin, { pi, options });
   try {
     await fiber;
   } catch (error) {

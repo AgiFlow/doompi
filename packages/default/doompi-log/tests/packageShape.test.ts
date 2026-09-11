@@ -14,10 +14,7 @@ const CONFIG_FILES = ['tsdown.config.ts', 'tsconfig.json', 'vitest.config.ts', '
 const EXPORT_SUBPATHS = [
   '.',
   './extensions/pi',
-  './extensions/headless',
   './extensions/server',
-  // Useful API export retained; the server facet owns its hub registration.
-  './hub-api',
   './metrics',
   './metricsSource',
   './tui/metricsOverlay',

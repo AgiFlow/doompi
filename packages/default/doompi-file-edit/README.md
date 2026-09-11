@@ -27,12 +27,11 @@ same extension:
 pi install npm:@agimon-ai/doompi-file-edit
 ```
 
-| Entry                                       | Purpose                                      |
-| ------------------------------------------- | -------------------------------------------- |
-| `@agimon-ai/doompi-file-edit/extensions/pi` | Timeline and DoomPi Leader shortcut          |
-| `@agimon-ai/doompi-file-edit/session-api`   | HTTP routes the cockpit reads a file through |
-| `@agimon-ai/doompi-file-edit/web-hub`       | Hub channel publishing the changed-file list |
-| `@agimon-ai/doompi-file-edit`               | Library API                                  |
+| Entry                                           | Purpose                                                  |
+| ----------------------------------------------- | -------------------------------------------------------- |
+| `@agimon-ai/doompi-file-edit/extensions/pi`     | Timeline and DoomPi Leader shortcut                      |
+| `@agimon-ai/doompi-file-edit/extensions/server` | Server-owned file API and changed-file channel lifecycle |
+| `@agimon-ai/doompi-file-edit`                   | Library API                                              |
 
 ## Open the timeline
 

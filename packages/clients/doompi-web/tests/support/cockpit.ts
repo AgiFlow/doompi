@@ -1,138 +1,40 @@
-import { type ChildProcess, spawn } from 'node:child_process';
 import fs from 'node:fs';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHeadlessHub, serveHeadlessServer, type HeadlessSessionHost } from '@agimon-ai/doompi/server';
 import { test as base } from '@playwright/test';
-import { type FakeSession, type FakeSessionOptions, startFakeSession } from './fakeSession.ts';
-import { startRunnerApiSocket } from './runnerRuns.ts';
+import { serveWeb } from '../../src/adapters/httpServer.ts';
+import { type HeadlessSession, startHeadlessSession } from './headlessSession.ts';
+import { startRunnerApiServer, type RunnerApiServer } from './runnerRuns.ts';
 
 const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
-const binary = path.join(packageRoot, 'dist', 'bin', 'serve.mjs');
-
-/**
- * A stand-in doompi-server for the create-session flow: registers itself the
- * way the real bin would and stays alive until the fixture kills it.
- */
-const REGISTERING_SERVER = `#!/usr/bin/env node
-const args = process.argv.slice(2);
-const value = (flag) => args[args.indexOf(flag) + 1];
-const fs = require('node:fs');
-const path = require('node:path');
-const dir = path.join(value('--registry-dir'), 'sessions');
-fs.mkdirSync(dir, { recursive: true });
-fs.writeFileSync(path.join(dir, value('--session-id') + '.json'), JSON.stringify({
-  version: 1,
-  id: value('--session-id'),
-  name: value('--name'),
-  cwd: process.cwd(),
-  socketPath: value('--listen'),
-  tokenFile: value('--auth-token-file'),
-  pid: process.pid,
-  createdAt: new Date().toISOString(),
-}));
-setInterval(() => {}, 1000);
-`;
-
-const FAILING_SERVER = `#!/usr/bin/env node
-process.stderr.write('the agent binary is missing\\n');
-process.exit(3);
-`;
-
-const REFUSING_SYNC = `#!/usr/bin/env node
-process.exit(1);
-`;
-
-async function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const probe = net.createServer();
-    probe.once('error', reject);
-    probe.listen(0, '127.0.0.1', () => {
-      const address = probe.address();
-      if (typeof address === 'string' || address === null) {
-        probe.close(() => reject(new Error('Could not reserve a port.')));
-        return;
-      }
-      const { port } = address;
-      probe.close(() => resolve(port));
-    });
-  });
-}
-
-async function waitForHealth(url: string, timeoutMs = 10_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    try {
-      const response = await fetch(`${url}/api/health`);
-      if (response.ok) return;
-    } catch {
-      // The server is still binding.
-    }
-    if (Date.now() > deadline) throw new Error(`doompi-web did not answer on ${url}.`);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-}
-
-/** Kills every process the registry still names, except this one. */
-function killRegistered(registryDir: string): void {
-  const recordsDir = path.join(registryDir, 'sessions');
-  let names: string[] = [];
-  try {
-    names = fs.readdirSync(recordsDir);
-  } catch {
-    return;
-  }
-  for (const name of names.filter((entry) => entry.endsWith('.json'))) {
-    try {
-      const record = JSON.parse(fs.readFileSync(path.join(recordsDir, name), 'utf8')) as { pid?: number };
-      if (typeof record.pid === 'number' && record.pid !== process.pid) process.kill(record.pid);
-    } catch {
-      // Already gone, or not ours to kill.
-    }
-  }
-}
 
 export interface CockpitFixture {
-  /** Every registered fake session, in registration order. */
-  sessions: FakeSession[];
-  /** The first session, which the cockpit auto-focuses; single-session specs read this. */
-  session: FakeSession;
-  registryDir: string;
-  /** The isolated workflow-mcp registry home the spawned hub watches. */
+  /** Every headless session, in registration order. */
+  sessions: HeadlessSession[];
+  /** The first session, which the cockpit auto-focuses. */
+  session: HeadlessSession;
+  /** Isolated workflow-mcp home used by filesystem-backed plugin fixtures. */
   workflowHome: string;
-  /** The isolated doom-runner store root the spawned hub watches. */
+  /** Isolated doom-runner store used by the runner package API fixture. */
   runnerStore: string;
-  /** The isolated Pi agent directory the hub's provider auth reads; specs write auth.json here. */
+  /** Isolated Pi agent directory used by settings and agent fixtures. */
   agentDir: string;
-  /** Isolated OS temporary root shared by the hub and filesystem-backed test helpers. */
+  /** Isolated temporary root shared by filesystem-backed plugin fixtures. */
   teamTemp: string;
   url: string;
 }
 
 interface CockpitOptions {
   sessionCount: number;
-  /** Which stand-in the hub launches for created sessions: one that registers, or one that fails. */
-  spawnStub: 'ok' | 'fail';
-  /** Which bundle to serve: the package's own dist, or the synced-style bundle global setup built. */
   assets: 'packaged' | 'synced';
-  /** Immutable package snapshot for production A/B tests, including its worker and executable. */
   assetPackageRoot: string | null;
-  /** Maximum frames buffered by a fake session while the hub is detached. */
   backlogLimit: number;
 }
 
-/**
- * Runs the published executable in hub mode against scripted sessions.
- *
- * Spawning `dist/bin/serve.mjs` rather than importing the server keeps the
- * static asset resolution and the bin wiring inside what the test covers. Each
- * fake session registers itself in a throwaway registry directory, exactly the
- * way a real doompi-server announces itself.
- */
 export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   sessionCount: [1, { option: true }],
-  spawnStub: ['ok', { option: true }],
   assets: ['packaged', { option: true }],
   assetPackageRoot: [null, { option: true }],
   backlogLimit: [512, { option: true }],
@@ -155,134 +57,114 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         }
       });
     }
-    await page.goto(`${cockpit.url}/pair`);
-    await page.waitForURL(`${cockpit.url}/`);
+    await page.goto(cockpit.url);
     await page.getByTestId('cockpit').waitFor();
     await page.goto('about:blank');
     for (const session of cockpit.sessions) {
-      const waitForSocketAttach = session.waitForAttach.bind(session);
+      const waitForAttach = session.waitForAttach.bind(session);
       session.waitForAttach = async (timeoutMs = 5000): Promise<void> => {
-        await waitForSocketAttach(timeoutMs);
+        await waitForAttach(timeoutMs);
         await page.locator('[data-testid="composer-input"]:not([disabled])').waitFor({ timeout: timeoutMs });
       };
     }
     await use(page);
   },
-  cockpit: async ({ sessionCount, spawnStub, assets, assetPackageRoot, backlogLimit }, use) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-hub-e2e-'));
+  cockpit: async ({ sessionCount, assets, assetPackageRoot }, use) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-e2e-'));
     const syncedDist = process.env.DOOMPI_E2E_SYNCED_DIST;
-    const syncedHome = process.env.DOOMPI_E2E_SYNCED_HOME;
-    const serializedServerComposition = process.env.DOOMPI_E2E_SYNCED_SERVER_COMPOSITION;
-    const syncedWorkRoot = process.env.DOOMPI_E2E_SYNCED_WORK_ROOT;
-    if (!syncedDist || !syncedHome || !serializedServerComposition || !syncedWorkRoot) {
-      throw new Error('global setup did not publish the synchronized test composition');
-    }
-    const serverComposition = JSON.parse(serializedServerComposition) as FakeSessionOptions['serverComposition'];
-    const registryDir = path.join(root, 'run');
-    const stateDir = path.join(root, 'state');
-    const teamTemp = path.join(root, 'tmp');
-    fs.mkdirSync(teamTemp, { recursive: true });
-    const homeDir = syncedHome;
-    const stub = path.join(root, 'fake-doompi-server');
-    const syncStub = path.join(root, 'refuse-doompi-sync');
-    fs.mkdirSync(homeDir, { recursive: true });
-    fs.writeFileSync(stub, spawnStub === 'ok' ? REGISTERING_SERVER : FAILING_SERVER, { mode: 0o755 });
-    fs.writeFileSync(syncStub, REFUSING_SYNC, { mode: 0o755 });
+    if (assets === 'synced' && (syncedDist === undefined || syncedDist === ''))
+      throw new Error('global setup did not publish the synchronized web bundle');
 
-    // An isolated Pi agent directory: doom-runner keeps its store under it, and
-    // runner specs write records there.
+    const workflowHome = path.join(root, 'workflow-mcp');
     const agentDir = path.join(root, 'pi-agent');
     const runnerStore = path.join(agentDir, 'doom-runner');
+    const teamTemp = path.join(root, 'tmp');
+    const workRoot = path.join(root, 'workspaces');
+    fs.mkdirSync(workRoot, { recursive: true });
+    fs.mkdirSync(teamTemp, { recursive: true });
     fs.mkdirSync(agentDir, { recursive: true });
 
-    // Each fake session serves a package API on its own socket, the way a real
-    // doompi-server does, so the hub has something to proxy to.
-    const apiSockets = path.join(root, 'api-sockets');
-    fs.mkdirSync(apiSockets, { recursive: true });
-    const sessions: FakeSession[] = [];
-    const sessionApiStops: Array<() => Promise<void>> = [];
+    const runnerServers = new Map<string, RunnerApiServer>();
+    const hosts = new Map<string, HeadlessSessionHost>();
+    const manager = {
+      async create(): Promise<HeadlessSessionHost> {
+        throw new Error('The Playwright headless fixture does not create sessions through HTTP.');
+      },
+      get: (id: string) => hosts.get(id),
+      sessions: () => [...hosts.values()],
+      async closeSession(id: string): Promise<void> {
+        await hosts.get(id)?.dispose();
+        hosts.delete(id);
+      },
+      async close(): Promise<void> {
+        for (const host of hosts.values()) await host.dispose();
+        hosts.clear();
+      },
+    };
+    const hub = createHeadlessHub({
+      manager,
+      requestSessionApi: async (scope, request) => {
+        const server = runnerServers.get(scope.sessionId);
+        if (server === undefined) return Response.json({ error: 'Session API unavailable.' }, { status: 404 });
+        const target = new URL(`/api/plugin/${request.basePath}${request.path}`, server.url);
+        const body = request.body === undefined || request.body === null ? undefined : Buffer.from(request.body);
+        return fetch(target, {
+          method: request.method,
+          ...(body === undefined ? {} : { body: body as unknown as BodyInit, duplex: 'half' as const }),
+        });
+      },
+    });
+
+    let headless = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'e2e-headless-token' });
+    const headlessUrl = (): string => headless.url;
+    const restartHeadless = async (): Promise<void> => {
+      const port = Number(new URL(headless.url).port);
+      await headless.close();
+      headless = await serveHeadlessServer({ headlessHub: hub, port, token: 'e2e-headless-token' });
+    };
+
+    const sessions: HeadlessSession[] = [];
     for (let index = 0; index < sessionCount; index += 1) {
       const id = `s${index + 1}`;
-      const apiSocketPath = path.join(apiSockets, `${id}.sock`);
-      const cwd = fs.mkdtempSync(path.join(syncedWorkRoot, `${id}-`));
+      runnerServers.set(id, await startRunnerApiServer(runnerStore, id));
       sessions.push(
-        await startFakeSession({
-          backlogLimit,
+        await startHeadlessSession({
           id,
           name: `session-${index + 1}`,
-          registryDir,
-          apiSocketPath,
-          cwd,
-          serverComposition,
+          cwd: path.join(workRoot, id),
+          hub,
+          headlessUrl,
+          restartHeadless,
+          onHost: (sessionId, host) => hosts.set(sessionId, host),
         }),
       );
-      sessionApiStops.push(startRunnerApiSocket(runnerStore, id, apiSocketPath));
     }
 
-    const port = await freePort();
-    // An isolated workflow home: the hub must never watch the developer's
-    // real registry from a test, and workflow specs write runs into this one.
-    const workflowHome = path.join(root, 'workflow-mcp');
-    // Provider auth and personal Doom configuration are isolated from the
-    // developer. The synchronized suites resolve the one generation global
-    // setup published, while the refusing command prevents accidental rebuilds.
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      HOME: homeDir,
-      USERPROFILE: homeDir,
-      TMPDIR: teamTemp,
-      TMP: teamTemp,
-      TEMP: teamTemp,
-      WORKFLOW_MCP_HOME: workflowHome,
-      PI_CODING_AGENT_DIR: agentDir,
-      DOOMPI_SYNC_COMMAND: syncStub,
-      DOOMPI_WEB_PACKAGE_ROOT: assetPackageRoot ?? packageRoot,
-    };
-    for (const key of Object.keys(env)) if (/_API_KEY$|_AUTH_TOKEN$|_OAUTH_TOKEN$/.test(key)) delete env[key];
-    // Assets are always explicit: without this, the server would prefer the
-    // developer's machine-wide ~/.doompi/web bundle over the freshly built one.
-    const assetsDir = assets === 'synced' ? syncedDist : path.join(assetPackageRoot ?? packageRoot, 'dist', 'web');
-    const child: ChildProcess = spawn(
-      process.execPath,
-      [
-        assetPackageRoot === null ? binary : path.join(assetPackageRoot, 'dist', 'bin', 'serve.mjs'),
-        '--registry-dir',
-        registryDir,
-        '--state-dir',
-        stateDir,
-        '--spawn-command',
-        stub,
-        '--port',
-        String(port),
-        '--assets',
-        assetsDir,
-      ],
-      {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env,
-      },
-    );
+    const assetsDir = assets === 'synced' ? syncedDist! : path.join(assetPackageRoot ?? packageRoot, 'dist', 'web');
+    const web = await serveWeb({
+      port: 0,
+      assetsDir,
+      headlessUrl: headless.url,
+      headlessToken: 'e2e-headless-token',
+    });
 
-    const logs: string[] = [];
-    child.stderr?.on('data', (chunk: Buffer) => logs.push(chunk.toString()));
-    child.stdout?.on('data', (chunk: Buffer) => logs.push(chunk.toString()));
-
-    const url = `http://127.0.0.1:${port}`;
     try {
-      await waitForHealth(url);
-    } catch (error) {
-      child.kill('SIGKILL');
+      await use({
+        sessions,
+        session: sessions[0]!,
+        workflowHome,
+        runnerStore,
+        agentDir,
+        teamTemp,
+        url: web.url,
+      });
+    } finally {
+      await web.close();
+      await headless.close();
       for (const session of sessions) await session.close();
-      throw new Error(`${(error as Error).message}\n${logs.join('')}`);
+      for (const server of runnerServers.values()) await server.close();
+      fs.rmSync(root, { recursive: true, force: true });
     }
-
-    await use({ sessions, session: sessions[0], registryDir, workflowHome, runnerStore, agentDir, teamTemp, url });
-
-    child.kill('SIGTERM');
-    for (const stop of sessionApiStops) await stop();
-    for (const session of sessions) await session.close();
-    killRegistered(registryDir);
-    fs.rmSync(root, { recursive: true, force: true });
   },
 });
 

@@ -8,10 +8,12 @@ import { api } from '../../../src/adapters/computerUseApi.ts';
 import { computerUseServerFacet } from '../../../src/adapters/server/facet.ts';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
+type MountedChannel = Parameters<DoomServerHostService['registerChannel']>[0];
 
 function hostContext(scope: DoomServerHostService['scope']) {
   const registered: MountedApi[] = [];
-  const state = { disposed: 0 };
+  const registeredChannels: MountedChannel[] = [];
+  const state = { disposed: 0, channelDisposed: 0 };
   const host: DoomServerHostService = {
     scope,
     context: { locality: 'local' } as unknown as DoomServerHostService['context'],
@@ -19,12 +21,17 @@ function hostContext(scope: DoomServerHostService['scope']) {
       registered.push(candidate);
       return { dispose: () => void (state.disposed += 1) };
     },
+    registerChannel(channel) {
+      registeredChannels.push(channel);
+      return { dispose: () => void (state.channelDisposed += 1) };
+    },
     mounted: () => registered.map((candidate) => candidate.basePath),
+    mountedChannels: () => registeredChannels.map((channel) => channel.frameType),
   };
   const context = {
     get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? host : undefined),
   } as unknown as Context;
-  return { context, registered, state };
+  return { context, registered, registeredChannels, state };
 }
 
 describe('computerUseServerFacet', () => {
@@ -44,9 +51,13 @@ describe('computerUseServerFacet', () => {
     expect(harness.state.disposed).toBe(1);
   });
 
-  it('does nothing in hub scope', () => {
+  it('registers and disposes its live channel in hub scope', () => {
     const harness = hostContext('hub');
-    expect(computerUseServerFacet.apply(harness.context)).toBeUndefined();
+    const dispose = computerUseServerFacet.apply(harness.context);
+    expect(typeof dispose).toBe('function');
     expect(harness.registered).toEqual([]);
+    expect(harness.registeredChannels).toHaveLength(1);
+    dispose?.();
+    expect(harness.state.channelDisposed).toBe(1);
   });
 });

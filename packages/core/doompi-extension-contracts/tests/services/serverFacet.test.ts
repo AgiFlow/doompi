@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { DoomHubChannelHost } from '../../src/schemas/hubChannel.ts';
 import type { DoomApi, DoomApiContext } from '../../src/schemas/packageApi.ts';
 import {
   DoomServerFacetManifestError,
@@ -19,6 +20,19 @@ function apiNamed(basePath: string, close = vi.fn()): DoomApi {
   };
 }
 
+function channelHost(): DoomHubChannelHost {
+  return {
+    sessions: () => [],
+    directEvents: {
+      publish: () => undefined,
+      subscribe: () => () => undefined,
+      close: () => undefined,
+    },
+    publish: () => undefined,
+    requestSessionApi: async () => new Response(null, { status: 204 }),
+    onNotice: () => undefined,
+  };
+}
 describe('createDoomServerHost', () => {
   it('mounts an api and hands its handler to the router', async () => {
     const host = createDoomServerHost({ scope: 'session', context: contextWith(vi.fn()) });
@@ -114,8 +128,26 @@ describe('createDoomServerHost', () => {
     expect(() => host.dispose()).not.toThrow();
     expect(notices[0]).toContain("package API 'runner' did not close cleanly");
   });
-});
 
+  it('owns channel sources and rejects duplicate frame types', () => {
+    const notices: string[] = [];
+    const close = vi.fn();
+    const host = createDoomServerHost({
+      scope: 'hub',
+      context: { scope: 'hub', cwd: '/repo', onNotice: (message) => notices.push(message) },
+      channelHost: channelHost(),
+    });
+    const channel = { frameType: 'tasks', start: () => ({ payloadFor: () => undefined, close }) };
+
+    expect(host.registerChannel(channel).mounted).toBe(true);
+    expect(host.registerChannel(channel).mounted).toBe(false);
+    expect(host.mountedChannels()).toEqual(['tasks']);
+
+    host.dispose();
+    expect(close).toHaveBeenCalledOnce();
+    expect(notices).toEqual(["hub channel 'tasks' is skipped: another facet already claims it."]);
+  });
+});
 describe('declaredServerFacetsOf', () => {
   const manifest = (doompiServer: unknown): Record<string, unknown> => ({ name: '@scope/pkg', doompiServer });
 

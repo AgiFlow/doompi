@@ -99,7 +99,7 @@ calls consume provider quota.
 
 The root exports planning configuration schemas, prompts, Fable flow helpers, and the Plan mode
 service. Focused exports include `/config`, `/planConfig`, `/planMode`, `/fableFlow`, and `/prompts`.
-`/session-api` is the entry a host mounts for the cockpit's plan tab.
+The session-scoped server facet owns the cockpit plan API.
 
 ## Development
 

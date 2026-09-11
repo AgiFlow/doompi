@@ -13,6 +13,7 @@ interface PackageManifest {
   publishConfig?: { access?: string };
   dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
   devDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
   doompiWeb?: { pluginId?: string; registrationOrder?: number; channels?: string[]; client?: string };
@@ -73,7 +74,7 @@ describe('doompi-domain package contract', () => {
       '.',
       './apply',
       './extensions/pi',
-      './extensions/headless',
+      './extensions/server',
       './mcp',
       './plugins',
       './resources',
@@ -84,7 +85,7 @@ describe('doompi-domain package contract', () => {
       '.',
       './apply',
       './extensions/pi',
-      './extensions/headless',
+      './extensions/server',
       './mcp',
       './plugins',
       './resources',
@@ -108,6 +109,15 @@ describe('doompi-domain package contract', () => {
     expect(entry).toContain('defineWebPlugin');
     expect(entry).toContain("statusKey: 'doom-domain'");
     expect(entry).toContain('multi: true');
+  });
+
+  it('keeps the web contract optional for headless installs while supporting web builds', async () => {
+    const manifest = await readManifest();
+
+    expect(manifest.dependencies?.['@agimon-ai/doompi-web-contracts']).toBeUndefined();
+    expect(manifest.devDependencies?.['@agimon-ai/doompi-web-contracts']).toBe('workspace:*');
+    expect(manifest.peerDependencies?.['@agimon-ai/doompi-web-contracts']).toBe('workspace:*');
+    expect(manifest.peerDependenciesMeta?.['@agimon-ai/doompi-web-contracts']).toEqual({ optional: true });
   });
 
   it('routes Pi discovery through the command and voice-tool factory', async () => {

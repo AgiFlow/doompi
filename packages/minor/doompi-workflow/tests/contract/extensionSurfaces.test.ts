@@ -1,18 +1,10 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import {
-  assertDeclaredApi,
-  mountPackageApi,
-  standardExtensionScenarios,
-} from '@agimon-ai/doompi-extension-contracts/testing';
+import { mountPackageApi, standardExtensionScenarios } from '@agimon-ai/doompi-extension-contracts/testing';
 import { describe, expect, it } from 'vitest';
 import { workflowExtension } from '../../src/adapters/pi/extension.ts';
 import { api } from '../../src/adapters/workflowHubApi.ts';
 
-const PACKAGE_ROOT = path.resolve(fileURLToPath(import.meta.url), '..', '..', '..');
-
 /**
- * The three surfaces this package ships, each checked where it is declared.
+ * The surfaces this package ships.
  *
  * The Pi lifecycle comes from the shared contract, so this package proves the
  * same things every other extension does rather than its own subset. What is
@@ -49,11 +41,5 @@ describe('the API surface', () => {
 
     expect((await mounted.fetch('/api/plugin/runner/runs')).status).toBe(404);
     mounted.close();
-  });
-
-  it('declares a hub facet for the API-owned base path', () => {
-    const report = assertDeclaredApi({ packageRoot: PACKAGE_ROOT, api, scope: 'hub' });
-
-    expect(report).toMatchObject({ basePath: 'workflow', dist: './dist/extensions/server.mjs' });
   });
 });

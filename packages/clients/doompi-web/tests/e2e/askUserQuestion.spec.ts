@@ -1,5 +1,5 @@
 import { expect, test } from '../support/cockpit.ts';
-import type { FakeSession } from '../support/fakeSession.ts';
+import type { HeadlessSession } from '../support/headlessSession.ts';
 
 // The questionnaire is a plugin contribution, so this suite serves the
 // synced-style bundle built from every workspace plugin: doompi-user-feedback
@@ -35,7 +35,7 @@ const QUESTIONS = [
 ];
 
 /** Starts the tool and opens the request its first question would open. */
-function ask(session: FakeSession): void {
+function ask(session: HeadlessSession): void {
   session.emit({
     type: 'tool_execution_start',
     toolCallId: 'call-ask',

@@ -58,7 +58,7 @@ function createDefaultManualTranscriptionService(projectRoot: string): IManualTr
   );
 }
 
-export function createVoiceSessionApi(options: VoiceSessionApiOptions = {}): DoomApiHandler {
+export function createVoiceSessionApi(options: VoiceSessionApiOptions): DoomApiHandler {
   const { manualTranscription, projectRoot = process.cwd(), ...mediaOptions } = options;
   return new VoiceSessionApi(
     createVoiceMediaApi(mediaOptions),

@@ -75,6 +75,7 @@ type ToolDefinition = {
 
 const SESSION_ID = 'session-1';
 const WORKFLOW_PACKAGE = '@agimon-ai/doompi-workflow';
+const TEST_ENVIRONMENT = Object.freeze({});
 /** A tool from another extension, so gating has something to preserve. */
 const FOREIGN_TOOL = 'read';
 /** The chords the extension registers, as the tests have to press them. */
@@ -123,6 +124,7 @@ function createHarness(
   { monitorIntervalMs = 60_000, launchAckPollMs = 5, launchAckTimeoutMs = 300, provideSharedReadiness = true } = {},
 ) {
   vi.stubEnv(SUBAGENT_ROOT_SESSION_ENV, '');
+  const environment = Object.freeze({ ...process.env });
   const commands = new Map<string, CommandOptions>();
   const handlers = new Map<string, EventHandler>();
   let sessionStarted = false;
@@ -418,6 +420,7 @@ function createHarness(
   activeCordisRoots.push(cordis);
   createWorkflowPiExtension({
     cordis,
+    environment,
     monitorIntervalMs,
     launchAckPollMs,
     launchAckTimeoutMs,
@@ -775,7 +778,7 @@ describe('workflow-mcp Pi extension', () => {
       },
     } as unknown as ExtensionAPI;
 
-    registerWorkflowPiTools(pi, { feature: createHarness().feature });
+    registerWorkflowPiTools(pi, { environment: TEST_ENVIRONMENT, feature: createHarness().feature });
 
     expect([...tools.keys()]).toEqual([...WORKFLOW_PI_TOOL_NAMES]);
     for (const action of ['follow', 'tail', 'open']) {
@@ -796,6 +799,7 @@ describe('workflow-mcp Pi extension', () => {
     const tailRun = vi.fn().mockResolvedValue('raw PTY frame from dependency');
 
     registerWorkflowPiTools(pi, {
+      environment: TEST_ENVIRONMENT,
       feature: createEmbeddedWorkflowFeature(),
       requireSessionRun: vi.fn().mockResolvedValue(record),
       tailRun,

@@ -13,6 +13,7 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { gitHeadlessFacet } from '../headless/facet.ts';
+import { createWorktreesChannel } from '../web/worktreesChannel.ts';
 import { api } from '../hubApi.ts';
 
 export const gitServerFacet: DoomServerFacet = {
@@ -22,10 +23,10 @@ export const gitServerFacet: DoomServerFacet = {
     const headlessDisposer =
       host.scope === 'session' && readDoomHeadlessHost(context) ? gitHeadlessFacet.apply(context) : undefined;
     if (host.scope !== 'hub') return headlessDisposer;
-    const registration = host.registerApi(api);
+    const registrations = [host.registerApi(api), host.registerChannel(createWorktreesChannel())];
     return () => {
       headlessDisposer?.();
-      registration.dispose();
+      for (const registration of registrations.reverse()) registration.dispose();
     };
   },
 };

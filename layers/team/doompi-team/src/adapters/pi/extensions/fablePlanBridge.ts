@@ -19,6 +19,7 @@ import type {
 } from '../../../schemas/team/capabilityCeiling';
 import type { AsyncSubagentSpawnInput, AsyncSubagentSpawnerContract } from '../../runs/background/asyncExecution';
 import { fableProfileResultPathFor } from '../../runs/background/asyncExecution';
+import type { SessionScope } from '../../filesystem/paths';
 import type { SubagentWaiterContract } from '../../runs/background/subagentWait';
 import type { ManagementActionsContract } from './managementActions';
 
@@ -62,7 +63,9 @@ interface ActiveOperation {
 
 interface FableBridgeSession {
   sessionId: string;
+  scope: SessionScope;
   cwd: string;
+  environment: Readonly<Record<string, string | undefined>>;
 }
 
 export interface FablePlanBridgeDeps {
@@ -105,8 +108,8 @@ function draftPrompt(packet: FablePlanPacket): string {
   });
 }
 
-function readProfileResult(runId: string): string {
-  const resultPath = fableProfileResultPathFor(runId);
+function readProfileResult(scope: SessionScope, runId: string): string {
+  const resultPath = fableProfileResultPathFor(scope, runId);
   try {
     const value: unknown = JSON.parse(fs.readFileSync(resultPath, 'utf8'));
     if (!value || typeof value !== 'object' || typeof (value as { text?: unknown }).text !== 'string') {
@@ -137,7 +140,7 @@ export function createFablePlanBridge(deps: FablePlanBridgeDeps): FablePlanBridg
 
   const authorized = (): boolean => {
     const ceiling = deps.policies.resolve();
-    return ceiling?.allowedExternalProfiles.includes(FABLE_PLAN_PROFILE) === true;
+    return ceiling?.allowedExternalProfiles?.includes(FABLE_PLAN_PROFILE) === true;
   };
 
   const spawnInput = (
@@ -152,13 +155,11 @@ export function createFablePlanBridge(deps: FablePlanBridgeDeps): FablePlanBridg
     agent: 'fable-draft',
     task: prompt,
     cwd: session.cwd,
+    environment: session.environment,
     childIndex: 0,
     fanout: false,
+    sessionScope: session.scope,
     piArgs: {
-      baseArgs: [],
-      sessionEnabled: false,
-      inheritProjectContext: false,
-      inheritSkills: false,
       model: FABLE_PLAN_MODEL,
       capabilityCeiling: ceiling,
     },
@@ -177,7 +178,7 @@ export function createFablePlanBridge(deps: FablePlanBridgeDeps): FablePlanBridg
   ): Promise<{ runId: string; text: string }> => {
     if (entry.controller.signal.aborted) throw new Error(FABLE_ERROR.cancelled);
     const ceiling = deps.policies.resolve();
-    if (!ceiling?.allowedExternalProfiles.includes(FABLE_PLAN_PROFILE)) {
+    if (!ceiling?.allowedExternalProfiles?.includes(FABLE_PLAN_PROFILE)) {
       throw new Error(FABLE_ERROR.capabilityDenied);
     }
     const runId = createRunId();
@@ -194,13 +195,13 @@ export function createFablePlanBridge(deps: FablePlanBridgeDeps): FablePlanBridg
     const wait = await deps.waiter.wait({
       target: { id: spawned.runId },
       sessionId: session.sessionId,
+      sessionScope: session.scope,
       waitFor: 'completion',
       timeoutMs: FABLE_DRAFT_TIMEOUT_MS,
       signal: entry.controller.signal,
     });
-    if (wait.reason === 'aborted') throw new Error(FABLE_ERROR.cancelled);
     if (wait.reason === FABLE_ERROR.timeout) {
-      deps.management.stop(runId, 'Fable stage timed out.');
+      await deps.management.stop(runId, 'Fable stage timed out.');
       throw new Error(FABLE_ERROR.timeout);
     }
     if (wait.reason !== FABLE_STATUS.completed) throw new Error(FABLE_ERROR.unavailable);
@@ -208,7 +209,7 @@ export function createFablePlanBridge(deps: FablePlanBridgeDeps): FablePlanBridg
     if (status?.state !== FABLE_STATUS.completed && status?.state !== 'complete') {
       throw new Error(status?.error?.includes('stream') ? FABLE_ERROR.malformedStream : FABLE_ERROR.unavailable);
     }
-    return { runId, text: readProfileResult(runId) };
+    return { runId, text: readProfileResult(session.scope, runId) };
   };
 
   const execute = async (
@@ -318,7 +319,7 @@ export function createFablePlanBridge(deps: FablePlanBridgeDeps): FablePlanBridg
       const entry = active;
       if (!entry || entry.operationId !== request.operationId) return;
       entry.controller.abort(new Error(request.reason));
-      if (entry.runId) deps.management.stop(entry.runId, request.reason);
+      if (entry.runId) void deps.management.stop(entry.runId, request.reason);
     },
   };
 
@@ -339,7 +340,7 @@ export function createFablePlanBridge(deps: FablePlanBridgeDeps): FablePlanBridg
         entry.controller.abort(new Error(SESSION_ENDED_REASON));
         if (entry.runId) {
           try {
-            deps.management.stop(entry.runId, SESSION_ENDED_REASON);
+            void deps.management.stop(entry.runId, SESSION_ENDED_REASON);
           } catch {
             // Session teardown continues so the capability registry cannot remain exposed.
           }

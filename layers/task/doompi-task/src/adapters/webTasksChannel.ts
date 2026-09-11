@@ -1,4 +1,8 @@
-import type { HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import type {
+  DoomHubChannelSource,
+  DoomHubSessionScope,
+  DoomHubChannel,
+} from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { resolveStorePath } from './store/paths.ts';
 import { TaskStore } from './store/taskStore.ts';
 import type { TaskDocument } from '../services/store/types.ts';
@@ -7,13 +11,21 @@ import { TASKS_CHANNEL_TYPE, type WebTask, type WebTasksPayload } from '../types
 interface TaskStoreSource {
   readonly snapshot: TaskDocument;
   read(): TaskDocument;
-  onExternalChange(listener: (document: TaskDocument) => void): () => void;
   dispose(): void;
+}
+
+function isTaskDocument(value: unknown): value is TaskDocument {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as TaskDocument).rev === 'number' &&
+    Array.isArray((value as TaskDocument).tasks)
+  );
 }
 
 export interface TasksChannelOptions {
   /** Injectable for tests. The default opens the session tree's durable task store. */
-  storeFor?: (scope: HubSessionScope) => TaskStoreSource;
+  storeFor?: (scope: DoomHubSessionScope) => TaskStoreSource;
 }
 
 function present(document: TaskDocument): WebTasksPayload {
@@ -37,35 +49,54 @@ function present(document: TaskDocument): WebTasksPayload {
   return { tasks, rev: document.rev };
 }
 
-/** Publishes each managed session's durable task graph and follows external subagent writes. */
-export function createTasksChannel(options: TasksChannelOptions = {}): WebHubChannel {
+/** Publishes each managed session's durable task graph and follows direct session commits. */
+export function createTasksChannel(options: TasksChannelOptions = {}): DoomHubChannel {
   return {
     frameType: TASKS_CHANNEL_TYPE,
     start(host) {
-      const stores = new Map<string, { store: TaskStoreSource; unwatch: () => void }>();
-      const open = (scope: HubSessionScope): void => {
+      const stores = new Map<string, { store: TaskStoreSource; unsubscribe: () => void; latest?: TaskDocument }>();
+      const open = (scope: DoomHubSessionScope): void => {
         if (stores.has(scope.sessionId)) return;
-        const store =
-          options.storeFor?.(scope) ??
-          new TaskStore({ cwd: scope.cwd, storePath: resolveStorePath(scope.cwd, process.env, scope.sessionId) });
-        const document = store.read();
-        const unwatch = store.onExternalChange((changed) => host.publish(scope.sessionId, present(changed)));
-        stores.set(scope.sessionId, { store, unwatch });
-        if (document.tasks.length > 0) host.publish(scope.sessionId, present(document));
+        let store = options.storeFor?.(scope);
+        if (store === undefined) {
+          if (scope.environment === undefined)
+            throw new Error(`Task channel requires an admitted environment for session '${scope.sessionId}'.`);
+          store = new TaskStore({
+            cwd: scope.cwd,
+            env: scope.environment,
+            storePath: resolveStorePath(scope.cwd, scope.environment, scope.sessionId),
+          });
+        }
+        store.read();
+        const source = { store, unsubscribe: () => undefined as void };
+        stores.set(scope.sessionId, source);
+        source.unsubscribe = host.directEvents.subscribe(
+          TASKS_CHANNEL_TYPE,
+          scope.sessionId,
+          (payload) => {
+            if (!isTaskDocument(payload)) return;
+            const current = stores.get(scope.sessionId);
+            if (current === undefined) return;
+            current.latest = payload;
+            host.publish(scope.sessionId, present(payload));
+          },
+          { replayLatest: true },
+        );
       };
       const close = (sessionId: string): void => {
         const source = stores.get(sessionId);
         if (!source) return;
-        source.unwatch();
+        source.unsubscribe();
         source.store.dispose();
         stores.delete(sessionId);
       };
       for (const scope of host.sessions()) open(scope);
 
-      const source: HubChannelSource = {
+      const source: DoomHubChannelSource = {
         payloadFor(scope) {
           open(scope);
-          const document = stores.get(scope.sessionId)?.store.snapshot;
+          const source = stores.get(scope.sessionId);
+          const document = source?.latest ?? source?.store.snapshot;
           return document === undefined ? undefined : present(document);
         },
         sessionAdded: open,
@@ -78,6 +109,3 @@ export function createTasksChannel(options: TasksChannelOptions = {}): WebHubCha
     },
   };
 }
-
-/** The named export the generated hub registry imports. */
-export const webHubChannels: readonly WebHubChannel[] = [createTasksChannel()];

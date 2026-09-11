@@ -1,7 +1,6 @@
 import {
   connectDoomCordisHost,
   DOOM_CORDIS_HOST_QUERY_CHANNEL,
-  DOOM_CORDIS_HOST_REQUIRED_ENV,
   DOOM_CORDIS_RUNTIME_SERVICE,
   DOOM_CORDIS_SESSION_SERVICE,
   finalizeDoomCordisHost,
@@ -76,7 +75,7 @@ describe('Doom Cordis host contract', () => {
     const host = testPi(bus);
     const consumer = testPi(bus);
     const controller = await installDoomCordisHost(host.pi, { mode: 'composed' });
-    const connection = await connectDoomCordisHost(consumer.pi, '@test/consumer', { allowStandalone: false });
+    const connection = await connectDoomCordisHost(consumer.pi, '@test/consumer');
 
     expect(connection.root).toBe(controller.root);
     expect(Context.is(connection.root)).toBe(true);
@@ -144,7 +143,7 @@ describe('Doom Cordis host contract', () => {
     const releaseDuplicate = bus.on(DOOM_CORDIS_HOST_QUERY_CHANNEL, (value) => {
       (value as { accept?: (response: unknown) => void }).accept?.(duplicateResponse);
     });
-    await expect(connectDoomCordisHost(second.pi, '@test/duplicate', { allowStandalone: false })).rejects.toThrow(
+    await expect(connectDoomCordisHost(second.pi, '@test/duplicate')).rejects.toThrow(
       'Multiple Doom Cordis hosts answered',
     );
     releaseDuplicate();
@@ -160,9 +159,7 @@ describe('Doom Cordis host contract', () => {
         root: {},
       });
     });
-    await expect(connectDoomCordisHost(second.pi, '@test/invalid', { allowStandalone: false })).rejects.toThrow(
-      'not a Cordis Context',
-    );
+    await expect(connectDoomCordisHost(second.pi, '@test/invalid')).rejects.toThrow('not a Cordis Context');
     release();
   });
 
@@ -187,7 +184,7 @@ describe('Doom Cordis host contract', () => {
     ]) {
       expect(() => bus.emit(DOOM_CORDIS_HOST_QUERY_CHANNEL, query)).not.toThrow();
     }
-    const connection = await connectDoomCordisHost(testPi(bus).pi, '@test/valid', { allowStandalone: false });
+    const connection = await connectDoomCordisHost(testPi(bus).pi, '@test/valid');
     expect(connection.root).toBe(controller.root);
     await connection.dispose();
     await controller.shutdown();
@@ -226,9 +223,7 @@ describe('Doom Cordis host contract', () => {
       const release = bus.on(DOOM_CORDIS_HOST_QUERY_CHANNEL, (value) => {
         (value as { accept: (candidate: unknown) => void }).accept(response);
       });
-      await expect(connectDoomCordisHost(testPi(bus).pi, '@test/invalid', { allowStandalone: false })).rejects.toThrow(
-        message,
-      );
+      await expect(connectDoomCordisHost(testPi(bus).pi, '@test/invalid')).rejects.toThrow(message);
       release();
     }
     await root.fiber.dispose();
@@ -286,13 +281,11 @@ describe('Doom Cordis host contract', () => {
     await controller.shutdown();
   });
 
-  it('fails closed when a composed host is required', async () => {
+  it('fails closed when the composed host is unavailable', async () => {
     const { pi } = testPi(new TestBus());
-    await expect(
-      connectDoomCordisHost(pi, '@test/required', {
-        environment: { [DOOM_CORDIS_HOST_REQUIRED_ENV]: '1' },
-      }),
-    ).rejects.toThrow('composed Doom Cordis host is unavailable');
+    await expect(connectDoomCordisHost(pi, '@test/required')).rejects.toThrow(
+      'composed Doom Cordis host is unavailable',
+    );
   });
 
   it('rolls back host discovery when Pi lifecycle registration fails', async () => {
@@ -308,22 +301,6 @@ describe('Doom Cordis host contract', () => {
     } as unknown as ExtensionAPI;
 
     await expect(installDoomCordisHost(pi, { mode: 'composed' })).rejects.toThrow('lifecycle registration failed');
-    expect(bus.listenerCount(DOOM_CORDIS_HOST_QUERY_CHANNEL)).toBe(0);
-  });
-
-  it('shares one standalone fallback and shuts it down after the final lease', async () => {
-    const bus = new TestBus();
-    const firstPi = testPi(bus).pi;
-    const secondPi = testPi(bus).pi;
-    const first = await connectDoomCordisHost(firstPi, '@test/first', { environment: {} });
-    const second = await connectDoomCordisHost(secondPi, '@test/second', { environment: {} });
-
-    expect(first.root).toBe(second.root);
-    expect(first.runtime.mode).toBe('standalone');
-    await first.dispose();
-    expect(first.root.reflect.get(DOOM_CORDIS_RUNTIME_SERVICE)).toBeDefined();
-    await second.dispose();
-    expect(first.root.reflect.get(DOOM_CORDIS_RUNTIME_SERVICE)).toBeUndefined();
     expect(bus.listenerCount(DOOM_CORDIS_HOST_QUERY_CHANNEL)).toBe(0);
   });
 

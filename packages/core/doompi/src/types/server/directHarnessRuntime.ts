@@ -22,8 +22,10 @@ import type {
 } from '@earendil-works/pi-ai';
 import type {
   CompactionSettings,
+  Entry,
   EntryProjector,
   Session,
+  SessionStats,
   ThinkingLevel,
   QueueMode,
 } from '@earendil-works/pi-agent-core';
@@ -58,6 +60,8 @@ export interface DirectHarnessRuntimeOptions<TContext extends object | undefined
   sessionPath?: string;
   /** Existing v3 JSONL path. It is never opened for writing. */
   legacySessionPath?: string;
+  /** Parent identity recorded on newly-created sessions. */
+  parentSessionId?: string;
   sessionsRoot?: string;
   /** Required when opening any existing session or importing legacy history. */
   historyOwnership?: HistoryOwnership;
@@ -120,11 +124,7 @@ export interface DirectHarnessEventListener {
   (event: HarnessEvent, context: Context): void | Promise<void>;
 }
 
-/**
- * Same-process AgentProcess compatibility facade backed by a public AgentHarness.
- * `send` and `onFrame` intentionally remain structurally compatible with the
- * legacy server's framed AgentProcess contract.
- */
+/** Direct, same-process AgentHarness runtime owned by one session host. */
 export interface DirectHarnessRuntime<TContext extends object | undefined = object | undefined> {
   readonly sessionId: string;
   readonly laneName: string;
@@ -135,12 +135,26 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   readonly exited: Promise<number>;
   readonly storageQuarantined: boolean;
 
-  send(frame: DirectHarnessFrame): void;
-  onFrame(listener: (frame: DirectHarnessFrame) => void): void;
+  onPresentationFrame(listener: (frame: DirectHarnessFrame) => void): () => void;
   onEvent(listener: DirectHarnessEventListener): () => void;
-  endInput(): void;
   stop(): void;
 
+  readState(): Promise<Record<string, unknown>>;
+  readEntries(): Promise<{ entries: Entry[]; leafId: string | null }>;
+  listCommands(): readonly { name: string; description: string }[];
+  setModel(model: { provider: string; id: string }): Promise<void>;
+  availableModels(): Promise<readonly Model<Api>[]>;
+  availableThinkingLevels(): Promise<ThinkingLevel[]>;
+  setThinkingLevel(level: ThinkingLevel): Promise<void>;
+  setSteeringMode(mode: QueueMode): Promise<void>;
+  setFollowUpMode(mode: QueueMode): Promise<void>;
+  navigateTree(
+    targetId: string | null,
+    options?: Record<string, unknown>,
+  ): Promise<{ cancelled: boolean; entries: Entry[] }>;
+  clearQueue(): Promise<{ steering: never[]; followUp: never[] }>;
+  setName(name: string): Promise<void>;
+  getSessionStats(): Promise<SessionStats>;
   replaceTools(tools: AgentHarnessTool<TContext>[]): Promise<void>;
   replaceResources(resources: AgentHarnessResources): Promise<void>;
   readResources(): Promise<AgentHarnessResources>;
@@ -149,6 +163,7 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
     usage: Usage,
     options?: { entryId?: string; details?: import('@earendil-works/pi-agent-core').JsonValue },
   ): Promise<string>;
+  submitPrompt(text: string, images?: ImageContent[]): Promise<{ settled: Promise<void> }>;
   prompt(text: string, images?: ImageContent[]): Promise<void>;
   steer(text: string, images?: ImageContent[]): Promise<void>;
   followUp(text: string, images?: ImageContent[]): Promise<void>;

@@ -4,13 +4,18 @@ import {
   type DoomHeadlessContent,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-extension-contracts/headless';
+import { DOOM_SERVER_HOST_SERVICE, requireDoomServerHost } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { MinorModeOwnerHandle, MinorModeState } from '@agimon-ai/doompi-extension-contracts/mode';
 import type { Context } from '@deepseek-ai/cordis';
 import { readFile } from 'node:fs/promises';
 import { createEmbeddedWorkflowFeature } from '@agimon-ai/workflow-mcp';
 import { z } from 'zod';
 import { parseWorkflowLaunchCommand } from '../../services/workflowLaunchCommand.ts';
-
+import { createWorkflowCatalogReader, presentWorkflowCatalog } from '../../services/webWorkflowCatalog.ts';
+import { defaultCatalogDeps } from '../workflowCatalogDeps.ts';
+import { readWorkflowRuns } from '../workflowWatcher.ts';
+import { presentWorkflowRuns, runBelongsToSession } from '../../services/workflowRuns.ts';
+import { WORKFLOW_CATALOG_TYPE, WORKFLOW_RUNS_TYPE } from '../../types/webWorkflows.ts';
 type HeadlessFacet = {
   inject: readonly string[];
   apply(context: Context): void | (() => void);
@@ -44,9 +49,36 @@ async function skill(name: string): Promise<string> {
 }
 
 export const workflowHeadlessFacet: HeadlessFacet = {
-  inject: [DOOM_HEADLESS_HOST_SERVICE],
+  inject: [DOOM_HEADLESS_HOST_SERVICE, DOOM_SERVER_HOST_SERVICE],
   apply(context: Context) {
     const host = requireDoomHeadlessHost(context);
+    const serverHost = requireDoomServerHost(context);
+    if (serverHost.context.directEvents === undefined)
+      throw new Error('Workflow headless facet requires the session direct event bus.');
+    const directEvents = serverHost.context.directEvents;
+    const catalogReader = createWorkflowCatalogReader(defaultCatalogDeps());
+    const publishLifecycle = async (executionContext: typeof host.context): Promise<void> => {
+      const runs = presentWorkflowRuns(
+        readWorkflowRuns({ environment: executionContext.environment })
+          .filter((run) => runBelongsToSession(run, executionContext.sessionId))
+          .map((run) => run.view),
+        Date.now(),
+      );
+      directEvents.publish(WORKFLOW_RUNS_TYPE, executionContext.sessionId, { runs });
+      try {
+        directEvents.publish(WORKFLOW_CATALOG_TYPE, executionContext.sessionId, {
+          cwd: executionContext.cwd,
+          workflows: presentWorkflowCatalog(await catalogReader.read(executionContext.cwd)),
+        });
+      } catch (error) {
+        const warning = error instanceof Error ? error.message : String(error);
+        directEvents.publish(WORKFLOW_CATALOG_TYPE, executionContext.sessionId, {
+          cwd: executionContext.cwd,
+          workflows: [],
+          warning,
+        });
+      }
+    };
     const feature = createEmbeddedWorkflowFeature();
     const statuses = feature.createListStatusesTool({
       recordFilter: (record) => {
@@ -116,7 +148,14 @@ export const workflowHeadlessFacet: HeadlessFacet = {
       minorMode: WORKFLOW_MODE_ID,
       allowedTools: [LIST_TOOL, LAUNCH_TOOL, RUN_TOOL],
     });
+    const projectionHook = host.registerHook({
+      event: 'tool_execution_end',
+      handle: async (_event, executionContext) => {
+        await publishLifecycle(executionContext);
+      },
+    });
     const registrations = [
+      projectionHook,
       host.registerResource({
         when: { minorMode: WORKFLOW_MODE_ID },
         name: 'doompi-author-workflow',
@@ -138,9 +177,10 @@ export const workflowHeadlessFacet: HeadlessFacet = {
       host.registerActivity({
         when: { minorMode: WORKFLOW_MODE_ID },
         name: SOURCE,
-        async start() {
+        async start(executionContext) {
           control = feature.createRunControl({});
           await control.start();
+          await publishLifecycle(executionContext);
           return () => {
             control?.dispose();
             control = undefined;

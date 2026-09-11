@@ -24,7 +24,7 @@ export function alreadyComposed(environment: NodeJS.ProcessEnv = process.env): b
 
 export function resolveRootSessionId(
   currentSessionId: string,
-  environment: Readonly<Record<string, string | undefined>> = process.env,
+  environment: Readonly<Record<string, string | undefined>>,
 ): string {
   const inherited = environment[SUBAGENT_ROOT_SESSION_ENV]?.trim();
   if (inherited) return inherited;

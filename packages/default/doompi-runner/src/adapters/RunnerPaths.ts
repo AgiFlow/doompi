@@ -207,6 +207,11 @@ export function resolveRunnerStoreDirectory(env: NodeJS.ProcessEnv): string {
   return path.join(resolveAgentDirectory(env), STORE_DIR_NAME);
 }
 
+/** Durable metadata directory for one session. Used by APIs and history reads, not live transport. */
+export function runnerStateDirFor(storeDir: string, sessionId: string): string {
+  return path.join(storeDir, sessionId, STATE_DIR_NAME);
+}
+
 /** Session-scoped runner storage under the Pi agent directory. */
 export class RunnerPaths implements IRunnerPaths {
   private adoptedSessionId: string | undefined;

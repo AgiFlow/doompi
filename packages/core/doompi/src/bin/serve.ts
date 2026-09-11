@@ -2,39 +2,26 @@
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { loadPackageApis, PACKAGE_API_DIR_ENV } from '@agimon-ai/doompi-extension-contracts/package-api-loader';
-import {
-  loadServerBundle,
-  loadServerFacets,
-  resolveServerBundleSource,
-} from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
-import { DOOM_API_INTERNAL_TOKEN_ENV, DOOM_API_SOCKET_ENV } from '@agimon-ai/doompi-extension-contracts/package-api';
-import { DOOM_RELAUNCH_FILE_ENV } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
+import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import type {
+  DoomHubSessionApiRequest,
+  DoomHubSessionCreateRequest,
+  DoomHubSessionScope,
+} from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { resolveHarnessOptions } from '../commands/cli/harnessOptions';
 import { buildHarnessContext } from '../adapters/harnessContext.ts';
 import { filterHookDisabledLayers, loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { createHarnessTelemetry } from '../adapters/telemetry/logSinkTelemetry';
 import { findRepositoryRoot } from '../adapters/repository/repository';
 import { readSyncRegistration, type SyncRegistration } from '../adapters/syncRegistration';
-import { superviseAgentRelaunches } from '../adapters/server/agentSupervisor.ts';
-import { createHeadlessSessionHost, isDirectHeadlessOptedIn } from '../adapters/server/headlessSessionHost.ts';
-import { createDoomAgentLauncher } from '../adapters/server/doomAgentLauncher.ts';
-import { createAgentServerService } from '../adapters/server/piSessionRuntime.ts';
-import { serveProtocolSocket } from '../adapters/server/protocolSocket.ts';
-import { API_SOCKET_NAME, serveSessionApis } from '../adapters/server/packageApiServer.ts';
-import { removeSessionRecord, writeSessionRecord } from '../adapters/server/sessionRegistry.ts';
-import { removeStaleSocket, serveSessionSocket } from '../adapters/server/socketServer.ts';
+import { createHeadlessHub, type HeadlessHub } from '../adapters/server/headlessHub.ts';
+import { createHeadlessSessionManager } from '../adapters/server/headlessSessionManager.ts';
+import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../types/server/headlessSessionHost.ts';
+import type { HeadlessSessionManager } from '../types/server/headlessSessionManager.ts';
+import { serveSessionApis, type PackageApiServer } from '../adapters/server/packageApiServer.ts';
 import { createServerTelemetry } from '../adapters/server/serverTelemetry.ts';
-import { startWebCockpit } from '../adapters/server/webCockpit.ts';
-import { REGISTRY_DIR_ENV, resolveRegistryDir } from '../services/server/registryPaths.ts';
+import { serveHeadlessServer } from '../adapters/server/headlessServer.ts';
 import { parseServeOptions, resolveSessionIdentity } from '../services/server/serveOptions.ts';
-import { SESSION_RECORD_VERSION } from '../types/server/registry.ts';
-import type { AgentProcess } from '../types/server/session.ts';
-
-const RPC_MODE_ARGS = ['--mode', 'rpc'];
 const TELEMETRY_SHUTDOWN_TIMEOUT_MS = 2_000;
 
 async function bounded(operation: Promise<unknown>, label: string, notice: (message: string) => void): Promise<void> {
@@ -63,12 +50,16 @@ function registeredSync(from: string): SyncRegistration | undefined {
   return readSyncRegistration(repositoryRoot);
 }
 
-function currentServerBundleSelection(agentArgs: readonly string[]): {
+function currentServerBundleSelection(
+  agentArgs: readonly string[],
+  cwd: string,
+  environment: NodeJS.ProcessEnv,
+): {
   root: string;
   majorMode: string;
   activeLayers: string[];
 } {
-  const options = resolveHarnessOptions({ args: agentArgs, cwd: process.cwd(), environment: process.env });
+  const options = resolveHarnessOptions({ args: agentArgs, cwd, environment });
   const config = loadMajorModesConfig(options.repoRoot, options.homeDirectory);
   const layers = resolveLayers(config, options.majorMode);
   return {
@@ -80,229 +71,292 @@ function currentServerBundleSelection(agentArgs: readonly string[]): {
 
 async function main(): Promise<number> {
   const options = parseServeOptions(process.argv.slice(2));
+  const baseCwd = process.cwd();
+  const baseEnvironment = Object.freeze({ ...process.env });
   const notice = (message: string): void => void process.stderr.write(`[doompi-server] ${message}\n`);
-  const telemetry = createServerTelemetry({ cwd: process.cwd(), env: process.env, warn: notice });
+  const telemetry = createServerTelemetry({ cwd: baseCwd, env: baseEnvironment, warn: notice });
   const harnessTelemetry = createHarnessTelemetry({
-    cwd: process.cwd(),
-    env: process.env,
+    cwd: baseCwd,
+    env: baseEnvironment,
     warn: notice,
     deferSpans: true,
   });
-  let registryDir: string | undefined;
-  let sessionId: string | undefined;
-  let launcher: ReturnType<typeof createDoomAgentLauncher> | undefined;
-  let agent: AgentProcess | undefined;
-  let directHost: Awaited<ReturnType<typeof createHeadlessSessionHost>> | undefined;
+  const baseSessionManager = createHeadlessSessionManager();
+  type SessionSetup = { cleanup: () => Promise<void> };
+  type SessionArtifacts = SessionSetup & { apis: PackageApiServer };
+  const pendingSessions = new Map<string, SessionSetup>();
+  const sessionArtifacts = new Map<string, SessionArtifacts>();
+  let mountSessionApis:
+    | ((options: HeadlessSessionHostOptions, host: HeadlessSessionHost) => Promise<PackageApiServer>)
+    | undefined;
+
+  const closeManagedSession = async (sessionId: string): Promise<void> => {
+    const artifacts = sessionArtifacts.get(sessionId);
+    sessionArtifacts.delete(sessionId);
+    const failures: unknown[] = [];
+    try {
+      await artifacts?.apis.close();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await artifacts?.cleanup();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await baseSessionManager.closeSession(sessionId);
+    } catch (error) {
+      failures.push(error);
+    }
+    if (failures.length > 0) throw new AggregateError(failures, `Session '${sessionId}' shutdown failed`);
+  };
+
+  const sessionManager: HeadlessSessionManager = {
+    async create(sessionOptions) {
+      const setup = pendingSessions.get(sessionOptions.sessionId);
+      let host: HeadlessSessionHost;
+      try {
+        host = await baseSessionManager.create(sessionOptions);
+      } catch (error) {
+        if (setup !== undefined && pendingSessions.delete(sessionOptions.sessionId))
+          await setup.cleanup().catch((cleanupError: unknown) => notice(String(cleanupError)));
+        throw error;
+      }
+      if (setup === undefined || mountSessionApis === undefined) return host;
+      try {
+        const apis = await mountSessionApis(sessionOptions, host);
+        pendingSessions.delete(sessionOptions.sessionId);
+        sessionArtifacts.set(sessionOptions.sessionId, { ...setup, apis });
+        return host;
+      } catch (error) {
+        pendingSessions.delete(sessionOptions.sessionId);
+        await baseSessionManager
+          .closeSession(sessionOptions.sessionId)
+          .catch((closeError: unknown) => notice(String(closeError)));
+        await setup.cleanup().catch((cleanupError: unknown) => notice(String(cleanupError)));
+        throw error;
+      }
+    },
+    get: (sessionId) => baseSessionManager.get(sessionId),
+    sessions: () => baseSessionManager.sessions(),
+    closeSession: closeManagedSession,
+    async close() {
+      const ids = baseSessionManager.sessions().map((session) => session.runtime.sessionId);
+      const outcomes = await Promise.allSettled(ids.map((id) => closeManagedSession(id)));
+      const failures = outcomes
+        .filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
+        .map((outcome) => outcome.reason);
+      if (failures.length > 0) throw new AggregateError(failures, 'Headless session shutdown failed');
+    },
+  };
+
+  let requestSessionApi: (
+    scope: DoomHubSessionScope,
+    request: DoomHubSessionApiRequest,
+  ) => Promise<Response> = async () => Response.json({ error: 'Session API unavailable.' }, { status: 404 });
+  let createSession: (request: DoomHubSessionCreateRequest) => Promise<DoomHubSessionScope> = async () => {
+    throw new Error('The cockpit session service is not ready.');
+  };
+  let hub!: HeadlessHub;
+  hub = createHeadlessHub({
+    manager: sessionManager,
+    createSession: (request) => createSession(request),
+    onNotice: notice,
+    requestSessionApi: (scope, request) => requestSessionApi(scope, request),
+  });
   let harnessContext: Awaited<ReturnType<typeof buildHarnessContext>> | undefined;
-  let socket: ReturnType<typeof serveSessionSocket> | undefined;
-  let apis: Awaited<ReturnType<typeof serveSessionApis>> | undefined;
-  let protocol: Awaited<ReturnType<typeof serveProtocolSocket>> | undefined;
-  let cockpit: Awaited<ReturnType<typeof startWebCockpit>> | undefined;
-  let exitCleanup: (() => void) | undefined;
+  let cockpit: Awaited<ReturnType<typeof serveHeadlessServer>> | undefined;
+  let attachToken: string | undefined;
 
   try {
-    await telemetry.runInSpan('doompi_server.startup_to_registry', {}, async () => {
+    await telemetry.runInSpan('doompi_server.startup', {}, async () => {
       const token = fs.readFileSync(options.tokenFile, 'utf8').trim();
       if (!token) throw new Error('The attach token file is empty.');
+      attachToken = token;
 
-      registryDir = resolveRegistryDir({
-        flagValue: options.registryDir,
-        envValue: process.env[REGISTRY_DIR_ENV],
-        homeDir: os.homedir(),
-      });
       const resolved = resolveSessionIdentity(options.agentArgs, {
         sessionId: options.sessionId ?? crypto.randomUUID(),
         sessionName: options.sessionName,
       });
-      sessionId = resolved.identity.sessionId;
-      const relaunchFile = `${path.resolve(options.socketPath)}.relaunch.json`;
-      const apiSocketPath = path.resolve(path.dirname(path.resolve(options.socketPath)), API_SOCKET_NAME);
-      const apiInternalToken = crypto.randomBytes(32).toString('base64url');
-      const directMode = isDirectHeadlessOptedIn();
 
-      const installationDir = path.dirname(fileURLToPath(import.meta.url));
-      const selectedRegistration = registeredSync(process.cwd()) ?? registeredSync(installationDir);
-      const source = resolveServerBundleSource({
-        registration: selectedRegistration,
-        directoryOverride: process.env[PACKAGE_API_DIR_ENV],
-      });
-      const selection = source.kind === 'descriptor' ? currentServerBundleSelection(resolved.agentArgs) : undefined;
+      const selectedRegistration = registeredSync(baseCwd);
+      const source = resolveServerBundleSource({ registration: selectedRegistration });
+      const selection =
+        source.kind === 'descriptor'
+          ? currentServerBundleSelection(resolved.agentArgs, baseCwd, baseEnvironment)
+          : undefined;
       const loadedBundle =
         source.kind === 'descriptor' && selection !== undefined
           ? await loadServerBundle('session', {
               ...source,
               ...selection,
-              ...(directMode ? { retainCandidates: true } : {}),
+              retainCandidates: true,
               onNotice: notice,
             })
           : undefined;
-      if (directMode) {
-        if (source.kind !== 'descriptor' || selection === undefined || loadedBundle === undefined)
-          throw new Error('Direct headless mode requires an admitted descriptor server bundle.');
-        harnessContext = await buildHarnessContext(
-          resolveHarnessOptions({ args: resolved.agentArgs, cwd: process.cwd(), environment: process.env }),
-          harnessTelemetry,
-        );
-        // This process is the session host, so apply the same environment the RPC child received.
-        for (const key of Object.keys(process.env)) {
-          if (!(key in harnessContext.environment)) delete process.env[key];
-        }
-        Object.assign(process.env, harnessContext.environment, {
-          [DOOM_API_INTERNAL_TOKEN_ENV]: apiInternalToken,
-          [DOOM_API_SOCKET_ENV]: apiSocketPath,
-        });
-        const selectionPolicyOptions = harnessContext.options;
-        directHost = await createHeadlessSessionHost({
-          cwd: harnessContext.options.cwd,
-          repoRoot: harnessContext.options.repoRoot,
-          sessionId: resolved.identity.sessionId,
-          sessionName: resolved.identity.sessionName,
-          agentArgs: harnessContext.options.piArgs,
-          selection: {
-            ...selection,
-            domains: harnessContext.options.domains,
-            profile: harnessContext.profile,
-            minorModes: [],
-          },
+      const loadedHubBundle =
+        source.kind === 'descriptor' && selection !== undefined
+          ? await loadServerBundle('hub', { ...source, ...selection, onNotice: notice })
+          : undefined;
+      if (
+        source.kind !== 'descriptor' ||
+        selection === undefined ||
+        loadedBundle === undefined ||
+        loadedHubBundle === undefined
+      )
+        throw new Error('The headless server requires an admitted descriptor server bundle.');
+      await hub.mountFacets(loadedHubBundle.facets);
+
+      const sessionHostOptions = (
+        context: Awaited<ReturnType<typeof buildHarnessContext>>,
+        identity: {
+          sessionId: string;
+          sessionName: string;
+          parentSessionId?: string;
+          sessionProvenance?: string;
+        },
+      ): HeadlessSessionHostOptions => {
+        const policyOptions = context.options;
+        const sessionSelection = {
+          ...selection,
+          activeLayers: context.selectedLayers,
+          domains: policyOptions.domains,
+          profile: context.profile,
+          minorModes: [],
+        };
+        return {
+          cwd: policyOptions.cwd,
+          repoRoot: policyOptions.repoRoot,
+          sessionId: identity.sessionId,
+          sessionName: identity.sessionName,
+          ...(identity.parentSessionId === undefined ? {} : { parentSessionId: identity.parentSessionId }),
+          ...(identity.sessionProvenance === undefined ? {} : { sessionProvenance: identity.sessionProvenance }),
+          agentArgs: policyOptions.piArgs,
+          environment: Object.freeze({ ...context.environment }),
+          selection: sessionSelection,
           candidates: loadedBundle.descriptor.entries,
           resolveSelection: (requested) => {
-            const config = loadMajorModesConfig(selectionPolicyOptions.repoRoot, selectionPolicyOptions.homeDirectory);
+            const config = loadMajorModesConfig(policyOptions.repoRoot, policyOptions.homeDirectory);
             return {
               ...requested,
               activeLayers: filterHookDisabledLayers(
                 config,
                 resolveLayers(config, requested.majorMode),
-                selectionPolicyOptions.hooks,
+                policyOptions.hooks,
               ),
             };
           },
           onNotice: notice,
-        });
-        agent = directHost.agent;
-      } else {
-        launcher = createDoomAgentLauncher({
-          resolveHarnessOptions,
-          agentArgs: [...resolved.agentArgs, ...RPC_MODE_ARGS],
-          cwd: process.cwd(),
-          environment: {
-            ...process.env,
-            [DOOM_API_INTERNAL_TOKEN_ENV]: apiInternalToken,
-            [DOOM_API_SOCKET_ENV]: apiSocketPath,
-            [DOOM_RELAUNCH_FILE_ENV]: relaunchFile,
-          },
-          compositionRecordPath: `${path.resolve(options.socketPath)}.composition.json`,
-          telemetry: harnessTelemetry,
-          onNotice: notice,
-        });
-        agent = await superviseAgentRelaunches({
-          launcher,
-          relaunchFile,
+        };
+      };
+
+      mountSessionApis = (sessionOptions, host) =>
+        serveSessionApis({
+          sessionId: sessionOptions.sessionId,
+          cwd: sessionOptions.cwd,
+          environment: sessionOptions.environment,
+          directEvents: hub.directEvents,
+          hubToken: token,
+          sessionService: hub.sessionService,
+          apis: [],
+          facets: loadedBundle.facets,
+          prepareFacets: host.prepareFacets,
+          activateFacets: host.activateFacets,
+          canDispatch: host.canDispatch,
           telemetry,
           onNotice: notice,
         });
-      }
+
+      harnessContext = await buildHarnessContext(
+        resolveHarnessOptions({ args: resolved.agentArgs, cwd: baseCwd, environment: baseEnvironment }),
+        harnessTelemetry,
+      );
+
+      requestSessionApi = async (scope, request) => {
+        const session = hub.session(scope.sessionId);
+        const artifacts = sessionArtifacts.get(scope.sessionId);
+        if (session === undefined || session.cwd !== scope.cwd || artifacts === undefined)
+          return Response.json({ error: 'Session not found.' }, { status: 404 });
+        if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u.test(request.basePath))
+          return Response.json({ error: 'Invalid session API base path.' }, { status: 400 });
+        if (!request.path.startsWith('/') || request.path.startsWith('//') || request.path.includes('#'))
+          return Response.json({ error: 'Invalid session API path.' }, { status: 400 });
+        const body = request.body === null || request.body === undefined ? undefined : request.body;
+        return artifacts.apis.request(
+          new Request(`http://doompi.local/api/plugin/${request.basePath}${request.path}`, {
+            method: request.method,
+            ...(body === undefined ? {} : { body }),
+            ...(request.signal === undefined ? {} : { signal: request.signal }),
+          }),
+        );
+      };
+
+      const activeHarnessContext = harnessContext;
+      pendingSessions.set(resolved.identity.sessionId, { cleanup: () => activeHarnessContext.cleanup() });
+      await hub.create(sessionHostOptions(harnessContext, resolved.identity));
       await bounded(harnessTelemetry.flush(), 'initial composition telemetry flush', notice);
-      await removeStaleSocket(options.socketPath);
-      socket = serveSessionSocket({ socketPath: options.socketPath, token, agent, telemetry, onNotice: notice });
-      process.stderr.write(`[doompi-server] listening on ${options.socketPath}\n`);
-      apis = await serveSessionApis({
-        socketDir: path.dirname(path.resolve(options.socketPath)),
-        sessionId: resolved.identity.sessionId,
-        cwd: process.cwd(),
-        internalToken: apiInternalToken,
-        hubToken: token,
-        apis:
-          source.kind === 'legacy'
-            ? await loadPackageApis('session', { apiDirectory: source.directory, env: {}, onNotice: notice })
-            : [],
-        facets:
-          loadedBundle?.facets ??
-          (source.kind === 'legacy'
-            ? await loadServerFacets('session', { apiDirectory: source.directory, env: {}, onNotice: notice })
-            : []),
-        prepareFacets: directHost?.prepareFacets,
-        activateFacets: directHost?.activateFacets,
-        canDispatch: directHost?.canDispatch,
-        telemetry,
-        onNotice: notice,
-      });
-      if (apis.socketPath !== undefined) process.stderr.write(`[doompi-server] package APIs on ${apis.socketPath}\n`);
 
-      protocol = await serveProtocolSocket({
-        socketPath: `${path.resolve(options.socketPath)}.pi`,
-        service: createAgentServerService({
-          agent,
-          sessionId: resolved.identity.sessionId,
-          sessionName: resolved.identity.sessionName,
-          cwd: process.cwd(),
-          createdAt: Date.now(),
-          telemetry,
-        }),
-        onNotice: notice,
-      });
-      process.stderr.write(`[doompi-server] protocol on ${protocol.socketPath}\n`);
-
-      writeSessionRecord(registryDir, {
-        version: SESSION_RECORD_VERSION,
-        id: resolved.identity.sessionId,
-        name: resolved.identity.sessionName,
-        cwd: process.cwd(),
-        socketPath: path.resolve(options.socketPath),
-        tokenFile: path.resolve(options.tokenFile),
-        ...(apis.socketPath === undefined ? {} : { apiSocketPath: apis.socketPath }),
-        protocolSocketPath: protocol.socketPath,
-        protocolServerId: protocol.serverId,
-        ...(source.kind === 'descriptor' && selection !== undefined
-          ? {
-              serverComposition: {
-                ...selection,
-                apiDirectory: source.directory,
-                generation: source.generation,
-                fingerprint: source.fingerprint,
-              },
-            }
-          : {}),
-        pid: process.pid,
-        createdAt: new Date().toISOString(),
-      });
-      exitCleanup = (): void => removeSessionRecord(registryDir!, resolved.identity.sessionId);
-      process.on('exit', exitCleanup);
+      createSession = async (request) => {
+        const identity = {
+          sessionId: crypto.randomUUID(),
+          sessionName: request.name,
+          parentSessionId: request.parentSessionId,
+          sessionProvenance: request.sessionProvenance,
+        };
+        const childIdentity = resolveSessionIdentity(options.agentArgs, identity);
+        const childContext = await buildHarnessContext(
+          resolveHarnessOptions({ args: childIdentity.agentArgs, cwd: request.cwd, environment: baseEnvironment }),
+          harnessTelemetry,
+        );
+        pendingSessions.set(identity.sessionId, { cleanup: () => childContext.cleanup() });
+        try {
+          await hub.create(sessionHostOptions(childContext, identity));
+          return { sessionId: identity.sessionId, cwd: childContext.options.cwd };
+        } catch (error) {
+          if (pendingSessions.delete(identity.sessionId))
+            await childContext.cleanup().catch((cleanupError: unknown) => notice(String(cleanupError)));
+          throw error;
+        }
+      };
     });
 
-    cockpit =
-      options.webPort === undefined
-        ? undefined
-        : await startWebCockpit({ registryDir: registryDir!, port: options.webPort }, (message) =>
-            process.stderr.write(`[doompi-web] ${message}\n`),
-          );
-    const stop = (): void => agent?.stop();
+    cockpit = await serveHeadlessServer({
+      port: options.webPort,
+      headlessHub: hub,
+      token: attachToken,
+      onNotice: (message) => process.stderr.write(`[doompi-server] ${message}\n`),
+    });
+    process.stderr.write(`[doompi-server] protocol on ${cockpit.url}/api/pi\n`);
+    let resolveShutdown!: (exitCode: number) => void;
+    const shutdown = new Promise<number>((resolve) => {
+      resolveShutdown = resolve;
+    });
+    const stop = (): void => resolveShutdown(0);
     process.on('SIGINT', stop);
     process.on('SIGTERM', stop);
     try {
-      return await agent!.exited;
+      return await shutdown;
     } finally {
       process.off('SIGINT', stop);
       process.off('SIGTERM', stop);
     }
   } finally {
     await bounded(telemetry.recordEvent('doompi_server.shutdown'), 'shutdown telemetry', notice);
-    if (directHost) {
-      try {
-        await directHost.dispose();
-      } catch (error) {
-        notice(error instanceof Error ? error.message : String(error));
-      }
-    } else agent?.stop();
-    await Promise.allSettled([
-      cockpit?.close(),
-      apis?.close(),
-      protocol?.close(),
-      socket?.close(),
-      launcher?.cleanup(),
-      harnessContext?.cleanup(),
-    ]);
-    if (registryDir && sessionId) removeSessionRecord(registryDir, sessionId);
-    if (exitCleanup) process.off('exit', exitCleanup);
+    await Promise.allSettled([cockpit?.close()]);
+    try {
+      await hub.close();
+    } catch (error) {
+      notice(error instanceof Error ? error.message : String(error));
+    }
+    try {
+      await sessionManager.close();
+    } catch (error) {
+      notice(error instanceof Error ? error.message : String(error));
+    }
+    const pendingCleanups = [...pendingSessions.values()].map((setup) => setup.cleanup());
+    pendingSessions.clear();
+    await Promise.allSettled(pendingCleanups);
     await bounded(harnessTelemetry.flush(), 'harness telemetry flush', notice);
     await bounded(harnessTelemetry.shutdown(), 'harness telemetry shutdown', notice);
     await bounded(telemetry.flush(), 'server telemetry flush', notice);

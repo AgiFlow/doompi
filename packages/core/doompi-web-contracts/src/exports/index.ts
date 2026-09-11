@@ -25,19 +25,6 @@ export type {
   ModelContextToolDescriptor,
 } from '../types/modelContext.ts';
 export type {
-  ChannelFrame,
-  ComputerUseHostBinding,
-  ComputerUseHostOperation,
-  ComputerUseHostRequest,
-  HubChannelConnection,
-  HubChannelHost,
-  HubChannelLifecycle,
-  HubChannelSource,
-  HubSessionApiRequest,
-  HubSessionScope,
-  WebHubChannel,
-} from '../types/webHub.ts';
-export type {
   ActivityGroupContribution,
   ComposerCapture,
   ComposerSubmission,

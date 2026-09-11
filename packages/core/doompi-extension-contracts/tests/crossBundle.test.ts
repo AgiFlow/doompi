@@ -82,11 +82,7 @@ interface CordisHostModule {
     pi: unknown,
     options: { mode: 'composed' | 'standalone' },
   ): Promise<{ root: unknown; shutdown(): Promise<void> }>;
-  connectDoomCordisHost(
-    pi: unknown,
-    source: string,
-    options?: { allowStandalone?: boolean },
-  ): Promise<{ root: unknown; dispose(): Promise<void> }>;
+  connectDoomCordisHost(pi: unknown, source: string): Promise<{ root: unknown; dispose(): Promise<void> }>;
 }
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
@@ -239,9 +235,7 @@ describe('separately built contract bundles', () => {
       },
     });
     const controller = await esm.installDoomCordisHost(pi(), { mode: 'composed' });
-    const connection = await cjs.connectDoomCordisHost(pi(), '@cross-bundle/consumer', {
-      allowStandalone: false,
-    });
+    const connection = await cjs.connectDoomCordisHost(pi(), '@cross-bundle/consumer');
 
     expect(connection.root).toBe(controller.root);
     await connection.dispose();

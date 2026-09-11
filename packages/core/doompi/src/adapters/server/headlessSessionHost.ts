@@ -1,5 +1,5 @@
 import type { Context as CordisContext } from '@deepseek-ai/cordis';
-import type { InstalledServerFacets } from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
+import type { InstalledServerFacets } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { DOOM_MINOR_MODE_ENTRY_TYPE } from '@agimon-ai/doompi-extension-contracts/mode';
 import type {
   DoomHeadlessEventName,
@@ -7,14 +7,16 @@ import type {
   DoomHeadlessSelection,
   DoomHeadlessTool,
 } from '@agimon-ai/doompi-extension-contracts/headless';
+import { DOOM_CHILD_SESSION_SERVICE } from '@agimon-ai/doompi-extension-contracts/child-session';
 import { domainStatus } from '@agimon-ai/doompi-domain';
 import { statusText } from '@agimon-ai/doompi-major-mode';
 import { createHeadlessClient } from './headlessClient.ts';
 import { HeadlessHost, headlessHarnessSkill } from './headlessHost.ts';
 import { createDirectHarnessRuntime } from './directHarnessRuntime.ts';
+import { createHeadlessChildSessionServiceProvider } from './headlessChildSessionService.ts';
 import { createHistoryOwnership } from '../serialization/historyOwnership.ts';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../../types/server/headlessSessionHost.ts';
-import type { AgentProcess, SessionFrame } from '../../types/server/session.ts';
+import type { SessionFrame } from '../../types/server/session.ts';
 import type { ResolvedHeadlessResource } from '../../types/server/headlessHost.ts';
 import type { DirectHarnessRuntime } from '../../types/server/directHarnessRuntime.ts';
 import { buildContextDetail } from '../../services/contextDetail.ts';
@@ -40,13 +42,6 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/contex
 import type { AgentHarnessResources, AgentHarnessTool, AgentMessage, HookMap } from '@earendil-works/pi-agent-core';
 import type { Model, Api, Usage } from '@earendil-works/pi-ai';
 import path from 'node:path';
-
-/** Explicit test-only switch for the same-process server adapter. */
-export const DIRECT_HEADLESS_OPT_IN_ENV = 'DOOMPI_TEST_DIRECT_HEADLESS';
-
-export function isDirectHeadlessOptedIn(environment: NodeJS.ProcessEnv = process.env): boolean {
-  return environment[DIRECT_HEADLESS_OPT_IN_ENV] === '1';
-}
 
 type AnyRecord = Record<string, unknown>;
 type HeadlessTool = DoomHeadlessTool;
@@ -353,6 +348,7 @@ function publishHeadlessSelectionStatus(
 function createHeadlessCompositionPublisher(
   runtime: Pick<DirectHarnessRuntime, 'sessionId' | 'appendCustomEntry'>,
   host: HeadlessHost,
+  environment: Readonly<Record<string, string | undefined>>,
 ): (selection?: DoomHeadlessSelection) => Promise<void> {
   let countTokens: ((text: string) => number) | undefined;
   let contextRevision = 0;
@@ -388,7 +384,7 @@ function createHeadlessCompositionPublisher(
         countTokens,
       });
       await runtime.appendCustomEntry(DOOM_CONTEXT_ENTRY_TYPE, { ...context, revision });
-      writeContextDetail(runtime.sessionId, revision, details);
+      writeContextDetail(runtime.sessionId, revision, details, environment);
       contextRevision = revision;
       publishedContext = contextKey;
     }
@@ -421,6 +417,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   const runtime = await createDirectHarnessRuntime({
     cwd: options.cwd,
     sessionId: options.sessionId,
+    ...(options.parentSessionId === undefined ? {} : { parentSessionId: options.parentSessionId }),
     historyOwnership: createHistoryOwnership(),
     sessionName: parsed.name ?? options.sessionName,
     ...(parsed.session === undefined ? {} : { sessionPath: parsed.session }),
@@ -629,16 +626,22 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   let headlessHost: HeadlessHost | undefined;
   let client: ReturnType<typeof createHeadlessClient> | undefined;
   let disposed = false;
-  let historyReplayed = false;
   let disposePromise: Promise<void> | undefined;
   let publishComposition: (selection?: DoomHeadlessSelection) => Promise<void> = async () => {
     throw new Error('Direct headless composition publisher is not installed.');
   };
+  const childSessionProvider = createHeadlessChildSessionServiceProvider({
+    parentSessionId: runtime.sessionId,
+    cwd: options.cwd,
+    models: modelRuntime,
+    defaultModel: () => currentModel,
+  });
 
   const executionContext = (selection: DoomHeadlessSelection): DoomHeadlessExecutionContext => ({
     cwd: options.cwd,
     repoRoot: options.repoRoot,
     sessionId: runtime.sessionId,
+    environment: options.environment,
     client: client!.client,
     model: currentModel === undefined ? undefined : modelIdentity(currentModel),
     selection,
@@ -683,7 +686,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     emitFrame: (frame) => emitTo(listeners, frame),
   });
 
-  runtime.onFrame((frame) => emitTo(listeners, frame));
+  const unsubscribePresentation = runtime.onPresentationFrame((frame) => emitTo(listeners, frame));
   const unsubscribeEvents = runtime.onEvent(async (event, _context) => {
     if (event.type === 'config_update' && event.property === 'model') {
       currentModel = await runtime.lane.getModel(BACKGROUND_CONTEXT);
@@ -700,6 +703,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   });
 
   const prepareFacets = (root: CordisContext): void => {
+    root.plugin((context) => {
+      context.provide(DOOM_CHILD_SESSION_SERVICE, childSessionProvider.get());
+      context.effect(() => () => childSessionProvider.close(), 'headless child session service lifetime');
+    });
     if (headlessHost !== undefined) throw new Error('Direct headless facets were prepared more than once.');
     headlessHost = new HeadlessHost(root, {
       candidates: options.candidates,
@@ -720,7 +727,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       onError: (error) =>
         options.onNotice?.(`Headless selection failed: ${error instanceof Error ? error.message : String(error)}`),
     });
-    publishComposition = createHeadlessCompositionPublisher(runtime, headlessHost);
+    publishComposition = createHeadlessCompositionPublisher(runtime, headlessHost, options.environment);
   };
 
   const activateFacets = async (installed: InstalledServerFacets): Promise<void> => {
@@ -750,7 +757,13 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       } catch (error) {
         failures.push(error);
       }
+      try {
+        await childSessionProvider.close();
+      } catch (error) {
+        failures.push(error);
+      }
       client?.dispose();
+      unsubscribePresentation();
       unsubscribeEvents();
       try {
         await runtime.dispose();
@@ -767,24 +780,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     );
   };
 
-  const agent: AgentProcess = {
-    send(frame) {
-      if (client?.receive(frame)) return;
-      runtime.send(frame);
-    },
-    onFrame(listener) {
-      listeners.add(listener);
-      if (historyReplayed) return;
-      historyReplayed = true;
-      for (const entry of entries) listener({ type: 'entry_appended', entry });
-    },
-    exited: runtime.exited,
-    endInput: stop,
-    stop,
-  };
-
   return {
-    agent,
     runtime,
     get host() {
       return headlessHost;
@@ -792,6 +788,13 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     prepareFacets,
     activateFacets,
     canDispatch: () => !disposed && headlessReady && !promptPreparationFailed && headlessHost?.status.ready === true,
+    onPresentationFrame(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    respondToExtensionUi(frame) {
+      return client?.receive(frame as SessionFrame) ?? false;
+    },
     dispose,
   };
 }

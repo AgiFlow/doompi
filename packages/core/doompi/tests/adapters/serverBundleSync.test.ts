@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import { loadServerBundle } from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
+import { loadServerBundle } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { afterEach, describe, expect, it } from 'vitest';
 import { compileExtensionModule } from '../../src/adapters/extensionCompiler.ts';
 import { syncServerBundle, type ServerBundleSyncInput } from '../../src/adapters/serverBundleSync.ts';

@@ -48,9 +48,17 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type {
+  DoomChildSessionScope,
+  DoomChildSessionSource,
+  DoomChildSessionServiceProvider,
+  DoomChildSessionTerminalPiForkSource,
+} from '@agimon-ai/doompi-extension-contracts/child-session';
 import type { InlineAgent } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
-import { SessionManager } from '@earendil-works/pi-coding-agent';
+import type { SessionManager } from '@earendil-works/pi-coding-agent';
 import { PI_RUNTIME_NAME } from '../../../types/environment';
+import type { NativeRunCoordinatorContract } from '../../nativeRunCoordinator';
+import type { NativeTeamChannelContract } from '../../intercom/nativeTeamChannel';
 import {
   type ResolvedSubagentCapabilityCeiling,
   SubagentCapabilityPolicyStore,
@@ -78,7 +86,6 @@ import {
   type AdmissionGateContract,
   type AdmissionTicket,
   DEFAULT_ADMISSION_TIMEOUT_MS,
-  sharedAdmissionGate,
 } from '../../runs/shared/admissionGate';
 import { DoomTeamExpectedError } from '../../../services/support/errors';
 import type { ExtensionConfig } from './config';
@@ -90,11 +97,15 @@ const PI_RUNTIME_REQUIREMENT = `runtime "${PI_RUNTIME_NAME}"`;
 type SessionForkCaptureMode = 'tool' | 'settled';
 
 export interface SessionForkSource {
-  sessionFile: string;
-  leafId: string;
+  readonly sessionFile?: string;
+  readonly leafId: string;
+  readonly terminalSource: DoomChildSessionTerminalPiForkSource;
 }
 
-export type SessionForkSourceManager = Pick<SessionManager, 'getSessionFile' | 'getLeafId' | 'getLeafEntry'>;
+export type SessionForkSourceManager = Pick<
+  SessionManager,
+  'getSessionFile' | 'getSessionId' | 'getLeafId' | 'getLeafEntry' | 'getHeader' | 'getBranch'
+>;
 
 function readableSessionFile(sessionFile: string | undefined): sessionFile is string {
   if (!sessionFile?.trim()) return false;
@@ -106,24 +117,35 @@ function readableSessionFile(sessionFile: string | undefined): sessionFile is st
   }
 }
 
-/** Capture the parent branch while excluding an assistant turn whose tool is still executing. */
+/** Capture an immutable parent branch while excluding an assistant turn whose tool is still executing. */
 export function captureSessionForkSource(
   manager: SessionForkSourceManager,
   mode: SessionForkCaptureMode,
 ): SessionForkSource | undefined {
-  const sessionFile = manager.getSessionFile();
-  if (!readableSessionFile(sessionFile)) return undefined;
-
   const leaf = manager.getLeafEntry();
   const leafId =
     mode === 'tool' && leaf?.type === 'message' && leaf.message.role === 'assistant'
       ? leaf.parentId
       : (leaf?.id ?? manager.getLeafId());
-  return leafId ? { sessionFile, leafId } : undefined;
-}
+  const header = manager.getHeader();
+  if (!leafId || header?.type !== 'session' || header.version !== 3) return undefined;
 
-function isSessionForkSourceAvailable(source: SessionForkSource): boolean {
-  return Boolean(source.leafId.trim()) && readableSessionFile(source.sessionFile);
+  const branch = manager.getBranch(leafId);
+  if (branch.at(-1)?.id !== leafId) return undefined;
+  const sourceSessionId = manager.getSessionId();
+  if (!sourceSessionId.trim()) return undefined;
+  const terminalSource: DoomChildSessionTerminalPiForkSource = Object.freeze({
+    kind: 'terminal-pi-fork',
+    sourceSessionId,
+    sourceLeafId: leafId,
+    snapshotJsonl: `${[header, ...branch].map((record) => JSON.stringify(record)).join('\n')}\n`,
+  });
+  const sessionFile = manager.getSessionFile();
+  return {
+    leafId,
+    terminalSource,
+    ...(readableSessionFile(sessionFile) ? { sessionFile } : {}),
+  };
 }
 
 export interface SpawnPlanTaskInput {
@@ -134,13 +156,7 @@ export interface SpawnPlanTaskInput {
   model?: string;
   runtime?: string;
   context?: typeof CONTEXT_FRESH | typeof CONTEXT_FORK;
-  /**
-   * An existing child transcript to continue instead of starting fresh.
-   *
-   * Set only by a restore. `sdkRunnerEntry.ts` opens it through
-   * `SessionManager.open`, which is what makes a restored run pick up where it
-   * was suspended rather than redo the task.
-   */
+  /** An existing child transcript to continue instead of starting fresh. */
   sessionFile?: string;
 }
 
@@ -183,11 +199,16 @@ export interface SpawnPlanRequest {
   /** Fallback cwd for any task that omits its own. */
   cwd: string;
   agentScope: AgentScope;
-  /** Legacy session identity retained for delegation correlation. */
+  /** Explicit owner scope forwarded to every child runtime. */
+  sessionScope: DoomChildSessionScope;
+  /** Environment admitted to this parent session, forwarded only to native children. */
+  environment?: Readonly<Record<string, string | undefined>>;
+  /** Parent identity retained for delegation correlation. */
   parentSessionId?: string;
-  /** Persisted parent transcript used for true Pi forks. */
+  /** Immutable terminal Pi branch used by native fork children. */
+  parentForkSource?: DoomChildSessionTerminalPiForkSource;
+  /** External-runtime parent source fields. */
   parentSessionFile?: string;
-  /** Settled parent leaf used for true Pi forks. */
   parentLeafId?: string;
   artifacts?: boolean;
   /** Authenticated models reported by the live parent host. Undefined for callers without a host context. */
@@ -217,8 +238,10 @@ interface SpawnOneChildInput {
   fanout: boolean;
   fallbackCwd: string;
   parentSessionId: string | undefined;
+  parentForkSource: DoomChildSessionTerminalPiForkSource | undefined;
+  sessionScope: DoomChildSessionScope;
+  environment: Readonly<Record<string, string | undefined>>;
   parentSessionFile: string | undefined;
-  preparedSessionFile: string | undefined;
   maxLiveRuns: number;
   admissionTimeoutMs: number;
   handshakeTimeoutMs: number | undefined;
@@ -375,33 +398,15 @@ export class SpawnPlanner implements SpawnPlannerContract {
     private readonly policies: SubagentCapabilityPolicyStore = new SubagentCapabilityPolicyStore(),
     private readonly skills?: SkillDiscoveryContract,
     private readonly reportConcurrencyEvent?: ConcurrencyEventReporter,
-    private readonly mcpToolResolver?: McpDirectToolResolver,
-    private readonly admission: AdmissionGateContract = sharedAdmissionGate(),
+    _mcpToolResolver?: McpDirectToolResolver,
+    private readonly admission?: AdmissionGateContract,
+    private readonly childSessions?: DoomChildSessionServiceProvider,
+    private readonly nativeRuns?: NativeRunCoordinatorContract,
+    private readonly teamChannel?: Pick<NativeTeamChannelContract, 'createNativeChildIntercom'>,
   ) {}
 
   protected generateRunId(): string {
     return crypto.randomUUID();
-  }
-
-  protected createForkSessionFile(source: SessionForkSource, cwd: string): string {
-    const sessionManager = SessionManager.open(source.sessionFile, undefined, cwd);
-    const sessionFile = sessionManager.createBranchedSession(source.leafId);
-    if (!sessionFile) throw new Error(`Could not create a branched Pi session from '${source.sessionFile}'.`);
-
-    // Pi defers writing user-only branches until an assistant response. A tool-safe
-    // fork usually ends at the user message immediately before the active tool call,
-    // so materialize that valid child transcript before the runner opens it.
-    if (!fs.existsSync(sessionFile)) {
-      const header = sessionManager.getHeader();
-      if (!header) throw new Error(`Forked Pi session '${sessionFile}' has no header.`);
-      const records = [header, ...sessionManager.getEntries()];
-      fs.writeFileSync(sessionFile, `${records.map((record) => JSON.stringify(record)).join('\n')}\n`, { flag: 'wx' });
-    }
-    return sessionFile;
-  }
-
-  protected removePreparedSessionFile(sessionFile: string): void {
-    fs.rmSync(sessionFile, { force: true });
   }
 
   protected validateCwd(cwd: string): void {
@@ -629,8 +634,10 @@ export class SpawnPlanner implements SpawnPlannerContract {
       fanout,
       fallbackCwd,
       parentSessionId,
+      parentForkSource,
+      sessionScope,
+      environment,
       parentSessionFile,
-      preparedSessionFile,
       maxLiveRuns,
       admissionTimeoutMs,
       handshakeTimeoutMs,
@@ -698,32 +705,15 @@ export class SpawnPlanner implements SpawnPlannerContract {
       ...(taskInput.inlineAgent ? { inlineAgent: taskInput.inlineAgent } : {}),
       task,
       cwd,
+      environment,
       childIndex,
       fanout,
+      sessionScope,
       ...(parentSessionFile ? { parentSessionFile } : {}),
       piArgs: {
-        baseArgs: [],
-        sessionEnabled: isPiRuntime(effectiveRuntime),
-        ...(taskInput.sessionFile
-          ? { sessionFile: taskInput.sessionFile }
-          : preparedSessionFile
-            ? { sessionFile: preparedSessionFile }
-            : {}),
-        inheritProjectContext: agentConfig.inheritProjectContext,
-        inheritSkills: agentConfig.inheritSkills,
-        systemPromptMode: agentConfig.systemPromptMode,
-        systemPrompt: skillProjection.systemPrompt,
-        requireReadTool: skillProjection.requireReadTool,
-        model: modelSelection.model,
-        thinking: agentConfig.thinking,
-        tools: agentConfig.tools,
-        extensions: agentConfig.extensions,
-        subagentOnlyExtensions: agentConfig.subagentOnlyExtensions,
-        mcpDirectTools: agentConfig.mcpDirectTools,
-        ...(this.mcpToolResolver ? { mcpToolResolver: this.mcpToolResolver } : {}),
-        excludeTools,
-        capabilityCeiling,
-        cwd,
+        ...(taskInput.sessionFile ? { sessionFile: taskInput.sessionFile } : {}),
+        ...(modelSelection.model ? { model: modelSelection.model } : {}),
+        ...(capabilityCeiling ? { capabilityCeiling } : {}),
         ...(effectiveContext === CONTEXT_FORK && parentSessionId ? { parentSessionId } : {}),
       },
       ...(handshakeTimeoutMs !== undefined ? { handshakeTimeoutMs } : {}),
@@ -735,9 +725,12 @@ export class SpawnPlanner implements SpawnPlannerContract {
       runtimes,
     };
 
+    const admission = this.admission;
+    if (!admission) throw new Error('Doom Team spawn admission is not configured.');
     let ticket: AdmissionTicket;
     try {
-      ticket = await this.admission.admit({
+      ticket = await admission.admit({
+        sessionScope,
         maxLiveRuns,
         timeoutMs: admissionTimeoutMs,
         ...(this.reportConcurrencyEvent ? { report: this.reportConcurrencyEvent } : {}),
@@ -753,6 +746,63 @@ export class SpawnPlanner implements SpawnPlannerContract {
     }
 
     try {
+      if (isPiRuntime(effectiveRuntime)) {
+        if (!this.nativeRuns || !this.childSessions?.get())
+          throw new Error('The native Team run coordinator is unavailable.');
+        const scope = sessionScope;
+        const source: DoomChildSessionSource = taskInput.sessionFile
+          ? { kind: 'v4-restore', sessionFile: taskInput.sessionFile }
+          : effectiveContext === CONTEXT_FORK
+            ? (parentForkSource ??
+              (() => {
+                throw new Error('Native fork input requires an immutable terminal Pi snapshot.');
+              })())
+            : { kind: 'fresh' };
+        const intercom = this.teamChannel?.createNativeChildIntercom({
+          rootSessionId: scope.rootSessionId,
+          agent: agentConfig.name,
+          runId,
+          childIndex,
+          task: { id: runId, subject: task },
+        });
+        let child: Awaited<ReturnType<NativeRunCoordinatorContract['start']>>;
+        try {
+          child = await this.nativeRuns.start(parentSessionId ?? scope.rootSessionId, {
+            runId,
+            parentSessionId: parentSessionId ?? scope.rootSessionId,
+            scope,
+            source,
+            agent: agentConfig.name,
+            task,
+            cwd,
+            ...(modelSelection.model ? { model: modelSelection.model } : {}),
+            ...(typeof agentConfig.thinking === 'string' ? { thinking: agentConfig.thinking } : {}),
+            ...(skillProjection.systemPrompt ? { systemPrompt: skillProjection.systemPrompt } : {}),
+            systemPromptMode: agentConfig.systemPromptMode,
+            ...(agentConfig.extensions ? { extensions: agentConfig.extensions } : {}),
+            ...(agentConfig.subagentOnlyExtensions
+              ? { subagentOnlyExtensions: agentConfig.subagentOnlyExtensions }
+              : {}),
+            ...(agentConfig.tools ? { tools: agentConfig.tools } : {}),
+            ...(excludeTools ? { excludeTools } : {}),
+            ...(agentConfig.skills ? { skills: agentConfig.skills } : {}),
+            ...(agentConfig.mcpDirectTools ? { mcpDirectTools: agentConfig.mcpDirectTools } : {}),
+            ...(capabilityCeiling ? { capabilityCeiling } : {}),
+            ...(intercom ? { intercom } : {}),
+            environment,
+          });
+        } catch (error) {
+          intercom?.dispose?.();
+          throw error;
+        }
+        return {
+          agent: agentConfig.name,
+          task,
+          childIndex,
+          runId: child.runId,
+          ...(warning ? { warning } : {}),
+        };
+      }
       const result: AsyncSubagentSpawnResult = await this.spawner.spawn(spawnInput);
       return {
         agent: agentConfig.name,
@@ -771,8 +821,8 @@ export class SpawnPlanner implements SpawnPlannerContract {
         ...(warning ? { warning } : {}),
       };
     } finally {
-      // The child is in `runRegistry` by the time `spawn` resolves, so the
-      // registry count takes over from this reservation.
+      // Once spawn resolves, direct child events make the run visible to the
+      // injected live counter, so only the reservation is released here.
       ticket.release();
     }
   }
@@ -854,16 +904,12 @@ export class SpawnPlanner implements SpawnPlannerContract {
             'Use a Pi agent for fork context or explicitly request a fresh run.',
           );
         }
-        const source =
-          request.parentSessionFile && request.parentLeafId
-            ? { sessionFile: request.parentSessionFile, leafId: request.parentLeafId }
-            : undefined;
-        if (!source || !isSessionForkSourceAvailable(source)) {
+        if (!request.parentForkSource) {
           throw new DoomTeamExpectedError(
             ERROR_CODE_UNSUPPORTED_CONTEXT,
-            `Fork context is unavailable for '${taskInput.agent}': the parent Pi session has no readable source.`,
+            `Fork context is unavailable for '${taskInput.agent}': the parent Pi session has no capturable branch.`,
             false,
-            'Use an active persisted Pi session or explicitly request a fresh run.',
+            'Use an active Pi session with a completed parent turn or explicitly request a fresh run.',
           );
         }
       }
@@ -938,31 +984,6 @@ export class SpawnPlanner implements SpawnPlannerContract {
         }
       }
     }
-    const forkSource =
-      request.parentSessionFile && request.parentLeafId
-        ? { sessionFile: request.parentSessionFile, leafId: request.parentLeafId }
-        : undefined;
-    const preparedSessionFiles: Array<string | undefined> = [];
-    try {
-      for (const [index, taskInput] of tasks.entries()) {
-        preparedSessionFiles.push(
-          resolveEffectiveContext(taskInput, resolvedAgents[index]!) === CONTEXT_FORK
-            ? this.createForkSessionFile(forkSource!, taskInput.cwd ?? request.cwd)
-            : undefined,
-        );
-      }
-    } catch (error) {
-      for (const sessionFile of preparedSessionFiles) {
-        if (sessionFile) this.removePreparedSessionFile(sessionFile);
-      }
-      throw new DoomTeamExpectedError(
-        ERROR_CODE_UNSUPPORTED_CONTEXT,
-        error instanceof Error ? error.message : String(error),
-        false,
-        'Retry from an active persisted Pi session or explicitly request a fresh run.',
-      );
-    }
-
     const concurrency = fanout
       ? (request.concurrency ?? config.parallel?.concurrency ?? DEFAULT_PARALLEL_CONCURRENCY)
       : 1;
@@ -984,8 +1005,10 @@ export class SpawnPlanner implements SpawnPlannerContract {
           fanout,
           fallbackCwd: request.cwd,
           parentSessionId: request.parentSessionId,
+          parentForkSource: request.parentForkSource,
+          sessionScope: request.sessionScope,
+          environment: request.environment ?? {},
           parentSessionFile: request.parentSessionFile,
-          preparedSessionFile: preparedSessionFiles[childIndex],
           maxLiveRuns,
           admissionTimeoutMs,
           handshakeTimeoutMs: config.handshakeTimeoutMs,

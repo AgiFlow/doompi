@@ -3,6 +3,7 @@ import {
   requireDoomHeadlessHost,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-extension-contracts/headless';
+import { DOOM_SERVER_HOST_SERVICE, requireDoomServerHost } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-extension-contracts/delegation';
 import type { Context } from '@deepseek-ai/cordis';
 import { Check } from 'typebox/value';
@@ -21,6 +22,7 @@ import {
 } from '../../services/taskResult.ts';
 import { getMaxTasks, getDelegationTimeoutMs, getStoreTtlMs } from '../../types/config.ts';
 import { removeLegacyStoreDirectoryAsync, sweepStoreFilesAsync } from '../../adapters/store/paths.ts';
+import { TASKS_CHANNEL_TYPE } from '../../types/webTasks.ts';
 import type { DoomHeadlessTool } from '@agimon-ai/doompi-extension-contracts/headless';
 
 const SOURCE = '@agimon-ai/doompi-task';
@@ -44,9 +46,10 @@ async function reducerAction(
   store: TaskStore,
   action: ReducerAction,
   params: TaskMutationParams,
+  maxTasks: number,
 ): Promise<DoomHeadlessToolResult> {
   const { document, value } = await store.mutate((current) => {
-    const result = applyTaskMutation(current, action, params, undefined, getMaxTasks());
+    const result = applyTaskMutation(current, action, params, undefined, maxTasks);
     return { ...(isCommittingOp(result.op) ? { document: result.document } : {}), value: result };
   });
   if (value.op.kind === 'error') throw new Error(value.op.message);
@@ -87,7 +90,11 @@ async function assignmentBatch(
   return result;
 }
 
-function createTaskTool(store: TaskStore, manager: DelegationManager): DoomHeadlessTool<typeof TaskParamsSchema> {
+function createTaskTool(
+  store: TaskStore,
+  manager: DelegationManager,
+  maxTasks: number,
+): DoomHeadlessTool<typeof TaskParamsSchema> {
   return {
     name: 'task',
     label: 'Task',
@@ -118,7 +125,7 @@ function createTaskTool(store: TaskStore, manager: DelegationManager): DoomHeadl
           if (!outcome.ok) throw new Error(outcome.message);
           return buildTextResult('cancel', params as TaskMutationParams, store.snapshot, outcome.message);
         }
-        return reducerAction(store, params.action as ReducerAction, params as TaskMutationParams);
+        return reducerAction(store, params.action as ReducerAction, params as TaskMutationParams, maxTasks);
       } catch (error) {
         return failure(error);
       }
@@ -127,23 +134,31 @@ function createTaskTool(store: TaskStore, manager: DelegationManager): DoomHeadl
 }
 
 export const taskHeadlessFacet: HeadlessFacet = {
-  inject: [DOOM_HEADLESS_HOST_SERVICE],
+  inject: [DOOM_HEADLESS_HOST_SERVICE, DOOM_SERVER_HOST_SERVICE],
   apply(context: Context) {
     const host = requireDoomHeadlessHost(context);
     const execution = host.context;
+    const serverHost = requireDoomServerHost(context);
+    if (serverHost.context.directEvents === undefined)
+      throw new Error('Task headless facet requires the session direct event bus.');
+    const directEvents = serverHost.context.directEvents;
+    const maxTasks = getMaxTasks(execution.environment);
     const store = new TaskStore({
-      cwd: execution.cwd,
-      onCommitted: () => host.context.client.setStatus(SOURCE, `tasks: ${store.snapshot.tasks.length}`),
+      env: execution.environment,
+      onCommitted: (_previous, committed) => {
+        execution.client.setStatus(SOURCE, `tasks: ${committed.tasks.length}`);
+        directEvents.publish(TASKS_CHANNEL_TYPE, execution.sessionId, committed);
+      },
     });
-    store.configureSession(resolveSessionKey(execution.sessionId));
+    store.configureSession(resolveSessionKey(execution.sessionId, execution.environment));
     const manager = new DelegationManager({
       store,
       cwd: execution.cwd,
-      platform: createNodeDelegationPlatform(),
+      platform: createNodeDelegationPlatform(execution.environment),
       getSessionId: () => execution.sessionId,
       notify: (message) => void execution.client.notify({ body: message.content, level: 'info' }),
-      onChange: () => host.context.client.setStatus(SOURCE, `tasks: ${store.snapshot.tasks.length}`),
-      runTimeoutMs: getDelegationTimeoutMs(),
+      onChange: () => execution.client.setStatus(SOURCE, `tasks: ${store.snapshot.tasks.length}`),
+      runTimeoutMs: getDelegationTimeoutMs(execution.environment),
       onNotifyError: (error) => void execution.client.notify({ body: String(error), level: 'warning' }),
     });
     context.inject([DOOM_DELEGATION_SERVICE], (serviceContext) => {
@@ -151,13 +166,13 @@ export const taskHeadlessFacet: HeadlessFacet = {
       if (service) manager.bind(serviceContext, service);
     });
     const registrations = [
-      host.registerTool(createTaskTool(store, manager)),
+      host.registerTool(createTaskTool(store, manager, maxTasks)),
       host.registerCommand({
         name: 'tasks',
         description: 'List or clear the persistent task graph.',
         async execute(args, commandContext) {
           const action = args.trim() === 'clear' ? 'clear' : 'list';
-          const response = await reducerAction(store, action, { action });
+          const response = await reducerAction(store, action, { action }, maxTasks);
           const content = response.content[0];
           await commandContext.client.notify({
             body: content?.type === 'text' ? content.text : 'No tasks',
@@ -173,17 +188,14 @@ export const taskHeadlessFacet: HeadlessFacet = {
       host.registerActivity({
         name: SOURCE,
         async start(activityContext) {
-          store.configureSession(resolveSessionKey(activityContext.sessionId));
-          await removeLegacyStoreDirectoryAsync(store.storePath);
-          if (!process.env.DOOM_TASK_STORE_PATH) await sweepStoreFilesAsync(store.storePath, getStoreTtlMs());
+          store.configureSession(resolveSessionKey(activityContext.sessionId, activityContext.environment));
+          await removeLegacyStoreDirectoryAsync(store.storePath, activityContext.cwd);
+          if (!activityContext.environment.DOOM_TASK_STORE_PATH)
+            await sweepStoreFilesAsync(store.storePath, getStoreTtlMs(activityContext.environment));
           await store.readAsync();
-          const unwatch = store.onExternalChange(() =>
-            host.context.client.setStatus(SOURCE, `tasks: ${store.snapshot.tasks.length}`),
-          );
           await manager.reconcile();
           host.context.client.setStatus(SOURCE, `tasks: ${store.snapshot.tasks.length}`);
           return () => {
-            unwatch();
             manager.reset();
             host.context.client.setStatus(SOURCE, undefined);
           };

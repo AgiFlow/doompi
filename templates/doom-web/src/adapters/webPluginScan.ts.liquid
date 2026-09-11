@@ -54,9 +54,6 @@ function declaredPluginsIn(resolved: string, isHost: boolean): DeclaredWebPlugin
     if (!fs.existsSync(entryPath)) {
       throw new WebPluginManifestError(resolved, `client.entry '${plugin.client.entry}' does not exist.`);
     }
-    if (plugin.hub && !fs.existsSync(path.join(resolved, plugin.hub.entry))) {
-      throw new WebPluginManifestError(resolved, `hub.entry '${plugin.hub.entry}' does not exist.`);
-    }
   }
   return declared;
 }

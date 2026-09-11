@@ -249,14 +249,14 @@ describe('registerFleetCommand', () => {
   it('registers the fleet command under the same name the leader-space overlay (G10) will target', () => {
     const registerCommand = vi.fn();
     const pi = { registerCommand } as never;
-    registerFleetCommand(pi, { scheduler: new FakeScheduler(), tracker: new FakeTracker() });
+    registerFleetCommand(pi, { scheduler: new FakeScheduler(), tracker: new FakeTracker(), environment: {} });
     expect(registerCommand).toHaveBeenCalledWith(SUBAGENT_FLEET_COMMAND, expect.any(Object));
   });
 
   it('does not replace the compact footer status while the overlay is open', async () => {
     const registerCommand = vi.fn();
     const pi = { registerCommand } as never;
-    registerFleetCommand(pi, { scheduler: new FakeScheduler(), tracker: new FakeTracker() });
+    registerFleetCommand(pi, { scheduler: new FakeScheduler(), tracker: new FakeTracker(), environment: {} });
     const handler = registerCommand.mock.calls[0][1].handler as (args: string, ctx: unknown) => Promise<void>;
 
     const setStatus = vi.fn();
@@ -291,7 +291,7 @@ describe('registerAgentStatus', () => {
       ui: { setStatus },
     } as never;
 
-    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker });
+    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker, environment: {} });
     handlers.get('session_start')?.({}, ctx);
     expect(setStatus).toHaveBeenLastCalledWith(FLEET_STATUS_KEY, 'Agents ○');
     expect(footerUpdate).toHaveBeenLastCalledWith({
@@ -332,7 +332,7 @@ describe('registerAgentStatus', () => {
       ui: { setStatus: vi.fn() },
     } as never;
 
-    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker });
+    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker, environment: {} });
     handlers.get('session_start')?.({}, ctx);
     await scheduler.subscriptions[0]?.run();
     await scheduler.subscriptions[0]?.run();
@@ -362,7 +362,7 @@ describe('registerAgentStatus', () => {
     const publishedCosts = (): unknown[] =>
       setStatus.mock.calls.filter(([key]) => key === COST_STATUS_KEY).map(([, value]) => value);
 
-    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker });
+    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker, environment: {} });
     handlers.get('session_start')?.({}, ctx);
     tracker.jobs = [{ runId: 'run-1', status: 'completed', cost: 0.57 }];
     await scheduler.subscriptions[0]?.run();
@@ -392,7 +392,7 @@ describe('registerAgentStatus', () => {
       ui: { setStatus },
     } as never;
 
-    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker });
+    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker, environment: {} });
     handlers.get('session_start')?.({}, ctx);
     await scheduler.subscriptions[0]?.run();
 

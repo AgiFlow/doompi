@@ -13,6 +13,8 @@ interface PackageManifest {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+  doompiWeb?: { pluginId?: string; client?: string };
 }
 
 interface ProjectManifest {
@@ -75,6 +77,25 @@ describe('doom Pi UI package boundary', () => {
     expect(manifest.peerDependencies?.['@earendil-works/pi-tui']).toBe('0.85.1');
   });
 
+  it('keeps browser UI dependencies optional while preserving the web client entry', async () => {
+    const manifest = await readJsonFile<PackageManifest>(manifestPath);
+    const webDependencies = ['@agimon-ai/doompi-web-components', '@agimon-ai/doompi-web-contracts'];
+
+    for (const dependency of webDependencies) {
+      expect(manifest.dependencies?.[dependency], dependency).toBeUndefined();
+      expect(manifest.devDependencies?.[dependency], dependency).toBe('workspace:*');
+      expect(manifest.peerDependencies?.[dependency], dependency).toBe('workspace:*');
+      expect(manifest.peerDependenciesMeta?.[dependency], dependency).toEqual({ optional: true });
+    }
+    expect(manifest.doompiWeb).toEqual({
+      pluginId: 'builtin-tools',
+      channels: [],
+      client: './src/exports/webClient.ts',
+    });
+    expect(await readFile(path.join(packageDirectory, 'tsdown.config.ts'), 'utf8')).toContain(
+      '!src/exports/webClient.ts',
+    );
+  });
   it('uses package-local project configuration without private rig packages or Doom Config runtime coupling', async () => {
     const project = await readJsonFile<ProjectManifest>(path.join(packageDirectory, 'project.json'));
     const manifest = await readJsonFile<PackageManifest>(manifestPath);
@@ -112,6 +133,7 @@ describe('doom Pi UI package boundary', () => {
 
     expect(publicEntries.length).toBeGreaterThan(0);
     expect(Object.keys(exportsMap)).not.toContain('./*');
+    expect(Object.keys(exportsMap)).not.toContain('./extension');
 
     for (const [subpath, target] of publicEntries) {
       expect(conditionPaths(target, 'import'), subpath).toHaveLength(1);

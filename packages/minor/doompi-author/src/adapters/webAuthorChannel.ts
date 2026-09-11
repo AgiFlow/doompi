@@ -1,15 +1,15 @@
 import type {
-  HubChannelConnection,
-  HubChannelHost,
-  HubChannelSource,
-  HubSessionScope,
-  WebHubChannel,
-} from '@agimon-ai/doompi-web-contracts';
+  DoomHubChannelConnection,
+  DoomHubChannelHost,
+  DoomHubChannelSource,
+  DoomHubSessionScope,
+  DoomHubChannel,
+} from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { API_BASE_PATH, AUTHOR_BRIDGE_ROUTES } from '../types/authorApi.ts';
 import { authorChannelType, type AuthorBrowserMessage, type AuthorHubMessage } from '../types/webAuthor.ts';
 
 interface Binding {
-  scope: HubSessionScope;
+  scope: DoomHubSessionScope;
   connectionId: string;
   generation: number;
   ownerToken: string;
@@ -34,12 +34,12 @@ async function responsePayload(response: Response): Promise<AuthorHubMessage> {
   return { kind: 'rejected', reason };
 }
 
-export function createAuthorChannel(): WebHubChannel {
+export function createAuthorChannel(): DoomHubChannel {
   const bindings = new Map<string, Binding>();
-  let host: HubChannelHost | undefined;
+  let host: DoomHubChannelHost | undefined;
   let closed = false;
   const keyOf = (sessionId: string, connectionId: string): string => `${sessionId}\0${connectionId}`;
-  const send = async (scope: HubSessionScope, path: string, value: Record<string, unknown>, signal?: AbortSignal) =>
+  const send = async (scope: DoomHubSessionScope, path: string, value: Record<string, unknown>, signal?: AbortSignal) =>
     await host!.requestSessionApi(scope, {
       basePath: API_BASE_PATH,
       path,
@@ -75,13 +75,13 @@ export function createAuthorChannel(): WebHubChannel {
     }
   };
 
-  const channel: WebHubChannel = {
+  const channel: DoomHubChannel = {
     frameType: authorChannelType,
     lifecycle: 'hub',
     receiveWithoutSubscription: true,
     start(channelHost) {
       host = channelHost;
-      const source: HubChannelSource = {
+      const source: DoomHubChannelSource = {
         payloadFor: () => undefined,
         sessionRemoved(sessionId) {
           for (const [key, binding] of bindings) {
@@ -141,7 +141,7 @@ export function createAuthorChannel(): WebHubChannel {
         } else if (reply.kind === 'rejected' && previous !== undefined) publish(previous, reply);
       })().catch((error: unknown) => host?.onNotice(error instanceof Error ? error.message : String(error)));
     },
-    disconnected(connection: HubChannelConnection) {
+    disconnected(connection: DoomHubChannelConnection) {
       for (const [key, binding] of bindings) {
         if (binding.connectionId !== connection.connectionId) continue;
         binding.poll?.abort();
@@ -155,5 +155,3 @@ export function createAuthorChannel(): WebHubChannel {
   };
   return channel;
 }
-
-export const webHubChannels: readonly WebHubChannel[] = [createAuthorChannel()];

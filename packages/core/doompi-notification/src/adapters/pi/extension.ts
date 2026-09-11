@@ -250,9 +250,7 @@ export async function notificationExtension(
 ): Promise<void> {
   if ((options.environment ?? process.env)[SUBAGENT_CHILD_ENV]) return;
 
-  const connection = await connectDoomCordisHost(pi, PACKAGE_SOURCE, {
-    environment: options.environment ?? process.env,
-  });
+  const connection = await connectDoomCordisHost(pi, PACKAGE_SOURCE);
   const fiber = connection.root.plugin(notificationPlugin, {
     generation: `${connection.runtime.generation}:notification`,
     pi,

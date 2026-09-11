@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext, ToolDefinition, ToolInfo } from '@earendil-works/pi-coding-agent';
 import type { TSchema } from 'typebox';
-import { connectDoomCordisHost, type DoomCordisHostConnection } from '../pi/cordisHost.ts';
+import { connectDoomCordisHost, installDoomCordisHost, type DoomCordisHostConnection } from '../pi/cordisHost.ts';
 
 /**
  * A Pi host a test drives, in place of the one Pi builds at runtime.
@@ -498,6 +498,7 @@ export function createPiTestHost(options: PiTestHostOptions = {}): PiTestHost {
       for (const handler of delivered) {
         answered.push(await invokable(handler)({ type: event, ...(payload as object) }, eventContext));
       }
+      if (event === 'session_shutdown') cordisConnection = undefined;
       return answered;
     },
     async callTool(name, params = {}, callOptions = {}) {
@@ -517,7 +518,18 @@ export function createPiTestHost(options: PiTestHostOptions = {}): PiTestHost {
       await command.options.handler(args, (context ?? buildContext()) as never);
     },
     async cordis(source = DEFAULT_CORDIS_SOURCE) {
-      cordisConnection ??= await connectDoomCordisHost(pi, source);
+      if (cordisConnection === undefined) {
+        const controller = await installDoomCordisHost(pi, {
+          mode: 'standalone',
+          source: `${source}:standalone-host`,
+        });
+        try {
+          cordisConnection = await connectDoomCordisHost(pi, source);
+        } catch (error) {
+          await controller.shutdown();
+          throw error;
+        }
+      }
       return cordisConnection;
     },
     async dispose() {

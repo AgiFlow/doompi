@@ -13,7 +13,6 @@ interface PackageManifest {
   keywords?: string[];
   exports?: Record<string, unknown>;
   publishConfig?: { access?: string };
-  doompiApi?: { basePath?: string; session?: { entry?: string } };
   doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
   doompiWeb?: { pluginId?: string; channels?: string[]; client?: string; hub?: { entry?: string } };
   pi?: { extensions?: string[] };
@@ -41,32 +40,24 @@ describe('doompi-author package contract', () => {
         'typescript',
       ]),
     );
-    expect(Object.keys(value.exports ?? {})).toEqual([
-      '.',
-      './extensions/pi',
-      './extensions/server',
-      './session-api',
-      './web-hub',
-      './extensions/headless',
-      './package.json',
-    ]);
+    expect(Object.keys(value.exports ?? {})).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
     expect(value.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });
 
-  it('declares matching package API and web entries', async () => {
+  it('declares matching server facet and web entries', async () => {
     const value = await manifest();
-    expect(value.doompiApi).toBeUndefined();
+    expect('doompiApi' in value).toBe(false);
     expect(value.doompiServer).toEqual({
       entry: './src/exports/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['session'],
+      scopes: ['hub', 'session'],
     });
     expect(value.doompiWeb).toMatchObject({
       pluginId: 'author',
       channels: ['author_webmcp'],
       client: './src/exports/webClient.ts',
-      hub: { entry: './src/exports/webHub.ts', dist: './dist/webHub.mjs' },
     });
+    expect(value.doompiWeb?.hub).toBeUndefined();
     expect(value.files).toEqual(expect.arrayContaining(['dist', 'src/web', 'src/prompts', 'llms.txt', 'README.md']));
   });
 });

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertDeclaredApi, mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
+import { mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
 import { describe, expect, it } from 'vitest';
 import { createAuthorApi, api } from '../../src/adapters/authorApi.ts';
 import { AUTHOR_DOCUMENT_OPEN_PATH } from '../../src/adapters/authorDocumentApi.ts';
@@ -52,7 +52,6 @@ describe('the author API', () => {
   it('serves the route through its declared package mount', async () => {
     const mounted = mountPackageApi(api, { scope: 'session', sessionId: 's1', cwd: '/repo' });
     expect((await mounted.fetch(`/api/plugin/${API_BASE_PATH}${AUTHOR_STATE_PATH}`)).status).toBe(200);
-    expect(assertDeclaredApi({ packageRoot: PACKAGE_ROOT, api, scope: 'session' }).basePath).toBe(API_BASE_PATH);
     mounted.close();
   });
 });

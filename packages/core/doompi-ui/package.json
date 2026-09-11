@@ -87,11 +87,6 @@
       "import": "./dist/config.mjs",
       "require": "./dist/config.cjs"
     },
-    "./extension": {
-      "types": "./dist/extension.d.mts",
-      "import": "./dist/extension.mjs",
-      "require": "./dist/extension.cjs"
-    },
     "./extensionName": {
       "types": "./dist/extensionName.d.mts",
       "import": "./dist/extensionName.mjs",
@@ -102,10 +97,10 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
-    "./extensions/headless": {
-      "types": "./dist/extensions/headless.d.mts",
-      "import": "./dist/extensions/headless.mjs",
-      "require": "./dist/extensions/headless.cjs"
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
     },
     "./footer": {
       "types": "./dist/footer.d.mts",
@@ -184,12 +179,12 @@
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-hashline": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
-    "@agimon-ai/doompi-web-components": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-web-components": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",
     "@tanstack/react-store": "0.11.1",
@@ -204,15 +199,25 @@
     "vitest": "5.0.0"
   },
   "peerDependencies": {
+    "@agimon-ai/doompi-web-components": "workspace:*",
+    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1"
+  },
+  "peerDependenciesMeta": {
+    "@agimon-ai/doompi-web-components": {
+      "optional": true
+    },
+    "@agimon-ai/doompi-web-contracts": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/headless.ts",
-    "dist": "./dist/extensions/headless.mjs",
+    "entry": "./src/exports/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
     ]

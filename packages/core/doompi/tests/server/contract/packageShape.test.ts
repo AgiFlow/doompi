@@ -41,4 +41,9 @@ describe('doompi core server surface', () => {
     const config = await readFile(path.join(packageDirectory, 'tsdown.config.ts'), 'utf8');
     expect(config).toContain("'bin/serve': 'src/bin/serve.ts'");
   });
+
+  it('does not fall back to the installation directory for server registration', async () => {
+    const source = await readFile(path.join(packageDirectory, 'src/bin/serve.ts'), 'utf8');
+    expect(source).not.toContain('registeredSync(installationDir)');
+  });
 });

@@ -17,6 +17,8 @@ import {
   requireDoomServerHost,
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
+import { createSubagentCatalogChannel } from '../webSubagentCatalogChannel.ts';
+import { createSubagentsChannel } from '../webSubagentsChannel.ts';
 import { teamHeadlessFacet } from '../headless/facet.ts';
 import { api } from '../teamCatalogApi.ts';
 
@@ -24,7 +26,15 @@ export const teamServerFacet: DoomServerFacet = {
   inject: [DOOM_SERVER_HOST_SERVICE],
   apply(context: Context) {
     const host = requireDoomServerHost(context);
-    if (host.scope !== 'session') return undefined;
+    if (host.scope === 'hub') {
+      const registrations = [
+        host.registerChannel(createSubagentsChannel()),
+        host.registerChannel(createSubagentCatalogChannel()),
+      ];
+      return () => {
+        for (const registration of registrations.reverse()) registration.dispose();
+      };
+    }
     const registration = host.registerApi(api);
     const headless = readDoomHeadlessHost(context) as DoomHeadlessHostService | undefined;
     const headlessDisposer = headless ? teamHeadlessFacet.apply(context) : undefined;

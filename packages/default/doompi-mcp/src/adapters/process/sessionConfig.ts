@@ -33,7 +33,7 @@ function readAllowlist(value: unknown): McpAllowlist | undefined {
  * than fatal, because losing MCP is better than losing the session.
  */
 export function readSessionConfig(
-  env: NodeJS.ProcessEnv = process.env,
+  env: Readonly<Record<string, string | undefined>> = process.env,
   defaultRepoRoot: string = process.cwd(),
 ): McpSessionConfig {
   const fallback: McpSessionConfig = {

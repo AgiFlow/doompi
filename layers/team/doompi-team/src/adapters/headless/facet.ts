@@ -5,6 +5,10 @@ import {
   type DoomHeadlessTool,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-extension-contracts/headless';
+import { readDoomChildSessionService } from '@agimon-ai/doompi-extension-contracts/child-session';
+import { readDoomServerHost } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { NativeAsyncJobProjection, TrackedAsyncJob } from '../asyncJobTracker.ts';
 import { DOOM_BACKGROUND_WORK_SERVICE } from '@agimon-ai/doompi-extension-contracts/background-work';
 import { DOOM_DELEGATION_SERVICE } from '@agimon-ai/doompi-extension-contracts/delegation';
 import { DOOM_SUBAGENT_POLICY_SERVICE } from '@agimon-ai/doompi-extension-contracts/subagent-policy';
@@ -15,17 +19,31 @@ import {
   SubagentParams,
   type SubagentToolParams,
 } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+import { catalogModels, presentCatalog } from '../../services/webSubagentCatalog.ts';
+import {
+  SUBAGENT_CATALOG_TYPE,
+  SUBAGENT_RUNS_TYPE,
+  type SubagentRun,
+  type SubagentRunState,
+} from '../../types/webSubagents.ts';
 import { createBackgroundWorkService } from '../../services/backgroundWorkService.ts';
 import { toModelInfo } from '../../services/models/modelInfo.ts';
 import { createSubagentPolicyService } from '../../services/subagentPolicyService.ts';
+import { resolveActiveTeamModelSpecs } from '../agents/discovery.ts';
 import { createTeamExtensionRuntime } from '../pi/teamRuntime.ts';
+import { subscribeNativeRunProjection } from '../nativeRunProjection.ts';
+import { nativeRunProjection } from '../nativeRunProjection.ts';
 import { createDelegationBridge } from '../pi/extensions/delegationBridge.ts';
 import { loadConfig } from '../pi/extensions/config.ts';
 import { resolveTrackedRunId } from '../asyncJobTracker.ts';
-import { listSuspendedRuns, isSuspendedRunResumable, formatSuspendedRuns } from '../suspendedRuns.ts';
-import { createSessionScope, setCurrentSessionScope } from '../filesystem/paths.ts';
+import {
+  clearSuspendedRun,
+  formatSuspendedRuns,
+  isSuspendedRunResumable,
+  listSuspendedRuns,
+} from '../suspendedRuns.ts';
+import { createSessionScope } from '../filesystem/paths.ts';
 import { openScopeAsync, suspendScopeRuns } from '../runs/registry/sessionLifecycle.ts';
-import { writeScopeOwnerAsync } from '../scopeOwner.ts';
 import type { NativeTeamRuntime, NativeTeamTransport } from '../intercom/nativeTeamChannel.ts';
 import { DoomTeamExpectedError } from '../../services/support/errors.ts';
 
@@ -37,6 +55,73 @@ type HeadlessFacet = {
   inject: readonly string[];
   apply(context: Context): void | (() => void);
 };
+
+interface SessionRunProjection extends SubagentRun {
+  /** Host-private child transcript path consumed by the hub, not the browser. */
+  sessionFile?: string;
+}
+
+const TERMINAL_RUN_STATES = new Set(['completed', 'complete', 'failed', 'stopped', 'paused']);
+
+function runState(status: string): SubagentRunState {
+  if (status === 'completed' || status === 'complete') return 'done';
+  if (status === 'failed') return 'failed';
+  if (status === 'stopped' || status === 'paused') return 'stopped';
+  if (status === 'queued') return 'queued';
+  return 'running';
+}
+
+function presentTrackedRun(run: TrackedAsyncJob): SessionRunProjection | undefined {
+  if (!run.agent || !run.status || run.startedAt === undefined) return undefined;
+  const lastUpdate = run.updatedAt ?? run.startedAt;
+  return {
+    runId: run.runId,
+    agent: run.agent,
+    state: runState(run.status),
+    rawState: run.status,
+    task: run.task ?? '',
+    cwd: run.cwd ?? '',
+    startedAt: run.startedAt,
+    ...(TERMINAL_RUN_STATES.has(run.status) ? { endedAt: lastUpdate } : {}),
+    lastUpdate,
+    tail: [],
+    ...(run.sessionFile === undefined ? {} : { sessionFile: run.sessionFile }),
+    ...(run.summary === undefined ? {} : { summary: run.summary }),
+    ...(run.error === undefined ? {} : { error: run.error }),
+  };
+}
+
+function presentNativeRun(run: NativeAsyncJobProjection): SessionRunProjection {
+  return {
+    runId: run.runId,
+    agent: run.agent,
+    state: runState(run.status),
+    rawState: run.status,
+    task: run.task,
+    cwd: run.cwd,
+    startedAt: run.startedAt,
+    ...(TERMINAL_RUN_STATES.has(run.status) ? { endedAt: run.updatedAt } : {}),
+    lastUpdate: run.updatedAt,
+    tail: [],
+    ...(run.sessionFile === undefined ? {} : { sessionFile: run.sessionFile }),
+    ...(run.summary === undefined ? {} : { summary: run.summary }),
+    ...(run.error === undefined ? {} : { error: run.error }),
+  };
+}
+
+function publishRuns(
+  directEvents: DoomDirectEventBus,
+  sessionId: string,
+  jobs: readonly TrackedAsyncJob[],
+  nativeRuns: ReadonlyMap<string, NativeAsyncJobProjection>,
+): void {
+  const runs = jobs
+    .filter((job) => !job.native)
+    .map(presentTrackedRun)
+    .filter((run): run is SessionRunProjection => run !== undefined);
+  runs.push(...[...nativeRuns.values()].map(presentNativeRun));
+  directEvents.publish(SUBAGENT_RUNS_TYPE, sessionId, { runs });
+}
 
 function result(value: unknown, isError = false): DoomHeadlessToolResult {
   const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
@@ -60,6 +145,7 @@ function headlessTeamServicesPlugin(ctx: Context, config: HeadlessTeamServicesCo
     DOOM_DELEGATION_SERVICE,
     config.bridge.createService(ctx, {
       sessionId: config.execution.sessionId,
+      sessionScope: createSessionScope(config.execution.sessionId),
       availableModels,
       ...(config.execution.model ? { parentModel: config.execution.model } : {}),
     }),
@@ -72,7 +158,8 @@ function subagentTool(
   runtime: ReturnType<typeof createTeamExtensionRuntime>,
   execution: DoomHeadlessExecutionContext,
 ): DoomHeadlessTool<typeof SubagentParams> {
-  const jobs = runtime.asyncJobTracker.forSession(execution.sessionId);
+  const scope = createSessionScope(execution.sessionId);
+  const jobs = runtime.asyncJobTracker.forSession(execution.sessionId, scope);
   const availableModels = execution.model ? [toModelInfo(execution.model)] : [];
   return {
     name: 'subagent',
@@ -129,6 +216,8 @@ function subagentTool(
               })),
               cwd: execution.cwd,
               agentScope: scopeOf(params.scope),
+              sessionScope: createSessionScope(execution.sessionId),
+              environment: execution.environment,
               parentSessionId: execution.sessionId,
               ...(params.concurrency === undefined ? {} : { concurrency: params.concurrency }),
               ...(params.artifacts === undefined ? {} : { artifacts: params.artifacts }),
@@ -154,7 +243,7 @@ function subagentTool(
         }
         const id = resolveTrackedRunId(jobs, params.id);
         if (params.action === SUBAGENT_ACTIONS.stop) {
-          return result({ runId: id, control: runtime.management.stop(id, params.reason) });
+          return result({ runId: id, control: await runtime.management.stop(id, params.reason) });
         }
         if (params.action === SUBAGENT_ACTIONS.steer) {
           const steer = await runtime.management.steer(id, params.message, undefined, signal);
@@ -169,19 +258,27 @@ function subagentTool(
           {
             single: {
               agent: suspended.agent,
+              ...(suspended.inlineAgent ? { inlineAgent: suspended.inlineAgent } : {}),
               task: suspended.task,
               cwd: suspended.cwd,
+              ...(suspended.model ? { model: suspended.model } : {}),
               sessionFile: suspended.sessionFile,
             },
             cwd: suspended.cwd,
             agentScope: 'both',
+            sessionScope: createSessionScope(execution.sessionId),
+            environment: execution.environment,
             runtime: 'pi',
             parentSessionId: execution.sessionId,
             availableModels,
           },
           loadConfig().config,
         );
-        return result(restored);
+        const outcome = restored.outcomes[0];
+        if (!outcome?.runId)
+          throw new Error(`Could not restore '${params.id}': ${outcome?.error ?? 'the spawn produced no run.'}`);
+        clearSuspendedRun(createSessionScope(execution.sessionId), params.id);
+        return result({ restore: { ...outcome, restoredFrom: params.id } });
       } catch (error) {
         return result(error instanceof Error ? error.message : String(error), true);
       }
@@ -217,9 +314,54 @@ export const teamHeadlessFacet: HeadlessFacet = {
   inject: [DOOM_HEADLESS_HOST_SERVICE],
   apply(context: Context) {
     const host = requireDoomHeadlessHost(context);
-    const runtime = createTeamExtensionRuntime();
+    const serverHost = readDoomServerHost(context);
+    if (serverHost === undefined || serverHost.scope !== 'session') {
+      throw new Error('Team headless facet requires a session server host.');
+    }
+    if (serverHost.context.environment === undefined) {
+      throw new Error('Team headless facet requires an admitted session environment.');
+    }
+    const directEvents = serverHost.context.directEvents;
+    if (directEvents === undefined) {
+      throw new Error('Team headless facet requires host-owned direct events.');
+    }
     const execution = host.context;
+    const runtime = createTeamExtensionRuntime(undefined, {
+      environment: serverHost.context.environment,
+      childSessions: { get: () => readDoomChildSessionService(context) },
+      nativeRunProjection,
+    });
     const scope = createSessionScope(execution.sessionId);
+    runtime.management.bindSessionScope(scope);
+    const directEventCleanups: Array<() => void> = [];
+    const jobs = runtime.asyncJobTracker.forSession(execution.sessionId, scope);
+    const nativeRuns = new Map<string, NativeAsyncJobProjection>();
+    const publishRunSnapshot = (): void => publishRuns(directEvents, execution.sessionId, jobs.list(), nativeRuns);
+    directEventCleanups.push(runtime.asyncJobTracker.subscribe(execution.sessionId, publishRunSnapshot));
+    directEventCleanups.push(
+      subscribeNativeRunProjection(execution.sessionId, (runs) => {
+        nativeRuns.clear();
+        for (const run of runs) nativeRuns.set(run.runId, run);
+        publishRunSnapshot();
+      }),
+    );
+    publishRunSnapshot();
+    try {
+      const discovered = runtime.discovery.discover(execution.cwd, 'both').agents;
+      directEvents.publish(SUBAGENT_CATALOG_TYPE, execution.sessionId, {
+        cwd: execution.cwd,
+        agents: presentCatalog(discovered),
+        models: catalogModels(discovered, resolveActiveTeamModelSpecs() ?? []),
+      });
+    } catch (error) {
+      const warning = error instanceof Error ? error.message : String(error);
+      directEvents.publish(SUBAGENT_CATALOG_TYPE, execution.sessionId, {
+        cwd: execution.cwd,
+        agents: [],
+        models: [],
+        warning,
+      });
+    }
     const bridge = createDelegationBridge({
       planner: runtime.spawnPlanner,
       management: runtime.management,
@@ -229,8 +371,15 @@ export const teamHeadlessFacet: HeadlessFacet = {
       loadConfig: () => loadConfig().config,
     });
     context.plugin(headlessTeamServicesPlugin, { bridge, runtime, execution });
-    runtime.pollScheduler.start();
-    runtime.asyncJobTracker.start();
+    runtime.completionNotifier.attachHost({
+      sendMessage: (message) => {
+        const pending = execution.client.notify({ body: message.content, level: 'info' });
+        if (pending)
+          void pending.catch((error) =>
+            process.emitWarning(`Could not notify headless Team completion: ${String(error)}`),
+          );
+      },
+    });
     const transport: NativeTeamTransport = {
       sendMessage: ((message) =>
         void execution.client.notify({
@@ -265,11 +414,7 @@ export const teamHeadlessFacet: HeadlessFacet = {
       host.registerActivity({
         name: SOURCE,
         async start(activityContext) {
-          setCurrentSessionScope(createSessionScope(activityContext.sessionId));
-          await writeScopeOwnerAsync(scope);
-          const opened = await openScopeAsync(scope, {
-            readStatus: (runId) => runtime.management.status(runId).status,
-          });
+          const opened = await openScopeAsync(scope);
           if (opened.suspended.length)
             await activityContext.client.notify({ body: formatSuspendedRuns(opened.suspended), level: 'info' });
           channel.bindMainSession(activityContext.sessionId);
@@ -285,14 +430,25 @@ export const teamHeadlessFacet: HeadlessFacet = {
     return () => {
       if (disposed) return;
       disposed = true;
+      for (const cleanup of directEventCleanups.splice(0).reverse()) cleanup();
       for (const registration of registrations.reverse()) registration.dispose();
       channel.dispose();
-      void suspendScopeRuns({
+      runtime.completionNotifier.dispose();
+      const suspension = suspendScopeRuns({
         scope,
         reason: 'headless session ended',
-        readStatus: (runId) => runtime.management.status(runId).status,
-      }).catch((error) => process.emitWarning(`Could not suspend headless Team runs: ${String(error)}`));
+        jobs: jobs.list(),
+        stop: (runId, reason) => runtime.management.stop(runId, reason),
+      });
+      const nativeShutdown = runtime.nativeRuns.close().finally(() => nativeRunProjection.dispose(execution.sessionId));
+      void Promise.allSettled([suspension, nativeShutdown]).then((outcomes) => {
+        for (const outcome of outcomes) {
+          if (outcome.status === 'rejected')
+            process.emitWarning(`Could not shut down headless Team runs: ${String(outcome.reason)}`);
+        }
+      });
       bridge.abandonAll();
+      runtime.dispose();
       runtime.asyncJobTracker.stop();
       runtime.pollScheduler.stop();
     };

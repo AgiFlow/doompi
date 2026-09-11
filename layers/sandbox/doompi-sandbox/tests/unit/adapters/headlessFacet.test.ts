@@ -6,17 +6,18 @@ import {
   type DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { Context } from '@deepseek-ai/cordis';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { sandboxHeadlessFacet } from '../../../src/adapters/headless/facet.ts';
 
-function fixture() {
+function fixture(environment: Readonly<Record<string, string | undefined>> = {}) {
   const client = {
     notify: vi.fn(),
     request: vi.fn(),
     setStatus: vi.fn(),
   };
   const execution = {
-    cwd: process.cwd(),
+    cwd: '/workspace',
+    environment,
     sessionId: 'sandbox-headless-test',
     client,
     session: {
@@ -63,14 +64,9 @@ function fixture() {
   return { activities, client, commands, context, disposers, execution, resources };
 }
 
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
-
 describe('sandbox headless facet', () => {
   it('defers the optional broker and registers the live status command and resources', async () => {
-    vi.stubEnv('DOOMPI_SANDBOX_BROKER', '0');
-    const test = fixture();
+    const test = fixture({ DOOMPI_SANDBOX_BROKER: '0' });
     const dispose = sandboxHeadlessFacet.apply(test.context);
 
     expect(test.resources.map((resource) => resource.name)).toEqual([
@@ -89,5 +85,27 @@ describe('sandbox headless facet', () => {
 
     dispose?.();
     expect(test.disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
+  });
+
+  it('uses each session environment for sandbox state', async () => {
+    const sandboxed = fixture({ DOOMPI_SANDBOX: '1', DOOMPI_SANDBOX_BROKER: '0' });
+    const host = fixture({ DOOMPI_SANDBOX: undefined, DOOMPI_SANDBOX_BROKER: '0' });
+    const sandboxedDispose = sandboxHeadlessFacet.apply(sandboxed.context);
+    const hostDispose = sandboxHeadlessFacet.apply(host.context);
+
+    await sandboxed.commands[0]!.execute('', sandboxed.execution);
+    await host.commands[0]!.execute('', host.execution);
+
+    expect(sandboxed.client.notify).toHaveBeenCalledWith({
+      body: 'Sandboxed session: the agent, extensions, and tools run inside the container.',
+      level: 'info',
+    });
+    expect(host.client.notify).toHaveBeenCalledWith({
+      body: 'Host session: relaunch with dpi --sandbox to contain the agent in a container.',
+      level: 'info',
+    });
+
+    sandboxedDispose?.();
+    hostDispose?.();
   });
 });

@@ -1,106 +1,20 @@
-# Migrations
+# Canonical three-surface migration
 
-The re-architecture behind DoomPi's kernel, its unified server facet, and the
-agent mesh. This is the plan of record. What is left to do is in
-[migrations_todo.md](./migrations_todo.md).
+This document is the architecture and operator guide for DoomPi's three canonical extension surfaces. Current evidence and unresolved release gates are tracked in [migrations_todo.md](./migrations_todo.md).
 
-## History migration boundary
+## Canonical ownership
 
-Existing v3 history is never implicitly upgraded during direct-host startup. Stop Pi and every writer first, then run `doompi history-import <v3-source> <v4-destination> --confirm-offline`. Import preserves a byte-exact original and publishes a distinct v4 journal while holding cooperative source and destination leases. Confirmation cannot prove that an unmanaged writer stopped; ambiguous locks are not automatically reclaimed.
+DoomPi has exactly three extension surfaces:
 
-If import or export reports an ambiguous lock, do not infer safety from the recorded PID and do not force a retry. Stop every managed and unmanaged writer, preserve and inspect the relevant `<history-path>.doompi-v4.lock` and migration state sidecars, and independently verify that the source and destination are quiescent. Only then archive or remove the stale lock explicitly and rerun the same command so it resumes from the retained state. If quiescence or file provenance cannot be proved, leave the lock and history files untouched for manual investigation.
+1. `./extensions/pi` runs inside the Pi terminal. It owns terminal integration and in-process native Team children.
+2. `doompiWeb.client` contributes browser presentation code. Browser plugins do not own sessions, APIs, security, or persistence.
+3. `./extensions/server`, declared by `doompiServer`, runs in the client-neutral headless process.
 
-Use `doompi history-export <v4-source> <v3-destination>` for a derived Pi-compatible fork and its machine-readable loss report. Resume the explicit file with pinned Pi 0.85.1's `pi --session <v3-destination>`, or select an export in the normal `/resume` discovery picker. `--resume <path>` is not that pinned CLI's path selector. Continuing the export never merges into canonical v4 history, and a modified continuation cannot be overwritten by re-export.
+The headless process owns the hub, session runtimes, native child services, package APIs, authentication, authorization, history, bounded replay, and event projection. Web and desktop are clients of that process. Explicit Claude and Codex runtimes remain external subprocesses and never fall back automatically to a native runtime.
 
-See the latest verification section in [migrations_todo.md](./migrations_todo.md) for evidence and remaining gates. This workflow does not authorize normal writable v4 cutover before those gates pass.
+## Server declaration and loading
 
-## Why
-
-Four hard requirements drive it.
-
-1. **Hot reload on all four axes.** Changing minor mode, profile, domains or
-   major mode must never hard-reload the agent. Today a major mode switch
-   respawns the process and loses in-memory state, notably the active minor
-   modes.
-2. **The API and the server are one.** Two generators for the same surface is
-   one too many.
-3. **An agent mesh.** A hub advertises the agents it owns, ACP/A2A style.
-4. **Web, desktop and native.** One protocol across all three carriers.
-
-## 1. Hot reload without a hard reload
-
-The mechanism is a static facet graph with gated contributions.
-
-Sync compiles one server artefact containing the union of every layer across
-every major mode, which `config.majorMode` already enumerates. The kernel
-activates all facets once. Packages declare contributions to a kernel registry
-tagged by owning layer instead of registering directly with a host. Any axis
-change recomputes the active union and pushes it down.
-
-| Axis       | Applied by                                                                  | Reload? |
-| ---------- | --------------------------------------------------------------------------- | ------- |
-| minor mode | contribution registry, already live today                                   | no      |
-| profile    | `systemPrompt` closure re-read per turn                                     | no      |
-| domains    | `setResources`                                                              | no      |
-| major mode | recompute union, `setTools` + `setResources` + hook toggles + command table | no      |
-
-This works because the harness setters are whole-list replacements, so removal
-is inherent:
-
-```ts
-setTools(tools: AgentHarnessTool<TContext>[], context: Context): Promise<void>;
-setResources(resources: Resources, context: Context): Promise<void>;
-```
-
-Chord's `FacetKernel` never adds or removes a facet, so its unbuilt
-structural-replacement gap stops mattering.
-
-**Honest limit.** Today's Pi `ExtensionAPI` has no removal for tools, commands
-or `pi.on` handlers; packages fake inactivity with internal guards. Requirement
-1 is only fully satisfied once the harness-driven server exists, in Phase 5. The
-`./extensions/pi` facet keeps today's guard behaviour permanently, which is fine
-because the TUI is a single-composition process.
-
-## 2. The API and the server are one
-
-`apiRoutesSync.ts` is deleted. One manifest field declares one
-`./extensions/server` facet. `DoomApi` becomes an optional capability that facet
-exposes. `serverBundleSync` replaces the generated `session.routes.mjs` and
-`hub.routes.mjs` pair. The `session` and `hub` scopes survive as capability
-metadata, not as separate facets.
-
-### The server facet contract
-
-A package ships two facets: the Pi extension the agent process installs, and the
-server facet the headless host installs. The server facet is where the API is
-registered, so the API and the server are one declaration.
-
-```ts
-export const runnerServerFacet: DoomServerFacet = {
-  inject: [DOOM_SERVER_HOST_SERVICE],
-  apply(context: Context) {
-    const host = requireDoomServerHost(context);
-    if (host.scope !== 'session') return undefined;
-    const registration = host.registerApi(api);
-    return () => registration.dispose();
-  },
-};
-```
-
-The facet **must** be a Cordis object plugin, never a bare function that calls
-`context.inject` inside itself. Only the object form declares its own `inject`,
-so the host mounts one fiber and `fiber.await()` settles once `apply` has run. A
-nested inject mounts a child fiber the host holds no handle on, and the host
-reads the mount table to decide whether to open a listener at all. This was
-verified with a throwaway probe test against Cordis 4.0.2, not inferred: an
-object plugin settles `apply` before `fiber.await()` resolves, and the returned
-function is honoured as a disposer on `root.fiber.dispose()`.
-
-`doom-server-facet-shape` in `@agimon-ai/vibe-lint-plugin-doom-extension`
-rejects the other forms. `scaffold-doom-server-facet` in
-`templates/doom-extension` generates the correct one.
-
-### Manifest declaration
+A package publishes one server facet through its manifest:
 
 ```jsonc
 {
@@ -119,144 +33,98 @@ rejects the other forms. `scaffold-doom-server-facet` in
 }
 ```
 
-`scopes` defaults to both. A facet that does not declare a scope is left out of
-that scope's generated module at sync time rather than checked for at install.
+Sync produces a generation-pinned `server.bundle.json`. The headless host loads only that descriptor and the exact compiled modules it names. Missing, stale, or malformed descriptors fail explicitly. There is no alternate aggregate-module loader and no environment-selected API directory.
 
-### Two levels of server, both loaded dynamically
-
-There is no union of server surfaces. Only the SPA needs Vite to merge
-compositions; server routes are `import()`ed at runtime from absolute file URLs,
-so each composition keeps its own mount table.
-
-| Level        | Selector                        | Where it runs                                                  | Where the modules come from                                                                                         |
-| ------------ | ------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| global / hub | no query, or `?hubSession=<id>` | the cockpit process                                            | that repository's synced generation, loaded per root when the root is admitted and disposed when no session uses it |
-| session      | `?session=<id>`                 | that session's own server process, proxied over its API socket | the session repository's own synced generation                                                                      |
-
-The hub keeps one `DoomServerHost` per composition bundle. A base path is only
-unique within one composition, so a single shared table would let the first root
-shadow the rest.
-
-### Failure posture
-
-Matches the API loader's. A missing module is ordinary state. A throwing facet
-costs only its own surface and becomes a notice, never a host startup failure.
-Phase 4 replaced the scope aggregate with independently compiled, generation-pinned
-facet entries, so a broken package import no longer makes every facet in that
-scope unavailable.
-
-## 3. Agent mesh
-
-`piHubService.ts` already makes the hub simultaneously a pi-protocol server to
-clients and a pi-protocol client to each session, joined by a Chord
-`RemoteServiceProvider`/`RemoteServiceEndpoint` re-publication.
-
-The catalog allowlist and durable host-local enrollment are implemented, not
-runtime-accepted. Peer transport and proxy integration are in progress. Explicit
-pairing requires confirmed public-key fingerprints and per-agent grants, with
-rotation and revocation. Peer credentials must not authorize human-device APIs.
+The server facet is a Cordis object plugin. It declares its injected services, registers only capabilities allowed by its scope, and returns bounded, idempotent cleanup.
 
 ```ts
-interface CatalogEntry {
-  version: 1;
-  hubId: string; // new; SessionRecord has no notion of "whose"
-  agentId: string; // SessionRecord.id
-  name: string;
-  project: string; // derived label, NOT cwd
-  createdAt: string;
-  status: 'live';
-}
+export const runnerServerFacet: DoomServerFacet = {
+  inject: [DOOM_SERVER_HOST_SERVICE],
+  apply(context: Context) {
+    const host = requireDoomServerHost(context);
+    if (host.scope !== 'session') return undefined;
+    const registration = host.registerApi(api);
+    return () => registration.dispose();
+  },
+};
 ```
 
-Never leaves the machine: `cwd`, `socketPath`, `tokenFile`, `apiSocketPath`,
-`protocolSocketPath`, `pid`. Served at `/api/agents`, beside the `/api/health`
-probe `hubProbe.ts` already trusts.
+A broken required declaration prevents the affected composition from starting. A retained but currently ineligible facet stays mounted without receiving capabilities above its declared ceiling.
 
-## 4. Web and desktop
+## Direct session runtime
 
-Web and desktop share the browser bundle and WebSocket carrier. Protocol
-unification remains in scope. React Native and mobile-only client extraction were
-explicitly removed by the user; no native application is required for completion.
+Each admitted session owns one in-process direct harness runtime. Typed service calls carry commands into the runtime. Presentation events flow outward through a bounded projection with a maximum of 1,024 retained events.
 
-Approved release targets are `darwin-arm64`, `linux-x64`, and `linux-arm64`.
-Intel Mac and Windows are unsupported for this migration. Each supported target
-still needs native acceptance evidence before release.
+Prompt admission and model settlement are separate. A caller may wait only for acceptance, while the returned settlement promise records completion or failure. Disposal rejects pending work, withdraws session-owned services, and runs cleanup once.
 
-## Phases
+The browser-facing Pi endpoint is `/api/pi`. It implements the authenticated Pi 0.85 client protocol and isolates every connection to its admitted session and grants. The old command channel and its response-correlation framing are not part of the architecture. Deprecated command endpoints stay unavailable.
 
-| #   | Phase                                              | Requirement               | Current status                                                  |
-| --- | -------------------------------------------------- | ------------------------- | --------------------------------------------------------------- |
-| 0   | Tactical state-loss fix                            | keeps the product working | landed                                                          |
-| 1   | `doompi-kernel` plus contribution registry         | 1                         | landed                                                          |
-| 2   | Package remediation: lazy activation               | 1                         | landed                                                          |
-| 3   | `./extensions/server`, pilot two, migrate the rest | 2                         | landed                                                          |
-| 4   | `serverBundleSync`, delete `apiRoutesSync`         | 2                         | implemented, distribution pending                               |
-| 5   | Harness-driven session server                      | **1 lands here**          | opt-in, acceptance pending                                      |
-| 6   | Retire the standalone server package               | 2                         | removed at user request; core retains the executable            |
-| 7   | Unified web/desktop client protocol                | 4                         | source integrated; runtime acceptance deferred; no React Native |
-| 8   | Agent catalog and hub federation                   | 3                         | source integrated; default-disabled; acceptance deferred        |
+## Native Team children
 
-Phase 5 contains the irreversible cutover because normal operation begins writing
-Pi format 4 history. The format-3 export view must be accepted before that cutover.
-Continue an explicit derived file with pinned Pi 0.85.1 using
-`pi --session <v3-destination>`, or select it in `/resume`. Migration operates on a
-verified copy and preserves the original v3 bytes. Opening the only original for a
-writable upstream commit is forbidden.
+The Pi terminal and headless session host inject typed child-session services. Native Team children run in process, inherit the allowed composition, and publish lifecycle and presentation events directly. Every child has a separate journal and an explicit capability ceiling.
 
-The three Phase 4 prerequisites are closed: tool restrictions reconcile against
-the host's active tools, rejected kernel sinks remain retryable, and packed-install
-includes the kernel as a nonselectable core foundation. The remaining work and
-acceptance evidence are tracked in [migrations_todo.md](./migrations_todo.md).
+Unsupported native child configuration fails with a specific error. It does not spawn Pi as a fallback. Explicit Claude and Codex backends continue to use their declared external process adapters.
 
-## Costs that are not hidden
+Child removal is bounded and idempotent. It cancels active work, disposes subscriptions, withdraws projections, and preserves the child's journal according to history policy.
 
-**Package remediation is real work.** Loading every facet means inactive
-packages must do nothing. Phase 2 audited all 32 extension entries and found no
-install-time side effect that blocks hot reload. The real blockers are `pi.on`
-having no unsubscribe and `registerCommand` being unremovable, both of which
-Phase 5 resolves.
+## Package APIs
 
-**16 packages lose features on the server.** `ui.custom` has 24 sites across 16
-packages and 18 packages import `pi-tui`. These stay TUI-only. The server host
-surface omits `setWidget`, `editor` and `custom` entirely, so a miscall fails at
-typecheck rather than silently no-opping.
+Author, Voice, computer-use, and other package capabilities receive typed services from the active host. Same-process packages do not rediscover each other through local network endpoints, process registries, token files, or filesystem polling.
 
-**One protocol includes extension presentation and hub events.** The cockpit now
-routes typed controls, bounded presentation replay, and hub/plugin/thread events
-over one Pi client connection. The explicit compatibility `/api/session` route
-remains available, but the cockpit no longer opens it. Lifecycle regression and
-runtime acceptance are still required before declaring feature parity.
+Server APIs and their authorization policy are mounted by the server facet that owns them. API calls cannot exceed the caller's session, package, or capability grant. Browser code sees only the client contribution and authenticated public API surface.
 
-**Federation reverses a deliberate security posture.** `hubAdvertisement.ts`
-advertises loopback only and `remoteAccessStore.ts` deliberately persists no
-device sessions. Hub-to-hub trust needs new durable credentials. `deviceAuth`
-and `webauthn` authenticate a human; a peer hub is not a human. Explicit local
-peer enrollment, a restart-fresh signed handshake, sealed protocol promotion, and
-outgoing discovery/proxy source are implemented, including ordered native writes,
-bounded queues, shutdown cancellation, and revocation cleanup. New regressions
-remain unrun. Federation requires explicit `WebServerOptions.federation.enabled`;
-normal launchers do not enable it. Static checks do not establish runtime acceptance.
+## Web and desktop
 
-## Implementation-first execution
+`doompi-web` serves the browser assets and proxies `/api` plus `/api/pi` to the headless process. It is presentation-only and can be replaced without changing session ownership.
 
-The user requested remaining implementation before further test execution.
-Architectural and static checks continue. Add focused regression coverage with each
-change, but retain test execution and runtime acceptance as explicit outstanding
-gates. Normal direct-host defaults remain blocked until those gates pass. The user
-explicitly authorized immediate retirement of `packages/clients/doompi-server`:
-core retains the executable, public server API, implementation, tests, and guides.
-This package deletion does not enable writable v4 cutover. See the ledger for the
-latest static evidence and deferred browser acceptance failure.
+Desktop starts two explicit roles:
 
-## Verification
+- `doompi-server`, the authenticated client-neutral headless owner
+- `doompi-web`, the presentation server
 
-Per phase, in order:
+Desktop computer-use remains an explicit typed IPC capability. If the desktop host is unavailable, the capability fails rather than selecting another host.
 
-1. `pnpm vibe-lint check --rules-only <paths>` before editing governed files.
-2. `pnpm exec oxfmt <changed paths>`.
-3. `pnpm lint:vibe --preflight-only`.
-4. The affected Nx `lint`, `typecheck`, `build` and `test` targets.
-5. Packed-install system tests before any release change.
+The core headless process must build and run without `doompi-web`, React, or browser assets.
 
-Use `scripts/run-clean-tests.mjs` for Nx and Vitest runs. Some subprocess tests
-also require a clean `HOME`; do not combine that with macOS keychain tests.
+## Security and isolation
+
+Authentication is required before session discovery, control, API access, or replay. Authorization is checked at the headless boundary and again by package-owned APIs where required.
+
+A client can observe and control only its admitted session and granted hub capabilities. Replay is bounded and ordered. Malformed controls, invalid sealed messages, unknown sessions, and cross-session requests fail closed.
+
+Federation is separate from human-device authentication. It remains default-disabled and requires host-local enrollment, confirmed peer fingerprints, revocable credentials, and exact per-agent grants. Peer credentials never grant session creation or human-device APIs.
+
+## History migration boundary
+
+Existing v3 history is never upgraded during normal startup. Stop Pi and every writer first, then run:
+
+```sh
+doompi history-import <v3-source> <v4-destination> --confirm-offline
+```
+
+Import preserves a byte-exact original and publishes a distinct v4 journal while holding cooperative source and destination leases. A recorded process identifier does not prove that an unmanaged writer stopped. Ambiguous locks are never reclaimed automatically.
+
+If import or export reports an ambiguous lock, preserve the history, lock, and migration-state files. Independently prove that every writer stopped before explicitly archiving or removing a stale lock. If provenance or quiescence cannot be proved, leave the files untouched for manual investigation.
+
+Use this command for a derived Pi-compatible history:
+
+```sh
+doompi history-export <v4-source> <v3-destination>
+```
+
+Continue that derived file with pinned Pi 0.85.1 using `pi --session <v3-destination>`, or select it in `/resume`. Continuing an export never merges changes into canonical v4 history, and a modified continuation cannot be overwritten by another export.
+
+## Release verification
+
+For every affected release candidate:
+
+1. Run `pnpm vibe-lint check --rules-only <paths>` before governed edits.
+2. Format changed files with the repository formatter.
+3. Run `pnpm lint:vibe --preflight-only`.
+4. Run affected Nx lint, typecheck, build, and test targets sequentially with the Nx cache disabled.
+5. Run packed-install system tests.
+6. Exercise browser and desktop against an authenticated headless process.
+7. Run native execution on `darwin-arm64`, `linux-x64`, and `linux-arm64`.
+8. Run `git diff --check` and retain the commands, platform, commit identity, results, and artifacts.
+
+Intel Mac and Windows are outside this migration's approved release targets. Static source inspection and successful compilation do not substitute for runtime acceptance.

@@ -116,6 +116,7 @@ async function createFixture(options: FixtureOptions = {}): Promise<Fixture> {
     cwd: '/test',
     repoRoot: '/test',
     sessionId: 'headless-selection-lifecycle',
+    environment: {},
     selection,
     client: { notify: vi.fn(), request: vi.fn(async () => undefined), setStatus: vi.fn() },
     session: {

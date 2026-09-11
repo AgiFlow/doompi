@@ -14,10 +14,12 @@ export type DoomGitErrorCode =
   | 'worktree_exists'
   | 'worktree_not_found'
   | 'worktree_not_owned'
+  | 'worktree_peer_unavailable'
   | 'worktree_dirty'
   | 'hub_unavailable'
   | 'spawn_cancelled'
   | 'registry_write_failed'
+  | 'message_too_large'
   | 'git_failed';
 
 export class DoomGitExpectedError extends Error {
@@ -31,6 +33,14 @@ export class DoomGitExpectedError extends Error {
     // text: an error the model cannot act on costs a turn to rediscover.
     super(`[${code}] ${message}\nRecovery: ${recovery}`);
     this.name = 'DoomGitExpectedError';
+  }
+}
+
+/** Raised when a worktree action needs the canonical hub but it is not injected. */
+export class HubUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HubUnavailableError';
   }
 }
 

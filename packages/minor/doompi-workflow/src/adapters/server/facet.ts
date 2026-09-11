@@ -18,6 +18,8 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { workflowHeadlessFacet } from '../headless/facet.ts';
+import { createWorkflowsChannel } from '../workflowsHubChannel.ts';
+import { createWorkflowCatalogChannel } from '../workflowCatalogChannel.ts';
 import { api } from '../workflowHubApi.ts';
 
 export const workflowServerFacet: DoomServerFacet = {
@@ -27,10 +29,14 @@ export const workflowServerFacet: DoomServerFacet = {
     const headlessDisposer =
       host.scope === 'session' && readDoomHeadlessHost(context) ? workflowHeadlessFacet.apply(context) : undefined;
     if (host.scope !== 'hub') return headlessDisposer;
-    const registration = host.registerApi(api);
+    const registrations = [
+      host.registerApi(api),
+      host.registerChannel(createWorkflowsChannel()),
+      host.registerChannel(createWorkflowCatalogChannel()),
+    ];
     return () => {
       headlessDisposer?.();
-      registration.dispose();
+      for (const registration of registrations.reverse()) registration.dispose();
     };
   },
 };

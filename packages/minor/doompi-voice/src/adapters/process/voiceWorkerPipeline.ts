@@ -36,6 +36,7 @@ import type {
   IPcmAudioRecorder,
   ISpeechPresenceDetector,
   ITranscriberRegistry,
+  IVoiceMediaHostConnection,
   SelectedTranscriber,
   TimerHandle,
   TranscriptionAdapterOutput,
@@ -49,7 +50,7 @@ import {
   SystemClock,
   writePrivatePcm16Wav,
 } from '../audio/infrastructure.ts';
-import { ClientPcmAudioRecorder, voiceMediaHostConnection } from '../audio/clientMedia.ts';
+import { ClientPcmAudioRecorder } from '../audio/clientMedia.ts';
 import { SileroSpeechPresenceDetector } from '../audio/silero.ts';
 import {
   MlxWhisperAdapter,
@@ -142,6 +143,7 @@ function isDeterministicNoSpeech(summary: ReturnType<typeof analyzePcm16>, class
 
 export interface VoiceWorkerPipelineDependencies {
   clock?: IClock;
+  clientMedia?: IVoiceMediaHostConnection;
   recorder?: IPcmAudioRecorder;
   registry?: ITranscriberRegistry;
   speechDetectorFactory?: () => ISpeechPresenceDetector;
@@ -177,7 +179,7 @@ export class VoiceWorkerPipeline implements VoiceWorkerRuntimeHooks {
     }
     const executables = new ExecutableResolver();
     const processSpawner = new NodeProcessSpawner();
-    const clientMedia = voiceMediaHostConnection();
+    const clientMedia = dependencies.clientMedia;
     this.recorder =
       dependencies.recorder ??
       (clientMedia

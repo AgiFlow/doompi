@@ -13,6 +13,7 @@ interface PackageManifest {
   publishConfig?: { access?: string };
   dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
   devDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
   doompiWeb?: { pluginId?: string; registrationOrder?: number; channels?: string[]; client?: string };
@@ -70,12 +71,12 @@ describe('doompi-profile package contract', () => {
       '.',
       './extensions/persona',
       './extensions/pi',
-      './extensions/headless',
+      './extensions/server',
       './package.json',
     ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).not.toContain('./extensions/doom');
-    for (const subpath of ['.', './extensions/persona', './extensions/pi', './extensions/headless']) {
+    for (const subpath of ['.', './extensions/persona', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     // Only the command entry is discovered by a bare package name. Detached
@@ -97,6 +98,15 @@ describe('doompi-profile package contract', () => {
     const entry = await readFile(path.join(packageDirectory, 'src/web/index.ts'), 'utf8');
     expect(entry).toContain('defineWebPlugin');
     expect(entry).toContain("statusKey: 'doom-profile'");
+  });
+
+  it('keeps the web contract optional for headless installs while supporting web builds', async () => {
+    const manifest = await readManifest();
+
+    expect(manifest.dependencies?.['@agimon-ai/doompi-web-contracts']).toBeUndefined();
+    expect(manifest.devDependencies?.['@agimon-ai/doompi-web-contracts']).toBe('workspace:*');
+    expect(manifest.peerDependencies?.['@agimon-ai/doompi-web-contracts']).toBe('workspace:*');
+    expect(manifest.peerDependenciesMeta?.['@agimon-ai/doompi-web-contracts']).toEqual({ optional: true });
   });
 
   it('routes both Pi entries through a default-exported factory', async () => {

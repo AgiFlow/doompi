@@ -1,9 +1,9 @@
 import { access, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { assertDeclaredApi, mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
+import { mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
 import { describe, expect, it } from 'vitest';
-import { api } from '../src/exports/sessionApi.ts';
+import { api } from '../src/adapters/voiceSessionApi.ts';
 import { MANUAL_TRANSCRIPTION_DURATION_HEADER, MANUAL_TRANSCRIPTION_ROUTE } from '../src/types/manualTranscription.ts';
 
 interface PackageManifest {
@@ -91,7 +91,7 @@ describe('doom voice package boundary', () => {
     expect(manifest.doompiWeb?.channels).toEqual(['voice_media_wake', 'voice_ownership']);
   });
 
-  it('declares its session server facet without replacing the legacy API', async () => {
+  it('declares its server facet', async () => {
     const manifest = await readManifest();
 
     expect(manifest.exports?.['./extensions/server']).toEqual({
@@ -102,7 +102,7 @@ describe('doom voice package boundary', () => {
     expect(manifest.doompiServer).toEqual({
       entry: './src/exports/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['session'],
+      scopes: ['hub', 'session'],
     });
   });
 
@@ -203,9 +203,6 @@ describe('doom voice package boundary', () => {
   });
 
   it('mounts the manual route at the API path declared by the package', async () => {
-    expect(assertDeclaredApi({ packageRoot: packageDirectory, api, scope: 'session' })).toMatchObject({
-      basePath: 'voice-media',
-    });
     const mounted = mountPackageApi(api, { scope: 'session', sessionId: 's1', cwd: packageDirectory });
     try {
       const response = await mounted.fetch(`/api/plugin/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=s1`, {

@@ -47,11 +47,6 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./api/git": {
-      "types": "./dist/hubApi.d.mts",
-      "import": "./dist/hubApi.mjs",
-      "require": "./dist/hubApi.cjs"
-    },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",
@@ -124,11 +119,7 @@
     "channels": [
       "git_worktrees"
     ],
-    "client": "./src/exports/webClient.ts",
-    "hub": {
-      "entry": "./src/exports/webHub.ts",
-      "dist": "./dist/webHub.mjs"
-    }
+    "client": "./src/exports/webClient.ts"
   },
   "pi": {
     "extensions": [

@@ -25,7 +25,7 @@ import type { Component } from '@earendil-works/pi-tui';
 import { Text } from '@earendil-works/pi-tui';
 import { SLASH_RESULT_CUSTOM_TYPE, type SlashRunDetail } from '../commands/slash/slashCommands';
 
-/** How much of a run id a line carries. `RunIdResolver` takes a prefix, so this stays usable, not decorative. */
+/** A concise prefix that remains usable by session-scoped management resolution. */
 const RUN_ID_PREFIX_LENGTH = 8;
 const STARTED_STATUSES = new Set(['started', 'queued', 'pending']);
 const COMPLETED_STATUSES = new Set(['complete', 'completed']);

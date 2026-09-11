@@ -68,6 +68,8 @@ export interface DoomHeadlessExecutionContext {
   /** Admitted configuration root, distinct from the tool execution directory. */
   readonly repoRoot: string;
   readonly sessionId: string;
+  /** Immutable session configuration. Facets must not read or mutate process.env. */
+  readonly environment: Readonly<Record<string, string | undefined>>;
   readonly client: DoomHeadlessClient;
   readonly session: DoomHeadlessSession;
   readonly model?: { provider: string; id: string };

@@ -148,6 +148,7 @@ const OWN_ENTRIES = {
   agentModel: 'agentModel',
   cordisFinalizer: 'cordisFinalizer',
   cordisHost: 'cordisHost',
+  terminalChildSession: 'terminalChildSession',
   effort: 'effort',
   modeCatalog: 'modeCatalog',
   ollamaProvider: 'ollamaProvider',
@@ -458,6 +459,7 @@ function parentActivation(
   const resolve = context.resolvers ?? LAYER_RESOLVERS;
   const activation = [
     resolve.ownEntry(OWN_ENTRIES.cordisHost),
+    resolve.ownEntry(OWN_ENTRIES.terminalChildSession),
     resolve.ownEntry(OWN_ENTRIES.modeCatalog),
     resolve.packageEntry(CORE_PACKAGE_ENTRIES.config),
     resolve.ownEntry(OWN_ENTRIES.transitionCoordinator),
@@ -492,6 +494,7 @@ function childActivation(
   const resolve = context.resolvers ?? LAYER_RESOLVERS;
   const activation = [
     resolve.ownEntry(OWN_ENTRIES.cordisHost),
+    resolve.ownEntry(OWN_ENTRIES.terminalChildSession),
     resolve.packageEntry(CORE_PACKAGE_ENTRIES.config),
     ...distributionPaths,
     ...featurePaths,

@@ -6,93 +6,55 @@ import {
 } from '../../../../src/services/server/serveOptions.ts';
 
 describe('parseServeOptions', () => {
-  it('reads the socket, token file, and agent arguments', () => {
-    const options = parseServeOptions([
-      '--listen',
-      '/run/doompi/session.sock',
-      '--auth-token-file',
-      '/run/doompi/token',
-      '--',
-      '--major-mode',
-      'copilot',
-    ]);
-
-    expect(options).toEqual({
-      socketPath: '/run/doompi/session.sock',
+  it('reads the token file, protocol port, and direct harness arguments', () => {
+    expect(
+      parseServeOptions(['--auth-token-file', '/run/doompi/token', '--web', '9000', '--', '--major-mode', 'copilot']),
+    ).toEqual({
       tokenFile: '/run/doompi/token',
       agentArgs: ['--major-mode', 'copilot'],
-      webPort: undefined,
+      webPort: 9000,
       sessionName: 'untitled',
       sessionId: undefined,
-      registryDir: undefined,
     });
   });
 
-  it('reads the session name, session id, and registry directory', () => {
-    const options = parseServeOptions([
-      '--listen',
-      '/s.sock',
-      '--auth-token-file',
-      '/t',
-      '--name',
-      'doompi-web',
-      '--session-id',
-      'a1b2',
-      '--registry-dir',
-      '/custom/run',
-    ]);
-
+  it('reads session identity and defaults the external protocol port', () => {
+    const options = parseServeOptions(['--auth-token-file', '/t', '--name', 'doompi-web', '--session-id', 'a1b2']);
     expect(options.sessionName).toBe('doompi-web');
     expect(options.sessionId).toBe('a1b2');
-    expect(options.registryDir).toBe('/custom/run');
+    expect(options.webPort).toBe(7433);
   });
 
-  it('rejects a session id that would escape the record namespace', () => {
-    const base = ['--listen', '/s.sock', '--auth-token-file', '/t'];
-    expect(() => parseServeOptions([...base, '--session-id', '../etc/x'])).toThrowError(/must not contain/);
+  it('rejects a session id containing a path separator', () => {
+    expect(() => parseServeOptions(['--auth-token-file', '/t', '--session-id', '../etc/x'])).toThrowError(
+      /must not contain/,
+    );
   });
 
-  it('accepts a server with no agent arguments', () => {
-    expect(parseServeOptions(['--listen', '/s.sock', '--auth-token-file', '/t']).agentArgs).toEqual([]);
-  });
-
-  it('never treats the server flags as agent arguments', () => {
-    const options = parseServeOptions(['--listen', '/s.sock', '--auth-token-file', '/t', '--', '--listen', 'x']);
-
-    expect(options.socketPath).toBe('/s.sock');
-    expect(options.agentArgs).toEqual(['--listen', 'x']);
-  });
-
-  it('requires both the socket and the token file', () => {
-    expect(() => parseServeOptions(['--listen', '/s.sock'])).toThrowError(/--auth-token-file is required/);
-    expect(() => parseServeOptions(['--auth-token-file', '/t'])).toThrowError(/--listen is required/);
+  it('requires an external protocol token file', () => {
+    expect(() => parseServeOptions([])).toThrowError(/--auth-token-file is required/);
   });
 
   it('rejects a flag with a missing value or an unknown option', () => {
-    expect(() => parseServeOptions(['--listen', '--auth-token-file'])).toThrowError(/--listen requires a value/);
+    expect(() => parseServeOptions(['--auth-token-file'])).toThrowError(/requires a value/);
     expect(() => parseServeOptions(['--verbose'])).toThrowError(/Unknown option --verbose/);
   });
 
-  it('serves no cockpit unless asked', () => {
-    expect(parseServeOptions(['--listen', '/s.sock', '--auth-token-file', '/t']).webPort).toBeUndefined();
-  });
-
-  it('takes a cockpit port, or defaults one when the flag stands alone', () => {
-    const base = ['--listen', '/s.sock', '--auth-token-file', '/t'];
+  it('accepts an explicit port or a bare default-port flag', () => {
+    const base = ['--auth-token-file', '/t'];
     expect(parseServeOptions([...base, '--web', '9000']).webPort).toBe(9000);
     expect(parseServeOptions([...base, '--web']).webPort).toBe(7433);
-    // The bare flag must not swallow the flag that follows it.
     expect(parseServeOptions(['--web', ...base]).webPort).toBe(7433);
   });
 
-  it('keeps the cockpit port out of the agent arguments', () => {
-    const options = parseServeOptions(['--listen', '/s.sock', '--auth-token-file', '/t', '--web', '--', '--mode', 'x']);
+  it('keeps server options out of direct harness arguments', () => {
+    const options = parseServeOptions(['--auth-token-file', '/t', '--', '--web', '--mode', 'x']);
     expect(options.webPort).toBe(7433);
-    expect(options.agentArgs).toEqual(['--mode', 'x']);
+    expect(options.agentArgs).toEqual(['--web', '--mode', 'x']);
   });
 
-  it('rejects a cockpit port outside the valid range', () => {
-    const base = ['--listen', '/s.sock', '--auth-token-file', '/t'];
+  it('rejects an external protocol port outside the valid range', () => {
+    const base = ['--auth-token-file', '/t'];
     expect(() => parseServeOptions([...base, '--web', '0'])).toThrowError(/expects a port number/);
     expect(() => parseServeOptions([...base, '--web', '70000'])).toThrowError(/expects a port number/);
   });

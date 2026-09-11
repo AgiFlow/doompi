@@ -15,6 +15,7 @@ function fixture(states: Array<{ hasPendingMessages: boolean; isIdle: boolean }>
     cwd: '/repo',
     repoRoot: '/repo',
     sessionId: 'autostop-test',
+    environment: {},
     selection: { majorMode: 'development', activeLayers: [], domains: [], minorModes: [] },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {

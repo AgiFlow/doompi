@@ -1,3 +1,1 @@
-import { doomPiUiExtension } from '../../adapters/pi/extension.ts';
-
-export default doomPiUiExtension;
+export { doomPiUiExtension as default } from '../../adapters/pi/extension.ts';

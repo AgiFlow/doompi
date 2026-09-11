@@ -22,14 +22,12 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { installTeamRuntime } from '../../src/adapters/pi/extension';
-import {
-  clearCurrentSessionScope,
-  setCurrentSessionScope,
-  tryCurrentSessionScope,
-} from '../../src/adapters/filesystem/paths';
-import * as scopeOwner from '../../src/adapters/scopeOwner';
+import { createSessionScope } from '../../src/adapters/filesystem/paths';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-team';
+const SECOND_SESSION_SCOPE = createSessionScope('second-session');
+const OTHER_SESSION_SCOPE = createSessionScope('other-session');
 type RegisteredTool = Parameters<ExtensionAPI['registerTool']>[0];
 
 /**
@@ -174,8 +172,12 @@ function fakePi(): FakeHost {
       hasConfiguredAuth: () => false,
     },
     sessionManager: {
-      getSessionId: () => 'session-under-test',
+      getSessionId: () => TEST_SESSION_SCOPE.rootSessionId,
       getSessionFile: () => undefined,
+      getLeafId: () => null,
+      getLeafEntry: () => null,
+      getHeader: () => null,
+      getBranch: () => [],
     },
   } as unknown as ExtensionContext;
   const readinessBySession = new WeakMap<object, DoomReadinessCoordinator>();
@@ -228,18 +230,6 @@ async function waitForTeamReadiness(host: FakeHost, context: unknown = host.cont
     },
     { timeout: 2_000 },
   );
-}
-
-function deferredScopeOwner(): {
-  readonly promise: Promise<scopeOwner.ScopeOwnerRecord>;
-  readonly resolve: () => void;
-} {
-  let resolve = (): void => undefined;
-  const promise = new Promise<scopeOwner.ScopeOwnerRecord>((settle) => {
-    resolve = () =>
-      settle({ version: 1, rootSessionId: 'session-under-test', hostPid: process.pid, startedAt: Date.now() });
-  });
-  return { promise, resolve };
 }
 
 function resetRuntimeState(): void {
@@ -304,36 +294,24 @@ describe('Team standard runtime', () => {
   });
 
   /**
-   * The host imports and ACTIVATES every extension before it fires
-   * `session_start`, so activation runs with no session scope at all. That is
-   * not a hypothetical: activation used to call `ResultWatcher.start()`, which
-   * reads `currentRunsDir()`, and every `pi` launch died on
-   * "No session scope is set" before the TUI appeared.
-   *
-   * Nothing else in this suite can catch that, because `tests/setup.ts` sets a
-   * worker-wide scope so the scoped path helpers work in unit tests. These two
-   * cases clear it on purpose, and MUST restore it - the scope is per worker,
-   * not per test, so leaking an unset one breaks every file that runs after.
+   * Pi imports and activates extensions before `session_start`, so activation
+   * must not require a session scope before the host binds one.
    */
   it('activates with no session scope set, as the host does before session_start', async () => {
     resetRuntimeState();
     const host = fakePi();
-    const previous = tryCurrentSessionScope();
-    clearCurrentSessionScope();
 
     try {
       expect(() => activateTeamForTest(host.pi)).not.toThrow();
       await expect(host.fireAsync('session_start')).resolves.toBeUndefined();
       await waitForTeamReadiness(host);
     } finally {
-      if (previous) setCurrentSessionScope(previous);
     }
   });
 
   it('activates with no scope while stale team environment is still set', () => {
     resetRuntimeState();
     const host = fakePi();
-    const previous = tryCurrentSessionScope();
     // A parent puts these on its OWN process.env when it binds as team member
     // `main` (`applyNativeTeamRootEnvironment`), and they outlive an extension
     // reload. `registerClient` runs at activation and used to resolve a scoped
@@ -346,7 +324,6 @@ describe('Team standard runtime', () => {
     process.env.PI_SUBAGENT_TEAM_ID = teamId;
     process.env.PI_SUBAGENT_TEAM_ROOT_SESSION = rootSessionId;
     process.env.PI_SUBAGENT_TEAM_MAIN_MEMBER = 'main';
-    clearCurrentSessionScope();
 
     try {
       expect(() => activateTeamForTest(host.pi)).not.toThrow();
@@ -354,7 +331,6 @@ describe('Team standard runtime', () => {
       delete process.env.PI_SUBAGENT_TEAM_ID;
       delete process.env.PI_SUBAGENT_TEAM_ROOT_SESSION;
       delete process.env.PI_SUBAGENT_TEAM_MAIN_MEMBER;
-      if (previous) setCurrentSessionScope(previous);
     }
   });
 
@@ -376,21 +352,6 @@ describe('Team standard runtime', () => {
     // Main membership is created only once a session id exists, so binding is
     // driven from session_start rather than activation.
     await expect(host.fireAsync('session_start')).resolves.toBeUndefined();
-    await waitForTeamReadiness(host);
-  });
-
-  it('returns from session_start while scope restoration continues under package readiness', async () => {
-    resetRuntimeState();
-    const host = fakePi();
-    const scopeWrite = deferredScopeOwner();
-    const writeScopeOwner = vi.spyOn(scopeOwner, 'writeScopeOwnerAsync').mockReturnValueOnce(scopeWrite.promise);
-    activateTeamForTest(host.pi);
-
-    await expect(host.fireAsync('session_start')).resolves.toBeUndefined();
-    await vi.waitFor(() => expect(writeScopeOwner).toHaveBeenCalledOnce());
-
-    expect(host.readinessFor()?.read(PACKAGE_SOURCE)?.state).toBe('pending');
-    scopeWrite.resolve();
     await waitForTeamReadiness(host);
   });
 
@@ -421,40 +382,6 @@ describe('Team standard runtime', () => {
     expect(host.readinessFor()?.read(PACKAGE_SOURCE)).toBeUndefined();
   });
 
-  it('registers tools immediately but waits for Team readiness before executing them', async () => {
-    resetRuntimeState();
-    const host = fakePi();
-    const scopeWrite = deferredScopeOwner();
-    vi.spyOn(scopeOwner, 'writeScopeOwnerAsync').mockReturnValueOnce(scopeWrite.promise);
-    activateTeamForTest(host.pi);
-    await host.fireAsync('session_start');
-    const tool = host.toolDefinitions.get('subagent');
-    if (!tool) throw new Error('Expected the subagent tool to be registered synchronously.');
-
-    let settled = false;
-    const execution = tool.execute(
-      'readiness-call',
-      { action: 'agents' },
-      undefined,
-      undefined,
-      host.context as ExtensionContext,
-    );
-    void execution.then(
-      () => {
-        settled = true;
-      },
-      () => {
-        settled = true;
-      },
-    );
-    await Promise.resolve();
-    expect(settled).toBe(false);
-
-    scopeWrite.resolve();
-    await waitForTeamReadiness(host);
-    await expect(execution).resolves.toEqual(expect.objectContaining({ content: expect.any(Array) }));
-  });
-
   it('routes concurrency events through the session-owned telemetry lifecycle', async () => {
     resetRuntimeState();
     const host = fakePi();
@@ -483,7 +410,7 @@ describe('Team standard runtime', () => {
 
     await host.fireAsync('session_start');
     await waitForTeamReadiness(host);
-    const firstSession = tracker.forSession('session-under-test');
+    const firstSession = tracker.forSession(TEST_SESSION_SCOPE.rootSessionId, TEST_SESSION_SCOPE);
     firstSession.track('run-from-first-session');
     expect(firstSession.list().map((job) => job.runId)).toEqual(['run-from-first-session']);
 
@@ -493,14 +420,18 @@ describe('Team standard runtime', () => {
       hasUI: false,
       ui: { notify: () => undefined, setStatus: () => undefined },
       sessionManager: {
-        getSessionId: () => 'second-session',
+        getSessionId: () => SECOND_SESSION_SCOPE.rootSessionId,
         getSessionFile: () => undefined,
+        getLeafId: () => null,
+        getLeafEntry: () => null,
+        getHeader: () => null,
+        getBranch: () => [],
       },
     };
     await host.fireAsync('session_start', secondContext);
     await waitForTeamReadiness(host, secondContext);
 
-    expect(tracker.forSession('second-session').list()).toEqual([]);
+    expect(tracker.forSession(SECOND_SESSION_SCOPE.rootSessionId, SECOND_SESSION_SCOPE).list()).toEqual([]);
     expect(firstSession.list().map((job) => job.runId)).toEqual(['run-from-first-session']);
   });
 
@@ -518,11 +449,11 @@ describe('Team standard runtime', () => {
     const service = readDoomBackgroundWorkService(cordis);
     if (!service) throw new Error('Expected Team to provide doom/background-work.');
 
-    tracker.forSession('other-session').track('other-run');
-    tracker.forSession('session-under-test').track('direct-run');
+    tracker.forSession(OTHER_SESSION_SCOPE.rootSessionId, OTHER_SESSION_SCOPE).track('other-run');
+    tracker.forSession(TEST_SESSION_SCOPE.rootSessionId, TEST_SESSION_SCOPE).track('direct-run');
 
     expect(service.snapshot()).toEqual({
-      items: [{ provider: 'team-direct-runs', id: 'direct-run', sessionId: 'session-under-test' }],
+      items: [{ provider: 'team-direct-runs', id: 'direct-run', sessionId: TEST_SESSION_SCOPE.rootSessionId }],
       errors: [],
     });
     expect(invalidations).toContain('updated');
@@ -561,7 +492,7 @@ describe('Team standard runtime', () => {
     const delegationContext = {
       ...(host.context as object),
       sessionManager: {
-        getSessionId: () => 'session-under-test',
+        getSessionId: () => TEST_SESSION_SCOPE.rootSessionId,
         getSessionFile: () => parentSessionFile,
         getLeafId: () => 'active-assistant',
         getLeafEntry: () => ({
@@ -570,6 +501,10 @@ describe('Team standard runtime', () => {
           parentId: 'safe-user-leaf',
           message: { role: 'assistant', content: [] },
         }),
+        getHeader: () => ({ type: 'session', version: 3, id: TEST_SESSION_SCOPE.rootSessionId }),
+        getBranch: () => [
+          { type: 'message', id: 'safe-user-leaf', parentId: null, message: { role: 'user', content: [] } },
+        ],
       },
     };
     await host.fireAsync('session_start', delegationContext);
@@ -616,7 +551,7 @@ describe('Team standard runtime', () => {
     );
     expect(planner.spawn).toHaveBeenCalledWith(
       expect.objectContaining({
-        parentSessionId: 'session-under-test',
+        parentSessionId: TEST_SESSION_SCOPE.rootSessionId,
         parentSessionFile,
         parentLeafId: 'safe-user-leaf',
       }),
@@ -647,7 +582,7 @@ describe('Team standard runtime', () => {
     const delegationContext = {
       ...(host.context as object),
       sessionManager: {
-        getSessionId: () => 'session-under-test',
+        getSessionId: () => TEST_SESSION_SCOPE.rootSessionId,
         getSessionFile: () => parentSessionFile,
         getLeafId: () => 'active-assistant',
         getLeafEntry: () => ({
@@ -656,6 +591,10 @@ describe('Team standard runtime', () => {
           parentId: 'safe-user-leaf',
           message: { role: 'assistant', content: [] },
         }),
+        getHeader: () => ({ type: 'session', version: 3, id: TEST_SESSION_SCOPE.rootSessionId }),
+        getBranch: () => [
+          { type: 'message', id: 'safe-user-leaf', parentId: null, message: { role: 'user', content: [] } },
+        ],
       },
     };
     await host.fireAsync('session_start', delegationContext);
@@ -701,7 +640,7 @@ describe('Team standard runtime', () => {
     const delegationContext = {
       ...(host.context as object),
       sessionManager: {
-        getSessionId: () => 'session-under-test',
+        getSessionId: () => TEST_SESSION_SCOPE.rootSessionId,
         getSessionFile: () => parentSessionFile,
         getLeafId: () => 'active-assistant',
         getLeafEntry: () => ({
@@ -710,6 +649,8 @@ describe('Team standard runtime', () => {
           parentId: settledLeaf,
           message: { role: 'assistant', content: [] },
         }),
+        getHeader: () => ({ type: 'session', version: 3, id: TEST_SESSION_SCOPE.rootSessionId }),
+        getBranch: () => [{ type: 'message', id: settledLeaf, parentId: null, message: { role: 'user', content: [] } }],
       },
     };
     await host.fireAsync('session_start', delegationContext);

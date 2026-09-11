@@ -1,16 +1,15 @@
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { mirrorComposition } from './compositionMirror.ts';
-import { createWorktreeSession, HubUnavailableError, sessionIsLive, stopWorktreeSession } from '../hub/hubClient.ts';
-import { channelRoot, hubRegistryDir, registryFile, worktreesRoot } from '../filesystem/paths.ts';
+import type { DoomHubSessionService } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import { registryFile, worktreesRoot } from '../filesystem/paths.ts';
 import { repositoryId, repositoryLabel, shortId } from './repositoryIdentity.ts';
-import { createWorktreeChannel } from '../channel/worktreeChannel.ts';
-import type { ChannelMessage, ChannelParty } from '../channel/worktreeChannel.ts';
+import { MAX_WORKTREE_MESSAGE_BYTES, type WorktreeMessageInbox, type WorktreeMessageParty } from './worktreeEvents.ts';
 import { createWorktreeRegistry } from './worktreeRegistry.ts';
 import { WORKTREE_RECORD_VERSION } from '../../types/worktreeRegistry.ts';
 import type { WorktreeGit, WorktreeRecord } from '../../types/worktreeRegistry.ts';
 import { planPrune, reconcile, refuseClose, refuseSpawn, worktreeDirectory } from '../../services/worktreeNaming.ts';
-import { DoomGitExpectedError } from '../../services/support/errors.ts';
+import { DoomGitExpectedError, HubUnavailableError } from '../../services/support/errors.ts';
 
 export interface WorktreeContext {
   /** Where the calling session is working, used to find the repository. */
@@ -40,33 +39,39 @@ export interface WorktreeOperations {
   merge(context: WorktreeContext, id: string, message?: string): Promise<WorktreeRecord>;
   prune(context: WorktreeContext, dryRun: boolean): Promise<ReturnType<typeof planPrune>>;
   send(context: WorktreeContext, id: string, message: string): Promise<void>;
-  messages(context: WorktreeContext, id: string): Promise<ChannelMessage[]>;
+  messages(context: WorktreeContext, id: string): Promise<import('./worktreeEvents.ts').WorktreeMessage[]>;
 }
 
 export interface WorktreeOperationsDeps {
   git: WorktreeGit;
-  /** Injected so tests never reach the network. */
-  createSession?: typeof createWorktreeSession;
-  stopSession?: typeof stopWorktreeSession;
+  /** The canonical hub-owned session lifecycle. */
+  sessionService?: DoomHubSessionService;
+  /** Session-local inbox for parent/worktree messages. */
+  messageInbox?: WorktreeMessageInbox;
   /** Injected so a test never copies a real dependency tree. */
   mirror?: typeof mirrorComposition;
-  isSessionLive?: typeof sessionIsLive;
   homeDir?: string;
-  registryDir?: string;
   /** Injected so a record's createdAt is reproducible in a test. */
   now?: () => Date;
 }
 
 export function createWorktreeOperations(deps: WorktreeOperationsDeps): WorktreeOperations {
   const { git } = deps;
-  const createSession = deps.createSession ?? createWorktreeSession;
-  const stopSession = deps.stopSession ?? stopWorktreeSession;
+  const sessionService = deps.sessionService;
   const mirror = deps.mirror ?? mirrorComposition;
-  const isSessionLive = deps.isSessionLive ?? sessionIsLive;
-  const registryDir = deps.registryDir ?? hubRegistryDir();
   const now = deps.now ?? (() => new Date());
+  const requireSessionService = (): DoomHubSessionService => {
+    if (sessionService === undefined)
+      throw new HubUnavailableError('The cockpit session service is unavailable. Start the cockpit and try again.');
+    return sessionService;
+  };
+  const requireMessageInbox = (): WorktreeMessageInbox => {
+    if (deps.messageInbox === undefined)
+      throw new HubUnavailableError('The Git message service is unavailable. Start the cockpit and try again.');
+    return deps.messageInbox;
+  };
   const probe = {
-    alive: (record: WorktreeRecord) => isSessionLive(registryDir, record.sessionId),
+    alive: (record: WorktreeRecord) => requireSessionService().isLive(record.sessionId),
     exists: (path: string) => fs.existsSync(path),
   };
 
@@ -74,8 +79,8 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
    * Everything an action needs about the repository it is acting on.
    *
    * Resolved per call rather than cached: a session's cwd is stable, but the
-   * registry file is shared with the cockpit panel and another process may
-   * have written it since the last call.
+   * worktree registry is shared and another process may have written it since
+   * the last call.
    */
   const resolve = async (context: WorktreeContext) => {
     const root = await git.repositoryRoot(context.cwd);
@@ -116,13 +121,38 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
    */
   const requireOwner = (context: WorktreeContext, record: WorktreeRecord, action: string): void => {
     if (record.parentSessionId === context.sessionId) return;
-    if (!isSessionLive(registryDir, record.parentSessionId)) return;
+    if (!requireSessionService().isLive(record.parentSessionId)) return;
     throw new DoomGitExpectedError(
       'worktree_not_owned',
       `Worktree ${record.id} belongs to another session.`,
       false,
       `Ask the session that created it to ${action} it, or close that session first.`,
     );
+  };
+
+  const peerFor = (
+    context: WorktreeContext,
+    record: WorktreeRecord,
+  ): { sessionId: string; party: WorktreeMessageParty } => {
+    if (context.sessionId === record.parentSessionId) return { sessionId: record.sessionId, party: 'parent' };
+    if (context.sessionId === record.sessionId) return { sessionId: record.parentSessionId, party: 'child' };
+    throw new DoomGitExpectedError(
+      'worktree_not_owned',
+      `Worktree ${record.id} belongs to another session.`,
+      false,
+      'Use a worktree owned by this session.',
+    );
+  };
+
+  const requirePeerLive = (peerSessionId: string): void => {
+    if (!requireSessionService().isLive(peerSessionId)) {
+      throw new DoomGitExpectedError(
+        'worktree_peer_unavailable',
+        'The other worktree session is no longer live.',
+        false,
+        'Start a new worktree session before sending a message.',
+      );
+    }
   };
 
   return {
@@ -182,13 +212,14 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       options?.onProgress?.('starting session\u2026');
       let sessionId: string;
       try {
-        sessionId = await createSession({
+        const session = await requireSessionService().create({
           cwd: path,
           name: request.name ?? request.branch,
           parentSessionId: context.sessionId,
-          registryDir,
+          sessionProvenance: 'worktree',
           ...(options?.signal === undefined ? {} : { signal: options.signal }),
         });
+        sessionId = session.sessionId;
       } catch (error) {
         const kept = await rollback();
         if (cancelled()) {
@@ -228,7 +259,9 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
         // A live session with no record is the worst outcome available here:
         // it runs, and no id anything can name points at it. The session goes
         // back too, rather than being left for someone to find by hand.
-        await stopSession(registryDir, sessionId).catch(() => undefined);
+        await requireSessionService()
+          .close(sessionId)
+          .catch(() => undefined);
         const kept = await rollback();
         throw new DoomGitExpectedError(
           'registry_write_failed',
@@ -252,7 +285,7 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       // The session is stopped before the directory goes. Removing a checkout
       // while a process still holds files open in it is how a half-removed
       // worktree and a stale git administrative entry are made.
-      await stopSession(registryDir, record.sessionId);
+      await requireSessionService().close(record.sessionId);
       await git.removeWorktree({ repositoryRoot: root, path: record.path, force });
       store.replace(records.filter((entry) => entry.id !== id));
       return record;
@@ -296,27 +329,35 @@ export function createWorktreeOperations(deps: WorktreeOperationsDeps): Worktree
       return record;
     },
 
-    /**
-     * Which side of the channel the caller is.
-     *
-     * A worktree session is the child of the record it belongs to, and the
-     * parent for everything else. Deciding from the session id rather than a
-     * flag means neither side can address itself by mistake.
-     */
+    /** Sends only between the parent session and its own worktree session. */
     async send(context, id, message) {
+      if (Buffer.byteLength(message, 'utf8') > MAX_WORKTREE_MESSAGE_BYTES) {
+        throw new DoomGitExpectedError(
+          'message_too_large',
+          `A message may not exceed ${String(MAX_WORKTREE_MESSAGE_BYTES)} bytes.`,
+          false,
+          'Send a shorter message.',
+        );
+      }
       const { records } = await resolve(context);
       const record = require(records, id);
-      const party: ChannelParty = context.sessionId === record.sessionId ? 'parent' : 'child';
-      createWorktreeChannel(channelRoot(record.id, deps.homeDir)).send(party, message);
+      const peer = peerFor(context, record);
+      requirePeerLive(peer.sessionId);
+      requireMessageInbox().send(peer.sessionId, {
+        version: 1,
+        worktreeId: record.id,
+        fromSessionId: context.sessionId,
+        from: peer.party,
+        text: message,
+        sentAt: new Date().toISOString(),
+      });
     },
 
     async messages(context, id) {
       const { records } = await resolve(context);
       const record = require(records, id);
-      const channel = createWorktreeChannel(channelRoot(record.id, deps.homeDir));
-      channel.sweep();
-      const party: ChannelParty = context.sessionId === record.sessionId ? 'child' : 'parent';
-      return channel.receive(party);
+      peerFor(context, record);
+      return requireMessageInbox().receive(record.id);
     },
 
     async prune(context, dryRun) {

@@ -69,6 +69,9 @@ export interface WebPackageManifest {
   name?: unknown;
   files?: unknown;
   dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
   doompiWeb?: unknown;
 }
 
@@ -289,11 +292,20 @@ export const webPluginNoModuleState: RuleDefinition = {
   },
 };
 
+function hasBrowserRuntime(manifest: WebPackageManifest, packageName: string): boolean {
+  if (manifest.dependencies?.[packageName] !== undefined) return true;
+  return (
+    manifest.peerDependencies?.[packageName] !== undefined &&
+    manifest.peerDependenciesMeta?.[packageName]?.optional === true &&
+    manifest.devDependencies?.[packageName] !== undefined
+  );
+}
+
 export const webPluginManifest: RuleDefinition = {
   preflight: true,
-  rule: 'A doompiWeb manifest block names a kebab-case plugin with an existing, typechecked client entry, publishes what its web/ code ships, and depends on the web contract',
+  rule: 'A doompiWeb manifest block names a kebab-case browser-only plugin with the canonical client entry',
   rationale:
-    'doompi sync discovers a plugin from this block and Vite compiles the shipped web/ source from the installed package, so a wrong entry path, an unpublished src/types file, or a missing contract dependency only fails on a user machine after publishing. Checking the block against the files it names catches that before the package leaves the repository.',
+    'doompi sync discovers browser presentation from doompiWeb.client while server facets own APIs and channels. An alternate client path, web-owned hub entry, unpublished type file, or missing contract dependency fails only after packaging unless rejected here.',
   check(filePath, configRoot) {
     if (path.basename(filePath) !== PACKAGE_MANIFEST_NAME) return null;
     const manifest = readManifest(configRoot);
@@ -313,8 +325,8 @@ export const webPluginManifest: RuleDefinition = {
         problems.push(`'${id}' registrationOrder must be a non-negative integer when present`);
       }
       const client = normalizeEntry(block.client);
-      if (client === null || !client.startsWith('./') || client.includes('..')) {
-        problems.push(`'${id}' client must be a package-relative ./path`);
+      if (client !== './src/exports/webClient.ts') {
+        problems.push(`'${id}' client must be ./src/exports/webClient.ts`);
       } else {
         if (!fs.existsSync(path.join(configRoot, client))) problems.push(`'${id}' client '${client}' does not exist`);
         if (!isPublished(files, stripDot(client)))
@@ -327,15 +339,7 @@ export const webPluginManifest: RuleDefinition = {
         problems.push(`'${id}' has no ${webRoot}/${WEB_TSCONFIG}, so its web entry is never typechecked`);
       }
       if (block.hub !== undefined) {
-        const hub = block.hub as { entry?: unknown; dist?: unknown } | string;
-        const entry = normalizeEntry(hub);
-        const dist = typeof hub === 'object' && hub !== null ? hub.dist : undefined;
-        if (entry === null || !fs.existsSync(path.join(configRoot, entry))) {
-          problems.push(`'${id}' hub.entry '${String(entry)}' does not exist`);
-        }
-        if (typeof dist !== 'string' || !dist.startsWith('./')) {
-          problems.push(`'${id}' hub.dist must be the package-relative ./path of the built hub entry`);
-        }
+        problems.push(`'${id}' must not declare doompiWeb.hub; register channels and APIs through doompiServer`);
       }
     }
     const imports = webImports(configRoot);
@@ -343,10 +347,10 @@ export const webPluginManifest: RuleDefinition = {
       if (!isPublished(files, typeFile))
         problems.push(`${WEB_ROOT}/ imports '${typeFile}', which is not in the files allowlist`);
     }
-    if (manifest.dependencies?.[CONTRACTS_PACKAGE] === undefined) {
+    if (!hasBrowserRuntime(manifest, CONTRACTS_PACKAGE)) {
       problems.push(`${CONTRACTS_PACKAGE} must be a dependency: the synced bundle imports it at runtime`);
     }
-    if (imports.packages.has(COMPONENTS_PACKAGE) && manifest.dependencies?.[COMPONENTS_PACKAGE] === undefined) {
+    if (imports.packages.has(COMPONENTS_PACKAGE) && !hasBrowserRuntime(manifest, COMPONENTS_PACKAGE)) {
       problems.push(`${COMPONENTS_PACKAGE} must be a dependency: ${WEB_ROOT}/ imports it`);
     }
     return problems.length > 0 ? `doompiWeb manifest: ${problems.join('; ')}.` : null;

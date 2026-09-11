@@ -1,37 +1,22 @@
 /**
  * The worktrees data channel, and the commands the dock sends back through it.
  *
- * DESIGN PATTERNS:
- * - Hub-scoped: it reads this machine's registry files, which a browser cannot.
- * - Scoped to the session that owns the worktree, not to the repository. Two
- *   sessions in one checkout are two pieces of work; showing each the other's
- *   worktrees offered a close button for something the reader never made.
- *   A worktree whose parent session is gone is the exception: it is shown to
- *   everyone in the repository, marked unowned, or nobody could ever close it.
- * - Poll, do not watch. The registry is a single small JSON file written by
- *   this package alone, and a watcher on a path that may not exist yet costs
- *   more than re-reading a few hundred bytes.
- * - Commands run the same `worktreeOperations` the tool runs, so the panel and
- *   the agent cannot drift into two ideas of what creating a worktree means.
- * - Publish only what the dock renders. Paths and provenance stay in the
- *   registry; the page gets a view.
- *
- * AVOID:
- * - Throwing out of a poll or a command. A registry that cannot be read is an
- *   empty list, and a failed command is an error string on the next frame:
- *   the dock degrades to what it can tell the reader, never to a dead channel.
+ * The registry is durable state only. Live lifecycle changes arrive through the
+ * hub-owned direct event bus, so this channel never polls or claims files.
  */
-import type { HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import type {
+  DoomHubChannel,
+  DoomHubChannelSource,
+  DoomHubSessionScope,
+  DoomHubSessionService,
+} from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import { DoomGitExpectedError, HubUnavailableError } from '../../services/support/errors.ts';
+import { GIT_WORKTREE_LIFECYCLE_EVENT, isWorktreeLifecycleEvent } from '../worktree/worktreeEvents.ts';
 import { GIT_WORKTREES_TYPE, type GitWorktreesCommand, type WorktreeView } from '../../types/webWorktrees.ts';
-import { DoomGitExpectedError } from '../../services/support/errors.ts';
-import { hubRegistryDir, registryFile } from '../filesystem/paths.ts';
-import { sessionIsLive } from '../hub/hubClient.ts';
+import { registryFile } from '../filesystem/paths.ts';
 import { createWorktreeGit } from '../worktree/gitCli.ts';
 import { createWorktreeOperations, type WorktreeOperations } from '../worktree/worktreeOperations.ts';
 import { createWorktreeRegistry } from '../worktree/worktreeRegistry.ts';
-
-/** How often a session's registry is re-read. Worktrees change by hand, not by the second. */
-const POLL_MS = 4000;
 
 interface SessionState {
   worktrees: WorktreeView[];
@@ -49,31 +34,23 @@ function payloadOf(state: SessionState): Record<string, unknown> {
 
 /** What the channel needs from its surroundings, injected so tests stay off this machine. */
 export interface WorktreesChannelOptions {
-  intervalMs?: number;
   operations?: WorktreeOperations;
   homeDir?: string;
-  registryDir?: string;
-  isSessionLive?: (registryDir: string, sessionId: string) => boolean;
 }
 
 interface ViewDeps {
-  registryDir: string;
   homeDir: string | undefined;
-  isSessionLive: (registryDir: string, sessionId: string) => boolean;
+  sessionService: DoomHubSessionService;
 }
 
-/**
- * The worktrees one session may see: its own, plus any whose parent session
- * has gone. Liveness is the registry record's presence, the same signal the
- * rail uses to decide a session exists at all.
- */
-function viewsFor(scope: HubSessionScope, deps: ViewDeps): WorktreeView[] {
+/** Worktrees visible to this session, using the hub's live session table for ownership. */
+function viewsFor(scope: DoomHubSessionScope, deps: ViewDeps): WorktreeView[] {
   try {
     return createWorktreeRegistry(registryFile(scope.cwd, deps.homeDir))
       .list()
       .flatMap((record) => {
         const owned = record.parentSessionId === scope.sessionId;
-        const unowned = !owned && !deps.isSessionLive(deps.registryDir, record.parentSessionId);
+        const unowned = !owned && !deps.sessionService.isLive(record.parentSessionId);
         if (!owned && !unowned) return [];
         return [
           {
@@ -135,32 +112,32 @@ function failureText(error: unknown): string {
   return error instanceof DoomGitExpectedError ? error.message : 'The worktree operation failed.';
 }
 
-/**
- * One poller per managed session, publishing only when the list actually
- * changed so an idle cockpit stays quiet.
- */
-export function createWorktreesChannel(options: WorktreesChannelOptions = {}): WebHubChannel {
-  const intervalMs = options.intervalMs ?? POLL_MS;
+/** Starts one direct-event subscription per managed session. */
+export function createWorktreesChannel(options: WorktreesChannelOptions = {}): DoomHubChannel {
   // Assigned by start, because receive is reachable only while the channel is
-  // running and the command needs the state the poller keeps.
-  let receiveCommand: ((scope: HubSessionScope, payload: unknown) => void) | undefined;
+  // running and the command needs the state the direct event subscriptions keep.
+  let receiveCommand: ((scope: DoomHubSessionScope, payload: unknown) => void) | undefined;
 
   return {
     frameType: GIT_WORKTREES_TYPE,
     start(host) {
-      const worktrees = options.operations ?? createWorktreeOperations({ git: createWorktreeGit() });
-      const views: ViewDeps = {
-        registryDir: options.registryDir ?? hubRegistryDir(),
-        homeDir: options.homeDir,
-        isSessionLive: options.isSessionLive ?? sessionIsLive,
-      };
+      const sessionService = host.sessionService;
+      if (sessionService === undefined) {
+        throw new HubUnavailableError('The cockpit session service is unavailable. Start the cockpit and try again.');
+      }
+      const worktrees =
+        options.operations ??
+        createWorktreeOperations({
+          git: createWorktreeGit(),
+          sessionService,
+        });
+      const views: ViewDeps = { homeDir: options.homeDir, sessionService };
       const latest = new Map<string, SessionState>();
-      const scopes = new Map<string, HubSessionScope>();
-      const timers = new Map<string, ReturnType<typeof setInterval>>();
+      const subscriptions = new Map<string, () => void>();
       const busy = new Set<string>();
 
       /** Republishes a session, skipping a frame that would say nothing new. */
-      const publish = (scope: HubSessionScope, force: boolean): void => {
+      const publish = (scope: DoomHubSessionScope, force: boolean): void => {
         const previous = latest.get(scope.sessionId);
         const next: SessionState = {
           worktrees: viewsFor(scope, views),
@@ -180,8 +157,7 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): W
         host.publish(scope.sessionId, payloadOf(next));
       };
 
-      /** Sets the operation label and clears the last failure, then publishes. */
-      const mark = (scope: HubSessionScope, pending: string | undefined, error: string | undefined): void => {
+      const mark = (scope: DoomHubSessionScope, pending: string | undefined, error: string | undefined): void => {
         const previous = latest.get(scope.sessionId);
         latest.set(scope.sessionId, {
           worktrees: previous?.worktrees ?? viewsFor(scope, views),
@@ -191,11 +167,19 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): W
         publish(scope, true);
       };
 
-      const run = async (scope: HubSessionScope, command: GitWorktreesCommand): Promise<void> => {
+      /** Announces a successful mutation to this session's lifecycle subscribers. */
+      const publishLifecycle = (scope: DoomHubSessionScope, repositoryRoot: string): void => {
+        host.directEvents.publish(GIT_WORKTREE_LIFECYCLE_EVENT, scope.sessionId, {
+          version: 1,
+          repositoryRoot,
+        });
+      };
+
+      const run = async (scope: DoomHubSessionScope, command: GitWorktreesCommand): Promise<void> => {
         const context = { cwd: scope.cwd, sessionId: scope.sessionId };
         if (command.action === 'create') {
           mark(scope, `creating ${command.branch}\u2026`, undefined);
-          await worktrees.spawn(
+          const record = await worktrees.spawn(
             context,
             {
               branch: command.branch,
@@ -205,39 +189,44 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): W
             // happening instead of holding one line for the whole wait.
             { onProgress: (label) => mark(scope, label, undefined) },
           );
+          publishLifecycle(scope, record.repositoryRoot);
           return;
         }
-        mark(scope, `closing ${command.id}\u2026`, undefined);
-        await worktrees.close(context, command.id, command.force ?? false);
+        mark(scope, `closing ${command.id}…`, undefined);
+        const record = await worktrees.close(context, command.id, command.force ?? false);
+        publishLifecycle(scope, record.repositoryRoot);
       };
 
-      const source: HubChannelSource = {
+      const source: DoomHubChannelSource = {
         payloadFor(scope) {
           const state = latest.get(scope.sessionId);
           return state === undefined ? undefined : payloadOf(state);
         },
         sessionAdded(scope) {
-          scopes.set(scope.sessionId, scope);
           publish(scope, false);
-          const timer = setInterval(() => {
-            publish(scope, false);
-          }, intervalMs);
-          timer.unref?.();
-          timers.set(scope.sessionId, timer);
+          const unsubscribe = host.directEvents.subscribe(GIT_WORKTREE_LIFECYCLE_EVENT, scope.sessionId, (payload) => {
+            if (!isWorktreeLifecycleEvent(payload)) return;
+            let sameRepository = false;
+            try {
+              sameRepository =
+                registryFile(scope.cwd, options.homeDir) === registryFile(payload.repositoryRoot, options.homeDir);
+            } catch {
+              sameRepository = false;
+            }
+            if (sameRepository) publish(scope, false);
+          });
+          subscriptions.set(scope.sessionId, unsubscribe);
         },
         sessionRemoved(sessionId) {
-          const timer = timers.get(sessionId);
-          if (timer !== undefined) clearInterval(timer);
-          timers.delete(sessionId);
+          subscriptions.get(sessionId)?.();
+          subscriptions.delete(sessionId);
           latest.delete(sessionId);
-          scopes.delete(sessionId);
           busy.delete(sessionId);
         },
         close() {
-          for (const timer of timers.values()) clearInterval(timer);
-          timers.clear();
+          for (const unsubscribe of subscriptions.values()) unsubscribe();
+          subscriptions.clear();
           latest.clear();
-          scopes.clear();
           busy.clear();
         },
       };
@@ -268,6 +257,3 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): W
     },
   };
 }
-
-/** The named export the generated hub channel registry imports. */
-export const webHubChannels: readonly WebHubChannel[] = [createWorktreesChannel()];

@@ -55,6 +55,7 @@ function setup() {
     cwd,
     repoRoot: root,
     sessionId: 'test',
+    environment: {},
     selection: { majorMode: 'development', activeLayers: [], domains: [], minorModes: [] },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {

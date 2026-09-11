@@ -53,7 +53,7 @@
 import * as path from 'node:path';
 
 import { writeAtomicJson } from '../../atomicJson';
-import { currentRunsDir } from '../../filesystem/paths';
+import { scopeRunsDir, type SessionScope } from '../../filesystem/paths';
 
 /** How long a burst of updates may be buffered before a trailing flush. */
 const DEFAULT_FLUSH_INTERVAL_MS = 75;
@@ -94,7 +94,7 @@ export interface CoalescedStatusWriterContract<TStatus extends StatusWithRecentE
    * just call `open()` again rather than having to detect and recover from a
    * half-initialized writer.
    */
-  open(runId: string, initialStatus: TStatus): void;
+  open(scope: SessionScope, runId: string, initialStatus: TStatus): void;
   /** Apply an in-memory mutation and let the trailing timer coalesce the write. */
   update(mutator: (status: TStatus) => void): void;
   /** Apply an in-memory mutation and flush synchronously, for transitions that must survive a crash. */
@@ -123,7 +123,7 @@ export class CoalescedStatusWriter<
   private dirtyCount = 0;
   private flushTimer: NodeJS.Timeout | undefined;
 
-  open(runId: string, initialStatus: TStatus): void {
+  open(scope: SessionScope, runId: string, initialStatus: TStatus): void {
     // A second open() is a reset: cancel whatever this instance was
     // previously tracking (including an unflushed dirty mutation) rather
     // than merging with it. See the doc comment on the interface method.
@@ -131,7 +131,7 @@ export class CoalescedStatusWriter<
       clearTimeout(this.flushTimer);
       this.flushTimer = undefined;
     }
-    this.statusPath = path.join(currentRunsDir(), runId, STATUS_FILE_NAME);
+    this.statusPath = path.join(scopeRunsDir(scope), runId, STATUS_FILE_NAME);
     this.status = initialStatus;
     this.dirtyCount = 0;
     // The initial write is not a coalescing candidate: callers rely on the

@@ -30,23 +30,21 @@ import {
   type VoiceMediaPlaybackResult,
   VOICE_MEDIA_PLAYBACK_STATE_HEADER,
   type VoiceMediaWake,
+  VOICE_MEDIA_WAKE_TYPE,
   VOICE_MEDIA_CHANNELS,
   VOICE_MEDIA_CONTENT_TYPE,
   VOICE_MEDIA_PROTOCOL_VERSION,
   VOICE_MEDIA_ROUTES,
   VOICE_MEDIA_SAMPLE_RATE,
 } from '../types/clientMedia.ts';
-import { createVoiceMediaWakePublisher, type VoiceMediaWakePublisher } from './voiceMediaWakeFile.ts';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import {
   VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS,
+  VOICE_OWNERSHIP_FRAME_TYPE,
   VOICE_OWNERSHIP_LEASE_MS,
   VOICE_OWNERSHIP_ROUTES,
-  parseVoiceOwnershipAcknowledgement,
-  parseVoiceOwnershipActivationRequest,
   parseVoiceOwnershipCommand,
-  parseVoiceOwnershipHandoffRequest,
-  parseVoiceOwnershipRegistration,
-  parseVoiceOwnershipTargets,
+  parseVoiceOwnershipSessionSnapshot,
   type VoiceOwnershipAcknowledgement,
   type VoiceOwnershipCommand,
   type VoiceOwnershipSessionSnapshot,
@@ -115,9 +113,8 @@ export interface VoiceMediaApiOptions {
   now?: () => number;
   clientConnectWaitMs?: number;
   eventEpoch?: string;
-  wakePublisher?: VoiceMediaWakePublisher;
+  directEvents: DoomDirectEventBus;
   ownershipCommandTimeoutMs?: number;
-  onNotice?: (message: string) => void;
   sessionId?: string;
   realtimeProvider?: RealtimeProvider;
 }
@@ -236,37 +233,6 @@ function captureActivity(request: Request): VoiceMediaCaptureActivity | undefine
   };
 }
 
-function parseOwnershipSnapshot(value: unknown): VoiceOwnershipSessionSnapshot | undefined {
-  const input = isRecord(value) ? value : undefined;
-  if (
-    input === undefined ||
-    !Object.keys(input).every((key) =>
-      ['registration', 'targets', 'activation', 'handoff', 'acknowledgement'].includes(key),
-    )
-  )
-    return undefined;
-  const registration = parseVoiceOwnershipRegistration(input.registration);
-  const targets = parseVoiceOwnershipTargets(input.targets);
-  const activation = parseVoiceOwnershipActivationRequest(input.activation);
-  const handoff = parseVoiceOwnershipHandoffRequest(input.handoff);
-  const acknowledgement = parseVoiceOwnershipAcknowledgement(input.acknowledgement);
-  if (
-    targets === undefined ||
-    (input.registration !== undefined && registration === undefined) ||
-    (input.activation !== undefined && activation === undefined) ||
-    (input.handoff !== undefined && handoff === undefined) ||
-    (input.acknowledgement !== undefined && acknowledgement === undefined)
-  )
-    return undefined;
-  return {
-    ...(registration === undefined ? {} : { registration }),
-    targets,
-    ...(activation === undefined ? {} : { activation }),
-    ...(handoff === undefined ? {} : { handoff }),
-    ...(acknowledgement === undefined ? {} : { acknowledgement }),
-  };
-}
-
 function emptyOwnershipSnapshot(): VoiceOwnershipSessionSnapshot {
   return { targets: [] };
 }
@@ -300,16 +266,14 @@ class VoiceMediaBroker implements DoomApiHandler {
   private readonly hubToken: string | undefined;
   private readonly clientConnectWaitMs: number;
   private readonly eventEpoch: string;
-  private readonly wakePublisher: VoiceMediaWakePublisher | undefined;
+  private readonly directEvents: DoomDirectEventBus;
   private readonly ownershipCommandTimeoutMs: number;
-  private readonly onNotice: ((message: string) => void) | undefined;
   private readonly events: VoiceMediaClientEvent[] = [];
   private readonly waiters = new Set<() => void>();
   private client: ClientLease | undefined;
   private capture: HostedCapture | undefined;
   private playback: HostedPlayback | undefined;
   private sequence = 0;
-  private wakeFailureReported = false;
   private ownershipSnapshot = emptyOwnershipSnapshot();
   private ownershipSyncedAt: number | undefined;
   private pendingOwnershipCommand: PendingOwnershipCommand | undefined;
@@ -327,10 +291,10 @@ class VoiceMediaBroker implements DoomApiHandler {
     this.clientConnectWaitMs = options.clientConnectWaitMs ?? CLIENT_CONNECT_WAIT_MS;
     this.eventEpoch = options.eventEpoch ?? randomUUID();
     if (!validId(this.eventEpoch)) throw new Error('Voice media event epoch is invalid.');
-    this.wakePublisher = options.wakePublisher;
+    this.directEvents = options.directEvents;
     this.ownershipCommandTimeoutMs = options.ownershipCommandTimeoutMs ?? VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS;
-    this.onNotice = options.onNotice;
-    this.publishWake();
+    this.publishOwnershipSnapshot();
+    this.directEvents.publish(VOICE_MEDIA_WAKE_TYPE, this.sessionId, this.currentWake());
   }
 
   public fetch(request: Request): Promise<Response> | Response {
@@ -555,10 +519,11 @@ class VoiceMediaBroker implements DoomApiHandler {
   }
 
   private async ownershipSync(request: Request): Promise<Response> {
-    const snapshot = parseOwnershipSnapshot(await jsonRecord(request));
+    const snapshot = parseVoiceOwnershipSessionSnapshot(await jsonRecord(request));
     if (snapshot === undefined) return errorResponse('Invalid voice ownership session snapshot.', 400);
     this.ownershipSnapshot = snapshot;
     this.ownershipSyncedAt = this.now();
+    this.publishOwnershipSnapshot();
     const pending = this.pendingOwnershipCommand;
     if (pending !== undefined && sameOwnershipCommand(pending.command, snapshot.acknowledgement)) {
       this.pendingOwnershipCommand = undefined;
@@ -1030,24 +995,15 @@ class VoiceMediaBroker implements DoomApiHandler {
     this.events.push({ ...event, sequence: this.sequence } as VoiceMediaClientEvent);
     if (this.events.length > MAX_EVENT_HISTORY) this.events.splice(0, this.events.length - MAX_EVENT_HISTORY);
     this.wake();
-    this.publishWake();
+    this.directEvents.publish(VOICE_MEDIA_WAKE_TYPE, this.sessionId, this.currentWake());
   }
 
   private currentWake(): VoiceMediaWake {
     return { eventEpoch: this.eventEpoch, sequence: this.sequence };
   }
 
-  private publishWake(): void {
-    if (this.wakePublisher === undefined) return;
-    try {
-      this.wakePublisher.publish(this.currentWake());
-      this.wakeFailureReported = false;
-    } catch (error) {
-      if (this.wakeFailureReported) return;
-      this.wakeFailureReported = true;
-      const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-      this.onNotice?.(`voice media wake publication failed (${message})`);
-    }
+  private publishOwnershipSnapshot(): void {
+    this.directEvents.publish(VOICE_OWNERSHIP_FRAME_TYPE, this.sessionId, this.ownershipSnapshot);
   }
 
   private failActiveClientWork(message: string): void {
@@ -1076,29 +1032,20 @@ class VoiceMediaBroker implements DoomApiHandler {
   }
 }
 
-export function createVoiceMediaApi(options: VoiceMediaApiOptions = {}): DoomApiHandler {
+export function createVoiceMediaApi(options: VoiceMediaApiOptions): DoomApiHandler {
   return new VoiceMediaBroker(options);
 }
 
 export const api: DoomApi = {
   basePath: VOICE_MEDIA_API_BASE_PATH,
   start(context: DoomApiContext): DoomApiHandler {
-    let wakePublisher: VoiceMediaWakePublisher | undefined;
-    if (context.sessionId !== undefined) {
-      try {
-        wakePublisher = createVoiceMediaWakePublisher(context.sessionId);
-      } catch (error) {
-        const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-        context.onNotice(`voice media wake publisher unavailable (${message})`);
-      }
-    }
+    if (context.directEvents === undefined) throw new Error('Voice media API requires the session direct event bus.');
     return createVoiceMediaApi({
+      directEvents: context.directEvents,
       internalToken: context.internalToken,
       sessionId: context.sessionId,
       realtimeProvider: createRealtimeRuntime({ stateDirectory: dirname(globalDoomConfigPath()) }).provider,
       hubToken: context.hubToken,
-      wakePublisher,
-      onNotice: (message) => context.onNotice(message),
     });
   },
 };

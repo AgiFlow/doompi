@@ -58,20 +58,15 @@
       "import": "./dist/delegation/manager.mjs",
       "require": "./dist/delegation/manager.cjs"
     },
-    "./extension": {
-      "types": "./dist/extension.d.mts",
-      "import": "./dist/extension.mjs",
-      "require": "./dist/extension.cjs"
-    },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
-    "./extensions/headless": {
-      "types": "./dist/extensions/headless.d.mts",
-      "import": "./dist/extensions/headless.mjs",
-      "require": "./dist/extensions/headless.cjs"
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
     },
     "./logSinkTelemetry": {
       "types": "./dist/logSinkTelemetry.d.mts",
@@ -137,11 +132,6 @@
       "types": "./dist/tool/taskTool.d.mts",
       "import": "./dist/tool/taskTool.mjs",
       "require": "./dist/tool/taskTool.cjs"
-    },
-    "./web-hub": {
-      "types": "./dist/webHub.d.mts",
-      "import": "./dist/webHub.mjs",
-      "require": "./dist/webHub.cjs"
     },
     "./tui/format": {
       "types": "./dist/tui/format.d.mts",
@@ -215,9 +205,10 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/headless.ts",
-    "dist": "./dist/extensions/headless.mjs",
+    "entry": "./src/exports/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
     "scopes": [
+      "hub",
       "session"
     ]
   },
@@ -226,11 +217,7 @@
     "channels": [
       "task_graph"
     ],
-    "client": "./src/exports/webClient.ts",
-    "hub": {
-      "entry": "./src/exports/webHub.ts",
-      "dist": "./dist/webHub.mjs"
-    }
+    "client": "./src/exports/webClient.ts"
   },
   "pi": {
     "extensions": [

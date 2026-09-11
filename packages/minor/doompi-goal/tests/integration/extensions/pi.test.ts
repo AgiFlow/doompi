@@ -1,3 +1,4 @@
+import { createPiTestHost } from '@agimon-ai/doompi-extension-contracts/testing';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import { registerGoalExtension } from '../../../src/adapters/pi/extension';
@@ -69,13 +70,21 @@ describe('doompi-goal Pi extension', () => {
   });
 
   it('owns awaited shutdown and recreates state when Pi loads the factory again', async () => {
-    const fixture = createPiFixture();
+    const first = createPiTestHost();
+    const reloaded = createPiTestHost();
+    await first.cordis('goal-test-first');
+    await reloaded.cordis('goal-test-reloaded');
 
-    await registerGoalExtension(fixture.pi);
-    await fixture.listeners.get('session_shutdown')?.();
-    await fixture.listeners.get('session_shutdown')?.();
-    await registerGoalExtension(fixture.pi);
+    try {
+      await registerGoalExtension(first.pi);
+      await first.emit('session_shutdown', { reason: 'test' });
+      await first.emit('session_shutdown', { reason: 'test' });
+      await registerGoalExtension(reloaded.pi);
 
-    expect(fixture.pi.registerCommand).toHaveBeenCalledTimes(2);
+      expect(first.commands.filter((command) => command.name === COMMAND_NAME)).toHaveLength(1);
+      expect(reloaded.commands.filter((command) => command.name === COMMAND_NAME)).toHaveLength(1);
+    } finally {
+      await Promise.all([first.dispose(), reloaded.dispose()]);
+    }
   });
 });

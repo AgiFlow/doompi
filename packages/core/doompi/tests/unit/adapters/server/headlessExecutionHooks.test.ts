@@ -14,7 +14,7 @@ import {
   type Models,
 } from '@earendil-works/pi-ai';
 import { DOOM_HEADLESS_HOST_SERVICE, requireDoomHeadlessHost } from '@agimon-ai/doompi-extension-contracts/headless';
-import type { LoadedServerFacet } from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
+import type { LoadedServerFacet } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { createHeadlessSessionHost } from '../../../../src/adapters/server/headlessSessionHost';
 import { serveSessionApis } from '../../../../src/adapters/server/packageApiServer';
 
@@ -274,16 +274,22 @@ describe('active headless execution hooks', () => {
           sessionId: 'headless-hooks-test',
           sessionName: 'Hooks',
           agentArgs: ['--session-dir', root, '--system-prompt', 'base'],
+          environment: {},
           candidates: [facet.declaration],
           selection: { majorMode: 'development', activeLayers: ['tools'], domains: ['hooks'], minorModes: [] },
           onNotice,
         });
         apis = await serveSessionApis({
-          socketDir: root,
           sessionId: 'headless-hooks-test',
           cwd: root,
           internalToken: 'internal',
           hubToken: 'hub',
+          environment: {},
+          directEvents: {
+            publish: () => undefined,
+            subscribe: () => () => undefined,
+            close: () => undefined,
+          },
           apis: [],
           facets: [facet],
           prepareFacets: session.prepareFacets,
@@ -347,7 +353,7 @@ describe('active headless execution hooks', () => {
         expect(toolResultEvents).toHaveLength(1);
 
         const reportedFrames: Record<string, unknown>[] = [];
-        session.agent.onFrame((frame) => reportedFrames.push(frame));
+        session.onPresentationFrame((frame) => reportedFrames.push(frame));
         await session.runtime.prompt('reported tool error');
         expect(executed).toEqual(['guarded:checked', 'deny', 'reported-error']);
         expect(reportedFrames).toContainEqual(

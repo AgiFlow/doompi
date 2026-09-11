@@ -1,44 +1,32 @@
 export interface ServeOptions {
-  socketPath: string;
-  /** File holding the attach token, so it never appears in a process listing. */
+  /** File holding the external protocol token, so it never appears in a process listing. */
   tokenFile: string;
-  /** Arguments appended to the supervised agent invocation. */
+  /** Arguments used to configure the direct harness session. */
   agentArgs: string[];
-  /** Port for the browser cockpit, or undefined to serve no cockpit. */
-  webPort?: number;
+  /** Port for the client-neutral HTTP and WebSocket protocol. */
+  webPort: number;
   /** Session name shown in the cockpit rail. */
   sessionName: string;
   /** Session id to mint, or undefined to let the server generate one. */
   sessionId?: string;
-  /** Registry directory override; the default is resolved by the caller. */
-  registryDir?: string;
 }
 
-const LISTEN_OPTION = '--listen';
 const TOKEN_FILE_OPTION = '--auth-token-file';
 const WEB_OPTION = '--web';
 const NAME_OPTION = '--name';
 const SESSION_ID_OPTION = '--session-id';
-const REGISTRY_DIR_OPTION = '--registry-dir';
 const AGENT_SEPARATOR = '--';
 const DEFAULT_WEB_PORT = 7433;
 const DEFAULT_SESSION_NAME = 'untitled';
 
-export const SERVE_USAGE = `doompi-server ${LISTEN_OPTION} <socket> ${TOKEN_FILE_OPTION} <file> [${NAME_OPTION} <name>] [${SESSION_ID_OPTION} <id>] [${REGISTRY_DIR_OPTION} <dir>] [${WEB_OPTION} [port]] [${AGENT_SEPARATOR} <agent arguments>]`;
+export const SERVE_USAGE = `doompi-server ${TOKEN_FILE_OPTION} <file> [${NAME_OPTION} <name>] [${SESSION_ID_OPTION} <id>] [${WEB_OPTION} [port]] [${AGENT_SEPARATOR} <agent arguments>]`;
 
 export interface SessionIdentity {
   sessionId: string;
   sessionName: string;
 }
 
-/**
- * Settles which session id and name the agent runs under.
- *
- * Pi accepts the same --session-id and --name flags this server does, so a
- * value the caller already put in the agent arguments wins and is read back
- * for the registry record; otherwise the fallback identity is appended. Either
- * way the server knows the session id before the agent even starts.
- */
+/** Settles the direct session identity from explicit arguments or caller defaults. */
 export function resolveSessionIdentity(
   agentArgs: readonly string[],
   fallback: SessionIdentity,
@@ -86,16 +74,13 @@ export function relaunchAgentArgs(args: readonly string[], majorMode: string): s
 /**
  * Parses the server's own arguments, leaving the agent's untouched.
  *
- * The token is read from a file rather than a flag: an argument vector is
- * readable by any local process, which would defeat the socket's permissions.
+ * The token is read from a file rather than a flag because command arguments are visible to other local processes.
  */
 export function parseServeOptions(argv: readonly string[]): ServeOptions {
-  let socketPath: string | undefined;
   let tokenFile: string | undefined;
-  let webPort: number | undefined;
+  let webPort = DEFAULT_WEB_PORT;
   let sessionName: string | undefined;
   let sessionId: string | undefined;
-  let registryDir: string | undefined;
   const agentArgs: string[] = [];
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -118,22 +103,12 @@ export function parseServeOptions(argv: readonly string[]): ServeOptions {
       }
       continue;
     }
-    if (
-      argument === LISTEN_OPTION ||
-      argument === TOKEN_FILE_OPTION ||
-      argument === NAME_OPTION ||
-      argument === SESSION_ID_OPTION ||
-      argument === REGISTRY_DIR_OPTION
-    ) {
+    if (argument === TOKEN_FILE_OPTION || argument === NAME_OPTION || argument === SESSION_ID_OPTION) {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith('-')) throw new Error(`${argument} requires a value.`);
-      if (argument === LISTEN_OPTION) socketPath = value;
-      else if (argument === TOKEN_FILE_OPTION) tokenFile = value;
+      if (argument === TOKEN_FILE_OPTION) tokenFile = value;
       else if (argument === NAME_OPTION) sessionName = value;
-      else if (argument === REGISTRY_DIR_OPTION) registryDir = value;
       else {
-        // The id names a registry record file and a Pi session, so a path
-        // separator would escape both namespaces.
         if (value.includes('/')) throw new Error(`${SESSION_ID_OPTION} must not contain "/".`);
         sessionId = value;
       }
@@ -143,15 +118,12 @@ export function parseServeOptions(argv: readonly string[]): ServeOptions {
     throw new Error(`Unknown option ${argument}. Usage: ${SERVE_USAGE}`);
   }
 
-  if (!socketPath) throw new Error(`${LISTEN_OPTION} is required. Usage: ${SERVE_USAGE}`);
   if (!tokenFile) throw new Error(`${TOKEN_FILE_OPTION} is required. Usage: ${SERVE_USAGE}`);
   return {
-    socketPath,
     tokenFile,
     agentArgs,
     webPort,
     sessionName: sessionName ?? DEFAULT_SESSION_NAME,
     sessionId,
-    registryDir,
   };
 }

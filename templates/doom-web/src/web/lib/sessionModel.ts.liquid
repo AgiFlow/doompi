@@ -1,12 +1,28 @@
 import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
-import { DIALOG_ANSWERED_TYPE, MINOR_MODE_ENTRY_TYPE, type MinorModeProjection } from '../../types/hub.ts';
+import {
+  AGENT_MODEL_ENTRY_TYPE,
+  CONTEXT_ENTRY_TYPE,
+  type ContextProjection,
+  DIALOG_ANSWERED_TYPE,
+  MINOR_MODE_ENTRY_TYPE,
+  type MinorModeProjection,
+  PROFILE_IDENTITY_ENTRY_TYPE,
+} from '../../types/hub.ts';
+import { parseDoomNotificationEntry } from '../../types/notification.ts';
+import { BUILTIN_COMMANDS } from './commands.ts';
 
 export type EntryKind = 'user' | 'assistant' | 'tool' | 'notice';
+
+export interface UserImage {
+  data: string;
+  mimeType: string;
+}
 
 export interface UserEntry {
   kind: 'user';
   id: string;
   text: string;
+  images?: UserImage[];
 }
 
 export interface AssistantEntry {
@@ -15,6 +31,21 @@ export interface AssistantEntry {
   text: string;
   thinking: string;
   streaming: boolean;
+  /**
+   * The persona active when this message was written.
+   *
+   * Stamped at creation rather than read from current state, so a profile
+   * switch leaves earlier messages showing who actually wrote them. Replay
+   * reproduces it because the identity entry is folded in journal order.
+   */
+  identity?: ProfileIdentity;
+}
+
+/** Display name and avatar of the persona a message was written under. */
+export interface ProfileIdentity {
+  profile: string;
+  name?: string;
+  icon?: string;
 }
 
 export interface ToolEntry {
@@ -49,9 +80,14 @@ export interface QueuedEntry {
   kind: 'queued';
   id: string;
   text: string;
+  /** How Pi must receive this entry when the browser rebuilds the queue after deleting one item. */
+  delivery?: 'steer' | 'followUp';
+  images?: UserImage[];
 }
 
-export type TimelineEntry = UserEntry | AssistantEntry | ToolEntry | NoticeEntry | SettledEntry | QueuedEntry;
+export type TimelineEntry = (UserEntry | AssistantEntry | ToolEntry | NoticeEntry | SettledEntry | QueuedEntry) & {
+  timestamp?: number;
+};
 
 export interface SessionStats {
   cost: number;
@@ -97,8 +133,15 @@ export interface DialogRequest {
   prefill: string;
 }
 
+export interface EditorTextRequest {
+  id: string;
+  text: string;
+}
+
 export interface SessionState {
   entries: TimelineEntry[];
+  /** Running tool frames kept outside the protocol-owned transcript so prompt plugins can claim their dialogs. */
+  activeTools: ToolEntry[];
   /**
    * Footer status entries keyed as the publishing extension named them, raw so
    * the colour survives. A key that is absent means the package is not in this
@@ -110,6 +153,14 @@ export interface SessionState {
   streaming: boolean;
   settled: boolean;
   stats: SessionStats | null;
+  /**
+   * Cost the assistant message now streaming has run up, on top of `stats`.
+   *
+   * Pi answers `get_session_stats` once per message at best, so without this
+   * the cost chip sits still for the length of a turn. Zero whenever no
+   * message is streaming or the provider has not reported yet.
+   */
+  liveCost: number;
   agent: AgentInfo | null;
   commands: CommandInfo[];
   /** Models the session offered, empty until the picker asks. */
@@ -117,8 +168,18 @@ export interface SessionState {
   /** Thinking levels the current model accepts, empty until the picker asks. */
   thinkingLevels: string[];
   dialog: DialogRequest | null;
+  /** Latest fire-and-forget editor replacement requested by a session extension. */
+  editorTextRequest: EditorTextRequest | null;
   /** The runtime's minor-mode catalog as last journaled, or null before it reports. */
   minorModes: MinorModeProjection | null;
+  /** What the session is composed of, as last journaled, or null before it reports. */
+  context: ContextProjection | null;
+  /**
+   * The persona most recently journaled, used to stamp assistant messages as
+   * they are created. Not a projection: folding it forward in journal order is
+   * what keeps a pre-switch message attributed to the persona that wrote it.
+   */
+  profileIdentity: ProfileIdentity | null;
   /** Tool calls seen since the current run began, reported when it settles. */
   toolsThisRun: number;
   /**
@@ -127,24 +188,53 @@ export interface SessionState {
    * has; folding by id is what keeps a restored transcript from doubling.
    */
   restoredIds: string[];
+  /**
+   * Prompts this page put on screen before the journal recorded them, newest
+   * last. The cockpit shows your message the moment you send it, but the
+   * journal is what carries every message, including the ones an extension
+   * sends on your behalf. Matching a journal message against this list is what
+   * lets both appear exactly once.
+   */
+  pendingUserEntries: { id: string; text: string; images?: UserImage[] }[];
+  /**
+   * Prompts an authoritative transcript already folded into the entry this page
+   * rendered, newest last.
+   *
+   * A prompt reaches the timeline from two directions, Pi's protocol snapshot
+   * and the session journal, and whichever lands first consumes the pending
+   * record. Without this the second arrival has nothing to match and appends a
+   * second copy of the message, which is what a reader sees when transcript
+   * ownership returns to the journal mid-session.
+   */
+  reconciledUserEntries: { id: string; text: string; images?: UserImage[] }[];
+  /** Stable local ids for optimistic prompts after Pi publishes their canonical transcript entries. */
+  protocolUserEntryIds: Record<string, string>;
   nextId: number;
 }
 
 export const initialSessionState: SessionState = {
   entries: [],
+  activeTools: [],
   statuses: {},
   widgets: [],
   streaming: false,
   settled: false,
   stats: null,
+  liveCost: 0,
   agent: null,
   commands: [],
   models: [],
   thinkingLevels: [],
   dialog: null,
+  editorTextRequest: null,
   minorModes: null,
+  context: null,
+  profileIdentity: null,
   toolsThisRun: 0,
   restoredIds: [],
+  pendingUserEntries: [],
+  reconciledUserEntries: [],
+  protocolUserEntryIds: {},
   nextId: 1,
 };
 
@@ -172,6 +262,23 @@ export function textFromContent(content: unknown): string {
     .join('');
 }
 
+const SUPPORTED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+
+export function isSupportedImageMimeType(mimeType: string): boolean {
+  return SUPPORTED_IMAGE_MIME_TYPES.has(mimeType);
+}
+
+/** Keeps only image blocks the cockpit can safely render as data URLs. */
+export function imagesFromContent(content: unknown): UserImage[] {
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((block) => {
+    if (!isRecord(block) || block.type !== 'image') return [];
+    const data = asString(block.data);
+    const mimeType = asString(block.mimeType);
+    return data && isSupportedImageMimeType(mimeType) ? [{ data, mimeType }] : [];
+  });
+}
+
 /** A one-line description of a tool call, good enough for a card header. */
 export function summariseArgs(args: unknown): string {
   if (!isRecord(args)) return '';
@@ -187,6 +294,20 @@ function withEntry(state: SessionState, entry: TimelineEntry): SessionState {
   return { ...state, entries: [...state.entries, entry], nextId: state.nextId + 1 };
 }
 
+function withChronologicalEntry(state: SessionState, entry: TimelineEntry): SessionState {
+  const timestamp = entry.timestamp;
+  if (timestamp === undefined) return withEntry(state, entry);
+  const index = state.entries.findIndex(
+    (existing) => existing.timestamp !== undefined && existing.timestamp > timestamp,
+  );
+  if (index === -1) return withEntry(state, entry);
+  return {
+    ...state,
+    entries: [...state.entries.slice(0, index), entry, ...state.entries.slice(index)],
+    nextId: state.nextId + 1,
+  };
+}
+
 function replaceEntry(state: SessionState, id: string, next: TimelineEntry): SessionState {
   return { ...state, entries: state.entries.map((entry) => (entry.id === id ? next : entry)) };
 }
@@ -200,6 +321,7 @@ function openAssistant(state: SessionState): { state: SessionState; entry: Assis
     text: '',
     thinking: '',
     streaming: true,
+    ...(state.profileIdentity === null ? {} : { identity: state.profileIdentity }),
   };
   return { state: withEntry(state, entry), entry };
 }
@@ -234,10 +356,10 @@ function closeAssistant(state: SessionState, message: unknown): SessionState {
   return { ...state, entries };
 }
 
-function applyToolStart(state: SessionState, frame: Frame): SessionState {
-  const entry: ToolEntry = {
+function toolEntryFromStart(frame: Frame, id: string): ToolEntry {
+  return {
     kind: 'tool',
-    id: `t${state.nextId}`,
+    id,
     toolCallId: asString(frame.toolCallId),
     name: asString(frame.toolName, 'tool'),
     args: isRecord(frame.args) ? frame.args : {},
@@ -247,7 +369,10 @@ function applyToolStart(state: SessionState, frame: Frame): SessionState {
     isError: false,
     running: true,
   };
-  const opened = withEntry(closeAssistant(state, undefined), entry);
+}
+
+function applyToolStart(state: SessionState, frame: Frame): SessionState {
+  const opened = withEntry(closeAssistant(state, undefined), toolEntryFromStart(frame, `t${state.nextId}`));
   return { ...opened, toolsThisRun: opened.toolsThisRun + 1 };
 }
 
@@ -284,7 +409,7 @@ function modelChoice(value: unknown): ModelChoice | undefined {
 
 function applyResponse(state: SessionState, frame: Frame): SessionState {
   const command = asString(frame.command);
-  if (frame.success === false && PICKER_COMMANDS.has(command)) {
+  if (frame.success === false && (PICKER_COMMANDS.has(command) || command === 'navigate_tree')) {
     return withEntry(state, {
       kind: 'notice',
       id: `n${state.nextId}`,
@@ -308,6 +433,17 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
         sessionName: asString(data.sessionName),
         messageCount: asNumber(data.messageCount) ?? 0,
         isStreaming: data.isStreaming === true,
+      },
+    };
+  }
+
+  if (command === 'navigate_tree' && data.cancelled !== true) {
+    const editorText = asString(data.editorText);
+    return {
+      ...state,
+      editorTextRequest: {
+        id: `rewind:${asString(data.leafId, 'root')}:${String(state.nextId)}`,
+        text: editorText,
       },
     };
   }
@@ -340,19 +476,47 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
         contextTokens: usage ? asNumber(usage.tokens) : null,
         contextWindow: usage ? asNumber(usage.contextWindow) : null,
       },
+      // This answer already counts the message the delta was tracking, so
+      // keeping the delta would bill it twice. Clearing it here rather than at
+      // `message_end` is what stops the chip dipping while the answer is in
+      // flight.
+      liveCost: 0,
     };
   }
 
   if (command === 'get_commands') {
     const raw = Array.isArray(data.commands) ? data.commands : [];
-    const commands = raw
+    const reported = raw
       .filter(isRecord)
       .map((entry) => ({ name: asString(entry.name), description: asString(entry.description) }))
       .filter((entry) => entry.name.length > 0);
+    // Pi does not report its own built-ins here, so the cockpit adds the ones
+    // it can run. An extension that claims the same name keeps it: that one
+    // reaches the session through the prompt path and is what the user gets.
+    const claimed = new Set(reported.map((entry) => entry.name));
+    const commands = [...reported, ...BUILTIN_COMMANDS.filter((entry) => !claimed.has(entry.name))];
     return { ...state, commands };
   }
 
   return state;
+}
+
+/**
+ * Folds the streaming message's own cost into the view model.
+ *
+ * Pi builds `message_update.usage` from the in-progress message's usage, not
+ * from a session running total, so this is added to the last figure Pi
+ * reported rather than replacing it. Providers that only price a message once
+ * it completes report zero here, and the chip then steps at each message
+ * instead of streaming, which is the provider's granularity showing through
+ * rather than a fault.
+ */
+function applyLiveUsage(state: SessionState, frame: Frame): SessionState {
+  if (asString(frame.type) !== 'message_update') return state;
+  const usage = isRecord(frame.usage) ? frame.usage : undefined;
+  const cost = usage && isRecord(usage.cost) ? (asNumber(usage.cost.total) ?? 0) : 0;
+  if (state.liveCost === cost) return state;
+  return { ...state, liveCost: cost };
 }
 
 function applyStatus(state: SessionState, frame: Frame): SessionState {
@@ -363,9 +527,34 @@ function applyStatus(state: SessionState, frame: Frame): SessionState {
   return { ...state, statuses: { ...state.statuses, [key]: text } };
 }
 
+function applyContextSelection(state: SessionState, projection: ContextProjection): SessionState {
+  const selection = projection.selection;
+  if (!selection || !selection.majorMode || !Array.isArray(selection.domains)) return { ...state, context: projection };
+  const profile = typeof selection.profile === 'string' ? selection.profile : '';
+  const status = [profile ? `*${profile}*` : undefined, `[${selection.majorMode}]`, selection.domains.join(',')]
+    .filter(Boolean)
+    .join(':');
+  return {
+    ...state,
+    context: projection,
+    statuses: {
+      ...state.statuses,
+      'doom-major-mode': status,
+      'doom-domain': selection.domains.join(','),
+      'doom-profile': profile,
+    },
+  };
+}
+
 function applyWidget(state: SessionState, frame: Frame): SessionState {
   const key = asString(frame.widgetKey);
-  if (!key || state.widgets.includes(key)) return state;
+  if (!key) return state;
+  const present = Array.isArray(frame.widgetLines) && frame.widgetLines.length > 0;
+  if (!present) {
+    if (!state.widgets.includes(key)) return state;
+    return { ...state, widgets: state.widgets.filter((widget) => widget !== key) };
+  }
+  if (state.widgets.includes(key)) return state;
   return { ...state, widgets: [...state.widgets, key] };
 }
 
@@ -373,6 +562,10 @@ function applyDialog(state: SessionState, frame: Frame): SessionState {
   const method = asString(frame.method);
   if (method === 'setStatus') return applyStatus(state, frame);
   if (method === 'setWidget') return applyWidget(state, frame);
+  if (method === 'set_editor_text') {
+    if (typeof frame.text !== 'string') return state;
+    return { ...state, editorTextRequest: { id: asString(frame.id), text: frame.text } };
+  }
   if (method !== 'select' && method !== 'confirm' && method !== 'input' && method !== 'editor') return state;
   const options = Array.isArray(frame.options) ? frame.options.map((option) => asString(option)).filter(Boolean) : [];
   return {
@@ -397,6 +590,57 @@ function thinkingFromContent(content: readonly Frame[]): string {
     .join('');
 }
 
+/** Remembers a prompt this page rendered, so the journal's copy of it folds into the same entry. */
+function withPendingUser(state: SessionState, id: string, text: string, images: UserImage[] = []): SessionState {
+  const pending = { id, text, ...(images.length > 0 ? { images } : {}) };
+  return { ...state, pendingUserEntries: [...state.pendingUserEntries, pending] };
+}
+
+/**
+ * Folds a journalled user message into the entry this page already rendered
+ * for it, or returns undefined when no such entry exists.
+ *
+ * A message the cockpit sent is on screen before it reaches the journal, and a
+ * queued one is on screen as queued until the run picks it up. Both are the
+ * same message the journal later reports, so it settles the entry that stands
+ * rather than adding a second copy of the text.
+ *
+ * A prompt Pi's protocol snapshot already claimed is matched here too. That
+ * claim consumed the pending record, so without the second list a journalled
+ * copy arriving after the run, which is what happens when transcript
+ * ownership falls back to the journal, would read as a new message and be
+ * appended below the settled divider.
+ */
+function reconcilePendingUser(state: SessionState, text: string, images: UserImage[]): SessionState | undefined {
+  const index = state.pendingUserEntries.findIndex((pending) => pending.text === text);
+  const reconciledIndex = index === -1 ? state.reconciledUserEntries.findIndex((claimed) => claimed.text === text) : -1;
+  if (index === -1 && reconciledIndex === -1) return undefined;
+  const source = index === -1 ? state.reconciledUserEntries : state.pendingUserEntries;
+  const at = index === -1 ? reconciledIndex : index;
+  const pending = source[at] as { id: string; images?: UserImage[] };
+  // A pending prompt is claimed once, because a second copy of the same text is
+  // a second message. A claim already published is kept: the hub re-reads the
+  // journal at every run boundary, and each of those copies has to fold into the
+  // entry that stands rather than becoming a new one.
+  const remaining = index === -1 ? state.reconciledUserEntries : source.filter((_, position) => position !== at);
+  const entries = state.entries.map((entry) => {
+    if (entry.id !== pending.id) return entry;
+    const reconciledImages = images.length > 0 ? images : pending.images;
+    if (entry.kind === 'queued') {
+      return {
+        kind: 'user' as const,
+        id: entry.id,
+        text: entry.text,
+        ...(reconciledImages ? { images: reconciledImages } : {}),
+      };
+    }
+    return entry.kind === 'user' && images.length > 0 ? { ...entry, images } : entry;
+  });
+  return index === -1
+    ? { ...state, entries, reconciledUserEntries: remaining }
+    : { ...state, entries, pendingUserEntries: remaining };
+}
+
 /**
  * Folds one journalled message into the timeline.
  *
@@ -412,7 +656,12 @@ function applyJournalMessage(state: SessionState, message: Frame): SessionState 
 
   if (role === 'user') {
     const text = textFromContent(content);
-    return text ? withEntry(state, { kind: 'user', id: `u${state.nextId}`, text }) : state;
+    const images = imagesFromContent(content);
+    if (!text && images.length === 0) return state;
+    return (
+      reconcilePendingUser(state, text, images) ??
+      withEntry(state, { kind: 'user', id: `u${state.nextId}`, text, ...(images.length > 0 ? { images } : {}) })
+    );
   }
 
   if (role === 'assistant') {
@@ -420,7 +669,14 @@ function applyJournalMessage(state: SessionState, message: Frame): SessionState 
     const thinking = thinkingFromContent(content);
     let next =
       text || thinking
-        ? withEntry(state, { kind: 'assistant', id: `a${state.nextId}`, text, thinking, streaming: false })
+        ? withEntry(state, {
+            kind: 'assistant',
+            id: `a${state.nextId}`,
+            text,
+            thinking,
+            streaming: false,
+            ...(state.profileIdentity === null ? {} : { identity: state.profileIdentity }),
+          })
         : state;
     for (const block of content) {
       if (block.type !== 'toolCall') continue;
@@ -468,20 +724,106 @@ function applyJournalEntry(state: SessionState, entry: Frame): SessionState {
 }
 
 /**
+ * Records a journal entry the protocol already publishes, without folding it.
+ *
+ * The hub re-reads the journal at every run boundary and re-publishes user
+ * messages, because no live frame carries one. Dropping those copies without a
+ * trace left the page with no memory of them, so a copy arriving after protocol
+ * ownership lapsed read as a new prompt and landed below the settled divider.
+ * Keeping the id is what makes the drop idempotent.
+ */
+function rememberJournalEntry(state: SessionState, entry: Frame): SessionState {
+  if (entry.type !== 'message' || !isRecord(entry.message)) return state;
+  const id = asString(entry.id);
+  if (id === '' || state.restoredIds.includes(id)) return state;
+  return { ...state, restoredIds: [...state.restoredIds, id] };
+}
+
+/**
+ * Folds an older window of transcript above what the page already holds.
+ *
+ * The reducer is append-only by design: it builds the timeline as the session
+ * produces it. Paging backwards is the one case that runs the other way, so
+ * the window is reduced on its own and the result is prepended, rather than
+ * teaching every case in the reducer about a second direction.
+ *
+ * Entry ids are positional, so a window reduced from scratch would collide
+ * with the live entries. Prefixing by page keeps every key unique and stable
+ * across re-renders, which is what a virtualised list needs to keep its
+ * measurements.
+ */
+export function prependHistory(state: SessionState, frames: readonly Frame[], page: number): SessionState {
+  // Wrapped: reduce would otherwise pass the index as the options argument.
+  const older = frames.reduce((carried, frame) => reduceSession(carried, frame), initialSessionState);
+  const known = new Set(state.restoredIds);
+  const restored = older.restoredIds.filter((id) => !known.has(id));
+  if (restored.length === 0) return state;
+  const prefix = `h${page}-`;
+  const entries = older.entries
+    .filter((entry) => entry.kind !== 'notice')
+    .map((entry) => ({ ...entry, id: `${prefix}${entry.id}` }) as TimelineEntry);
+  return {
+    ...state,
+    entries: [...entries, ...state.entries],
+    restoredIds: [...restored, ...state.restoredIds],
+  };
+}
+
+/**
  * Folds one agent frame into the view model.
  *
  * Pure and total: an unrecognised frame returns the state unchanged, so a Pi
  * protocol addition cannot break the cockpit, it just is not rendered yet.
  */
-export function reduceSession(state: SessionState, frame: Frame): SessionState {
+/** Frames whose only product is a timeline entry the protocol now publishes. */
+const TRANSCRIPT_FRAMES = new Set([
+  'message_update',
+  'message_end',
+  'tool_execution_start',
+  'tool_execution_update',
+  'tool_execution_end',
+]);
+
+export interface ReduceSessionOptions {
+  /**
+   * The protocol supplies the transcript, so this reducer must not build one.
+   *
+   * Both would otherwise write the same timeline from different sources: the
+   * snapshot replaces it wholesale while these frames append to it, and the
+   * result flickers between the two. The frames still reach here for
+   * everything else they carry, which is why this is a filter rather than a
+   * missing subscription.
+   */
+  transcriptFromProtocol?: boolean;
+}
+
+export function reduceSession(state: SessionState, frame: Frame, options: ReduceSessionOptions = {}): SessionState {
+  // Usage is read before the transcript filter below because a session whose
+  // transcript the protocol owns still bills for its messages.
+  return reduceFrame(applyLiveUsage(state, frame), frame, options);
+}
+
+function reduceFrame(state: SessionState, frame: Frame, options: ReduceSessionOptions): SessionState {
   const type = asString(frame.type);
+  if (options.transcriptFromProtocol && TRANSCRIPT_FRAMES.has(type)) {
+    if (type === 'tool_execution_start') {
+      const active = toolEntryFromStart(frame, `active:${asString(frame.toolCallId)}`);
+      const activeTools = [...state.activeTools.filter((entry) => entry.toolCallId !== active.toolCallId), active];
+      return { ...state, activeTools, toolsThisRun: state.toolsThisRun + 1 };
+    }
+    if (type === 'tool_execution_end') {
+      const toolCallId = asString(frame.toolCallId);
+      return { ...state, activeTools: state.activeTools.filter((entry) => entry.toolCallId !== toolCallId) };
+    }
+    return state;
+  }
 
   switch (type) {
     case 'replay':
-      return isRecord(frame.frame) ? reduceSession(state, frame.frame) : state;
+      return isRecord(frame.frame) ? reduceSession(state, frame.frame, options) : state;
 
     case 'agent_start':
-      return { ...state, streaming: true, settled: false, toolsThisRun: 0 };
+      return { ...state, activeTools: [], streaming: true, settled: false, toolsThisRun: 0 };
 
     case 'message_update':
       return isRecord(frame.assistantMessageEvent) ? applyAssistantDelta(state, frame.assistantMessageEvent) : state;
@@ -507,9 +849,21 @@ export function reduceSession(state: SessionState, frame: Frame): SessionState {
       });
 
     case 'agent_settled': {
-      const closed = closeAssistant(state, undefined);
+      const closed = options.transcriptFromProtocol ? state : closeAssistant(state, undefined);
       const marked = withEntry(closed, { kind: 'settled', id: `s${closed.nextId}`, tools: closed.toolsThisRun });
-      return { ...marked, streaming: false, settled: true };
+      return { ...marked, activeTools: [], dialog: null, streaming: false, settled: true };
+    }
+
+    case 'queue_update': {
+      const steering = Array.isArray(frame.steering) ? frame.steering : [];
+      const followUp = Array.isArray(frame.followUp) ? frame.followUp : [];
+      const queue = [
+        ...steering.map((entry) => ({ text: asString(entry), delivery: 'steer' as const })),
+        ...followUp.map((entry) => ({ text: asString(entry), delivery: 'followUp' as const })),
+      ]
+        .map((entry, index) => ({ kind: 'queued' as const, id: `queue-${index}`, ...entry }))
+        .filter((entry) => entry.text.length > 0);
+      return replaceQueuedEntries(state, queue);
     }
 
     case 'extension_ui_request': {
@@ -534,17 +888,75 @@ export function reduceSession(state: SessionState, frame: Frame): SessionState {
     case DIALOG_ANSWERED_TYPE:
       return state.dialog && state.dialog.id === asString(frame.id) ? { ...state, dialog: null } : state;
 
-    // The runtime journals its minor-mode catalog as a custom entry; every
-    // other custom entry belongs to some extension's own bookkeeping.
+    // Pi announces a thinking level it switched on its own behalf: plan mode
+    // applying its configured effort, or the /effort command. state.agent is
+    // otherwise written only by a get_state this page asked for, so without
+    // this the chip keeps whatever the last request reported.
+    case 'thinking_level_changed': {
+      if (state.agent === null) return state;
+      const level = asString(frame.level, state.agent.thinkingLevel);
+      return { ...state, agent: { ...state.agent, thinkingLevel: level } };
+    }
+
+    // Journaled composition and notifications apply independently of protocol-owned messages.
     case 'entry_appended': {
       const entry = isRecord(frame.entry) ? frame.entry : undefined;
       if (!entry) return state;
+      const notification = parseDoomNotificationEntry(frame);
+      if (notification) {
+        if (state.restoredIds.includes(notification.entryId)) return state;
+        const timestamp = asNumber(entry.timestamp) ?? undefined;
+        const next = withChronologicalEntry(state, {
+          kind: 'notice',
+          id: `n${state.nextId}`,
+          text: notification.data.body,
+          tone: notification.data.level === 'error' ? 'error' : 'info',
+          ...(timestamp === undefined ? {} : { timestamp }),
+        });
+        return { ...next, restoredIds: [...next.restoredIds, notification.entryId] };
+      }
       if (entry.type === 'custom' && entry.customType === MINOR_MODE_ENTRY_TYPE) {
         const data = isRecord(entry.data) ? entry.data : undefined;
         if (!data || !Array.isArray(data.modes)) return state;
         return { ...state, minorModes: data as unknown as MinorModeProjection };
       }
-      return applyJournalEntry(state, entry);
+      if (entry.type === 'custom' && entry.customType === CONTEXT_ENTRY_TYPE) {
+        const data = isRecord(entry.data) ? entry.data : undefined;
+        if (!data || !Array.isArray(data.groups)) return state;
+        return applyContextSelection(state, data as unknown as ContextProjection);
+      }
+      // Pi has no wire event for a model an extension chose, so the runtime
+      // journals one. Guarded on agent because a get_state has to have named
+      // the rest of the facts before a model can be swapped into them.
+      if (entry.type === 'custom' && entry.customType === AGENT_MODEL_ENTRY_TYPE) {
+        const data = isRecord(entry.data) ? entry.data : undefined;
+        if (!data || state.agent === null) return state;
+        const id = asString(data.id, '');
+        const provider = asString(data.provider, '');
+        if (id === '' || provider === '') return state;
+        return { ...state, agent: { ...state.agent, model: id, provider } };
+      }
+      // Folded in journal order, never collapsed: assistant messages are stamped
+      // with whatever was current when they were created, so a switch leaves the
+      // messages before it attributed to the persona that wrote them.
+      if (entry.type === 'custom' && entry.customType === PROFILE_IDENTITY_ENTRY_TYPE) {
+        const data = isRecord(entry.data) ? entry.data : undefined;
+        const profile = asString(data?.profile, '');
+        if (profile === '') return state;
+        const name = asString(data?.name, '');
+        const icon = asString(data?.icon, '');
+        return {
+          ...state,
+          profileIdentity: {
+            profile,
+            ...(name === '' ? {} : { name }),
+            ...(icon === '' ? {} : { icon }),
+          },
+        };
+      }
+      // A journalled user message is a transcript entry the protocol already
+      // publishes; the catalog above is DoomPi's own and always applies.
+      return options.transcriptFromProtocol ? rememberJournalEntry(state, entry) : applyJournalEntry(state, entry);
     }
 
     case 'response':
@@ -565,15 +977,72 @@ export function reduceSession(state: SessionState, frame: Frame): SessionState {
 }
 
 /** Records the prompt locally, because Pi does not echo it back as an event. */
-export function appendUserPrompt(state: SessionState, text: string): SessionState {
-  return withEntry(state, { kind: 'user', id: `u${state.nextId}`, text });
+export function appendUserPrompt(state: SessionState, text: string, images: UserImage[] = []): SessionState {
+  const id = `u${state.nextId}`;
+  const entry: UserEntry = { kind: 'user', id, text, ...(images.length > 0 ? { images } : {}) };
+  return withPendingUser(withEntry(state, entry), id, text, images);
 }
 
 /** A follow-up waits for the current run, so it is marked rather than shown as sent. */
-export function appendQueued(state: SessionState, text: string): SessionState {
-  return withEntry(state, { kind: 'queued', id: `q${state.nextId}`, text });
+export function appendQueued(state: SessionState, text: string, images: UserImage[] = []): SessionState {
+  const id = `q${state.nextId}`;
+  const entry: QueuedEntry = {
+    kind: 'queued',
+    id,
+    text,
+    delivery: 'followUp',
+    ...(images.length > 0 ? { images } : {}),
+  };
+  return withPendingUser(withEntry(state, entry), id, text, images);
 }
 
+/** Replaces visible queued rows while preserving optimistic ids and attachments. */
+export function replaceQueuedEntries(state: SessionState, queue: readonly QueuedEntry[]): SessionState {
+  const remaining = state.entries.filter((entry): entry is QueuedEntry => entry.kind === 'queued');
+  const normalized = queue.map((entry) => {
+    const existingIndex = remaining.findIndex((candidate) => candidate.text === entry.text);
+    if (existingIndex === -1) return entry;
+    const [existing] = remaining.splice(existingIndex, 1);
+    return existing === undefined
+      ? entry
+      : {
+          ...entry,
+          id: existing.id,
+          ...(entry.delivery === undefined && existing.delivery !== undefined ? { delivery: existing.delivery } : {}),
+          ...(existing.images ? { images: existing.images } : {}),
+        };
+  });
+  const pendingUserEntries = [...state.pendingUserEntries];
+  for (const entry of normalized) {
+    if (!pendingUserEntries.some((pending) => pending.id === entry.id)) {
+      pendingUserEntries.push({ id: entry.id, text: entry.text, ...(entry.images ? { images: entry.images } : {}) });
+    }
+  }
+  return {
+    ...state,
+    entries: [...state.entries.filter((entry) => entry.kind !== 'queued'), ...normalized],
+    pendingUserEntries,
+  };
+}
+
+/** Removes queued rows and their reconciliation records after Pi clears the queue. */
+export function clearQueuedEntries(state: SessionState): SessionState {
+  const queuedIds = new Set(state.entries.filter((entry) => entry.kind === 'queued').map((entry) => entry.id));
+  return {
+    ...state,
+    entries: state.entries.filter((entry) => entry.kind !== 'queued'),
+    pendingUserEntries: state.pendingUserEntries.filter((entry) => !queuedIds.has(entry.id)),
+  };
+}
+
+/** Removes one queued row and the optimistic reconciliation record tied to it. */
+export function removeQueuedEntry(state: SessionState, id: string): SessionState {
+  return {
+    ...state,
+    entries: state.entries.filter((entry) => entry.kind !== 'queued' || entry.id !== id),
+    pendingUserEntries: state.pendingUserEntries.filter((entry) => entry.id !== id),
+  };
+}
 export function clearDialog(state: SessionState): SessionState {
   return { ...state, dialog: null };
 }

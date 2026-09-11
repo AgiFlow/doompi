@@ -36,11 +36,12 @@ import { SUBAGENT_CHILD_ENV, SUBAGENT_PARENT_SESSION_ENV } from '../../../../typ
 import type { DiscoveredSkill, SkillDiscoveryContract, SkillSource } from '../../../agents/skills';
 import type { AgentScope, AgentSource, AgentDiscoveryContract } from '../../../agents/types';
 import { diagnoseIntercomBridge, type IntercomBridgeConfigInput } from '../../../../services/intercom/intercomBridge';
-import { currentResultsDir, currentRunsDir, TEMP_ROOT_DIR } from '../../../filesystem/paths';
+import { TEMP_ROOT_DIR, scopeResultsDir, scopeRunsDir, type SessionScope } from '../../../filesystem/paths';
 
 export interface DoctorReportInput {
   cwd: string;
   agentScope: AgentScope;
+  scope: SessionScope;
   intercomBridgeConfig?: IntercomBridgeConfigInput;
   context?: 'fresh' | 'fork';
   orchestratorTarget?: string;
@@ -169,8 +170,8 @@ export function buildDoctorReport(input: DoctorReportInput, deps: DoctorReportDe
     '',
     'Filesystem',
     formatExistingDirectory('temp root', TEMP_ROOT_DIR),
-    formatExistingDirectory('runs', currentRunsDir()),
-    formatExistingDirectory('results', currentResultsDir()),
+    formatExistingDirectory('runs', scopeRunsDir(input.scope)),
+    formatExistingDirectory('results', scopeResultsDir(input.scope)),
     '',
     'Discovery',
     ...formatDiscovery(input, deps),

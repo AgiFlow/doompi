@@ -1,6 +1,6 @@
 # @agimon-ai/doompi-web-contracts
 
-Typed plugin, slot, session-channel, and hub-channel contracts for the DoomPi web cockpit.
+Typed browser plugin, slot, session-channel, and presentation contracts for the DoomPi web cockpit.
 
 This is a library, not a Pi extension. It starts no process and does not belong in `.doom/modes.yaml`.
 
@@ -17,15 +17,9 @@ those surfaces.
 
 ## Plugin shape
 
-A web plugin can have two entries:
+A web plugin has one browser client entry exporting `webPlugin: WebPluginDefinition`. It can contribute tabs, slots, Leader bindings, commands, browser session channels, activity surfaces, and tool renderers.
 
-- A client entry exports `webPlugin: WebPluginDefinition`. It can contribute tabs, slots, Leader
-  bindings, commands, session channels, activity surfaces, and tool renderers.
-- An optional hub entry exports `webHubChannels: readonly WebHubChannel[]`. Each channel watches a
-  data source and emits per-session `ChannelFrame` payloads to the page.
-
-Declare both entries in the plugin package's `doompiWeb` manifest block. The DoomPi cockpit bundler
-reads those declarations and generates the registration modules.
+Declare that entry as `doompiWeb.client` in the plugin package manifest. Server-owned APIs and live channels belong to the package's canonical `doompiServer` facet, not to a web plugin entry.
 
 Use the definition helpers for checked literals:
 
@@ -39,8 +33,7 @@ import {
 } from '@agimon-ai/doompi-web-contracts';
 ```
 
-Import contracts type-only from server code. The `/testing` subpath provides channel, render, slot,
-and tool-message fixtures for plugin tests.
+The `/testing` subpath provides browser channel, render, slot, and tool-message fixtures for plugin tests.
 
 ## License
 

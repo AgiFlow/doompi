@@ -53,6 +53,17 @@ function makeCtx(hasUI = true): FakeCtx {
     sessionManager: {
       getSessionFile: () => '/sessions/session-under-test.jsonl',
       getSessionId: () => 'session-under-test',
+      getLeafId: () => 'settled-leaf',
+      getLeafEntry: () => ({
+        type: 'message',
+        id: 'settled-leaf',
+        parentId: null,
+        message: { role: 'user', content: [] },
+      }),
+      getHeader: () => ({ type: 'session', version: 3, id: 'session-under-test' }),
+      getBranch: () => [
+        { type: 'message', id: 'settled-leaf', parentId: null, message: { role: 'user', content: [] } },
+      ],
     },
     ui: {
       notify: (message: string, kind: string) => notifications.push({ message, kind }),
@@ -167,6 +178,7 @@ function makeDeps(overrides: Partial<SlashCommandDeps> = {}): {
       skills: unusedByThisCommand as SlashCommandDeps['skills'],
       management: unusedByThisCommand as SlashCommandDeps['management'],
       loadConfig: () => config,
+      environment: {},
       ...overrides,
     },
     spawnPlanner,
@@ -298,6 +310,15 @@ describe('/run', () => {
           parentId: 'prior-leaf',
           message: { role: 'assistant', content: [] },
         }),
+        getHeader: () => ({ type: 'session', version: 3, id: 'session-under-test' }),
+        getBranch: () => [
+          {
+            type: 'message',
+            id: 'settled-leaf',
+            parentId: 'prior-leaf',
+            message: { role: 'assistant', content: [] },
+          },
+        ],
       },
     } as unknown as ExtensionContext;
 
@@ -410,11 +431,12 @@ describe('/subagents-steer', () => {
     steerError: Error | undefined;
     steerState: 'delivered' | 'failed' | 'pending' = 'delivered';
 
+    bindSessionScope(): void {}
+
     async steer(id: string, message: string) {
       if (this.steerError) throw this.steerError;
       this.steerCalls.push({ id, message });
       return {
-        requestPath: `/tmp/${id}/steer.json`,
         requestId: 'request-1',
         index: 0,
         state: this.steerState,
@@ -474,10 +496,12 @@ describe('/subagents-stop', () => {
     stopCalls: string[] = [];
     stopError: Error | undefined;
 
-    stop(id: string): { requestPath: string } {
+    bindSessionScope(): void {}
+
+    async stop(id: string): Promise<{ requestId: string }> {
       if (this.stopError) throw this.stopError;
       this.stopCalls.push(id);
-      return { requestPath: `/tmp/${id}/stop.json` };
+      return { requestId: 'request-1' };
     }
   }
 

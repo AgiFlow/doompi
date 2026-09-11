@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
-import { activityGroups, minorModes, selectionAxes } from '../../src/web/lib/composition.ts';
+import {
+  activityGroups,
+  bindFileLinkModes,
+  fileLinkFor,
+  fileTabForPath,
+  minorModes,
+  selectionAxes,
+} from '../../src/web/lib/composition.ts';
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
 import { ansiSegments, emptySelection, parseSelection, stripAnsi } from '../../src/web/lib/statusLine.ts';
 
@@ -103,10 +110,33 @@ describe('minorModes', () => {
     expect(byName.help).toMatchObject({ id: 'help', availability: 'on', keys: 'h e' });
     expect(byName.plan).toMatchObject({ id: 'plan', availability: 'off' });
     // The id stem links the catalog record to the declared row and its keys.
-    expect(byName.loop).toMatchObject({ id: 'loop.active', availability: 'off', detail: 'activating', keys: 'l l' });
+    expect(byName.loop).toMatchObject({
+      id: 'loop.active',
+      availability: 'off',
+      detail: 'activating',
+      keys: 'l l',
+      activityGroup: 'loops',
+    });
     // Declared modes the catalog lacks stay listed as unavailable.
     expect(byName.goal.availability).toBe('unavailable');
     expect(byName.workflow.availability).toBe('unavailable');
+  });
+
+  it('drives the mode its key drives, which is not always the one it is named after', () => {
+    // SPC v e toggles autonomous capture, which the runtime registers as
+    // 'voice-auto'; 'voice' is the one-shot dictation command on v v. A row
+    // that sent its own label would reach the wrong mode.
+    const modes = minorModes({ 'doom-voice': 'listening' }, []);
+    const voice = modes.find((mode) => mode.name === 'voice');
+
+    expect(voice?.id).toBe('voice-auto');
+    expect(voice?.availability).toBe('on');
+  });
+
+  it('sends a mode whose id matches its name unchanged', () => {
+    const modes = minorModes({ goal: 'ship the gate' }, []);
+
+    expect(modes.find((mode) => mode.name === 'goal')?.id).toBe('goal');
   });
 
   it('separates a mode that is absent from one that is merely off', () => {
@@ -130,8 +160,21 @@ describe('minorModes', () => {
     expect(modes.find((mode) => mode.name === 'goal')?.detail).toBe('held');
   });
 
-  it('always reports every mode DoomPi ships', () => {
-    expect(minorModes({}, []).map((mode) => mode.name)).toEqual(['help', 'plan', 'loop', 'goal', 'workflow', 'voice']);
+  it('hides opt-in modes until the session reports them', () => {
+    expect(minorModes({}, []).map((mode) => mode.name)).toEqual([
+      'help',
+      'plan',
+      'loop',
+      'goal',
+      'author',
+      'workflow',
+      'voice',
+    ]);
+    expect(minorModes({ 'doom-computer-use-mode': '' }, []).find((mode) => mode.name === 'computer use')).toMatchObject(
+      {
+        availability: 'off',
+      },
+    );
   });
 
   it('prefers plugin-declared modes over the packaged fallback, in declared order', () => {
@@ -213,11 +256,17 @@ describe('selectionAxes', () => {
 });
 
 describe('activityGroups', () => {
-  const installOwners = (): void =>
+  const subagentsTab = () => ({ id: 'subagents-fleet', label: 'subagents', panel: () => null });
+  const workflowsTab = () => ({ id: 'workflows-runs', label: 'workflows', panel: () => null });
+  let activeWorkflowSession: string | null = null;
+  const installOwners = (): void => {
+    activeWorkflowSession = null;
     installWebPlugins([
       defineWebPlugin({
         id: 'subagents',
-        activityGroups: [{ name: 'agents', keys: 'a r', statusKey: 'doom-team-agents', tab: 'subagents', order: 10 }],
+        activityGroups: [
+          { name: 'agents', keys: 'a r', statusKey: 'doom-team-agents', transientTab: subagentsTab, order: 10 },
+        ],
       }),
       defineWebPlugin({
         id: 'runner',
@@ -230,12 +279,17 @@ describe('activityGroups', () => {
             name: 'workflows',
             keys: 'w r',
             widgetKeys: ['workflow-mcp-progress', 'workflow-mcp-follow'],
-            tab: 'workflows',
+            activeSource: {
+              subscribe: () => () => undefined,
+              isActive: (sessionId) => sessionId !== null && sessionId === activeWorkflowSession,
+            },
+            transientTab: workflowsTab,
             order: 30,
           },
         ],
       }),
     ]);
+  };
 
   it('has no host-side table: a session signal with no owning package shows nothing', () => {
     expect(
@@ -243,26 +297,73 @@ describe('activityGroups', () => {
     ).toEqual([]);
   });
 
-  it('lists only the declared groups the session signals, with their tabs', () => {
+  it('keeps a package-owned launcher group visible before the session signals work', () => {
     installOwners();
     try {
-      expect(activityGroups({}, [])).toEqual([]);
+      const idle = activityGroups({}, []);
+      expect(idle.map((group) => group.name)).toEqual(['workflows']);
+      expect(idle[0]).toEqual({
+        name: 'workflows',
+        keys: 'w r',
+        summary: '',
+        active: false,
+        transientTab: workflowsTab,
+      });
 
       const groups = activityGroups({ 'doom-runner-runners': '', 'doom-team-agents': '2 running' }, []);
-      expect(groups.map((group) => group.name)).toEqual(['agents', 'runners']);
-      expect(groups[0]).toEqual({ name: 'agents', keys: 'a r', summary: '2 running', active: true, tab: 'subagents' });
+      expect(groups.map((group) => group.name)).toEqual(['agents', 'runners', 'workflows']);
+      expect(groups[0]).toEqual({
+        name: 'agents',
+        keys: 'a r',
+        summary: '2 running',
+        active: true,
+        transientTab: subagentsTab,
+      });
       expect(groups[1]).toEqual({ name: 'runners', keys: 'r l', summary: '', active: false });
     } finally {
       resetWebPlugins();
     }
   });
 
-  it('adds workflows when the widget shows up', () => {
+  it('uses session-owned workflow state without marking another session as active', () => {
     installOwners();
     try {
-      const groups = activityGroups({}, ['workflow-mcp-follow']);
-      expect(groups.map((group) => group.name)).toEqual(['workflows']);
-      expect(groups[0]?.tab).toBe('workflows');
+      const progress = activityGroups({}, ['workflow-mcp-progress'], 's1');
+      expect(progress.map((group) => group.name)).toEqual(['workflows']);
+      expect(progress[0]).toMatchObject({ transientTab: workflowsTab, active: false });
+
+      activeWorkflowSession = 's1';
+      expect(activityGroups({}, [], 's1')[0]).toMatchObject({ transientTab: workflowsTab, active: true });
+      expect(activityGroups({}, [], 's2')[0]).toMatchObject({ transientTab: workflowsTab, active: false });
+    } finally {
+      resetWebPlugins();
+    }
+  });
+
+  it('drops a hideWhenEmpty group while its session reports nothing, and brings it back after', () => {
+    // A cleared status arrives as an empty string rather than an absent key,
+    // because the same map tells the selection bar which minor modes exist. A
+    // group whose whole content is what the session is doing opts out of that
+    // one-way door; a group that is also a launcher does not.
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'goal',
+        activityGroups: [{ name: 'goal', keys: 'g e', statusKey: 'doom-goal-current', hideWhenEmpty: true }],
+      }),
+      defineWebPlugin({
+        id: 'runner',
+        activityGroups: [{ name: 'runners', keys: 'r l', statusKey: 'doom-runner-runners' }],
+      }),
+    ]);
+    try {
+      const idle = activityGroups({ 'doom-goal-current': '', 'doom-runner-runners': '' }, []);
+      expect(idle.map((group) => group.name)).toEqual(['runners']);
+
+      const working = activityGroups({ 'doom-goal-current': 'active 4m · ship it', 'doom-runner-runners': '' }, []);
+      expect(working.map((group) => group.name)).toEqual(['goal', 'runners']);
+
+      // Whitespace and colour are not content either.
+      expect(activityGroups({ 'doom-goal-current': '  ' }, [])).toEqual([]);
     } finally {
       resetWebPlugins();
     }
@@ -276,7 +377,7 @@ describe('a catalog mode that cannot run here', () => {
     modes: [
       {
         id: 'voice-auto',
-        label: 'Voice',
+        label: 'Autonomous voice',
         description: 'autonomous capture',
         order: 30,
         activation: 'inactive' as const,
@@ -289,6 +390,14 @@ describe('a catalog mode that cannot run here', () => {
         })),
       },
     ],
+  });
+
+  it('matches the packaged voice row by mode id when its live label differs', () => {
+    const modes = minorModes({}, [], catalog([{ id: 'activate', enabled: true }]));
+
+    expect(modes.filter((mode) => mode.id === 'voice-auto')).toHaveLength(1);
+    expect(modes.find((mode) => mode.name === 'voice')).toMatchObject({ id: 'voice-auto', availability: 'off' });
+    expect(modes.some((mode) => mode.name === 'autonomous voice')).toBe(false);
   });
 
   it('is unavailable, and carries the mode own words for why', () => {
@@ -326,5 +435,94 @@ describe('a catalog mode that cannot run here', () => {
     // An active mode with every action disabled is still active, and saying
     // otherwise would hide a mode that is doing something right now.
     expect(minorModes({}, [], running)[0].availability).toBe('on');
+  });
+});
+
+describe('fileLinkFor', () => {
+  const tabFor = (id: string) => ({ id, label: id, panel: () => null });
+
+  it('answers nothing while no plugin tracks files', () => {
+    try {
+      installWebPlugins([defineWebPlugin({ id: 'quiet' })]);
+      expect(fileLinkFor('s1', 'src/app.ts')).toBeUndefined();
+    } finally {
+      resetWebPlugins();
+    }
+  });
+
+  it('takes the first source that claims the path, and leaves the rest plain', () => {
+    try {
+      installWebPlugins([
+        defineWebPlugin({
+          id: 'first',
+          fileLinks: {
+            subscribe: () => () => undefined,
+            fingerprint: () => 'src/app.ts',
+            resolve: (_sessionId, path) => (path === 'src/app.ts' ? tabFor('first-app') : undefined),
+          },
+        }),
+        defineWebPlugin({
+          id: 'second',
+          fileLinks: {
+            subscribe: () => () => undefined,
+            fingerprint: () => 'src/app.ts docs/README.md',
+            resolve: (_sessionId, path) =>
+              path === 'src/app.ts'
+                ? tabFor('second-app')
+                : path === 'docs/README.md'
+                  ? tabFor('second-readme')
+                  : undefined,
+          },
+        }),
+      ]);
+      expect(fileLinkFor('s1', 'src/app.ts')?.id).toBe('first-app');
+      expect(fileLinkFor('s1', 'docs/README.md')?.id).toBe('second-readme');
+      expect(fileLinkFor('s1', 'flex gap-3')).toBeUndefined();
+    } finally {
+      resetWebPlugins();
+    }
+  });
+  it('uses normal Files links when Author is off, including explicit untracked paths', () => {
+    let active = false;
+    const release = bindFileLinkModes({
+      active: (sessionId) => (sessionId === 's1' && active ? ['author'] : []),
+      subscribe: () => () => undefined,
+    });
+    try {
+      installWebPlugins([
+        defineWebPlugin({
+          id: 'author',
+          fileLinks: {
+            requiredMinorMode: 'author',
+            subscribe: () => () => undefined,
+            fingerprint: () => '',
+            resolve: () => tabFor('author-file'),
+            openPath: () => tabFor('author-file'),
+          },
+        }),
+        defineWebPlugin({
+          id: 'files',
+          fileLinks: {
+            subscribe: () => () => undefined,
+            fingerprint: () => '',
+            resolve: (_sessionId, path) => (path === 'tracked.ts' ? tabFor('files-preview') : undefined),
+            openPath: () => tabFor('files-preview'),
+          },
+        }),
+      ]);
+      expect(fileLinkFor('s1', 'tracked.ts')?.id).toBe('files-preview');
+      expect(fileTabForPath('s1', 'untracked.ts')?.id).toBe('files-preview');
+      active = true;
+      expect(fileTabForPath('s1', 'untracked.ts')?.id).toBe('author-file');
+      expect(fileLinkFor('s1', 'tracked.ts')?.id).toBe('author-file');
+      expect(fileTabForPath('s2', 'untracked.ts')?.id).toBe('files-preview');
+      active = false;
+      expect(fileTabForPath('s1', 'tracked.ts')?.id).toBe('files-preview');
+      release();
+      expect(fileLinkFor('s1', 'tracked.ts')?.id).toBe('files-preview');
+    } finally {
+      release();
+      resetWebPlugins();
+    }
   });
 });

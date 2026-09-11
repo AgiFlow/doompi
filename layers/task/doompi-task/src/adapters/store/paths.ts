@@ -43,7 +43,7 @@ async function gitAsync(args: string[], cwd: string): Promise<string | undefined
   });
 }
 
-function resolveAgentDirectory(env: NodeJS.ProcessEnv): string {
+function resolveAgentDirectory(env: Readonly<Record<string, string | undefined>>): string {
   const configured = env[PI_CODING_AGENT_DIR_ENV]?.trim();
   if (configured === HOME_ALIAS) return os.homedir();
   if (configured?.startsWith(HOME_ALIAS_PREFIX)) {
@@ -58,7 +58,10 @@ function isWithin(root: string, candidate: string): boolean {
 }
 
 /** Resolve the tree root without relying on extension startup order. */
-export function resolveSessionKey(rootSessionId: string, env: NodeJS.ProcessEnv = process.env): string {
+export function resolveSessionKey(
+  rootSessionId: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string {
   if (!env[SUBAGENT_CHILD_ENV]) return rootSessionId;
   const parentSessionId = env[SUBAGENT_PARENT_SESSION_ENV]?.trim();
   if (!parentSessionId) throw new Error(`${SUBAGENT_PARENT_SESSION_ENV} is required in a subagent child`);
@@ -68,7 +71,7 @@ export function resolveSessionKey(rootSessionId: string, env: NodeJS.ProcessEnv 
 /** Resolve one root session tree to a task document under the Pi agent directory. */
 export function resolveStorePath(
   _cwd: string = process.cwd(),
-  env: NodeJS.ProcessEnv = process.env,
+  env: Readonly<Record<string, string | undefined>> = process.env,
   sessionKey: string = 'standalone',
 ): string {
   const override = env[STORE_PATH_ENV]?.trim();
@@ -80,7 +83,7 @@ export function resolveStorePath(
 }
 
 /** Whether a deliberate unscoped task-store override is active. */
-export function hasStorePathOverride(env: NodeJS.ProcessEnv = process.env): boolean {
+export function hasStorePathOverride(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
   return Boolean(env[STORE_PATH_ENV]?.trim());
 }
 

@@ -86,7 +86,7 @@ function projectionKey(frame: Record<string, unknown>): { kind: 'status' | 'widg
   return undefined;
 }
 
-/** Frames from the live session socket, or from a backlog when replay is true. */
+/** Presentation frames from the Pi protocol, or from bounded replay when replay is true. */
 export function applySessionFrame(
   sessionId: string,
   frame: Record<string, unknown>,
@@ -99,13 +99,13 @@ export function applySessionFrame(
     if (options.replay && keys.has(projection.key)) return;
     if (!options.replay) keys.add(projection.key);
   }
-  // The legacy wire is the realtime and recovery fallback until Pi's protocol
-  // publishes a snapshot. Once it does, only DoomPi-specific frames reduce here.
+  // The presentation stream owns live and replay projection until the typed session
+  // service publishes a snapshot. Once it does, only DoomPi-specific frames reduce here.
   const transcriptFromProtocol = protocolTranscripts.has(sessionId);
   sessionStoreFor(sessionId).setState((state) => reduceSession(state, frame, { transcriptFromProtocol }));
 }
 
-/** Lets the legacy stream resume transcript ownership after a protocol failure. */
+/** Lets the presentation stream resume transcript ownership after a typed service failure. */
 export function releaseProtocolTranscript(sessionId: string): void {
   protocolTranscripts.delete(sessionId);
 }

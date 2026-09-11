@@ -1,15 +1,15 @@
 /**
- * The contract the parent writes and an external-CLI child reads back.
- *
- * Separate from `cliRunnerEntry.ts` so the spawner can build one without
- * importing the child entry point, which is resolved by raw filesystem path
- * rather than by `import` and must stay independently loadable.
+ * The bounded launch contract the parent sends to an external CLI child over
+ * Node process IPC. It stays separate from the child entry point so the parent
+ * can validate and send it without importing executable module side effects.
  */
 
 export interface CliLaunchConfig {
   runId: string;
   operationId?: string;
   agent: string;
+  task: string;
+  sensitiveTask?: boolean;
   /** Which configured runtime this is, for the result record and error text. */
   runtime: string;
   command: string;
@@ -27,8 +27,6 @@ export interface CliLaunchConfig {
   profileResultPath?: string;
   /** Suppress generic completion chat for bridge-owned runs. */
   internal?: boolean;
-  /** Where the child signals that it started; the parent's spawn blocks on this. */
-  handshakePath: string;
   /** Where the terminal result lands, in this run's own session scope. */
   resultPath: string;
 }

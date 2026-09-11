@@ -158,10 +158,9 @@ describe('Doom web plugin rules', () => {
       const result = webPluginManifest.check?.(manifest, root);
       expect(result).toContain("pluginId 'Bad Case' must be kebab-case");
       expect(result).toContain('registrationOrder must be a non-negative integer');
-      expect(result).toContain("client './src/web/index.ts' is not in the files allowlist");
+      expect(result).toContain('client must be ./src/exports/webClient.ts');
       expect(result).toContain('has no src/web/tsconfig.json');
-      expect(result).toContain("hub.entry './src/exports/webHub.ts' does not exist");
-      expect(result).toContain('hub.dist must be');
+      expect(result).toContain('must not declare doompiWeb.hub');
       expect(result).toContain("web/ imports 'src/types/webDemo.ts', which is not in the files allowlist");
       expect(result).toContain(`${CONTRACTS} must be a dependency`);
       expect(result).toContain(`${COMPONENTS} must be a dependency`);
@@ -174,29 +173,74 @@ describe('Doom web plugin rules', () => {
         dependencies: { [CONTRACTS]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/web/index.ts' },
       });
-      expect(webPluginManifest.check?.(manifest, root)).toContain("client './src/web/index.ts' does not exist");
+      expect(webPluginManifest.check?.(manifest, root)).toContain('client must be ./src/exports/webClient.ts');
     });
 
-    it('accepts a complete manifest, with an array of blocks', () => {
+    it('accepts a complete browser-only manifest with canonical client entries', () => {
       write('src/web/index.ts', `import type { D } from '../types/webDemo.ts';\n${entry}`);
-      write('src/web/other.ts', entry);
       write('src/web/tsconfig.json', '{}');
       write('src/types/webDemo.ts', 'export type D = 1;');
-      write('src/exports/webHub.ts', 'export const webHubChannels = [];');
+      write('src/exports/webClient.ts', "export { webPlugin } from '../web/index.ts';");
       const manifest = writeManifest({
         name: 'p',
-        files: ['dist', 'src/web', 'src/types/webDemo.ts'],
+        files: ['dist', 'src/web', 'src/exports/webClient.ts', 'src/types/webDemo.ts'],
         dependencies: { [CONTRACTS]: 'workspace:*' },
         doompiWeb: [
-          {
-            pluginId: 'demo',
-            client: './src/web/index.ts',
-            hub: { entry: './src/exports/webHub.ts', dist: './dist/webHub.mjs' },
-          },
-          { pluginId: 'demo-other', registrationOrder: 5, client: './src/web/other.ts' },
+          { pluginId: 'demo', client: './src/exports/webClient.ts' },
+          { pluginId: 'demo-other', registrationOrder: 5, client: './src/exports/webClient.ts' },
         ],
       });
       expect(webPluginManifest.check?.(manifest, root)).toBeNull();
+    });
+
+    it('accepts optional browser peers backed by dev dependencies', () => {
+      write('src/web/index.ts', `import { Button } from '${COMPONENTS}';\n${entry}`);
+      write('src/web/tsconfig.json', '{}');
+      write('src/exports/webClient.ts', "export { webPlugin } from '../web/index.ts';");
+      const manifest = writeManifest({
+        name: 'p',
+        files: ['dist', 'src/web', 'src/exports/webClient.ts'],
+        devDependencies: { [CONTRACTS]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
+        peerDependencies: { [CONTRACTS]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
+        peerDependenciesMeta: {
+          [CONTRACTS]: { optional: true },
+          [COMPONENTS]: { optional: true },
+        },
+        doompiWeb: { pluginId: 'demo', client: './src/exports/webClient.ts' },
+      });
+
+      expect(webPluginManifest.check?.(manifest, root)).toBeNull();
+    });
+
+    it('rejects browser peers without optional metadata or local dev support', () => {
+      write('src/web/index.ts', `import { Button } from '${COMPONENTS}';\n${entry}`);
+      write('src/web/tsconfig.json', '{}');
+      write('src/exports/webClient.ts', "export { webPlugin } from '../web/index.ts';");
+      const baseManifest = {
+        name: 'p',
+        files: ['dist', 'src/web', 'src/exports/webClient.ts'],
+        peerDependencies: { [CONTRACTS]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
+        doompiWeb: { pluginId: 'demo', client: './src/exports/webClient.ts' },
+      };
+
+      const missingOptional = writeManifest({
+        ...baseManifest,
+        devDependencies: { [CONTRACTS]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
+        peerDependenciesMeta: {},
+      });
+      expect(webPluginManifest.check?.(missingOptional, root)).toContain(`${CONTRACTS} must be a dependency`);
+      expect(webPluginManifest.check?.(missingOptional, root)).toContain(`${COMPONENTS} must be a dependency`);
+
+      const missingDev = writeManifest({
+        ...baseManifest,
+        devDependencies: {},
+        peerDependenciesMeta: {
+          [CONTRACTS]: { optional: true },
+          [COMPONENTS]: { optional: true },
+        },
+      });
+      expect(webPluginManifest.check?.(missingDev, root)).toContain(`${CONTRACTS} must be a dependency`);
+      expect(webPluginManifest.check?.(missingDev, root)).toContain(`${COMPONENTS} must be a dependency`);
     });
   });
 
@@ -231,7 +275,6 @@ describe('Doom web plugin rules', () => {
       write('src/web/tsconfig.json', '{}');
       write('src/types/webDemo.ts', 'export type D = 1;');
       write('src/exports/webClient.ts', "export { webPlugin } from '../web/index.ts';");
-      write('src/exports/webHub.ts', 'export const webHubChannels = [];');
       const manifest = writeManifest({
         name: 'p',
         files: ['dist', 'src/web', 'src/exports/webClient.ts', 'src/types/webDemo.ts'],
@@ -239,7 +282,6 @@ describe('Doom web plugin rules', () => {
         doompiWeb: {
           pluginId: 'demo',
           client: './src/exports/webClient.ts',
-          hub: { entry: './src/exports/webHub.ts', dist: './dist/webHub.mjs' },
         },
       });
       expect(webPluginManifest.check?.(manifest, root)).toBeNull();

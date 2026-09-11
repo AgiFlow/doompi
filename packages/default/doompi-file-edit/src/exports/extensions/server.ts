@@ -1,2 +1,2 @@
 // A Doom server host loads the module's default export as its facet entry contract.
-export { fileEditsServerFacet, fileEditsServerFacet as default } from '../serverFacet.ts';
+export { fileEditsServerFacet as default, fileEditsServerFacet } from '../../adapters/server/facet.ts';

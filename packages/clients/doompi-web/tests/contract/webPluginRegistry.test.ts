@@ -36,8 +36,6 @@ describe('the committed builtin web plugin registry', () => {
     const client = rendered.get(path.join('src', 'web', 'app', 'webPlugins.generated.ts'));
     expect(client).toContain('export const webPlugins: readonly WebPluginDefinition[] = [];');
     expect(client).not.toContain('file://');
-    const hub = rendered.get(path.join('src', 'adapters', 'webHubPlugins.generated.ts'));
-    expect(hub).toContain('export const BUILTIN_HUB_CHANNELS: readonly WebHubChannel[] = [];');
   });
 
   // A plugin's classes are scanned from the directory its components live in.
@@ -92,64 +90,20 @@ describe('the committed builtin web plugin registry', () => {
       expect(cssFor(dir)).toContain(`@source "${path.join(dir, 'web')}";`);
     });
 
-    it('names the shell once and excludes host channels from the session registry', () => {
+    it('names the shell once', () => {
       const generated = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-web-generated-'));
       scratch.push(generated);
       const hostPlugin: DeclaredWebPlugin = {
         pluginId: 'host-fixture',
         registrationOrder: 0,
-        channels: ['host-fixture'],
         packageDir: packageRoot,
         packageName: '@agimon-ai/doompi-web',
         isHost: true,
         client: { entry: './src/web/main.tsx' },
-        hub: { entry: './src/adapters/httpServer.ts' },
       };
-      const { cssModulePath, serverRegistry } = writeSyncWebPluginModules([hostPlugin], generated);
+      const { cssModulePath } = writeSyncWebPluginModules([hostPlugin], generated);
       const shellSource = `@source "${path.join(packageRoot, 'src', 'web')}";`;
       expect(fs.readFileSync(cssModulePath, 'utf8').split(shellSource)).toHaveLength(2);
-      expect(serverRegistry).toBe('[]\n');
-    });
-
-    it('publishes external hub paths with and without a distinct distribution entry', () => {
-      const generated = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-web-generated-'));
-      scratch.push(generated);
-      const externalRoot = path.join(generated, 'external');
-      const externalPlugins: DeclaredWebPlugin[] = [
-        {
-          pluginId: 'external-dist',
-          registrationOrder: 0,
-          channels: ['external-dist'],
-          packageDir: externalRoot,
-          packageName: '@scope/external-dist',
-          isHost: false,
-          client: { entry: './src/web/index.ts' },
-          hub: { entry: './src/hub.ts', dist: './dist/hub.mjs' },
-        },
-        {
-          pluginId: 'external-source',
-          registrationOrder: 1,
-          channels: ['external-source'],
-          packageDir: externalRoot,
-          packageName: '@scope/external-source',
-          isHost: false,
-          client: { entry: './src/web/index.ts' },
-          hub: { entry: './src/hub.ts' },
-        },
-      ];
-      const { serverRegistry } = writeSyncWebPluginModules(externalPlugins, generated);
-      expect(JSON.parse(serverRegistry)).toEqual([
-        {
-          pluginId: 'external-dist',
-          channels: ['external-dist'],
-          hubEntry: path.join(externalRoot, 'dist', 'hub.mjs'),
-        },
-        {
-          pluginId: 'external-source',
-          channels: ['external-source'],
-          hubEntry: path.join(externalRoot, 'src', 'hub.ts'),
-        },
-      ]);
     });
   });
 });

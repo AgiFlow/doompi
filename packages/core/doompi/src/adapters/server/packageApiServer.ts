@@ -1,25 +1,19 @@
-import fs from 'node:fs';
-import http from 'node:http';
-import path from 'node:path';
-import { getRequestListener } from '@hono/node-server';
 import {
   DOOM_API_ROUTE_PREFIX,
   type DoomApi,
   type DoomApiContext,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomDirectEventBus, DoomHubSessionService } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { createDoomServerHost, type DoomServerFacet } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import {
   installServerFacets,
   type LoadedServerFacet,
   type InstalledServerFacets,
   type InstallServerFacetsOptions,
-} from '@agimon-ai/doompi-extension-contracts/server-facet-loader';
+} from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
 import { validatedTraceContext } from '../../services/server/traceContext.ts';
 import { observe, type ServerTelemetry } from './serverTelemetry.ts';
-
-/** The socket name beside the session's own, so one directory holds the pair. */
-export const API_SOCKET_NAME = 'api.sock';
 
 /**
  * A body that keeps streaming well after its headers went out is worth its own span. A fast
@@ -29,12 +23,15 @@ export const API_SOCKET_NAME = 'api.sock';
 export const COMPLETION_SPAN_MIN_DURATION_MS = 1000;
 
 export interface PackageApiServerOptions {
-  /** Directory the session's sockets live in; the API socket joins them there. */
-  socketDir: string;
   sessionId: string;
   cwd: string;
+  /** Admitted environment for APIs serving this session. */
+  readonly environment: Readonly<Record<string, string | undefined>>;
+  /** Lifecycle-owned direct events shared with the hub. */
+  readonly directEvents: DoomDirectEventBus;
   internalToken?: string;
   hubToken?: string;
+  sessionService?: DoomHubSessionService;
   apis: readonly DoomApi[];
   /** Server facets to install; each registers its own APIs through the host. */
   facets?: readonly (DoomServerFacet | LoadedServerFacet)[];
@@ -46,8 +43,8 @@ export interface PackageApiServerOptions {
 }
 
 export interface PackageApiServer {
-  /** Absolute path of the socket, for the registry record; undefined when nothing mounted. */
-  readonly socketPath: string | undefined;
+  /** Dispatches an already-authenticated request without crossing a transport boundary. */
+  readonly request: (request: Request) => Promise<Response>;
   close(): Promise<void>;
 }
 
@@ -88,30 +85,28 @@ function responseWithCompletion(response: Response, complete: () => void): Respo
   return new Response(body, response);
 }
 
-/**
- * Serves this session's package APIs over HTTP on a unix socket.
- *
- * A socket rather than a port: the session server is one of many on a machine,
- * ports are a finite shared namespace, and the only client is the hub, which
- * already knows this session's directory. Nothing here is reachable from the
- * network, so the surface adds no way to reach a session that did not exist
- * before.
- *
- * Each API is mounted under its own base path and sees requests with that
- * prefix stripped, so a package declares routes relative to itself.
- */
+/** Installs session facets and dispatches authenticated package API calls in-process. */
 export async function serveSessionApis(options: PackageApiServerOptions): Promise<PackageApiServer> {
+  if (options.environment === undefined)
+    throw new Error('Session package API server requires an admitted environment.');
+  if (options.directEvents === undefined) throw new Error('Session package API server requires direct events.');
   const facets = options.facets ?? [];
   if (options.apis.length === 0 && facets.length === 0 && !options.prepareFacets) {
-    return { socketPath: undefined, close: () => Promise.resolve() };
+    return {
+      request: async () => Response.json({ error: 'No package APIs are mounted.' }, { status: 404 }),
+      close: () => Promise.resolve(),
+    };
   }
 
   const context: DoomApiContext = {
     scope: 'session',
     sessionId: options.sessionId,
     cwd: options.cwd,
+    environment: options.environment,
+    directEvents: options.directEvents,
     ...(options.internalToken === undefined ? {} : { internalToken: options.internalToken }),
     ...(options.hubToken === undefined ? {} : { hubToken: options.hubToken }),
+    ...(options.sessionService === undefined ? {} : { sessionService: options.sessionService }),
     onNotice: options.onNotice,
   };
   const host = createDoomServerHost({ scope: 'session', context });
@@ -132,7 +127,10 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
   if (host.mounted().length === 0 && !options.prepareFacets) {
     await installed.dispose();
     host.dispose();
-    return { socketPath: undefined, close: () => Promise.resolve() };
+    return {
+      request: async () => Response.json({ error: 'No package APIs are mounted.' }, { status: 404 }),
+      close: () => Promise.resolve(),
+    };
   }
 
   const dispatch = async (request: Request): Promise<Response> => {
@@ -194,30 +192,16 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
       );
     });
   };
-
-  const socketPath = path.resolve(options.socketDir, API_SOCKET_NAME);
-  fs.rmSync(socketPath, { force: true });
-  const server = http.createServer(getRequestListener(dispatch));
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(socketPath, () => {
-      server.removeListener('error', reject);
-      resolve();
-    });
-  });
+  let closePromise: Promise<void> | undefined;
 
   return {
-    socketPath,
-    close: async () => {
-      await installed.dispose();
-      host.dispose();
-      server.closeAllConnections();
-      await new Promise<void>((resolve) => {
-        server.close(() => {
-          fs.rmSync(socketPath, { force: true });
-          resolve();
-        });
-      });
+    request: dispatch,
+    close: () => {
+      closePromise ??= (async () => {
+        await installed.dispose();
+        host.dispose();
+      })();
+      return closePromise;
     },
   };
 }

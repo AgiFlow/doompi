@@ -10,9 +10,11 @@ function formatBriefPath(entry: string, cwd: string): string {
 }
 
 /** Supply Node-owned process and path facilities to the host-neutral manager. */
-export function createNodeDelegationPlatform(): DelegationPlatform {
+export function createNodeDelegationPlatform(
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): DelegationPlatform {
   return {
-    environment: process.env,
+    environment,
     processId: process.pid,
     createRequestId: randomUUID,
     formatBriefPath,

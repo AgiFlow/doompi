@@ -26,6 +26,7 @@ describe('doom-workflow headless entry', () => {
     // A host with no terminal is also a host with no doompi-ui on its module
     // path, and the entry has to survive both at once.
     const host = createPiTestHost({ hasUI: false, mode: 'rpc' });
+    await host.cordis('workflow-headless-test');
 
     await expect(standard.default(host.pi)).resolves.toBeUndefined();
 

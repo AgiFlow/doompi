@@ -8,6 +8,7 @@ function execution(): DoomHeadlessExecutionContext {
     cwd: '/repo/nested',
     repoRoot: '/repo',
     sessionId: 'owned-session',
+    environment: {},
     selection: { majorMode: 'copilot', activeLayers: ['runner'], domains: [], minorModes: [] },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {

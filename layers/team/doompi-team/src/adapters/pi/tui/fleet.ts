@@ -2,40 +2,19 @@
  * The fleet inspector overlay: a roster of this session's async runs, plus a
  * scrollable detail/transcript pane and runtime controls for the selected one.
  *
- * NOT A PORT - THE FIX IS THE POINT:
- * The predecessor (`doom-pi-subagents/src/tui/fleet.ts`) owned a private
- * `setInterval(750ms)` whose handler unconditionally nulled its own transcript
- * cache (`invalidate()`), so every tick re-read and re-parsed the selected
- * run's whole transcript file regardless of whether anything had changed.
- * This version registers with `PollScheduler` instead of owning a timer, and
- * NEVER blanks `transcriptCache` on a tick. A tick stats only the selected
- * transcript and requests a repaint when its size or modification time changes.
- * `renderedTranscript()` then uses the same fingerprint to decide whether the
- * next render needs one content read. Ctrl+R remains the deliberate manual
- * cache-clearing path.
- *
- * There is also no foreground-run concept here (doom-team is async-only - see
- * `spawnHandshake.ts`'s header), so every roster item is an async run. Roster
- * state comes from `AsyncJobTrackerContract`, the package's one source of truth for
- * run state; the fuller per-run detail a tracker record does not carry
- * (steps, summary) comes from `readAsyncRunStatus` (`statusReader.ts`), read
- * lazily only for the SELECTED item when the detail pane actually needs it,
- * not for the whole roster on every tick.
+ * Live fleet state comes only from `AsyncJobTrackerContract`, which is fed by
+ * typed native and external child events. Durable transcript files are read only
+ * while rendering a selected run whose event projection names one, never to
+ * discover liveness, completion, or control state.
  *
  * DESIGN PATTERNS:
- * - The scheduler subscription's `run()` diffs the roster and selected
- *   transcript fingerprint against the last values it saw, matching
- *   `PollSubscription`'s "return true only on real work" contract so idle
- *   backoff still applies when nothing in the fleet is moving
+ * - The scheduler diffs in-memory tracker projections and requests a repaint only
+ *   when a projected value changes
  * - Controls always list every action, unavailable ones dimmed rather than
  *   hidden, so the key map never shifts under the user
- *
- * Child transcripts are written directly from Pi SDK events by the detached
- * runner. The exact artifact path is persisted in status.json so non-default
- * artifact policies remain readable here.
+ * - Ctrl+R deliberately clears render caches without changing live run state
  */
 
-import * as fs from 'node:fs';
 import {
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_NAVIGATION_KEYS,
@@ -56,7 +35,7 @@ import {
 } from '@earendil-works/pi-tui';
 import type { AsyncRunStatus } from '../../runs/background/asyncExecution';
 import type { TrackedAsyncJobsContract, TrackedAsyncJob } from '../../asyncJobTracker';
-import { readAsyncRunStatus } from '../../statusReader';
+import type { SessionScope } from '../../filesystem/paths';
 import { formatDuration, formatModelThinking, formatTokens } from './formatters';
 import type { PollSchedulerContract } from '../../pollScheduler';
 import { agentSystemPromptFingerprint, fieldRow, readAgentSystemPrompt, renderAgentView } from './fleetAgentView';
@@ -293,19 +272,30 @@ function rightAligned(left: string, right: string, width: number): string {
   return fit(left, leftWidth) + ' '.repeat(Math.max(1, width - leftWidth - rightWidth)) + fit(right, rightWidth);
 }
 
-/**
- * Size and mtime of a transcript, for the poll tick.
- *
- * A tick may stat but must never read (see the module header), so this is
- * deliberately the cheapest thing that still changes when the file grows.
- */
-function transcriptFingerprint(filePath: string): string {
-  try {
-    const stat = fs.statSync(filePath);
-    return `${stat.size}:${stat.mtimeMs}`;
-  } catch {
-    return 'missing';
-  }
+function trackedStatus(job: TrackedAsyncJob | undefined): AsyncRunStatus | undefined {
+  if (!job) return undefined;
+  const startedAt = job.startedAt ?? job.updatedAt ?? Date.now();
+  return {
+    version: 1,
+    runId: job.runId,
+    agent: job.agent ?? 'unknown',
+    state: (job.status ?? 'queued') as AsyncRunStatus['state'],
+    startedAt,
+    lastUpdate: job.updatedAt ?? startedAt,
+    ...(job.task === undefined ? {} : { task: job.task }),
+    ...(job.cwd === undefined ? {} : { cwd: job.cwd }),
+    ...(job.runtime === undefined ? {} : { runtime: job.runtime }),
+    ...(job.error === undefined ? {} : { error: job.error }),
+    ...(job.activityState === undefined ? {} : { activityState: job.activityState }),
+    ...(job.attentionReason === undefined ? {} : { attentionReason: job.attentionReason }),
+    ...(job.sessionFile === undefined ? {} : { sessionFile: job.sessionFile }),
+    ...(job.transcriptPath === undefined ? {} : { transcriptPath: job.transcriptPath }),
+    ...(job.summary === undefined ? {} : { summary: job.summary }),
+    ...(job.tokens === undefined ? {} : { tokens: job.tokens }),
+    ...(job.cost === undefined ? {} : { cost: job.cost }),
+    ...(job.currentTool === undefined ? {} : { currentTool: job.currentTool }),
+    ...(job.toolCount === undefined ? {} : { toolCount: job.toolCount }),
+  };
 }
 
 /** Rendered agent tab, cached so scrolling a long prompt does not re-render its markdown. */
@@ -346,6 +336,7 @@ export class SubagentFleetComponent extends DoomOverlay {
     theme: Theme,
     scheduler: PollSchedulerContract,
     tracker: TrackedAsyncJobsContract,
+    _sessionScope: SessionScope,
     done: (result: undefined) => void,
     options: FleetViewOptions = {},
   ) {
@@ -365,10 +356,7 @@ export class SubagentFleetComponent extends DoomOverlay {
     });
   }
 
-  /**
-   * One scheduler tick. The tracker read is in memory and only the selected
-   * transcript is statted. Transcript contents remain render-owned and cached.
-   */
+  /** One scheduler tick over in-memory projections only. */
   private onTick(): boolean {
     if (this.disposed) return false;
     this.refresh();
@@ -382,13 +370,9 @@ export class SubagentFleetComponent extends DoomOverlay {
   private pollRenderKey(): string {
     const selected = this.snapshot.items[this.selected];
     if (!selected) return `${rosterRenderKey(this.snapshot)}::none`;
-    const transcriptPath = readAsyncRunStatus(selected.runId)?.transcriptPath;
-    const transcriptKey = transcriptPath ? `${transcriptPath}:${transcriptFingerprint(transcriptPath)}` : 'none';
-    // The live status header moves on values the roster row does not carry, so
-    // a tick that only changes what the run is DOING still has to repaint.
     const job = selected.job;
     const activity = `${job.currentTool ?? ''}:${job.toolCount ?? 0}:${job.tokens ?? 0}`;
-    return `${rosterRenderKey(this.snapshot)}::${selected.runId}:${transcriptKey}:${activity}`;
+    return `${rosterRenderKey(this.snapshot)}::${selected.runId}:${activity}`;
   }
 
   private refresh(): void {
@@ -677,8 +661,7 @@ export class SubagentFleetComponent extends DoomOverlay {
     const now = Date.now();
     const roster = this.rosterLines(rosterWidth, now);
     const selected = this.snapshot.items[this.selected];
-    // One status read per paint, shared by the header and the detail body.
-    const status = selected ? readAsyncRunStatus(selected.runId) : undefined;
+    const status = trackedStatus(selected?.job);
     const body = this.wrappedDetail(selected, status, detailWidth);
     // The agent tab is its own self-describing document, so the live status
     // header would only repeat what it already states in full.
@@ -755,10 +738,12 @@ export async function openSubagentFleet(
   ctx: ExtensionContext,
   scheduler: PollSchedulerContract,
   tracker: TrackedAsyncJobsContract,
+  sessionScope: SessionScope,
   options: FleetViewOptions = {},
 ): Promise<void> {
   await ctx.ui.custom<undefined>(
-    (tui, theme, _keybindings, done) => new SubagentFleetComponent(tui, theme, scheduler, tracker, done, options),
+    (tui, theme, _keybindings, done) =>
+      new SubagentFleetComponent(tui, theme, scheduler, tracker, sessionScope, done, options),
     DOOM_FULLSCREEN_UI_OPTIONS,
   );
 }

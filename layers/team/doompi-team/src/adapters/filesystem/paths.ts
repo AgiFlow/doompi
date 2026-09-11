@@ -153,24 +153,14 @@ export function sessionScopeDir(scope: SessionScope): string {
   return path.join(SESSIONS_ROOT_DIR, scope.scopeKey);
 }
 
-/** Records which session and process own a scope, so a later sweep can reap it. */
-export function scopeOwnerPath(scope: SessionScope): string {
-  return path.join(sessionScopeDir(scope), 'owner.json');
-}
-
 /** Terminal run results, written once by the runner and read by this scope's parent only. */
 export function scopeResultsDir(scope: SessionScope): string {
   return path.join(sessionScopeDir(scope), 'run-results');
 }
 
-/** Per-run working state: status.json, transcripts, control inboxes, claimed results. */
+/** Per-run durable output state: status snapshots and transcripts. */
 export function scopeRunsDir(scope: SessionScope): string {
   return path.join(sessionScopeDir(scope), 'runs');
-}
-
-/** Team member records, heartbeats, inboxes and replies for this scope's team. */
-export function scopeTeamDir(scope: SessionScope): string {
-  return path.join(sessionScopeDir(scope), 'team');
 }
 
 /** Runs stopped by a session shutdown, awaiting an explicit restore. */
@@ -178,121 +168,24 @@ export function scopeSuspendedDir(scope: SessionScope): string {
   return path.join(sessionScopeDir(scope), 'suspended');
 }
 
-/**
- * Scratch space for launching a child: its prompt, task and tool diagnostics.
- *
- * Callers `mkdtemp` inside this rather than in `os.tmpdir()` directly, so the
- * scoping applies to launch scratch too. These files carry the full task text,
- * which is exactly the content that should not be world-readable.
- */
+/** Private scratch space for a native child's generated prompt and tool plan. */
 export function scopeChildLaunchTempDir(scope: SessionScope): string {
   return path.join(sessionScopeDir(scope), 'child-launch');
 }
 
-/**
- * Path of the launch config handed to a detached runner.
- *
- * These files carry the full launch contract, so the runner's spawn site writes
- * them 0600 and the parent removes them once the child has read them.
- */
-export function getRunConfigPath(scope: SessionScope, runId: string): string {
-  return path.join(sessionScopeDir(scope), 'launch', `${runId}.json`);
+/** Resolve an explicitly supplied child environment without consulting ambient state. */
+export function resolveSessionScopeFromEnv(
+  env: Readonly<Record<string, string | undefined>>,
+): SessionScope | undefined {
+  const rootSessionId = env[SUBAGENT_ROOT_SESSION_ENV]?.trim();
+  return rootSessionId ? createSessionScope(rootSessionId) : undefined;
 }
 
-// ============================================================================
-// The process's current scope
-// ============================================================================
-
-/**
- * One process serves exactly one root session at a time, so the scope is
- * process state rather than a parameter on every path call.
- *
- * WHY THIS IS SETTABLE AND NOT A CONSTANT:
- * `TEMP_ROOT_DIR` can be a constant because the OS user is fixed for the life
- * of the process. The root session is not: a parent learns it at
- * `session_start`, and Pi fires that again with a DIFFERENT session id after
- * `/new`, `/resume` and `/fork` (it builds a fresh `SessionManager` each time).
- * A child learns it from the environment its parent spawned it with.
- *
- * WHY AN UNSET SCOPE THROWS RATHER THAN FALLING BACK:
- * A silent fallback to an unscoped directory is exactly the shared-state bug
- * this layout removes, and it would fail invisibly - two sessions quietly
- * sharing a tree again. Every real code path runs after either `session_start`
- * or child bootstrap, so reaching a path helper with no scope is a wiring bug
- * and should say so.
- *
- * AVOID:
- * - Reading this at module scope. It is not set at import time
- */
-let currentScope: SessionScope | undefined;
-
-export function setCurrentSessionScope(scope: SessionScope): void {
-  currentScope = scope;
-}
-
-/** Test-only, and for a child that legitimately has no team root forwarded. */
-export function clearCurrentSessionScope(): void {
-  currentScope = undefined;
-}
-
-export function tryCurrentSessionScope(): SessionScope | undefined {
-  return currentScope;
-}
-
-export function requireCurrentSessionScope(): SessionScope {
-  if (!currentScope) {
-    throw new Error(
-      'No session scope is set. The parent sets it on session_start; a child sets it from its spawn environment.',
-    );
-  }
-  return currentScope;
-}
-
-/** `run-results/` for this process's scope. */
-export function currentResultsDir(): string {
-  return scopeResultsDir(requireCurrentSessionScope());
-}
-
-/** `runs/` for this process's scope. */
-export function currentRunsDir(): string {
-  return scopeRunsDir(requireCurrentSessionScope());
-}
-
-/** `child-launch/` for this process's scope. */
-export function currentChildLaunchTempDir(): string {
-  return scopeChildLaunchTempDir(requireCurrentSessionScope());
-}
-
-/** `suspended/` for this process's scope. */
-export function currentSuspendedDir(): string {
-  return scopeSuspendedDir(requireCurrentSessionScope());
-}
-
-/** Launch config path for a run in this process's scope. */
-export function currentRunConfigPath(runId: string): string {
-  return getRunConfigPath(requireCurrentSessionScope(), runId);
+export function adoptSessionScopeFromEnv(env: Readonly<Record<string, string | undefined>>): SessionScope | undefined {
+  return resolveSessionScopeFromEnv(env);
 }
 
 /** Folded into a spawned child's environment so it resolves the same tree. */
 export function sessionScopeEnvironment(scope: SessionScope): Record<string, string> {
   return { [SUBAGENT_ROOT_SESSION_ENV]: scope.rootSessionId };
-}
-
-/** The scope a spawned child inherits, or undefined in a process nothing spawned. */
-export function resolveSessionScopeFromEnv(env: NodeJS.ProcessEnv = process.env): SessionScope | undefined {
-  const rootSessionId = env[SUBAGENT_ROOT_SESSION_ENV]?.trim();
-  return rootSessionId ? createSessionScope(rootSessionId) : undefined;
-}
-
-/**
- * Adopt the inherited scope, if this process was spawned with one.
- *
- * Returns whether a scope was adopted, so a child entry point can fail loudly
- * rather than silently writing into an unscoped tree.
- */
-export function adoptSessionScopeFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
-  const scope = resolveSessionScopeFromEnv(env);
-  if (!scope) return false;
-  setCurrentSessionScope(scope);
-  return true;
 }

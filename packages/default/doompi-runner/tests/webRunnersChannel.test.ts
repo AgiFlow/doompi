@@ -1,54 +1,40 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import type { HubChannelHost } from '@agimon-ai/doompi-web-contracts';
-import { afterEach, describe, expect, it } from 'vitest';
+import type { DoomDirectEventBus, DoomHubChannelHost } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import { describe, expect, it } from 'vitest';
 import { createRunnersChannel } from '../src/adapters/webRunnersChannel.ts';
-import { runnerStateDirFor, watchRunnerRuns } from '../src/adapters/webRunnerWatcher.ts';
-import type { RunnerRecord } from '../src/types/runnerRegistry';
+import type { RunnerRunView } from '../src/types/webRunners.ts';
 
-let cleanups: Array<() => void> = [];
-
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0).reverse()) cleanup();
-});
-
-function freshStore(): string {
-  const store = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-runner-chan-'));
-  cleanups.push(() => fs.rmSync(store, { recursive: true, force: true }));
-  return store;
-}
-
-function writeRecord(store: string, sessionId: string, overrides: Partial<RunnerRecord>): void {
-  const dir = runnerStateDirFor(store, sessionId);
-  fs.mkdirSync(dir, { recursive: true });
-  const record: RunnerRecord = {
-    id: 'runner-a',
-    name: 'api',
-    pid: 42,
-    command: 'pnpm dev',
-    cwd: '/repo',
-    logPath: '/tmp/api.log',
-    interactive: false,
-    sessionId,
-    startedAt: new Date().toISOString(),
-    state: 'running',
-    promoted: true,
-    backend: 'native',
-    hostPid: 7,
-    ...overrides,
-  };
-  fs.writeFileSync(path.join(dir, `${record.id}.json`), JSON.stringify(record));
-}
-
-interface FakeHost extends HubChannelHost {
+interface FakeHost extends DoomHubChannelHost {
   published: Array<{ sessionId: string; payload: unknown }>;
+  emit(sessionId: string, payload: unknown): void;
 }
 
 function fakeHost(): FakeHost {
   const published: FakeHost['published'] = [];
+  const listeners = new Map<string, Set<(payload: unknown) => void>>();
+  const key = (sessionId: string): string => `runner_runs:${sessionId}`;
+  const directEvents: DoomDirectEventBus = {
+    publish(_frameType, sessionId, payload) {
+      for (const listener of listeners.get(key(sessionId)) ?? []) listener(payload);
+    },
+    subscribe(_frameType, sessionId, listener) {
+      const current = listeners.get(key(sessionId)) ?? new Set<(payload: unknown) => void>();
+      current.add(listener);
+      listeners.set(key(sessionId), current);
+      return () => {
+        current.delete(listener);
+        if (current.size === 0) listeners.delete(key(sessionId));
+      };
+    },
+    close() {
+      listeners.clear();
+    },
+  };
   return {
     published,
+    emit(sessionId, payload) {
+      directEvents.publish('runner_runs', sessionId, payload);
+    },
+    directEvents,
     sessions: () => [],
     publish: (sessionId, payload) => published.push({ sessionId, payload }),
     requestSessionApi: () => Promise.resolve(Response.json({ error: 'not implemented' }, { status: 501 })),
@@ -56,73 +42,59 @@ function fakeHost(): FakeHost {
   };
 }
 
-const waitFor = async (predicate: () => boolean, what: string, timeoutMs = 8000): Promise<void> => {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}.`);
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-};
-
-function runsOf(payload: unknown): Array<Record<string, unknown>> {
-  return (payload as { runs: Array<Record<string, unknown>> }).runs;
-}
+const run = (id: string): RunnerRunView => ({
+  id,
+  name: id,
+  pid: 42,
+  command: 'pnpm dev',
+  cwd: '/repo',
+  interactive: false,
+  backend: 'native',
+  state: 'running',
+  promoted: true,
+  startedAt: '2026-08-07T00:00:00.000Z',
+  logPath: '/tmp/server.log',
+});
 
 describe('the runners hub channel', () => {
-  it(
-    'watches each session state directory, publishes changes, and answers snapshots',
-    { timeout: 15_000 },
-    async () => {
-      const store = freshStore();
-      const host = fakeHost();
-      const channel = createRunnersChannel((sessionId, onRuns) =>
-        watchRunnerRuns(sessionId, onRuns, { storeDir: store }),
-      );
-      const source = channel.start(host);
-      cleanups.push(() => source.close());
-      expect(channel.frameType).toBe('runner_runs');
+  it('subscribes to lifecycle-owned snapshots and answers per-session snapshots', () => {
+    const host = fakeHost();
+    const source = createRunnersChannel().start(host);
+    const s1 = { sessionId: 's1', cwd: '/repo' };
+    const s2 = { sessionId: 's2', cwd: '/repo' };
 
-      source.sessionAdded?.({ sessionId: 's1', cwd: '/repo' });
-      // Nothing on disk yet: no snapshot, no announcement.
-      expect(source.payloadFor({ sessionId: 's1', cwd: '/repo' })).toBeUndefined();
-      expect(host.published).toEqual([]);
+    expect(source.payloadFor(s1)).toBeUndefined();
+    source.sessionAdded?.(s1);
+    source.sessionAdded?.(s2);
+    host.emit('s1', { runs: [run('runner-a')] });
+    expect(source.payloadFor(s1)).toEqual({ runs: [run('runner-a')] });
+    expect(source.payloadFor(s2)).toBeUndefined();
+    expect(host.published).toEqual([{ sessionId: 's1', payload: { runs: [run('runner-a')] } }]);
 
-      writeRecord(store, 's1', {});
-      writeRecord(store, 's1', { id: 'runner-b', name: 'worker', command: 'pnpm worker' });
-      // A sidecar next to the records is not a record.
-      fs.writeFileSync(path.join(runnerStateDirFor(store, 's1'), 'runner-a.exit.json'), '{"code":0}');
-      await waitFor(() => host.published.some((entry) => runsOf(entry.payload).length === 2), 'both runners');
-      const snapshot = source.payloadFor({ sessionId: 's1', cwd: '/repo' });
-      expect(
-        runsOf(snapshot)
-          .map((run) => String(run.id))
-          .sort((left, right) => left.localeCompare(right)),
-      ).toEqual(['runner-a', 'runner-b']);
+    host.emit('s2', { runs: [run('runner-b')] });
+    expect(source.payloadFor(s2)).toEqual({ runs: [run('runner-b')] });
+    expect(host.published.at(-1)).toEqual({ sessionId: 's2', payload: { runs: [run('runner-b')] } });
 
-      writeRecord(store, 's1', {
-        state: 'completed',
-        exit: {
-          reason: 'stopped',
-          code: null,
-          signal: null,
-          stopReason: 'manual',
-          finishedAt: new Date().toISOString(),
-        },
-      });
-      await waitFor(
-        () => runsOf(host.published.at(-1)?.payload).some((run) => run.id === 'runner-a' && run.state === 'completed'),
-        'the stop to publish',
-      );
-      // Finished runs sort after running ones.
-      expect(runsOf(host.published.at(-1)?.payload).map((run) => run.id)).toEqual(['runner-b', 'runner-a']);
+    source.sessionRemoved?.('s1');
+    host.emit('s1', { runs: [] });
+    expect(source.payloadFor(s1)).toBeUndefined();
+    expect(host.published).toHaveLength(2);
+  });
 
-      // Another session's directory is another session's feed.
-      writeRecord(store, 's2', { id: 'runner-c' });
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      expect(host.published.every((entry) => entry.sessionId === 's1')).toBe(true);
+  it('ignores malformed snapshots and closes every subscription', () => {
+    const host = fakeHost();
+    const source = createRunnersChannel().start(host);
+    source.sessionAdded?.({ sessionId: 's1', cwd: '/repo' });
+    source.sessionAdded?.({ sessionId: 's2', cwd: '/repo' });
+    host.emit('s1', { runs: 'invalid' });
+    expect(host.published).toEqual([]);
+    source.close();
+    host.emit('s1', { runs: [run('runner-a')] });
+    host.emit('s2', { runs: [run('runner-b')] });
+    expect(host.published).toEqual([]);
+  });
 
-      source.sessionRemoved?.('s1');
-      expect(source.payloadFor({ sessionId: 's1', cwd: '/repo' })).toBeUndefined();
-    },
-  );
+  it('claims the frame type the plugin manifest declares', () => {
+    expect(createRunnersChannel().frameType).toBe('runner_runs');
+  });
 });

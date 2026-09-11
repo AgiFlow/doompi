@@ -8,9 +8,11 @@ import { teamServerFacet } from '../../../src/adapters/server/facet.ts';
 import { api } from '../../../src/adapters/teamCatalogApi.ts';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
+type MountedChannel = Parameters<DoomServerHostService['registerChannel']>[0];
 
 function hostContext(scope: DoomServerHostService['scope']) {
   const registered: MountedApi[] = [];
+  const channels: MountedChannel[] = [];
   const state = { disposed: 0 };
   const host: DoomServerHostService = {
     scope,
@@ -19,12 +21,17 @@ function hostContext(scope: DoomServerHostService['scope']) {
       registered.push(candidate);
       return { dispose: () => void (state.disposed += 1) };
     },
+    registerChannel(candidate) {
+      channels.push(candidate);
+      return { dispose: () => void (state.disposed += 1) };
+    },
     mounted: () => registered.map((candidate) => candidate.basePath),
+    mountedChannels: () => channels.map((candidate) => candidate.frameType),
   };
   const context = {
     get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? host : undefined),
   } as unknown as Context;
-  return { context, registered, state };
+  return { channels, context, registered, state };
 }
 
 describe('teamServerFacet', () => {
@@ -44,9 +51,11 @@ describe('teamServerFacet', () => {
     expect(harness.state.disposed).toBe(1);
   });
 
-  it('does nothing in hub scope', () => {
+  it('registers and disposes Team channels in hub scope', () => {
     const harness = hostContext('hub');
-    expect(teamServerFacet.apply(harness.context)).toBeUndefined();
+    teamServerFacet.apply(harness.context)?.();
+    expect(harness.channels.map((channel) => channel.frameType)).toEqual(['subagent_runs', 'subagent_catalog']);
     expect(harness.registered).toEqual([]);
+    expect(harness.state.disposed).toBe(2);
   });
 });

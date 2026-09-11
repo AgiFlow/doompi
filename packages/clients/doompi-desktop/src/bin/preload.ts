@@ -7,8 +7,8 @@ import { contextBridge, ipcRenderer } from 'electron';
  * browser cockpit does, so everything it already knows how to do keeps working
  * with no desktop-specific code: `target="_blank"` is caught by the window's
  * open handler and sent to the real browser, and directory browsing is served
- * by the hub. What remains is the marker a future non-web client needs in order
- * to tell the targets apart, and the app version for support.
+ * by the web proxy. What remains is the marker a future non-web client needs in
+ * order to tell the targets apart, and the app version for support.
  *
  * Anything added here is privilege the cockpit does not have in a browser, so
  * it should earn its place against a concrete caller rather than be offered in

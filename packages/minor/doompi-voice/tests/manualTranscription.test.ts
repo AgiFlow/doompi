@@ -8,7 +8,7 @@ import {
   ManualTranscriptionApi,
   normalizeManualTranscriptionMediaType,
 } from '../src/adapters/manualTranscriptionApi.ts';
-import { createVoiceSessionApi } from '../src/adapters/voiceSessionApi.ts';
+import { createTestVoiceSessionApi as createVoiceSessionApi } from './support.ts';
 import { encodePcm16Wav } from '../src/services/pcm.ts';
 import { ManualTranscriptionService } from '../src/services/manualTranscription.ts';
 import type {

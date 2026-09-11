@@ -17,6 +17,7 @@ import type { ISpawner } from '../types/spawner';
 
 /** Everything the runner runtime is assembled from. */
 export interface RunnerDependencies {
+  readonly environment: Readonly<Record<string, string | undefined>>;
   readonly clock: IClock;
   readonly spawner: ISpawner;
   readonly processControl: IProcessControl;

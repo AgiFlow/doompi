@@ -54,23 +54,22 @@
  *   Register with `PollScheduler` instead
  */
 
-import * as path from 'node:path';
 import type { ExtensionConfig } from '../../extensions/config';
 import type {
+  SessionForkSource,
   SpawnPlannerContract,
   SpawnPlanChildOutcome,
   SpawnPlanResult,
   SpawnPlanTaskInput,
 } from '../../extensions/spawnPlan';
 import type { AgentScope } from '../../../agents/types';
-import { requestAsyncInterrupt, requestAsyncStop } from '../../../intercom/supervisorControlChannel';
 import {
   type TrackedAsyncJobsContract,
   TERMINAL_ASYNC_JOB_STATES,
   type TrackedAsyncJob,
 } from '../../../asyncJobTracker';
 import type { AvailableModelInfo, ParentModel } from '../../../runs/shared/modelFallback';
-import { currentRunsDir } from '../../../filesystem/paths';
+import type { SessionScope } from '../../../filesystem/paths';
 import type { PollSchedulerContract } from '../../../pollScheduler';
 
 export interface SlashSingleLaunchInput {
@@ -78,9 +77,11 @@ export interface SlashSingleLaunchInput {
   task: string;
   cwd: string;
   agentScope: AgentScope;
+  sessionScope: SessionScope;
   model?: string;
   context?: 'fresh' | 'fork';
   parentSessionId?: string;
+  parentForkSource?: SessionForkSource['terminalSource'];
   currentDepth?: number;
   availableModels?: AvailableModelInfo[];
   parentModel?: ParentModel;
@@ -92,8 +93,10 @@ export interface SlashParallelLaunchInput {
   tasks: SpawnPlanTaskInput[];
   cwd: string;
   agentScope: AgentScope;
+  sessionScope: SessionScope;
   concurrency?: number;
   parentSessionId?: string;
+  parentForkSource?: SessionForkSource['terminalSource'];
   currentDepth?: number;
   availableModels?: AvailableModelInfo[];
   parentModel?: ParentModel;
@@ -124,7 +127,9 @@ export async function launchSingleSubagent(
       },
       cwd: input.cwd,
       agentScope: input.agentScope,
+      sessionScope: input.sessionScope,
       ...(input.parentSessionId ? { parentSessionId: input.parentSessionId } : {}),
+      ...(input.parentForkSource ? { parentForkSource: input.parentForkSource } : {}),
       ...(input.currentDepth !== undefined ? { currentDepth: input.currentDepth } : {}),
       ...(input.availableModels !== undefined ? { availableModels: input.availableModels } : {}),
       ...(input.parentModel ? { parentModel: input.parentModel } : {}),
@@ -149,8 +154,9 @@ export async function launchParallelSubagents(
       tasks: input.tasks,
       cwd: input.cwd,
       agentScope: input.agentScope,
+      sessionScope: input.sessionScope,
       ...(input.concurrency !== undefined ? { concurrency: input.concurrency } : {}),
-      ...(input.parentSessionId ? { parentSessionId: input.parentSessionId } : {}),
+      ...(input.parentForkSource ? { parentForkSource: input.parentForkSource } : {}),
       ...(input.currentDepth !== undefined ? { currentDepth: input.currentDepth } : {}),
       ...(input.availableModels !== undefined ? { availableModels: input.availableModels } : {}),
       ...(input.parentModel ? { parentModel: input.parentModel } : {}),
@@ -161,19 +167,6 @@ export async function launchParallelSubagents(
   );
   trackLaunchedRuns(tracker, result.outcomes);
   return result;
-}
-
-export type SlashStopMode = 'interrupt' | 'stop';
-
-/**
- * Ask a tracked run to stop. See the module doc: a write failure here is a
- * real failure and is NOT caught - the caller must surface it.
- */
-export function requestSlashRunStop(runId: string, mode: SlashStopMode = 'stop', reason?: string): void {
-  const asyncDir = path.join(currentRunsDir(), runId);
-  const payload = reason ? { reason } : {};
-  if (mode === 'interrupt') requestAsyncInterrupt(asyncDir, payload);
-  else requestAsyncStop(asyncDir, payload);
 }
 
 export interface SlashRunWatchOptions {

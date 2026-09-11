@@ -3,7 +3,8 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CoalescedStatusWriter, type StatusWithRecentEntries } from '../../src/adapters/runs/background/statusWriter';
-import { currentRunsDir } from '../../src/adapters/filesystem/paths';
+import { scopeRunsDir } from '../../src/adapters/filesystem/paths';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 interface FakeRunStatus extends StatusWithRecentEntries {
   state: 'running' | 'completed' | 'failed';
@@ -35,7 +36,7 @@ function freshRunId(label: string): string {
 }
 
 function statusPathFor(runId: string): string {
-  return path.join(currentRunsDir(), runId, 'status.json');
+  return path.join(scopeRunsDir(TEST_SESSION_SCOPE), runId, 'status.json');
 }
 
 function readStatus(runId: string): FakeRunStatus {
@@ -54,7 +55,7 @@ afterEach(() => {
   vi.useRealTimers();
   while (createdRunIds.length > 0) {
     const runId = createdRunIds.pop();
-    if (runId) fs.rmSync(path.join(currentRunsDir(), runId), { recursive: true, force: true });
+    if (runId) fs.rmSync(path.join(scopeRunsDir(TEST_SESSION_SCOPE), runId), { recursive: true, force: true });
   }
 });
 
@@ -63,7 +64,7 @@ describe('CoalescedStatusWriter.open', () => {
     const runId = freshRunId('open');
     const writer = newWriter();
 
-    writer.open(runId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, runId, { state: 'running', currentStep: 0 });
 
     expect(readStatus(runId)).toEqual({ state: 'running', currentStep: 0 });
   });
@@ -74,14 +75,14 @@ describe('CoalescedStatusWriter.open called again', () => {
     const firstRunId = freshRunId('reopen-first');
     const secondRunId = freshRunId('reopen-second');
     const writer = newWriter();
-    writer.open(firstRunId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, firstRunId, { state: 'running', currentStep: 0 });
 
     // Buffered but never flushed: a retried bootstrap must not resurrect this.
     writer.update((status) => {
       status.currentStep = 99;
     });
 
-    writer.open(secondRunId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, secondRunId, { state: 'running', currentStep: 0 });
     vi.advanceTimersByTime(200);
 
     expect(readStatus(secondRunId)).toEqual({ state: 'running', currentStep: 0 });
@@ -93,13 +94,13 @@ describe('CoalescedStatusWriter.open called again', () => {
     const firstRunId = freshRunId('reopen-timer-first');
     const secondRunId = freshRunId('reopen-timer-second');
     const writer = newWriter();
-    writer.open(firstRunId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, firstRunId, { state: 'running', currentStep: 0 });
     writer.update((status) => {
       status.currentStep = 1;
     });
     writer.cloneCalls = 0;
 
-    writer.open(secondRunId, { state: 'completed', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, secondRunId, { state: 'completed', currentStep: 0 });
     vi.advanceTimersByTime(200);
 
     // Only open()'s own synchronous write for the second session; the first
@@ -112,7 +113,7 @@ describe('CoalescedStatusWriter.update', () => {
   it('buffers a mutation in memory instead of writing it immediately', () => {
     const runId = freshRunId('buffer');
     const writer = newWriter();
-    writer.open(runId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, runId, { state: 'running', currentStep: 0 });
 
     writer.update((status) => {
       status.currentStep = 1;
@@ -124,7 +125,7 @@ describe('CoalescedStatusWriter.update', () => {
   it('flushes a buffered mutation once the trailing coalescing timer elapses', () => {
     const runId = freshRunId('flush');
     const writer = newWriter();
-    writer.open(runId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, runId, { state: 'running', currentStep: 0 });
 
     writer.update((status) => {
       status.currentStep = 1;
@@ -137,7 +138,7 @@ describe('CoalescedStatusWriter.update', () => {
   it('coalesces a burst of updates inside the window into a single clone and a single write', () => {
     const runId = freshRunId('coalesce');
     const writer = newWriter();
-    writer.open(runId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, runId, { state: 'running', currentStep: 0 });
     writer.cloneCalls = 0; // open() clones once for its own synchronous write; ignore that here.
 
     for (let step = 1; step <= 5; step++) {
@@ -156,7 +157,7 @@ describe('CoalescedStatusWriter.update', () => {
   it('performs zero clones across repeated flushes once nothing has changed since the last one', () => {
     const runId = freshRunId('no-op');
     const writer = newWriter();
-    writer.open(runId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, runId, { state: 'running', currentStep: 0 });
     writer.cloneCalls = 0;
 
     writer.update((status) => {
@@ -189,7 +190,7 @@ describe('CoalescedStatusWriter.updateSync', () => {
   it('writes a terminal transition to disk before returning, without waiting for the coalescing timer', () => {
     const runId = freshRunId('sync');
     const writer = newWriter();
-    writer.open(runId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, runId, { state: 'running', currentStep: 0 });
 
     writer.updateSync((status) => {
       status.state = 'completed';
@@ -201,7 +202,7 @@ describe('CoalescedStatusWriter.updateSync', () => {
   it('cancels a pending coalesced flush, so the sync write is not duplicated when the timer would have fired', () => {
     const runId = freshRunId('sync-cancel');
     const writer = newWriter();
-    writer.open(runId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, runId, { state: 'running', currentStep: 0 });
     writer.cloneCalls = 0;
 
     writer.update((status) => {
@@ -221,7 +222,7 @@ describe('CoalescedStatusWriter recentTools / recentOutput capping', () => {
   it('caps recentTools at 50 entries, dropping the oldest first', () => {
     const runId = freshRunId('tools-cap');
     const writer = newWriter();
-    writer.open(runId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, runId, { state: 'running', currentStep: 0 });
 
     for (let i = 0; i < 60; i++) writer.appendTool({ tool: `tool-${i}` });
     vi.advanceTimersByTime(75);
@@ -235,7 +236,7 @@ describe('CoalescedStatusWriter recentTools / recentOutput capping', () => {
   it('caps recentOutput at 50 entries the same way, so a long run cannot grow the status file without bound', () => {
     const runId = freshRunId('output-cap');
     const writer = newWriter();
-    writer.open(runId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, runId, { state: 'running', currentStep: 0 });
 
     for (let i = 0; i < 55; i++) writer.appendOutput(`line-${i}`);
     vi.advanceTimersByTime(75);
@@ -251,7 +252,7 @@ describe('CoalescedStatusWriter.close', () => {
   it('flushes a dirty buffered mutation instead of losing it on shutdown', () => {
     const runId = freshRunId('close-flush');
     const writer = newWriter();
-    writer.open(runId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, runId, { state: 'running', currentStep: 0 });
 
     writer.update((status) => {
       status.currentStep = 1;
@@ -264,7 +265,7 @@ describe('CoalescedStatusWriter.close', () => {
   it('is safe to call when nothing is buffered', () => {
     const runId = freshRunId('close-idle');
     const writer = newWriter();
-    writer.open(runId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, runId, { state: 'running', currentStep: 0 });
     writer.cloneCalls = 0;
 
     expect(() => writer.close()).not.toThrow();
@@ -277,7 +278,7 @@ describe('CoalescedStatusWriter timer lifecycle', () => {
     vi.useRealTimers();
     const runId = freshRunId('unref');
     const writer = newWriter();
-    writer.open(runId, { state: 'running', currentStep: 0 });
+    writer.open(TEST_SESSION_SCOPE, runId, { state: 'running', currentStep: 0 });
 
     const unref = vi.fn();
     const setTimeoutSpy = vi

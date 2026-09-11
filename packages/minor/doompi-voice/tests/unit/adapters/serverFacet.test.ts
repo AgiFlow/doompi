@@ -8,9 +8,11 @@ import { voiceServerFacet } from '../../../src/adapters/server/facet.ts';
 import { api } from '../../../src/adapters/voiceSessionApi.ts';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
+type MountedChannel = Parameters<DoomServerHostService['registerChannel']>[0];
 
 function hostContext(scope: DoomServerHostService['scope']) {
   const registered: MountedApi[] = [];
+  const channels: MountedChannel[] = [];
   const state = { disposed: 0 };
   const host: DoomServerHostService = {
     scope,
@@ -23,8 +25,15 @@ function hostContext(scope: DoomServerHostService['scope']) {
         },
       };
     },
+    registerChannel(channel) {
+      channels.push(channel);
+      return { dispose: () => void (state.disposed += 1) };
+    },
     mounted() {
       return registered.map((mounted) => mounted.basePath);
+    },
+    mountedChannels() {
+      return [];
     },
   };
   const context = {
@@ -32,7 +41,7 @@ function hostContext(scope: DoomServerHostService['scope']) {
       return name === DOOM_SERVER_HOST_SERVICE ? host : undefined;
     },
   } as unknown as Context;
-  return { context, registered, state };
+  return { context, registered, channels, state };
 }
 
 describe('voiceServerFacet', () => {
@@ -57,12 +66,15 @@ describe('voiceServerFacet', () => {
     expect(harness.state.disposed).toBe(1);
   });
 
-  it('registers nothing on the hub scope', () => {
+  it('registers voice wake and ownership channels on the hub scope', () => {
     const harness = hostContext('hub');
 
     const dispose = voiceServerFacet.apply(harness.context);
 
     expect(harness.registered).toEqual([]);
-    expect(dispose).toBeUndefined();
+    expect(harness.channels.map((channel) => channel.frameType)).toEqual(['voice_media_wake', 'voice_ownership']);
+    expect(typeof dispose).toBe('function');
+    dispose?.();
+    expect(harness.state.disposed).toBe(2);
   });
 });

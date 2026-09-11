@@ -55,16 +55,6 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
-    "./session-api": {
-      "types": "./dist/sessionApi.d.mts",
-      "import": "./dist/sessionApi.mjs",
-      "require": "./dist/sessionApi.cjs"
-    },
-    "./web-hub": {
-      "types": "./dist/webHub.d.mts",
-      "import": "./dist/webHub.mjs",
-      "require": "./dist/webHub.cjs"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -126,7 +116,8 @@
     "entry": "./src/exports/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
-      "session"
+      "session",
+      "hub"
     ]
   },
   "doompiWeb": {
@@ -134,11 +125,7 @@
     "channels": [
       "file_edits"
     ],
-    "client": "./src/exports/webClient.ts",
-    "hub": {
-      "entry": "./src/exports/webHub.ts",
-      "dist": "./dist/webHub.mjs"
-    }
+    "client": "./src/exports/webClient.ts"
   },
   "pi": {
     "extensions": [

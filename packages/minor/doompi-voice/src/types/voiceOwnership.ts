@@ -66,6 +66,33 @@ export interface VoiceOwnershipSessionSnapshot {
   acknowledgement?: VoiceOwnershipAcknowledgement;
 }
 
+const OWNERSHIP_SNAPSHOT_KEYS = ['registration', 'targets', 'activation', 'handoff', 'acknowledgement'] as const;
+
+export function parseVoiceOwnershipSessionSnapshot(value: unknown): VoiceOwnershipSessionSnapshot | undefined {
+  const input = record(value);
+  if (input === undefined || !exact(input, OWNERSHIP_SNAPSHOT_KEYS)) return undefined;
+  const registration = parseVoiceOwnershipRegistration(input.registration);
+  const targets = parseVoiceOwnershipTargets(input.targets);
+  const activation = parseVoiceOwnershipActivationRequest(input.activation);
+  const handoff = parseVoiceOwnershipHandoffRequest(input.handoff);
+  const acknowledgement = parseVoiceOwnershipAcknowledgement(input.acknowledgement);
+  if (
+    targets === undefined ||
+    (input.registration !== undefined && registration === undefined) ||
+    (input.activation !== undefined && activation === undefined) ||
+    (input.handoff !== undefined && handoff === undefined) ||
+    (input.acknowledgement !== undefined && acknowledgement === undefined)
+  )
+    return undefined;
+  return {
+    ...(registration === undefined ? {} : { registration }),
+    targets,
+    ...(activation === undefined ? {} : { activation }),
+    ...(handoff === undefined ? {} : { handoff }),
+    ...(acknowledgement === undefined ? {} : { acknowledgement }),
+  };
+}
+
 export interface BrowserVoiceOwnershipPayload {
   type: 'browser-media-session';
   version: typeof VOICE_OWNERSHIP_PROTOCOL_VERSION;

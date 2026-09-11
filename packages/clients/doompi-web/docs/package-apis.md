@@ -158,9 +158,7 @@ A session server loads its API registry at startup. Build and run `doompi sync`,
 GET /api/plugin/mcp/repository?repositoryId=<repository-id>&hubSession=<session-id>
 ```
 
-The hub uses `hubSession` only to select the matching hub API generation. It removes the selector, then invokes the MCP handler in the hub process. Without `hubSession`, `DOOMPI_API_DIR` takes precedence, followed by the generated global API directory.
-
-A hub module is built server code. Build and sync it before restarting or reloading the hub composition.
+The headless hub uses `hubSession` only to select the matching admitted server-facet generation. It removes the selector, then invokes the handler in the headless process. A hub module is built server code, so build and sync it before restarting the headless process.
 
 ## Failure and trust boundaries
 
@@ -173,4 +171,4 @@ Package APIs are trusted executable code, not remote sandboxes. Keep the failure
 - make `close()` safe after partial startup
 - report a package-scoped notice instead of taking down unrelated APIs
 
-Remote requests still pass through the web guard and sealed transport, but those layers do not make a handler correct. A direct browser `fetch` from a plugin may expose its payload to the tunnel relay unless it uses the sealed transport helper. See [Remote security](security.md).
+Remote requests still pass through the browser transport boundary, but that layer does not make a handler correct. See [Remote security](security.md).

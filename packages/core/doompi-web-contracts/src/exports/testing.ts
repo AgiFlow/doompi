@@ -1,10 +1,4 @@
-export {
-  type ChannelDelivery,
-  driveChannel,
-  hubChannelHarness,
-  type HubChannelHarness,
-  type HubChannelHarnessOptions,
-} from '../services/testing/channels.ts';
+export { type ChannelDelivery, driveChannel } from '../services/testing/channels.ts';
 export { renderPlugin, type RenderedPlugin } from '../services/testing/render.ts';
 export {
   type RecordedSlotAction,

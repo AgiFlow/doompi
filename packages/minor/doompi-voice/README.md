@@ -211,12 +211,11 @@ See [Architecture](./docs/ARCHITECTURE.md) for the thread and process topology, 
 The root exports audio infrastructure, PCM, VAD, and utterance services, narration and playback
 contracts, command correction, fallback narration, and Voice types. Host adapters should import only declared package exports:
 
-| Export                                  | Purpose                                                                         |
-| --------------------------------------- | ------------------------------------------------------------------------------- |
-| `@agimon-ai/doompi-voice`               | Host audio adapters, narration, PCM, VAD, correction, and Voice types           |
-| `@agimon-ai/doompi-voice/extensions/pi` | Pi extension activation                                                         |
-| `@agimon-ai/doompi-voice/client-media`  | Client capture activity and media contracts                                     |
-| `@agimon-ai/doompi-voice/session-api`   | Host media/session API factories, manual transcription, and ownership contracts |
+| Export                                  | Purpose                                                               |
+| --------------------------------------- | --------------------------------------------------------------------- |
+| `@agimon-ai/doompi-voice`               | Host audio adapters, narration, PCM, VAD, correction, and Voice types |
+| `@agimon-ai/doompi-voice/extensions/pi` | Pi extension activation                                               |
+| `@agimon-ai/doompi-voice/client-media`  | Client capture activity and media contracts                           |
 
 ## Development
 

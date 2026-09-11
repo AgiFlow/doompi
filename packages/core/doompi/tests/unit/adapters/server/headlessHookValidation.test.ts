@@ -55,6 +55,7 @@ describe('headless hook boundary validation', () => {
       sessionId: 'validation',
       sessionName: 'Validation',
       agentArgs: ['--session-dir', root],
+      environment: {},
       candidates: [],
       selection: { majorMode: 'test', activeLayers: [], domains: [], minorModes: [] },
     });

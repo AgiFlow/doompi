@@ -1,70 +1,66 @@
 # Headless session server
 
-**A headless server for one DoomPi session.**
+**The canonical client-neutral server for a DoomPi session.**
 
-`doompi-server` owns one Pi RPC agent behind local Unix sockets. A client can disconnect and reattach while the agent keeps running. The server also publishes Pi's routed protocol, optional package APIs, and a registry record used by DoomPi Web.
+`doompi-server` embeds a `DirectHarnessRuntime` and its typed session services in one process. It does not launch a second Pi process or expose an internal filesystem transport. Clients use the authenticated HTTP surface and the `/api/pi` WebSocket endpoint. A command-line server owns one session; the exported hub and session manager can host more than one session in a process.
 
 The `@agimon-ai/doompi` core package owns this executable and the `@agimon-ai/doompi/server` API. It is a standalone process, not a Pi extension. Do not add it to `.doom/modes.yaml`.
 
 ## Install
 
-Requires Node.js 22.19.0 or newer and a DoomPi installation.
+Requires Node.js 22.19.0 or newer and a synchronized DoomPi installation.
 
 ```bash
 npm install -g @agimon-ai/doompi
 ```
 
+Run `doompi sync` in the session repository before starting the server. Startup requires the admitted generation and its `server.bundle.json` descriptor.
+
 ## Quick start
 
-Create a private runtime directory and token, then pass agent arguments after `--`:
+Create an owner-only token file, then pass harness arguments after `--`:
 
 ```bash
-runtime_dir="$(mktemp -d "${TMPDIR:-/tmp}/doompi-session.XXXXXX")"
-(umask 077; openssl rand -base64 32 > "$runtime_dir/token")
+token_file="$(mktemp)"
+(umask 077; openssl rand -base64 32 > "$token_file")
 
 doompi-server \
-  --listen "$runtime_dir/session.sock" \
-  --auth-token-file "$runtime_dir/token" \
+  --auth-token-file "$token_file" \
   -- --major-mode copilot
 ```
 
-The token is read from the file, not the command line. Keep the runtime directory private.
+The server listens on loopback port 7433 by default. Use `--web 9000` to select another port. The option name is retained for CLI compatibility, but the listener is the server's normal client-neutral HTTP and WebSocket surface, not an optional browser-only service.
 
-Add `--web` to start or join DoomPi Web on port 7433. A standalone `doompi-web` process is the better choice when several sessions share one cockpit.
-
-See [Getting started](getting-started.md) for command options, agent selection, registry configuration, and the web integration.
+The token is read from the file, not the command line. Keep the file private. A direct client presents the token to the HTTP routes and `/api/pi`; DoomPi Web can proxy the endpoint after applying its own browser and remote-access controls.
 
 ## How it works
 
-The server resolves the configured DoomPi installation and starts one agent in RPC mode. It opens three local transports:
+Startup resolves an admitted synchronized generation, validates its descriptor, and loads the eligible server facets. It then creates the direct harness, session service, and package API handlers in process. The listener provides:
 
-- `--listen` is the token-protected framed session socket.
-- `<listen>.pi` is the Pi routed protocol socket.
-- `api.sock` serves optional session package APIs.
+- `/api/pi`, an authenticated WebSocket carrying the Pi 0.85 Chord protocol;
+- `/api/health`, an unauthenticated readiness check;
+- `/api/sessions` and related routes for discovery and channel access; and
+- session package APIs below `/api/sessions/<session-id>/api/<base-path>/...`.
 
-After the transports are ready, the server writes an owner-only registry record. DoomPi Web reads that record to find the sockets and token file. The token itself is not stored in the record, but the paths are sensitive and the registry must remain private.
-
-The framed socket allows one attached client. If it disconnects, the agent continues and the server keeps a bounded in-memory replay window. A major-mode change that needs a different extension composition relaunches the agent while keeping the server, session ID, sockets, and registry record.
-
-See [Lifecycle](lifecycle.md) for startup and relaunch behavior, [IPC](ipc.md) for wire contracts, and [Session APIs](api.md) for package handlers and TypeScript exports.
+The Pi protocol exposes typed management, hub, and session services. Session calls operate directly on the same runtime that owns the session journal. No raw command bridge, child-process fallback, or separate package API transport sits between a client and the runtime.
 
 ## Security
 
-The server listens on Unix sockets, not public network ports. Filesystem permissions protect the Pi protocol and package API sockets. The framed session socket also requires the attach token. These controls do not defend against root, a compromised owner account, or trusted package code.
+The server binds to loopback by default and requires the token for every route except `/api/health`. A token file keeps the capability out of process listings. The server is not a sandbox: the harness, extensions, and server facets run with the account's authority.
 
-A browser never receives the Unix attach token. Remote browsers authenticate to DoomPi Web with a separate device cookie, and the web package owns the remote-access boundary. Do not expose any server socket through an unauthenticated TCP forwarder.
+DoomPi Web owns browser authentication, remote tunnels, device cookies, and passkeys. When it proxies a session, browser code does not need the server token. Do not publish the server listener without an authenticated boundary.
 
-Read [Security and trust boundaries](security.md) before sharing a runtime directory or connecting the server to a remote cockpit.
+Read [Security and trust boundaries](security.md) before sharing a listener or token.
 
 ## Guides
 
-| Guide                                 | What it covers                                             |
-| ------------------------------------- | ---------------------------------------------------------- |
-| [Getting started](getting-started.md) | Installation, options, registry, and web integration       |
-| [Lifecycle](lifecycle.md)             | Startup, agent selection, relaunches, and shutdown         |
-| [IPC](ipc.md)                         | Unix sockets, attach and replay, framing, and Pi protocol  |
-| [Session APIs](api.md)                | Package API routes and the TypeScript export surface       |
-| [Security](security.md)               | Permissions, tokens, trusted inputs, and remote boundaries |
+| Guide                                 | What it covers                                                    |
+| ------------------------------------- | ----------------------------------------------------------------- |
+| [Getting started](getting-started.md) | Installation, options, synchronization, and web integration       |
+| [Lifecycle](lifecycle.md)             | In-process startup, readiness, shutdown, and history ownership    |
+| [IPC](ipc.md)                         | The `/api/pi` protocol, typed operations, HTTP routes, and replay |
+| [Session APIs](api.md)                | `server.bundle.json`, package handlers, and TypeScript exports    |
+| [Security](security.md)               | Tokens, listener exposure, trusted code, and data boundaries      |
 
 ## License
 

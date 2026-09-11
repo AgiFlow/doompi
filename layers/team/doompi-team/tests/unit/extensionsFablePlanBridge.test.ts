@@ -18,6 +18,7 @@ import {
 } from '../../src/adapters/runs/background/asyncExecution';
 import type { SubagentWaiterContract, WaitOutcome, WaitRequest } from '../../src/adapters/runs/background/subagentWait';
 import type { ManagementActionsContract } from '../../src/adapters/pi/extensions/managementActions';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 const REQUEST: FablePlanStartPayload = {
   requester: FABLE_PLAN_REQUESTER,
@@ -40,7 +41,7 @@ class FakeSpawner implements AsyncSubagentSpawnerContract {
 
   async spawn(input: AsyncSubagentSpawnInput) {
     this.inputs.push(input);
-    const resultPath = fableProfileResultPathFor(input.runId);
+    const resultPath = fableProfileResultPathFor(TEST_SESSION_SCOPE, input.runId);
     fs.mkdirSync(path.dirname(resultPath), { recursive: true });
     fs.writeFileSync(resultPath, JSON.stringify({ text: 'draft output' }), { mode: 0o600 });
     return { runId: input.runId, pid: 100 + this.inputs.length };
@@ -92,7 +93,12 @@ let runSequence: number;
 const opened: Array<ReturnType<typeof createFablePlanBridge>> = [];
 
 function bind(bridge: ReturnType<typeof createFablePlanBridge>): DoomFablePlanService {
-  const service = bridge.createService({ sessionId: 'session-1', cwd: '/repository' });
+  const service = bridge.createService({
+    sessionId: 'session-1',
+    scope: TEST_SESSION_SCOPE,
+    cwd: '/repository',
+    environment: {},
+  });
   opened.push(bridge);
   return service;
 }
@@ -142,12 +148,7 @@ describe('Fable plan bridge', () => {
     });
     expect(spawner.inputs[0]?.task).toContain('"stage":"draft"');
     expect(spawner.inputs[0]?.task).toContain('Inspect the current repository');
-    expect(spawner.inputs[0]?.piArgs).toMatchObject({
-      model: 'fable',
-      sessionEnabled: false,
-      inheritProjectContext: false,
-      inheritSkills: false,
-    });
+    expect(spawner.inputs[0]?.piArgs).toMatchObject({ model: 'fable' });
     expect(spawner.inputs[0]?.inlineAgent).toBeUndefined();
     expect(report).toHaveBeenCalledWith(
       'doom_team.fable_stage_started',
@@ -263,7 +264,7 @@ describe('Fable plan bridge', () => {
     grant(policies);
     const spawner: AsyncSubagentSpawnerContract = {
       spawn: vi.fn(async (input: AsyncSubagentSpawnInput) => {
-        const resultPath = fableProfileResultPathFor(input.runId);
+        const resultPath = fableProfileResultPathFor(TEST_SESSION_SCOPE, input.runId);
         fs.mkdirSync(path.dirname(resultPath), { recursive: true });
         fs.writeFileSync(resultPath, contents);
         return { runId: input.runId, pid: 10 };
@@ -282,7 +283,7 @@ describe('Fable plan bridge', () => {
       status: 'failed',
       errorCode: 'unavailable',
     });
-    expect(fs.existsSync(fableProfileResultPathFor('invalid-1'))).toBe(false);
+    expect(fs.existsSync(fableProfileResultPathFor(TEST_SESSION_SCOPE, 'invalid-1'))).toBe(false);
   });
 
   it('rejects duplicate binding and honors an already-aborted parent signal', async () => {
@@ -296,7 +297,14 @@ describe('Fable plan bridge', () => {
       createRunId: () => `run-${++runSequence}`,
     });
     const service = bind(bridge);
-    expect(() => bridge.createService({ sessionId: 'session-2', cwd: '/repository' })).toThrow('already bound');
+    expect(() =>
+      bridge.createService({
+        sessionId: 'session-2',
+        scope: TEST_SESSION_SCOPE,
+        cwd: '/repository',
+        environment: {},
+      }),
+    ).toThrow('already bound');
     const controller = new AbortController();
     controller.abort(new Error('parent ended'));
 

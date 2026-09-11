@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ClientPcmAudioRecorder } from '../src/adapters/audio/clientMedia.ts';
-import { createVoiceMediaApi } from '../src/adapters/clientMediaApi.ts';
+import { createTestVoiceMediaApi as createVoiceMediaApi } from './support.ts';
 import { NodeTurnSpool } from '../src/adapters/process/turnSpool.ts';
 import { VoiceWorkerPipeline } from '../src/adapters/process/voiceWorkerPipeline.ts';
 import { PCM_FRAME_BYTES, PCM_FRAME_MS } from '../src/services/pcm.ts';

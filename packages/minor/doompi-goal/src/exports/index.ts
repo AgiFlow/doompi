@@ -1,4 +1,3 @@
-export { goalHeadlessFacet } from '../adapters/headless/facet.ts';
 export { registerGoalExtension } from '../adapters/pi/extension';
 export { DefaultGoalExtensionService } from '../services/extensionService.ts';
 export type { GoalAccountingState, UsageContext, UsageLike } from '../services/accounting.ts';

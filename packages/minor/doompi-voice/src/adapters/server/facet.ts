@@ -22,14 +22,23 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { voiceHeadlessFacet } from '../headless/facet.ts';
+import { createVoiceMediaWakeChannel, createVoiceOwnershipChannel } from '../voiceMediaHubChannel.ts';
 import { api } from '../voiceSessionApi.ts';
 
 export const voiceServerFacet: DoomServerFacet = {
   inject: [DOOM_SERVER_HOST_SERVICE],
   apply(context: Context) {
     const host = requireDoomServerHost(context);
-    const headlessDisposer =
-      host.scope === 'session' && readDoomHeadlessHost(context) ? voiceHeadlessFacet.apply(context) : undefined;
+    if (host.scope === 'hub') {
+      const registrations = [
+        host.registerChannel(createVoiceMediaWakeChannel()),
+        host.registerChannel(createVoiceOwnershipChannel()),
+      ];
+      return () => {
+        for (const registration of registrations.reverse()) registration.dispose();
+      };
+    }
+    const headlessDisposer = readDoomHeadlessHost(context) ? voiceHeadlessFacet.apply(context) : undefined;
     if (host.scope !== 'session') return headlessDisposer;
     const registration = host.registerApi(api);
     return () => {

@@ -36,7 +36,7 @@ All three tools and their model guidance remain unavailable during setup and are
 import { activateComputerUseExtension, createComputerUseSessionClient } from '@agimon-ai/doompi-computer-use';
 ```
 
-The session API entry is available at `@agimon-ai/doompi-computer-use/session-api`. Its agent and hub routes use separate host-issued context tokens. Grants remain opaque and session-bound inside the request broker.
+The session-scoped server facet owns the agent and hub routes. Their host-issued context tokens remain opaque and session-bound inside the request broker.
 
 ## Development
 

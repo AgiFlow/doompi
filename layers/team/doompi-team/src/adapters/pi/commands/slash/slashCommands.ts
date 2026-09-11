@@ -48,6 +48,7 @@
  *   `watchTrackedRunUntilTerminal`
  */
 
+import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { ExtensionConfig } from '../../extensions/config';
 import type { ManagementActionsContract } from '../../extensions/managementActions';
@@ -69,6 +70,7 @@ import {
 } from './chainExpression';
 import { buildDoctorReport } from './doctor';
 import { taskInputFromParsedStep, UnsupportedInlineConfigError } from './spawnRequestMapping';
+import { createSessionScope } from '../../../filesystem/paths';
 import { launchParallelSubagents, launchSingleSubagent, watchTrackedRunUntilTerminal } from './subagentLaunch';
 
 export interface SlashCommandDeps {
@@ -77,18 +79,18 @@ export interface SlashCommandDeps {
   tracker: AsyncJobTrackerContract;
   scheduler: PollSchedulerContract;
   discovery: AgentDiscoveryContract;
-  /**
-   * Used by `/subagents-stop`. Preferred over calling `requestSlashRunStop`
-   * directly because it resolves an id PREFIX through `RunIdResolver` and
-   * raises a real error for an unknown or ambiguous one, instead of writing a
-   * stop request into a directory for a run that does not exist.
-   */
+  /** Session-scoped typed management for status, prefix resolution, and control. */
   management: ManagementActionsContract;
   loadConfig: () => ExtensionConfig;
+  environment: Readonly<Record<string, string | undefined>>;
 }
 
 export interface SlashCommandState {
   baseCwd: string | undefined;
+}
+
+function sessionScopeFor(ctx: ExtensionContext, environment: Readonly<Record<string, string | undefined>>) {
+  return createSessionScope(resolveRootSessionId(ctx.sessionManager.getSessionId(), environment));
 }
 
 const SLASH_STATUS_KEY = 'subagent-slash';
@@ -253,7 +255,8 @@ export async function launchSingleAgentRun(
   if (!agents.find((agent) => agent.name === request.agent)) {
     return { ok: false, message: `Unknown agent: ${request.agent}` };
   }
-  const jobs = deps.tracker.forSession(ctx.sessionManager.getSessionId());
+  const scope = sessionScopeFor(ctx, deps.environment);
+  const jobs = deps.tracker.forSession(ctx.sessionManager.getSessionId(), scope);
   try {
     const parentForkSource = captureSessionForkSource(ctx.sessionManager, 'settled');
     const parentModel = normalizeParentModel(ctx.model);
@@ -270,11 +273,16 @@ export async function launchSingleAgentRun(
         task: taskInput.task ?? '',
         cwd: taskInput.cwd ?? baseCwd,
         agentScope: 'both',
+        sessionScope: scope,
         parentSessionId: ctx.sessionManager.getSessionId(),
         ...(taskInput.model ? { model: taskInput.model } : {}),
         ...(taskInput.context ? { context: taskInput.context } : {}),
         ...(parentForkSource
-          ? { parentSessionFile: parentForkSource.sessionFile, parentLeafId: parentForkSource.leafId }
+          ? {
+              parentForkSource: parentForkSource.terminalSource,
+              ...(parentForkSource.sessionFile ? { parentSessionFile: parentForkSource.sessionFile } : {}),
+              parentLeafId: parentForkSource.leafId,
+            }
           : {}),
         availableModels: authenticatedModelInfos(ctx.modelRegistry),
         ...(parentModel ? { parentModel } : {}),
@@ -371,7 +379,8 @@ export function registerSlashCommands(pi: ExtensionAPI, state: SlashCommandState
   pi.registerCommand('parallel', {
     description: 'Run agents in parallel: /parallel scout "task1" -> reviewer "task2" [--fork]',
     handler: async (args, ctx) => {
-      const jobs = deps.tracker.forSession(ctx.sessionManager.getSessionId());
+      const scope = sessionScopeFor(ctx, deps.environment);
+      const jobs = deps.tracker.forSession(ctx.sessionManager.getSessionId(), scope);
       const { args: cleanedArgs, fork } = extractForkFlag(args);
       const baseCwd = requireBaseCwd(state, ctx);
       if (!baseCwd) return;
@@ -406,9 +415,14 @@ export function registerSlashCommands(pi: ExtensionAPI, state: SlashCommandState
             tasks,
             cwd: baseCwd,
             agentScope: 'both',
+            sessionScope: scope,
             parentSessionId: ctx.sessionManager.getSessionId(),
             ...(parentForkSource
-              ? { parentSessionFile: parentForkSource.sessionFile, parentLeafId: parentForkSource.leafId }
+              ? {
+                  parentForkSource: parentForkSource.terminalSource,
+                  ...(parentForkSource.sessionFile ? { parentSessionFile: parentForkSource.sessionFile } : {}),
+                  parentLeafId: parentForkSource.leafId,
+                }
               : {}),
             availableModels: authenticatedModelInfos(ctx.modelRegistry),
             ...(parentModel ? { parentModel } : {}),
@@ -427,7 +441,10 @@ export function registerSlashCommands(pi: ExtensionAPI, state: SlashCommandState
     handler: async (_args, ctx) => {
       sendSlashText(
         pi,
-        buildDoctorReport({ cwd: ctx.cwd, agentScope: 'both' }, { discovery: deps.discovery, skills: deps.skills }),
+        buildDoctorReport(
+          { cwd: ctx.cwd, agentScope: 'both', scope: sessionScopeFor(ctx, deps.environment) },
+          { discovery: deps.discovery, skills: deps.skills },
+        ),
       );
     },
   });
@@ -444,6 +461,7 @@ export function registerSlashCommands(pi: ExtensionAPI, state: SlashCommandState
       const id = input.slice(0, separator);
       const message = input.slice(separator + 1).trim();
       try {
+        deps.management.bindSessionScope(sessionScopeFor(ctx, deps.environment));
         const result = await deps.management.steer(id, message);
         const summary = `Steering ${result.state} for ${id}: ${result.message}`;
         if (result.state === 'failed') notifyError(ctx, summary);
@@ -457,20 +475,18 @@ export function registerSlashCommands(pi: ExtensionAPI, state: SlashCommandState
   pi.registerCommand('subagents-stop', {
     description: 'Stop a running subagent: /subagents-stop [run-id]',
     handler: async (args, ctx) => {
-      const jobs = deps.tracker.forSession(ctx.sessionManager.getSessionId());
+      const scope = sessionScopeFor(ctx, deps.environment);
+      deps.management.bindSessionScope(scope);
+      const jobs = deps.tracker.forSession(ctx.sessionManager.getSessionId(), scope);
       const id = args.trim();
       if (!id) {
         sendSlashText(pi, stoppableRunsReport(jobs.list()));
         return;
       }
       try {
-        deps.management.stop(resolveTrackedRunId(jobs, id));
-        // Deliberately reports the REQUEST, not the outcome. Stop is
-        // asynchronous in this package: the request is a file the child
-        // claims on its next control-channel tick, so claiming "stopped"
-        // here would assert something this process has not observed. The
-        // run's own status is what confirms it, via /subagents-fleet or a
-        // completion notification.
+        await deps.management.stop(resolveTrackedRunId(jobs, id));
+        // The direct control request is acknowledged by transport delivery. The
+        // run's own event stream remains authoritative for its terminal state.
         notifyInfo(ctx, `Stop requested for ${id}. The run reports its own final state once it acknowledges.`);
       } catch (error) {
         // `ManagementActions.stop` throws only for an id that resolves to no

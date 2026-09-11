@@ -31,7 +31,10 @@ import { createBackgroundWorkService } from '../../services/backgroundWorkServic
 import { createSubagentPolicyService } from '../../services/subagentPolicyService';
 
 export interface TeamCollaborationPluginConfig {
-  readonly session: DelegationSessionContext & { readonly cwd: string };
+  readonly session: DelegationSessionContext & {
+    readonly cwd: string;
+    readonly environment: Readonly<Record<string, string | undefined>>;
+  };
   readonly directRunTracker: AsyncJobTracker;
   readonly delegation: DelegationBridge;
   readonly fablePlan: FablePlanBridge;
@@ -53,7 +56,9 @@ export function teamCollaborationPlugin(ctx: Context, config: TeamCollaborationP
   const delegation: DoomDelegationService = config.delegation.createService(ctx, config.session);
   const fablePlan: DoomFablePlanService = config.fablePlan.createService({
     sessionId: config.session.sessionId,
+    scope: config.session.sessionScope,
     cwd: config.session.cwd,
+    environment: config.session.environment,
   });
 
   ctx.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork);

@@ -7,23 +7,21 @@ import {
   type DoomHeadlessTool,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-extension-contracts/headless';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { teamHeadlessFacet } from '../../../src/adapters/headless/facet.ts';
-import {
-  createSessionScope,
-  sessionScopeDir,
-  setCurrentSessionScope,
-  tryCurrentSessionScope,
-} from '../../../src/adapters/filesystem/paths';
+import { sessionScopeDir } from '../../../src/adapters/filesystem/paths';
 import type { TeamExtensionRuntime } from '../../../src/adapters/pi/teamRuntime';
+import { TEST_SESSION_SCOPE } from '../../support/sessionScope';
 
-function fixture() {
-  const sessionId = `headless-team-${process.pid}-${Math.random().toString(36).slice(2)}`;
+function fixture(options: { serverHost?: unknown } = {}) {
+  const sessionId = TEST_SESSION_SCOPE.rootSessionId;
   const execution = {
     cwd: process.cwd(),
     repoRoot: process.cwd(),
     sessionId,
+    environment: {},
     model: { provider: 'openai-codex', id: 'gpt-5.6-luna' },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {
@@ -48,6 +46,18 @@ function fixture() {
     disposers.push(dispose);
     return { dispose };
   };
+  const defaultServerHost = {
+    scope: 'session' as const,
+    context: {
+      environment: {},
+      directEvents: {
+        publish: vi.fn(),
+        subscribe: vi.fn(() => () => undefined),
+        close: vi.fn(),
+      },
+    },
+  };
+  const serverHost = options.serverHost === null ? undefined : (options.serverHost ?? defaultServerHost);
   const host = {
     context: execution,
     registerTool(tool: DoomHeadlessTool) {
@@ -64,7 +74,11 @@ function fixture() {
     },
   };
   context = {
-    get: (name: string) => (name === DOOM_HEADLESS_HOST_SERVICE ? host : undefined),
+    get: (name: string) => {
+      if (name === DOOM_HEADLESS_HOST_SERVICE) return host;
+      if (name === DOOM_SERVER_HOST_SERVICE) return serverHost;
+      return undefined;
+    },
     plugin: (
       plugin: (ctx: Context, config: { runtime: TeamExtensionRuntime }) => void,
       config: { runtime: TeamExtensionRuntime },
@@ -97,16 +111,37 @@ afterEach(() => {
 });
 
 describe('teamHeadlessFacet', () => {
+  it('rejects a missing session server host', () => {
+    expect(() => fixture({ serverHost: null })).toThrow('requires a session server host');
+  });
+
+  it('rejects a missing host-owned direct event bus', () => {
+    expect(() => fixture({ serverHost: { scope: 'session', context: { environment: {} } } })).toThrow(
+      'requires host-owned direct events',
+    );
+  });
+
+  it('rejects a missing admitted session environment', () => {
+    expect(() =>
+      fixture({
+        serverHost: {
+          scope: 'session',
+          context: {
+            directEvents: { publish: vi.fn(), subscribe: vi.fn(() => () => undefined), close: vi.fn() },
+          },
+        },
+      }),
+    ).toThrow('requires an admitted session environment');
+  });
   it('retains tracked jobs across optional activity disable and re-enable', async () => {
     vi.useFakeTimers();
-    const previousScope = tryCurrentSessionScope();
     const test = fixture();
-    const scope = createSessionScope(test.sessionId);
+    const scope = TEST_SESSION_SCOPE;
     let activityStop: (() => void | Promise<void>) | undefined;
 
     try {
       activityStop = await test.activities[0]!.start(test.execution);
-      const jobs = test.runtime.asyncJobTracker.forSession(test.sessionId);
+      const jobs = test.runtime.asyncJobTracker.forSession(test.sessionId, scope);
       const intercom = test.tools.find((tool) => tool.name === 'intercom');
       if (!intercom) throw new Error('intercom headless tool was not registered');
       jobs.track('retained-run');
@@ -136,23 +171,21 @@ describe('teamHeadlessFacet', () => {
     } finally {
       await activityStop?.();
       test.dispose();
-      if (previousScope) setCurrentSessionScope(previousScope);
       fs.rmSync(sessionScopeDir(scope), { recursive: true, force: true });
     }
   });
 
   it('detaches intercom on activity stop and stops every runtime worker on final disposal', async () => {
     vi.useFakeTimers();
-    const previousScope = tryCurrentSessionScope();
     const test = fixture();
-    const scope = createSessionScope(test.sessionId);
+    const scope = TEST_SESSION_SCOPE;
     let activityStop: (() => void | Promise<void>) | undefined;
     const intercom = test.tools.find((tool) => tool.name === 'intercom');
     if (!intercom) throw new Error('intercom headless tool was not registered');
 
     try {
       activityStop = await test.activities[0]!.start(test.execution);
-      const jobs = test.runtime.asyncJobTracker.forSession(test.sessionId);
+      const jobs = test.runtime.asyncJobTracker.forSession(test.sessionId, scope);
       jobs.track('final-run');
       await activityStop?.();
       activityStop = undefined;
@@ -162,7 +195,7 @@ describe('teamHeadlessFacet', () => {
       expect(jobs.list()).toHaveLength(1);
 
       test.dispose();
-      expect(test.runtime.asyncJobTracker.forSession(test.sessionId).list()).toEqual([]);
+      expect(test.runtime.asyncJobTracker.forSession(test.sessionId, scope).list()).toEqual([]);
       expect(vi.getTimerCount()).toBe(0);
       expect(test.disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
 
@@ -171,15 +204,13 @@ describe('teamHeadlessFacet', () => {
     } finally {
       await activityStop?.();
       test.dispose();
-      if (previousScope) setCurrentSessionScope(previousScope);
       fs.rmSync(sessionScopeDir(scope), { recursive: true, force: true });
     }
   });
 
   it('dispatches headless subagent actions without a Pi ExtensionAPI', async () => {
-    const previousScope = tryCurrentSessionScope();
     const test = fixture();
-    const scope = createSessionScope(test.sessionId);
+    const scope = TEST_SESSION_SCOPE;
     const subagent = test.tools.find((tool) => tool.name === 'subagent');
     if (!subagent) throw new Error('subagent headless tool was not registered');
     const spawn = vi.spyOn(test.runtime.spawnPlanner, 'spawn').mockResolvedValue({
@@ -218,8 +249,26 @@ describe('teamHeadlessFacet', () => {
     } finally {
       spawn.mockRestore();
       test.dispose();
-      if (previousScope) setCurrentSessionScope(previousScope);
       fs.rmSync(sessionScopeDir(scope), { recursive: true, force: true });
+    }
+  });
+
+  it('attaches completion notifications to the headless client', async () => {
+    const test = fixture();
+    try {
+      await expect(
+        test.runtime.completionNotifier.deliver({
+          runId: 'headless-completion',
+          agent: 'worker',
+          success: false,
+          summary: 'failed',
+        }),
+      ).resolves.toBe(true);
+      expect(test.client.notify).toHaveBeenCalledWith(
+        expect.objectContaining({ body: expect.stringContaining('failed') }),
+      );
+    } finally {
+      test.dispose();
     }
   });
 });

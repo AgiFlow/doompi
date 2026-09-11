@@ -87,6 +87,11 @@ export interface WorkflowRunView {
   jobs: WorkflowJobView[];
 }
 
+/** What the workflow runs channel publishes for one session. */
+export interface WorkflowRunsPayload {
+  runs: WorkflowRunView[];
+}
+
 export const WORKFLOW_RUNS_TYPE = 'workflow_runs';
 
 /**

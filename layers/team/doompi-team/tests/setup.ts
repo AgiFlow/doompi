@@ -74,8 +74,6 @@ process.once('exit', () => {
  * above - silently undoing the per-worker isolation this whole file exists for
  * and putting every worker back on one shared tree.
  */
-const { createSessionScope, setCurrentSessionScope } = await import('../src/adapters/filesystem/paths');
-setCurrentSessionScope(createSessionScope(`test-worker-${process.pid}`));
 
 // Global test setup
 beforeAll(async () => {

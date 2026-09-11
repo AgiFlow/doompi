@@ -62,8 +62,8 @@ describe('Doom package API rules', () => {
       expect(packageApiManifest.check?.(manifest, root)).toBeNull();
     });
 
-    it('requires a server declaration for a generated API barrel', () => {
-      write('src/exports/sessionApi.ts', 'export { api } from "../adapters/runnerApi.ts";');
+    it('requires a server declaration for a server implementation', () => {
+      write('src/adapters/server/runnerApi.ts', 'export const api = {};');
       const manifest = writeManifest({ name: 'demo' });
 
       expect(packageApiManifest.check?.(manifest, root)).toContain(
@@ -101,7 +101,7 @@ describe('Doom package API rules', () => {
       );
     });
 
-    it('allows a headless-only server composition and a TUI-only package without one', () => {
+    it('rejects the legacy headless server category while allowing a TUI-only package', () => {
       write(
         'src/exports/extensions/headless.ts',
         'export { headlessFacet as default } from "../../adapters/headless/facet.ts";',
@@ -121,12 +121,47 @@ describe('Doom package API rules', () => {
           scopes: ['session'],
         },
       });
-      expect(packageApiManifest.check?.(manifest, root)).toBeNull();
+      const violation = packageApiManifest.check?.(manifest, root) ?? '';
+      expect(violation).toContain('doompiServer.entry must be ./src/exports/extensions/server.ts');
+      expect(violation).toContain('Remove legacy package export ./extensions/headless');
 
       fs.rmSync(path.join(root, 'src'), { recursive: true, force: true });
       const tuiManifest = writeManifest({ name: 'tui-only-demo' });
       write('src/tui/status.ts', 'export const status = true;');
       expect(packageApiManifest.check?.(tuiManifest, root)).toBeNull();
+    });
+
+    it('rejects web-owned hub runtime, legacy loader exports, and executable surface entries', () => {
+      write('src/exports/extensions/pi.ts', 'export default function extension(): void {}');
+      write('src/exports/webClient.ts', 'export const webPlugin = {};');
+      const manifest = writeManifest({
+        name: 'legacy-demo',
+        files: ['src/web', 'src/exports/webClient.ts'],
+        exports: {
+          './extensions/pi': './dist/extensions/pi.mjs',
+          './package-api-loader': './dist/packageApiLoader.mjs',
+          './session-api': './dist/sessionApi.mjs',
+          './sessionApi': './dist/sessionApi.mjs',
+          './hub-api': './dist/hubApi.mjs',
+          './api/git': './dist/hubApi.mjs',
+        },
+        pi: { extensions: ['./dist/extensions/pi.mjs'] },
+        doompiWeb: {
+          pluginId: 'legacy-demo',
+          client: './src/exports/webClient.ts',
+          hub: { entry: './src/exports/webHub.ts', dist: './dist/webHub.mjs' },
+        },
+      });
+
+      const violation = packageApiManifest.check?.(manifest, root) ?? '';
+      expect(violation).toContain('Remove doompiWeb.hub');
+      expect(violation).toContain('Remove legacy package export ./package-api-loader');
+      expect(violation).toContain('Remove legacy package export ./session-api');
+      expect(violation).toContain('Remove legacy package export ./sessionApi');
+      expect(violation).toContain('Remove legacy package export ./hub-api');
+      expect(violation).toContain('Remove legacy package export ./api/git');
+      expect(violation).toContain('Canonical surface entry ./src/exports/extensions/pi.ts');
+      expect(violation).toContain('Canonical surface entry ./src/exports/webClient.ts');
     });
 
     it('requires a matching published export and rejects noncanonical server paths', () => {

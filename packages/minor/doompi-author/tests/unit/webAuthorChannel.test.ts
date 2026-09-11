@@ -1,4 +1,4 @@
-import type { HubChannelHost } from '@agimon-ai/doompi-web-contracts';
+import type { DoomHubChannelHost } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { describe, expect, it, vi } from 'vitest';
 import { createAuthorBridgeApi } from '../../src/adapters/authorBridgeApi.ts';
 import { createAuthorChannel } from '../../src/adapters/webAuthorChannel.ts';
@@ -17,8 +17,13 @@ function harness() {
   });
   const app = createAuthorBridgeApi(state);
   const targeted: unknown[] = [];
-  const host: HubChannelHost = {
+  const host: DoomHubChannelHost = {
     sessions: () => [scope],
+    directEvents: {
+      publish: () => undefined,
+      subscribe: () => () => undefined,
+      close: () => undefined,
+    },
     publish: vi.fn(),
     publishToConnection(connectionId, sessionId, payload) {
       expect(connectionId).toBe('connection');

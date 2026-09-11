@@ -118,7 +118,6 @@ function summary(id: string, overrides: Partial<SessionSummary> = {}): SessionSu
     pendingMessageCount: 0,
     everPrompted: false,
     awaitingInput: false,
-    socketPath: `/run/${id}.sock`,
     ...overrides,
   };
 }

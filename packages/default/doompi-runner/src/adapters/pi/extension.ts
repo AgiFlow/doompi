@@ -78,7 +78,8 @@ function loadRunnerSettings(context: ExtensionContext): void {
  * CLI for anything it leaves running.
  */
 export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
-  const container = createRunnerContainer();
+  const environment = Object.freeze({ ...process.env });
+  const container = createRunnerContainer({ environment });
   const registry = container.runnerRegistry;
   let disposeRuntime = async (): Promise<void> => {
     try {
@@ -152,7 +153,7 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
       serviceName: 'doom-runner',
       packageName: '@agimon-ai/doompi-runner',
       cwd: ctx.cwd,
-      env: process.env,
+      env: environment,
       enableLogs: true,
       enableTraces: true,
     });
@@ -613,7 +614,7 @@ export function installRunnerRuntime(cordis: Context, pi: ExtensionAPI): void {
     const previousContext = sessionContext;
     const generation = ++sessionGeneration;
     sessionId = activeSessionId;
-    rootSessionId = resolveRootSessionId(activeSessionId);
+    rootSessionId = resolveRootSessionId(activeSessionId, environment);
     sessionContext = context;
     sessionReady = false;
     lastRunnerCount = undefined;

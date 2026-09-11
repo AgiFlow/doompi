@@ -33,7 +33,7 @@ test('shows the session fleet in the subagents tab', async ({ page, cockpit }) =
       role: 'assistant',
       content: [
         { type: 'text', text: 'Reading the hub adapter first.' },
-        { type: 'toolCall', id: 'call-d', name: 'read', arguments: { path: 'src/adapters/sessionHub.ts' } },
+        { type: 'toolCall', id: 'call-d', name: 'read', arguments: { path: 'src/adapters/server/headlessHub.ts' } },
       ],
     }),
   ]);
@@ -225,7 +225,7 @@ test('the activity dock lists the runs and opens one in a temporary agent tab', 
       role: 'assistant',
       content: [
         { type: 'text', text: 'Reading the hub adapter first.' },
-        { type: 'toolCall', id: 'call-1', name: 'read', arguments: { path: 'src/adapters/sessionHub.ts' } },
+        { type: 'toolCall', id: 'call-1', name: 'read', arguments: { path: 'src/adapters/server/headlessHub.ts' } },
       ],
     }),
   ]);

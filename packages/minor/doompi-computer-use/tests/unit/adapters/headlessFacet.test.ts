@@ -1,3 +1,4 @@
+import path from 'node:path';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
@@ -17,19 +18,32 @@ import type { ComputerUseSessionView } from '../../../src/types/computerUseApi.t
 import { computerUseHeadlessFacet } from '../../../src/adapters/headless/facet.ts';
 
 const clientState = vi.hoisted(() => ({ current: undefined as unknown }));
+const runnerState = vi.hoisted(() => ({
+  options: undefined as { allowedScriptPaths: readonly string[] } | undefined,
+}));
+vi.mock('../../../src/adapters/pi/computerScriptRunner.ts', () => ({
+  ComputerScriptRunner: class {
+    constructor(options: { allowedScriptPaths: readonly string[] }) {
+      runnerState.options = options;
+    }
+    execute = vi.fn(async () => {
+      throw new Error('script unavailable');
+    });
+  },
+}));
 vi.mock('../../../src/adapters/pi/sessionApiClient.ts', () => ({
   createComputerUseSessionClient: () => clientState.current,
 }));
-
 function contextFor(host: DoomHeadlessHostService): Context {
   return { get: (name: string) => (name === DOOM_HEADLESS_HOST_SERVICE ? host : undefined) } as unknown as Context;
 }
 
-function fixture(selectionModes: string[] = []) {
+function fixture(selectionModes: string[] = [], environment: Readonly<Record<string, string | undefined>> = {}) {
   let minorModes = selectionModes;
   const execution = {
-    cwd: process.cwd(),
-    repoRoot: process.cwd(),
+    cwd: '/workspace',
+    repoRoot: '/workspace',
+    environment,
     sessionId: 'computer-use-headless-test',
     get selection() {
       return { majorMode: 'copilot', activeLayers: [], domains: [], minorModes };
@@ -128,6 +142,7 @@ const observation: ComputerUseObservation = {
 
 beforeEach(() => {
   clientState.current = undefined;
+  runnerState.options = undefined;
 });
 
 describe('computer use headless facet', () => {
@@ -263,5 +278,19 @@ describe('computer use headless facet', () => {
     expect(client.stop).toHaveBeenCalledTimes(2);
     test.close?.();
     expect(test.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('uses each session environment for allowed computer script paths', () => {
+    clientState.current = {} as ComputerUseSessionClient;
+    const first = fixture([], {
+      DOOMPI_COMPUTER_USE_SCRIPT_PATHS: ['/first', '/shared'].join(path.delimiter),
+    });
+    const firstOptions = runnerState.options;
+    const second = fixture([], { DOOMPI_COMPUTER_USE_SCRIPT_PATHS: '/second' });
+
+    expect(firstOptions?.allowedScriptPaths).toEqual(['/first', '/shared']);
+    expect(runnerState.options?.allowedScriptPaths).toEqual(['/second']);
+    first.close?.();
+    second.close?.();
   });
 });

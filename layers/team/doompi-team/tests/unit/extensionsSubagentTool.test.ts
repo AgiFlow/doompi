@@ -2,9 +2,11 @@ import * as fs from 'node:fs';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it } from 'vitest';
 import type {
+  ControlActionResult,
   ManagementActionsContract,
   ListActionResult,
   StatusActionResult,
+  SteerActionResult,
 } from '../../src/adapters/pi/extensions/managementActions';
 import type {
   SpawnPlannerContract,
@@ -18,9 +20,14 @@ import type {
   AgentScope,
   AgentDiscoveryContract,
 } from '../../src/adapters/agents/types';
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/adapters/asyncJobTracker';
+import type {
+  AsyncJobTrackerContract,
+  TrackedAsyncJob,
+  TrackedAsyncJobsContract,
+} from '../../src/adapters/asyncJobTracker';
 import { listSuspendedRuns, suspendRun } from '../../src/adapters/suspendedRuns';
-import { createSessionScope, sessionScopeDir, setCurrentSessionScope } from '../../src/adapters/filesystem/paths';
+import { sessionScopeDir, sessionScopeEnvironment, type SessionScope } from '../../src/adapters/filesystem/paths';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 class FakeSpawnPlanner implements SpawnPlannerContract {
   calls: SpawnPlanRequest[] = [];
@@ -36,48 +43,88 @@ class FakeManagement implements ManagementActionsContract {
   steerCalls: Array<{ id: string; message: string; targetIndex?: number }> = [];
   statusResult: StatusActionResult = {
     runId: 'run-1',
-    runDir: '/run-1',
+    runDir: undefined,
     claimed: false,
     status: undefined,
   };
+  bindSessionScope(_scope: SessionScope): void {}
   status(): StatusActionResult {
     return this.statusResult;
   }
   list(): ListActionResult {
     return { runs: [] };
   }
-  interrupt() {
-    return { requestPath: '/interrupt' };
+  interrupt(): Promise<ControlActionResult> {
+    return Promise.resolve({ requestId: 'interrupt-1' });
   }
-  stop(id: string, reason?: string) {
+  stop(id: string, reason?: string): Promise<ControlActionResult> {
     this.stopCalls.push({ id, reason });
-    return { requestPath: '/stop' };
+    return Promise.resolve({ requestId: 'stop-1' });
   }
-  async steer(id: string, message: string, targetIndex?: number) {
+  steer(id: string, message: string, targetIndex?: number): Promise<SteerActionResult> {
     this.steerCalls.push({ id, message, targetIndex });
-    return { requestPath: '/steer', requestId: 'steer-1', index: 0, state: 'delivered' as const, message: 'accepted' };
+    return Promise.resolve({ requestId: 'steer-1', index: 0, state: 'delivered', message: 'accepted' });
+  }
+}
+
+class FakeSessionJobs implements TrackedAsyncJobsContract {
+  private jobs: TrackedAsyncJob[];
+
+  constructor(private readonly tracker: FakeTracker) {
+    this.jobs = [{ runId: 'run-1', status: 'running', runtime: tracker.runtime }];
+  }
+
+  track(runId: string): void {
+    this.tracker.tracked.push(runId);
+    if (!this.jobs.some((job) => job.runId === runId)) this.jobs.push({ runId, status: undefined });
+  }
+
+  untrack(runId: string): void {
+    this.jobs = this.jobs.filter((job) => job.runId !== runId);
+  }
+
+  list(): TrackedAsyncJob[] {
+    return this.jobs;
+  }
+
+  get(id: string): TrackedAsyncJob | undefined {
+    return this.jobs.find((job) => job.runId === id);
+  }
+
+  reset(): void {
+    this.jobs = [];
   }
 }
 
 class FakeTracker implements AsyncJobTrackerContract {
   tracked: string[] = [];
-  runtime = 'pi';
-  forSession() {
-    return this;
+  private readonly sessions = new Map<string, FakeSessionJobs>();
+  private runtimeValue = 'pi';
+
+  get runtime(): string {
+    return this.runtimeValue;
   }
-  track(runId: string): void {
-    this.tracked.push(runId);
+
+  set runtime(value: string) {
+    this.runtimeValue = value;
+    for (const jobs of this.sessions.values()) {
+      const run = jobs.get('run-1');
+      if (run) run.runtime = value;
+    }
   }
-  untrack(): void {}
-  list(): TrackedAsyncJob[] {
-    return [{ runId: 'run-1', status: 'running', runtime: this.runtime }];
+
+  forSession(sessionId: string, _scope: SessionScope): TrackedAsyncJobsContract {
+    let jobs = this.sessions.get(sessionId);
+    if (!jobs) {
+      jobs = new FakeSessionJobs(this);
+      this.sessions.set(sessionId, jobs);
+    }
+    return jobs;
   }
-  get(id: string): TrackedAsyncJob | undefined {
-    return id === 'run-1' ? { runId: id, status: 'running', runtime: this.runtime } : undefined;
+
+  stop(): void {
+    this.sessions.clear();
   }
-  reset(): void {}
-  start(): void {}
-  stop(): void {}
 }
 
 const worker: AgentConfig = {
@@ -116,7 +163,14 @@ function host(existing: ToolDefinition[] = []): { pi: ExtensionAPI; tools: ToolD
 function context(model?: { provider: string; id: string }): ExtensionContext {
   return {
     cwd: '/work',
-    sessionManager: { getSessionId: () => 'session-1', getSessionFile: () => undefined },
+    sessionManager: {
+      getSessionId: () => TEST_SESSION_SCOPE.rootSessionId,
+      getSessionFile: () => undefined,
+      getLeafId: () => null,
+      getLeafEntry: () => null,
+      getHeader: () => null,
+      getBranch: () => [],
+    },
     modelRegistry: { getAvailable: () => [], hasConfiguredAuth: () => false },
     ...(model ? { model } : {}),
   } as unknown as ExtensionContext;
@@ -129,7 +183,13 @@ function harness() {
   const management = new FakeManagement();
   const tracker = new FakeTracker();
   const discovery = new FakeDiscovery();
-  const service = new SubagentToolService(planner, management, tracker, discovery);
+  const service = new SubagentToolService(
+    planner,
+    management,
+    tracker,
+    discovery,
+    sessionScopeEnvironment(TEST_SESSION_SCOPE),
+  );
   const registered = host();
   service.registerTool(registered.pi);
   const tool = registered.tools[0]!;
@@ -277,6 +337,15 @@ describe('SubagentToolService actions', () => {
           parentId: 'safe-user-leaf',
           message: { role: 'assistant', content: [] },
         }),
+        getHeader: () => ({ type: 'session', version: 3, id: 'parent-session' }),
+        getBranch: () => [
+          {
+            type: 'message',
+            id: 'safe-user-leaf',
+            parentId: null,
+            message: { role: 'user', content: [] },
+          },
+        ],
       },
     } as unknown as ExtensionContext;
 
@@ -400,15 +469,13 @@ describe('SubagentToolService actions', () => {
 });
 
 describe('SubagentToolService restore safety', () => {
-  const scope = createSessionScope(`subagent-tool-${Math.random().toString(36).slice(2)}`);
+  const scope = TEST_SESSION_SCOPE;
 
   afterEach(() => {
     fs.rmSync(sessionScopeDir(scope), { recursive: true, force: true });
-    setCurrentSessionScope(scope);
   });
 
   it('refuses to restart suspended work without a Pi transcript', async () => {
-    setCurrentSessionScope(scope);
     suspendRun(scope, {
       runId: 'external-run',
       agent: 'worker',
@@ -423,7 +490,6 @@ describe('SubagentToolService restore safety', () => {
   });
 
   it('includes suspended work in normal fleet status and status-by-id', async () => {
-    setCurrentSessionScope(scope);
     suspendRun(scope, {
       runId: 'suspended-run',
       agent: 'worker',
@@ -444,7 +510,6 @@ describe('SubagentToolService restore safety', () => {
   });
 
   it('restores named and inline Pi recovery metadata and clears the old record only after startup', async () => {
-    setCurrentSessionScope(scope);
     fs.mkdirSync(sessionScopeDir(scope), { recursive: true });
     const sessionFile = `${sessionScopeDir(scope)}/child.jsonl`;
     fs.writeFileSync(sessionFile, '');
@@ -476,7 +541,6 @@ describe('SubagentToolService restore safety', () => {
         model: 'openai-codex/gpt-5.6-sol',
         sessionFile,
       },
-      runtime: 'pi',
     });
     expect(result.details).toHaveProperty('restore.restoredFrom', 'inline-run');
     expect(h.tracker.tracked).toContain('restored-run');
@@ -484,7 +548,6 @@ describe('SubagentToolService restore safety', () => {
   });
 
   it('retains a resumable record when restored startup fails', async () => {
-    setCurrentSessionScope(scope);
     fs.mkdirSync(sessionScopeDir(scope), { recursive: true });
     const sessionFile = `${sessionScopeDir(scope)}/failed-child.jsonl`;
     fs.writeFileSync(sessionFile, '');

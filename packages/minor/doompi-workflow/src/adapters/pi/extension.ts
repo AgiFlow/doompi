@@ -82,7 +82,7 @@ export function dispatcherToolRestriction(): DoomToolRestriction {
 export function createDispatcherBridge(
   pi: ExtensionAPI,
   parentSessionId: string | undefined,
-  environment: Readonly<Record<string, string | undefined>> = process.env,
+  environment: Readonly<Record<string, string | undefined>>,
 ): ExtensionAPI {
   const rootSessionId = parentSessionId ? resolveRootSessionId(parentSessionId, environment) : undefined;
   return new Proxy(pi, {
@@ -289,7 +289,7 @@ export function installWorkflowRuntime(
   cordis: Context,
   pi: ExtensionAPI,
   isCurrentInvocation: () => boolean,
-  environment: Readonly<Record<string, string | undefined>> = process.env,
+  environment: Readonly<Record<string, string | undefined>>,
 ): void {
   const dispatcher = isWorkflowDispatcherProcess(environment);
   const parentSessionId = dispatcher ? resolveDispatcherParentSession(environment) : undefined;
@@ -316,7 +316,12 @@ export function installWorkflowRuntime(
       });
       return () => handle.dispose();
     });
-    runtime = installWorkflowPiRuntime({ cordis, initialMode: true, isActive: isCurrentInvocation })(runtimePi);
+    runtime = installWorkflowPiRuntime({
+      cordis,
+      environment,
+      initialMode: true,
+      isActive: isCurrentInvocation,
+    })(runtimePi);
     return;
   }
 
@@ -351,6 +356,7 @@ export function installWorkflowRuntime(
   });
   runtime = installWorkflowPiRuntime({
     cordis,
+    environment,
     isActive: isCurrentInvocation,
     onModeChange: (enabled) => {
       workflowMode = enabled;
@@ -370,9 +376,10 @@ function workflowPlugin(cordis: Context, { fence, environment }: WorkflowPluginC
 
 /** The package's sole Pi factory; Pi reloads it and Cordis owns all package resources. */
 export async function workflowExtension(pi: ExtensionAPI): Promise<void> {
+  const environment = Object.freeze({ ...process.env });
   const connection = await connectDoomCordisHost(pi, PACKAGE_SOURCE);
   const fence = createWorkflowFence(pi);
-  const fiber = connection.root.plugin(workflowPlugin, { fence, environment: process.env });
+  const fiber = connection.root.plugin(workflowPlugin, { fence, environment });
   let disposal: Promise<void> | undefined;
   const dispose = (): Promise<void> => {
     if (disposal) return disposal;

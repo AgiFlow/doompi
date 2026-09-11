@@ -19,10 +19,10 @@ async function readOrFallback(filePath: string, fallback: string): Promise<strin
   }
 }
 
-async function skillCatalog(cwd: string): Promise<string> {
+async function skillCatalog(cwd: string, environment: Readonly<Record<string, string | undefined>>): Promise<string> {
   const roots = [
     path.join(cwd, '.doom', 'skills'),
-    ...(process.env.PI_SUBAGENT_EXTRA_SKILL_DIRS?.split(path.delimiter) ?? []),
+    ...(environment.PI_SUBAGENT_EXTRA_SKILL_DIRS?.split(path.delimiter) ?? []),
   ].filter(Boolean);
   const paths: string[] = [];
   for (const root of roots) {
@@ -49,7 +49,7 @@ export const skillHeadlessFacet = {
       {
         name: 'doompi/skills',
         kind: 'skill',
-        read: (execution) => skillCatalog(execution.cwd),
+        read: (execution) => skillCatalog(execution.cwd, execution.environment),
       },
       {
         name: 'doompi-author-skill',
@@ -81,7 +81,7 @@ export const skillHeadlessFacet = {
         }
         await execution.client.notify({
           title: 'DoomPi skills',
-          body: await skillCatalog(execution.cwd),
+          body: await skillCatalog(execution.cwd, execution.environment),
           level: 'info',
         });
       },

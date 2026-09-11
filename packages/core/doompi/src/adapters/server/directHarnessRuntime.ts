@@ -13,7 +13,6 @@ import {
   JSONL_STORAGE_VERSION,
   JsonlSessionRepo,
   type JsonlSessionMetadata,
-  type Entry,
   type Session,
 } from '@earendil-works/pi-agent-core/harness/session';
 import {
@@ -109,7 +108,7 @@ function modelReference(model: DirectHarnessModel | undefined, models: AnyModels
   return resolved;
 }
 
-function metadataFromFile(filePath: string): JsonlSessionMetadata {
+export function readDirectHarnessSessionMetadata(filePath: string): JsonlSessionMetadata {
   const absolute = fs.realpathSync(filePath);
   const firstLine = fs.readFileSync(absolute, 'utf8').split('\n', 1)[0];
   let header: AnyRecord;
@@ -260,7 +259,7 @@ async function openStorage<TContext extends object | undefined>(
       const owner = options.historyOwnership;
       if (owner === undefined) throw new Error('Opening an existing session requires explicit HistoryOwnership');
       historyLease = await acquireHistoryLease(owner, importedPath);
-      metadata ??= metadataFromFile(importedPath);
+      metadata ??= readDirectHarnessSessionMetadata(importedPath);
       if (options.sessionId !== undefined && options.sessionId !== metadata.id) {
         throw new Error(`Session id mismatch: expected ${options.sessionId}, found ${metadata.id}`);
       }
@@ -269,7 +268,14 @@ async function openStorage<TContext extends object | undefined>(
     } else {
       const owner = options.historyOwnership;
       if (owner === undefined) throw new Error('Creating a writable session requires explicit HistoryOwnership');
-      const created = await repository.create({ id: options.sessionId, cwd: options.cwd }, context);
+      const created = await repository.create(
+        {
+          id: options.sessionId,
+          cwd: options.cwd,
+          ...(options.parentSessionId === undefined ? {} : { parentSessionId: options.parentSessionId }),
+        },
+        context,
+      );
       session = created;
       importedPath = created.metadata.path;
       if (historyLease === undefined) throw new Error('New history was not admitted before publication');
@@ -511,26 +517,6 @@ function isStorageFailure(error: unknown): boolean {
 function resultError(value: unknown): never {
   if (isRecord(value) && value.ok === false) throw value.error;
   throw value;
-}
-
-function successFrame(id: unknown, command: string, data?: unknown): DirectHarnessFrame {
-  return {
-    ...(typeof id === 'string' ? { id } : {}),
-    type: 'response',
-    command,
-    success: true,
-    ...(data === undefined ? {} : { data }),
-  };
-}
-
-function failureFrame(id: unknown, command: string, error: unknown): DirectHarnessFrame {
-  return {
-    ...(typeof id === 'string' ? { id } : {}),
-    type: 'response',
-    command,
-    success: false,
-    error: errorMessage(error),
-  };
 }
 
 async function entriesForLane(
@@ -837,11 +823,11 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     }
   };
 
-  const startPrompt = async (
+  const admitPrompt = async (
     text: string,
     images?: ImageContent[],
     streamingBehavior?: 'steer' | 'followUp',
-  ): Promise<void> => {
+  ): Promise<{ settled: Promise<void> }> => {
     const execution = await lane.inspectExecution(context);
     if (execution.current !== null && streamingBehavior !== undefined) {
       const queued =
@@ -849,7 +835,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
           ? await writable(() => lane.steer(text, images, context))
           : await writable(() => lane.followUp(text, images, context));
       if (!queued.ok) resultError(queued);
-      return;
+      return { settled: Promise.resolve() };
     }
     const admission = await writable(() =>
       lane.accept(
@@ -862,317 +848,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       ),
     );
     if (!admission.ok) resultError(admission);
-    await drive(admission.value.operationId);
-  };
-
-  const command = async (frame: DirectHarnessFrame): Promise<void> => {
-    const type = stringValue(frame.type);
-    const id = frame.id;
-    if (type === undefined) {
-      emitFrame(failureFrame(id, 'unknown', new Error('Command frame has no type')));
-      return;
-    }
-    switch (type) {
-      case 'prompt': {
-        const message = stringValue(frame.message);
-        if (message === undefined) {
-          emitFrame(failureFrame(id, type, new Error('Prompt message must be a string')));
-          return;
-        }
-        try {
-          if (await options.dispatchCommand?.(message)) {
-            emitFrame(successFrame(id, type));
-            return;
-          }
-          await startPrompt(
-            message,
-            Array.isArray(frame.images) ? (frame.images as ImageContent[]) : undefined,
-            frame.streamingBehavior === 'steer' || frame.streamingBehavior === 'followUp'
-              ? frame.streamingBehavior
-              : undefined,
-          );
-          emitFrame(successFrame(id, type));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-          emitFrame({ type: 'agent_settled' });
-        }
-        return;
-      }
-      case 'steer':
-      case 'follow_up': {
-        const message = stringValue(frame.message);
-        if (message === undefined) {
-          emitFrame(failureFrame(id, type, new Error('Queued message must be a string')));
-          return;
-        }
-        try {
-          const queued =
-            type === 'steer'
-              ? await writable(() =>
-                  lane.steer(
-                    message,
-                    Array.isArray(frame.images) ? (frame.images as ImageContent[]) : undefined,
-                    context,
-                  ),
-                )
-              : await writable(() =>
-                  lane.followUp(
-                    message,
-                    Array.isArray(frame.images) ? (frame.images as ImageContent[]) : undefined,
-                    context,
-                  ),
-                );
-          if (!queued.ok) resultError(queued);
-          emitFrame(successFrame(id, type));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'abort': {
-        try {
-          const result = await writable(() => lane.abort(context));
-          if (!result.ok) resultError(result);
-          emitFrame(successFrame(id, type));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'get_commands': {
-        try {
-          const commands = (options.listCommands?.() ?? []).map((entry) => ({ ...entry, source: 'extension' }));
-          emitFrame(successFrame(id, type, { commands }));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'get_state': {
-        try {
-          const snapshot = await lane.watch(context);
-          const execution = snapshot.snapshot;
-          snapshot.unsubscribe();
-          const configuredModel = await lane.getModel(context);
-          const name = await harness.getName(context);
-          const data = {
-            model:
-              configuredModel === undefined
-                ? undefined
-                : { provider: configuredModel.provider, id: configuredModel.id },
-            thinkingLevel: execution.configuration.thinkingLevel,
-            isStreaming: execution.operation?.kind === 'run',
-            isCompacting: execution.operation?.kind === 'compaction',
-            steeringMode: await harness.getSteeringMode(context),
-            followUpMode: await harness.getFollowUpMode(context),
-            sessionFile: storage.sessionFile,
-            sessionId,
-            ...(name === undefined ? {} : { sessionName: name }),
-            autoCompactionEnabled: (await harness.getCompactionSettings(context)).enabled,
-            messageCount: execution.stats.messageCount,
-            pendingMessageCount: execution.queues.filter((entry) => entry.type === 'message').length,
-          };
-          emitFrame(successFrame(id, type, data));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'set_model': {
-        const provider = stringValue(frame.provider);
-        const modelId = stringValue(frame.modelId);
-        try {
-          if (!provider || !modelId) throw new Error('Model provider and modelId are required');
-          const next = models.getModel(provider, modelId);
-          if (next === undefined) throw new Error(`Model not found: ${provider}/${modelId}`);
-          await writable(() => lane.setModel({ provider, modelId }, context));
-          emitFrame(successFrame(id, type, next));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'get_available_models': {
-        try {
-          emitFrame(successFrame(id, type, { models: await models.getAvailable() }));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'get_available_thinking_levels': {
-        try {
-          const model = await lane.getModel(context);
-          if (!model) throw new Error('No model is selected');
-          emitFrame(successFrame(id, type, { levels: getSupportedThinkingLevels(model) }));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'set_thinking_level': {
-        try {
-          const level = stringValue(frame.level);
-          if (level === undefined) throw new Error('Thinking level is required');
-          await writable(() => lane.setThinkingLevel(level as never, context));
-          emitFrame(successFrame(id, type));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'set_steering_mode':
-      case 'set_follow_up_mode': {
-        try {
-          const mode = stringValue(frame.mode);
-          if (mode !== 'all' && mode !== 'one-at-a-time') throw new Error('Queue mode must be all or one-at-a-time');
-          if (type === 'set_steering_mode') await writable(() => harness.setSteeringMode(mode, context));
-          else await writable(() => harness.setFollowUpMode(mode, context));
-          emitFrame(successFrame(id, type));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'compact': {
-        try {
-          const result = await writable(() =>
-            lane.compact(
-              frame.customInstructions === undefined
-                ? undefined
-                : { customInstructions: stringValue(frame.customInstructions) ?? '' },
-              context,
-            ),
-          );
-          if (!result.ok) resultError(result);
-          emitFrame(successFrame(id, type, result.value));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'navigate_tree': {
-        try {
-          const rawTargetId = frame.targetId;
-          if (rawTargetId !== null && typeof rawTargetId !== 'string')
-            throw new Error('Navigation targetId must be a string or null');
-          const targetId: string | null = rawTargetId ?? null;
-          const result = await writable(() =>
-            lane.navigateTree(targetId, isRecord(frame.options) ? (frame.options as never) : undefined, context),
-          );
-          if (!result.ok) resultError(result);
-          const entries = await entriesForLane(lane, context);
-          emitFrame(successFrame(id, type, { cancelled: result.value.navigation.status !== 'completed', entries }));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'get_entries': {
-        try {
-          let entries = await entriesForLane(lane, context);
-          const since = stringValue(frame.since);
-          if (since !== undefined) {
-            const index = entries.findIndex((entry) => isRecord(entry) && entry.id === since);
-            if (index < 0) throw new Error(`Entry not found: ${since}`);
-            entries = entries.slice(index + 1);
-          }
-          emitFrame(successFrame(id, type, { entries, leafId: await lane.getTipId(context) }));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'get_messages': {
-        try {
-          const entries = await entriesForLane(lane, context);
-          emitFrame(
-            successFrame(id, type, {
-              messages: entries
-                .filter((entry): entry is Extract<Entry, { type: 'message' }> => entry.type === 'message')
-                .map((entry) => entry.message),
-            }),
-          );
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'set_session_name': {
-        try {
-          const name = stringValue(frame.name)?.trim();
-          if (!name) throw new Error('Session name cannot be empty');
-          await writable(() => harness.setName(name, context));
-          emitFrame(successFrame(id, type));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'get_session_stats': {
-        try {
-          emitFrame(successFrame(id, type, await storage.session.getStats(context)));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'record_usage': {
-        try {
-          if (!isRecord(frame.usage)) throw new Error('Usage is required');
-          const result = await writable(() =>
-            lane.recordUsage(
-              frame.usage as Usage,
-              isRecord(frame.options) ? (frame.options as never) : undefined,
-              context,
-            ),
-          );
-          if (!result.ok) resultError(result);
-          emitFrame(successFrame(id, type, result.value));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'append_custom_entry': {
-        try {
-          const customType = stringValue(frame.customType);
-          if (!customType) throw new Error('customType is required');
-          const entryId = await writable(() => lane.appendCustomEntry(customType, frame.data as never, context));
-          emitFrame(successFrame(id, type, { entryId }));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'resume': {
-        try {
-          const result = await writable(() => lane.resume(context));
-          if (!result.ok) resultError(result);
-          emitFrame(successFrame(id, type, result.value));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      case 'clear_queue': {
-        try {
-          const snapshot = await lane.watch(context);
-          const queued = snapshot.snapshot.queues;
-          snapshot.unsubscribe();
-          for (const item of queued)
-            await writable(() => lane.cancelQueued(item.entryId, context)).then((result) => {
-              if (!result.ok) resultError(result);
-            });
-          emitFrame(successFrame(id, type, { steering: [], followUp: [] }));
-        } catch (error) {
-          emitFrame(failureFrame(id, type, error));
-        }
-        return;
-      }
-      default:
-        emitFrame(failureFrame(id, type, new Error(`Unknown command: ${type}`)));
-    }
+    return { settled: drive(admission.value.operationId) };
   };
 
   const replaceTools = async (tools: AgentHarnessTool<TContext>[]): Promise<void> => {
@@ -1204,7 +880,17 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     if (!result.ok) resultError(result);
     return result.value.usageId;
   };
-  const prompt = async (text: string, images?: ImageContent[]): Promise<void> => startPrompt(text, images);
+  const submitPrompt = async (text: string, images?: ImageContent[]): Promise<{ settled: Promise<void> }> => {
+    if (await options.dispatchCommand?.(text)) {
+      emitFrame({ type: 'agent_settled' });
+      return { settled: Promise.resolve() };
+    }
+    return admitPrompt(text, images);
+  };
+  const prompt = async (text: string, images?: ImageContent[]): Promise<void> => {
+    const submission = await submitPrompt(text, images);
+    await submission.settled;
+  };
   const steer = async (text: string, images?: ImageContent[]): Promise<void> => {
     const result = await writable(() => lane.steer(text, images, context));
     if (!result.ok) resultError(result);
@@ -1227,6 +913,69 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     const result = await writable(() => lane.resume(context));
     if (!result.ok) resultError(result);
   };
+  const readState = async (): Promise<Record<string, unknown>> => {
+    const watched = await lane.watch(context);
+    const execution = watched.snapshot;
+    watched.unsubscribe();
+    const configuredModel = await lane.getModel(context);
+    const name = await harness.getName(context);
+    return {
+      model: configuredModel === undefined ? undefined : { provider: configuredModel.provider, id: configuredModel.id },
+      thinkingLevel: execution.configuration.thinkingLevel,
+      isStreaming: execution.operation?.kind === 'run',
+      isCompacting: execution.operation?.kind === 'compaction',
+      steeringMode: await harness.getSteeringMode(context),
+      followUpMode: await harness.getFollowUpMode(context),
+      sessionFile: storage.sessionFile,
+      sessionId,
+      ...(name === undefined ? {} : { sessionName: name }),
+      autoCompactionEnabled: (await harness.getCompactionSettings(context)).enabled,
+      messageCount: execution.stats.messageCount,
+      pendingMessageCount: execution.queues.filter((entry) => entry.type === 'message').length,
+    };
+  };
+  const readEntries = async () => ({
+    entries: await entriesForLane(lane, context),
+    leafId: await lane.getTipId(context),
+  });
+  const listCommands = () => [...(options.listCommands?.() ?? [])];
+  const setModel = async (model: { provider: string; id: string }): Promise<void> => {
+    if (models.getModel(model.provider, model.id) === undefined)
+      throw new Error(`Model not found: ${model.provider}/${model.id}`);
+    await writable(() => lane.setModel({ provider: model.provider, modelId: model.id }, context));
+  };
+  const availableModels = () => models.getAvailable();
+  const availableThinkingLevels = async () => {
+    const model = await lane.getModel(context);
+    if (!model) throw new Error('No model is selected');
+    return getSupportedThinkingLevels(model);
+  };
+  const setThinkingLevel = (level: Parameters<typeof lane.setThinkingLevel>[0]) =>
+    writable(() => lane.setThinkingLevel(level, context));
+  const setSteeringMode = (mode: Parameters<typeof harness.setSteeringMode>[0]) =>
+    writable(() => harness.setSteeringMode(mode, context));
+  const setFollowUpMode = (mode: Parameters<typeof harness.setFollowUpMode>[0]) =>
+    writable(() => harness.setFollowUpMode(mode, context));
+  const navigateTree = async (targetId: string | null, navigationOptions?: Record<string, unknown>) => {
+    const result = await writable(() => lane.navigateTree(targetId, navigationOptions as never, context));
+    if (!result.ok) resultError(result);
+    return {
+      cancelled: result.value.navigation.status !== 'completed',
+      entries: await entriesForLane(lane, context),
+    };
+  };
+  const clearQueue = async () => {
+    const watched = await lane.watch(context);
+    const queued = watched.snapshot.queues;
+    watched.unsubscribe();
+    for (const item of queued) {
+      const result = await writable(() => lane.cancelQueued(item.entryId, context));
+      if (!result.ok) resultError(result);
+    }
+    return { steering: [] as never[], followUp: [] as never[] };
+  };
+  const setName = (name: string) => writable(() => harness.setName(name, context));
+  const getSessionStats = () => storage.session.getStats(context);
   const dispose = async (): Promise<void> => {
     if (disposed) return;
     disposed = true;
@@ -1262,31 +1011,38 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     get storageQuarantined() {
       return storageQuarantined;
     },
-    send(frame) {
-      void command(frame).catch((error) => {
-        emitFrame(failureFrame(frame.id, stringValue(frame.type) ?? 'unknown', error));
-      });
-    },
-    onFrame(listener) {
+    onPresentationFrame(listener) {
       listeners.add(listener);
+      return () => listeners.delete(listener);
     },
     onEvent(listener) {
       lifecycleListeners.add(listener);
       return () => lifecycleListeners.delete(listener);
-    },
-    endInput() {
-      void dispose().catch(() => undefined);
     },
     stop() {
       void abort()
         .catch(() => undefined)
         .finally(() => dispose().catch(() => undefined));
     },
+    readState,
+    readEntries,
+    listCommands,
+    setModel,
+    availableModels,
+    availableThinkingLevels,
+    setThinkingLevel,
+    setSteeringMode,
+    setFollowUpMode,
+    navigateTree,
+    clearQueue,
+    setName,
+    getSessionStats,
     replaceTools,
     replaceResources,
     readResources,
     appendCustomEntry,
     recordUsage,
+    submitPrompt,
     prompt,
     steer,
     followUp,

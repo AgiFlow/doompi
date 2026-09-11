@@ -9,6 +9,8 @@ import type {
 
 /** Everything the voice runtime is assembled from. */
 export interface VoiceDependencies {
+  /** Optional host-owned browser/device media service. */
+  readonly clientMedia?: IVoiceMediaHostConnection;
   readonly clock: IClock;
   readonly executables: IExecutableResolver;
   readonly spawner: IProcessSpawner;

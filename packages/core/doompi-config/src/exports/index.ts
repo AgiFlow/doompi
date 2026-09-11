@@ -1,4 +1,3 @@
-export { configHeadlessFacet } from '../adapters/headless/facet.ts';
 export { writePrivateAtomicJson } from '../adapters/atomicJson.ts';
 export {
   globalDoomConfigDirectory,

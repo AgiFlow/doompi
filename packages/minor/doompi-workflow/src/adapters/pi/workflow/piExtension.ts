@@ -423,6 +423,8 @@ export type DetachedSpawn = (
 ) => Promise<void>;
 
 interface WorkflowPiExtensionOptions {
+  /** Captured environment used for session lineage and external child processes. */
+  readonly environment: Readonly<Record<string, string | undefined>>;
   /** Package plugin context used to resolve session-scoped Cordis services. */
   cordis?: Context;
   followIntervalMs?: number;
@@ -522,15 +524,15 @@ function workflowIdFor(workflowPath: string): string {
   return basename(workflowPath, extname(workflowPath));
 }
 
-function launcherEnvironment(): NodeJS.ProcessEnv {
-  const env = { ...process.env };
+function launcherEnvironment(environment: Readonly<Record<string, string | undefined>>): NodeJS.ProcessEnv {
+  const env = { ...environment };
   for (const key of LAUNCHER_ENVIRONMENT_STRIPPED) delete env[key];
   return env;
 }
 
 /** The launcher the workflow templates default to, when it is a known one. */
-function preferredLauncher(): MultiplexerLauncher | undefined {
-  const value = process.env[LAUNCHER_ENV];
+function preferredLauncher(environment: Readonly<Record<string, string | undefined>>): MultiplexerLauncher | undefined {
+  const value = environment[LAUNCHER_ENV];
   return value === LAUNCHER_TMUX || value === LAUNCHER_CMUX ? value : undefined;
 }
 
@@ -662,7 +664,7 @@ function runLabel(record: WorkflowRunRecord): string {
     .join(` ${GLYPH.separator} `);
 }
 
-export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {}) {
+export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions) {
   return (pi: ExtensionAPI): WorkflowPiRuntime => {
     const feature = options.featureFactory?.() ?? createEmbeddedWorkflowFeature();
     const runtimeGeneration = randomUUID();
@@ -854,7 +856,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
         serviceName: 'doom-workflow',
         packageName: '@agimon-ai/doompi-workflow',
         cwd: ctx?.cwd,
-        env: process.env,
+        env: options.environment,
         enableLogs: true,
         enableTraces: true,
       });
@@ -888,11 +890,11 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
       };
     });
     const observeSession = (sessionId: string | undefined): void => {
-      if (sessionId && isRuntimeActive()) knownSessionId = resolveRootSessionId(sessionId);
+      if (sessionId && isRuntimeActive()) knownSessionId = resolveRootSessionId(sessionId, options.environment);
     };
     const currentSessionId = (): string | undefined => {
       const sessionId = knownSessionId ?? sessionCtx?.sessionManager.getSessionId();
-      return sessionId ? resolveRootSessionId(sessionId) : undefined;
+      return sessionId ? resolveRootSessionId(sessionId, options.environment) : undefined;
     };
     const isRootProcess = (ctx: ExtensionContext, rootSessionId: string): boolean =>
       ctx.sessionManager.getSessionId().trim() === rootSessionId;
@@ -957,6 +959,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
     };
 
     const launchExecutor: WorkflowLaunchExecutor = createWorkflowLaunchExecutor({
+      environment: options.environment,
       activeRunCount: async () => sessionRunCount,
       observeSession,
       rejectRunner,
@@ -1068,7 +1071,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
      * shared registry never leaks another session's runs into this UI.
      */
     const startRunControl = async (ctx: ExtensionContext): Promise<void> => {
-      const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId());
+      const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId(), options.environment);
       const control = feature.createRunControl({
         recordFilter: (candidate) => isSessionRun(candidate, sessionId),
       });
@@ -1198,7 +1201,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
       try {
         const records = await listAllRuns(registry);
         if (!refreshIsCurrent()) return;
-        const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId());
+        const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId(), options.environment);
         const rootProcess = isRootProcess(ctx, sessionId);
         const sessionRecords = records.filter((record) => isSessionRun(record, sessionId));
         const running = sessionRecords.filter((record) => record.stage === RUNNING_STATUS && !record.stale);
@@ -1459,7 +1462,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
         });
         return `Opened ${record.runKey} in cmux.`;
       }
-      if (!process.env.TMUX) {
+      if (!options.environment.TMUX) {
         return 'Pi is not attached to tmux. Follow the output instead, or attach to the recorded tmux session manually.';
       }
       const target = launcher.sessionId ?? launcher.sessionName;
@@ -1861,7 +1864,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
       // Mint the transfer capability in the shared registry before spawning.
       // The delegated CLI can only adopt this exact terminal record and gets
       // the owner identity from the claim rather than caller-controlled argv.
-      const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId());
+      const sessionId = resolveRootSessionId(ctx.sessionManager.getSessionId(), options.environment);
       const claim = await registry.claimRunRecovery(record.workspace, record.runKey, sessionId);
       const cwd = record.originalRepoPath ?? ctx.cwd;
       const recoverCommand = shellCommand([
@@ -1875,7 +1878,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
         claim.claimId,
         ...(input.runner ? ['--runner', input.runner] : []),
       ]);
-      const launcher = preferredLauncher();
+      const launcher = preferredLauncher(options.environment);
       try {
         await spawnDetached(
           process.execPath,
@@ -1890,7 +1893,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
             '--command',
             recoverCommand,
           ],
-          { cwd, env: launcherEnvironment() },
+          { cwd, env: launcherEnvironment(options.environment) },
         );
       } catch (error) {
         await registry.releaseRunRecoveryClaim(record.workspace, record.runKey, claim.claimId);
@@ -2265,6 +2268,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
     });
 
     registerWorkflowPiTools(readinessPi, {
+      environment: options.environment,
       runTool,
       recoverTool,
       launchExecutor,
@@ -2371,7 +2375,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
 
       const activeTelemetry = getTelemetry(ctx);
       void activeTelemetry.recordEvent('doom_workflow.session_started', {
-        mode: process.env.WORKFLOW_MCP_MODE === 'on' ? 'on' : 'off',
+        mode: options.environment.WORKFLOW_MCP_MODE === 'on' ? 'on' : 'off',
         outcome: 'started',
       });
 
@@ -2379,14 +2383,14 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
       // default-off state has to be applied here rather than by not registering.
       // WORKFLOW_MCP_MODE=on is the non-interactive dispatcher path.
       const sessionId = ctx.sessionManager.getSessionId();
-      const rootSessionId = resolveRootSessionId(sessionId);
+      const rootSessionId = resolveRootSessionId(sessionId, options.environment);
       observeSession(rootSessionId);
       sessionStartedAt = Date.now();
       lifecycleNarrationReady = false;
       previousStages = new Map<string, WorkflowStage>();
       pendingTerminalRuns.clear();
       deliveredTerminalRuns.clear();
-      setWorkflowMode(options.initialMode ?? process.env.WORKFLOW_MCP_MODE === 'on');
+      setWorkflowMode(options.initialMode ?? options.environment.WORKFLOW_MCP_MODE === 'on');
 
       const coordinator = readinessCoordinator(ctx);
       readinessHandle = (async (): Promise<DoomReadinessHandle<void>> => {
@@ -2521,7 +2525,7 @@ export function installWorkflowPiRuntime(options: WorkflowPiExtensionOptions = {
 }
 
 /** Direct installer retained for focused tests; the public factory uses Cordis ownership. */
-export function createWorkflowPiExtension(options: WorkflowPiExtensionOptions = {}) {
+export function createWorkflowPiExtension(options: WorkflowPiExtensionOptions) {
   return (pi: ExtensionAPI): void => {
     const runtime = installWorkflowPiRuntime(options)(pi);
     pi.on('session_shutdown', (_event, context) => runtime.dispose(context));

@@ -59,6 +59,7 @@ async function setup(
           cwd: '/test',
           repoRoot: '/test',
           sessionId: 'test',
+          environment: {},
           selection,
           shutdown: vi.fn(),
           client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },

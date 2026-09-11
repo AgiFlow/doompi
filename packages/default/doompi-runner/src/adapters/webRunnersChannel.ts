@@ -1,48 +1,53 @@
-import type { HubChannelSource, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import type { DoomHubChannel, DoomHubChannelSource } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { RUNNER_RUNS_TYPE, type RunnerRunView } from '../types/webRunners.ts';
-import { type RunnerRunsSource, watchRunnerRuns } from './webRunnerWatcher.ts';
+
+function runnerPayload(value: unknown): value is { runs: RunnerRunView[] } {
+  return typeof value === 'object' && value !== null && Array.isArray((value as { runs?: unknown }).runs);
+}
 
 /**
- * The runners data channel: one state-directory watcher per managed session,
- * published as { runs } payloads under the 'runner_runs' frame type. The hub
- * runs in its own process, so this reads the records the session's registry
- * writes rather than the registry itself.
+ * The runners data channel consumes lifecycle-owned snapshots from the session
+ * server. Durable registry files are read by the owning session only, never by
+ * this hub channel.
  */
-export function createRunnersChannel(watch: typeof watchRunnerRuns = watchRunnerRuns): WebHubChannel {
+export function createRunnersChannel(): DoomHubChannel {
   return {
     frameType: RUNNER_RUNS_TYPE,
     start(host) {
       const latest = new Map<string, RunnerRunView[]>();
-      const sources = new Map<string, RunnerRunsSource>();
-      const channelSource: HubChannelSource = {
+      const subscriptions = new Map<string, () => void>();
+      const source: DoomHubChannelSource = {
         payloadFor(scope) {
           const runs = latest.get(scope.sessionId);
           return runs === undefined ? undefined : { runs };
         },
         sessionAdded(scope) {
-          sources.set(
+          subscriptions.get(scope.sessionId)?.();
+          latest.delete(scope.sessionId);
+          const unsubscribe = host.directEvents.subscribe(
+            RUNNER_RUNS_TYPE,
             scope.sessionId,
-            watch(scope.sessionId, (runs) => {
-              latest.set(scope.sessionId, runs);
-              host.publish(scope.sessionId, { runs });
-            }),
+            (payload) => {
+              if (!runnerPayload(payload)) return;
+              latest.set(scope.sessionId, payload.runs);
+              host.publish(scope.sessionId, payload);
+            },
+            { replayLatest: true },
           );
+          subscriptions.set(scope.sessionId, unsubscribe);
         },
         sessionRemoved(sessionId) {
-          sources.get(sessionId)?.close();
-          sources.delete(sessionId);
+          subscriptions.get(sessionId)?.();
+          subscriptions.delete(sessionId);
           latest.delete(sessionId);
         },
         close() {
-          for (const source of sources.values()) source.close();
-          sources.clear();
+          for (const unsubscribe of subscriptions.values()) unsubscribe();
+          subscriptions.clear();
           latest.clear();
         },
       };
-      return channelSource;
+      return source;
     },
   };
 }
-
-/** The named export the generated hub registry imports. */
-export const webHubChannels: readonly WebHubChannel[] = [createRunnersChannel()];

@@ -28,7 +28,7 @@ export const sandboxHeadlessFacet = {
   inject: [DOOM_HEADLESS_HOST_SERVICE],
   apply(context: Context) {
     const host = requireDoomHeadlessHost(context);
-    const service = new DefaultSandboxExtensionService(process.env);
+    const service = new DefaultSandboxExtensionService(host.context.environment);
     let broker: RunningBroker | undefined;
     const resources: DoomHeadlessResource[] = [
       { name: 'doompi-sandbox', kind: 'context', read: () => readPackageResource('llms.txt') },
@@ -42,9 +42,9 @@ export const sandboxHeadlessFacet = {
     const activity: DoomHeadlessActivity = {
       name: BROKER_STATUS_SOURCE,
       async start(execution) {
-        if (process.env[BROKER_DISABLED_ENV] === DISABLED_VALUE) return () => undefined;
+        if (execution.environment[BROKER_DISABLED_ENV] === DISABLED_VALUE) return () => undefined;
         const started = await startBroker({
-          environment: process.env,
+          environment: execution.environment,
           onDenied: (reason) => {
             void execution.client.notify({
               title: 'DoomPi sandbox broker',

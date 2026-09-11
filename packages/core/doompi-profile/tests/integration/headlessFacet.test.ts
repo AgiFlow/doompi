@@ -25,6 +25,7 @@ function execution(repoRoot: string, profile: string): DoomHeadlessExecutionCont
     cwd: path.join(repoRoot, 'different-working-directory'),
     repoRoot,
     sessionId: 'headless-profile-test',
+    environment: {},
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {
       entries: () => [],

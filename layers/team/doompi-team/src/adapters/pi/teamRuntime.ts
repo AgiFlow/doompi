@@ -7,26 +7,24 @@
  */
 
 import { SubagentCapabilityPolicyStore } from '../../schemas/team/capabilityCeiling';
+import type { DoomChildSessionServiceProvider } from '@agimon-ai/doompi-extension-contracts/child-session';
 import { AgentDiscoveryService } from '../agents/discovery';
 import { SkillDiscoveryService } from '../agents/skills';
 import { NativeTeamChannelService } from '../intercom/nativeTeamChannel';
-import { ControlChannelWatcher } from '../intercom/supervisorControlChannel';
 import { AsyncSubagentSpawner } from '../runs/background/asyncExecution';
-import { AsyncJobTracker } from '../asyncJobTracker';
+import { AsyncJobTracker, TERMINAL_ASYNC_JOB_STATES } from '../asyncJobTracker';
+import { NativeRunCoordinator } from '../nativeRunCoordinator';
+import type { NativeRunProjectionSink } from '../nativeRunProjection';
 import { CompletionNotifier } from '../runs/background/notify';
-import { ProcessTerminalInspector } from '../processTerminal';
-import { ResultWatcher } from '../resultWatcher';
-import { RunIdResolver } from '../runIdResolver';
-import { StaleRunReconciler } from '../staleRunReconciler';
-import { CoalescedStatusWriter } from '../runs/background/statusWriter';
 import { SubagentWaiter } from '../runs/background/subagentWait';
-import { TerminalPersistenceService } from '../runs/background/terminalPersistence';
+import { AdmissionGate } from '../runs/shared/admissionGate';
 import { McpDirectToolResolverBinding } from '../runs/shared/mcpDirectToolAllowlist';
 import type { ConcurrencyEventReporter } from '../runs/shared/runWithConcurrency';
 import { ManagementActions } from './extensions/managementActions';
 import { SpawnPlanner } from './extensions/spawnPlan';
 import { SubagentToolService } from './extensions/subagentTool';
 import { PollScheduler } from '../pollScheduler';
+import { ExternalProcessIpc, type ExternalProcessEvent } from '../process/externalProcessIpc';
 
 const ignoreConcurrencyEvent: ConcurrencyEventReporter = () => undefined;
 
@@ -35,79 +33,135 @@ export interface TeamExtensionRuntime {
   readonly subagentTool: SubagentToolService;
   readonly teamChannel: NativeTeamChannelService;
   readonly pollScheduler: PollScheduler;
-  readonly statusWriter: CoalescedStatusWriter;
-  readonly terminalPersistence: TerminalPersistenceService;
-  readonly controlChannel: ControlChannelWatcher;
   readonly asyncJobTracker: AsyncJobTracker;
+  readonly nativeRuns: NativeRunCoordinator;
   readonly subagentWaiter: SubagentWaiter;
   readonly asyncSubagentSpawner: AsyncSubagentSpawner;
   readonly discovery: AgentDiscoveryService;
   readonly skills: SkillDiscoveryService;
   readonly spawnPlanner: SpawnPlanner;
   readonly completionNotifier: CompletionNotifier;
-  readonly resultWatcher: ResultWatcher;
-  readonly runIdResolver: RunIdResolver;
-  readonly processTerminal: ProcessTerminalInspector;
-  readonly staleRunReconciler: StaleRunReconciler;
+  readonly externalProcesses: ExternalProcessIpc;
+  readonly dispose: () => void;
   readonly management: ManagementActions;
   readonly capabilityPolicies: SubagentCapabilityPolicyStore;
   readonly mcpToolResolver: McpDirectToolResolverBinding;
   readonly reportConcurrencyEvent: ConcurrencyEventReporter;
 }
 
+/** Lazy dependencies supplied by the owning Pi or headless host. */
+export interface TeamExtensionRuntimeOptions {
+  readonly environment: Readonly<Record<string, string | undefined>>;
+  readonly childSessions?: DoomChildSessionServiceProvider;
+  readonly nativeRunProjection?: NativeRunProjectionSink;
+}
+
 /** Build one fresh parent graph for one Team Cordis adapter fiber. */
 export function createTeamExtensionRuntime(
-  reportConcurrencyEvent: ConcurrencyEventReporter = ignoreConcurrencyEvent,
+  reportConcurrencyEvent: ConcurrencyEventReporter | undefined,
+  options: TeamExtensionRuntimeOptions,
 ): TeamExtensionRuntime {
+  const report = reportConcurrencyEvent ?? ignoreConcurrencyEvent;
   const pollScheduler = new PollScheduler();
-  const statusWriter = new CoalescedStatusWriter();
-  const terminalPersistence = new TerminalPersistenceService(statusWriter);
-  const controlChannel = new ControlChannelWatcher(pollScheduler);
-  const asyncJobTracker = new AsyncJobTracker(pollScheduler);
+  const asyncJobTracker = new AsyncJobTracker();
+  const admission = new AdmissionGate({
+    countLiveRuns: (scope) =>
+      asyncJobTracker
+        .forSession(scope.rootSessionId, scope)
+        .list()
+        .filter((job) => job.status === undefined || !TERMINAL_ASYNC_JOB_STATES.has(job.status)).length,
+  });
   const subagentWaiter = new SubagentWaiter(asyncJobTracker);
-  const asyncSubagentSpawner = new AsyncSubagentSpawner(asyncJobTracker, terminalPersistence);
+  const externalProcesses = new ExternalProcessIpc();
+  const asyncSubagentSpawner = new AsyncSubagentSpawner(externalProcesses);
   const discovery = new AgentDiscoveryService();
   const skills = new SkillDiscoveryService();
   const capabilityPolicies = new SubagentCapabilityPolicyStore();
   const mcpToolResolver = new McpDirectToolResolverBinding();
+  const completionNotifier = new CompletionNotifier();
+  const nativeRuns = new NativeRunCoordinator(
+    options.childSessions,
+    asyncJobTracker,
+    completionNotifier,
+    options.nativeRunProjection,
+  );
+  const teamChannel = new NativeTeamChannelService();
   const spawnPlanner = new SpawnPlanner(
     discovery,
     asyncSubagentSpawner,
     capabilityPolicies,
     skills,
-    reportConcurrencyEvent,
+    report,
     mcpToolResolver,
+    admission,
+    options.childSessions,
+    nativeRuns,
+    teamChannel,
   );
-  const runIdResolver = new RunIdResolver();
-  const processTerminal = new ProcessTerminalInspector();
-  const management = new ManagementActions(runIdResolver, asyncJobTracker);
-  const completionNotifier = new CompletionNotifier();
-  const resultWatcher = new ResultWatcher(pollScheduler);
-  const staleRunReconciler = new StaleRunReconciler(processTerminal, runIdResolver);
-  const teamChannel = new NativeTeamChannelService();
-  const subagentTool = new SubagentToolService(spawnPlanner, management, asyncJobTracker, discovery);
+  const management = new ManagementActions(asyncJobTracker, nativeRuns, externalProcesses);
+  const onExternalEvent = (event: ExternalProcessEvent): void => {
+    const sessionId = event.scope.rootSessionId;
+    if ('message' in event) {
+      const { message } = event;
+      if (message.kind === 'status') asyncJobTracker.upsertExternal(sessionId, event.scope, message.status);
+      if (message.kind === 'error') {
+        asyncJobTracker.markExternalFailed(sessionId, event.scope, message.runId, message.error);
+        void completionNotifier
+          .deliver({ runId: message.runId, agent: 'external', success: false, summary: message.error })
+          .then((delivered) => {
+            if (delivered) asyncJobTracker.acknowledgeHandoff(sessionId, message.runId);
+          });
+      }
+      if (message.kind === 'result') {
+        if (!asyncJobTracker.acceptExternalResult(sessionId, event.scope, message.runId, message.result)) return;
+        void completionNotifier.deliver({ ...message.result, runId: message.runId }).then((delivered) => {
+          if (delivered) asyncJobTracker.acknowledgeHandoff(sessionId, message.runId);
+        });
+      }
+      return;
+    }
+    const jobs = asyncJobTracker.forSession(sessionId, event.scope);
+    const job = jobs.get(event.runId);
+    if (!job || (job.status && TERMINAL_ASYNC_JOB_STATES.has(job.status))) return;
+    const error = `External runner process exited unexpectedly (${event.signal ?? `code ${event.code ?? 'unknown'}`}).`;
+    asyncJobTracker.markExternalFailed(sessionId, event.scope, event.runId, error);
+    void completionNotifier
+      .deliver({ runId: event.runId, agent: job.agent ?? 'external', success: false, summary: error })
+      .then((delivered) => {
+        if (delivered) asyncJobTracker.acknowledgeHandoff(sessionId, event.runId);
+      });
+  };
+  const unsubscribeExternal = externalProcesses.subscribe(onExternalEvent);
+  const subagentTool = new SubagentToolService(
+    spawnPlanner,
+    management,
+    asyncJobTracker,
+    discovery,
+    options.environment,
+  );
+
+  const dispose = (): void => {
+    unsubscribeExternal();
+    externalProcesses.close();
+  };
 
   return Object.freeze({
     subagentTool,
     teamChannel,
     pollScheduler,
-    statusWriter,
-    terminalPersistence,
-    controlChannel,
     asyncJobTracker,
+    nativeRuns,
     subagentWaiter,
     asyncSubagentSpawner,
     discovery,
     skills,
     spawnPlanner,
     completionNotifier,
-    resultWatcher,
-    runIdResolver,
-    processTerminal,
-    staleRunReconciler,
+    externalProcesses,
+    dispose,
     management,
     capabilityPolicies,
     mcpToolResolver,
-    reportConcurrencyEvent,
+    reportConcurrencyEvent: report,
   });
 }

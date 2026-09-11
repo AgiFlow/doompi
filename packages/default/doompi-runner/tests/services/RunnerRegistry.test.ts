@@ -13,7 +13,7 @@ const RETAINED_HISTORY_RECORDS = 500;
 
 let directory: string;
 let previousRegistryPath: string | undefined;
-let previousRootSession: string | undefined;
+const EMPTY_ENVIRONMENT = Object.freeze({});
 const open: RunnerRegistry[] = [];
 
 function pathsFor(repositoryPath: string): IRunnerPaths {
@@ -42,8 +42,9 @@ function registryFor(
   repositoryPath: string,
   alive: ReadonlySet<number> = new Set([1, 2, 3]),
   port: ProcessRegistryPort = createDefaultProcessRegistry(),
+  environment: Readonly<Record<string, string | undefined>> = EMPTY_ENVIRONMENT,
 ): RunnerRegistry {
-  const registry = new RunnerRegistry(pathsFor(repositoryPath), controlWith(alive), port);
+  const registry = new RunnerRegistry(pathsFor(repositoryPath), controlWith(alive), port, environment);
   open.push(registry);
   return registry;
 }
@@ -76,9 +77,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doom-runner-registry-')));
   previousRegistryPath = process.env[REGISTRY_PATH_ENV];
-  previousRootSession = process.env[SUBAGENT_ROOT_SESSION_ENV];
   process.env[REGISTRY_PATH_ENV] = path.join(directory, 'processes.db');
-  delete process.env[SUBAGENT_ROOT_SESSION_ENV];
 });
 
 afterEach(() => {
@@ -86,8 +85,6 @@ afterEach(() => {
   for (const registry of open.splice(0)) registry.close();
   if (previousRegistryPath === undefined) delete process.env[REGISTRY_PATH_ENV];
   else process.env[REGISTRY_PATH_ENV] = previousRegistryPath;
-  if (previousRootSession === undefined) delete process.env[SUBAGENT_ROOT_SESSION_ENV];
-  else process.env[SUBAGENT_ROOT_SESSION_ENV] = previousRootSession;
   fs.rmSync(directory, { recursive: true, force: true });
 });
 
@@ -204,11 +201,11 @@ describe('RunnerRegistry', () => {
   });
 
   it('lists descendant-owned runners by their inherited root without changing ownership', async () => {
-    const registry = registryFor('/repo/main');
-    process.env[SUBAGENT_ROOT_SESSION_ENV] = 'root-session';
+    const environment = Object.freeze({ [SUBAGENT_ROOT_SESSION_ENV]: 'root-session' });
+    const registry = registryFor('/repo/main', new Set([1, 2, 3]), createDefaultProcessRegistry(), environment);
+    const otherRegistry = registryFor('/repo/main');
     await registry.register(inputFor('child-api', 1, 'child-session'));
-    delete process.env[SUBAGENT_ROOT_SESSION_ENV];
-    await registry.register(inputFor('other-api', 2, 'other-root'));
+    await otherRegistry.register(inputFor('other-api', 2, 'other-root'));
 
     expect((await registry.listByRootSession('root-session')).map((record) => record.name)).toEqual(['child-api']);
     expect((await registry.listBySession('root-session')).map((record) => record.name)).toEqual([]);

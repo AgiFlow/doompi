@@ -28,3 +28,14 @@ export {
   type DoomServerBundleOwner,
   parseDoomServerBundle,
 } from '../schemas/serverBundle.ts';
+export {
+  type InstalledServerFacets,
+  type InstallServerFacetsOptions,
+  installServerFacets,
+  type LoadedServerBundle,
+  type LoadedServerFacet,
+  type LoadServerBundleOptions,
+  loadServerBundle,
+  resolveServerBundleSource,
+  type ServerBundleSource,
+} from '../adapters/serverFacetLoader.ts';

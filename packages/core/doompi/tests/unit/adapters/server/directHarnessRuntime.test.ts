@@ -2,7 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import { JsonlSessionRepo, MemorySessionRepo } from '@earendil-works/pi-agent-core/harness/session';
+import {
+  JsonlSessionRepo,
+  MemorySessionRepo,
+  JSONL_STORAGE_VERSION,
+} from '@earendil-works/pi-agent-core/harness/session';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import {
   createAssistantMessageEventStream,
@@ -17,7 +21,10 @@ import {
   createHistoryOwnership,
   historyOwnershipLockPath,
 } from '../../../../src/adapters/serialization/historyOwnership.ts';
-import { createDirectHarnessRuntime } from '../../../../src/adapters/server/directHarnessRuntime.ts';
+import {
+  createDirectHarnessRuntime,
+  readDirectHarnessSessionMetadata,
+} from '../../../../src/adapters/server/directHarnessRuntime.ts';
 
 const model: Model<Api> = {
   id: 'test-model',
@@ -37,15 +44,6 @@ const models = {
   getModel: (provider: string, id: string) => (provider === model.provider && id === model.id ? model : undefined),
   getAvailable: async () => [model],
 } as unknown as Models;
-
-async function frameFor(frames: Record<string, unknown>[], id: string): Promise<Record<string, unknown>> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const frame = frames.find((candidate) => candidate.id === id);
-    if (frame !== undefined) return frame;
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-  throw new Error(`Timed out waiting for response ${id}`);
-}
 
 describe('direct AgentHarness runtime', () => {
   it.each(['sessionPath', 'legacySessionPath'] as const)(
@@ -164,7 +162,7 @@ describe('direct AgentHarness runtime', () => {
       await repository.close(BACKGROUND_CONTEXT);
     }
   });
-  it('replaces resources through the public harness and preserves framed state responses', async () => {
+  it('replaces resources through the public harness and exposes typed state', async () => {
     const repository = new MemorySessionRepo();
     const session = await repository.create({ id: 'direct-runtime-test' }, BACKGROUND_CONTEXT);
     const runtime = await createDirectHarnessRuntime({
@@ -173,8 +171,6 @@ describe('direct AgentHarness runtime', () => {
       models,
       model,
     });
-    const frames: Record<string, unknown>[] = [];
-    runtime.onFrame((frame) => frames.push(frame));
 
     try {
       expect(await runtime.readResources()).toEqual({});
@@ -183,12 +179,9 @@ describe('direct AgentHarness runtime', () => {
         promptTemplates: [{ name: 'greet', content: 'Hello' }],
       });
 
-      runtime.send({ type: 'get_state', id: 'state' });
-      await expect(frameFor(frames, 'state')).resolves.toMatchObject({
-        type: 'response',
-        command: 'get_state',
-        success: true,
-        data: { sessionId: 'direct-runtime-test', model: { provider: 'test-provider', id: 'test-model' } },
+      await expect(runtime.readState()).resolves.toMatchObject({
+        sessionId: 'direct-runtime-test',
+        model: { provider: 'test-provider', id: 'test-model' },
       });
     } finally {
       await runtime.dispose();
@@ -196,9 +189,9 @@ describe('direct AgentHarness runtime', () => {
     }
   });
 
-  it('serves protocol command variants and reports rejected operations as responses', async () => {
+  it('exposes typed session operations without command frames', async () => {
     const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'protocol-runtime-test' }, BACKGROUND_CONTEXT);
+    const session = await repository.create({ id: 'typed-runtime-test' }, BACKGROUND_CONTEXT);
     const streamSimple = vi.fn<Models['streamSimple']>(() => {
       const stream = createAssistantMessageEventStream();
       const message: AssistantMessage = {
@@ -231,139 +224,32 @@ describe('direct AgentHarness runtime', () => {
       listCommands: () => [{ name: 'known', description: 'Known command' }],
       dispatchCommand,
     });
-    const frames: Record<string, unknown>[] = [];
-    runtime.onFrame((frame) => frames.push(frame));
-    let requestId = 0;
-    const request = async (type: string, fields: Record<string, unknown> = {}) => {
-      const id = `protocol-${++requestId}`;
-      runtime.send({ type, id, ...fields });
-      return frameFor(frames, id);
-    };
-
     try {
-      await expect(request('get_commands')).resolves.toMatchObject({
-        type: 'response',
-        command: 'get_commands',
-        success: true,
-        data: { commands: [{ name: 'known', description: 'Known command', source: 'extension' }] },
-      });
-      await expect(request('get_available_models')).resolves.toMatchObject({
-        command: 'get_available_models',
-        success: true,
-        data: { models: [model] },
-      });
-      await expect(request('set_model', { provider: model.provider, modelId: model.id })).resolves.toMatchObject({
-        command: 'set_model',
-        success: true,
-        data: model,
-      });
-      await expect(request('set_model', { provider: 'missing', modelId: 'missing' })).resolves.toMatchObject({
-        command: 'set_model',
-        success: false,
-      });
-      await expect(request('set_thinking_level', { level: 'high' })).resolves.toMatchObject({
-        command: 'set_thinking_level',
-        success: true,
-      });
-      await expect(request('set_thinking_level')).resolves.toMatchObject({
-        command: 'set_thinking_level',
-        success: false,
-      });
-      await expect(request('set_steering_mode', { mode: 'one-at-a-time' })).resolves.toMatchObject({ success: true });
-      await expect(request('set_follow_up_mode', { mode: 'all' })).resolves.toMatchObject({ success: true });
-      await expect(request('set_follow_up_mode', { mode: 'invalid' })).resolves.toMatchObject({ success: false });
+      expect(runtime.listCommands()).toEqual([{ name: 'known', description: 'Known command' }]);
+      await expect(runtime.availableModels()).resolves.toEqual([model]);
+      await expect(runtime.setModel({ provider: 'missing', id: 'missing' })).rejects.toThrow('Model not found');
+      await runtime.setModel({ provider: model.provider, id: model.id });
+      await runtime.setThinkingLevel('high');
+      await runtime.setSteeringMode('one-at-a-time');
+      await runtime.setFollowUpMode('all');
+      await expect(runtime.appendCustomEntry('typed-test', { value: 1 })).resolves.toEqual(expect.any(String));
       await expect(
-        request('append_custom_entry', { customType: 'protocol-test', data: { value: 1 } }),
-      ).resolves.toMatchObject({
-        command: 'append_custom_entry',
-        success: true,
-        data: { entryId: expect.any(String) },
-      });
-      await expect(request('append_custom_entry')).resolves.toMatchObject({ success: false });
-      await expect(
-        request('record_usage', {
-          usage: {
-            input: 1,
-            output: 1,
-            cacheRead: 0,
-            cacheWrite: 0,
-            totalTokens: 2,
-            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-          },
+        runtime.recordUsage({
+          input: 1,
+          output: 1,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 2,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
         }),
-      ).resolves.toMatchObject({
-        command: 'record_usage',
-        success: true,
-        data: { usageId: expect.any(String) },
-      });
-      await expect(request('record_usage')).resolves.toMatchObject({ success: false });
-      await expect(request('get_entries')).resolves.toMatchObject({
-        command: 'get_entries',
-        success: true,
-        data: { entries: expect.any(Array), leafId: expect.any(String) },
-      });
-      await expect(request('get_entries', { since: 'missing-entry' })).resolves.toMatchObject({
-        command: 'get_entries',
-        success: false,
-      });
-      await expect(request('get_messages')).resolves.toMatchObject({
-        command: 'get_messages',
-        success: true,
-        data: { messages: [] },
-      });
-      await expect(request('set_session_name', { name: 'Protocol session' })).resolves.toMatchObject({ success: true });
-      await expect(request('set_session_name', { name: '   ' })).resolves.toMatchObject({ success: false });
-      await expect(request('get_state')).resolves.toMatchObject({
-        command: 'get_state',
-        success: true,
-        data: { sessionId: 'protocol-runtime-test', sessionName: 'Protocol session', thinkingLevel: 'high' },
-      });
-      await expect(request('clear_queue')).resolves.toMatchObject({
-        command: 'clear_queue',
-        success: true,
-        data: { steering: [], followUp: [] },
-      });
-      await expect(request('prompt', { message: 42 })).resolves.toMatchObject({
-        command: 'prompt',
-        success: false,
-      });
-      runtime.send({ type: 'prompt', id: 'normal-prompt', message: 'normal prompt' });
-      await expect(frameFor(frames, 'normal-prompt')).resolves.toMatchObject({ command: 'prompt', success: true });
+      ).resolves.toEqual(expect.any(String));
+      await runtime.setName('Typed session');
+      await expect(runtime.readState()).resolves.toMatchObject({ sessionName: 'Typed session', thinkingLevel: 'high' });
+      await expect(runtime.readEntries()).resolves.toMatchObject({ entries: expect.any(Array) });
+      await expect(runtime.clearQueue()).resolves.toEqual({ steering: [], followUp: [] });
+      await runtime.prompt('normal prompt');
       expect(streamSimple).toHaveBeenCalledOnce();
-      await expect(request('steer', { message: 'steer this' })).resolves.toMatchObject({
-        command: 'steer',
-        success: true,
-      });
-      await expect(request('follow_up', { message: 'follow this' })).resolves.toMatchObject({
-        command: 'follow_up',
-        success: true,
-      });
-      await expect(request('steer')).resolves.toMatchObject({ command: 'steer', success: false });
-      await expect(request('abort')).resolves.toMatchObject({ command: 'abort', success: expect.any(Boolean) });
-      await expect(request('compact', { customInstructions: 'Keep protocol history concise' })).resolves.toMatchObject({
-        command: 'compact',
-        success: expect.any(Boolean),
-      });
-      await expect(request('resume')).resolves.toMatchObject({ command: 'resume', success: expect.any(Boolean) });
-      await expect(request('navigate_tree', { targetId: 42 })).resolves.toMatchObject({
-        command: 'navigate_tree',
-        success: false,
-      });
-      runtime.send({ id: 'missing-type' });
-      await expect(frameFor(frames, 'missing-type')).resolves.toMatchObject({
-        command: 'unknown',
-        success: false,
-      });
-      await expect(request('navigate_tree', { targetId: null })).resolves.toMatchObject({
-        command: 'navigate_tree',
-        success: expect.any(Boolean),
-      });
-      await expect(request('unknown_protocol_command')).resolves.toMatchObject({
-        command: 'unknown_protocol_command',
-        success: false,
-      });
-      runtime.send({ type: 'prompt', id: 'slash-prompt', message: '/known argument' });
-      await expect(frameFor(frames, 'slash-prompt')).resolves.toMatchObject({ command: 'prompt', success: true });
+      await runtime.prompt('/known argument');
       expect(dispatchCommand).toHaveBeenCalledWith('/known argument');
     } finally {
       await runtime.dispose();
@@ -407,22 +293,11 @@ describe('direct AgentHarness runtime', () => {
         if (phase === 'turn' && !prepared) throw new Error('capability preparation failed');
       },
     });
-    const frames: Record<string, unknown>[] = [];
-    runtime.onFrame((frame) => frames.push(frame));
     try {
-      runtime.send({ type: 'prompt', id: 'blocked-prompt', message: 'blocked' });
-      await expect(frameFor(frames, 'blocked-prompt')).resolves.toMatchObject({
-        type: 'response',
-        command: 'prompt',
-        success: true,
-      });
+      await runtime.prompt('blocked');
       expect(streamSimple).not.toHaveBeenCalled();
       prepared = true;
-      runtime.send({ type: 'prompt', id: 'recovered-prompt', message: 'recovered' });
-      await expect(frameFor(frames, 'recovered-prompt')).resolves.toMatchObject({
-        command: 'prompt',
-        success: true,
-      });
+      await runtime.prompt('recovered');
       expect(streamSimple).toHaveBeenCalledOnce();
     } finally {
       await runtime.dispose();
@@ -466,15 +341,11 @@ describe('direct AgentHarness runtime', () => {
         if (blocked) throw new Error('provider admission blocked');
       },
     });
-    const frames: Record<string, unknown>[] = [];
-    runtime.onFrame((frame) => frames.push(frame));
     try {
-      runtime.send({ type: 'prompt', id: 'guarded-prompt', message: 'guarded' });
-      await expect(frameFor(frames, 'guarded-prompt')).resolves.toMatchObject({ success: true });
+      await runtime.prompt('guarded');
       expect(streamSimple).not.toHaveBeenCalled();
       blocked = false;
-      runtime.send({ type: 'prompt', id: 'allowed-prompt', message: 'allowed' });
-      await expect(frameFor(frames, 'allowed-prompt')).resolves.toMatchObject({ success: true });
+      await runtime.prompt('allowed');
       expect(streamSimple).toHaveBeenCalledOnce();
     } finally {
       await runtime.dispose();
@@ -482,9 +353,9 @@ describe('direct AgentHarness runtime', () => {
     }
   });
 
-  it('frames command-provider failures and recovers for the next request', async () => {
+  it('surfaces typed command catalog failures and recovers for the next call', async () => {
     const repository = new MemorySessionRepo();
-    const session = await repository.create({ id: 'frame-recovery-test' }, BACKGROUND_CONTEXT);
+    const session = await repository.create({ id: 'catalog-recovery-test' }, BACKGROUND_CONTEXT);
     const listCommands = vi
       .fn<() => []>()
       .mockImplementationOnce(() => {
@@ -492,23 +363,9 @@ describe('direct AgentHarness runtime', () => {
       })
       .mockReturnValue([]);
     const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model, listCommands });
-    const frames: Record<string, unknown>[] = [];
-    runtime.onFrame((frame) => frames.push(frame));
     try {
-      runtime.send({ id: 'unexpected-command', type: 'get_commands' });
-      await expect(frameFor(frames, 'unexpected-command')).resolves.toMatchObject({
-        type: 'response',
-        command: 'get_commands',
-        success: false,
-        error: 'command catalog unavailable',
-      });
-      runtime.send({ type: 'get_commands', id: 'recovered-command' });
-      await expect(frameFor(frames, 'recovered-command')).resolves.toMatchObject({
-        type: 'response',
-        command: 'get_commands',
-        success: true,
-        data: { commands: [] },
-      });
+      expect(() => runtime.listCommands()).toThrow('command catalog unavailable');
+      expect(runtime.listCommands()).toEqual([]);
     } finally {
       await runtime.dispose();
       await repository.close(BACKGROUND_CONTEXT);
@@ -548,7 +405,7 @@ describe('direct AgentHarness runtime', () => {
       model,
     });
     const frames: Record<string, unknown>[] = [];
-    runtime.onFrame((frame) => frames.push(frame));
+    runtime.onPresentationFrame((frame) => frames.push(frame));
     let observerFailed = false;
     const unsubscribe = runtime.onEvent(async (event) => {
       if (event.type === 'run_start' && !observerFailed) {
@@ -557,8 +414,7 @@ describe('direct AgentHarness runtime', () => {
       }
     });
     try {
-      runtime.send({ type: 'prompt', id: 'event-prompt', message: 'event recovery' });
-      await expect(frameFor(frames, 'event-prompt')).resolves.toMatchObject({ command: 'prompt', success: true });
+      await runtime.prompt('event recovery');
       expect(observerFailed).toBe(true);
       expect(frames).toContainEqual(
         expect.objectContaining({
@@ -569,7 +425,7 @@ describe('direct AgentHarness runtime', () => {
         }),
       );
       unsubscribe();
-      runtime.endInput();
+      await runtime.dispose();
       await expect(runtime.exited).resolves.toBe(0);
     } finally {
       await runtime.dispose();
@@ -687,5 +543,165 @@ describe('direct AgentHarness runtime', () => {
       fs.rmSync(root, { recursive: true, force: true });
     }
     expect(release).toHaveBeenCalledOnce();
+  });
+  it('validates upstream v4 session metadata before replaying a journal', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-session-metadata-'));
+    const validPath = path.join(root, 'valid.jsonl');
+    const minimalPath = path.join(root, 'minimal.jsonl');
+    fs.writeFileSync(
+      validPath,
+      `${JSON.stringify({
+        kind: 'header',
+        v: 4,
+        id: 'session-id',
+        cwd: root,
+        createdAt: 123,
+        parentSessionId: 'parent-id',
+        legacyParentSessionPath: '/legacy/session.jsonl',
+      })}\n`,
+    );
+    fs.writeFileSync(
+      minimalPath,
+      `${JSON.stringify({ kind: 'header', v: 4, id: 'minimal', cwd: root, createdAt: 456, storageVersion: 7 })}\n`,
+    );
+    try {
+      expect(readDirectHarnessSessionMetadata(validPath)).toMatchObject({
+        id: 'session-id',
+        cwd: root,
+        createdAt: 123,
+        storageVersion: JSONL_STORAGE_VERSION,
+        parentSessionId: 'parent-id',
+        legacyParentSessionPath: '/legacy/session.jsonl',
+        path: fs.realpathSync(validPath),
+        modifiedAt: expect.any(Number),
+      });
+      expect(readDirectHarnessSessionMetadata(minimalPath)).toMatchObject({
+        id: 'minimal',
+        createdAt: 456,
+        storageVersion: 7,
+      });
+
+      const invalidHeaders = [
+        ['malformed', 'not-json', 'Invalid JSONL session header'],
+        ['wrong-kind', JSON.stringify({ kind: 'session', v: 4 }), 'not an upstream v4 JSONL file'],
+        ['wrong-version', JSON.stringify({ kind: 'header', v: 3 }), 'not an upstream v4 JSONL file'],
+        [
+          'invalid-identity',
+          JSON.stringify({ kind: 'header', v: 4, id: '', cwd: root, createdAt: 1 }),
+          'Invalid JSONL session identity',
+        ],
+        [
+          'invalid-created-at',
+          JSON.stringify({ kind: 'header', v: 4, id: 'session', cwd: root, createdAt: null }),
+          'Invalid JSONL session identity',
+        ],
+      ] as const;
+      for (const [name, content, message] of invalidHeaders) {
+        const filePath = path.join(root, `${name}.jsonl`);
+        fs.writeFileSync(filePath, `${content}\n`);
+        expect(() => readDirectHarnessSessionMetadata(filePath)).toThrow(message);
+      }
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('quarantines writes after a journal failure and reports the blocked state', async () => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'quarantined-runtime' }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+    const frames: Record<string, unknown>[] = [];
+    runtime.onPresentationFrame((frame) => frames.push(frame));
+    const append = vi.spyOn(runtime.lane, 'appendCustomEntry').mockImplementation(async () => {
+      throw new Error('journal write failed');
+    });
+    try {
+      await expect(runtime.appendCustomEntry('will-fail')).rejects.toThrow('journal write failed');
+      expect(runtime.storageQuarantined).toBe(true);
+      expect(frames).toContainEqual({ type: 'error', code: 'storage_quarantined', error: 'journal write failed' });
+      await expect(runtime.setName('blocked')).rejects.toThrow('writes are quarantined');
+      expect(append).toHaveBeenCalledOnce();
+    } finally {
+      append.mockRestore();
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+
+  it('returns a nonzero exit code when runtime cleanup fails and remains idempotent', async () => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'cleanup-failure-runtime' }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+    vi.spyOn(runtime.harness, 'close').mockRejectedValue(new Error('harness cleanup failed'));
+    try {
+      await expect(runtime.dispose()).rejects.toThrow('harness cleanup failed');
+      await expect(runtime.exited).resolves.toBe(1);
+      await expect(runtime.dispose()).resolves.toBeUndefined();
+    } finally {
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+  it('refuses writable session creation without explicit history ownership', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-owner-required-'));
+    try {
+      await expect(
+        createDirectHarnessRuntime({ cwd: root, sessionsRoot: root, sessionId: 'owner-required', models, model }),
+      ).rejects.toThrow('requires explicit HistoryOwnership');
+      expect(fs.readdirSync(root)).toEqual([]);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects an existing session when its identity does not match the requested id', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-session-mismatch-'));
+    const sessionPath = path.join(root, 'session.jsonl');
+    fs.writeFileSync(
+      sessionPath,
+      `${JSON.stringify({ kind: 'header', v: 4, id: 'actual-id', cwd: root, createdAt: 1 })}\n`,
+    );
+    const release = vi.fn();
+    const ownership = { acquire: vi.fn(async () => ({ assertQuiescent: vi.fn(), release })) };
+    try {
+      await expect(
+        createDirectHarnessRuntime({
+          cwd: root,
+          sessionPath,
+          sessionId: 'requested-id',
+          historyOwnership: ownership,
+          models,
+          model,
+        }),
+      ).rejects.toThrow('Session id mismatch: expected requested-id, found actual-id');
+      expect(release).toHaveBeenCalledOnce();
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails before harness creation when no public model registry or provider is configured', async () => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'models-required' }, BACKGROUND_CONTEXT);
+    try {
+      await expect(createDirectHarnessRuntime({ cwd: '/tmp', session, model })).rejects.toThrow(
+        'requires a public Models registry or at least one Provider',
+      );
+    } finally {
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+
+  it('quarantines the runtime when session cleanup fails during disposal', async () => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'session-cleanup-failure' }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+    vi.spyOn(session, 'close').mockRejectedValue(new Error('session close failed'));
+    try {
+      await expect(runtime.dispose()).rejects.toThrow('session close failed');
+      expect(runtime.storageQuarantined).toBe(true);
+      await expect(runtime.exited).resolves.toBe(1);
+    } finally {
+      await repository.close(BACKGROUND_CONTEXT);
+    }
   });
 });

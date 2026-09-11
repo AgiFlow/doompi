@@ -1,9 +1,4 @@
 export {
-  assertDeclaredApi,
-  type DeclaredApiExpectation,
-  type DeclaredApiReport,
-} from '../adapters/testing/declaredApi.ts';
-export {
   type ExtensionContractScenario,
   standardExtensionScenarios,
   type StandardExtensionContractOptions,
@@ -26,6 +21,11 @@ export {
   type RecordedUserMessage,
   type RecordedWidget,
 } from '../adapters/testing/piHost.ts';
+export {
+  doomHubChannelHarness,
+  type DoomHubChannelHarness,
+  type DoomHubChannelHarnessOptions,
+} from '../adapters/testing/hubChannel.ts';
 export {
   mountPackageApi,
   type MountedPackageApi,

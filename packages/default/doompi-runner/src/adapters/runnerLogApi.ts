@@ -22,9 +22,8 @@ import { LogReader } from './LogReader/LogReader.ts';
 import { LogTail } from './LogTail/LogTail.ts';
 import { PtyBackendChain } from './PtyBackendChain/PtyBackendChain.ts';
 import { RmuxBackend } from './RmuxBackend/RmuxBackend.ts';
-import { RunnerPaths, resolveRunnerStoreDirectory } from './RunnerPaths.ts';
+import { RunnerPaths, resolveRunnerStoreDirectory, runnerStateDirFor } from './RunnerPaths.ts';
 import { TmuxBackend } from './TmuxBackend/TmuxBackend.ts';
-import { runnerStateDirFor } from './webRunnerWatcher.ts';
 
 const LOG_DIR_NAME = 'logs';
 const STATE_EXTENSION = '.json';

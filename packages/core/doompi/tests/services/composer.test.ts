@@ -441,6 +441,7 @@ describe('composeLoadOrder', () => {
     const childExtensions = JSON.parse(environment.DOOMPI_CHILD_EXTENSIONS ?? '[]') as string[];
     expect(childExtensions).toEqual([
       '/own/cordisHost.ts',
+      '/own/terminalChildSession.ts',
       '/pkg/@agimon-ai/doompi-config/extensions/pi',
       ...configuredDefaultPackages.map((name) => `/pkg/${name}`),
       '/pkg/@agimon-ai/doompi-team',

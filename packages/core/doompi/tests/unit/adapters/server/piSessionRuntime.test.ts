@@ -1,220 +1,206 @@
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context';
 import { describe, expect, it, vi } from 'vitest';
-import { createRpcTranscript, type RpcTranscript } from '../../../../src/services/server/rpcTranscript.ts';
 import { createAgentSessionRuntime } from '../../../../src/adapters/server/piSessionRuntime.ts';
-import type { AgentProcess, SessionFrame } from '../../../../src/types/server/session.ts';
+import type { DirectHarnessFrame, DirectHarnessRuntime } from '../../../../src/types/server/directHarnessRuntime.ts';
 
-function fixture(transcript?: RpcTranscript) {
-  const listeners: Array<(frame: SessionFrame) => void> = [];
-  const sent: SessionFrame[] = [];
-  const agent: AgentProcess = {
-    send: (frame) => {
-      sent.push(frame);
+function fixture() {
+  const listeners = new Set<(frame: DirectHarnessFrame) => void>();
+  const direct = {
+    exited: new Promise<number>(() => undefined),
+    onPresentationFrame(listener: (frame: DirectHarnessFrame) => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
-    onFrame: (listener) => {
-      listeners.push(listener);
-    },
-    exited: new Promise<number>(() => {}),
-    endInput: () => {},
-    stop: () => {},
-  };
-  const runtime = createAgentSessionRuntime({ agent, sessionId: 's1', sessionName: 'test', cwd: '/test', transcript });
+    readEntries: vi.fn(async () => ({ entries: [], leafId: null })),
+    readState: vi.fn(async () => ({ sessionId: 's1', thinkingLevel: 'off' })),
+    listCommands: vi.fn(() => [{ name: 'run', description: 'Run' }]),
+    availableModels: vi.fn(async () => [{ provider: 'test', id: 'm', api: 'test' }]),
+    availableThinkingLevels: vi.fn(async () => ['off', 'high']),
+    setModel: vi.fn(async () => undefined),
+    setThinkingLevel: vi.fn(async () => undefined),
+    setSteeringMode: vi.fn(async () => undefined),
+    setFollowUpMode: vi.fn(async () => undefined),
+    clearQueue: vi.fn(async () => ({ steering: [], followUp: [] })),
+    navigateTree: vi.fn(async () => ({ cancelled: false, entries: [] })),
+    submitPrompt: vi.fn(async () => ({ settled: Promise.resolve() })),
+    prompt: vi.fn(async () => undefined),
+    steer: vi.fn(async () => undefined),
+    followUp: vi.fn(async () => undefined),
+    abort: vi.fn(async () => undefined),
+    compact: vi.fn(async () => undefined),
+    setName: vi.fn(async () => undefined),
+    getSessionStats: vi.fn(async () => ({ messages: 0 })),
+  } as unknown as DirectHarnessRuntime;
+  const respondToExtensionUi = vi.fn(() => true);
+  const runtime = createAgentSessionRuntime({
+    runtime: direct,
+    sessionId: 's1',
+    sessionName: 'test',
+    cwd: '/test',
+    respondToExtensionUi,
+  });
   return {
+    direct,
     runtime,
-    sent,
-    emit: (frame: SessionFrame) => {
+    respondToExtensionUi,
+    emit(frame: DirectHarnessFrame) {
       for (const listener of listeners) listener(frame);
     },
   };
 }
 
 describe('typed session runtime controls', () => {
-  it('correlates concurrent info replies by id and command, including out-of-order results', async () => {
-    const { runtime, sent, emit } = fixture();
-    const commands = runtime.getCommands(BACKGROUND_CONTEXT);
-    const models = runtime.getAvailableModels(BACKGROUND_CONTEXT);
-    expect(sent.map((frame) => frame.type)).toEqual(['get_commands', 'get_available_models']);
-    emit({ type: 'response', id: sent[0].id, command: 'get_available_models', success: true, data: { models: [] } });
-    emit({
-      type: 'response',
-      id: sent[1].id,
-      command: 'get_available_models',
-      success: true,
-      data: { models: [{ provider: 'test', id: 'm', apiKey: 'not forwarded' }] },
-    });
-    emit({
-      type: 'response',
-      id: sent[0].id,
-      command: 'get_commands',
-      success: true,
-      data: { commands: [{ name: 'run', source: 'extension' }] },
-    });
-    await expect(commands).resolves.toEqual([{ name: 'run', source: 'extension' }]);
-    await expect(models).resolves.toEqual([{ provider: 'test', id: 'm' }]);
+  it('uses direct typed reads and model controls', async () => {
+    const { direct, runtime } = fixture();
+
+    await expect(runtime.getCommands(BACKGROUND_CONTEXT)).resolves.toEqual([{ name: 'run', description: 'Run' }]);
+    await expect(runtime.getAvailableModels(BACKGROUND_CONTEXT)).resolves.toEqual([{ provider: 'test', id: 'm' }]);
+    await expect(runtime.getAvailableThinkingLevels(BACKGROUND_CONTEXT)).resolves.toEqual(['off', 'high']);
+    await expect(runtime.getState(BACKGROUND_CONTEXT)).resolves.toMatchObject({ sessionId: 's1' });
+    await runtime.setModel({ provider: 'test', id: 'm' }, BACKGROUND_CONTEXT);
+    await runtime.setThinking('high', BACKGROUND_CONTEXT);
+
+    expect(direct.setModel).toHaveBeenCalledWith({ provider: 'test', id: 'm' });
+    expect(direct.setThinkingLevel).toHaveBeenCalledWith('high');
     await runtime.dispose();
   });
 
-  it('forwards queue and rewind controls and propagates command failures', async () => {
-    const { runtime, sent, emit } = fixture();
-    const queue = runtime.clearQueue(BACKGROUND_CONTEXT);
-    emit({
-      type: 'response',
-      id: sent[0].id,
-      command: 'clear_queue',
-      success: true,
-      data: { steering: ['one'], followUp: [] },
+  it('forwards queue and rewind controls through direct methods', async () => {
+    const { direct, runtime } = fixture();
+    vi.mocked(direct.readEntries).mockResolvedValue({
+      leafId: 'entry',
+      entries: [
+        {
+          id: 'entry',
+          parentId: null,
+          type: 'message',
+          seq: 1,
+          timestamp: Date.now(),
+          message: { role: 'user', timestamp: 123, content: 'hello' },
+        },
+      ],
     });
-    await expect(queue).resolves.toEqual({ steering: ['one'], followUp: [] });
-    const rewind = runtime.rewind({ itemId: 'user-123', summarize: true }, BACKGROUND_CONTEXT);
-    expect(sent[1]).toMatchObject({ type: 'get_entries' });
-    emit({
-      type: 'response',
-      id: sent[1].id,
-      command: 'get_entries',
-      success: true,
-      data: {
-        leafId: 'entry',
-        entries: [
-          { id: 'entry', parentId: null, type: 'message', message: { role: 'user', timestamp: 123, content: 'hello' } },
-        ],
-      },
+
+    await expect(runtime.clearQueue(BACKGROUND_CONTEXT)).resolves.toEqual({ steering: [], followUp: [] });
+    await expect(runtime.rewind({ itemId: 'user-123', summarize: true }, BACKGROUND_CONTEXT)).resolves.toMatchObject({
+      cancelled: false,
     });
-    await Promise.resolve();
-    expect(sent[2]).toMatchObject({
-      type: 'navigate_tree',
-      targetId: 'entry',
-      entryId: 'entry',
-      options: { summarize: true },
-    });
-    emit({ type: 'response', id: sent[2].id, command: 'navigate_tree', success: false, error: 'history is read-only' });
-    await expect(rewind).rejects.toThrow('history is read-only');
+    expect(direct.navigateTree).toHaveBeenCalledWith('entry', { summarize: true });
     await runtime.dispose();
   });
 
-  it('preserves images and extension dialog identity', async () => {
-    const { runtime, sent, emit } = fixture();
+  it('preserves images and routes extension dialog responses to the host', async () => {
+    const { direct, runtime, respondToExtensionUi } = fixture();
     const images = [{ type: 'image' as const, data: 'image', mimeType: 'image/png' }];
-    const follow = runtime.followUp({ text: 'later', images }, BACKGROUND_CONTEXT);
-    expect(sent[0]).toMatchObject({ type: 'follow_up', message: 'later', images });
-    emit({ type: 'response', id: sent[0].id, command: 'follow_up', success: true });
-    await follow;
-    await runtime.extensionUiResponse({ id: 'dialog', confirmed: false }, BACKGROUND_CONTEXT);
-    expect(sent[1]).toEqual({ type: 'extension_ui_response', id: 'dialog', confirmed: false });
+
+    await runtime.followUp({ text: 'later', images }, BACKGROUND_CONTEXT);
+    await runtime.extensionUiResponse({ id: 'dialog-1', value: 'yes' }, BACKGROUND_CONTEXT);
+
+    expect(direct.followUp).toHaveBeenCalledWith('later', images);
+    expect(respondToExtensionUi).toHaveBeenCalledWith({ type: 'extension_ui_response', id: 'dialog-1', value: 'yes' });
     await runtime.dispose();
   });
 
-  it('rejects pending calls and prompts on disposal instead of leaving unresolved promises', async () => {
-    const { runtime } = fixture();
-    const info = runtime.getSessionStats(BACKGROUND_CONTEXT);
-    const prompt = runtime.prompt('hello', BACKGROUND_CONTEXT);
-    const infoFailure = expect(info).rejects.toThrow('disposed');
-    const promptFailure = expect(prompt).rejects.toThrow('disposed');
-    await runtime.dispose();
-    await Promise.all([infoFailure, promptFailure]);
-  });
-  it('hydrates persisted custom projections without a legacy hub attachment', async () => {
-    const { runtime, sent, emit } = fixture();
-    const ready = runtime.initialize();
-    emit({
-      type: 'response',
-      id: sent[0].id,
-      command: 'get_state',
-      success: true,
-      data: { model: { provider: 'test', id: 'model' }, thinkingLevel: 'off', isStreaming: false },
+  it('waits for settlement while accepted acknowledgement returns after direct admission', async () => {
+    const { direct, runtime, emit } = fixture();
+
+    const settled = runtime.prompt('hello', BACKGROUND_CONTEXT);
+    await Promise.resolve();
+    expect(direct.submitPrompt).toHaveBeenCalledWith('hello', undefined);
+    let finished = false;
+    void settled.then(() => {
+      finished = true;
     });
     await Promise.resolve();
-    expect(sent[1].type).toBe('get_entries');
-    emit({
-      type: 'response',
-      id: sent[1].id,
-      command: 'get_entries',
-      success: true,
-      data: {
-        leafId: 'context',
-        entries: [
-          { id: 'context', parentId: null, type: 'custom', customType: 'doompi:context', data: { profile: 'test' } },
-        ],
-      },
-    });
-    emit({
-      type: 'extension_ui_request',
-      method: 'setStatus',
-      statusKey: 'selection',
-      statusText: 'newer live selection',
-    });
-    await ready;
-    const frames = runtime.state.state.presentation?.projections.map((event) => event.frame);
-    expect(frames).toContainEqual(
-      expect.objectContaining({ type: 'entry_appended', entry: expect.objectContaining({ id: 'context' }) }),
-    );
-    expect(frames?.at(-1)).toMatchObject({ statusText: 'newer live selection' });
-    emit({ type: 'extension_ui_request', method: 'confirm', id: 'dialog', title: 'confirm' });
-    await runtime.extensionUiResponse({ id: 'dialog', confirmed: true }, BACKGROUND_CONTEXT);
-    expect(runtime.state.state.presentation?.projections.some((event) => event.frame.id === 'dialog')).toBe(false);
-    await runtime.dispose();
-  });
-  it('publishes custom-only hydration even when the transcript reducer has no change', async () => {
-    const transcript = createRpcTranscript({ id: 's1', cwd: '/test', now: () => 0 });
-    transcript.apply = () => ({});
-    const { runtime, emit } = fixture(transcript);
-    const publish = vi.spyOn(runtime.state, 'publish');
-    emit({
-      type: 'response',
-      command: 'get_entries',
-      success: true,
-      data: {
-        leafId: 'custom',
-        entries: [{ id: 'custom', parentId: null, type: 'custom', customType: 'context', data: {} }],
-      },
-    });
-    expect(publish).toHaveBeenCalledOnce();
-    expect(runtime.state.state.presentation?.projections).toHaveLength(1);
-    emit({ type: 'response', command: 'get_entries', success: true, data: { entries: [], leafId: null } });
-    expect(publish).toHaveBeenCalledTimes(2);
-    expect(runtime.state.state.presentation?.projections).toEqual([]);
-    await runtime.dispose();
-  });
-  it('acknowledges browser preflight without binding the accepted turn to its caller lifetime', async () => {
-    const { runtime, sent, emit } = fixture();
-    const controller = new AbortController();
-    const prompt = runtime.prompt(
-      { text: 'background task', waitFor: 'accepted' },
-      withAbortSignal(controller.signal, BACKGROUND_CONTEXT),
-    );
-    await expect(runtime.prompt({ text: 'duplicate', waitFor: 'accepted' }, BACKGROUND_CONTEXT)).rejects.toThrow(
-      'already running',
-    );
-    expect(sent).toHaveLength(1);
-    emit({ type: 'response', id: sent[0].id, command: 'prompt', success: true });
-    await prompt;
-    controller.abort();
-    expect(sent.some((frame) => frame.type === 'abort')).toBe(false);
+    expect(finished).toBe(false);
     emit({ type: 'agent_settled' });
+    await settled;
+
+    await runtime.prompt({ text: 'accepted', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
+    expect(direct.submitPrompt).toHaveBeenLastCalledWith('accepted', undefined);
     await runtime.dispose();
   });
 
-  it('does not acknowledge rejected browser preflight as a successful submission', async () => {
-    const { runtime, sent, emit } = fixture();
-    const prompt = runtime.prompt({ text: 'task', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
-    emit({ type: 'response', id: sent[0].id, command: 'prompt', success: false, error: 'preflight denied' });
-    await expect(prompt).rejects.toThrow('preflight denied');
+  it('aborts the active direct turn when the caller cancels', async () => {
+    const { direct, runtime } = fixture();
+    const controller = new AbortController();
+    const pending = runtime.prompt('cancel me', withAbortSignal(controller.signal, BACKGROUND_CONTEXT));
+    await Promise.resolve();
+    controller.abort(new Error('cancelled'));
+
+    await expect(pending).rejects.toThrow('cancelled');
+    expect(direct.abort).toHaveBeenCalledOnce();
     await runtime.dispose();
   });
-  it('retains concurrent live items across unrelated frames for reconnecting clients', async () => {
-    const { runtime, emit } = fixture();
-    emit({ type: 'agent_start' });
-    emit({
-      type: 'message_start',
-      message: { id: 'draft', role: 'assistant', content: [{ type: 'text', text: 'working' }] },
+  it('rejects malformed controls and prevents operations after disposal', async () => {
+    const { direct, runtime, emit, respondToExtensionUi } = fixture();
+    try {
+      await expect(runtime.prompt({ text: 42 } as never, BACKGROUND_CONTEXT)).rejects.toThrow(
+        'Prompt message must be a string',
+      );
+      await expect(
+        runtime.prompt({ text: 'bad images', images: [{ type: 'text' }] } as never, BACKGROUND_CONTEXT),
+      ).rejects.toThrow('Invalid message images');
+      await expect(
+        runtime.prompt({ text: 'bad acknowledgement', waitFor: 'queued' } as never, BACKGROUND_CONTEXT),
+      ).rejects.toThrow('Invalid prompt acknowledgement mode');
+
+      emit({ type: 'agent_start' });
+      await expect(runtime.prompt('overlapping', BACKGROUND_CONTEXT)).rejects.toThrow('A turn is already running');
+      await runtime.steer(
+        { text: 'steer', images: [{ type: 'image', data: 'data', mimeType: 'image/png' }] },
+        BACKGROUND_CONTEXT,
+      );
+      await runtime.abort(BACKGROUND_CONTEXT);
+      expect(direct.steer).toHaveBeenCalledWith('steer', [{ type: 'image', data: 'data', mimeType: 'image/png' }]);
+      expect(direct.abort).toHaveBeenCalledOnce();
+      emit({ type: 'agent_settled' });
+      await expect(runtime.steer('idle', BACKGROUND_CONTEXT)).rejects.toThrow('There is no active turn to steer');
+      await expect(runtime.abort(BACKGROUND_CONTEXT)).rejects.toThrow('There is no active turn to abort');
+
+      await expect(runtime.setModel(null as never, BACKGROUND_CONTEXT)).rejects.toThrow('Invalid model');
+      await expect(runtime.setThinking('invalid' as never, BACKGROUND_CONTEXT)).rejects.toThrow(
+        'Invalid thinking level',
+      );
+      await expect(runtime.setName('x'.repeat(257), BACKGROUND_CONTEXT)).rejects.toThrow('Invalid session name');
+      await expect(runtime.rewind(null as never, BACKGROUND_CONTEXT)).rejects.toThrow('Invalid rewind identity');
+      await expect(runtime.rewind({ itemId: 'missing' }, BACKGROUND_CONTEXT)).rejects.toThrow(
+        'selected message is not in the active session tree',
+      );
+
+      await expect(runtime.extensionUiResponse({ id: '', value: 'yes' }, BACKGROUND_CONTEXT)).rejects.toThrow(
+        'Invalid extension UI response',
+      );
+      await expect(
+        runtime.extensionUiResponse({ id: 'dialog', value: 42 } as never, BACKGROUND_CONTEXT),
+      ).rejects.toThrow('Invalid extension UI response');
+      await runtime.extensionUiResponse({ id: 'dialog', confirmed: true }, BACKGROUND_CONTEXT);
+      vi.mocked(respondToExtensionUi).mockReturnValue(false);
+      await expect(runtime.extensionUiResponse({ id: 'missing', cancelled: true }, BACKGROUND_CONTEXT)).rejects.toThrow(
+        'No pending extension UI request',
+      );
+
+      await runtime.dispose();
+      await expect(runtime.getState(BACKGROUND_CONTEXT)).rejects.toThrow('session runtime is disposed');
+      await expect(runtime.prompt('after disposal', BACKGROUND_CONTEXT)).rejects.toThrow('session runtime is disposed');
+    } finally {
+      await runtime.dispose();
+    }
+  });
+  it('hydrates persisted custom entries once and propagates prompt admission failures', async () => {
+    const { direct, runtime } = fixture();
+    vi.mocked(direct.readEntries).mockResolvedValue({
+      leafId: null,
+      entries: [{ type: 'custom', customType: 'persisted', data: { value: true } } as never],
     });
-    emit({ type: 'tool_execution_start', toolCallId: 'tool', toolName: 'read', args: {} });
-    emit({ type: 'extension_ui_request', method: 'setStatus', statusKey: 'task', statusText: 'running' });
-    expect(runtime.state.state.progress).toBeNull();
-    expect(runtime.state.state.inFlight?.map((item) => item.id)).toEqual(['draft', 'tool']);
-    emit({ type: 'tool_execution_end', toolCallId: 'tool', result: { content: [] }, isError: false });
-    expect(runtime.state.state.inFlight?.map((item) => item.id)).toEqual(['draft']);
-    emit({ type: 'agent_settled' });
-    expect(runtime.state.state.inFlight).toEqual([]);
-    await runtime.dispose();
+    vi.mocked(direct.submitPrompt).mockRejectedValueOnce(new Error('prompt admission failed'));
+    try {
+      await runtime.initialize();
+      await runtime.initialize();
+      expect(direct.readEntries).toHaveBeenCalledOnce();
+      await expect(runtime.prompt('will fail', BACKGROUND_CONTEXT)).rejects.toThrow('prompt admission failed');
+    } finally {
+      await runtime.dispose();
+    }
   });
 });

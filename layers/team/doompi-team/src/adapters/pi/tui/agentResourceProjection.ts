@@ -1,13 +1,115 @@
 import type { ResolvedSubagentCapabilityCeiling } from '../../../schemas/team/capabilityCeiling';
+import { DOOMPI_CHILD_EXTENSIONS_ENV } from '../../../types/environment';
 import { buildSkillInjection, type SkillDiscoveryContract } from '../../agents/skills';
 import type { AgentConfig } from '../../agents/types';
-import { type PiLaunchToolPlan, type PiSdkResourcePlan, resolvePiSdkResourcePlan } from '../../runs/shared/piArgs';
 import { isPiRuntime } from '../../runs/shared/runtimeRegistry';
 
 const CONDITIONAL_TOOLS = 'Request-specific internal tools';
 const HOST_DEFAULT_TOOLS = 'Pi host-default tool set';
 const AMBIENT_EXTENSIONS = 'Ambient Pi extensions';
 const AMBIENT_SKILLS = 'Ambient Pi skills';
+
+interface ResourceToolSelection {
+  selector: string;
+  name: string;
+}
+
+interface PiLaunchToolPlan {
+  capabilityCeiling?: ResolvedSubagentCapabilityCeiling;
+  excludedTools: string[];
+  requestedBuiltinTools: string[];
+  declaredBuiltinTools: string[];
+  resolvedMcpSelections: ResourceToolSelection[];
+  effectiveMcpTools: string[];
+  explicitToolAllowlist: boolean;
+  effectiveToolAllowlist: string[];
+  runtimeExtensions: string[];
+  configuredExtensions: string[];
+}
+
+interface PiSdkResourcePlan {
+  toolPlan: PiLaunchToolPlan;
+  extensions: string[];
+  noAmbientExtensions: boolean;
+}
+
+function isToolExtensionPath(tool: string): boolean {
+  return tool.includes('/') || tool.endsWith('.ts') || tool.endsWith('.js');
+}
+
+function inheritedExtensions(environment: NodeJS.ProcessEnv | undefined): string[] {
+  const raw = environment?.[DOOMPI_CHILD_EXTENSIONS_ENV];
+  if (!raw) return [];
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed) || !parsed.every((value) => typeof value === 'string')) {
+    throw new Error(`${DOOMPI_CHILD_EXTENSIONS_ENV} must be a JSON array of extension paths.`);
+  }
+  return parsed;
+}
+
+function resolvePiSdkResourcePlan(input: {
+  tools?: string[];
+  extensions?: string[];
+  subagentOnlyExtensions?: string[];
+  excludeTools?: string[];
+  capabilityCeiling?: ResolvedSubagentCapabilityCeiling;
+  requireReadTool: boolean;
+  environment?: NodeJS.ProcessEnv;
+}): PiSdkResourcePlan {
+  const excludedTools = [...new Set((input.excludeTools ?? []).map((tool) => tool.trim()).filter(Boolean))];
+  const excluded = new Set(excludedTools);
+  const allowedTools = input.capabilityCeiling?.allowedTools;
+  const allowed = allowedTools ? new Set(allowedTools) : undefined;
+  const requestedBuiltinTools = [
+    ...new Set([...(input.tools ?? []), ...(input.capabilityCeiling?.requiredTools ?? [])]),
+  ].filter((tool) => !isToolExtensionPath(tool));
+  if (input.requireReadTool && excluded.has('read')) {
+    throw new Error("Child tool exclusions exclude required tool 'read' for lazy skill loading.");
+  }
+  if (input.requireReadTool && allowed && !allowed.has('read')) {
+    throw new Error(
+      `Capability ceiling from ${input.capabilityCeiling?.sources.join(', ') || 'unknown source'} excludes required tool 'read' for lazy skill loading.`,
+    );
+  }
+  const declaredBuiltinTools = (
+    input.tools === undefined
+      ? (allowedTools ?? [])
+      : input.requireReadTool && requestedBuiltinTools.length > 0 && !requestedBuiltinTools.includes('read') && !allowed
+        ? ['read', ...requestedBuiltinTools]
+        : requestedBuiltinTools
+  )
+    .filter((tool) => !allowed || allowed.has(tool))
+    .filter((tool) => !excluded.has(tool));
+  const explicitToolAllowlist = input.tools !== undefined || allowed !== undefined;
+  const effectiveToolAllowlist = [...new Set(declaredBuiltinTools)];
+  if (input.requireReadTool && explicitToolAllowlist && !effectiveToolAllowlist.includes('read')) {
+    throw new Error("Effective child tool allowlist excludes required tool 'read' for lazy skill loading.");
+  }
+  const configuredExtensions = input.capabilityCeiling?.denyExtensions
+    ? []
+    : [
+        ...(input.tools ?? []).filter(isToolExtensionPath),
+        ...(input.extensions ?? []),
+        ...(input.subagentOnlyExtensions ?? []),
+      ];
+  const toolPlan: PiLaunchToolPlan = {
+    ...(input.capabilityCeiling ? { capabilityCeiling: input.capabilityCeiling } : {}),
+    excludedTools,
+    requestedBuiltinTools,
+    declaredBuiltinTools,
+    resolvedMcpSelections: [],
+    effectiveMcpTools: [],
+    explicitToolAllowlist,
+    effectiveToolAllowlist,
+    runtimeExtensions: [],
+    configuredExtensions,
+  };
+  return {
+    toolPlan,
+    extensions: [...new Set([...inheritedExtensions(input.environment), ...configuredExtensions])],
+    noAmbientExtensions: input.capabilityCeiling?.denyExtensions === true || input.extensions !== undefined,
+  };
+}
 
 export interface ProjectedResource {
   name: string;
@@ -102,16 +204,18 @@ function toolProjection(
   const { toolPlan } = plan;
   const mcpNames = new Set(toolPlan.effectiveMcpTools);
   const effective = toolPlan.explicitToolAllowlist
-    ? toolPlan.effectiveToolAllowlist.map((name) =>
-        resource(
-          name,
-          mcpNames.has(name)
-            ? 'resolved MCP tool'
-            : agent.tools === undefined
-              ? 'granted by parent capability ceiling'
-              : 'configured builtin tool',
-        ),
-      )
+    ? toolPlan.effectiveToolAllowlist
+        .map((name) =>
+          resource(
+            name,
+            mcpNames.has(name)
+              ? 'resolved MCP tool'
+              : agent.tools === undefined
+                ? 'granted by parent capability ceiling'
+                : 'configured builtin tool',
+          ),
+        )
+        .sort((left, right) => left.name.localeCompare(right.name))
     : [];
   const removedBuiltins = removedBuiltinCandidates(agent, toolPlan)
     .filter((name) => !toolPlan.declaredBuiltinTools.includes(name))
@@ -262,12 +366,9 @@ export function projectAgentResources(
       tools: agent.tools,
       extensions: agent.extensions,
       subagentOnlyExtensions: agent.subagentOnlyExtensions,
-      mcpDirectTools: agent.mcpDirectTools,
-      cwd: context.cwd,
-      requireReadTool: skills.requireReadTool,
       excludeTools: context.excludeTools ? [...context.excludeTools] : undefined,
       capabilityCeiling: context.capabilityCeiling,
-      inheritSkills: agent.inheritSkills,
+      requireReadTool: skills.requireReadTool,
       environment: context.environment,
     });
     return {

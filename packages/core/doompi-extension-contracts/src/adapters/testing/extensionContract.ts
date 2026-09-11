@@ -70,6 +70,7 @@ export function standardExtensionScenarios(
     async run() {
       const host = build(hostOptions);
       try {
+        await host.cordis('standard-extension-contract');
         await body(host);
       } finally {
         await host.dispose();
@@ -79,6 +80,7 @@ export function standardExtensionScenarios(
 
   return [
     scenario('registers its declared tools and commands when the host loads it', {}, async (host) => {
+      await host.cordis('standard-extension-contract');
       await options.factory(host.pi);
 
       assertContains(
@@ -94,9 +96,11 @@ export function standardExtensionScenarios(
     }),
 
     scenario('handles session_shutdown, so the host can reclaim what it registered', {}, async (host) => {
+      const before = host.handlers(SHUTDOWN_EVENT).length;
+      await host.cordis('standard-extension-contract');
       await options.factory(host.pi);
 
-      if (host.handlers(SHUTDOWN_EVENT).length === 0) {
+      if (host.handlers(SHUTDOWN_EVENT).length === before) {
         fail('The entry registered no session_shutdown handler, so nothing it holds is ever released.');
       }
     }),
@@ -104,6 +108,7 @@ export function standardExtensionScenarios(
     scenario('takes a repeated shutdown without failing the second one', {}, async (host) => {
       // Pi delivers shutdown per registered extension, and a package that
       // installed twice on one runner receives it twice.
+      await host.cordis('standard-extension-contract');
       await options.factory(host.pi);
 
       await host.emit(SHUTDOWN_EVENT, { reason: 'quit' });
@@ -111,10 +116,13 @@ export function standardExtensionScenarios(
     }),
 
     scenario('loads again on the same host after a shutdown, the way /reload does', {}, async (host) => {
+      await host.cordis('standard-extension-contract');
       await options.factory(host.pi);
       await host.emit(SHUTDOWN_EVENT, { reason: 'reload' });
       const before = host.tools.length;
 
+      await host.cordis('standard-extension-contract');
+      await host.cordis('standard-extension-contract');
       await options.factory(host.pi);
 
       if (expectedTools.length > 0 && host.tools.length === before) {
@@ -130,6 +138,7 @@ export function standardExtensionScenarios(
     // The cockpit and the RPC runtime both load extensions with no TUI. An
     // entry that reaches for one there takes the whole session down.
     scenario('installs and shuts down on a headless host', { hasUI: false, mode: 'rpc' }, async (host) => {
+      await host.cordis('standard-extension-contract');
       await options.factory(host.pi);
       await host.emit(START_EVENT, { reason: 'startup' });
       await host.emit(SHUTDOWN_EVENT, { reason: 'quit' });

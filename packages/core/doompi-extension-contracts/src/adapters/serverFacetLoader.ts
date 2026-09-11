@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Context, Service, type Fiber } from '@deepseek-ai/cordis';
@@ -17,64 +16,6 @@ import {
   type DoomServerBundleEntry,
   parseDoomServerBundle,
 } from '../schemas/serverBundle.ts';
-import { packageApiDirectory } from './packageApiLoader.ts';
-
-/** The generated module a host of this scope installs its facets from. */
-export function serverFacetsModulePath(
-  scope: DoomApiScope,
-  env: NodeJS.ProcessEnv = process.env,
-  homeDir = os.homedir(),
-  explicitDirectory?: string,
-): string {
-  return path.join(packageApiDirectory(env, homeDir, explicitDirectory), `${scope}.facets.mjs`);
-}
-
-export interface LoadServerFacetsOptions {
-  env?: NodeJS.ProcessEnv;
-  homeDir?: string;
-  apiDirectory?: string;
-  onNotice?: (message: string) => void;
-}
-
-/**
- * The server facets a host of this scope should install, from the module
- * `doompi sync` generated.
- *
- * The failure posture matches the API loader's: no module is an ordinary state
- * on a fresh machine, and a module that fails to load costs the host its
- * facets but never its start. A server that refuses to boot over one broken
- * package is worse than a server missing that package's surface.
- */
-export async function loadServerFacets(
-  scope: DoomApiScope,
-  options: LoadServerFacetsOptions = {},
-): Promise<DoomServerFacet[]> {
-  const notice = options.onNotice ?? ((): void => {});
-  const environment = options.env ?? process.env;
-  const modulePath = serverFacetsModulePath(scope, environment, options.homeDir ?? os.homedir(), options.apiDirectory);
-  if (!fs.existsSync(modulePath)) return [];
-  let exported: unknown;
-  try {
-    const module = (await import(pathToFileURL(modulePath).href)) as { facets?: unknown };
-    exported = module.facets;
-  } catch (error) {
-    notice(`${scope} server facets are unavailable (${error instanceof Error ? error.message : String(error)})`);
-    return [];
-  }
-  if (!Array.isArray(exported)) {
-    notice(`${modulePath} exports no facets array; no ${scope} facet is installed`);
-    return [];
-  }
-  const facets: DoomServerFacet[] = [];
-  for (const candidate of exported) {
-    if (!isDoomServerFacet(candidate)) {
-      notice(`a ${scope} facet entry is not a server facet and is skipped`);
-      continue;
-    }
-    facets.push(candidate);
-  }
-  return facets;
-}
 
 export type ServerBundleSource =
   | {
@@ -83,7 +24,6 @@ export type ServerBundleSource =
       readonly generation: string;
       readonly fingerprint: string;
     }
-  | { readonly kind: 'legacy'; readonly directory: string }
   | { readonly kind: 'empty' };
 
 /** Normalize operator-selected directories without falling back after descriptor errors. */
@@ -118,8 +58,7 @@ export function resolveServerBundleSource(options: {
     );
     return { kind: 'descriptor', directory, generation: descriptor.generation, fingerprint: descriptor.fingerprint };
   }
-  // Only an explicit override or an admitted pre-cutover registration reaches here.
-  return { kind: 'legacy', directory };
+  throw new Error(`Server bundle descriptor is missing: ${descriptorPath}`);
 }
 
 export interface LoadServerBundleOptions {
@@ -265,8 +204,22 @@ class ScopedDoomServerHost extends Service<DoomServerHostService> implements Doo
     return registration;
   }
 
+  registerChannel(channel: Parameters<DoomServerHostService['registerChannel']>[0]) {
+    const registration = this.host.registerChannel(channel);
+    if (registration.mounted !== true) {
+      registration.dispose();
+      throw new Error(`hub channel '${channel.frameType}' did not mount.`);
+    }
+    this.ctx.effect(() => () => registration.dispose(), 'server facet channel registration');
+    return registration;
+  }
+
   mounted(): readonly string[] {
     return this.host.mounted();
+  }
+
+  mountedChannels(): readonly string[] {
+    return this.host.mountedChannels();
   }
 }
 

@@ -59,11 +59,12 @@ export class RunnerRegistry implements IRunnerRegistry {
     private readonly paths: IRunnerPaths,
     private readonly processControl: IProcessControl,
     private readonly registry: ProcessRegistryPort,
+    private readonly environment: Readonly<Record<string, string | undefined>>,
   ) {}
 
   async register(input: RegisterRunnerInput): Promise<RunnerRecord> {
     const startedAt = new Date().toISOString();
-    const rootSessionId = resolveRootSessionId(input.sessionId);
+    const rootSessionId = resolveRootSessionId(input.sessionId, this.environment);
     const response = await this.registry.registerProcess({
       repositoryPath: this.repositoryPath(),
       serviceName: `${SERVICE_PREFIX}${input.id}`,

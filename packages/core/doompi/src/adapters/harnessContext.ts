@@ -21,7 +21,6 @@ import {
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { applyProfileEnvironment, buildPersonaPrompt, resolveProfile } from '@agimon-ai/doompi-config/profiles';
 import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
-import { DOOM_CORDIS_HOST_REQUIRED_ENV } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-extension-contracts/mcp-session';
 import { DEFAULT_THEME_NAME, writeDefaultTheme } from '@agimon-ai/doompi-ui/theme';
 import { createHarnessSession } from './config/harnessState';
@@ -190,7 +189,6 @@ export async function buildHarnessContext(
 
     configurePreset(options, environment);
     environment.NX_DAEMON ??= 'false';
-    environment[DOOM_CORDIS_HOST_REQUIRED_ENV] = '1';
     environment.DOOMPI_THEME ||= DEFAULT_THEME_NAME;
     environment.CLAUDE_PROJECT_DIR = options.repoRoot;
     environment.CODEX_REPO_ROOT = options.repoRoot;

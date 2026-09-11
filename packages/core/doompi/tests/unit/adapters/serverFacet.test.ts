@@ -30,7 +30,9 @@ function hostContext(scope: DoomServerHostService['scope']) {
       registered.push(candidate);
       return { dispose: () => void (state.disposed += 1) };
     },
+    registerChannel: () => ({ dispose: () => undefined }),
     mounted: () => registered.map((candidate) => candidate.basePath),
+    mountedChannels: () => [],
   };
   const context = {
     get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? host : undefined),
@@ -126,7 +128,9 @@ describe('doompiServerFacet headless minor command', () => {
         registered.push(candidate);
         return { dispose: apiDispose };
       },
+      registerChannel: () => ({ dispose: () => undefined }),
       mounted: () => registered.map((candidate) => candidate.basePath),
+      mountedChannels: () => [],
     };
     const context = {
       get(name: string) {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createVoiceMediaApi } from '../src/adapters/clientMediaApi.ts';
+import { createTestVoiceMediaApi as createVoiceMediaApi } from './support.ts';
 import { voiceOwnershipState } from '../src/adapters/pi/voice.ts';
 import {
   SessionVoiceOwnership,

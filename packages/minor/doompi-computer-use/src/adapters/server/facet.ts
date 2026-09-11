@@ -18,14 +18,18 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { computerUseHeadlessFacet } from '../headless/facet.ts';
+import { createComputerUseChannel } from '../webComputerUseChannel.ts';
 import { api } from '../computerUseApi.ts';
 
 export const computerUseServerFacet: DoomServerFacet = {
   inject: [DOOM_SERVER_HOST_SERVICE],
   apply(context: Context) {
     const host = requireDoomServerHost(context);
-    const headlessDisposer =
-      host.scope === 'session' && readDoomHeadlessHost(context) ? computerUseHeadlessFacet.apply(context) : undefined;
+    if (host.scope === 'hub') {
+      const registration = host.registerChannel(createComputerUseChannel());
+      return () => registration.dispose();
+    }
+    const headlessDisposer = readDoomHeadlessHost(context) ? computerUseHeadlessFacet.apply(context) : undefined;
     if (host.scope !== 'session') return headlessDisposer;
     const registration = host.registerApi(api);
     return () => {

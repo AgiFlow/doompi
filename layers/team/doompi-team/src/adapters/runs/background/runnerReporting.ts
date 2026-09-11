@@ -105,16 +105,12 @@
 
 import * as path from 'node:path';
 import { writeAtomicJson } from '../../atomicJson';
-import { currentResultsDir } from '../../filesystem/paths';
+import { scopeResultsDir, type SessionScope } from '../../filesystem/paths';
 import type { AcceptanceLedger } from '../../../types/runs';
 import type { AsyncRunStatus } from './asyncExecution';
 import { RESULT_FILE_SUFFIX, type RunResultFile } from '../../resultWatcher';
 import { type CoalescedStatusWriterContract } from './statusWriter';
 import type { TerminalTrigger } from './terminalPersistence';
-
-function resultPathFor(runId: string): string {
-  return path.join(currentResultsDir(), `${runId}${RESULT_FILE_SUFFIX}`);
-}
 
 /** Generous but bounded - see the module header's summary-in-status section. */
 const MAX_STATUS_SUMMARY_CHARS = 4_000;
@@ -156,7 +152,7 @@ export type RunnerReportingContract = {
    */
   recordSessionFile(sessionFile: string): string | undefined;
   /** The callback to wire into `TerminalPersistenceService.begin()`. See the module header for what it does and why, in this order. */
-  mutateTerminalStatus(status: AsyncRunStatus, trigger: TerminalTrigger | undefined): void;
+  mutateTerminalStatus(scope: SessionScope, status: AsyncRunStatus, trigger: TerminalTrigger | undefined): void;
 };
 
 function describeReason(reason: unknown): string {
@@ -177,8 +173,8 @@ export class RunnerReporting implements RunnerReportingContract {
     return Date.now();
   }
 
-  protected writeResultFile(runId: string, result: RunResultFile): void {
-    writeAtomicJson(resultPathFor(runId), result);
+  protected writeResultFile(scope: SessionScope, runId: string, result: RunResultFile): void {
+    writeAtomicJson(path.join(scopeResultsDir(scope), `${runId}${RESULT_FILE_SUFFIX}`), result);
   }
 
   private prepared: RunnerResultInput | undefined;
@@ -215,7 +211,7 @@ export class RunnerReporting implements RunnerReportingContract {
     return { state: 'failed', success: false, error: 'Run finalized without ever calling prepareResult().' };
   }
 
-  mutateTerminalStatus(status: AsyncRunStatus, trigger: TerminalTrigger | undefined): void {
+  mutateTerminalStatus(scope: SessionScope, status: AsyncRunStatus, trigger: TerminalTrigger | undefined): void {
     const now = this.now();
     const outcome = this.resolveOutcome(trigger);
 
@@ -244,6 +240,6 @@ export class RunnerReporting implements RunnerReportingContract {
       ...(outcome.error ? { error: outcome.error } : {}),
       ...(this.prepared?.acceptance ? { acceptance: this.prepared.acceptance } : {}),
     };
-    this.writeResultFile(status.runId, result);
+    this.writeResultFile(scope, status.runId, result);
   }
 }

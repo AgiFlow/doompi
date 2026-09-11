@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
+import { useCallback } from 'react';
 import { sessionsStore } from './sessionsStore.ts';
 
 /**
@@ -10,10 +11,13 @@ import { sessionsStore } from './sessionsStore.ts';
 export function useOpenTab(): (tabId: string | null) => void {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const navigate = useNavigate();
-  return (tabId) => {
-    if (activeId === null) return;
-    void (tabId === null
-      ? navigate({ to: '/session/$sessionId', params: { sessionId: activeId } })
-      : navigate({ to: '/session/$sessionId/$tabId', params: { sessionId: activeId, tabId } }));
-  };
+  return useCallback(
+    (tabId) => {
+      if (activeId === null) return;
+      void (tabId === null
+        ? navigate({ to: '/session/$sessionId', params: { sessionId: activeId } })
+        : navigate({ to: '/session/$sessionId/$tabId', params: { sessionId: activeId, tabId } }));
+    },
+    [activeId, navigate],
+  );
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { agentHasWriteTools } from '../../agents/memory';
@@ -15,7 +16,7 @@ import { normalizeParentModel } from '../../runs/shared/modelFallback';
 import { isPiRuntime } from '../../runs/shared/runtimeRegistry';
 import { DoomTeamExpectedError, invalidRequest } from '../../../services/support/errors';
 import { authenticatedModelInfos } from '../../../services/models/modelResolution';
-import { requireCurrentSessionScope } from '../../filesystem/paths';
+import { createSessionScope, type SessionScope } from '../../filesystem/paths';
 import { renderSubagentCall, renderSubagentResult } from '../tui/subagentToolRender';
 import { loadConfig } from './config';
 import type { ManagementActionsContract, StatusActionResult } from './managementActions';
@@ -183,7 +184,12 @@ export class SubagentToolService implements SubagentToolContract {
     private readonly management: ManagementActionsContract,
     private readonly tracker: AsyncJobTrackerContract,
     private readonly discovery: AgentDiscoveryContract,
+    private readonly environment: Readonly<Record<string, string | undefined>>,
   ) {}
+
+  private sessionScope(ctx: ExtensionContext): SessionScope {
+    return createSessionScope(resolveRootSessionId(ctx.sessionManager.getSessionId(), this.environment));
+  }
 
   registerTool(pi: ExtensionAPI): void {
     if (this.registeredHosts.has(pi)) return;
@@ -200,7 +206,9 @@ export class SubagentToolService implements SubagentToolContract {
   }
 
   private trackOutcomes(result: SpawnPlanResult, ctx: ExtensionContext): SpawnPlanResult {
-    const jobs = this.tracker.forSession(ctx.sessionManager.getSessionId());
+    const scope = this.sessionScope(ctx);
+    this.management.bindSessionScope(scope);
+    const jobs = this.tracker.forSession(ctx.sessionManager.getSessionId(), scope);
     for (const outcome of result.outcomes) {
       if (outcome.runId) jobs.track(outcome.runId);
     }
@@ -231,13 +239,19 @@ export class SubagentToolService implements SubagentToolContract {
     });
     const parentForkSource = captureSessionForkSource(ctx.sessionManager, 'tool');
     const parentModel = normalizeParentModel(ctx.model);
+    const scope = this.sessionScope(ctx);
     return {
       tasks,
       cwd: ctx.cwd,
       agentScope: scopeOrDefault(params.scope),
+      sessionScope: scope,
       parentSessionId: ctx.sessionManager.getSessionId(),
       ...(parentForkSource
-        ? { parentSessionFile: parentForkSource.sessionFile, parentLeafId: parentForkSource.leafId }
+        ? {
+            parentForkSource: parentForkSource.terminalSource,
+            ...(parentForkSource.sessionFile ? { parentSessionFile: parentForkSource.sessionFile } : {}),
+            parentLeafId: parentForkSource.leafId,
+          }
         : {}),
       ...(params.concurrency !== undefined ? { concurrency: params.concurrency } : {}),
       ...(params.artifacts !== undefined ? { artifacts: params.artifacts } : {}),
@@ -253,7 +267,10 @@ export class SubagentToolService implements SubagentToolContract {
     params: Extract<SubagentToolParams, { action: 'run' }>,
     ctx: ExtensionContext,
   ): Promise<AgentToolResult<SubagentToolDetails>> {
+    const scope = this.sessionScope(ctx);
+    this.management.bindSessionScope(scope);
     const operation = startOperation<AgentToolResult<SubagentToolDetails>>(
+      scope,
       operationId,
       params,
       params.requests.map(() => randomUUID()),
@@ -302,7 +319,7 @@ export class SubagentToolService implements SubagentToolContract {
       started: started.length,
       failed: failed.length,
     });
-    completeOperation(operationId, operation.record, response);
+    completeOperation(scope, operationId, operation.record, response);
     return response;
   }
 
@@ -339,10 +356,12 @@ export class SubagentToolService implements SubagentToolContract {
     preallocatedRunIds?: string[],
     operationId?: string,
   ): Promise<AgentToolResult<SubagentToolDetails>> {
-    const jobs = this.tracker.forSession(ctx.sessionManager.getSessionId());
+    const scope = this.sessionScope(ctx);
+    this.management.bindSessionScope(scope);
+    const jobs = this.tracker.forSession(ctx.sessionManager.getSessionId(), scope);
     switch (params.action) {
       case SUBAGENT_ACTIONS.status: {
-        const suspendedRuns = listSuspendedRuns(requireCurrentSessionScope());
+        const suspendedRuns = listSuspendedRuns(scope);
         if (!('id' in params)) {
           if ('transcriptLines' in params && params.transcriptLines !== undefined) {
             throw invalidRequest(
@@ -394,12 +413,12 @@ export class SubagentToolService implements SubagentToolContract {
       }
       case SUBAGENT_ACTIONS.stop: {
         const id = resolveTrackedRunId(jobs, params.id);
-        const result = this.management.stop(id, params.reason);
+        const result = await this.management.stop(id, params.reason);
         return textResult(`Stop requested for '${id}'.`, { control: result });
       }
       case SUBAGENT_ACTIONS.steer: {
         const id = resolveTrackedRunId(jobs, params.id);
-        const runtime = this.tracker.get(id)?.runtime;
+        const runtime = jobs.get(id)?.runtime;
         if (runtime && !isPiRuntime(runtime)) {
           throw new DoomTeamExpectedError(
             'unsupported_operation',
@@ -414,13 +433,12 @@ export class SubagentToolService implements SubagentToolContract {
         });
       }
       case SUBAGENT_ACTIONS.suspended: {
-        const runs = listSuspendedRuns(requireCurrentSessionScope());
+        const runs = listSuspendedRuns(scope);
         return textResult(runs.length ? formatSuspendedRuns(runs) : 'No suspended subagents in this session.', {
           suspended: runs.map(publicSuspendedRun),
         });
       }
       case SUBAGENT_ACTIONS.restore: {
-        const scope = requireCurrentSessionScope();
         const record = listSuspendedRuns(scope).find((run) => run.runId === params.id);
         if (!record) {
           throw new DoomTeamExpectedError(
@@ -451,7 +469,8 @@ export class SubagentToolService implements SubagentToolContract {
               },
               cwd: record.cwd,
               agentScope: 'both',
-              runtime: 'pi',
+              sessionScope: scope,
+              parentSessionId: ctx.sessionManager.getSessionId(),
               availableModels: authenticatedModelInfos(ctx.modelRegistry),
               ...(operationId ? { operationId } : {}),
               ...(preallocatedRunIds ? { preallocatedRunIds } : {}),
@@ -501,7 +520,10 @@ export class SubagentToolService implements SubagentToolContract {
           params.action === SUBAGENT_ACTIONS.restore;
         if (!journaled) return this.executeManagement(params, ctx, signal);
 
+        const scope = this.sessionScope(ctx);
+        this.management.bindSessionScope(scope);
         const operation = startOperation<AgentToolResult<SubagentToolDetails>>(
+          scope,
           id,
           params,
           params.action === SUBAGENT_ACTIONS.restore ? [randomUUID()] : [],
@@ -516,7 +538,7 @@ export class SubagentToolService implements SubagentToolContract {
           );
         }
         const response = await this.executeManagement(params, ctx, signal, operation.record.runIds, id);
-        completeOperation(id, operation.record, response);
+        completeOperation(scope, id, operation.record, response);
         return response;
       },
     };

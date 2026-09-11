@@ -81,6 +81,7 @@ async function registerExtension(
     }),
   } as unknown as ExtensionAPI;
   capturePi?.(pi);
+  await connectDoomCordisHost(pi, '@example/ui-test');
   await doomPiUiExtension(pi, telemetry);
   return handlers;
 }

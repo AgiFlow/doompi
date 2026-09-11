@@ -1,0 +1,119 @@
+# Package APIs
+
+A package API is server code contributed by a package in the active DoomPi composition. It gives a web plugin an HTTP-shaped boundary without putting filesystem access, process control, credentials, or long-running server resources in browser code.
+
+The API runs in the client-neutral `doompi-server` process that owns its data. DoomPi Web only forwards the browser request to that process.
+
+## Execution scope
+
+```text
+Browser plugin
+      |
+      | /api/plugin/<basePath>/<package route>
+      v
+DoomPi Web presentation proxy
+      |
+      | authenticated HTTP forwarding
+      v
+client-neutral doompi-server
+```
+
+| Scope    | Runs in              | Use it for                                                     |
+| -------- | -------------------- | ------------------------------------------------------------- |
+| `hub`    | `doompi-server`      | Repository discovery, machine settings, and shared state      |
+| `session`| `doompi-server`      | State and operations owned by one agent session or its cwd    |
+
+Both scopes are headless responsibilities. DoomPi Web does not load package API modules or decide which session owns a request.
+
+## Routing model
+
+All package APIs share one public prefix:
+
+```text
+/api/plugin/<basePath>/<package route>
+```
+
+The headless process authenticates the caller, selects the admitted server facet, removes any scope selector, and calls the package handler. A missing API answers `404`; malformed input answers `400`; a handler failure answers a package-scoped `500` without stopping unrelated APIs.
+
+## Declare an API
+
+Declare one server facet in the package manifest:
+
+```json
+{
+  "doompiServer": {
+    "entry": "./src/exports/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": ["session"]
+  }
+}
+```
+
+Use `hub`, `session`, or both scopes. Each package has one facet declaration with package-relative source and built paths that cannot escape the package. Publish its built entry and matching package export.
+
+The built entry default-exports a Cordis object plugin. It receives the server host for its declared scope and disposes registrations when the facet stops:
+
+```ts
+import {
+  DOOM_SERVER_HOST_SERVICE,
+  requireDoomServerHost,
+  type DoomServerFacet,
+} from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { api } from '../exampleApi';
+
+export default {
+  inject: [DOOM_SERVER_HOST_SERVICE],
+  apply(context) {
+    const host = requireDoomServerHost(context);
+    const registration = host.registerApi(api);
+    return () => registration.dispose();
+  },
+} satisfies DoomServerFacet;
+```
+
+## Implement the handler
+
+Keep the API implementation reusable and separate from the facet entry:
+
+```ts
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+
+export const api: DoomApi = {
+  basePath: 'example',
+  start(context: DoomApiContext): DoomApiHandler {
+    return {
+      async fetch() {
+        return Response.json({ scope: context.scope });
+      },
+      close() {},
+    };
+  },
+};
+```
+
+The headless host strips `/api/plugin/<basePath>` before calling `fetch`. A request to `/api/plugin/runner/runners/run-1/log` arrives at the `runner` handler as `/runners/run-1/log` with the original method, body, and ordinary headers.
+
+## Host context and caller identity
+
+`DoomApiContext` identifies the execution scope and provides only host-owned capabilities relevant to that placement. Credentials and repository capabilities are process-local and never sent to the browser.
+
+Before forwarding a browser request, the headless process discards incoming copies of trusted caller headers. It stamps locality, paired-device identity when remote, and any required passkey step-up. A handler must still validate operation-specific input and enforce its own authorization.
+
+## Composition and lifecycle
+
+`doompi sync` discovers `doompiServer` declarations and writes generation-pinned server facet descriptors. The headless process loads admitted facets and starts their APIs. Build and synchronize a package before restarting the headless process when a server API changes.
+
+Optional package failures are attributed and isolated; required failures prevent readiness. An empty composition remains a valid descriptor.
+
+## Failure and trust boundaries
+
+Package APIs are trusted executable code, not remote sandboxes. Keep the failure boundary narrow:
+
+- validate bodies, methods, identifiers, and content types before side effects
+- bound file reads, response bodies, logs, and streams
+- resolve paths against host-provided roots, never raw browser authority
+- do not accept caller identity or authorization headers supplied by the browser
+- make `close()` safe after partial startup
+- report a package-scoped notice instead of taking down unrelated APIs
+
+Remote requests still pass through the browser transport boundary, but that layer does not make a handler correct. See [Remote security](security.md).

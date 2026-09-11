@@ -119,5 +119,3 @@ export {
   syncStatePath,
   writeSyncState,
 } from '../../adapters/syncState';
-// Read-only compatibility filenames, not a legacy generation writer.
-export { apiRoutesFile, serverFacetsFile } from '../../services/legacyApiFiles.ts';

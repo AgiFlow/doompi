@@ -22,8 +22,6 @@ const SELECTION_MARKER = '›';
  */
 const BREADCRUMB_MARKER = 'SPC ›';
 const isSelectedRow = (line: string): boolean => line.includes(SELECTION_MARKER) && !line.includes(BREADCRUMB_MARKER);
-const EXTERNAL_POLL_MS = 20;
-const EXTERNAL_SETTLE_MS = 200;
 let directory: string;
 let storePath: string;
 
@@ -76,15 +74,12 @@ interface Harness {
   closed: () => number;
 }
 
-function createComponent(
-  options: Omit<Partial<TaskSpaceOptions>, 'store'> & { pollIntervalMs?: number } = {},
-): Harness {
-  const { pollIntervalMs, ...spaceOptions } = options;
-  const store = new TaskStore(pollIntervalMs === undefined ? { storePath } : { storePath, pollIntervalMs });
+function createComponent(options: Omit<Partial<TaskSpaceOptions>, 'store'> = {}): Harness {
+  const store = new TaskStore({ storePath });
   store.read();
   const tui = { terminal: { rows: 42, columns: WIDTH }, requestRender: vi.fn() } as unknown as TUI;
   let closeCount = 0;
-  const component = new TaskSpaceComponent(tui, createTheme(), { store, ...spaceOptions }, () => {
+  const component = new TaskSpaceComponent(tui, createTheme(), { store, ...options }, () => {
     closeCount += 1;
   });
   const render = (): string[] => component.render(WIDTH);
@@ -268,15 +263,16 @@ describe('TaskSpaceComponent list panel', () => {
     harness.component.dispose();
   });
 
-  it('refreshes rows from an external write without closing', async () => {
+  it('does not refresh rows from an external durable write', async () => {
     seed([{ subject: 'original subject' }]);
-    const harness = createComponent({ pollIntervalMs: EXTERNAL_POLL_MS });
+    const harness = createComponent();
     expect(harness.text()).toContain('original subject');
 
     seed([{ subject: 'rewritten subject' }]);
-    await new Promise((resolve) => setTimeout(resolve, EXTERNAL_SETTLE_MS));
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(harness.text()).toContain('rewritten subject');
+    expect(harness.text()).toContain('original subject');
+    expect(harness.text()).not.toContain('rewritten subject');
     expect(harness.closed()).toBe(0);
     harness.component.dispose();
   });
@@ -341,7 +337,7 @@ describe('TaskSpaceComponent editing and layout', () => {
     harness.component.handleInput('!');
     expect(harness.text()).toContain('EDIT');
     harness.component.handleInput(KEY_ENTER);
-    await new Promise((resolve) => setTimeout(resolve, EXTERNAL_SETTLE_MS));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(harness.store.read().tasks[0].subject).toBe('ol!');
     harness.component.dispose();
@@ -354,7 +350,7 @@ describe('TaskSpaceComponent editing and layout', () => {
     harness.component.handleInput(KEY_ENTER);
     for (let index = 0; index < 'keep me'.length; index++) harness.component.handleInput('\x7f');
     harness.component.handleInput(KEY_ENTER);
-    await new Promise((resolve) => setTimeout(resolve, EXTERNAL_SETTLE_MS));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(harness.store.read().tasks[0].subject).toBe('keep me');
     expect(harness.text()).toContain('blank');

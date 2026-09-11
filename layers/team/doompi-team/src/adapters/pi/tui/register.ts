@@ -8,6 +8,7 @@
 
 import type { DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
 import type { ManagementActionsContract } from '../extensions/managementActions';
 import type { SubagentCapabilityPolicyStore } from '../../../schemas/team/capabilityCeiling';
 import { resolveActiveTeamPackageConfig } from '../../agents/discovery';
@@ -19,6 +20,7 @@ import {
   resolveTrackedRunId,
 } from '../../asyncJobTracker';
 import type { PollSchedulerContract } from '../../pollScheduler';
+import { createSessionScope, type SessionScope } from '../../filesystem/paths';
 import { type AgentLaunchRequest, openAgentCatalog } from './agentCatalog';
 import { buildAgentCatalogEntries } from './agentResourceProjection';
 import { type FleetActionDispatcher, openSubagentFleet } from './fleet';
@@ -108,6 +110,7 @@ export interface RegisterFleetCommandDeps {
   dispatchAction?: FleetActionDispatcher;
   /** Builds context-scoped controls when a static test dispatcher is not supplied. */
   management?: ManagementActionsContract;
+  environment: Readonly<Record<string, string | undefined>>;
 }
 
 export function createFleetActionDispatcher(
@@ -117,11 +120,11 @@ export function createFleetActionDispatcher(
   return async (request) => {
     const runId = resolveTrackedRunId(jobs, request.id);
     if (request.action === 'interrupt') {
-      management.interrupt(runId, request.message);
+      await management.interrupt(runId, request.message);
       return { status: REQUESTED_STATUS };
     }
     if (request.action === 'stop') {
-      management.stop(runId, request.message);
+      await management.stop(runId, request.message);
       return { status: REQUESTED_STATUS };
     }
     if (request.action === 'steer') {
@@ -140,6 +143,7 @@ export function registerAgentStatus(
   let current:
     | {
         ctx: ExtensionContext;
+        scope: SessionScope;
         jobs: TrackedAsyncJobsContract;
         fingerprint: string | undefined;
         /**
@@ -202,9 +206,11 @@ export function registerAgentStatus(
 
   pi.on('session_start', (_event, ctx: ExtensionContext) => {
     if (disposed) return;
+    const scope = createSessionScope(resolveRootSessionId(ctx.sessionManager.getSessionId(), deps.environment));
     current = {
       ctx,
-      jobs: deps.tracker.forSession(ctx.sessionManager.getSessionId()),
+      scope,
+      jobs: deps.tracker.forSession(ctx.sessionManager.getSessionId(), scope),
       fingerprint: undefined,
       costs: new Map(),
       costText: undefined,
@@ -229,10 +235,11 @@ export function registerFleetCommand(pi: ExtensionAPI, deps: RegisterFleetComman
   pi.registerCommand(SUBAGENT_FLEET_COMMAND, {
     description: 'Open the live agent runs overlay: inspect current-session runs and apply runtime controls',
     handler: async (_args: string, ctx: ExtensionContext) => {
-      const jobs = deps.tracker.forSession(ctx.sessionManager.getSessionId());
+      const scope = createSessionScope(resolveRootSessionId(ctx.sessionManager.getSessionId(), deps.environment));
+      const jobs = deps.tracker.forSession(ctx.sessionManager.getSessionId(), scope);
       const dispatchAction =
         deps.dispatchAction ?? (deps.management ? createFleetActionDispatcher(deps.management, jobs) : undefined);
-      await openSubagentFleet(ctx, deps.scheduler, jobs, { dispatchAction });
+      await openSubagentFleet(ctx, deps.scheduler, jobs, scope, { dispatchAction });
     },
   });
 }

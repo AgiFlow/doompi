@@ -19,7 +19,11 @@ function hostContext(scope: DoomServerHostService['scope']) {
       registered.push(candidate);
       return { dispose: () => void (state.disposed += 1) };
     },
+    registerChannel() {
+      return { dispose: () => undefined };
+    },
     mounted: () => registered.map((candidate) => candidate.basePath),
+    mountedChannels: () => [],
   };
   const context = {
     get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? host : undefined),

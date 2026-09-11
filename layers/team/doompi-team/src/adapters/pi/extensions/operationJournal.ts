@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 import { writeAtomicJson } from '../../atomicJson';
 import { DoomTeamExpectedError } from '../../../services/support/errors';
-import { currentRunsDir } from '../../filesystem/paths';
+import { scopeRunsDir, type SessionScope } from '../../filesystem/paths';
 
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
@@ -27,9 +27,9 @@ function hashArguments(args: unknown): string {
   return createHash(HASH_ALGORITHM).update(JSON.stringify(args)).digest(HASH_ENCODING);
 }
 
-function journalPath(operationId: string): string {
+function journalPath(scope: SessionScope, operationId: string): string {
   const safeId = createHash(HASH_ALGORITHM).update(operationId).digest(HASH_ENCODING);
-  return path.join(path.dirname(currentRunsDir()), 'operations', `${safeId}.json`);
+  return path.join(scopeRunsDir(scope), '..', 'operations', `${safeId}.json`);
 }
 
 function readRecord<TResult>(file: string): OperationRecord<TResult> {
@@ -37,8 +37,13 @@ function readRecord<TResult>(file: string): OperationRecord<TResult> {
 }
 
 /** Persist replay identity and run ids before any side effect is started. */
-export function startOperation<TResult>(operationId: string, args: unknown, runIds: string[]): OperationStart<TResult> {
-  const file = journalPath(operationId);
+export function startOperation<TResult>(
+  scope: SessionScope,
+  operationId: string,
+  args: unknown,
+  runIds: string[],
+): OperationStart<TResult> {
+  const file = journalPath(scope, operationId);
   const argumentHash = hashArguments(args);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const record: OperationRecord<TResult> = {
@@ -68,9 +73,10 @@ export function startOperation<TResult>(operationId: string, args: unknown, runI
 }
 
 export function completeOperation<TResult>(
+  scope: SessionScope,
   operationId: string,
   record: OperationRecord<TResult>,
   result: TResult,
 ): void {
-  writeAtomicJson(journalPath(operationId), { ...record, state: 'completed', result });
+  writeAtomicJson(journalPath(scope, operationId), { ...record, state: 'completed', result });
 }

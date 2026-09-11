@@ -45,7 +45,7 @@ describe('composed Cordis boundary entries', () => {
   it('opens first, provides the session, and finalizes last with idempotent cleanup', async () => {
     const { pi, dispatch } = setup();
     await cordisHostExtension(pi);
-    const feature = await connectDoomCordisHost(pi, '@test/feature', { allowStandalone: false });
+    const feature = await connectDoomCordisHost(pi, '@test/feature');
     await cordisFinalizerExtension(pi);
 
     await dispatch({ type: 'session_start', reason: 'startup' });

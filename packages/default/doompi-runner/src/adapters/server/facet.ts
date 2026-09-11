@@ -30,6 +30,9 @@ import type { RunnerDependencies } from '../../container/types.ts';
 import { summarizeLog } from '../../adapters/LogReader/LogReader.ts';
 import { createHeadlessBashTool, createHeadlessRunnersCommand } from '../headless.ts';
 import { reconcileActiveRunners, stopRunnerProcess } from '../../services/runs/reconcile.ts';
+import { presentRunnerRuns } from '../../services/webRunnerRuns.ts';
+import { RUNNER_RUNS_TYPE } from '../../types/webRunners.ts';
+import { createRunnersChannel } from '../webRunnersChannel.ts';
 import { api } from '../runnerLogApi.ts';
 
 export type RunnerContainerFactory = () => RunnerDependencies;
@@ -41,6 +44,7 @@ export function createRunnerServerFacet(createContainer: RunnerContainerFactory)
       const server = requireDoomServerHost(context);
       const registrations = [] as Array<{ dispose(): void }>;
       if (server.scope === 'session') registrations.push(server.registerApi(api));
+      if (server.scope === 'hub') registrations.push(server.registerChannel(createRunnersChannel()));
 
       const headless = readDoomHeadlessHost(context);
       if (!headless) {
@@ -49,6 +53,9 @@ export function createRunnerServerFacet(createContainer: RunnerContainerFactory)
           : () => registrations.reverse().forEach((registration) => registration.dispose());
       }
 
+      if (server.context.directEvents === undefined)
+        throw new Error('Runner headless facet requires the session direct event bus.');
+      const directEvents = server.context.directEvents;
       const container = createContainer();
       let sessionId: string | undefined;
       let supervision: Promise<void> | undefined;
@@ -108,6 +115,36 @@ export function createRunnerServerFacet(createContainer: RunnerContainerFactory)
         return runtimeDisposal;
       };
 
+      const publishRuns = async (ownedSessionId: string): Promise<void> => {
+        try {
+          const records = await container.runnerRegistry.listAll(ownedSessionId);
+          directEvents.publish(RUNNER_RUNS_TYPE, ownedSessionId, {
+            runs: presentRunnerRuns(records, Date.now()),
+          });
+        } catch (error) {
+          process.emitWarning(`Could not publish runner state: ${String(error)}`);
+        }
+      };
+      let publishInFlight: Promise<void> | undefined;
+      let publishAgain = false;
+      let unsubscribeRunnerUpdates: (() => void) | undefined;
+      const requestPublish = (ownedSessionId: string): void => {
+        publishAgain = true;
+        if (publishInFlight !== undefined) return;
+        publishInFlight = (async () => {
+          do {
+            publishAgain = false;
+            await publishRuns(ownedSessionId);
+          } while (publishAgain);
+        })()
+          .catch((error: unknown) => {
+            process.emitWarning(`Could not schedule runner state publication: ${String(error)}`);
+          })
+          .finally(() => {
+            publishInFlight = undefined;
+          });
+      };
+
       registrations.push(
         headless.registerTool(
           createHeadlessBashTool({ run: (request) => container.bashRunService.run(request) }, summarizeLog),
@@ -119,7 +156,12 @@ export function createRunnerServerFacet(createContainer: RunnerContainerFactory)
           name: 'runner',
           start: async (executionContext: DoomHeadlessExecutionContext) => {
             await startSupervision(executionContext);
+            requestPublish(executionContext.sessionId);
+            const unsubscribe = container.runnerRegistry.subscribe(() => requestPublish(executionContext.sessionId));
+            unsubscribeRunnerUpdates = unsubscribe;
             return () => {
+              unsubscribe();
+              if (unsubscribeRunnerUpdates === unsubscribe) unsubscribeRunnerUpdates = undefined;
               // Let the next optional activation reconcile again, while keeping
               // the retained runtime and all child job supervisors alive.
               supervision = undefined;
@@ -129,6 +171,8 @@ export function createRunnerServerFacet(createContainer: RunnerContainerFactory)
       );
 
       return async () => {
+        unsubscribeRunnerUpdates?.();
+        unsubscribeRunnerUpdates = undefined;
         await disposeRuntime();
         for (const registration of registrations.reverse()) registration.dispose();
       };

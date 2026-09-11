@@ -8,7 +8,7 @@ export {
   parseUseAuthorToolInput,
   UseAuthorToolInputSchema,
 } from '../schemas/authorTools.ts';
-export { createAuthorCatalog, UnixAuthorCatalog } from '../adapters/pi/authorBridgeClient.ts';
+export { createAuthorCatalog } from '../adapters/pi/authorBridgeClient.ts';
 export type { AuthorCatalog } from '../services/authorCatalog.ts';
 export {
   AuthorBridgeError,

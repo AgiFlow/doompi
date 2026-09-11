@@ -68,16 +68,6 @@
       "import": "./dist/clientMedia.mjs",
       "require": "./dist/clientMedia.cjs"
     },
-    "./session-api": {
-      "types": "./dist/sessionApi.d.mts",
-      "import": "./dist/sessionApi.mjs",
-      "require": "./dist/sessionApi.cjs"
-    },
-    "./extensions/headless": {
-      "types": "./dist/extensions/headless.d.mts",
-      "import": "./dist/extensions/headless.mjs",
-      "require": "./dist/extensions/headless.cjs"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -127,6 +117,7 @@
     "entry": "./src/exports/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
+      "hub",
       "session"
     ]
   },
@@ -136,11 +127,7 @@
       "voice_media_wake",
       "voice_ownership"
     ],
-    "client": "./src/exports/webClient.ts",
-    "hub": {
-      "entry": "./src/exports/webHub.ts",
-      "dist": "./dist/webHub.mjs"
-    }
+    "client": "./src/exports/webClient.ts"
   },
   "pi": {
     "extensions": [

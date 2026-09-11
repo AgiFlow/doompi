@@ -1,58 +1,82 @@
-import os from 'node:os';
-import path from 'node:path';
-import type { HubChannelSource, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
-import { journalPathOf, RUN_ID_PATTERN, RUN_STATUS_FILE_NAME } from '../services/webSubagentRuns.ts';
+import type {
+  DoomHubChannelSource as HubChannelSource,
+  DoomHubSessionScope,
+  DoomHubChannel as WebHubChannel,
+} from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../types/webSubagents.ts';
-import { readAsyncRunStatusAt } from './statusReader.ts';
-import { type SubagentRunsSource, teamRunsDirFor, watchSubagentRuns } from './webSubagentWatcher.ts';
+
+const RUN_ID_PATTERN = /^[\w.-]+$/;
+
+interface SessionRunProjection extends SubagentRun {
+  /** Host-private child transcript path. Never published to the browser. */
+  sessionFile?: string;
+}
+
+type SessionRunProjectionPayload = { runs: SessionRunProjection[] };
+type SubagentRunsPayload = { runs: SubagentRun[] };
+
+function isSubagentRunsPayload(value: unknown): value is SessionRunProjectionPayload {
+  return typeof value === 'object' && value !== null && Array.isArray((value as { runs?: unknown }).runs);
+}
+
+function publicPayload(payload: SessionRunProjectionPayload): SubagentRunsPayload {
+  return { runs: payload.runs.map(({ sessionFile: _sessionFile, ...run }) => run) };
+}
 
 /**
- * The built-in subagents data channel: one doom-team runs watcher per managed
- * session, published as { runs } payloads under the 'subagent_runs' frame
- * type. The watcher itself is untouched; this adapter only gives it the
- * generic channel shape every plugin data source uses. A run is also a
- * thread: its status names the child's own Pi session journal, which the
- * hub tails for the cockpit's agent tab.
+ * The built-in subagents data channel consumes current state from the
+ * host-owned direct event bus. Its bounded latest replay seeds late subscribers.
  */
-export function createSubagentsChannel(watch: typeof watchSubagentRuns = watchSubagentRuns): WebHubChannel {
+export function createSubagentsChannel(): WebHubChannel {
   return {
     frameType: SUBAGENT_RUNS_TYPE,
     start(host) {
-      const latest = new Map<string, SubagentRun[]>();
-      const sources = new Map<string, SubagentRunsSource>();
-      const channelSource: HubChannelSource = {
+      const scopes = new Map<string, DoomHubSessionScope>();
+      const latest = new Map<string, SessionRunProjectionPayload>();
+      const subscriptions = new Map<string, () => void>();
+      const publish = (scope: DoomHubSessionScope, payload: SessionRunProjectionPayload): void => {
+        if (scopes.get(scope.sessionId) !== scope) return;
+        latest.set(scope.sessionId, payload);
+        host.publish(scope.sessionId, publicPayload(payload));
+      };
+      const source: HubChannelSource = {
         payloadFor(scope) {
-          const runs = latest.get(scope.sessionId);
-          return runs === undefined ? undefined : { runs };
+          const payload = scopes.has(scope.sessionId) ? latest.get(scope.sessionId) : undefined;
+          return payload === undefined ? undefined : publicPayload(payload);
         },
         threadJournal(scope, runId) {
           if (!RUN_ID_PATTERN.test(runId)) return undefined;
-          const runsDir = teamRunsDirFor({ sessionId: scope.sessionId, tmpdir: os.tmpdir(), uid: process.getuid?.() });
-          if (runsDir === undefined) return undefined;
-          const status = readAsyncRunStatusAt(path.join(runsDir, runId, RUN_STATUS_FILE_NAME));
-          return status === undefined ? undefined : journalPathOf(status);
+          const projected = latest.get(scope.sessionId)?.runs.find((run) => run.runId === runId);
+          return projected?.sessionFile;
         },
         sessionAdded(scope) {
-          sources.set(
+          subscriptions.get(scope.sessionId)?.();
+          scopes.set(scope.sessionId, scope);
+          latest.delete(scope.sessionId);
+          const unsubscribe = host.directEvents.subscribe(
+            SUBAGENT_RUNS_TYPE,
             scope.sessionId,
-            watch(scope.sessionId, (runs) => {
-              latest.set(scope.sessionId, runs);
-              host.publish(scope.sessionId, { runs });
-            }),
+            (value) => {
+              if (isSubagentRunsPayload(value)) publish(scope, value);
+            },
+            { replayLatest: true },
           );
+          subscriptions.set(scope.sessionId, unsubscribe);
         },
         sessionRemoved(sessionId) {
-          sources.get(sessionId)?.close();
-          sources.delete(sessionId);
+          subscriptions.get(sessionId)?.();
+          subscriptions.delete(sessionId);
+          scopes.delete(sessionId);
           latest.delete(sessionId);
         },
         close() {
-          for (const source of sources.values()) source.close();
-          sources.clear();
+          for (const unsubscribe of subscriptions.values()) unsubscribe();
+          subscriptions.clear();
+          scopes.clear();
           latest.clear();
         },
       };
-      return channelSource;
+      return source;
     },
   };
 }

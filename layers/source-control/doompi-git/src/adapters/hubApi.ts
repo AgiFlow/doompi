@@ -2,6 +2,7 @@ import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-
 import { createWorktreeGit } from './worktree/gitCli.ts';
 import { createWorktreeOperations } from './worktree/worktreeOperations.ts';
 import { DoomGitExpectedError } from '../services/support/errors.ts';
+import { GIT_WORKTREE_LIFECYCLE_EVENT } from './worktree/worktreeEvents.ts';
 
 /**
  * The worktree surface the cockpit panel calls.
@@ -29,7 +30,15 @@ function failed(error: unknown): Response {
 export const api: DoomApi = {
   basePath: 'git',
   start(context: DoomApiContext): DoomApiHandler {
-    const operations = createWorktreeOperations({ git: createWorktreeGit() });
+    if (context.directEvents === undefined) throw new Error('Git hub API requires the direct event bus.');
+    const directEvents = context.directEvents;
+    const publishLifecycle = (sessionId: string, repositoryRoot: string): void => {
+      directEvents.publish(GIT_WORKTREE_LIFECYCLE_EVENT, sessionId, { version: 1 as const, repositoryRoot });
+    };
+    const operations = createWorktreeOperations({
+      git: createWorktreeGit(),
+      sessionService: context.sessionService,
+    });
 
     /** The admitted root for a request, or a response explaining why not. */
     const rootOf = (url: URL): string | Response => {
@@ -48,6 +57,11 @@ export const api: DoomApi = {
         // The operations layer works from a cwd, and an admitted repository
         // root is one.
         const callerContext = { cwd: root, sessionId: url.searchParams.get('sessionId') ?? '' };
+        const isMutation =
+          (request.method === 'POST' && url.pathname === '/worktrees') ||
+          (request.method === 'DELETE' && /^\/worktrees\/[^/]+$/u.test(url.pathname));
+        if (isMutation && callerContext.sessionId === '')
+          return badRequest('A sessionId is required for worktree mutations.');
 
         try {
           if (request.method === 'GET' && url.pathname === '/worktrees') {
@@ -63,6 +77,7 @@ export const api: DoomApi = {
               ...(body.baseRef === undefined ? {} : { baseRef: body.baseRef }),
               ...(body.name === undefined ? {} : { name: body.name }),
             });
+            publishLifecycle(callerContext.sessionId, record.repositoryRoot);
             return Response.json({ worktree: record }, { status: 201 });
           }
           const closing = /^\/worktrees\/([^/]+)$/u.exec(url.pathname);
@@ -72,6 +87,7 @@ export const api: DoomApi = {
               decodeURIComponent(String(closing[1])),
               url.searchParams.get('force') === 'true',
             );
+            publishLifecycle(callerContext.sessionId, record.repositoryRoot);
             return Response.json({ worktree: record });
           }
           return Response.json({ error: 'No such worktree route.' }, { status: 404 });

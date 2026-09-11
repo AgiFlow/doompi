@@ -30,6 +30,7 @@ describe('doompi-author Pi extension', () => {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
 
+    await host.cordis();
     await activateAuthorExtension(host.pi, { service });
     await host.runCommand(COMMAND_NAME);
 
@@ -45,6 +46,7 @@ describe('doompi-author Pi extension', () => {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
 
+    await host.cordis();
     await activateAuthorExtension(host.pi, { service });
     await host.runCommand(COMMAND_NAME);
 
@@ -54,6 +56,7 @@ describe('doompi-author Pi extension', () => {
 
   it('follows optional Help provider replacement and withdraws its contribution on shutdown', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     await activateAuthorExtension(host.pi);
     const connection = await connectDoomCordisHost(host.pi, 'doompi-author-help-test');
     const firstService = createDoomHelpService('doompi-author-help-first');

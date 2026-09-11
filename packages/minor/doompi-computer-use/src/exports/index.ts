@@ -5,7 +5,7 @@ export {
   COMPUTER_USE_MODE_ID,
   COMPUTER_USE_TOOL_NAMES,
 } from '../adapters/pi/extension.ts';
-export { createComputerUseSessionClient, UnixComputerUseSessionClient } from '../adapters/pi/sessionApiClient.ts';
+export { createComputerUseSessionClient } from '../adapters/pi/sessionApiClient.ts';
 export type { ComputerUseSessionClient } from '../adapters/pi/sessionApiClient.ts';
 export { COMPUTER_USE_SCRIPT_PATHS_ENV, createComputerUseContainer } from '../container/index.ts';
 export { ComputerScriptRunner } from '../adapters/pi/computerScriptRunner.ts';

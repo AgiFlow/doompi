@@ -33,7 +33,10 @@ function safeName(sessionId: string): string {
   return sessionId.replace(/[^a-zA-Z0-9._-]/gu, '_');
 }
 
-export function contextDetailPath(sessionId: string, environment: NodeJS.ProcessEnv = process.env): string {
+export function contextDetailPath(
+  sessionId: string,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): string {
   return path.join(agentDirectory(environment), DIRECTORY_NAME, `${safeName(sessionId)}.json`);
 }
 
@@ -48,7 +51,7 @@ export function writeContextDetail(
   sessionId: string,
   revision: number,
   items: readonly ContextItemDetail[],
-  environment: NodeJS.ProcessEnv = process.env,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
 ): boolean {
   const target = contextDetailPath(sessionId, environment);
   const payload: ContextDetailFile = { version: CONTEXT_DETAIL_VERSION, revision, items };
@@ -69,7 +72,10 @@ export function writeContextDetail(
 }
 
 /** Drops a session's file. Called when the session ends, so the directory does not grow forever. */
-export function removeContextDetail(sessionId: string, environment: NodeJS.ProcessEnv = process.env): void {
+export function removeContextDetail(
+  sessionId: string,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): void {
   try {
     fs.rmSync(contextDetailPath(sessionId, environment), { force: true });
   } catch {
@@ -87,7 +93,7 @@ function isDetailFile(value: unknown): value is ContextDetailFile {
 /** What the session wrote, or undefined when it has not written yet. */
 export function readContextDetail(
   sessionId: string,
-  environment: NodeJS.ProcessEnv = process.env,
+  environment: Readonly<Record<string, string | undefined>> = process.env,
 ): ContextDetailFile | undefined {
   try {
     const parsed: unknown = JSON.parse(fs.readFileSync(contextDetailPath(sessionId, environment), 'utf8'));

@@ -1,18 +1,10 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import {
-  assertDeclaredApi,
-  mountPackageApi,
-  standardExtensionScenarios,
-} from '@agimon-ai/doompi-extension-contracts/testing';
+import { mountPackageApi, standardExtensionScenarios } from '@agimon-ai/doompi-extension-contracts/testing';
 import { describe, expect, it } from 'vitest';
 import { runnerExtension } from '../../src/adapters/pi/extension.ts';
 import { api } from '../../src/adapters/runnerLogApi.ts';
 
-const PACKAGE_ROOT = path.resolve(fileURLToPath(import.meta.url), '..', '..', '..');
-
 /**
- * The surfaces this package ships, each checked where it is declared.
+ * The surfaces this package ships.
  *
  * The runner's API is the only session-scoped one in the repository, so this is
  * also where the session half of the mount is exercised: the host hands a
@@ -47,11 +39,5 @@ describe('the API surface', () => {
 
     expect((await mounted.fetch('/api/plugin/workflow/runs')).status).toBe(404);
     mounted.close();
-  });
-
-  it('serves the base path the manifest mounts it at', () => {
-    const report = assertDeclaredApi({ packageRoot: PACKAGE_ROOT, api, scope: 'session' });
-
-    expect(report).toMatchObject({ basePath: 'runner', dist: './dist/extensions/server.mjs' });
   });
 });

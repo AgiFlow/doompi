@@ -9,6 +9,7 @@
  */
 
 import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
+import { readDoomChildSessionService } from '@agimon-ai/doompi-extension-contracts/child-session';
 import {
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
   requireDoomContextContributions,
@@ -47,21 +48,13 @@ import { captureSessionForkSource, type SpawnPlannerContract } from './extension
 import type { SkillDiscoveryContract } from '../agents/skills';
 import type { AgentDiscoveryContract } from '../agents/types';
 import { formatTeamContextSnapshot, readActiveTeamSnapshot } from '../api/teamSnapshot';
-import {
-  type AsyncJobTrackerContract,
-  type TrackedAsyncJobsContract,
-  TERMINAL_ASYNC_JOB_STATES,
-} from '../asyncJobTracker';
+import type { AsyncJobTrackerContract } from '../asyncJobTracker';
 import { openScopeAsync, suspendScopeRuns } from '../runs/registry/sessionLifecycle';
 import { formatSuspendedRunsAsync } from '../suspendedRuns';
 import { normalizeParentModel } from '../runs/shared/modelFallback';
 import { authenticatedModelInfos } from '../../services/models/modelResolution';
-import { createSessionScope, setCurrentSessionScope, tryCurrentSessionScope } from '../filesystem/paths';
+import { createSessionScope, type SessionScope } from '../filesystem/paths';
 import type { PollSchedulerContract } from '../pollScheduler';
-import { writeScopeOwnerAsync } from '../scopeOwner';
-import { resolveActiveTeamModelSpecs } from '../agents/discovery';
-import { writeSessionCatalogSnapshot } from '../sessionCatalogSnapshot';
-import { presentCatalog } from '../../services/webSubagentCatalog';
 import { registerCompletionRenderer } from './tui/completionNotice';
 import { registerSlashRunRenderer } from './tui/slashRunNotice';
 import {
@@ -73,8 +66,6 @@ import {
 import { teamCollaborationPlugin, type TeamDelegationObservation } from './collaboration';
 import { createTeamExtensionRuntime, type TeamExtensionRuntime } from './teamRuntime';
 
-/** See the subscriber's own comment for why crash detection does not need the 250ms floor. */
-const STALE_RUN_RECONCILE_INTERVAL_MS = 2_000;
 const SESSION_SHUTDOWN_REASON_FALLBACK = 'unknown';
 const PACKAGE_SOURCE = '@agimon-ai/doompi-team';
 
@@ -100,6 +91,7 @@ function buildSlashCommandDeps(
   tracker: AsyncJobTrackerContract,
   scheduler: PollSchedulerContract,
   management: ManagementActionsContract,
+  environment: Readonly<Record<string, string | undefined>>,
 ): SlashCommandDeps {
   return {
     spawnPlanner: planner,
@@ -109,6 +101,7 @@ function buildSlashCommandDeps(
     skills,
     management,
     loadConfig: () => loadConfig().config,
+    environment,
   };
 }
 
@@ -156,6 +149,7 @@ function recordDelegationObservation(telemetry: DoomTelemetry, observation: Team
  */
 export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExtensionRuntime {
   let telemetry: DoomTelemetry | undefined;
+  const environment = { ...process.env };
   const getTelemetry = (ctx: ExtensionContext): DoomTelemetry => {
     telemetry ??= createDoomTelemetry({
       serviceName: 'doom-team',
@@ -177,20 +171,23 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
     },
     '@agimon-ai/doompi-team/telemetry',
   );
-  const runtime = createTeamExtensionRuntime(reportConcurrencyEvent);
+  const runtime = createTeamExtensionRuntime(reportConcurrencyEvent, {
+    environment,
+    childSessions: { get: () => readDoomChildSessionService(activeCordisSession?.cordis ?? cordis) },
+  });
   const {
     subagentTool,
     teamChannel,
     pollScheduler,
     asyncJobTracker,
+    nativeRuns,
     subagentWaiter,
     asyncSubagentSpawner,
     discovery,
     skills,
     spawnPlanner,
     completionNotifier,
-    resultWatcher,
-    staleRunReconciler,
+    dispose: disposeRuntime,
     management,
     capabilityPolicies,
     mcpToolResolver,
@@ -222,7 +219,7 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
         id: 'runtime',
         label: 'Team',
         order: 200,
-        snapshot: () => formatTeamContextSnapshot(readActiveTeamSnapshot()),
+        snapshot: () => formatTeamContextSnapshot(readActiveTeamSnapshot(teamRuntime)),
       });
       return () => registration.dispose();
     });
@@ -308,25 +305,23 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
   cordis.inject([DOOM_UI_HUB_SERVICE], (uiContext) => registerSubagentLeaderContribution(requireDoomUiHub(uiContext)));
 
   const teamRuntime = teamChannel.createRuntime(readinessPi);
-  cordis.effect(() => () => teamRuntime.dispose(), '@agimon-ai/doompi-team/channel');
-  teamChannel.registerClient(readinessPi);
 
-  // Attach before `ResultWatcher.start()`, which `session_start` drives.
   completionNotifier.attachHost(pi);
-  cordis.effect(() => () => completionNotifier.dispose(), '@agimon-ai/doompi-team/completions');
+  cordis.effect(
+    () => () => {
+      completionNotifier.dispose();
+      disposeRuntime();
+    },
+    '@agimon-ai/doompi-team/completions',
+  );
 
   pollScheduler.start();
   cordis.effect(() => () => pollScheduler.stop(), '@agimon-ai/doompi-team/polling');
 
-  asyncJobTracker.start();
   cordis.effect(() => () => asyncJobTracker.stop(), '@agimon-ai/doompi-team/jobs');
-
+  cordis.effect(() => () => nativeRuns.close(), '@agimon-ai/doompi-team/native-runs');
   let collaborationFiber: Fiber | undefined;
-  let currentSessionJobs: TrackedAsyncJobsContract | undefined;
-  // The scope `ResultWatcher` is currently watching. See its start site in
-  // the `session_start` handler for why the watcher is latched on this
-  // rather than started once.
-  let watchedScopeKey: string | undefined;
+  let activeScope: SessionScope | undefined;
   const delegationBridge = createDelegationBridge({
     planner: spawnPlanner,
     management,
@@ -351,47 +346,7 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
     },
     '@agimon-ai/doompi-team/collaboration',
   );
-  cordis.effect(
-    () => () => {
-      resultWatcher.stop();
-      watchedScopeKey = undefined;
-    },
-    '@agimon-ai/doompi-team/result-watcher',
-  );
 
-  const unregisterStaleRunReconciler = pollScheduler.register({
-    id: 'stale-run-reconciler',
-    // Crash detection, not status freshness - `AsyncJobTracker` owns that and
-    // polls on its own 250ms. This subscriber only ever acts on a run whose
-    // process is provably dead, so noticing that 2s later is invisible, while
-    // running it 4x/second per active run was not: each pass is a status read,
-    // a run-id resolve and a pid probe that a healthy child always discards.
-    intervalMs: STALE_RUN_RECONCILE_INTERVAL_MS,
-    run: async () => {
-      let repaired = false;
-      let hasActiveRun = false;
-      for (const job of currentSessionJobs?.list() ?? []) {
-        if (job.status && TERMINAL_ASYNC_JOB_STATES.has(job.status)) continue;
-        hasActiveRun = true;
-        // One pass, one `inspect()`. Calling `reconcile` and
-        // `sweepOrphanedClaims` separately probed the same pid twice for the
-        // same answer - see `StaleRunReconcilerContract.reconcileAndSweep`.
-        const { reconcile: outcome, sweep } = staleRunReconciler.reconcileAndSweepAsync
-          ? await staleRunReconciler.reconcileAndSweepAsync(job.runId)
-          : staleRunReconciler.reconcileAndSweep(job.runId);
-        if (outcome.repaired) {
-          currentSessionJobs?.track(job.runId);
-          repaired = true;
-        }
-        if (sweep.recovered.length > 0) repaired = true;
-      }
-      // An active runner is useful work for scheduling purposes: keeping
-      // the shared scheduler at its floor prevents crash detection from
-      // inheriting the idle five-second backoff ceiling.
-      return repaired || hasActiveRun;
-    },
-  });
-  cordis.effect(() => unregisterStaleRunReconciler, '@agimon-ai/doompi-team/stale-runs');
   // The orchestration addendum. Registered here rather than inside the
   // `subagent` tool's description because it is behavioural guidance, and it
   // has to land before the model decides whether to reach for the tool at
@@ -405,36 +360,6 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
 
   const state: SlashCommandState = { baseCwd: undefined };
 
-  /**
-   * Publish what this session can launch, for the cockpit hub to read.
-   *
-   * The hub and the session API run in `doompi-server`, which never receives
-   * the domain projection's agent directories or the harness state behind the
-   * Team model policy, so discovery run there misses every domain-provided
-   * agent. This process has both. Republished on each turn so an agent file
-   * added mid-session shows up without a restart.
-   */
-  const publishCatalogSnapshot = (cwd: string, sessionId: string): void => {
-    // A spawned child shares its parent's scope directory; only the root
-    // session may write the catalog the user is looking at.
-    if (resolveRootSessionId(sessionId) !== sessionId) return;
-    try {
-      writeSessionCatalogSnapshot(sessionId, {
-        cwd,
-        agents: presentCatalog(discovery.discover(cwd, 'both').agents),
-        models: resolveActiveTeamModelSpecs() ?? [],
-      });
-    } catch {
-      // Best effort: the hub falls back to its own discovery, and every launch
-      // path reports discovery failures on its own.
-    }
-  };
-
-  pi.on('before_agent_start', (_event: { systemPrompt?: string }, ctx: ExtensionContext) => {
-    if (!active) return undefined;
-    publishCatalogSnapshot(ctx.cwd, ctx.sessionManager.getSessionId());
-    return undefined;
-  });
   const slashCommandDeps = buildSlashCommandDeps(
     discovery,
     skills,
@@ -442,6 +367,7 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
     asyncJobTracker,
     pollScheduler,
     management,
+    environment,
   );
   registerSlashCommands(readinessPi, state, slashCommandDeps);
   registerAgentListCommand(readinessPi, {
@@ -461,11 +387,13 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
     scheduler: pollScheduler,
     tracker: asyncJobTracker,
     management,
+    environment,
   });
   cordis.inject([DOOM_UI_HUB_SERVICE], (uiContext) => {
     return registerAgentStatus(pi, requireDoomUiHub(uiContext), {
       scheduler: pollScheduler,
       tracker: asyncJobTracker,
+      environment,
     });
   });
   registerCompletionRenderer(pi);
@@ -484,7 +412,6 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
       () => capabilityPolicies.clear(),
       () => delegationBridge.abandonAll(),
       () => fablePlanBridge.abandonAll(),
-      () => teamRuntime.dispose(),
     ]) {
       try {
         cleanup();
@@ -492,7 +419,6 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
         errors.push(error);
       }
     }
-    currentSessionJobs = undefined;
     if (errors.length === 0) return undefined;
     if (errors.length === 1 && errors[0] instanceof Error) return errors[0];
     return new AggregateError(errors, 'Team session cleanup failed.');
@@ -512,20 +438,14 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
     const activeTelemetry = getTelemetry(ctx);
     void activeTelemetry.recordEvent('doom_team.session_started', {
       'team.root_session':
-        resolveRootSessionId(ctx.sessionManager.getSessionId()) === ctx.sessionManager.getSessionId(),
+        resolveRootSessionId(ctx.sessionManager.getSessionId(), environment) === ctx.sessionManager.getSessionId(),
     });
-    // Before anything else: every scoped path helper reads this. A child
-    // keeps the root inherited from its spawn environment, while a top-level
-    // session falls back to its own Pi session id.
     const sessionId = ctx.sessionManager.getSessionId();
-    const scope = createSessionScope(resolveRootSessionId(sessionId));
-    setCurrentSessionScope(scope);
-    state.baseCwd = ctx.cwd;
-    publishCatalogSnapshot(ctx.cwd, sessionId);
-    if (watchedScopeKey !== undefined && watchedScopeKey !== scope.scopeKey) {
-      resultWatcher.stop();
-      watchedScopeKey = undefined;
-    }
+    const scope = createSessionScope(resolveRootSessionId(sessionId, environment));
+    const previousScope = activeScope;
+    if (previousScope) management.releaseSessionScope(previousScope);
+    activeScope = scope;
+    management.bindSessionScope(scope);
     const retirement = retireSessionBindings();
     const coordinator = coordinatorFor(ctx);
     const ownsSession = (): boolean =>
@@ -544,19 +464,9 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
         const retirementError = await retirement;
         if (retirementError) throw retirementError;
         if (!ownsSession()) return { value: undefined };
-        // Claim the scope for this process, so a later sweep can tell an
-        // abandoned tree from a live one. Rewritten on every session_start
-        // because /resume legitimately re-adopts a scope under a new process.
-        await writeScopeOwnerAsync(scope);
-        signal.throwIfAborted();
-        if (!ownsSession()) return { value: undefined };
-        // Prune records whose process is gone, reap sibling scopes holding
-        // nothing alive, and REPORT what is suspended. Nothing is restarted:
-        // reopening a session must not silently spend tokens on stale work.
-        const opened = await openScopeAsync(scope, {
-          readStatusAsync: async (runId) =>
-            management.statusAsync ? (await management.statusAsync(runId)).status : management.status(runId).status,
-        });
+        // Suspended records are reported as durable history only. They never
+        // seed the current session's live run tracker.
+        const opened = await openScopeAsync(scope);
         signal.throwIfAborted();
         if (!ownsSession()) return { value: undefined };
         if (opened.suspended.length > 0 && ctx.hasUI) {
@@ -571,19 +481,6 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
           'team.reaped_count': opened.reaped,
           outcome: 'reported',
         });
-        currentSessionJobs = asyncJobTracker.forSession(sessionId);
-        // ResultWatcher needs the session scope, but a repeated start for the
-        // same scope must not reset its in-flight claims.
-        if (watchedScopeKey !== scope.scopeKey) {
-          watchedScopeKey = scope.scopeKey;
-          resultWatcher.start(async (result) => {
-            const jobs = currentSessionJobs;
-            if (!jobs?.get(result.runId)) return false;
-            const accepted = await completionNotifier.deliver(result);
-            if (accepted) asyncJobTracker.acknowledgeHandoff(sessionId, result.runId);
-            return accepted;
-          });
-        }
         const parentModel = normalizeParentModel(ctx.model);
         const activeSession = activeCordisSession;
         const collaborationParent =
@@ -591,7 +488,9 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
         const nextCollaboration = collaborationParent.plugin(teamCollaborationPlugin, {
           session: {
             sessionId,
+            sessionScope: scope,
             cwd: ctx.cwd,
+            environment,
             availableModels: authenticatedModelInfos(ctx.modelRegistry),
             ...(parentModel ? { parentModel } : {}),
             captureForkSource: () => captureSessionForkSource(ctx.sessionManager, 'tool'),
@@ -661,12 +560,13 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
       ...(pendingReadiness ? [pendingReadiness.then((handle) => handle.wait())] : []),
       ...(ownedReadiness ? [ownedReadiness.dispose()] : []),
     ]);
-    const scope = tryCurrentSessionScope();
+    const scope = activeScope;
     const suspensionPromise = scope
       ? suspendScopeRuns({
           scope,
           reason: event.reason ?? SESSION_SHUTDOWN_REASON_FALLBACK,
-          readStatus: (runId) => management.status(runId).status,
+          jobs: asyncJobTracker.forSession(scope.rootSessionId, scope).list(),
+          stop: (runId, reason) => management.stop(runId, reason),
         })
       : Promise.resolve(undefined);
     let suspension: Awaited<ReturnType<typeof suspendScopeRuns>> | undefined;
@@ -683,6 +583,16 @@ export function installTeamRuntime(cordis: Context, pi: ExtensionAPI): TeamExten
         reason: event.reason ?? SESSION_SHUTDOWN_REASON_FALLBACK,
       });
     } finally {
+      try {
+        await nativeRuns.close();
+      } catch (error) {
+        await telemetry?.recordError('doom_team.native_shutdown_failed', error, {
+          reason: event.reason ?? SESSION_SHUTDOWN_REASON_FALLBACK,
+        });
+      }
+      if (activeScope) management.releaseSessionScope(activeScope);
+      activeScope = undefined;
+      teamRuntime.dispose();
       await telemetry?.shutdown();
       telemetry = undefined;
     }

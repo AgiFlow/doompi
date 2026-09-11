@@ -1,4 +1,8 @@
-import type { HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import type {
+  DoomHubChannel,
+  DoomHubChannelSource,
+  DoomHubSessionScope,
+} from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { VoiceOwnershipCoordinator } from '../services/voiceOwnershipCoordinator.ts';
 import { VOICE_MEDIA_API_BASE_PATH, VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../types/clientMedia.ts';
 import {
@@ -6,71 +10,82 @@ import {
   VOICE_OWNERSHIP_FRAME_TYPE,
   VOICE_OWNERSHIP_ROUTES,
   parseVoiceOwnershipAcknowledgement,
-  parseVoiceOwnershipActivationRequest,
-  parseVoiceOwnershipHandoffRequest,
-  parseVoiceOwnershipRegistration,
+  parseVoiceOwnershipSessionSnapshot,
   type BrowserVoiceOwnershipPayload,
   type VoiceOwnershipCommand,
+  type VoiceOwnershipSessionSnapshot,
 } from '../types/voiceOwnership.ts';
-import { type VoiceMediaWakeSource, watchVoiceMediaWake } from './voiceMediaWakeFile.ts';
 
-const OWNERSHIP_POLL_MS = 1_000;
 const MAX_HANDLED_REQUESTS = 512;
+const MAX_EVENT_EPOCH_LENGTH = 200;
 
-function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
+function parseVoiceMediaWake(value: unknown): VoiceMediaWake | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  if (
+    Object.keys(record).sort().join(',') !== 'eventEpoch,sequence' ||
+    typeof record.eventEpoch !== 'string' ||
+    record.eventEpoch.length === 0 ||
+    record.eventEpoch.length > MAX_EVENT_EPOCH_LENGTH ||
+    !Number.isSafeInteger(record.sequence) ||
+    (record.sequence as number) < 0
+  )
+    return undefined;
+  return { eventEpoch: record.eventEpoch, sequence: record.sequence as number };
 }
 
-export function createVoiceMediaWakeChannel(watch: typeof watchVoiceMediaWake = watchVoiceMediaWake): WebHubChannel {
+/** Publishes session-owned media wakeups through the host's direct event bus. */
+export function createVoiceMediaWakeChannel(): DoomHubChannel {
   return {
     frameType: VOICE_MEDIA_WAKE_TYPE,
     start(host) {
       const latest = new Map<string, VoiceMediaWake>();
-      const sources = new Map<string, VoiceMediaWakeSource>();
+      const subscriptions = new Map<string, () => void>();
       return {
         payloadFor(scope) {
           return latest.get(scope.sessionId);
         },
         sessionAdded(scope) {
-          sources.get(scope.sessionId)?.close();
-          sources.set(
+          subscriptions.get(scope.sessionId)?.();
+          const unsubscribe = host.directEvents.subscribe(
+            VOICE_MEDIA_WAKE_TYPE,
             scope.sessionId,
-            watch(scope.sessionId, (wake) => {
-              if (wake === undefined) {
-                latest.delete(scope.sessionId);
-                return;
-              }
+            (payload) => {
+              const wake = parseVoiceMediaWake(payload);
+              if (wake === undefined) return;
+              const current = latest.get(scope.sessionId);
+              if (current?.eventEpoch === wake.eventEpoch && wake.sequence <= current.sequence) return;
               latest.set(scope.sessionId, wake);
               host.publish(scope.sessionId, wake);
-            }),
+            },
+            { replayLatest: true },
           );
+          subscriptions.set(scope.sessionId, unsubscribe);
         },
         sessionRemoved(sessionId) {
-          sources.get(sessionId)?.close();
-          sources.delete(sessionId);
+          subscriptions.get(sessionId)?.();
+          subscriptions.delete(sessionId);
           latest.delete(sessionId);
         },
         close() {
-          for (const source of sources.values()) source.close();
-          sources.clear();
+          for (const unsubscribe of subscriptions.values()) unsubscribe();
+          subscriptions.clear();
           latest.clear();
         },
-      };
+      } satisfies DoomHubChannelSource;
     },
   };
 }
 
-export function createVoiceOwnershipChannel(options: { pollMs?: number } = {}): WebHubChannel {
+/** Coordinates browser voice ownership from session lifecycle events. */
+export function createVoiceOwnershipChannel(): DoomHubChannel {
   return {
     frameType: VOICE_OWNERSHIP_FRAME_TYPE,
     lifecycle: 'hub',
     start(host) {
-      const scopes = new Map<string, HubSessionScope>();
+      const scopes = new Map<string, DoomHubSessionScope>();
+      const subscriptions = new Map<string, () => void>();
       const handledRequests = new Set<string>();
-      let closed = false;
-      let polling = false;
       let catalogSignature = '';
 
       const publishSelection = (payload: BrowserVoiceOwnershipPayload): void => {
@@ -118,101 +133,83 @@ export function createVoiceOwnershipChannel(options: { pollMs?: number } = {}): 
         catalogSignature = nextSignature;
       };
 
-      const poll = async (): Promise<void> => {
-        if (closed || polling) return;
-        polling = true;
-        try {
-          const snapshots: Array<{
-            sessionId: string;
-            activation: ReturnType<typeof parseVoiceOwnershipActivationRequest>;
-            handoff: ReturnType<typeof parseVoiceOwnershipHandoffRequest>;
-          }> = [];
-          for (const scope of scopes.values()) {
-            try {
-              const response = await host.requestSessionApi(scope, {
-                basePath: VOICE_MEDIA_API_BASE_PATH,
-                path: VOICE_OWNERSHIP_ROUTES.state,
-                method: 'GET',
-              });
-              const body = response.ok ? record(await response.json()) : undefined;
-              const registration = parseVoiceOwnershipRegistration(body?.registration);
-              if (registration === undefined) {
-                coordinator.remove(scope.sessionId);
-                continue;
-              }
-              coordinator.update(scope.sessionId, registration);
-              snapshots.push({
-                sessionId: scope.sessionId,
-                activation: parseVoiceOwnershipActivationRequest(body?.activation),
-                handoff: parseVoiceOwnershipHandoffRequest(body?.handoff),
-              });
-            } catch (error) {
-              coordinator.remove(scope.sessionId);
-              host.onNotice(
-                `voice ownership poll failed for ${scope.sessionId} (${error instanceof Error ? error.message : String(error)})`,
-              );
-            }
-          }
-
+      const processSnapshot = async (sessionId: string, snapshot: VoiceOwnershipSessionSnapshot): Promise<void> => {
+        if (snapshot.handoff !== undefined) {
+          const key = `${sessionId}:handoff:${snapshot.handoff.requestId}`;
+          if (!remember(key)) return;
           try {
-            await refreshCatalogs();
+            if (!(await coordinator.handoff(sessionId, snapshot.handoff.handle)))
+              host.onNotice(`voice handoff requested by ${sessionId} was rejected`);
           } catch (error) {
             host.onNotice(
-              `voice ownership catalog update failed (${error instanceof Error ? error.message : String(error)})`,
+              `voice handoff requested by ${sessionId} failed (${error instanceof Error ? error.message : String(error)})`,
             );
           }
-
-          for (const snapshot of snapshots) {
-            if (snapshot.handoff !== undefined) {
-              const key = `${snapshot.sessionId}:handoff:${snapshot.handoff.requestId}`;
-              if (remember(key)) {
-                try {
-                  if (!(await coordinator.handoff(snapshot.sessionId, snapshot.handoff.handle)))
-                    host.onNotice(`voice handoff requested by ${snapshot.sessionId} was rejected`);
-                } catch (error) {
-                  host.onNotice(
-                    `voice handoff requested by ${snapshot.sessionId} failed (${error instanceof Error ? error.message : String(error)})`,
-                  );
-                }
-              }
-              continue;
-            }
-            if (snapshot.activation !== undefined) {
-              const key = `${snapshot.sessionId}:activate:${snapshot.activation.requestId}`;
-              if (remember(key)) {
-                try {
-                  if (!(await coordinator.activate(snapshot.sessionId)))
-                    host.onNotice(`voice activation requested by ${snapshot.sessionId} was rejected`);
-                } catch (error) {
-                  host.onNotice(
-                    `voice activation requested by ${snapshot.sessionId} failed (${error instanceof Error ? error.message : String(error)})`,
-                  );
-                }
-              }
-            }
-          }
-        } finally {
-          polling = false;
+          return;
+        }
+        if (snapshot.activation === undefined) return;
+        const key = `${sessionId}:activate:${snapshot.activation.requestId}`;
+        if (!remember(key)) return;
+        try {
+          if (!(await coordinator.activate(sessionId)))
+            host.onNotice(`voice activation requested by ${sessionId} was rejected`);
+        } catch (error) {
+          host.onNotice(
+            `voice activation requested by ${sessionId} failed (${error instanceof Error ? error.message : String(error)})`,
+          );
         }
       };
 
-      const timer = setInterval(() => void poll(), options.pollMs ?? OWNERSHIP_POLL_MS);
-      const source: HubChannelSource = {
+      const applySnapshot = (sessionId: string, value: unknown): void => {
+        const snapshot = parseVoiceOwnershipSessionSnapshot(value);
+        if (snapshot?.registration === undefined) {
+          coordinator.remove(sessionId);
+          void refreshCatalogs().catch((error: unknown) =>
+            host.onNotice(
+              `voice ownership catalog update failed (${error instanceof Error ? error.message : String(error)})`,
+            ),
+          );
+          return;
+        }
+        coordinator.update(sessionId, snapshot.registration);
+        void processSnapshot(sessionId, snapshot);
+        void refreshCatalogs().catch((error: unknown) =>
+          host.onNotice(
+            `voice ownership catalog update failed (${error instanceof Error ? error.message : String(error)})`,
+          ),
+        );
+      };
+
+      const source: DoomHubChannelSource = {
         payloadFor() {
           return coordinator.payload();
         },
         sessionAdded(scope) {
           scopes.set(scope.sessionId, scope);
-          void poll();
+          subscriptions.get(scope.sessionId)?.();
+          const unsubscribe = host.directEvents.subscribe(
+            VOICE_OWNERSHIP_FRAME_TYPE,
+            scope.sessionId,
+            (payload) => applySnapshot(scope.sessionId, payload),
+            { replayLatest: true },
+          );
+          subscriptions.set(scope.sessionId, unsubscribe);
+          void refreshCatalogs().catch((error: unknown) =>
+            host.onNotice(
+              `voice ownership catalog update failed (${error instanceof Error ? error.message : String(error)})`,
+            ),
+          );
         },
         sessionRemoved(sessionId) {
+          subscriptions.get(sessionId)?.();
+          subscriptions.delete(sessionId);
           scopes.delete(sessionId);
           coordinator.remove(sessionId);
           catalogSignature = '';
         },
         close() {
-          closed = true;
-          clearInterval(timer);
+          for (const unsubscribe of subscriptions.values()) unsubscribe();
+          subscriptions.clear();
           scopes.clear();
           handledRequests.clear();
         },
@@ -221,5 +218,3 @@ export function createVoiceOwnershipChannel(options: { pollMs?: number } = {}): 
     },
   };
 }
-
-export const webHubChannels: readonly WebHubChannel[] = [createVoiceMediaWakeChannel(), createVoiceOwnershipChannel()];

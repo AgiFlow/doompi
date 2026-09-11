@@ -7,7 +7,6 @@ import type { MinorModeOwnerHandle, MinorModeState } from '@agimon-ai/doompi-ext
 import { DOOM_VOICE_AUTO_MODE_ID } from '@agimon-ai/doompi-extension-contracts/narration';
 import type { Context } from '@deepseek-ai/cordis';
 import { readFile } from 'node:fs/promises';
-import { voiceMediaHostConnection } from '../audio/clientMedia.ts';
 
 type HeadlessFacet = {
   inject: readonly string[];
@@ -31,7 +30,7 @@ export const voiceHeadlessFacet: HeadlessFacet = {
   inject: [DOOM_HEADLESS_HOST_SERVICE],
   apply(context: Context) {
     const host = requireDoomHeadlessHost(context);
-    const media = voiceMediaHostConnection();
+    const media = undefined;
     let modeOwner: MinorModeOwnerHandle | undefined;
     const modeSelected = (): boolean => host.context.selection.minorModes.includes(DOOM_VOICE_AUTO_MODE_ID);
     const modeState = (): MinorModeState => {

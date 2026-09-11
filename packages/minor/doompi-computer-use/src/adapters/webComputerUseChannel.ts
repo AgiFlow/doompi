@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import type { HubChannelSource, HubSessionScope, WebHubChannel } from '@agimon-ai/doompi-web-contracts';
+import type {
+  DoomHubChannelSource,
+  DoomHubSessionScope,
+  DoomHubChannel,
+} from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import {
   API_BASE_PATH,
   computerUseChannelType,
@@ -10,14 +14,8 @@ import {
   type ComputerUseChannelPayload,
   type ComputerUseSessionView,
 } from '../types/computerUseApi.ts';
-import {
-  computerUseSessionApiError,
-  MissingComputerUseApiError,
-  missingComputerUseApiRetryAt,
-} from './webComputerUseAvailability.ts';
+import { computerUseSessionApiError, MissingComputerUseApiError } from './webComputerUseAvailability.ts';
 export { computerUseChannelType };
-
-const POLL_MS = 250;
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -41,22 +39,34 @@ async function responseJson(response: Response): Promise<unknown> {
   return value;
 }
 
-export function createComputerUseChannel(options: { pollMs?: number } = {}): WebHubChannel {
-  let receiveCommand: ((scope: HubSessionScope, payload: unknown) => void) | undefined;
+function sessionState(value: unknown): ComputerUseSessionView | undefined {
+  const input = record(value);
+  if (
+    typeof input?.sessionId !== 'string' ||
+    typeof input.revision !== 'number' ||
+    typeof input.wake !== 'number' ||
+    !['inactive', 'awaiting_confirmation', 'activating', 'active', 'stopping', 'failed'].includes(input.phase as string)
+  )
+    return undefined;
+  return input as unknown as ComputerUseSessionView;
+}
+
+export function createComputerUseChannel(): DoomHubChannel {
+  let receiveCommand: ((scope: DoomHubSessionScope, payload: unknown) => void) | undefined;
   return {
     frameType: computerUseChannelType,
     lifecycle: 'hub',
     start(host) {
-      const scopes = new Map<string, HubSessionScope>();
+      const scopes = new Map<string, DoomHubSessionScope>();
       const latest = new Map<string, ComputerUseChannelPayload>();
       const targets = new Map<string, readonly Record<string, unknown>[]>();
       const grants = new Map<string, string>();
+      const subscriptions = new Map<string, () => void>();
       const processing = new Set<string>();
-      const unavailableUntil = new Map<string, number>();
       let activeSessionId: string | undefined;
       let closed = false;
 
-      const sessionRequest = async (scope: HubSessionScope, path: string, method = 'GET', value?: unknown) =>
+      const sessionRequest = async (scope: DoomHubSessionScope, path: string, method = 'GET', value?: unknown) =>
         host.requestSessionApi(scope, {
           basePath: API_BASE_PATH,
           path,
@@ -64,7 +74,13 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
           ...(value === undefined ? {} : { body: JSON.stringify(value) }),
         });
 
-      const publish = (scope: HubSessionScope, state: ComputerUseSessionView): void => {
+      const publish = (scope: DoomHubSessionScope, state: ComputerUseSessionView): void => {
+        if (state.phase === 'active' || state.phase === 'activating' || state.phase === 'stopping') {
+          activeSessionId = scope.sessionId;
+        } else if (activeSessionId === scope.sessionId) {
+          activeSessionId = undefined;
+          grants.delete(scope.sessionId);
+        }
         const payload: ComputerUseChannelPayload = {
           state,
           targets: targets.get(scope.sessionId) ?? [],
@@ -74,28 +90,14 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
         host.publish(scope.sessionId, payload);
       };
 
-      const refresh = async (scope: HubSessionScope): Promise<ComputerUseSessionView> => {
-        const state = (await responseJson(
-          await sessionRequest(scope, COMPUTER_USE_ROUTES.hubState),
-        )) as ComputerUseSessionView;
-        if (state.phase === 'active' || state.phase === 'activating' || state.phase === 'stopping') {
-          activeSessionId = scope.sessionId;
-          if (state.phase === 'active' && !grants.has(scope.sessionId)) {
-            const authorization = (await responseJson(
-              await sessionRequest(scope, COMPUTER_USE_ROUTES.hubAuthorization),
-            )) as { grantId: string } | null;
-            if (authorization !== null) grants.set(scope.sessionId, authorization.grantId);
-          }
-        } else {
-          if (activeSessionId === scope.sessionId) activeSessionId = undefined;
-          grants.delete(scope.sessionId);
-        }
-        unavailableUntil.delete(scope.sessionId);
+      const refresh = async (scope: DoomHubSessionScope): Promise<ComputerUseSessionView> => {
+        const state = sessionState(await responseJson(await sessionRequest(scope, COMPUTER_USE_ROUTES.hubState)));
+        if (state === undefined) throw new Error('Computer-use API returned an invalid session state.');
         publish(scope, state);
         return state;
       };
 
-      const completePending = async (scope: HubSessionScope, pending: ComputerUseBrokerRequest): Promise<void> => {
+      const completePending = async (scope: DoomHubSessionScope, pending: ComputerUseBrokerRequest): Promise<void> => {
         if (!host.computerUse?.available) throw new Error('DoomPi Desktop computer use is unavailable.');
         try {
           const result = await host.computerUse.request(scope, {
@@ -118,7 +120,7 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
         }
       };
 
-      const stopSession = async (scope: HubSessionScope): Promise<void> => {
+      const stopSession = async (scope: DoomHubSessionScope): Promise<void> => {
         const authorization = (await responseJson(
           await sessionRequest(scope, COMPUTER_USE_ROUTES.hubAuthorization),
         )) as { grantId: string } | null;
@@ -143,13 +145,19 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
         grants.delete(scope.sessionId);
         if (activeSessionId === scope.sessionId) activeSessionId = undefined;
       };
-      const pollScope = async (scope: HubSessionScope): Promise<void> => {
+
+      const processScope = async (scope: DoomHubSessionScope, announced?: ComputerUseSessionView): Promise<void> => {
         if (closed || processing.has(scope.sessionId)) return;
-        if ((unavailableUntil.get(scope.sessionId) ?? 0) > Date.now()) return;
         processing.add(scope.sessionId);
         try {
-          const state = await refresh(scope);
+          const state = announced ?? (await refresh(scope));
           if (state.phase === 'active') {
+            if (!grants.has(scope.sessionId)) {
+              const authorization = (await responseJson(
+                await sessionRequest(scope, COMPUTER_USE_ROUTES.hubAuthorization),
+              )) as { grantId: string } | null;
+              if (authorization !== null) grants.set(scope.sessionId, authorization.grantId);
+            }
             const expired = typeof state.expiresAt === 'number' && state.expiresAt <= Date.now();
             let owned = false;
             if (!expired && host.computerUse?.available) {
@@ -207,11 +215,10 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
           if (pending !== null) await completePending(scope, pending);
         } catch (error) {
           if (error instanceof MissingComputerUseApiError) {
-            unavailableUntil.set(scope.sessionId, missingComputerUseApiRetryAt(Date.now()));
             latest.delete(scope.sessionId);
           } else {
             host.onNotice(
-              `computer-use poll failed for ${scope.sessionId} (${error instanceof Error ? error.message : String(error)})`,
+              `computer-use state handling failed for ${scope.sessionId} (${error instanceof Error ? error.message : String(error)})`,
             );
           }
         } finally {
@@ -219,10 +226,16 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
         }
       };
 
+      const onState = (scope: DoomHubSessionScope, payload: unknown): void => {
+        const state = sessionState(payload);
+        if (state === undefined || state.sessionId !== scope.sessionId) return;
+        publish(scope, state);
+        void processScope(scope, state);
+      };
+
       receiveCommand = (scope, payload) => {
         const parsed = command(payload);
         if (parsed === undefined) return;
-        unavailableUntil.delete(scope.sessionId);
         void (async () => {
           try {
             if (parsed.action === 'targets') {
@@ -238,9 +251,9 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
               await stopSession(scope);
             }
             await refresh(scope);
+            void processScope(scope);
           } catch (error) {
             if (error instanceof MissingComputerUseApiError) {
-              unavailableUntil.set(scope.sessionId, missingComputerUseApiRetryAt(Date.now()));
               latest.delete(scope.sessionId);
             } else {
               host.onNotice(
@@ -251,19 +264,24 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
         })();
       };
 
-      const timer: ReturnType<typeof setInterval> = setInterval(() => {
-        for (const scope of scopes.values()) void pollScope(scope);
-      }, options.pollMs ?? POLL_MS);
-
-      const source: HubChannelSource = {
+      const source: DoomHubChannelSource = {
         payloadFor: (scope) => latest.get(scope.sessionId),
         sessionAdded(scope) {
           scopes.set(scope.sessionId, scope);
-          void pollScope(scope);
+          const unsubscribe = host.directEvents.subscribe(
+            computerUseChannelType,
+            scope.sessionId,
+            (payload) => onState(scope, payload),
+            { replayLatest: true },
+          );
+          subscriptions.set(scope.sessionId, unsubscribe);
+          void processScope(scope);
         },
         sessionRemoved(sessionId) {
           const scope = scopes.get(sessionId);
           const grantId = grants.get(sessionId);
+          subscriptions.get(sessionId)?.();
+          subscriptions.delete(sessionId);
           if (scope !== undefined && grantId !== undefined && host.computerUse?.available) {
             void host.computerUse
               .request(scope, { operation: 'stop', payload: { grantId } })
@@ -278,12 +296,12 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
           targets.delete(sessionId);
           grants.delete(sessionId);
           processing.delete(sessionId);
-          unavailableUntil.delete(sessionId);
           if (activeSessionId === sessionId) activeSessionId = undefined;
         },
         close() {
           closed = true;
-          clearInterval(timer);
+          for (const unsubscribe of subscriptions.values()) unsubscribe();
+          subscriptions.clear();
           if (host.computerUse?.available) {
             for (const [sessionId, grantId] of grants) {
               const scope = scopes.get(sessionId);
@@ -297,7 +315,6 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
           latest.clear();
           targets.clear();
           grants.clear();
-          unavailableUntil.clear();
         },
       };
       return source;
@@ -307,5 +324,3 @@ export function createComputerUseChannel(options: { pollMs?: number } = {}): Web
     },
   };
 }
-
-export const webHubChannels: readonly WebHubChannel[] = [createComputerUseChannel()];
