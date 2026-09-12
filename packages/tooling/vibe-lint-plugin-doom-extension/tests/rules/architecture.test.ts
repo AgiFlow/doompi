@@ -427,7 +427,7 @@ describe('Doom deterministic architecture rules', () => {
     const abiViolation = (file: string): string =>
       doomCleanArchitectureBoundary.check?.(file, root, boundaryContext()) ?? '';
 
-    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-kernel' }));
+    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-core' }));
     const owned = write(
       'src/exports/index.ts',
       "export type { DoomKernel, KernelSlotSink } from '../types/kernel.ts';",
@@ -447,7 +447,7 @@ describe('Doom deterministic architecture rules', () => {
     const contractsManifest = write(
       'package.json',
       JSON.stringify({
-        name: '@agimon-ai/doompi-extension-contracts',
+        name: '@agimon-ai/doompi-core',
         exports: { './cordis-host': './dist/cordisHost.mjs' },
       }),
     );
@@ -478,7 +478,7 @@ describe('Doom deterministic architecture rules', () => {
     const foundationManifest = write(
       'package.json',
       JSON.stringify({
-        name: '@agimon-ai/doompi-extension-contracts',
+        name: '@agimon-ai/doompi-core',
         dependencies: { '@agimon-ai/doompi-task': '1.0.0' },
       }),
     );
@@ -573,7 +573,7 @@ describe('Doom deterministic architecture rules', () => {
       const service = write(
         'src/services/session/index.ts',
         `
-        import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+        import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
         import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
         export function start(pi: ExtensionAPI) { connectDoomCordisHost(pi, 'test'); pi.on('session_start', handler); }
       `,
@@ -664,7 +664,7 @@ describe('Doom deterministic architecture rules', () => {
 
   describe('cordis Context ownership', () => {
     it('allows exactly one Context in each shared host and rejects every package-local root', () => {
-      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-extension-contracts' }));
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-core' }));
       const host = write(
         'src/controllers/cordisHost.ts',
         "import { Context } from '@deepseek-ai/cordis';\nconst root = new Context();",
@@ -692,7 +692,7 @@ describe('Doom deterministic architecture rules', () => {
     });
 
     it('reports a server facet loader that owns no Context or more than one', () => {
-      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-extension-contracts' }));
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-core' }));
       write(
         'src/controllers/cordisHost.ts',
         "import { Context } from '@deepseek-ai/cordis';\nconst root = new Context();",
@@ -711,7 +711,7 @@ describe('Doom deterministic architecture rules', () => {
     });
 
     it('requires the shared host cardinality and ignores non-Doom packages', () => {
-      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-extension-contracts' }));
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-core' }));
       write(
         'src/controllers/serverFacetLoader.ts',
         "import { Context } from '@deepseek-ai/cordis';\nconst root = new Context();",
@@ -779,7 +779,7 @@ describe('Doom deterministic architecture rules', () => {
 
     function lifecycleSource(factoryName = 'extension', packageName = '@agimon-ai/doompi-example'): string {
       return [
-        `import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';`,
+        `import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';`,
         `export async function ${factoryName}(pi: any) {`,
         `  const connection = await connectDoomCordisHost(pi, '${packageName}');`,
         `  const fiber = connection.root.plugin(featurePlugin);`,
@@ -796,7 +796,7 @@ describe('Doom deterministic architecture rules', () => {
       const manifest = featureManifest();
       const entry = write(
         'src/extensions/pi.ts',
-        `import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension'; export default definePiExtension('@agimon-ai/doompi-example', () => ({ tools: [] }));`,
+        `import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension'; export default definePiExtension('@agimon-ai/doompi-example', () => ({ tools: [] }));`,
       );
       expect(cordisFeaturePlugin.check?.(entry, root, boundaryContext())).toBeNull();
       expect(cordisFeaturePlugin.check?.(manifest, root, boundaryContext())).toBeNull();
@@ -820,11 +820,11 @@ describe('Doom deterministic architecture rules', () => {
       );
       write(
         'src/extensions/pi.ts',
-        `import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension'; export default definePiExtension('demo', () => ({}));`,
+        `import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension'; export default definePiExtension('demo', () => ({}));`,
       );
       const server = write(
         'src/extensions/server.ts',
-        `import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet'; export default defineServerPlugin({ name: 'demo' });`,
+        `import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet'; export default defineServerPlugin({ name: 'demo' });`,
       );
       const web = write('src/extensions/web.ts', `export const webPlugin = defineWebPlugin({ id: 'demo' });`);
       expect(cordisFeaturePlugin.check?.(manifest, root, boundaryContext())).toBeNull();
@@ -836,7 +836,7 @@ describe('Doom deterministic architecture rules', () => {
       const manifest = featureManifest();
       write(
         'src/extensions/pi.ts',
-        `import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension'; export default definePiExtension('example', ({ context }) => ({ services: [(owner) => {}] }));`,
+        `import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension'; export default definePiExtension('example', ({ context }) => ({ services: [(owner) => {}] }));`,
       );
       expect(cordisFeaturePlugin.check?.(manifest, root, boundaryContext())).toBeNull();
       fs.writeFileSync(
@@ -966,14 +966,14 @@ describe('Doom deterministic architecture rules', () => {
   });
 
   it('limits generic helper host access to the contracts-owned controllers', () => {
-    const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-extension-contracts' }));
+    const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-core' }));
     const source =
-      "import { requireDoomServerHost } from '@agimon-ai/doompi-extension-contracts/server-facet'; export const mount = (context) => requireDoomServerHost(context);";
+      "import { requireDoomServerHost } from '@agimon-ai/doompi-core/server-facet'; export const mount = (context) => requireDoomServerHost(context);";
     write('src/controllers/serverPlugin.ts', source);
     expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
     write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
     expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toContain('has no owning');
-    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-extension-contracts' }));
+    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-core' }));
     write('src/controllers/unowned.ts', source);
     expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toContain('has no owning');
   });
@@ -991,7 +991,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/extensions/extension.ts',
         [
-          `import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-extension-contracts/config';`,
+          `import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';`,
           `let runtime: unknown;`,
           `cordis.inject([DOOM_CONFIG_SERVICE], (context) => {`,
           `  const binding = createRuntime(context);`,
@@ -1009,7 +1009,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/services/serverBinding/index.ts',
         [
-          `import { DOOM_SERVER_HOST_SERVICE, requireDoomServerHost } from '@agimon-ai/doompi-extension-contracts/server-facet';`,
+          `import { DOOM_SERVER_HOST_SERVICE, requireDoomServerHost } from '@agimon-ai/doompi-core/server-facet';`,
           `export const facet = {`,
           `  inject: [DOOM_SERVER_HOST_SERVICE],`,
           `  apply(context: unknown) {`,
@@ -1029,7 +1029,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/services/serverBinding/index.ts',
         [
-          `import { DOOM_SERVER_HOST_SERVICE, requireDoomServerHost } from '@agimon-ai/doompi-extension-contracts/server-facet';`,
+          `import { DOOM_SERVER_HOST_SERVICE, requireDoomServerHost } from '@agimon-ai/doompi-core/server-facet';`,
           `export const facet = {`,
           `  inject: [DOOM_SERVER_HOST_SERVICE],`,
           `  apply: (context: unknown) => {`,
@@ -1049,7 +1049,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/services/serverBinding/index.ts',
         [
-          `import { DOOM_SERVER_HOST_SERVICE, requireDoomServerHost } from '@agimon-ai/doompi-extension-contracts/server-facet';`,
+          `import { DOOM_SERVER_HOST_SERVICE, requireDoomServerHost } from '@agimon-ai/doompi-core/server-facet';`,
           `export const facet = {`,
           `  apply(context: unknown) {`,
           `    const host = requireDoomServerHost(context);`,
@@ -1068,8 +1068,8 @@ describe('Doom deterministic architecture rules', () => {
       const entry = write(
         'src/extensions/pi.ts',
         `
-        import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-        import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+        import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+        import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
         export default definePiExtension('example', ({ context: owner }) => {
           owner.provide(DOOM_HELP_SERVICE, help);
           return { services: [(context) => { context.provide(DOOM_HELP_SERVICE, help); }] };
@@ -1080,8 +1080,8 @@ describe('Doom deterministic architecture rules', () => {
       fs.writeFileSync(
         entry,
         `
-        import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
-        import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+        import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
+        import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
         export default defineServerPlugin({ name: 'example', session: (plugin) => {
           plugin.context.provide(DOOM_HELP_SERVICE, help);
           return { services: [function provider(context) { context.provide(DOOM_HELP_SERVICE, help); }] };
@@ -1096,7 +1096,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/extensions/pi.ts',
         `
-        import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+        import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
         import { createRuntime } from '../controllers/runtime';
         export default definePiExtension('example', ({ pi }) => createRuntime({ pi }));
       `,
@@ -1104,7 +1104,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/controllers/runtime.ts',
         `
-        import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+        import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
         export function createRuntime(options) {
           return { services: [(cordis) => { cordis.provide(DOOM_HELP_SERVICE, help); }] };
         }
@@ -1118,7 +1118,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/extensions/pi.ts',
         `
-        import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+        import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
         import { createRuntime } from '../services/runtime';
         export default definePiExtension('example', () => { const runtime = createRuntime(); return { services: [runtime.plugin] }; });
       `,
@@ -1126,7 +1126,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/services/runtime/index.ts',
         `
-        import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+        import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
         export function createRuntime() { return { plugin(cordis) { cordis.provide(DOOM_HELP_SERVICE, help); } }; }
       `,
       );
@@ -1138,8 +1138,8 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/extensions/pi.ts',
         `
-        import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-        import { requireDoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';
+        import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+        import { requireDoomHelpService } from '@agimon-ai/doompi-core/help';
         export default definePiExtension('example', ({ context }) => {
           requireDoomHelpService(context);
           return {};
@@ -1156,8 +1156,8 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/extensions/pi.ts',
         `
-        import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-        import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+        import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+        import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
         export default definePiExtension({ source: 'old', setup(context) { context.provide(DOOM_HELP_SERVICE, help); } });
         const unrelated = { services: [(context) => { context.provide(DOOM_HELP_SERVICE, help); }] };
       `,
@@ -1172,7 +1172,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/extensions/owned.ts',
         [
-          `import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';`,
+          `import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';`,
           `connection.root.plugin(providerPlugin);`,
           `function providerPlugin(context: unknown) { installProvider(context); }`,
           `function installProvider(context: unknown) { context.provide(DOOM_HELP_SERVICE, service); }`,
@@ -1183,7 +1183,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/extensions/unowned.ts',
         [
-          `import { DOOM_NARRATION_SERVICE } from '@agimon-ai/doompi-extension-contracts/narration';`,
+          `import { DOOM_NARRATION_SERVICE } from '@agimon-ai/doompi-core/narration';`,
           `connection.root.provide(DOOM_NARRATION_SERVICE, service);`,
         ].join('\n'),
       );
@@ -1197,7 +1197,7 @@ describe('Doom deterministic architecture rules', () => {
       const source = write(
         'src/extensions/extension.ts',
         [
-          `import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';`,
+          `import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-core/help';`,
           `let active: unknown;`,
           `export const use = (context: unknown) => requireDoomHelpService(context);`,
           `cordis.inject([DOOM_HELP_SERVICE], (context) => {`,
@@ -1215,7 +1215,7 @@ describe('Doom deterministic architecture rules', () => {
       fs.writeFileSync(
         source,
         [
-          `import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';`,
+          `import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-core/help';`,
           `let escaped: (() => unknown) | undefined;`,
           `cordis.inject([DOOM_HELP_SERVICE], (context) => {`,
           `  escaped = () => requireDoomHelpService(context);`,
@@ -1230,7 +1230,7 @@ describe('Doom deterministic architecture rules', () => {
       fs.writeFileSync(
         source,
         [
-          `import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';`,
+          `import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-core/help';`,
           `let active: unknown;`,
           `export const use = (context: unknown) => requireDoomHelpService(context);`,
           `cordis.inject([DOOM_HELP_SERVICE], (context) => {`,
@@ -1250,8 +1250,8 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/commands/run.ts',
         [
-          `import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-extension-contracts/transition';`,
-          `import { requireDoomReadinessCoordinator } from '@agimon-ai/doompi-extension-contracts/readiness';`,
+          `import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';`,
+          `import { requireDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';`,
           `export function run(ctx: unknown) {`,
           `  requireDoomTransitionCoordinator(ctx);`,
           `  requireDoomReadinessCoordinator(ctx);`,
@@ -1261,7 +1261,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/extensions/extension.ts',
         [
-          `import { DOOM_TRANSITION_SERVICE } from '@agimon-ai/doompi-extension-contracts/transition';`,
+          `import { DOOM_TRANSITION_SERVICE } from '@agimon-ai/doompi-core/transition';`,
           `cordis.inject([DOOM_TRANSITION_SERVICE], () => { return () => undefined; });`,
         ].join('\n'),
       );
@@ -1278,7 +1278,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/extensions/extension.ts',
         [
-          `import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';`,
+          `import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';`,
           `cordis.inject([DOOM_UI_HUB_SERVICE], (context) => {`,
           `  const handle = requireDoomUiHub(context).registerLeader(contribution);`,
           `  return () => handle.dispose();`,
@@ -1294,7 +1294,7 @@ describe('Doom deterministic architecture rules', () => {
       write(
         'src/services/help.ts',
         [
-          `import { requireDoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';`,
+          `import { requireDoomHelpService } from '@agimon-ai/doompi-core/help';`,
           `export function required(ctx: unknown) { return requireDoomHelpService(ctx); }`,
           `export function literal(ctx: any) { return ctx.get('doom/voice-tools'); }`,
         ].join('\n'),
@@ -1326,8 +1326,8 @@ describe('Doom deterministic architecture rules', () => {
     write('package.json', JSON.stringify({ name: '@agimon-ai/doompi' }));
     const source = [
       `import { Context, Service } from '@deepseek-ai/cordis';`,
-      `import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/headless';`,
-      `import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-extension-contracts/mode';`,
+      `import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-core/headless';`,
+      `import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-minor-mode';`,
       `export class HeadlessHost extends Service<unknown> {`,
       `  constructor(context: Context) {`,
       `    super(context, DOOM_HEADLESS_HOST_SERVICE);`,
@@ -1367,7 +1367,7 @@ describe('Doom deterministic architecture rules', () => {
       const manifest = write(
         'package.json',
         JSON.stringify({
-          name: '@agimon-ai/doompi-extension-contracts',
+          name: '@agimon-ai/doompi-core',
           exports: { './session-context': './dist/sessionContext.mjs' },
         }),
       );
@@ -1375,7 +1375,7 @@ describe('Doom deterministic architecture rules', () => {
       const consumer = write(
         'src/extensions/consumer.ts',
         [
-          `import { readDoomSessionContext } from '@agimon-ai/doompi-extension-contracts/session-context';`,
+          `import { readDoomSessionContext } from '@agimon-ai/doompi-core/session-context';`,
           `import type { Context as CordisContext } from '@deepseek-ai/cordis';`,
           `function read(ctx: CordisContext) { const sessionContext = ctx; return sessionContext.reflect.get('doom/value'); }`,
         ].join('\n'),
@@ -1386,7 +1386,7 @@ describe('Doom deterministic architecture rules', () => {
         'legacy session-context module',
       );
       expect(noLegacyCordisAccess.check?.(consumer, root, boundaryContext())).toContain(
-        'legacy @agimon-ai/doompi-extension-contracts/session-context import and Cordis reflect access',
+        'legacy @agimon-ai/doompi-core/session-context import and Cordis reflect access',
       );
 
       fs.rmSync(legacyModule);
@@ -1401,7 +1401,7 @@ describe('Doom deterministic architecture rules', () => {
       const connectedReflection = write(
         'src/extensions/connected.ts',
         [
-          `import { connectDoomCordisHost as connect } from '@agimon-ai/doompi-extension-contracts/cordis-host';`,
+          `import { connectDoomCordisHost as connect } from '@agimon-ai/doompi-core/cordis-host';`,
           `async function read(pi: unknown) {`,
           `  const connection = await connect(pi, 'fixture');`,
           `  const { root: sessionContext } = connection;`,
@@ -1445,7 +1445,7 @@ describe('Doom deterministic architecture rules', () => {
     it('allows a package to depend on its own tier and every tier below it', () => {
       const manifest = manifestFor('@agimon-ai/doompi-autocompact', {
         '@agimon-ai/doompi-config': 'workspace:*',
-        '@agimon-ai/doompi-extension-contracts': 'workspace:*',
+        '@agimon-ai/doompi-core': 'workspace:*',
         '@agimon-ai/doompi-task': 'workspace:*',
         '@agimon-ai/doompi-ui': 'workspace:*',
       });

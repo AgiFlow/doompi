@@ -1,7 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
+import { mountPackageApi } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { api } from '../src/controllers/voiceSessionApi';
 import { MANUAL_TRANSCRIPTION_DURATION_HEADER, MANUAL_TRANSCRIPTION_ROUTE } from '../src/types/manualTranscription';

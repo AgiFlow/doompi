@@ -1,4 +1,5 @@
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import { createAuthorCommand } from '../controllers/doomAuthorCommand';
 import { createAuthorPiMode } from '../controllers/authorPiMode';
 import { createAuthorTools } from '../tools/authorTools';
@@ -17,7 +18,7 @@ const authorPiExtension = definePiExtension<Partial<AuthorExtensionDependencies>
         pi: { renderShell: 'self' as const },
       })),
       commands: [createAuthorCommand(options?.service)],
-      minorModes: [mode.mode],
+      services: [piMinorModes([mode.mode])],
       toolRestrictions: [mode.restriction],
       resources: [
         {

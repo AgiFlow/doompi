@@ -1,5 +1,5 @@
-import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
-import type { DoomToolRestriction } from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
 import { type EmbeddedWorkflowFeature, type WorkflowRunRecord } from '@agimon-ai/workflow-mcp';
 import type { AgentToolResult, AgentToolUpdateCallback, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';

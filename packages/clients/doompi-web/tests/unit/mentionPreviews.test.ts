@@ -1,8 +1,8 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { MentionPreviewAsset } from '../../src/web/features/session/MentionPreviews.tsx';
-import type { SessionAsset } from '../../src/web/lib/sessionAsset.ts';
+import { MentionPreviewAsset } from '../../src/web/features/session/MentionPreviews';
+import type { SessionAsset } from '../../src/web/lib/sessionAsset';
 
 const asset = (contentType: string): SessionAsset => ({
   url: 'blob:sealed-file',

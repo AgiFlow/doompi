@@ -3,7 +3,7 @@ import {
   DOOM_DELEGATION_FINISHED_EVENT,
   DOOM_DELEGATION_UPDATED_EVENT,
   type DelegationRequest,
-} from '@agimon-ai/doompi-extension-contracts/delegation';
+} from '../../src/exports/delegationApi';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it } from 'vitest';
 

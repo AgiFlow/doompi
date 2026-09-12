@@ -25,7 +25,7 @@ import {
   StatusBadge,
   StreamCursor,
 } from '@agimon-ai/doompi-web-components';
-import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type {

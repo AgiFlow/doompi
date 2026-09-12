@@ -1,4 +1,4 @@
-import type { MinorModeRecord } from '@agimon-ai/doompi-extension-contracts/mode';
+import type { MinorModeRecord } from '@agimon-ai/doompi-minor-mode';
 import { describe, expect, it } from 'vitest';
 import { projectMinorModeRecords } from '../../src/models/uiState';
 

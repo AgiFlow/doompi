@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis';
-import { installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

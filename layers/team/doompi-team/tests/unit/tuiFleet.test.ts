@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
-import type { TranscriptPage } from '@agimon-ai/doompi-extension-contracts/session-protocol';
+import type { TranscriptPage } from '@agimon-ai/doompi-core/session-protocol';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
 import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';

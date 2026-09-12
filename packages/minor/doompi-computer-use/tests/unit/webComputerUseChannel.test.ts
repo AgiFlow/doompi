@@ -1,4 +1,4 @@
-import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
 import { describe, expect, it, vi } from 'vitest';
 import { createComputerUseChannel } from '../../src/controllers/webComputerUseChannel';
 import { COMPUTER_USE_ROUTES, type ComputerUseSessionView } from '../../src/types/computerUseApi';

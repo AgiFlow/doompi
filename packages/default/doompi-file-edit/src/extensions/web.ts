@@ -1,4 +1,4 @@
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { fileLinks } from '../web/components/fileLinks';
 import { FilesActivitySection } from '../web/components/FilesActivitySection';
 import { filesChannel } from '../web/stores/filesStore';

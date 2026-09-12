@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { DoomRepositorySyncView } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomRepositorySyncView } from '@agimon-ai/doompi-core/package-api';
 import type { TokenStore } from '@agimon-ai/mcp-proxy';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { McpSettingsManager } from '../src/services/mcpSettingsManager';

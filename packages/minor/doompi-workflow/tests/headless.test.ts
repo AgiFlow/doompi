@@ -17,7 +17,7 @@ vi.mock('@agimon-ai/doompi-ui/footer', () => {
   throw new Error(missingUiMessage);
 });
 
-import { createPiTestHost } from '@agimon-ai/doompi-extension-contracts/testing';
+import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
 
 describe('doom-workflow headless entry', () => {
   it('loads the sole standard Pi entry without the optional UI provider', async () => {

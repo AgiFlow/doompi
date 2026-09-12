@@ -1,4 +1,4 @@
-import type { PiToolRestriction } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import type { PiToolRestriction } from '@agimon-ai/doompi-core/pi-extension';
 import type { {{ restrictionName | pascalCase }}State } from './type';
 import { {{ restrictionName | upperCase }}_RESTRICTED_TOOLS } from '../../constants/{{ restrictionName | camelCase }}Tools';
 /**
@@ -25,7 +25,7 @@ import { {{ restrictionName | upperCase }}_RESTRICTED_TOOLS } from '../../consta
  *   in the plugin tools contribution and hide it here instead.
  * - Reading Date.now, process.env or any host state in the returned closure.
  */
-import type { DoomToolRestriction } from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
 
 /**
  * {{ restrictionDescription }}

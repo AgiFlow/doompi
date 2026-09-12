@@ -2,10 +2,10 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
-import { headlessArguments, hubArguments, hubEnvironment } from '../services/hubLaunch.ts';
-import type { ComputerUseHost } from '../services/computerUseHost.ts';
-import type { HubLaunchPlan, RunningHub } from '../types/hub.ts';
-import { attachComputerUseHostBridge } from './computerUseHostBridge.ts';
+import { headlessArguments, hubArguments, hubEnvironment } from '../services/hubLaunch';
+import type { ComputerUseHost } from '../services/computerUseHost';
+import type { HubLaunchPlan, RunningHub } from '../types/hub';
+import { attachComputerUseHostBridge } from './computerUseHostBridge';
 
 const HEALTH_TIMEOUT_MS = 10 * 60_000;
 const HEALTH_POLL_MS = 150;

@@ -1,3 +1,10 @@
+import {
+  DOOM_HEADLESS_OWNER as TEST_OWNER,
+  DOOM_HEADLESS_HOST_SERVICE as TEST_AGENT,
+} from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE as TEST_SERVER, type DoomServerFacet } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE as TEST_CATALOG } from '@agimon-ai/doompi-minor-mode';
+import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';
 import type {
   DoomHeadlessActivity,
@@ -5,21 +12,20 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHook,
   DoomHeadlessHostService,
-  DoomHeadlessMinorMode,
   DoomHeadlessResource,
   DoomHeadlessSelection,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { describe, expect, it, vi } from 'vitest';
 import { loopServerFacet } from '../../src/extensions/server';
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/headless';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-core/headless';
 
 async function fixture() {
   let selection: DoomHeadlessSelection = {
     majorMode: 'copilot',
     activeLayers: [],
     domains: [],
-    minorModes: [],
+    state: {},
   };
   const commands: DoomHeadlessCommand[] = [];
   const hooks: DoomHeadlessHook[] = [];
@@ -53,15 +59,16 @@ async function fixture() {
     },
     shutdown: vi.fn(),
   } as unknown as DoomHeadlessExecutionContext;
+  const registerOwner = vi.fn((value: DoomHeadlessMinorMode) => {
+    mode = value;
+    return { publish: vi.fn(), dispose: vi.fn() };
+  });
   const host = {
     context: execution,
-    changeSelection: async (patch: Partial<DoomHeadlessSelection>) => {
-      selection = { ...selection, ...patch };
+    changeSelection: async (change: { axis: 'state'; key: string; values: string[] }) => {
+      selection = { ...selection, state: { ...selection.state, [change.key]: change.values } };
     },
-    registerMinorMode: (value: DoomHeadlessMinorMode) => {
-      mode = value;
-      return { publish: vi.fn(), dispose: vi.fn() };
-    },
+    assertActive: vi.fn(),
     registerResource: (value: DoomHeadlessResource) => {
       resources.push(value);
       return registration();
@@ -82,7 +89,7 @@ async function fixture() {
   const context = new Context();
   context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session', context: {} });
   context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
-  const close = await loopServerFacet.apply(context);
+  const close = await mountFacet(loopServerFacet, context, host, registerOwner);
   return { execution, selection: () => selection, commands, hooks, resources, activity, mode, close };
 }
 
@@ -137,3 +144,22 @@ describe('loop headless facet', () => {
     await test.close?.();
   });
 });
+
+async function mountFacet(
+  facet: DoomServerFacet,
+  existing: Context,
+  host: DoomHeadlessHostService,
+  registerOwner: ReturnType<typeof vi.fn>,
+) {
+  const root = new Context();
+  root.provide(TEST_SERVER, existing.get(TEST_SERVER));
+  root.provide(TEST_AGENT, host);
+  root.provide(TEST_CATALOG, { registerOwner } as never);
+  const owner = root.extend({ [TEST_OWNER]: { packageName: '@fixture/mode' } });
+  const release = await facet.apply(owner);
+  await vi.waitFor(() => expect(registerOwner).toHaveBeenCalled());
+  return async () => {
+    await release?.();
+    await root.fiber.dispose();
+  };
+}

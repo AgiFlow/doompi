@@ -1,4 +1,4 @@
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import { createPromptSaveCommand } from '../controllers/promptSaveCommand';
 import { createPromptsCommand } from '../controllers/promptsCommand';
 import { createInputCapture } from '../controllers/inputCapture';

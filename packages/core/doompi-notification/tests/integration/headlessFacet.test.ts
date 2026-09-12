@@ -3,7 +3,7 @@ import type {
   DoomHeadlessCommand,
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { describe, expect, it, vi } from 'vitest';
 import { notificationServerFacet as notificationHeadlessFacet } from '../../src/extensions/server';
 

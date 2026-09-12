@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchWithStepUp } from '../../src/web/lib/stepUp.ts';
-import { STEP_UP_HEADER } from '../../src/types/remoteAccess.ts';
+import { fetchWithStepUp } from '../../src/web/lib/stepUp';
+import { STEP_UP_HEADER } from '../../src/types/remoteAccess';
 
 const original = globalThis.fetch;
 

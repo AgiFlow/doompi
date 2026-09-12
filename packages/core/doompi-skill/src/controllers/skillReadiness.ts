@@ -1,4 +1,4 @@
-import type { PiEventHandlers } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { ExtensionAPI, ExtensionContext, Skill } from '@earendil-works/pi-coding-agent';
 import type { Context } from '@deepseek-ai/cordis';

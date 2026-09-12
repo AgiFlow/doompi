@@ -1,4 +1,4 @@
-import type { TransientTab } from '@agimon-ai/doompi-web-contracts';
+import type { TransientTab } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { Store } from '@tanstack/store';
 

@@ -9,7 +9,7 @@ import {
   hubEntry,
   hubEnvironment,
   LOOPBACK_HOST,
-} from '../../src/services/hubLaunch.ts';
+} from '../../src/services/hubLaunch';
 
 describe('locating the staged runtime', () => {
   it('reads the presentation entry from the resources directory once packaged', () => {

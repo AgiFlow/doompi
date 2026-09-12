@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Separator } from './Separator.tsx';
+import { Separator } from './Separator';
 
 const meta = {
   title: 'Components/Separator',

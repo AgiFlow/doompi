@@ -76,9 +76,9 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
+    "@agimon-ai/doompi-minor-mode": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "csv-parse": "7.0.2",

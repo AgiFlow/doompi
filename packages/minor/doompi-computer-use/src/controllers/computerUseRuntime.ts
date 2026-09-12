@@ -1,11 +1,8 @@
+import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { COMPUTER_USE_GUIDANCE } from '../constants/computerUse';
-import { type PiPluginContributions } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-import {
-  defineMinorMode,
-  type MinorModeOwner,
-  type MinorModeOwnerActionContext,
-} from '@agimon-ai/doompi-extension-contracts/mode';
-import { type DoomToolRestriction } from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import { defineMinorMode, type MinorModeOwner, type MinorModeOwnerActionContext } from '@agimon-ai/doompi-minor-mode';
+import { type DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { createComputerUseCommand } from './computerUseCommand';
 import {
@@ -238,15 +235,17 @@ export function createComputerUseRuntime(
         },
       },
     ],
-    minorModes: {
-      snapshot: () => (globallyEnabled ? [mode] : []),
-      subscribe(listener) {
-        modeListeners.add(listener);
-        return () => {
-          modeListeners.delete(listener);
-        };
-      },
-    },
+    services: [
+      piMinorModes({
+        snapshot: () => (globallyEnabled ? [mode] : []),
+        subscribe(listener) {
+          modeListeners.add(listener);
+          return () => {
+            modeListeners.delete(listener);
+          };
+        },
+      }),
+    ],
     toolRestrictions: [
       {
         source: PACKAGE_SOURCE,

@@ -58,7 +58,7 @@ import {
   DOOM_SERVER_HOST_SERVICE,
   requireDoomServerHost,
   type DoomServerFacet,
-} from '@agimon-ai/doompi-extension-contracts/server-facet';
+} from '@agimon-ai/doompi-core/server-facet';
 import { api } from '../exampleApi';
 
 export default {
@@ -76,7 +76,7 @@ export default {
 Keep the API implementation reusable and separate from the facet entry:
 
 ```ts
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 
 export const api: DoomApi = {
   basePath: 'example',

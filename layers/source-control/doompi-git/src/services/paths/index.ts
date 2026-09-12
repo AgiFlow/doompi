@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { REGISTRY_DIR_ENV, resolveRegistryDir } from '@agimon-ai/doompi-web-contracts';
+import { REGISTRY_DIR_ENV, resolveRegistryDir } from '@agimon-ai/doompi-core/web';
 import { repositoryId, repositoryLabel } from '../repositoryIdentity';
 
 const REGISTRY_DIR_FLAG = '--registry-dir';

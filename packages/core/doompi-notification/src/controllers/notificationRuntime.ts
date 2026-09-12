@@ -1,16 +1,7 @@
-import type { PiPluginContributions } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-import {
-  DOOM_ASK_USER_BLOCKED_EVENT,
-  DOOM_ASK_USER_PROMPT_EVENT,
-} from '@agimon-ai/doompi-extension-contracts/ask-user';
-import {
-  DOOM_CORDIS_SESSION_SERVICE,
-  type DoomCordisSessionService,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import {
-  DOOM_NOTIFICATION_SERVICE,
-  type DoomNotificationLevel,
-} from '@agimon-ai/doompi-extension-contracts/notification';
+import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import { DOOM_ASK_USER_BLOCKED_EVENT, DOOM_ASK_USER_PROMPT_EVENT } from '@agimon-ai/doompi-core/ask-user';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_NOTIFICATION_SERVICE, type DoomNotificationLevel } from '@agimon-ai/doompi-core/notification';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 import {

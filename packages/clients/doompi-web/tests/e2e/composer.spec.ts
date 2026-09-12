@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 const COMMANDS = {
   type: 'response',

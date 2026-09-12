@@ -1,7 +1,7 @@
 import { Checkbox as CheckboxPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { CheckIcon } from '../icons/icons.ts';
-import { cn } from '../lib/cn.ts';
+import { CheckIcon } from '../icons/icons';
+import { cn } from '../lib/cn';
 
 /** A box that is on, off, or indeterminate; the tick is the accent on the deep well. */
 export function Checkbox({ className, ...props }: ComponentProps<typeof CheckboxPrimitive.Root>) {

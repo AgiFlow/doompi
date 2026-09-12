@@ -1,36 +1,28 @@
+import { extensionLayers } from '../composition/transitionLayers';
 import fs from 'node:fs';
-import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
+import { loadMajorModesConfig, filterHookDisabledLayers, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { readDoomConfigContextGeneration, requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-extension-contracts/config';
+import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { alreadyComposed } from '@agimon-ai/doompi-extension-contracts/child-process';
+import { alreadyComposed } from '@agimon-ai/doompi-core/child-process';
 import {
   connectDoomCordisHost,
   DOOM_CORDIS_SESSION_SERVICE,
   type DoomCordisSessionService,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { MUTE_ENV } from '../models/compositionState';
-import { readLauncherComposition } from '../services/launcherComposition';
-import { createMapResolvers, readSyncState } from '../services/syncState';
+} from '@agimon-ai/doompi-core/cordis-host';
+import { MUTE_ENV } from '../builders/cli/compositionState';
+import { readLauncherComposition } from '../builders/cli/launcherComposition';
+import { createMapResolvers, readSyncState } from '../composition/syncState';
 import {
   createLayerResolvers,
   type ExtensionLayerResolvers,
   PERSONA_ENTRY,
   resolveExtensionComposition,
-} from '../services/extensionAssembler';
-import {
-  type DoomTransitionCoordinator,
-  DOOM_TRANSITION_SERVICE,
-  MINOR_MODE_CATALOG_SERVICE,
-  requireDoomTransitionCoordinator,
-  readMinorModeCatalogHost,
-} from '@agimon-ai/doompi-extension-contracts/transition';
-import { createDoomTransitionCoordinator } from '../services/transitionCoordinator';
+} from '../builders/cli/extensionAssembler';
+import { type DoomTransitionCoordinator, DOOM_TRANSITION_SERVICE } from '@agimon-ai/doompi-core/transition';
+import { createDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition-coordinator';
 import type { Context } from '@deepseek-ai/cordis';
-import type {
-  TransitionSelectionSnapshot,
-  TransitionSynchronization,
-} from '@agimon-ai/doompi-extension-contracts/transition';
+import type { TransitionSelectionSnapshot, TransitionSynchronization } from '@agimon-ai/doompi-core/transition';
 
 const ENABLED_FLAG = '1';
 const DEFAULT_PRESET = 'default';
@@ -202,18 +194,15 @@ function transitionCoordinatorPlugin(cordis: Context): void {
               }
             : {}),
         },
-        majorModesConfig,
-        hooksEnabled: harness.hooks,
+        resolveLayers: (majorMode) =>
+          filterHookDisabledLayers(majorModesConfig, resolveLayers(majorModesConfig, majorMode), harness.hooks),
+        extensionLayers: (layers) => extensionLayers(majorModesConfig, layers),
         synchronization: currentTransitionSynchronization(repositoryRoot, process.env, harness.majorMode),
         resolveComposition,
       }),
     });
     sessionContext.provide(DOOM_TRANSITION_SERVICE, coordinator);
-    sessionContext.inject([DOOM_TRANSITION_SERVICE, MINOR_MODE_CATALOG_SERVICE], (catalogContext) => {
-      const activeCoordinator = requireDoomTransitionCoordinator(catalogContext);
-      const catalog = readMinorModeCatalogHost(catalogContext);
-      return catalog ? activeCoordinator.attachMinorModeCatalog(catalog) : undefined;
-    });
+
     return () => coordinator.dispose();
   });
 }

@@ -1,1 +1,1 @@
-export * from '../controllers/router';
+export * from '../cli/router';

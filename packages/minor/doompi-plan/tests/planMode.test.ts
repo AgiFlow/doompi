@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { resetHarnessStore } from '@agimon-ai/doompi-config';
 import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-author/author-facade';
-import type { LeaderContribution } from '@agimon-ai/doompi-extension-contracts/leader';
+import type { LeaderContribution } from '@agimon-ai/doompi-core/leader';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   MINOR_MODE_TOOL_NAME,
@@ -11,20 +11,20 @@ import {
   type MinorModeOwnerDefinition,
   type MinorModeOwnerHandle,
   type MinorModeState,
-} from '@agimon-ai/doompi-extension-contracts/mode';
+} from '@agimon-ai/doompi-minor-mode';
 import {
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
   type NarrationRequest,
-} from '@agimon-ai/doompi-extension-contracts/narration';
+} from '@agimon-ai/doompi-core/narration';
 import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
 import {
   DOOM_SUBAGENT_POLICY_SERVICE,
   type DoomSubagentPolicyService,
   type SubagentPolicy,
   type SubagentPolicyHandle,
-} from '@agimon-ai/doompi-extension-contracts/subagent-policy';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-team/subagent-policy';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import {
   createDoomVoiceToolsService,
   DOOM_VOICE_TOOLS_SERVICE,
@@ -36,7 +36,7 @@ import {
   DOOM_TOOL_SURFACE_SERVICE,
   type DoomToolSurfaceService,
   createDoomToolSurface,
-} from '@agimon-ai/doompi-extension-contracts/tool-surface';
+} from '@agimon-ai/doompi-core/tool-surface';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlanningModeConfig, PlanningThinkingLevel } from '../src/exports/config';

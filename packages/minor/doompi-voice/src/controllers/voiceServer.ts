@@ -1,5 +1,6 @@
-import { type DoomHeadlessCommand, type DoomHeadlessToolResult } from '@agimon-ai/doompi-extension-contracts/headless';
-import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-extension-contracts/mode';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
+import { type DoomHeadlessCommand, type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
+import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import { DOOM_VOICE_AUTO_MODE_ID } from '../constants/voiceTools';
 import { readVoicePrompt } from '../services/voicePrompt';
 
@@ -12,12 +13,13 @@ function failure(message: string): DoomHeadlessToolResult {
   return { content: [{ type: 'text', text: message }], isError: true };
 }
 
-import { type DoomHeadlessHostService } from '@agimon-ai/doompi-extension-contracts/headless';
-import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 export function createVoiceServer(host: DoomHeadlessHostService): DoomServerSessionPlugin {
   const media = undefined;
   let modeOwner: MinorModeOwner;
-  const modeSelected = (): boolean => host.context.selection.minorModes.includes(DOOM_VOICE_AUTO_MODE_ID);
+  const modeSelected = (): boolean =>
+    (host.context.selection.state?.['minor-mode'] ?? []).includes(DOOM_VOICE_AUTO_MODE_ID);
   const modeState = (): MinorModeState => {
     const active = modeSelected();
     return {
@@ -31,10 +33,13 @@ export function createVoiceServer(host: DoomHeadlessHostService): DoomServerSess
     };
   };
   const selectMode = async (enabled: boolean): Promise<void> => {
-    const modes = host.context.selection.minorModes.filter((mode) => mode !== DOOM_VOICE_AUTO_MODE_ID);
+    const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter(
+      (mode) => mode !== DOOM_VOICE_AUTO_MODE_ID,
+    );
     await host.changeSelection({
-      axis: 'minorModes',
-      minorModes: enabled ? [...modes, DOOM_VOICE_AUTO_MODE_ID] : modes,
+      axis: 'state',
+      key: 'minor-mode',
+      values: enabled ? [...modes, DOOM_VOICE_AUTO_MODE_ID] : modes,
     });
     modeOwner.publish();
   };
@@ -76,16 +81,19 @@ export function createVoiceServer(host: DoomHeadlessHostService): DoomServerSess
     },
   }).createOwner(undefined);
   return {
-    minorModes: [modeOwner],
+    services: [serverMinorModes([modeOwner])],
     toolRestrictions: [
       {
-        minorMode: DOOM_VOICE_AUTO_MODE_ID,
+        when: { state: { 'minor-mode': DOOM_VOICE_AUTO_MODE_ID } },
         allowedTools: [...VOICE_TOOL_NAMES],
       },
     ],
     resources: [
       {
-        when: { minorMode: DOOM_VOICE_AUTO_MODE_ID },
+        when: {
+          state: { 'minor-mode': DOOM_VOICE_AUTO_MODE_ID },
+          attribution: { kind: 'minor', mode: DOOM_VOICE_AUTO_MODE_ID },
+        },
         name: 'doompi-use-voice',
         kind: 'skill',
         read: readVoicePrompt,
@@ -93,7 +101,10 @@ export function createVoiceServer(host: DoomHeadlessHostService): DoomServerSess
     ],
     activities: [
       {
-        when: { minorMode: DOOM_VOICE_AUTO_MODE_ID },
+        when: {
+          state: { 'minor-mode': DOOM_VOICE_AUTO_MODE_ID },
+          attribution: { kind: 'minor', mode: DOOM_VOICE_AUTO_MODE_ID },
+        },
         name: SOURCE,
         start() {
           if (!media) throw new Error(MEDIA_UNAVAILABLE);
@@ -103,7 +114,10 @@ export function createVoiceServer(host: DoomHeadlessHostService): DoomServerSess
     ],
     tools: [
       {
-        when: { minorMode: DOOM_VOICE_AUTO_MODE_ID },
+        when: {
+          state: { 'minor-mode': DOOM_VOICE_AUTO_MODE_ID },
+          attribution: { kind: 'minor', mode: DOOM_VOICE_AUTO_MODE_ID },
+        },
         name: 'describe_voice_tools',
         label: 'Describe Voice tools',
         description: 'Describe the voice capabilities available to this headless session.',
@@ -116,7 +130,10 @@ export function createVoiceServer(host: DoomHeadlessHostService): DoomServerSess
         },
       },
       {
-        when: { minorMode: DOOM_VOICE_AUTO_MODE_ID },
+        when: {
+          state: { 'minor-mode': DOOM_VOICE_AUTO_MODE_ID },
+          attribution: { kind: 'minor', mode: DOOM_VOICE_AUTO_MODE_ID },
+        },
         name: 'use_voice_tools',
         label: 'Use Voice tools',
         description: 'Invoke one capability from the current voice catalog.',
@@ -135,7 +152,10 @@ export function createVoiceServer(host: DoomHeadlessHostService): DoomServerSess
         },
       },
       {
-        when: { minorMode: DOOM_VOICE_AUTO_MODE_ID },
+        when: {
+          state: { 'minor-mode': DOOM_VOICE_AUTO_MODE_ID },
+          attribution: { kind: 'minor', mode: DOOM_VOICE_AUTO_MODE_ID },
+        },
         name: 'narrate',
         label: 'Narrate',
         description: 'Speak text through the configured voice media client.',
@@ -151,7 +171,10 @@ export function createVoiceServer(host: DoomHeadlessHostService): DoomServerSess
         },
       },
       {
-        when: { minorMode: DOOM_VOICE_AUTO_MODE_ID },
+        when: {
+          state: { 'minor-mode': DOOM_VOICE_AUTO_MODE_ID },
+          attribution: { kind: 'minor', mode: DOOM_VOICE_AUTO_MODE_ID },
+        },
         name: 'transfer_voice',
         label: 'Transfer Voice',
         description: 'Transfer autonomous voice control to the selected session.',
@@ -182,7 +205,10 @@ export function createVoiceServer(host: DoomHeadlessHostService): DoomServerSess
     ] satisfies DoomHeadlessCommand[],
     hooks: [
       {
-        when: { minorMode: DOOM_VOICE_AUTO_MODE_ID },
+        when: {
+          state: { 'minor-mode': DOOM_VOICE_AUTO_MODE_ID },
+          attribution: { kind: 'minor', mode: DOOM_VOICE_AUTO_MODE_ID },
+        },
         event: 'session_shutdown',
         handle: () => {
           host.context.client.setStatus(SOURCE, undefined);

@@ -1,8 +1,8 @@
 import { Dialog as SheetPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { CloseIcon } from '../icons/icons.ts';
-import { cn } from '../lib/cn.ts';
-import { Button } from './Button.tsx';
+import { CloseIcon } from '../icons/icons';
+import { cn } from '../lib/cn';
+import { Button } from './Button';
 
 /**
  * A side panel on Radix's Dialog: an overlay that slides in from an edge,

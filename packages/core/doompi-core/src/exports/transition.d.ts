@@ -1,0 +1,3 @@
+export type { DomainTransitionTarget, DoomTransitionCoordinator, DoomTransitionPlan, DoomTransitionRequest, DoomTransitionResult, MajorModeTransitionTarget, LiveTransitionTarget, ProfileTransitionTarget, StructuralTransitionExecution, TransitionAxis, TransitionDiagnosticCode, TransitionDisposition, TransitionExecutionStrategy, TransitionGeneration, TransitionOutcome, TransitionSelectionSnapshot, TransitionSource, TransitionSynchronization, TransitionTarget, } from '../schemas/transition';
+export { DOOM_TRANSITION_SERVICE, readDoomTransitionCoordinator, requireDoomTransitionCoordinator, } from '../schemas/transition';
+//# sourceMappingURL=transition.d.ts.map

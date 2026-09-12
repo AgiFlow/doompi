@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const findSyncedRoot = vi.hoisted(() => vi.fn());
 const readStartupBootstrapStatus = vi.hoisted(() => vi.fn());
-vi.mock('../src/services/bootstrapLocator', () => ({ findSyncedRoot, readStartupBootstrapStatus }));
+vi.mock('../src/builders/cli/bootstrapLocator', () => ({ findSyncedRoot, readStartupBootstrapStatus }));
 
 import doomPiPackageExtension from '../src/extensions/pi';
 import * as publicApi from '../src/exports';

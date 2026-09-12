@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const connectDoomCordisHost = vi.fn();
 
-vi.mock('../../../../../../packages/core/doompi-extension-contracts/src/controllers/cordisHost', () => ({
+vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
   connectDoomCordisHost: (...args: unknown[]) => connectDoomCordisHost(...args),
 }));
 

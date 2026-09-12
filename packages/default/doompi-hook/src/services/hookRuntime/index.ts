@@ -1,9 +1,6 @@
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-extension-contracts/config';
-import {
-  type DoomReadinessCoordinator,
-  readDoomReadinessCoordinator,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
+import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
+import { type DoomReadinessCoordinator, readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { HookTelemetry } from '../../types/telemetry';

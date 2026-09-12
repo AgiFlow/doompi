@@ -1,3 +1,10 @@
+import {
+  DOOM_HEADLESS_OWNER as TEST_OWNER,
+  DOOM_HEADLESS_HOST_SERVICE as TEST_AGENT,
+} from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE as TEST_SERVER, type DoomServerFacet } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE as TEST_CATALOG } from '@agimon-ai/doompi-minor-mode';
+import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import path from 'node:path';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
@@ -6,11 +13,10 @@ import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHook,
   type DoomHeadlessHostService,
-  type DoomHeadlessMinorMode,
   type DoomHeadlessResource,
   type DoomHeadlessTool,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import type { Context } from '@deepseek-ai/cordis';
+} from '@agimon-ai/doompi-core/headless';
+import { Context } from '@deepseek-ai/cordis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComputerUseSessionClient } from '../../../src/services/sessionApiClient';
 import type { ComputerUseObservation } from '../../../src/types/computerUse';
@@ -54,7 +60,7 @@ async function fixture(selectionModes: string[] = [], environment: Readonly<Reco
     environment,
     sessionId: 'computer-use-headless-test',
     get selection() {
-      return { majorMode: 'copilot', activeLayers: [], domains: [], minorModes };
+      return { majorMode: 'copilot', activeLayers: [], domains: [], state: { 'minor-mode': minorModes } };
     },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {
@@ -77,15 +83,16 @@ async function fixture(selectionModes: string[] = [], environment: Readonly<Reco
   const publish = vi.fn();
   const dispose = vi.fn();
   const registrations = { dispose: vi.fn() };
+  const registerOwner = vi.fn((mode: DoomHeadlessMinorMode) => {
+    modes.push(mode);
+    return { publish, dispose };
+  });
   const host = {
     context: execution,
-    changeSelection: vi.fn(async ({ minorModes: selected }: { minorModes?: string[] }) => {
+    changeSelection: vi.fn(async ({ values: selected }: { values?: string[] }) => {
       if (selected) minorModes = selected;
     }),
-    registerMinorMode: (mode: DoomHeadlessMinorMode) => {
-      modes.push(mode);
-      return { publish, dispose };
-    },
+    assertActive: vi.fn(),
     registerToolRestriction: (restriction: unknown) => {
       restrictions.push(restriction);
       return registrations;
@@ -111,7 +118,7 @@ async function fixture(selectionModes: string[] = [], environment: Readonly<Reco
       return registrations;
     },
   } as unknown as DoomHeadlessHostService;
-  const close = await computerUseHeadlessFacet.apply(contextFor(host));
+  const close = await mountFacet(computerUseHeadlessFacet, contextFor(host), host, registerOwner);
   return {
     execution,
     modes,
@@ -245,7 +252,7 @@ describe('computer use headless facet', () => {
     await expect(mode.handleAction('activate', {}, operation(test.execution))).resolves.toEqual({
       message: 'Computer use activated.',
     });
-    expect(test.execution.selection.minorModes).toContain('computer-use');
+    expect(test.execution.selection.state?.['minor-mode']).toContain('computer-use');
     expect(test.publish).toHaveBeenCalled();
     expect(test.execution.client.setStatus).toHaveBeenCalledWith(
       '@agimon-ai/doompi-computer-use',
@@ -276,7 +283,7 @@ describe('computer use headless facet', () => {
     await stopActivity();
     await command.execute('deactivate', test.execution);
     expect(client.stop).toHaveBeenCalled();
-    expect(test.execution.selection.minorModes).not.toContain('computer-use');
+    expect(test.execution.selection.state?.['minor-mode']).not.toContain('computer-use');
     state.phase = 'active';
     await mode.handleAction('doctor', {}, operation(test.execution));
     expect(beforeStart.handle({ systemPrompt: 'Base prompt' }, test.execution)).toMatchObject({
@@ -302,3 +309,22 @@ describe('computer use headless facet', () => {
     await second.close?.();
   });
 });
+
+async function mountFacet(
+  facet: DoomServerFacet,
+  existing: Context,
+  host: DoomHeadlessHostService,
+  registerOwner: ReturnType<typeof vi.fn>,
+) {
+  const root = new Context();
+  root.provide(TEST_SERVER, existing.get(TEST_SERVER));
+  root.provide(TEST_AGENT, host);
+  root.provide(TEST_CATALOG, { registerOwner } as never);
+  const owner = root.extend({ [TEST_OWNER]: { packageName: '@fixture/mode' } });
+  const release = await facet.apply(owner);
+  await vi.waitFor(() => expect(registerOwner).toHaveBeenCalled());
+  return async () => {
+    await release?.();
+    await root.fiber.dispose();
+  };
+}

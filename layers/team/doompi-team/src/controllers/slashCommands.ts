@@ -48,7 +48,7 @@
  *   `watchTrackedRunUntilTerminal`
  */
 
-import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { ExtensionConfig } from '../services/config';
 import type { ManagementActionsContract } from '../services/managementActions';

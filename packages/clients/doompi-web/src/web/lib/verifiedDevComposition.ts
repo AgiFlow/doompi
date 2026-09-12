@@ -1,5 +1,5 @@
-import { activateVerifiedBundle, activateVerifiedPluginComposition } from '../../pwa/workerClient.ts';
-import type { SessionWebComposition } from '../../types/hub.ts';
+import { activateVerifiedBundle, activateVerifiedPluginComposition } from '../../pwa/workerClient';
+import type { SessionWebComposition } from '../../types/hub';
 
 let pin: { key: string; ready: Promise<void> } | undefined;
 

@@ -1,4 +1,4 @@
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { VoiceActivitySection } from '../web/components/VoiceActivitySection';
 import { VoiceComposerAction } from '../web/components/VoiceComposerAction';
 import { startVoiceMediaRuntime } from '../web/components/VoiceMediaRuntime';

@@ -59,7 +59,42 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./subagent-tool": {
+      "types": "./dist/subagent-tool.d.mts",
+      "import": "./dist/subagent-tool.mjs",
+      "require": "./dist/subagent-tool.cjs"
+    },
+    "./subagent-policy": {
+      "types": "./dist/subagent-policy.d.mts",
+      "import": "./dist/subagent-policy.mjs",
+      "require": "./dist/subagent-policy.cjs"
+    },
+    "./fable-plan": {
+      "types": "./dist/fable-plan.d.mts",
+      "import": "./dist/fable-plan.mjs",
+      "require": "./dist/fable-plan.cjs"
+    },
+    "./delegation-api": {
+      "types": "./dist/delegation-api.d.mts",
+      "import": "./dist/delegation-api.mjs",
+      "require": "./dist/delegation-api.cjs"
+    },
+    "./runtime-subagent-tool": {
+      "types": "./dist/runtime-subagent-tool.d.mts",
+      "import": "./dist/runtime-subagent-tool.mjs",
+      "require": "./dist/runtime-subagent-tool.cjs"
+    },
+    "./runtime-subagent-policy": {
+      "types": "./dist/runtime-subagent-policy.d.mts",
+      "import": "./dist/runtime-subagent-policy.mjs",
+      "require": "./dist/runtime-subagent-policy.cjs"
+    },
+    "./fable-plan-api": {
+      "types": "./dist/fable-plan-api.d.mts",
+      "import": "./dist/fable-plan-api.mjs",
+      "require": "./dist/fable-plan-api.cjs"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -76,11 +111,10 @@
   "dependencies": {
     "@agimon-ai/doompi-cache": "workspace:*",
     "@agimon-ai/doompi-config": "workspace:*",
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "typebox": "1.3.25",
     "yaml": "2.9.0"

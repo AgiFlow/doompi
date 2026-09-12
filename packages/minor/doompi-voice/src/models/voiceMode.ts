@@ -1,4 +1,4 @@
-import { type MinorModeState } from '@agimon-ai/doompi-extension-contracts/mode';
+import { type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import { type AutoCaptureActivationState, type VoiceState } from '../types';
 import { AUTO_MODE_COLOR } from '../constants/voiceRuntime';
 

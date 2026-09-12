@@ -2,7 +2,7 @@ import type {
   DoomHubChannelSource as HubChannelSource,
   DoomHubSessionScope,
   DoomHubChannel as WebHubChannel,
-} from '@agimon-ai/doompi-extension-contracts/hub-channel';
+} from '@agimon-ai/doompi-core/hub-channel';
 import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../types/webSubagents';
 
 const RUN_ID_PATTERN = /^[\w.-]+$/;

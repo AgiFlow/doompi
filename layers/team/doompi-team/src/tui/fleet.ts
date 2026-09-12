@@ -24,7 +24,7 @@ import {
   type DoomOverlayTui,
 } from '@agimon-ai/doompi-ui/doom-overlay';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
-import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-extension-contracts/session-protocol';
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
 import { type ExtensionContext, getMarkdownTheme } from '@earendil-works/pi-coding-agent';
 import {
   Key,

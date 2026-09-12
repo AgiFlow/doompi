@@ -2,24 +2,24 @@ import { Button } from '@agimon-ai/doompi-web-components';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
-import { SessionRail } from '../features/sessions/SessionRail.tsx';
-import { AppearanceSettings } from '../features/settings/AppearanceSettings.tsx';
-import { ContributedSettings } from '../features/settings/ContributedSettings.tsx';
-import { ImageSettings } from '../features/settings/ImageSettings.tsx';
-import { NotificationSettings } from '../features/settings/NotificationSettings.tsx';
-import { PluginSettings } from '../features/settings/PluginSettings.tsx';
-import { RepositoryWorkspace } from '../features/settings/RepositoryWorkspace.tsx';
-import { ProviderSettings } from '../features/settings/ProviderSettings.tsx';
-import { RemoteControlSettings } from '../features/settings/RemoteControlSettings.tsx';
-import { SettingsMenu } from '../features/settings/SettingsMenu.tsx';
-import { SettingsPanelHost } from '../features/settings/SettingsPanelHost.tsx';
+import { SessionRail } from '../features/sessions/SessionRail';
+import { AppearanceSettings } from '../features/settings/AppearanceSettings';
+import { ContributedSettings } from '../features/settings/ContributedSettings';
+import { ImageSettings } from '../features/settings/ImageSettings';
+import { NotificationSettings } from '../features/settings/NotificationSettings';
+import { PluginSettings } from '../features/settings/PluginSettings';
+import { RepositoryWorkspace } from '../features/settings/RepositoryWorkspace';
+import { ProviderSettings } from '../features/settings/ProviderSettings';
+import { RemoteControlSettings } from '../features/settings/RemoteControlSettings';
+import { SettingsMenu } from '../features/settings/SettingsMenu';
+import { SettingsPanelHost } from '../features/settings/SettingsPanelHost';
 import {
   DEFAULT_REPOSITORY_SETTINGS_SECTION,
   DEFAULT_SETTINGS_SECTION,
   settingsSection,
-} from '../lib/settingsSections.ts';
-import { sessionsStore } from '../stores/sessionsStore.ts';
-import { useWebPluginRegistry } from '../stores/useWebPluginRegistry.ts';
+} from '../lib/settingsSections';
+import { sessionsStore } from '../stores/sessionsStore';
+import { useWebPluginRegistry } from '../stores/useWebPluginRegistry';
 
 /**
  * The settings pages, in the cockpit's frame: the rail stays so a session is

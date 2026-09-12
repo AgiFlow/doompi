@@ -1,4 +1,4 @@
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import { ExecutableResolver, NodeProcessSpawner, SystemClock, TemporaryWorkspace } from '../services/infrastructure';
 import { api as voiceMediaApi, createVoiceMediaApi, type VoiceMediaApiOptions } from './clientMediaApi';
 import { ManualTranscriptionConfigLoader } from '../services/manualTranscriptionConfig';

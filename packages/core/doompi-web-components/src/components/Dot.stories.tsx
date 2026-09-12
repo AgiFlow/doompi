@@ -3,8 +3,8 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Dot } from './Dot.tsx';
-import { DOT_TONES } from '../types/tone.ts';
+import { Dot } from './Dot';
+import { DOT_TONES } from '../types/tone';
 
 const SIZES = ['xs', 'sm', 'md', 'lg'] as const;
 

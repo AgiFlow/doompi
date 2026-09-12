@@ -1,5 +1,5 @@
 import { Badge, Button, EmptyState, Markdown } from '@agimon-ai/doompi-web-components';
-import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useEffect, useState } from 'react';
 import type { WorkflowRunView } from '../../types/webWorkflows';
 import type {

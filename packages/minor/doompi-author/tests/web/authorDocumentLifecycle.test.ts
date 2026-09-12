@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isValidElement, type ReactNode, type ReactElement } from 'react';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { AuthorDocumentPanel, authorFileLinks, authorFileTab } from '../../src/web/components/AuthorDocumentPanel';
 import { AuthorTextView } from '../../src/web/components/AuthorTextView';
 import { AuthorMediaView } from '../../src/web/components/AuthorMediaView';
@@ -27,8 +27,8 @@ vi.mock('react', async (importOriginal) => ({
 vi.mock('@tanstack/react-store', () => ({
   useStore: (store: { state: unknown }, select: (state: unknown) => unknown) => select(store.state),
 }));
-vi.mock('../../src/web/api/authorFiles.ts', () => ({ loadAuthorDocument: vi.fn(), saveAuthorDocument: vi.fn() }));
-vi.mock('../../src/web/api/authorBrowserBridge.ts', () => ({ focusAuthorViewport: vi.fn(async () => vi.fn()) }));
+vi.mock('../../src/web/api/authorFiles', () => ({ loadAuthorDocument: vi.fn(), saveAuthorDocument: vi.fn() }));
+vi.mock('../../src/web/api/authorBrowserBridge', () => ({ focusAuthorViewport: vi.fn(async () => vi.fn()) }));
 type Props = {
   children?: ReactNode;
   'data-testid'?: string;

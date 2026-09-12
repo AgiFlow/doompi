@@ -9,8 +9,8 @@ import {
   composeDoomSession,
   findSyncedRoot,
   registerDoomFlags,
-} from '../controllers/composer';
-import { acquireCompositionClaim } from '../models/compositionState';
+} from '../builders/cli/composition';
+import { acquireCompositionClaim } from '../builders/cli/compositionState';
 const WARNING = 'warning';
 const STALE_MESSAGE = 'doompi config changed since the last sync. Run doompi sync.';
 

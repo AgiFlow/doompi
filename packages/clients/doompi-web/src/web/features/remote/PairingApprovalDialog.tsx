@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import { approveDevice, denyDevice, remoteAccessStore } from '../../stores/remoteAccessStore.ts';
+import { approveDevice, denyDevice, remoteAccessStore } from '../../stores/remoteAccessStore';
 
 /**
  * The second factor, and the reason a photographed QR is not enough.

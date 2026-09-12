@@ -1,4 +1,4 @@
-import type { ComposerSubmission } from '@agimon-ai/doompi-web-contracts';
+import type { ComposerSubmission } from '@agimon-ai/doompi-core/web';
 
 type ComposerSubmissionListener = (submission: ComposerSubmission) => void;
 

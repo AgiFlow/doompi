@@ -1,6 +1,7 @@
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/computerUse';
-import { type DoomHeadlessToolResult } from '@agimon-ai/doompi-extension-contracts/headless';
-import { defineMinorMode, type MinorModeOwner } from '@agimon-ai/doompi-extension-contracts/mode';
+import { type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
+import { defineMinorMode, type MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
 import { COMPUTER_USE_MODE_ID } from '../types/computerUseApi';
 import { COMPUTER_USE_TOOL_NAMES } from '../constants/computerUse';
 import { modeState } from '../models/computerUseMode';
@@ -39,8 +40,8 @@ import {
   type DoomHeadlessHostService,
   type DoomHeadlessTool,
   type DoomHeadlessCommand,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+} from '@agimon-ai/doompi-core/headless';
+import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
   DoomServerSessionPlugin,
   'tools' | 'commands'
@@ -58,7 +59,8 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
   let state: ComputerUseSessionView | undefined;
   let stopActivity: (() => void) | undefined;
   let modeOwner: MinorModeOwner | undefined;
-  const modeSelected = (): boolean => host.context.selection.minorModes.includes(COMPUTER_USE_MODE_ID);
+  const modeSelected = (): boolean =>
+    (host.context.selection.state?.['minor-mode'] ?? []).includes(COMPUTER_USE_MODE_ID);
   const publishMode = (): void => modeOwner?.publish();
   const applyState = (next: ComputerUseSessionView | undefined): void => {
     state = next;
@@ -69,10 +71,11 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
     publishMode();
   };
   const selectMode = async (enabled: boolean): Promise<void> => {
-    const modes = host.context.selection.minorModes.filter((mode) => mode !== COMPUTER_USE_MODE_ID);
+    const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== COMPUTER_USE_MODE_ID);
     await host.changeSelection({
-      axis: 'minorModes',
-      minorModes: enabled ? [...modes, COMPUTER_USE_MODE_ID] : modes,
+      axis: 'state',
+      key: 'minor-mode',
+      values: enabled ? [...modes, COMPUTER_USE_MODE_ID] : modes,
     });
     publishMode();
   };
@@ -150,16 +153,19 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
     },
   }).createOwner(undefined);
   return {
-    minorModes: [modeOwner],
+    services: [serverMinorModes([modeOwner])],
     toolRestrictions: [
       {
-        minorMode: COMPUTER_USE_MODE_ID,
+        when: { state: { 'minor-mode': COMPUTER_USE_MODE_ID } },
         allowedTools: [...COMPUTER_USE_TOOL_NAMES],
       },
     ],
     activities: [
       {
-        when: { minorMode: COMPUTER_USE_MODE_ID },
+        when: {
+          state: { 'minor-mode': COMPUTER_USE_MODE_ID },
+          attribution: { kind: 'minor', mode: COMPUTER_USE_MODE_ID },
+        },
         name: SOURCE,
         async start() {
           await refresh();
@@ -177,7 +183,10 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
     ],
     tools: [
       {
-        when: { minorMode: COMPUTER_USE_MODE_ID },
+        when: {
+          state: { 'minor-mode': COMPUTER_USE_MODE_ID },
+          attribution: { kind: 'minor', mode: COMPUTER_USE_MODE_ID },
+        },
         name: 'computer_state',
         label: 'Computer State',
         description: 'Observe the authorized application window and return semantic accessibility state.',
@@ -194,7 +203,10 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
         },
       },
       {
-        when: { minorMode: COMPUTER_USE_MODE_ID },
+        when: {
+          state: { 'minor-mode': COMPUTER_USE_MODE_ID },
+          attribution: { kind: 'minor', mode: COMPUTER_USE_MODE_ID },
+        },
         name: 'computer_action',
         label: 'Computer Action',
         description: 'Perform one constrained semantic action in the authorized application window.',
@@ -223,7 +235,10 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
         },
       },
       {
-        when: { minorMode: COMPUTER_USE_MODE_ID },
+        when: {
+          state: { 'minor-mode': COMPUTER_USE_MODE_ID },
+          attribution: { kind: 'minor', mode: COMPUTER_USE_MODE_ID },
+        },
         name: 'computer_exec',
         label: 'Computer Script',
         description:
@@ -256,8 +271,9 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
           if (args.trim() === 'deactivate' && client && state?.phase !== 'inactive' && state?.phase !== 'failed') {
             await client.stop();
             await host.changeSelection({
-              axis: 'minorModes',
-              minorModes: execution.selection.minorModes.filter((mode) => mode !== COMPUTER_USE_MODE_ID),
+              axis: 'state',
+              key: 'minor-mode',
+              values: (execution.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== COMPUTER_USE_MODE_ID),
             });
             await refresh();
           }
@@ -266,7 +282,10 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
     ],
     hooks: [
       {
-        when: { minorMode: COMPUTER_USE_MODE_ID },
+        when: {
+          state: { 'minor-mode': COMPUTER_USE_MODE_ID },
+          attribution: { kind: 'minor', mode: COMPUTER_USE_MODE_ID },
+        },
         event: 'before_agent_start',
         handle(event) {
           if (state?.phase !== 'active') return undefined;
@@ -275,7 +294,10 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
         },
       },
       {
-        when: { minorMode: COMPUTER_USE_MODE_ID },
+        when: {
+          state: { 'minor-mode': COMPUTER_USE_MODE_ID },
+          attribution: { kind: 'minor', mode: COMPUTER_USE_MODE_ID },
+        },
         event: 'session_shutdown',
         handle: async () => {
           stopActivity?.();

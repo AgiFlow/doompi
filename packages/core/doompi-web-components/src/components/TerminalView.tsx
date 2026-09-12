@@ -1,6 +1,6 @@
 import { type ComponentProps, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { cn } from '../lib/cn.ts';
-import { themeVariable } from '../types/theme.ts';
+import { cn } from '../lib/cn';
+import { themeVariable } from '../types/theme';
 
 /**
  * A terminal emulator, for output that is a screen rather than a document.

@@ -1,0 +1,4 @@
+export function run(args: readonly string[]): string {
+  if (args.length === 0 || args.includes('--help')) return '{{ packageName }}: use --help to display commands';
+  throw new Error(`Unknown command: ${args[0]}`);
+}

@@ -1,6 +1,6 @@
 import { replicatedState } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import type { SessionServiceState } from '@agimon-ai/doompi-extension-contracts/session-protocol';
+import type { SessionServiceState } from '@agimon-ai/doompi-core/session-protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fake = vi.hoisted(() => ({
@@ -41,13 +41,13 @@ vi.mock('@earendil-works/chord', async (original) => ({
   ...(await original<typeof import('@earendil-works/chord')>()),
   createRemoteServiceBinding: fake.binding,
 }));
-vi.mock('../../src/web/lib/piTransport.ts', () => ({
+vi.mock('../../src/web/lib/piTransport', () => ({
   protocolSocketUrl: () => 'ws://test/api/pi',
   createProtocolTransport: () => ({}),
 }));
-vi.mock('../../src/web/lib/sessionProtocolCommands.ts', () => ({ bindSessionProtocol: () => fake.release }));
-vi.mock('../../src/web/lib/browserTelemetry.ts', () => ({ recordBrowserPerformance: () => {} }));
-vi.mock('../../src/web/stores/sessionStore.ts', () => ({
+vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({ bindSessionProtocol: () => fake.release }));
+vi.mock('../../src/web/lib/browserTelemetry', () => ({ recordBrowserPerformance: () => {} }));
+vi.mock('../../src/web/stores/sessionStore', () => ({
   applyProtocolTranscript: (...args: unknown[]) => {
     fake.order.push('transcript');
     fake.publish(...args);
@@ -72,7 +72,7 @@ vi.mock('../../src/web/stores/sessionStore.ts', () => ({
   setHasNewerHistory: () => {},
 }));
 
-import { startProtocolRuntime, type ProtocolRuntime } from '../../src/web/app/protocolRuntime.ts';
+import { startProtocolRuntime, type ProtocolRuntime } from '../../src/web/app/protocolRuntime';
 
 function sessionState() {
   return replicatedState<SessionServiceState>({

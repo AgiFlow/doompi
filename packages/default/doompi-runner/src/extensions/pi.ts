@@ -1,4 +1,4 @@
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import type { BashParams } from '../schemas/bashTool';
 import { createBashTool } from '../tools/bashTool';
 import { renderBashCall, renderBashResult } from '../tui/bashRender';

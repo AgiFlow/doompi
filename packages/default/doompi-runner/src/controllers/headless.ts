@@ -3,7 +3,7 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessTool,
   DoomHeadlessToolResult,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { BASH_TOOL_LABEL, BASH_TOOL_NAME } from '../constants/bashTool';
 import { MS_PER_SECOND } from '../constants/headless';
 import { COMMAND_NAME, SERVER_COMMAND_DESCRIPTION } from '../constants/runners';

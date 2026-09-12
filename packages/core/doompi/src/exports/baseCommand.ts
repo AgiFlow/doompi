@@ -1,1 +1,1 @@
-export * from '../controllers/baseCommand';
+export * from '../cli/commands/baseCommand';

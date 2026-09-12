@@ -1,7 +1,4 @@
-import {
-  DOOM_TOOL_OVERRIDES_SERVICE,
-  createDoomToolOverridesService,
-} from '@agimon-ai/doompi-extension-contracts/tool-overrides';
+import { DOOM_TOOL_OVERRIDES_SERVICE, createDoomToolOverridesService } from '@agimon-ai/doompi-core/tool-overrides';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';

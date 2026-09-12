@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { applyStoredTheme, availableThemes, selectTheme, themeStore } from '../../src/web/stores/themeStore.ts';
+import { applyStoredTheme, availableThemes, selectTheme, themeStore } from '../../src/web/stores/themeStore';
 
 interface FakeStorage extends Storage {
   readonly values: Map<string, string>;

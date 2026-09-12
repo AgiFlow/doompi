@@ -1,8 +1,8 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Slot } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
-import { Spinner } from './Spinner.tsx';
+import { cn } from '../lib/cn';
+import { Spinner } from './Spinner';
 
 export const buttonVariants = cva(
   'inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-mono transition-[color,background-color,border-color,filter] outline-none focus-visible:ring-2 focus-visible:ring-doom-blue/50 disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0',

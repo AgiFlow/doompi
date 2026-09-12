@@ -1,4 +1,4 @@
-import type { DoomHelpSkillDescriptor } from '@agimon-ai/doompi-extension-contracts/help';
+import type { DoomHelpSkillDescriptor } from '@agimon-ai/doompi-core/help';
 import type { ResolvedHelpIndex } from '../../types/help';
 
 export const MAX_LLMS_BYTES = 1024 * 1024;

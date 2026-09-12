@@ -16,10 +16,10 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
-import { focusPrompt } from '../../lib/promptFocus.ts';
-import { menuStore } from '../../stores/menuStore.ts';
-import { answerDialogConfirm, answerDialogValue, cancelDialog, useActiveSession } from '../../stores/sessionStore.ts';
-import { useToolPrompt } from '../../stores/useToolPrompt.ts';
+import { focusPrompt } from '../../lib/promptFocus';
+import { menuStore } from '../../stores/menuStore';
+import { answerDialogConfirm, answerDialogValue, cancelDialog, useActiveSession } from '../../stores/sessionStore';
+import { useToolPrompt } from '../../stores/useToolPrompt';
 
 /**
  * Renders the extension UI sub-protocol as a modal.

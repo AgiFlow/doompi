@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { ToolEntry } from '../../src/web/lib/sessionModel.ts';
-import { pluginSlotProps } from '../../src/web/lib/pluginSlotProps.ts';
-import { toolMessageProps } from '../../src/web/lib/toolMessageProps.ts';
+import type { ToolEntry } from '../../src/web/lib/sessionModel';
+import { pluginSlotProps } from '../../src/web/lib/pluginSlotProps';
+import { toolMessageProps } from '../../src/web/lib/toolMessageProps';
 
 describe('toolMessageProps', () => {
   it('hands a tool message the slot actions plus the call and its newest result', () => {

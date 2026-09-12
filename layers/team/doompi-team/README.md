@@ -116,7 +116,7 @@ import { resolveSubagentLaunchContract } from '@agimon-ai/doompi-team';
 
 Focused subpaths include `/api/capability-ceiling`, `/api/delegation`, `/api/team-snapshot`,
 and `/env`. Live cross-extension collaboration contracts come from
-`@agimon-ai/doompi-extension-contracts`; Pi loads `/extensions/pi` through package metadata.
+`@agimon-ai/doompi-core`; Pi loads `/extensions/pi` through package metadata.
 
 ## Development
 

@@ -15,7 +15,7 @@ export type {
   IVoiceNarrationCompactor,
   VoiceTurnFallbackNarratorOptions,
 } from './type';
-import { MAX_NARRATION_TEXT_CHARACTERS, normalizeNarrationText } from '@agimon-ai/doompi-extension-contracts/narration';
+import { MAX_NARRATION_TEXT_CHARACTERS, normalizeNarrationText } from '@agimon-ai/doompi-core/narration';
 
 export const DETERMINISTIC_FALLBACK_THRESHOLD_CHARACTERS = 320;
 

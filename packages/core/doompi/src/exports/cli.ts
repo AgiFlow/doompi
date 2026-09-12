@@ -2,17 +2,11 @@
  * CLI Application Exports
  */
 
-export { CliApp, runCli, runHarness } from '../controllers/cliApp';
-export { parseCompatibilityArgs, parseCompatibilityProvider } from '../controllers/compatibilityOptions';
+export { CliApp, runCli, runHarness } from '../cli/cliApp';
+export { parseCompatibilityArgs, parseCompatibilityProvider } from '../cli/commands/compat/options';
 // Published so a session server settles the same option matrix the launcher
 // does, instead of shelling out to the CLI purely to parse arguments.
-export { resolveHarnessOptions, type ResolveHarnessOptionsInput } from '../controllers/harnessOptions';
-export { compatHelp, doctorHelp, HARNESS_VERSION, initHelp, printHelp, syncHelp } from '../controllers/help';
-export { parseHarnessArgs } from '../controllers/options';
-export {
-  informationalRequest,
-  KNOWN_COMMANDS,
-  type KnownCommand,
-  routeCommand,
-  wantsHelp,
-} from '../controllers/router';
+export { resolveHarnessOptions, type ResolveHarnessOptionsInput } from '../cli/harnessOptions';
+export { compatHelp, doctorHelp, HARNESS_VERSION, initHelp, printHelp, syncHelp } from '../cli/help';
+export { parseHarnessArgs } from '../cli/options';
+export { informationalRequest, KNOWN_COMMANDS, type KnownCommand, routeCommand, wantsHelp } from '../cli/router';

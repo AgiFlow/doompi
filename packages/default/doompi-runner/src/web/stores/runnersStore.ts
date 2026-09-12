@@ -1,4 +1,4 @@
-import { defineSessionStore, type SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
+import { defineSessionStore, type SessionFrameSender } from '@agimon-ai/doompi-core/web';
 import { RUNNER_RUNS_TYPE } from '../../constants/webRunners';
 import { type RunnerRunView } from '../../types/webRunners';
 import { type RunnerLaunchRequest, runnerLaunchLine } from '../lib/launchLine';

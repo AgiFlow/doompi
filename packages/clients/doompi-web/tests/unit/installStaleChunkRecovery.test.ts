@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { installStaleChunkRecovery } from '../../src/web/lib/installStaleChunkRecovery.ts';
+import { installStaleChunkRecovery } from '../../src/web/lib/installStaleChunkRecovery';
 
 function preloadError(payload: unknown): Event {
   return Object.assign(new Event('vite:preloadError', { cancelable: true }), { payload });

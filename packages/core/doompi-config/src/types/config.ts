@@ -1,8 +1,8 @@
-import type { IDoomConfigService as DoomConfigServiceContract } from '@agimon-ai/doompi-extension-contracts/config';
-import type { DoomMcpProjection } from '@agimon-ai/doompi-extension-contracts/mcp-projection';
+import type { IDoomConfigService as DoomConfigServiceContract } from '@agimon-ai/doompi-core/config';
+import type { DoomMcpProjection } from '@agimon-ai/doompi-core/mcp-projection';
 import type { PersonaIdentity, PersonaVoiceOverride } from './profiles';
 
-export { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-extension-contracts/config';
+export { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
 
 export type ProjectTrust = 'ask' | 'always' | 'never';
 export type PlanningThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
@@ -179,15 +179,8 @@ export interface PluginHookSource {
   configPath: string;
 }
 
-/** What admitted a package into the composition. */
-export interface PackageAttribution {
-  /** `major` for a layer package, `domain` for a plugin a domain carries. */
-  kind: 'major' | 'domain';
-  /** The major mode name, or the domain name. */
-  mode: string;
-  /** The layer the package was listed under; absent for a domain plugin. */
-  layer?: string;
-}
+export type { PackageAttribution } from '@agimon-ai/doompi-core/context-projection';
+import type { PackageAttribution } from '@agimon-ai/doompi-core/context-projection';
 
 export interface HarnessState {
   root?: string;

@@ -1,5 +1,5 @@
-import type { MinorModeCatalogService } from '@agimon-ai/doompi-extension-contracts/mode';
-import { createNarrationRequest, type DoomNarrationService } from '@agimon-ai/doompi-extension-contracts/narration';
+import type { MinorModeCatalogService } from '@agimon-ai/doompi-minor-mode';
+import { createNarrationRequest, type DoomNarrationService } from '@agimon-ai/doompi-core/narration';
 import type { QuestionParams } from '../../schemas/questionnaire';
 import { isAutonomousVoiceRecord } from '../autonomousVoiceMode';
 import { buildVoiceQuestionNarration } from '../voiceQuestionNarration';

@@ -61,15 +61,9 @@ boilerplate:
       - llms.txt
       - package.json
       - project.json
-      - src/adapters/bundleAssetPolicy.ts
       - src/adapters/httpServer.ts
       - src/adapters/packageVersion.ts
-      - src/adapters/webBundler.ts
-      - src/adapters/webPluginGenerate.ts
-      - src/adapters/webPluginScan.ts
-      - src/adapters/webPluginVite.ts
       - src/bin/serve.ts
-      - src/exports/bundler.ts
       - src/exports/index.ts
       - src/pwa/bundleCache.ts
       - src/pwa/index.html
@@ -84,11 +78,9 @@ boilerplate:
       - src/services/serveOptions.ts
       - src/services/staticAssets.ts
       - src/services/webDevRoots.ts
-      - src/services/webPluginManifest.ts
       - src/types/auth.ts
       - src/types/bridge.ts
       - src/types/bundle.ts
-      - src/types/bundleAssetPolicy.ts
       - src/types/devProxy.ts
       - src/types/hub.ts
       - src/types/media.ts
@@ -320,7 +312,7 @@ boilerplate:
 
       The browser imports shared wire contracts and owns rendering, navigation, and client state. The headless process owns sessions, server facets, APIs, channels, authorization, history, and replay. Keep server access under `src/adapters`; keep browser-only code under `src/web`; never make a browser feature depend on a server module.
 
-      Browser plugins use `doompiWeb.client`. Host-side behavior uses `doompiServer` and is loaded by `doompi-server`, never by this package. The web bundler composes browser entries only, while Vite's `/api` proxy points at the headless endpoint.
+      Browser plugins use `doompiWeb.client`. Host-side behavior uses `doompiServer` and is loaded by `doompi-server`, never by this package. `@agimon-ai/doompi/builders/web` owns browser composition and bundling, while Vite's `/api` proxy points at the headless endpoint.
 
 feature:
   - name: scaffold-doom-web-feature

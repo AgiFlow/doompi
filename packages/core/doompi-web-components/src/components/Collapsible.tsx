@@ -1,6 +1,6 @@
 import { Collapsible as CollapsiblePrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+import { cn } from '../lib/cn';
 
 /** A section that folds; Radix keeps the trigger's aria-expanded in step with the content. */
 export function Collapsible(props: ComponentProps<typeof CollapsiblePrimitive.Root>) {

@@ -1,1 +1,1 @@
-export * from '../controllers/help';
+export * from '../cli/help';

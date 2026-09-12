@@ -1,4 +1,4 @@
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import { create{{ packageName | replace: "doompi-", "" | pascalCase }}Command } from '../controllers/{{ commandName | camelCase }}Command';
 import { Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService } from '../services/extensionService';
 import type { {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionDependencies } from '../services/extensionService/type';

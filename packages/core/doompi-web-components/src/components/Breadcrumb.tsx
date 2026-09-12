@@ -1,5 +1,5 @@
-import { cn } from '../lib/cn.ts';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './Tooltip.tsx';
+import { cn } from '../lib/cn';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './Tooltip';
 
 /** The marker a collapsed run of segments is shown as. */
 export const BREADCRUMB_ELLIPSIS = '…';

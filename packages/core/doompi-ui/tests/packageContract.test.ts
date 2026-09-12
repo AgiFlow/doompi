@@ -79,7 +79,8 @@ describe('doom Pi UI package boundary', () => {
 
   it('keeps browser UI dependencies optional while preserving the web client entry', async () => {
     const manifest = await readJsonFile<PackageManifest>(manifestPath);
-    const webDependencies = ['@agimon-ai/doompi-web-components', '@agimon-ai/doompi-web-contracts'];
+    const webDependencies = ['@agimon-ai/doompi-web-components'];
+    expect(manifest.dependencies?.['@agimon-ai/doompi-core']).toBe('workspace:*');
 
     for (const dependency of webDependencies) {
       expect(manifest.dependencies?.[dependency], dependency).toBeUndefined();

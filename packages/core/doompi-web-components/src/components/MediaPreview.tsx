@@ -1,11 +1,11 @@
 import { useEffect, useImperativeHandle, useRef } from 'react';
-import { FileIcon } from '../icons/icons.ts';
-import { cn } from '../lib/cn.ts';
-import { mediaKindOf } from '../lib/media.ts';
-import { boundedMediaTime } from '../lib/mediaPlayback.ts';
-import type { MediaKind } from '../types/editor.ts';
-import { Badge } from './Badge.tsx';
-import { PdfPreview, type PdfPreviewController } from './PdfPreview.tsx';
+import { FileIcon } from '../icons/icons';
+import { cn } from '../lib/cn';
+import { mediaKindOf } from '../lib/media';
+import { boundedMediaTime } from '../lib/mediaPlayback';
+import type { MediaKind } from '../types/editor';
+import { Badge } from './Badge';
+import { PdfPreview, type PdfPreviewController } from './PdfPreview';
 /**
  * A file the browser can show but not edit.
  *

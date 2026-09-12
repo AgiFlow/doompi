@@ -1,5 +1,5 @@
-import type { MinorModeState } from '@agimon-ai/doompi-extension-contracts/mode';
-import type { DoomToolRestriction } from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
 import type { ComputerUseSessionView } from '../types/computerUseApi';
 import { COMPUTER_USE_TOOL_NAMES } from '../constants/computerUse';
 export function modeState(state?: ComputerUseSessionView, enabled = false): MinorModeState {

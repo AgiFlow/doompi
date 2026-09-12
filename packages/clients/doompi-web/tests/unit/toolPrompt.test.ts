@@ -1,13 +1,8 @@
-import { defineWebPlugin, type ToolPromptDialog } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin, type ToolPromptDialog } from '@agimon-ai/doompi-core/web';
 import { afterEach, describe, expect, it } from 'vitest';
-import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
-import {
-  initialSessionState,
-  reduceSession,
-  type SessionState,
-  type ToolEntry,
-} from '../../src/web/lib/sessionModel.ts';
-import { toolPromptClaim } from '../../src/web/lib/toolPrompt.ts';
+import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry';
+import { initialSessionState, reduceSession, type SessionState, type ToolEntry } from '../../src/web/lib/sessionModel';
+import { toolPromptClaim } from '../../src/web/lib/toolPrompt';
 
 function Component(): null {
   return null;

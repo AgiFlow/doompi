@@ -4,8 +4,8 @@
  * the workspace store, so each variant seeds its own session through the
  * store's public mutations rather than faking the state shape.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import type { AuthorDocumentInput } from '../lib/authorViewportTypes';
 import { updateAuthorGridGeometry } from '../lib/authorGrid';
 import { addAuthorRegion, focusAuthorDocument, putAuthorDocument } from '../stores/authorWorkspaceStore';

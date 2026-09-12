@@ -17,10 +17,10 @@ import {
   showRemoteOptions,
   turnRemoteAccessOff,
   turnRemoteAccessOn,
-} from '../../stores/remoteAccessStore.ts';
-import { HandoverProgress } from './HandoverProgress.tsx';
-import { RemoteAccessOptions } from './RemoteAccessOptions.tsx';
-import { RemoteAccessPairing } from './RemoteAccessPairing.tsx';
+} from '../../stores/remoteAccessStore';
+import { HandoverProgress } from './HandoverProgress';
+import { RemoteAccessOptions } from './RemoteAccessOptions';
+import { RemoteAccessPairing } from './RemoteAccessPairing';
 
 /**
  * Two panels rather than one.

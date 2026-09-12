@@ -6,8 +6,8 @@ import {
   deleteDevProxyTarget,
   devProxyStore,
   refreshDevProxyTargets,
-} from '../../stores/devProxyStore.ts';
-import { DEV_PROXY_PREFIX } from '../../../types/devProxy.ts';
+} from '../../stores/devProxyStore';
+import { DEV_PROXY_PREFIX } from '../../../types/devProxy';
 
 /**
  * Local dev servers reachable through the cockpit's own address.

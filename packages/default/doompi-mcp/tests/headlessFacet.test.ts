@@ -1,4 +1,4 @@
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
@@ -8,7 +8,7 @@ import {
   type DoomHeadlessHostService,
   type DoomHeadlessResource,
   type DoomHeadlessTool,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { describe, expect, it, vi } from 'vitest';
 import { sessionConfigEnvironment } from '../src/services/sessionConfig';
 

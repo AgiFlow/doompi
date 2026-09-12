@@ -1,4 +1,4 @@
-import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it } from 'vitest';
 import { formatPlanStatus, PLAN_STATUS_KEY } from '../../src/types/planApi';
 import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';

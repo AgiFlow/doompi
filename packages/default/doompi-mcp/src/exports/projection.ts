@@ -1,4 +1,4 @@
-export { AGENT_PLUGIN_MCP_SCHEMA_URL } from '@agimon-ai/doompi-extension-contracts/mcp-projection';
+export { AGENT_PLUGIN_MCP_SCHEMA_URL } from '@agimon-ai/doompi-core/mcp-projection';
 export {
   normalizeAgentPluginMcpSource,
   type NormalizeAgentPluginMcpOptions,

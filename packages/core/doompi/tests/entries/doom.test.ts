@@ -12,13 +12,13 @@ const cleanupRunDirectory = vi.hoisted(() => vi.fn());
 const findSyncedRoot = vi.hoisted(() => vi.fn());
 const registerDoomFlags = vi.hoisted(() => vi.fn());
 
-vi.mock('../../src/controllers/composer', () => ({
+vi.mock('../../src/builders/cli/composition', () => ({
   composeDoomSession,
   cleanupRunDirectory,
   findSyncedRoot,
   registerDoomFlags,
 }));
-vi.mock('../../src/models/compositionState', () => ({ acquireCompositionClaim }));
+vi.mock('../../src/builders/cli/compositionState', () => ({ acquireCompositionClaim }));
 
 type Handler = (event: unknown, ctx: ExtensionContext) => unknown;
 

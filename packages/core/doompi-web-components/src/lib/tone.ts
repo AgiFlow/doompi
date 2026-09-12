@@ -1,4 +1,4 @@
-import type { ChipTone, DotTone, MessageLineTone, StatusTone } from '../types/tone.ts';
+import type { ChipTone, DotTone, MessageLineTone, StatusTone } from '../types/tone';
 
 /**
  * Translations between the tone vocabularies.

@@ -3,12 +3,12 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { DoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';
+import type { DoomHelpService } from '@agimon-ai/doompi-core/help';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { readSyncRegistration } from '../../src/services/syncRegistration';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
 import {
   FORBIDDEN_PACK_CONTENT,
   PACKAGE_MATRIX,
@@ -1083,12 +1083,8 @@ function summarizeStartup(
 }
 
 function writeContractProbe(fixture: RuntimeFixture): void {
-  const cordisHostEntry = installedPackageEntry(
-    consumer.root,
-    '@agimon-ai/doompi-extension-contracts',
-    './cordis-host',
-  );
-  const uiHubEntry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-extension-contracts', './ui-hub');
+  const cordisHostEntry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-core', './cordis-host');
+  const uiHubEntry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-core', './ui-hub');
   if (!cordisHostEntry || !uiHubEntry) throw new Error('Installed Doom Cordis contract entries are missing');
   const probeRoot = path.join(fixture.agentDirectory, 'extensions', 'packed-contract-probe');
   fs.mkdirSync(probeRoot, { recursive: true });
@@ -1502,8 +1498,8 @@ describe('conventional Pi discovery', () => {
   it('registers packed package-owned Help descriptors through the shared Cordis host', async () => {
     assertConsumerInstall();
     const hostModule = await importInstalledHostEntry('cordis-host');
-    const helpEntry = installedConditionalTarget('@agimon-ai/doompi-extension-contracts', './help', 'import');
-    const hostEntry = installedConditionalTarget('@agimon-ai/doompi-extension-contracts', './cordis-host', 'import');
+    const helpEntry = installedConditionalTarget('@agimon-ai/doompi-core', './help', 'import');
+    const hostEntry = installedConditionalTarget('@agimon-ai/doompi-core', './cordis-host', 'import');
     const helpContracts = (await import(pathToFileURL(helpEntry).href)) as {
       readonly DOOM_HELP_SERVICE: 'doom/help';
       createDoomHelpService(generation: string): DoomHelpService;
@@ -1515,7 +1511,7 @@ describe('conventional Pi discovery', () => {
       ): Promise<{ readonly root: Context; dispose(): Promise<void> }>;
     };
     const contributionEntries = [
-      ['@agimon-ai/doompi', './extensions/mode-catalog'],
+      ['@agimon-ai/doompi', './extensions/context-catalog'],
       ['@agimon-ai/doompi-config', './extensions/pi'],
       ['@agimon-ai/doompi-domain', './extensions/pi'],
       ['@agimon-ai/doompi-goal', './extensions/pi'],
@@ -1685,14 +1681,14 @@ describe('consumer ownership boundaries', () => {
 
   it('keeps the matrix explicit instead of silently dropping standard entries', () => {
     const names = PACKAGE_MATRIX.map((entry) => entry.name);
-    expect(PACKAGE_MATRIX).toHaveLength(49);
-    expect(standardPackageSet.size).toBe(33);
+    expect(PACKAGE_MATRIX).toHaveLength(48);
+    expect(standardPackageSet.size).toBe(34);
     expect(standardPackageSet).toContain('@agimon-ai/doompi-author');
     expect(standardPackageSet).toContain('@agimon-ai/doompi-computer-use');
     expect(standardPackageSet).toContain('@agimon-ai/doompi-help');
     expect(names).toContain('@agimon-ai/doompi');
     expect(names).toContain('@agimon-ai/doompi-web-components');
-    expect(names).toContain('@agimon-ai/doompi-web-contracts');
+    expect(names).toContain('@agimon-ai/doompi-core');
     expect(names).toContain('@agimon-ai/doompi-web-security');
     expect(PACKAGE_MATRIX.find(({ name }) => name === '@agimon-ai/doompi-user-feedback')?.layer).toBe('ask-user');
     expect(PACKAGE_MATRIX.find(({ name }) => name === '@agimon-ai/doompi-git')?.layer).toBe('layer');

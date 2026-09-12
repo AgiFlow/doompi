@@ -3,8 +3,8 @@ import type {
   ToolTranscriptItem,
   TranscriptItem,
   UserTranscriptItem,
-} from '@agimon-ai/doompi-extension-contracts/session-protocol';
-import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
+} from '@agimon-ai/doompi-core/session-protocol';
+import type { ToolResultView } from '@agimon-ai/doompi-core/web';
 import {
   imagesFromContent,
   summariseArgs,
@@ -13,7 +13,7 @@ import {
   type TimelineEntry,
   type ToolEntry,
   type UserEntry,
-} from './sessionModel.ts';
+} from './sessionModel';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

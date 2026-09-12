@@ -1,3 +1,4 @@
+import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import { restoreHarnessStateSnapshot, snapshotHarnessState } from '@agimon-ai/doompi-config/harnessStore';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import {
@@ -7,13 +8,12 @@ import {
   supersedeDoomConfigTransition,
 } from '@agimon-ai/doompi-config/piContext';
 import type { DoomConfigPendingSelection } from '@agimon-ai/doompi-config/types';
-import { alreadyComposed } from '@agimon-ai/doompi-extension-contracts/child-process';
+import { alreadyComposed } from '@agimon-ai/doompi-core/child-process';
 import {
-  type DoomTransitionResult,
   type MinorModeReloadHandoffHandle,
   prepareMinorModeReloadHandoff,
-  requireDoomTransitionCoordinator,
-} from '@agimon-ai/doompi-extension-contracts/transition';
+} from '@agimon-ai/doompi-minor-mode/reload-handoff';
+import { type DoomTransitionResult, requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
 import { readDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import type {
   VoiceReloadHandoff,
@@ -211,7 +211,7 @@ export function createMajorModeCommand(
                 ctx.sessionManager.getSessionId(),
                 coordinator.hostGeneration,
                 plan.operationId,
-                plan.previous.minorModes,
+                readMinorModeCatalog(cordis)?.getSnapshot(),
               );
               try {
                 if (existingPending) supersedeDoomConfigTransition(pi, existingPending);

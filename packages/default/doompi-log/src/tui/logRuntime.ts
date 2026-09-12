@@ -1,10 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import {
-  DOOM_UI_HUB_SERVICE,
-  type DoomUiHubService,
-  requireDoomUiHub,
-} from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import { LogMetricsAggregator } from '../services/metrics';
 import { createMetricsSource } from '../services/metricsSource';
 import { isEnabled } from '../services/telemetryEnabled';

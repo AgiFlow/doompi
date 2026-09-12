@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { InlineAgent } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+import type { InlineAgent } from '../../schemas/subagentTool';
 import { SUBAGENT_RUN_ID_ENV } from '../../types/environment';
 import { scopeResultsDir, sessionScopeEnvironment, scopeRunsDir, type SessionScope } from '../sessionPaths';
 import type { ActivityState, ArtifactDirPreference } from '../../types';

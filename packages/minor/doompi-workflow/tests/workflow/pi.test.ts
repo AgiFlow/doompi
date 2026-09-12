@@ -8,27 +8,27 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProvider,
   type DoomBackgroundWorkService,
-} from '@agimon-ai/doompi-extension-contracts/background-work';
-import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';
+} from '@agimon-ai/doompi-core/background-work';
+import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   type MinorModeCatalogService,
   type MinorModeOwnerDefinition,
   type MinorModeOwnerHandle,
   type MinorModeState,
-} from '@agimon-ai/doompi-extension-contracts/mode';
+} from '@agimon-ai/doompi-minor-mode';
 import {
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
   type NarrationRequest,
-} from '@agimon-ai/doompi-extension-contracts/narration';
+} from '@agimon-ai/doompi-core/narration';
 import {
   createDoomReadinessCoordinator,
   DOOM_READINESS_SERVICE,
   type DoomReadinessCoordinator,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
-import { createDoomToolSurface, DOOM_TOOL_SURFACE_SERVICE } from '@agimon-ai/doompi-extension-contracts/tool-surface';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-core/readiness';
+import { createDoomToolSurface, DOOM_TOOL_SURFACE_SERVICE } from '@agimon-ai/doompi-core/tool-surface';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import {
   createEmbeddedWorkflowFeature,
   type EmbeddedWorkflowFeature,

@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
-import { SubagentParams } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+import { SubagentParams } from '../schemas/subagentTool';
 import { DoomTeamExpectedError } from '../services/errors';
 import {
   SUBAGENT_TOOL_NAME,

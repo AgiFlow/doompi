@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-extension-contracts/headless';
+import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
 import { createHeadlessBashTool } from '../../../src/controllers/headless';
 import type { BashRunRequest, BashRunResult } from '../../../src/types/bashRunService';
 
@@ -9,7 +9,7 @@ function execution(): DoomHeadlessExecutionContext {
     repoRoot: '/repo',
     sessionId: 'owned-session',
     environment: {},
-    selection: { majorMode: 'copilot', activeLayers: ['runner'], domains: [], minorModes: [] },
+    selection: { majorMode: 'copilot', activeLayers: ['runner'], domains: [], state: {} },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {
       entries: () => [],

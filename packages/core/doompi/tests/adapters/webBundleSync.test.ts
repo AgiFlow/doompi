@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { syncWebBundle } from '../../src/services/webBundleSync';
+import { syncWebBundle } from '../../src/builders/web';
 
 let cleanups: Array<() => void> = [];
 
@@ -16,12 +16,10 @@ function tempDir(prefix: string): string {
   return dir;
 }
 
-/** A stand-in installed doompi-web: package.json plus a bundler entry file. */
+/** A stand-in installed client package. Bundling is owned by the web builder. */
 function fakeWebPackage(): string {
   const root = tempDir('doompi-webpkg-');
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: '@agimon-ai/doompi-web' }));
-  fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'dist', 'bundler.mjs'), 'export const marker = true;');
   return root;
 }
 
@@ -48,7 +46,7 @@ describe('the sync web bundle phase', () => {
     const entry = path.join(pluginRoot, 'dist', 'extensions', 'pi.mjs');
     fs.writeFileSync(entry, '');
 
-    const calls: Array<{ pluginRoots: readonly string[]; outDir: string }> = [];
+    const calls: Array<{ hostRoot: string; pluginRoots: readonly string[]; outDir: string }> = [];
     const outputDirectory = path.join(home, 'generation', 'web-bundle');
     const result = await syncWebBundle({
       repoRoot: tempDir('doompi-repo-'),
@@ -57,7 +55,7 @@ describe('the sync web bundle phase', () => {
       outputDirectory,
       importBundler: () =>
         Promise.resolve({
-          bundleCockpitWeb: (options: { pluginRoots: readonly string[]; outDir: string }) => {
+          bundleCockpitWeb: (options: { hostRoot: string; pluginRoots: readonly string[]; outDir: string }) => {
             calls.push(options);
             const assetsDir = path.join(options.outDir, 'web');
             fs.mkdirSync(assetsDir, { recursive: true });
@@ -69,6 +67,7 @@ describe('the sync web bundle phase', () => {
 
     // Duplicate entries collapse to one package root.
     expect(calls).toHaveLength(1);
+    expect(calls[0]?.hostRoot).toBe(webRoot);
     expect(calls[0]?.pluginRoots).toEqual([pluginRoot]);
     expect(result).toMatchObject({ status: 'bundled', pluginIds: ['subagents', 'workflows'] });
     const generated = path.join(outputDirectory, 'web', 'index.html');

@@ -1,4 +1,4 @@
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import { createSandboxCommand } from '../controllers/doomSandboxCommand';
 import { brokeredProviderOverrides } from '../services/brokerProviders';
 import { DefaultSandboxExtensionService } from '../services/extensionService';

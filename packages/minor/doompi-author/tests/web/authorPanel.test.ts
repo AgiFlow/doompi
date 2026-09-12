@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ToolMessageRenderProps, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { ToolMessageRenderProps, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {

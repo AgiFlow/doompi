@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import {
   activityGroups,
   bindFileLinkModes,
@@ -7,9 +7,9 @@ import {
   fileTabForPath,
   minorModes,
   selectionAxes,
-} from '../../src/web/lib/composition.ts';
-import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
-import { ansiSegments, emptySelection, parseSelection, stripAnsi } from '../../src/web/lib/statusLine.ts';
+} from '../../src/web/lib/composition';
+import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry';
+import { ansiSegments, emptySelection, parseSelection, stripAnsi } from '../../src/web/lib/statusLine';
 
 // Captured from a live `doompi --mode rpc` session, so the parser is tested
 // against what DoomPi really publishes rather than a guess at the format.

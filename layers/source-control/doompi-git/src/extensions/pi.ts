@@ -1,5 +1,5 @@
 // @scaffold-generated
-import { definePiExtension, definePiTool } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
 import { createGitCommand } from '../controllers/gitCommand';
 import { createRunWorktreeTool } from '../tools/runWorktree';
 import { createGitDependencies } from '../services/gitDependencies';

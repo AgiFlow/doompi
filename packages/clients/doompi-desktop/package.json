@@ -35,6 +35,9 @@
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
+  "dependencies": {
+    "@agimon-ai/doompi-config": "workspace:*"
+  },
   "devDependencies": {
     "@agimon-ai/doompi": "workspace:*",
     "@agimon-ai/doompi-config": "workspace:*",

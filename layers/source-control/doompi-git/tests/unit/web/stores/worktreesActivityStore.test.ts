@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 import {
   requestWorktreeClose,
   requestWorktreeCreate,

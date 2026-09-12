@@ -1,4 +1,4 @@
-import type { ContextItemDetail, ContextItemKind } from '@agimon-ai/doompi/context-api';
+import type { ContextItemDetail, ContextItemKind } from '@agimon-ai/doompi-core/context-api';
 import {
   Dialog,
   DialogBody,
@@ -9,7 +9,7 @@ import {
   Spinner,
 } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
-import { fetchContextItemDetail } from '../../lib/contextDetailApi.ts';
+import { fetchContextItemDetail } from '../../lib/contextDetailApi';
 
 /**
  * What one row of the composition actually is.

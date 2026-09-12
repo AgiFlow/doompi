@@ -1,10 +1,11 @@
+import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
 import {
   type MinorModeReloadHandoffHandle,
   prepareMinorModeReloadHandoff,
-  requireDoomTransitionCoordinator,
-} from '@agimon-ai/doompi-extension-contracts/transition';
+} from '@agimon-ai/doompi-minor-mode/reload-handoff';
+import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
 import type { VoiceReloadHandoff, VoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
 import { readDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
@@ -142,7 +143,7 @@ export function createProfileCommand(
               ctx.sessionManager.getSessionId(),
               coordinator.hostGeneration,
               plan.operationId,
-              plan.previous.minorModes,
+              readMinorModeCatalog(cordis)?.getSnapshot(),
             );
             try {
               const { applyProfile } = await load.selection();

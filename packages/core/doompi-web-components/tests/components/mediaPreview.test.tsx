@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { MediaPreview } from '../../src/exports/index.ts';
+import { MediaPreview } from '../../src/exports';
 
 const SRC = '/api/sessions/s1/file?path=docs%2Freport.pdf';
 

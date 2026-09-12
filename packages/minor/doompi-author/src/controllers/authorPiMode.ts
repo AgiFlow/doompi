@@ -1,7 +1,7 @@
 import { authorMinorMode } from '../models/authorMode';
 import { authorToolRestriction, createAuthorCatalogMonitor } from '../services/authorCatalog/monitor';
 import type { AuthorCatalog } from '../services/authorCatalog/type';
-import type { PiToolRestriction } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import type { PiToolRestriction } from '@agimon-ai/doompi-core/pi-extension';
 import { AUTHOR_PACKAGE_SOURCE } from '../constants/author';
 
 export interface AuthorPiMode {

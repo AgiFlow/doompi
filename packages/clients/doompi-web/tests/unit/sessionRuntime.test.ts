@@ -21,11 +21,11 @@ const pluginState = vi.hoisted(() => ({
 
 const menuState = vi.hoisted(() => ({ claimed: [] as string[], cleared: 0 }));
 
-vi.mock('../../src/web/lib/pluginRegistry.ts', () => ({
+vi.mock('../../src/web/lib/pluginRegistry', () => ({
   dispatchChannelFrame: (frame: Record<string, unknown>) => pluginState.dispatched.push(frame),
 }));
 
-vi.mock('../../src/web/lib/pluginRuntime.ts', () => ({
+vi.mock('../../src/web/lib/pluginRuntime', () => ({
   focusSessionWebPlugins: (sessionId: string) => {
     pluginState.focusedSessions.push(sessionId);
     return pluginState.focus(sessionId);
@@ -33,7 +33,7 @@ vi.mock('../../src/web/lib/pluginRuntime.ts', () => ({
   removeSessionWebPluginRuntime: () => undefined,
 }));
 
-vi.mock('../../src/web/app/protocolRuntime.ts', () => ({
+vi.mock('../../src/web/app/protocolRuntime', () => ({
   startProtocolRuntime: (_location: unknown, presentation: NonNullable<typeof socketState.presentation>) => {
     socketState.presentation = presentation;
     return { client: {}, focus: () => undefined, stop: () => undefined };
@@ -41,13 +41,13 @@ vi.mock('../../src/web/app/protocolRuntime.ts', () => ({
 }));
 
 // ProtocolRuntime is stubbed above, so record its command boundary separately.
-vi.mock('../../src/web/lib/sessionProtocolCommands.ts', () => ({
+vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({
   sendSessionProtocolFrame: (sessionId: string, frame: Record<string, unknown>) => {
     socketState.sent.push({ type: 'session_command', sessionId, frame });
   },
 }));
 
-vi.mock('../../src/web/lib/protocolHubSocket.ts', () => ({
+vi.mock('../../src/web/lib/protocolHubSocket', () => ({
   createProtocolHubSocket: (_client: unknown, handlers: SocketHandlers) => {
     socketState.handlers = handlers;
     return {
@@ -57,30 +57,30 @@ vi.mock('../../src/web/lib/protocolHubSocket.ts', () => ({
   },
 }));
 
-vi.mock('../../src/web/lib/browserTelemetry.ts', () => ({
+vi.mock('../../src/web/lib/browserTelemetry', () => ({
   browserReadyDuration: () => 0,
   recordBrowserPerformance: () => undefined,
 }));
 
-vi.mock('../../src/web/stores/menuStore.ts', () => ({
+vi.mock('../../src/web/stores/menuStore', () => ({
   claimDialogMenu: (id: string) => menuState.claimed.push(id),
   clearPendingMenu: () => {
     menuState.cleared += 1;
   },
 }));
 
-import { startSessionRuntime } from '../../src/web/app/sessionRuntime.ts';
-import { onHubConnected } from '../../src/web/lib/transport.ts';
-import { resetSessions, sessionsStore, setActiveSession } from '../../src/web/stores/sessionsStore.ts';
-import { onCaptureStatus, pendingCaptureSessions, submitCapture } from '../../src/web/stores/captureStore.ts';
+import { startSessionRuntime } from '../../src/web/app/sessionRuntime';
+import { onHubConnected } from '../../src/web/lib/transport';
+import { resetSessions, sessionsStore, setActiveSession } from '../../src/web/stores/sessionsStore';
+import { onCaptureStatus, pendingCaptureSessions, submitCapture } from '../../src/web/stores/captureStore';
 import {
   applyProtocolTranscript,
   applySessionFrame,
   dropSessionStore,
   requestOlderHistory,
   sessionStoreFor,
-} from '../../src/web/stores/sessionStore.ts';
-import { threadStoreKey } from '../../src/web/stores/threadStore.ts';
+} from '../../src/web/stores/sessionStore';
+import { threadStoreKey } from '../../src/web/stores/threadStore';
 
 afterEach(() => {
   socketState.handlers = undefined;

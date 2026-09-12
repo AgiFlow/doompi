@@ -12,26 +12,22 @@ import {
   THREAD_BACKLOG_TYPE,
   THREAD_FRAME_TYPE,
   unsubscribeFrame,
-} from '../../types/hub.ts';
-import { parseBundleUpdatedMessage } from '../../types/bundle.ts';
-import { parseDoomNotificationEntry } from '../../types/notification.ts';
-import {
-  REMOTE_PAIRING_REQUEST_TYPE,
-  REMOTE_STATE_TYPE,
-  type RemoteAccessStateView,
-} from '../../types/remoteAccess.ts';
-import { dispatchChannelFrame } from '../lib/pluginRegistry.ts';
-import { focusSessionWebPlugins, removeSessionWebPluginRuntime } from '../lib/pluginRuntime.ts';
-import { startProtocolRuntime } from './protocolRuntime.ts';
-import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } from '../lib/transport.ts';
-import { applyCaptureFrame, disconnectCaptures, pendingCaptureSessions } from '../stores/captureStore.ts';
-import { bindSessionFileLinkModes } from '../stores/fileLinkModesStore.ts';
-import { createProtocolHubSocket } from '../lib/protocolHubSocket.ts';
-import { deliverBrowserNotification } from '../lib/browserNotifications.ts';
-import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry.ts';
-import { dropComposerState, restoreComposerDrafts, saveComposerDrafts } from '../stores/composerStore.ts';
-import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
-import { applyRemoteState } from '../stores/remoteAccessStore.ts';
+} from '../../types/hub';
+import { parseBundleUpdatedMessage } from '../../types/bundle';
+import { parseDoomNotificationEntry } from '../../types/notification';
+import { REMOTE_PAIRING_REQUEST_TYPE, REMOTE_STATE_TYPE, type RemoteAccessStateView } from '../../types/remoteAccess';
+import { dispatchChannelFrame } from '../lib/pluginRegistry';
+import { focusSessionWebPlugins, removeSessionWebPluginRuntime } from '../lib/pluginRuntime';
+import { startProtocolRuntime } from './protocolRuntime';
+import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } from '../lib/transport';
+import { applyCaptureFrame, disconnectCaptures, pendingCaptureSessions } from '../stores/captureStore';
+import { bindSessionFileLinkModes } from '../stores/fileLinkModesStore';
+import { createProtocolHubSocket } from '../lib/protocolHubSocket';
+import { deliverBrowserNotification } from '../lib/browserNotifications';
+import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry';
+import { dropComposerState, restoreComposerDrafts, saveComposerDrafts } from '../stores/composerStore';
+import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore';
+import { applyRemoteState } from '../stores/remoteAccessStore';
 import {
   applyHistoryPage,
   applySessionFrame,
@@ -43,9 +39,9 @@ import {
   refreshSessionStats,
   resetSessionStore,
   seedHistoryCursor,
-} from '../stores/sessionStore.ts';
-import { applyThreadTranscriptFrame, dropThreads, resubscribeThreads, threadStoreKey } from '../stores/threadStore.ts';
-import { dropTransientTabs } from '../stores/transientTabsStore.ts';
+} from '../stores/sessionStore';
+import { applyThreadTranscriptFrame, dropThreads, resubscribeThreads, threadStoreKey } from '../stores/threadStore';
+import { dropTransientTabs } from '../stores/transientTabsStore';
 import {
   applySessionBacklog,
   applySessionRemoved,
@@ -56,7 +52,7 @@ import {
   markSocketClosed,
   sessionsStore,
   setActiveSession,
-} from '../stores/sessionsStore.ts';
+} from '../stores/sessionsStore';
 
 const VOICE_OWNERSHIP_FRAME_TYPE = 'voice_ownership';
 

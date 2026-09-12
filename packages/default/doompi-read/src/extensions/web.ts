@@ -1,4 +1,4 @@
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { ReadToolMessage } from '../web/components/ReadToolMessage';
 
 /**

@@ -8,9 +8,9 @@ import {
   ensureBuiltinWebPluginModules,
   renderBuiltinWebPluginModules,
   writeSyncWebPluginModules,
-} from '../../src/adapters/webPluginGenerate.ts';
-import { scanWebPlugins } from '../../src/adapters/webPluginScan.ts';
-import type { DeclaredWebPlugin } from '../../src/services/webPluginManifest.ts';
+} from '@agimon-ai/doompi/builders/web';
+import { scanWebPlugins } from '@agimon-ai/doompi/builders/web';
+import type { DeclaredWebPlugin } from '@agimon-ai/doompi/builders/web';
 
 const packageRoot = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -18,21 +18,21 @@ describe('the committed builtin web plugin registry', () => {
   it('matches what the host doompiWeb manifest produces right now', async () => {
     // The committed generated modules must equal a fresh render: a manifest
     // edit without regeneration fails here (and in CI's check-mode build).
-    for (const [relativePath, content] of renderBuiltinWebPluginModules()) {
+    for (const [relativePath, content] of renderBuiltinWebPluginModules(packageRoot)) {
       await expect(readFile(path.join(packageRoot, relativePath), 'utf8'), relativePath).resolves.toBe(content);
     }
   });
 
   it('accepts the current generated modules with default and check-only options', () => {
-    expect(() => ensureBuiltinWebPluginModules()).not.toThrow();
-    expect(() => ensureBuiltinWebPluginModules({ check: true })).not.toThrow();
+    expect(() => ensureBuiltinWebPluginModules({ packageRoot })).not.toThrow();
+    expect(() => ensureBuiltinWebPluginModules({ packageRoot, check: true })).not.toThrow();
   });
 
   it('is empty: every tab and channel is a plugin, never a hardcoded builtin', () => {
     // The host package declares no plugins of its own any more; the whole
     // set reaches the cockpit through the doompi sync bundle, so the
     // committed registry must stay empty and name no other package.
-    const rendered = renderBuiltinWebPluginModules();
+    const rendered = renderBuiltinWebPluginModules(packageRoot);
     const client = rendered.get(path.join('src', 'web', 'app', 'webPlugins.generated.ts'));
     expect(client).toContain('export const webPlugins: readonly WebPluginDefinition[] = [];');
     expect(client).not.toContain('file://');
@@ -71,7 +71,7 @@ describe('the committed builtin web plugin registry', () => {
       scratch.push(generated);
       const host = fileURLToPath(new URL('../..', import.meta.url));
       const plugins = scanWebPlugins(host, [packageDir], () => undefined);
-      const { compositionModulePath, cssModulePath } = writeSyncWebPluginModules(plugins, generated);
+      const { compositionModulePath, cssModulePath } = writeSyncWebPluginModules(plugins, generated, packageRoot);
       const composition = fs.readFileSync(compositionModulePath, 'utf8');
       expect(composition).toContain("import { webPlugins } from './webPlugins.generated.ts';");
       expect(composition).toContain('globalThis.DoomPiWebPluginComposition = webPlugins;');
@@ -102,7 +102,7 @@ describe('the committed builtin web plugin registry', () => {
         isHost: true,
         client: { entry: './src/web/main.tsx' },
       };
-      const { cssModulePath } = writeSyncWebPluginModules([hostPlugin], generated);
+      const { cssModulePath } = writeSyncWebPluginModules([hostPlugin], generated, packageRoot);
       const shellSource = `@source "${path.join(packageRoot, 'src', 'web')}";`;
       expect(fs.readFileSync(cssModulePath, 'utf8').split(shellSource)).toHaveLength(2);
     });

@@ -1,6 +1,6 @@
 # Session lifecycle
 
-Package hooks follow the [plugin lifecycle contract](../../../doompi-extension-contracts/docs/plugins.md): register, `onStart`, `onStop`, unregister, and `onDispose`. Server readiness waits for required plugin startup; browser reconnects do not restart those plugins.
+Package hooks follow the [plugin lifecycle contract](../../../doompi-core/docs/plugins.md): register, `onStart`, `onStop`, unregister, and `onDispose`. Server readiness waits for required plugin startup; browser reconnects do not restart those plugins.
 
 `doompi-server` owns one session boundary from startup through shutdown. The Pi harness, session services, package facets, and listener live in the same process. A client can disconnect without stopping the runtime, and a later client can recover the current replicated state.
 

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadSandboxHarness, resolveSandboxHarnessEntry } from '../../src/services/sandboxHarness';
+import { loadSandboxHarness, resolveSandboxHarnessEntry } from '../../src/cli/commands/sandbox/harness';
 
 const tempDirectories: string[] = [];
 

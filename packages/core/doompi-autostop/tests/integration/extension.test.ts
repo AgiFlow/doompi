@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { autoStopExtension } from '../../src/extensions/pi';
 import { DEFAULT_AUTO_STOP_DELAYS } from '../../src/exports';

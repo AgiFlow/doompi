@@ -1,4 +1,4 @@
-import type { DoomTransitionResult } from '@agimon-ai/doompi-extension-contracts/transition';
+import type { DoomTransitionResult } from '@agimon-ai/doompi-core/transition';
 import { VOICE_TOOL_MAX_DOMAIN_COUNT, VOICE_TOOL_MAX_IDENTIFIER_LENGTH } from '@agimon-ai/doompi-voice/voice-tools';
 import type { SelectItem } from '@earendil-works/pi-tui';
 import { type DomainListing, SAFE_DOMAIN_NAME } from '../../types/domains';

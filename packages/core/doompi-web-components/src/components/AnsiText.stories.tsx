@@ -1,4 +1,4 @@
-import { AnsiLine, AnsiText } from './AnsiText.tsx';
+import { AnsiLine, AnsiText } from './AnsiText';
 
 const LOG = [
   '\u001B[32mPASS\u001B[0m src/app.test.ts \u001B[2m12 tests\u001B[0m',

@@ -1,1 +1,1 @@
-export * from '../services/compatibility/process';
+export * from '../cli/commands/compat/providers/process';

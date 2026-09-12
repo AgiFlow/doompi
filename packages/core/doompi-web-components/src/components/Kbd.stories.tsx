@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Kbd } from './Kbd.tsx';
+import { Kbd } from './Kbd';
 
 const KEYS = ['SPC', 'C-c', 'g', '⏎', '⌘K'] as const;
 

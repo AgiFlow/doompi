@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+import { cn } from '../lib/cn';
 
 /**
  * The shape both fields wear, so a single-line and a multi-line field in the

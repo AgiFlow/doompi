@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
 import { HubUnavailableError } from '../../../../src/services/errors';
 import { createWorktreeOperations } from '../../../../src/services/worktreeOperations';
 import {

@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 // The context face reads the same footer status line the composer chips read,
 // so these drive it the way DoomPi really publishes it rather than seeding a

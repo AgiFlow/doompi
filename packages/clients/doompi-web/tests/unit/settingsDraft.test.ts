@@ -1,11 +1,11 @@
-import type { SettingsFieldContribution } from '@agimon-ai/doompi-web-contracts';
+import type { SettingsFieldContribution } from '@agimon-ai/doompi-core/web';
 import { describe, expect, it } from 'vitest';
 import {
   canSaveSettings,
   plannedSettingsWrites,
   settingsKeyOf,
   settingsLockedReason,
-} from '../../src/web/lib/settingsDraft.ts';
+} from '../../src/web/lib/settingsDraft';
 
 /**
  * The rules a settings page runs on.

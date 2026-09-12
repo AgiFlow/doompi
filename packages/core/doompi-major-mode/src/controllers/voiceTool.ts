@@ -1,4 +1,4 @@
-import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-extension-contracts/transition';
+import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
 import type { DoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';

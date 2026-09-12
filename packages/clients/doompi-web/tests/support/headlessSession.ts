@@ -1,9 +1,6 @@
 import { Client, type ByteTransportFactory } from '@earendil-works/pi-client';
-import {
-  DOOM_COCKPIT_SERVER_ID,
-  DoomSessionManagementService,
-} from '@agimon-ai/doompi-extension-contracts/session-protocol';
-import { createAgentServerService, type HeadlessHub, type HeadlessSessionHost } from '@agimon-ai/doompi/server';
+import { DOOM_COCKPIT_SERVER_ID, DoomSessionManagementService } from '@agimon-ai/doompi-core/session-protocol';
+import { createAgentServerService, type HeadlessHub, type HeadlessSessionHost } from '@agimon-ai/doompi-core/server';
 import WebSocket from 'ws';
 
 type Frame = Record<string, unknown>;

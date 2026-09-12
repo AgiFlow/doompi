@@ -1,8 +1,8 @@
 import { Button, Input, Switch } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
-import { readImageSettings, writeImageSettings } from '../../lib/settingsApi.ts';
-import type { SettingsImagesView } from '../../../types/settings.ts';
-import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
+import { readImageSettings, writeImageSettings } from '../../lib/settingsApi';
+import type { SettingsImagesView } from '../../../types/settings';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 /**
  * The image page: how large an image may be when it reaches a model.

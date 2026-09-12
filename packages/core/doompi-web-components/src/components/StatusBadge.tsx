@@ -1,8 +1,8 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Slot } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
-import type { StatusTone as Tone } from '../types/tone.ts';
+import { cn } from '../lib/cn';
+import type { StatusTone as Tone } from '../types/tone';
 
 export const statusBadgeVariants = cva(
   'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm font-mono font-bold uppercase',

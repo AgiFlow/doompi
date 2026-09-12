@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { domainsExtension } from '../../src/extensions/pi';

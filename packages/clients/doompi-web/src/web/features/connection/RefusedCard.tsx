@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, Spinner } from '@agimon-ai/doompi-web-components';
-import { abbreviateCwd } from '../../lib/sessionSummary.ts';
-import { useActiveSessionMeta } from '../../stores/sessionsStore.ts';
+import { abbreviateCwd } from '../../lib/sessionSummary';
+import { useActiveSessionMeta } from '../../stores/sessionsStore';
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (

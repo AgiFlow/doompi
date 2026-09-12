@@ -1,4 +1,4 @@
-import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it, vi } from 'vitest';
 import {
   formatMcpSessionAuthStatus,

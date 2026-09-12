@@ -1,25 +1,23 @@
+import { headlessMinorModeCommand } from '@agimon-ai/doompi-minor-mode';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessCommand,
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHostService,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   type MinorModeActionRequest,
   type MinorModeCatalogService,
   type MinorModeRecord,
-} from '@agimon-ai/doompi-extension-contracts/mode';
-import {
-  DOOM_SERVER_HOST_SERVICE,
-  type DoomServerHostService,
-} from '@agimon-ai/doompi-extension-contracts/server-facet';
+} from '@agimon-ai/doompi-minor-mode';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
-import { api } from '../../../src/controllers/contextApi';
-import { machineApi } from '../../../src/controllers/machineApi';
-import { remoteApi } from '../../../src/controllers/remoteApi';
-import { sessionFilesApi } from '../../../src/controllers/sessionFilesApi';
+import { api } from '@agimon-ai/doompi-core/runtime-context-api';
+import { machineApi } from '@agimon-ai/doompi-core/machine-api';
+import { remoteApi } from '@agimon-ai/doompi-core/remote-api';
+import { sessionFilesApi } from '@agimon-ai/doompi-core/session-files-api';
 import { doompiServerFacet } from '../../../src/extensions/server';
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
@@ -125,7 +123,8 @@ describe('doompiServerFacet headless minor command', () => {
     const headless: DoomHeadlessHostService = {
       context: {} as DoomHeadlessHostService['context'],
       changeSelection: vi.fn(async () => undefined),
-      registerMinorMode: vi.fn(),
+      assertActive: vi.fn(),
+      subscribeSelection: vi.fn(() => vi.fn()),
       registerToolRestriction: vi.fn(),
       registerTool: vi.fn(),
       registerResource: vi.fn(),
@@ -154,6 +153,7 @@ describe('doompiServerFacet headless minor command', () => {
     context.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, catalog);
 
     const dispose = await doompiServerFacet.apply(context);
+    const commandHandle = headless.registerCommand(headlessMinorModeCommand(catalog));
     expect(command?.name).toBe('minor');
     expect(registered).toEqual([api, sessionFilesApi]);
 
@@ -171,6 +171,7 @@ describe('doompiServerFacet headless minor command', () => {
     expect(notify).toHaveBeenCalledWith({ body: 'Plan is inactive.', level: 'info' });
 
     await dispose?.();
+    commandHandle.dispose();
     expect(commandDispose).toHaveBeenCalledOnce();
     expect(apiDispose).toHaveBeenCalledTimes(2);
   });

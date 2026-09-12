@@ -15,18 +15,15 @@ import {
   BUILTIN_LEADER_COMMANDS,
 } from '../constants/ui';
 import path from 'node:path';
-import type { PiEventHandlers } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-import { readDoomMcpStatus } from '@agimon-ai/doompi-extension-contracts/mcp-status';
-import {
-  type DoomNotificationLevel,
-  readDoomNotificationService,
-} from '@agimon-ai/doompi-extension-contracts/notification';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import { readDoomMcpStatus } from '@agimon-ai/doompi-core/mcp-status';
+import { type DoomNotificationLevel, readDoomNotificationService } from '@agimon-ai/doompi-core/notification';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ReadonlyFooterDataProvider } from '@earendil-works/pi-coding-agent';
 import { type DoomLeaderDiagnostic, DoomLeaderRegistry } from '../services/leaderRegistry';
 import { createDoomUiHub } from '../services/uiHub';
 import { DoomUiState, type LeaderSnapshot } from '../models/uiState';
-import { buildToolSources, type McpServerStatus } from '../services/toolInventory';
+import { buildToolSources, type McpServerStatus } from '@agimon-ai/doompi-core/tool-inventory';
 import { openConfigOverlay } from './configOverlay';
 import { DoomEditor } from './doomEditor';
 import { DoomFooter } from './doomFooter';

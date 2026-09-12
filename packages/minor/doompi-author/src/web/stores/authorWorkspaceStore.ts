@@ -1,4 +1,4 @@
-import { defineGlobalStore } from '@agimon-ai/doompi-web-contracts';
+import { defineGlobalStore } from '@agimon-ai/doompi-core/web';
 import type {
   AuthorAnnotation,
   AuthorCrop,

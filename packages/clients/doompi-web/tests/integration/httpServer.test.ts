@@ -4,8 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import WebSocket, { WebSocketServer } from 'ws';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { serveWeb } from '../../src/adapters/httpServer.ts';
-import type { WebServer } from '../../src/types/bridge.ts';
+import { serveWeb } from '../../src/adapters/httpServer';
+import type { WebServer } from '../../src/types/bridge';
 
 function listen(server: Server): Promise<string> {
   return new Promise((resolve, reject) => {

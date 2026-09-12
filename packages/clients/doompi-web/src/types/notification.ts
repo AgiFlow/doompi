@@ -2,7 +2,7 @@ import {
   DOOM_NOTIFICATION_ENTRY_TYPE,
   type DoomNotificationEntryData,
   isDoomNotificationEntryData,
-} from '@agimon-ai/doompi-extension-contracts/notification';
+} from '@agimon-ai/doompi-core/notification';
 
 export interface DoomNotificationEntry {
   entryId: string;

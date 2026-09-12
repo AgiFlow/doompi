@@ -1,5 +1,5 @@
 import { HELP_COMMAND_NAME, HELP_COMMAND_DESCRIPTION } from '../constants/help';
-import { defineCommand, type DoomPluginCommand } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { defineCommand, type DoomPluginCommand } from '@agimon-ai/doompi-core/pi-extension';
 import type { HelpActivationService } from '../types/help';
 
 export type RequireHelpActivation = () => HelpActivationService;

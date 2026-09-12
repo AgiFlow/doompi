@@ -1,8 +1,8 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import type { ComponentProps } from 'react';
 import { Slot } from 'radix-ui';
-import { cn } from '../lib/cn.ts';
-import type { ChipTone } from '../types/tone.ts';
+import { cn } from '../lib/cn';
+import type { ChipTone } from '../types/tone';
 
 export const badgeVariants = cva('inline-flex items-center gap-1.5 whitespace-nowrap rounded border font-mono', {
   variants: {

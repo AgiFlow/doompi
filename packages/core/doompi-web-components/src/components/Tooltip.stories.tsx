@@ -7,8 +7,8 @@
  * paint without a hover. The wrapper keeps padding on every edge so a tooltip
  * is not pushed back onto its trigger by collision avoidance.
  */
-import { Button } from './Button.tsx';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './Tooltip.tsx';
+import { Button } from './Button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './Tooltip';
 
 const meta = {
   title: 'Components/Tooltip',

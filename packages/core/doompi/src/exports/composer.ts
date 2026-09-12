@@ -1,1 +1,1 @@
-export * from '../controllers/composer';
+export * from '../builders/cli/composition';

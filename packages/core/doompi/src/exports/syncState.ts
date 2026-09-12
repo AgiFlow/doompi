@@ -1,1 +1,1 @@
-export * from '../services/syncState';
+export * from '../composition/syncState';

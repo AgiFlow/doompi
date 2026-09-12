@@ -1,6 +1,6 @@
 import { Popover as PopoverPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+import { cn } from '../lib/cn';
 
 /**
  * shadcn's Popover on Radix: anchored to its trigger, closes on outside

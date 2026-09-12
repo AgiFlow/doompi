@@ -4,8 +4,8 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { build } from 'vite';
 import { describe, expect, it } from 'vitest';
-import { bundleAssetPolicyPlugin } from '../../src/adapters/bundleAssetPolicy.ts';
-import { parseBundleAssetPolicy } from '../../src/types/bundleAssetPolicy.ts';
+import { bundleAssetPolicyPlugin } from '@agimon-ai/doompi/builders/web';
+import { parseBundleAssetPolicy } from '@agimon-ai/doompi-core/web';
 
 const requireFromComponents = createRequire(
   new URL('../../../../core/doompi-web-components/package.json', import.meta.url),

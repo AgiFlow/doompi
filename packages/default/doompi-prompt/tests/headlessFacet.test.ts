@@ -1,4 +1,4 @@
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -9,7 +9,7 @@ import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHostService,
   type DoomHeadlessResource,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { promptServerFacet as promptHeadlessFacet } from '../src/extensions/server';
 

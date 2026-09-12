@@ -4,7 +4,7 @@
  * default export is a bare `const meta`. The frame sender comes from the
  * contracts package's own testing fixture rather than a hand-rolled stub.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import type { SubagentRun } from '../../types/webSubagents';
 import { elapsedRun, RunControl } from './RunControl';
 

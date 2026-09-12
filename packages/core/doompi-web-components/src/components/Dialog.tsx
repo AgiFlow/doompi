@@ -1,9 +1,9 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { createContext, type ComponentProps, useContext } from 'react';
-import { CloseIcon } from '../icons/icons.ts';
-import { cn } from '../lib/cn.ts';
-import { Button } from './Button.tsx';
+import { CloseIcon } from '../icons/icons';
+import { cn } from '../lib/cn';
+import { Button } from './Button';
 
 const DialogOpenChangeContext = createContext<((open: boolean) => void) | undefined>(undefined);
 /**

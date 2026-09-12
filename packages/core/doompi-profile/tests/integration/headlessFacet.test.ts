@@ -7,7 +7,7 @@ import {
   type DoomHeadlessHook,
   type DoomHeadlessHostService,
   type DoomHeadlessResource,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import profileHeadlessFacet from '../../src/extensions/server';
@@ -40,7 +40,7 @@ function execution(repoRoot: string, profile: string): DoomHeadlessExecutionCont
       majorMode: 'copilot',
       activeLayers: [],
       domains: [],
-      minorModes: [],
+      state: {},
       profile,
     },
     shutdown: vi.fn(),

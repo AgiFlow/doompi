@@ -3,7 +3,7 @@
  * mounts the exported `render`, so no Storybook runtime is imported and the
  * default export is a bare `const meta`.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { ComputerExecToolCard } from './ComputerExecToolCard';
 import { computerExecToolName } from '../lib/computerExecToolRender';
 

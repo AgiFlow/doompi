@@ -1,4 +1,4 @@
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 
 /**
  * This package's cockpit presence: pure metadata. The selection bar renders

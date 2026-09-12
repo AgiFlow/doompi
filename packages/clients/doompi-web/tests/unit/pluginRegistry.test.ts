@@ -1,6 +1,6 @@
-import { defineSessionChannel, defineSlot, defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineSessionChannel, defineSlot, defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { afterEach, describe, expect, it } from 'vitest';
-import { leaderGroup } from '../../src/web/lib/leaderTree.ts';
+import { leaderGroup } from '../../src/web/lib/leaderTree';
 import {
   activateWebPluginSession,
   activityGroupSlot,
@@ -30,8 +30,8 @@ import {
   webPluginDiagnostics,
   webPluginRegistryRevision,
   webTabs,
-} from '../../src/web/lib/pluginRegistry.ts';
-import { settingsSections } from '../../src/web/lib/settingsSections.ts';
+} from '../../src/web/lib/pluginRegistry';
+import { settingsSections } from '../../src/web/lib/settingsSections';
 interface ItemsPayload {
   items: string[];
 }

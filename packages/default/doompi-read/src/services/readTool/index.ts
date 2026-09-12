@@ -18,7 +18,7 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessTool,
   DoomHeadlessToolResult,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { formatDimensionNote, resizeImage } from '@earendil-works/pi-coding-agent';
 import { ReadParamsSchema, type ReadParams } from '../../schemas/readTool';
 import {

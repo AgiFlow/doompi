@@ -1,12 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { COMMAND_NAME } from '../constants/task';
-import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { createTasksChannel } from '../controllers/webTasksChannel';
-import {
-  type DoomHeadlessExecutionContext,
-  type DoomHeadlessToolResult,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-extension-contracts/delegation';
+import { type DoomHeadlessExecutionContext, type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
+import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-team/delegation';
 import { Check } from 'typebox/value';
 import { TaskParamsSchema, type TaskParams, type TaskAssignmentParams } from '../schemas/task';
 import { TaskStore } from '../services/taskStore';
@@ -24,7 +21,7 @@ import {
 import { getMaxTasks, getDelegationTimeoutMs, getStoreTtlMs } from '../services/config';
 import { removeLegacyStoreDirectoryAsync, sweepStoreFilesAsync } from '../services/paths';
 import { TASKS_CHANNEL_TYPE } from '../types/webTasks';
-import type { DoomHeadlessTool } from '@agimon-ai/doompi-extension-contracts/headless';
+import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
 
 const SOURCE = '@agimon-ai/doompi-task';
 

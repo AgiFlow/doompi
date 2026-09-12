@@ -5,7 +5,7 @@ import {
   restartSession,
   resumeSession,
   searchDirectories,
-} from '../../src/web/lib/hubApi.ts';
+} from '../../src/web/lib/hubApi';
 
 function respond(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

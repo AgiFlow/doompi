@@ -12,8 +12,8 @@ import {
   MinorModeToolInputSchema,
   MinorModeToolResultSchema,
   requireMinorModeCatalog,
-} from '@agimon-ai/doompi-extension-contracts/mode';
-import { DoomProtocolError } from '@agimon-ai/doompi-extension-contracts/protocol';
+} from '@agimon-ai/doompi-minor-mode';
+import { DoomProtocolError } from '@agimon-ai/doompi-core/protocol';
 import type { VoiceToolDefinition } from '../services/voiceTools';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';

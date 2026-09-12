@@ -19,7 +19,7 @@ interface PackageBaseline {
 }
 
 const FIXTURE_ROOT = fileURLToPath(new URL('../fixtures', import.meta.url));
-const CONTRACTS_SOURCE = fileURLToPath(new URL('../../../doompi-extension-contracts/src', import.meta.url));
+const CONTRACTS_SOURCE = fileURLToPath(new URL('../../../doompi-core/src', import.meta.url));
 const conditionCodes: Readonly<Record<string, string>> = { types: 't', import: 'i', require: 'r', default: 'd' };
 const packageBaseline = JSON.parse(
   fs.readFileSync(path.join(FIXTURE_ROOT, 'packageCompatibility.json'), 'utf8'),

@@ -12,7 +12,7 @@ import {
   type ToolEntry,
   summariseArgs,
   textFromContent,
-} from '../../src/web/lib/sessionModel.ts';
+} from '../../src/web/lib/sessionModel';
 
 const fold = (frames: Array<Record<string, unknown>>, from: SessionState = initialSessionState): SessionState =>
   frames.reduce((carried, frame) => reduceSession(carried, frame), from);

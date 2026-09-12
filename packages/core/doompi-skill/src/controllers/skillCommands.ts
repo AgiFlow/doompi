@@ -1,4 +1,4 @@
-import type { DoomHeadlessCommand } from '@agimon-ai/doompi-extension-contracts/headless';
+import type { DoomHeadlessCommand } from '@agimon-ai/doompi-core/headless';
 import { expandDeferredSkillCommand, type DeferredSkillSnapshot } from '../services/deferredSkills';
 import { SKILLS_COMMAND } from '../types/skills';
 export function createSkillCommands(inventory: DeferredSkillSnapshot, catalog: string): readonly DoomHeadlessCommand[] {

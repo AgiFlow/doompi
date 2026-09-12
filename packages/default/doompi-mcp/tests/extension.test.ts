@@ -7,15 +7,12 @@ import {
   DOOM_MCP_PROJECTION_SERVICE,
   type DoomMcpProjection,
   type DoomMcpProjectionService,
-} from '@agimon-ai/doompi-extension-contracts/mcp-projection';
-import {
-  installDoomCordisHost,
-  type DoomCordisHostController,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { readDoomMcpStatus } from '@agimon-ai/doompi-extension-contracts/mcp-status';
-import { readDoomMcpToolResolver } from '@agimon-ai/doompi-extension-contracts/mcp-tool-resolver';
-import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protocol';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-core/mcp-projection';
+import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordis-host';
+import { readDoomMcpStatus } from '@agimon-ai/doompi-core/mcp-status';
+import { readDoomMcpToolResolver } from '@agimon-ai/doompi-core/mcp-tool-resolver';
+import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { Context, type Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { McpServerStateChange } from '@agimon-ai/mcp-proxy';

@@ -10,7 +10,7 @@ import type {
   SharedServices,
   TokenStore,
 } from '@agimon-ai/mcp-proxy';
-import type { DoomOAuthRedirect } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomOAuthRedirect } from '@agimon-ai/doompi-core/package-api';
 import mcpProxyPackage from '@agimon-ai/mcp-proxy/package.json' with { type: 'json' };
 import type { McpConfigSource } from '../../types/mcpConfig';
 import type { CachedCatalog } from '../../types/mcpRuntime';

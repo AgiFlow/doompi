@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BUNDLE_UPDATED_MESSAGE, parseBundleUpdatedMessage } from '../../src/types/bundle.ts';
+import { BUNDLE_UPDATED_MESSAGE, parseBundleUpdatedMessage } from '../../src/types/bundle';
 
 describe('the verifier-to-page bundle message', () => {
   it('reads a committed revision', () => {

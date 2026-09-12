@@ -1,4 +1,4 @@
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useCallback, useEffect, useState } from 'react';
 import type { SavedPromptView } from '../../types/webPrompts';
 import { PromptsDialog } from './PromptsDialog';

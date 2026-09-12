@@ -1,5 +1,5 @@
 import { MessageItem, MessageItemHeader, toolTone } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import { lsCallView } from '../lib/builtinToolView';
 import { ListingBody, listingExpandable } from './ListingBody';
 

@@ -1,1 +1,1 @@
-export * from '../controllers/initCommand';
+export * from '../cli/commands/init';

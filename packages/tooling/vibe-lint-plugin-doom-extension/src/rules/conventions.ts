@@ -25,7 +25,7 @@ const SUPERSEDED_CONTAINER_IMPORT =
 const DOOM_PACKAGE_NAME = '@agimon-ai/doompi';
 const DOOM_PACKAGE_PREFIX = `${DOOM_PACKAGE_NAME}-`;
 const NATIVE_DIRECT_HARNESS_RUNTIME_PATH = 'src/controllers/directHarnessRuntime.ts';
-const CORDIS_CONTRACTS_PACKAGE = '@agimon-ai/doompi-extension-contracts';
+const CORDIS_CONTRACTS_PACKAGE = '@agimon-ai/doompi-core';
 const CORDIS_HOST_ADAPTER_PATH = 'src/controllers/cordisHost.ts';
 const CORDIS_PROTOCOL_EXPORT = `${CORDIS_CONTRACTS_PACKAGE}/protocol`;
 const CORDIS_HOST_QUERY_CHANNEL_IDENTIFIER = 'DOOM_CORDIS_HOST_QUERY_CHANNEL';
@@ -72,7 +72,7 @@ const SAME_RUNNER_PROTOCOL_EXPORTS = new Set([
 type ProcessGlobalBoundaryKind = 'claim' | 'reload';
 
 const LEGITIMATE_PROCESS_GLOBAL_BOUNDARIES = new Map<string, ReadonlyMap<string, ProcessGlobalBoundaryKind>>([
-  [CORDIS_CONTRACTS_PACKAGE, new Map([['src/schemas/transitionContext.ts', 'reload']])],
+  ['@agimon-ai/doompi-minor-mode', new Map([['src/services/reloadHandoff/index.ts', 'reload']])],
   ['@agimon-ai/doompi-voice', new Map([['src/services/voiceReloadHandoff/index.ts', 'reload']])],
   ['@agimon-ai/doompi-domain', new Map([['src/models/domainSwitchHandoff.ts', 'reload']])],
   [
@@ -700,14 +700,14 @@ export const noLiveGlobalRegistry: RuleDefinition = {
 
 export const noProtocolChannelLiterals: RuleDefinition = {
   preflight: true,
-  rule: 'Doom protocol channel literals may only be declared in doompi-extension-contracts',
+  rule: 'Doom protocol channel literals may only be declared in doompi-core',
   rationale: 'Central channel ownership makes versioning and cross-extension discovery type-safe.',
   check(filePath) {
     if (!['.ts', '.tsx', '.mts', '.cts'].includes(path.extname(filePath))) return null;
     const text = readText(filePath);
-    if (!text || filePath.includes(`${path.sep}doompi-extension-contracts${path.sep}`)) return null;
+    if (!text || filePath.includes(`${path.sep}doompi-core${path.sep}`)) return null;
     return /['"`]doom:[^'"`]+['"`]/.test(text)
-      ? 'Move Doom protocol channel literals to @agimon-ai/doompi-extension-contracts.'
+      ? 'Move Doom protocol channel literals to @agimon-ai/doompi-core.'
       : null;
   },
 };

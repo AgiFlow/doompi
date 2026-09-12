@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { sessionFileUrl } from '../../src/types/media.ts';
-import { mediaKindFor, parseFileMentions } from '../../src/web/lib/fileMentions.ts';
+import { sessionFileUrl } from '../../src/types/media';
+import { mediaKindFor, parseFileMentions } from '../../src/web/lib/fileMentions';
 
 describe('parseFileMentions', () => {
   it('finds @ tokens at the start and after whitespace, once each', () => {

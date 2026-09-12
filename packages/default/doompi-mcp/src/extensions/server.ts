@@ -1,4 +1,4 @@
-import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { mcpHubApi } from '../controllers/mcpHubApi';
 import { createMcpServerRuntime } from '../controllers/serverRuntime';
 export const mcpServerFacet = defineServerPlugin({

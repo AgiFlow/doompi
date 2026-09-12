@@ -9,8 +9,8 @@ import {
   turnRemoteAccessOff,
   turnRemoteAccessOn,
   updateRemoteSettings,
-} from '../../src/web/stores/remoteAccessStore.ts';
-import type { RemoteAccessStateView } from '../../src/types/remoteAccess.ts';
+} from '../../src/web/stores/remoteAccessStore';
+import type { RemoteAccessStateView } from '../../src/types/remoteAccess';
 
 const originalFetch = globalThis.fetch;
 

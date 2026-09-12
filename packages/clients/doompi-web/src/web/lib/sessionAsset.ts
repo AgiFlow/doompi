@@ -1,5 +1,5 @@
-import { sessionFileUrl } from '../../types/media.ts';
-import { sealedHttpSession } from './sealedSession.ts';
+import { sessionFileUrl } from '../../types/media';
+import { sealedHttpSession } from './sealedSession';
 
 export interface SessionAsset {
   url: string;

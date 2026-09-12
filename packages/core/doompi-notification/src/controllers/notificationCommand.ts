@@ -1,4 +1,4 @@
-import { defineCommand } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { defineCommand } from '@agimon-ai/doompi-core/server-facet';
 
 export const notificationCommand = defineCommand({
   name: 'notify',

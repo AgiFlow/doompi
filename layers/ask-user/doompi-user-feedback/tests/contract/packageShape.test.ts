@@ -61,7 +61,7 @@ describe('doompi-user-feedback package contract', () => {
 
     expect(Object.keys(manifest.dependencies ?? {}).some((name) => name.startsWith('@juicesharp/'))).toBe(false);
     expect(manifest.dependencies).toMatchObject({
-      '@agimon-ai/doompi-extension-contracts': 'workspace:*',
+      '@agimon-ai/doompi-core': 'workspace:*',
       '@deepseek-ai/cordis': '4.0.2',
       typebox: '1.3.25',
     });

@@ -1,14 +1,20 @@
+import {
+  DOOM_HEADLESS_OWNER as TEST_OWNER,
+  DOOM_HEADLESS_HOST_SERVICE as TEST_AGENT,
+} from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE as TEST_SERVER, type DoomServerFacet } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE as TEST_CATALOG } from '@agimon-ai/doompi-minor-mode';
+import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { readFile } from 'node:fs/promises';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
   DoomHeadlessHook,
-  DoomHeadlessMinorMode,
   DoomHeadlessResource,
   DoomHeadlessSelection,
   DoomHeadlessTool,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { describe, expect, it, vi } from 'vitest';
 import { planServerFacet } from '../../src/extensions/server';
 
@@ -17,7 +23,7 @@ async function fixture() {
     majorMode: 'copilot',
     activeLayers: [],
     domains: [],
-    minorModes: ['retained'],
+    state: { 'minor-mode': ['retained'] },
   };
   let mode!: DoomHeadlessMinorMode;
   const resources: DoomHeadlessResource[] = [];
@@ -31,15 +37,16 @@ async function fixture() {
       return selection;
     },
   } as DoomHeadlessExecutionContext;
+  const registerOwner = vi.fn((value: DoomHeadlessMinorMode) => {
+    mode = value;
+    return { publish, dispose };
+  });
   const host = {
     context: execution,
-    changeSelection: async (patch: Partial<DoomHeadlessSelection>) => {
-      selection = { ...selection, ...patch };
+    changeSelection: async (change: { axis: 'state'; key: string; values: string[] }) => {
+      selection = { ...selection, state: { ...selection.state, [change.key]: change.values } };
     },
-    registerMinorMode: (value: DoomHeadlessMinorMode) => {
-      mode = value;
-      return { publish, dispose };
-    },
+    assertActive: vi.fn(),
     registerToolRestriction: registration,
     registerResource: (value: DoomHeadlessResource) => {
       resources.push(value);
@@ -54,11 +61,16 @@ async function fixture() {
       return registration();
     },
   } as unknown as DoomHeadlessHostService;
-  const close = await planServerFacet.apply({
-    effect() {},
-    get: (name: string) =>
-      name === 'doom/server-host' ? { scope: 'session', context: {}, registerApi: () => ({ dispose() {} }) } : host,
-  } as unknown as Context);
+  const close = await mountFacet(
+    planServerFacet,
+    {
+      effect() {},
+      get: (name: string) =>
+        name === 'doom/server-host' ? { scope: 'session', context: {}, registerApi: () => ({ dispose() {} }) } : host,
+    } as unknown as Context,
+    host,
+    registerOwner,
+  );
   const action = (id: string, args: Record<string, string> = {}, signal = new AbortController().signal) =>
     mode.handleAction(id, args, { signal, context: execution } as Parameters<DoomHeadlessMinorMode['handleAction']>[2]);
   return { mode, action, execution, resources, hooks, tools, publish, dispose, close };
@@ -71,7 +83,10 @@ describe('headless planning resources and selection', () => {
       await readFile(new URL('../../src/prompts/doompi-use-plan/SKILL.md', import.meta.url), 'utf8'),
     );
     for (const contribution of [...test.resources, ...test.tools, ...test.hooks]) {
-      expect(contribution.when).toEqual({ minorMode: 'plan' });
+      expect(contribution.when).toEqual({
+        state: { 'minor-mode': 'plan' },
+        attribution: { kind: 'minor', mode: 'plan' },
+      });
     }
     await test.close?.();
     expect(test.dispose).toHaveBeenCalledTimes(8);
@@ -83,12 +98,12 @@ describe('headless planning resources and selection', () => {
       const test = await fixture();
       expect(test.mode.initialState).toMatchObject({ activation: 'inactive' });
       await test.action('activate', { flavor });
-      expect(test.execution.selection.minorModes).toEqual(['retained', 'plan']);
+      expect(test.execution.selection.state?.['minor-mode']).toEqual(['retained', 'plan']);
       expect(test.publish).toHaveBeenLastCalledWith(
         expect.objectContaining({ activation: 'active', modelContextVariant: flavor }),
       );
       await test.action('deactivate');
-      expect(test.execution.selection.minorModes).toEqual(['retained']);
+      expect(test.execution.selection.state?.['minor-mode']).toEqual(['retained']);
       expect(test.publish).toHaveBeenLastCalledWith(expect.objectContaining({ activation: 'inactive' }));
     },
   );
@@ -98,7 +113,7 @@ describe('headless planning resources and selection', () => {
     await expect(test.action('activate', { flavor: 'invalid' })).rejects.toThrow('valid plan flavor');
     await expect(test.action('unknown')).rejects.toThrow('Unknown plan mode action');
     await expect(test.action('activate', { flavor: 'normal' }, AbortSignal.abort())).rejects.toThrow();
-    expect(test.execution.selection.minorModes).toEqual(['retained']);
+    expect(test.execution.selection.state?.['minor-mode']).toEqual(['retained']);
     expect(test.publish).not.toHaveBeenCalled();
   });
 
@@ -112,3 +127,22 @@ describe('headless planning resources and selection', () => {
     });
   });
 });
+
+async function mountFacet(
+  facet: DoomServerFacet,
+  existing: Context,
+  host: DoomHeadlessHostService,
+  registerOwner: ReturnType<typeof vi.fn>,
+) {
+  const root = new Context();
+  root.provide(TEST_SERVER, existing.get(TEST_SERVER));
+  root.provide(TEST_AGENT, host);
+  root.provide(TEST_CATALOG, { registerOwner } as never);
+  const owner = root.extend({ [TEST_OWNER]: { packageName: '@fixture/mode' } });
+  const release = await facet.apply(owner);
+  await vi.waitFor(() => expect(registerOwner).toHaveBeenCalled());
+  return async () => {
+    await release?.();
+    await root.fiber.dispose();
+  };
+}

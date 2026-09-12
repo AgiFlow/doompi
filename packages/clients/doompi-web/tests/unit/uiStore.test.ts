@@ -12,7 +12,7 @@ async function load(dock: string | null = null, tab: string | null = null, unava
     }),
   };
   vi.stubGlobal('window', { localStorage: storage });
-  return { ...(await import('../../src/web/stores/uiStore.ts')), storage };
+  return { ...(await import('../../src/web/stores/uiStore')), storage };
 }
 
 afterEach(() => {

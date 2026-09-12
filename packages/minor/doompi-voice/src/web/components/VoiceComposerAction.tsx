@@ -1,5 +1,5 @@
 import { AlertIcon, Button, LoaderIcon, MicIcon, StopIcon } from '@agimon-ai/doompi-web-components';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useEffect, useRef, useState } from 'react';
 import { ManualComposerRecorder, type ManualComposerRecorderState } from '../api/manualComposerRecorder';
 import { voiceActivityView } from '../lib/voiceActivityView';

@@ -1,4 +1,4 @@
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { FindToolMessage } from '../web/components/FindToolMessage';
 import { LsToolMessage } from '../web/components/LsToolMessage';
 import { WriteToolMessage } from '../web/components/WriteToolMessage';

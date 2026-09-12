@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 const run = promisify(execFile);
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const ENTRY = path.join(PACKAGE_ROOT, 'src/bin/serve.ts');
+const ENTRY = path.join(PACKAGE_ROOT, 'dist/bin/serve.mjs');
 const childEnvironment = { ...process.env };
 delete childEnvironment.FORCE_COLOR;
 delete childEnvironment.NO_COLOR;

@@ -5,9 +5,9 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config';
-import { readSyncRegistration } from '@agimon-ai/doompi/services';
-import { bundleCockpitWeb } from '../../src/adapters/webBundler.ts';
-import { pluginPackageRoots } from './pluginRoots.ts';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
+import { bundleCockpitWeb } from '@agimon-ai/doompi/builders/web';
+import { pluginPackageRoots } from './pluginRoots';
 
 /** A fixture plugin whose tool renderer throws on demand, so the timeline's fallback can be proved. */
 const crashRoot = fileURLToPath(new URL('../fixtures/crash-plugin', import.meta.url));
@@ -81,6 +81,7 @@ majorMode:
   }
   const outDir = path.dirname(registration.webDirectory);
   const result = await bundleCockpitWeb({
+    hostRoot: fileURLToPath(new URL('../..', import.meta.url)),
     pluginRoots: [...packages.map((entry) => entry.root), crashRoot],
     outDir,
   });

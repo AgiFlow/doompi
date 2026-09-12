@@ -1,8 +1,4 @@
-import type {
-  DoomHubChannel,
-  DoomHubChannelSource,
-  DoomHubSessionScope,
-} from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { DoomHubChannel, DoomHubChannelSource, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
 import { VoiceOwnershipCoordinator } from '../services/voiceOwnershipCoordinator';
 import { VOICE_MEDIA_API_BASE_PATH, VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../types/clientMedia';
 import {

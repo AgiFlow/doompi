@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ComputerUseHost } from '../../src/services/computerUseHost.ts';
-import type { ComputerUseBackend, ComputerUseDesktopRequest } from '../../src/types/computerUse.ts';
+import { ComputerUseHost } from '../../src/services/computerUseHost';
+import type { ComputerUseBackend, ComputerUseDesktopRequest } from '../../src/types/computerUse';
 
 function request(
   sessionId: string,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { bindTransport, invokeServerMethod, releaseTransport } from '../../src/web/lib/transport.ts';
+import { bindTransport, invokeServerMethod, releaseTransport } from '../../src/web/lib/transport';
 
 afterEach(releaseTransport);
 

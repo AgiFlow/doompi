@@ -5,7 +5,7 @@
  * package's own testing fixture, and the rows come from the real session store
  * seeded at module scope, which is the only input this component reads.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import type { SubagentRun } from '../../types/webSubagents';
 import { subagents } from '../stores/subagentsStore';
 import { AgentsActivitySection } from './AgentsActivitySection';
@@ -32,7 +32,7 @@ subagents.update('agents-busy', (current) => ({
       agent: 'reviewer',
       state: 'running',
       startedAt: NOW - 7 * MINUTE,
-      currentTool: 'read · packages/core/doompi-web-contracts',
+      currentTool: 'read · packages/core/doompi-core',
       toolCount: 24,
     }),
     run({

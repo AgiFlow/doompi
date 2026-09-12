@@ -1,4 +1,4 @@
-import { DOOMPI_SANDBOX_ENV } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
+import { DOOMPI_SANDBOX_ENV } from '@agimon-ai/doompi-core/sandbox-harness';
 import type { BrokerEndpoint, SandboxEngine, SandboxHostFacts } from '../../types/sandboxHarness';
 import { filterSandboxEnvironment, isCredentialEnvName } from '../sandboxEnvironment';
 import { OAUTH_CALLBACK_HOST_ENV, OAUTH_CONTAINER_BIND, oauthPublishArgs } from '../oauthCallback';

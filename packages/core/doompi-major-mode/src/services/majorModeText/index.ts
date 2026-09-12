@@ -1,5 +1,5 @@
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import type { TransitionExecutionStrategy } from '@agimon-ai/doompi-extension-contracts/transition';
+import type { TransitionExecutionStrategy } from '@agimon-ai/doompi-core/transition';
 import type { SelectItem } from '@earendil-works/pi-tui';
 
 const OPTION_PREFIX = /^\[[ x]\] /;

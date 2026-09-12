@@ -10,7 +10,7 @@ import {
   updateHarnessState,
 } from '@agimon-ai/doompi-config/harnessStore';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
-import type { TransitionOutcome } from '@agimon-ai/doompi-extension-contracts/transition';
+import type { TransitionOutcome } from '@agimon-ai/doompi-core/transition';
 import { createDoomVoiceToolsService, DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-voice/voice-tools';
 import {
   createVoiceReloadHandoffStore,

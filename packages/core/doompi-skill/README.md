@@ -26,7 +26,7 @@ diagnostics.
 ## Contributing skill directories
 
 The package provides the session-owned `doom/skill-sources` Cordis service from
-`@agimon-ai/doompi-extension-contracts/skills`. Extensions register their directories inside
+`@agimon-ai/doompi-core/skills`. Extensions register their directories inside
 `ctx.inject([DOOM_SKILL_SOURCES_SERVICE], ...)`; the returned handle is disposed automatically when
 either the contributor or provider unloads. Contributions are keyed by source, so a replacement
 generation takes the previous package slot without doubling it.

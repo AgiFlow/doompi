@@ -1,1 +1,1 @@
-export * from '../controllers/compatibilityOptions';
+export * from '../cli/commands/compat/options';

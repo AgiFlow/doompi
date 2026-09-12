@@ -27,10 +27,7 @@ Callers should discover the optional service through Cordis and request delivery
 a particular host:
 
 ```ts
-import {
-  DOOM_NOTIFICATION_SERVICE,
-  readDoomNotificationService,
-} from '@agimon-ai/doompi-extension-contracts/notification';
+import { DOOM_NOTIFICATION_SERVICE, readDoomNotificationService } from '@agimon-ai/doompi-core/notification';
 
 ctx.inject([DOOM_NOTIFICATION_SERVICE], (notificationContext) => {
   void readDoomNotificationService(notificationContext)?.request({

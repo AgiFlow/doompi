@@ -1,4 +1,4 @@
-import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { createWorkflowsChannel } from '../controllers/workflowsHubChannel';
 import { createWorkflowCatalogChannel } from '../controllers/workflowCatalogChannel';
 import { api } from '../controllers/workflowHubApi';

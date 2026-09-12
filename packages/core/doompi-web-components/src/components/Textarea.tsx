@@ -1,7 +1,7 @@
 import type { VariantProps } from 'class-variance-authority';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
-import { fieldVariants } from './Input.tsx';
+import { cn } from '../lib/cn';
+import { fieldVariants } from './Input';
 
 export interface TextareaProps extends Omit<ComponentProps<'textarea'>, 'size'>, VariantProps<typeof fieldVariants> {}
 

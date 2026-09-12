@@ -1,1 +1,1 @@
-export * from '../controllers/explainCommand';
+export * from '../cli/commands/explain';

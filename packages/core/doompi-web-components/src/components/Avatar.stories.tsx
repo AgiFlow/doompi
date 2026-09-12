@@ -3,8 +3,8 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Avatar, AvatarFallback } from './Avatar.tsx';
-import { UserIcon } from '../icons/icons.ts';
+import { Avatar, AvatarFallback } from './Avatar';
+import { UserIcon } from '../icons/icons';
 
 /** Avatar declares no variants; the size is whatever the caller hands it. */
 const SIZES = [

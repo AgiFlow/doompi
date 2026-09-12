@@ -5,7 +5,7 @@
  * package's own testing fixture, whose `thread` option stands in for the host's
  * transcript; the runs come from the real session store seeded at module scope.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import type { ReactNode } from 'react';
 import type { SubagentRun } from '../../types/webSubagents';
 import { subagents } from '../stores/subagentsStore';
@@ -52,7 +52,7 @@ subagents.update('thread-done', (current) => ({
 const thread = (threadId: string): ReactNode => (
   <div className="min-h-0 flex-1 overflow-auto px-6 py-4 text-xs text-doom-dim">
     <p className="text-doom-faint">transcript of {threadId}</p>
-    <p className="pt-2 text-doom-text">read packages/core/doompi-web-contracts/src/services/testing/slotProps.ts</p>
+    <p className="pt-2 text-doom-text">read packages/core/doompi-core/src/services/testing/slotProps.ts</p>
     <p className="pt-1 text-doom-text">the fixture already builds every slot prop, so the story stays honest</p>
   </div>
 );

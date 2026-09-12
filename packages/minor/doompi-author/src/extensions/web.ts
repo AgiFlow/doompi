@@ -1,4 +1,4 @@
-import { defineWebPlugin, type WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin, type WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 import { authorFileLinks } from '../web/components/AuthorDocumentPanel';
 import { AuthorPanel } from '../web/components/AuthorPanel';
 import { startAuthorBrowserBridge } from '../web/api/authorBrowserBridge';

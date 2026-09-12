@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { ToolPathLink } from '../../src/components/ToolPathLink.tsx';
+import { ToolPathLink } from '../../src/components/ToolPathLink';
 
 describe('tool path links', () => {
   it('keeps a path plain when the host cannot open it', () => {

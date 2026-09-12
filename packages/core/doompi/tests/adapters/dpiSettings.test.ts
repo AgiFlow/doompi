@@ -7,7 +7,7 @@ import {
   type DpiSettingsStorageBackend,
   installDpiSettingsOverlay,
   type PiSettingsRuntime,
-} from '../../src/services/dpiSettings';
+} from '../../src/builders/cli/dpiSettings';
 
 class MemorySettingsStorage implements DpiSettingsStorageBackend {
   global: string | undefined;

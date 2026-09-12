@@ -1,11 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext, TurnEndEvent } from '@earendil-works/pi-coding-agent';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
-import {
-  type DoomReadinessCoordinator,
-  readDoomReadinessCoordinator,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
-import type { PiEventHandlers } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { type DoomReadinessCoordinator, readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
 import type {
   PiTelemetryExtensionOptions,
   PiTelemetryRuntimeHandle,

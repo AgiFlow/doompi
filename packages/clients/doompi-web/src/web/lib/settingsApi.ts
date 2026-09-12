@@ -14,9 +14,9 @@ import {
   type SettingsModel,
   type SettingsRepository,
   type SettingsWriteRequest,
-} from '../../types/settings.ts';
-import { sealedHttpSession } from './sealedSession.ts';
-import { fetchWithStepUp } from './stepUp.ts';
+} from '../../types/settings';
+import { sealedHttpSession } from './sealedSession';
+import { fetchWithStepUp } from './stepUp';
 
 /**
  * The page's half of the settings routes. The only place the cockpit talks

@@ -43,11 +43,6 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./bundler": {
-      "types": "./dist/bundler.d.mts",
-      "import": "./dist/bundler.mjs",
-      "require": "./dist/bundler.cjs"
-    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -63,9 +58,9 @@
   },
   "dependencies": {
     "@agimon-ai/doompi": "workspace:*",
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
+    "@agimon-ai/doompi-core/web": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@codemirror/state": "6.7.2",
     "@codemirror/view": "6.43.11",

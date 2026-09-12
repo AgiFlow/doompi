@@ -1,5 +1,5 @@
-import type { DoomHeadlessHostService } from '@agimon-ai/doompi-extension-contracts/headless';
-import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { discoverServerSkills } from '../services/serverInventory';
 import { readPackageResource } from '../services/packageResources';
 import { createSkillCommands } from './skillCommands';

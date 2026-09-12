@@ -3,7 +3,7 @@ import {
   type DoomHeadlessCommand,
   type DoomHeadlessHook,
   type DoomHeadlessResource,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-log';

@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react';
 import {
   browserNotificationPermission,
   type BrowserNotificationPermissionStatus,
-} from '../../lib/browserNotifications.ts';
-import { disableLivePush, enableLivePush, livePushStatus, type LivePushStatus } from '../../lib/livePush.ts';
-import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
+} from '../../lib/browserNotifications';
+import { disableLivePush, enableLivePush, livePushStatus, type LivePushStatus } from '../../lib/livePush';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 const STATUS_COPY: Record<BrowserNotificationPermissionStatus, string> = {
   granted: 'browser notifications are allowed',

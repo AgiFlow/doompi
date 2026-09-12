@@ -9,11 +9,11 @@ const mocks = vi.hoisted(() => ({
   acquireBootstrapClaim: vi.fn(),
 }));
 
-vi.mock('../../src/services/bootstrapLocator', () => ({
+vi.mock('../../src/builders/cli/bootstrapLocator', () => ({
   findSyncedRoot: mocks.findSyncedRoot,
   readStartupBootstrapStatus: mocks.readStartupBootstrapStatus,
 }));
-vi.mock('../../src/models/bootstrapClaim', () => ({
+vi.mock('../../src/builders/cli/bootstrapClaim', () => ({
   acquireBootstrapClaim: mocks.acquireBootstrapClaim,
 }));
 

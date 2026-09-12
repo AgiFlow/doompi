@@ -8,7 +8,7 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
-} from '../../src/components/Sheet.tsx';
+} from '../../src/components/Sheet';
 
 describe('sheet composition', () => {
   // Render the semantic sections directly: server rendering does not mount the portal.

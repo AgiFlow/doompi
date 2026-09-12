@@ -4,9 +4,8 @@ import {
   type DoomTransitionCoordinator,
   type DoomTransitionPlan,
   type DoomTransitionRequest,
-  type MinorModeCatalogHost,
   type TransitionSelectionSnapshot,
-} from '@agimon-ai/doompi-extension-contracts/transition';
+} from '@agimon-ai/doompi-core/transition';
 
 /**
  * A coordinator stub on a real cordis registry.
@@ -49,9 +48,6 @@ export function bindStubCoordinator(
       if (outcome !== 'applied') return { ...plan, outcome };
       const applied = await executeStructural?.(request, plan);
       return { ...plan, outcome: applied ?? 'applied' };
-    },
-    attachMinorModeCatalog(_catalog: MinorModeCatalogHost) {
-      return () => undefined;
     },
     dispose() {
       // The stub owns nothing.

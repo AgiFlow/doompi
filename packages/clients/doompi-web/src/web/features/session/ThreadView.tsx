@@ -1,9 +1,9 @@
-import type { ThreadViewOptions } from '@agimon-ai/doompi-web-contracts';
+import type { ThreadViewOptions } from '@agimon-ai/doompi-core/web';
 import { EmptyState } from '@agimon-ai/doompi-web-components';
 import { useEffect } from 'react';
-import { sessionStoreFor } from '../../stores/sessionStore.ts';
-import { subscribeThread, threadStoreKey, unsubscribeThread } from '../../stores/threadStore.ts';
-import { Transcript } from './Timeline.tsx';
+import { sessionStoreFor } from '../../stores/sessionStore';
+import { subscribeThread, threadStoreKey, unsubscribeThread } from '../../stores/threadStore';
+import { Transcript } from './Timeline';
 
 const THREAD_TEST_ID = 'thread-timeline';
 

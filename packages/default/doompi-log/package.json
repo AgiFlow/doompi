@@ -83,10 +83,9 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@agimon-ai/log-sink-mcp": "0.29.19",
     "@deepseek-ai/cordis": "4.0.2",

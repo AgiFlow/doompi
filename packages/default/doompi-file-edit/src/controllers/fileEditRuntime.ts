@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { SUBAGENT_CHILD_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';
-import type { PiPluginContributions } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-import type { LeaderContribution } from '@agimon-ai/doompi-extension-contracts/leader';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { SUBAGENT_CHILD_ENV } from '@agimon-ai/doompi-core/child-process';
+import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import type { LeaderContribution } from '@agimon-ai/doompi-core/leader';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';

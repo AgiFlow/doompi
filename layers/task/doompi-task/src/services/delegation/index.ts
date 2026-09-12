@@ -8,8 +8,8 @@ import {
   type DelegationResult,
   type DelegationStarted as DelegationStartedPayload,
   type DelegationUpdate,
-} from '@agimon-ai/doompi-extension-contracts/delegation';
-import type { InlineAgent } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+} from '@agimon-ai/doompi-team/delegation';
+import type { InlineAgent } from '@agimon-ai/doompi-team/subagent-tool';
 import type { Context } from '@deepseek-ai/cordis';
 import { TASK_EVENT, type TaskEventName, type TaskFailureReporter } from '../../types/telemetry';
 import { reconcileOrphanedDelegations } from '../reconcile';

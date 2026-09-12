@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 
 interface FakeWorker {
   postMessage: ReturnType<typeof vi.fn>;

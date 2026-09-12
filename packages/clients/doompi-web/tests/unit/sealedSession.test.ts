@@ -7,7 +7,7 @@ import {
   sealedHttpSession,
   sealedProtocolSession,
   sealedSession,
-} from '../../src/web/lib/sealedSession.ts';
+} from '../../src/web/lib/sealedSession';
 import { createHostHandshake } from '@agimon-ai/doompi-web-security/node';
 
 const originalFetch = globalThis.fetch;

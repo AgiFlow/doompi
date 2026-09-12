@@ -5,7 +5,7 @@
  * a hand-rolled stub, so a change to the render contract breaks this story at
  * the type level instead of silently drifting.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import type { McpToolDetails } from '../../types/webMcp';
 import { McpToolMessage } from './McpToolMessage';
 import { MCP_STATUS_KEY } from '../lib/mcpToolMatch';

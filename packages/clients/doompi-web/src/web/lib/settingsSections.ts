@@ -1,11 +1,11 @@
-import type { SettingsSectionContribution } from '@agimon-ai/doompi-web-contracts';
+import type { SettingsSectionContribution } from '@agimon-ai/doompi-core/web';
 import {
   pluginRepositorySettingsPanels,
   pluginSettingsPanels,
   pluginSettingsSections,
   type InstalledRepositorySettingsPanel,
   type InstalledSettingsPanel,
-} from './pluginRegistry.ts';
+} from './pluginRegistry';
 
 /**
  * The settings menu, as data: the rail's gear and the settings page both

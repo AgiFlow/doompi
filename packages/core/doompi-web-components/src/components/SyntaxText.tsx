@@ -1,13 +1,13 @@
 import { type ComponentProps, Fragment, useEffect, useState } from 'react';
-import { cn } from '../lib/cn.ts';
-import type { GrammarKey } from '../lib/editorLanguage.ts';
+import { cn } from '../lib/cn';
+import type { GrammarKey } from '../lib/editorLanguage';
 import {
   detectGrammar,
   highlightToLines,
   type SyntaxLines,
   type SyntaxSpan,
   syntaxStyleOf,
-} from '../lib/syntaxHighlight.ts';
+} from '../lib/syntaxHighlight';
 
 /**
  * Read-only code with the editor's colours.

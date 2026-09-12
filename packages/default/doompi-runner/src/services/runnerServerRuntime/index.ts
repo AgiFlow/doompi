@@ -1,8 +1,5 @@
-import type {
-  DoomHeadlessActivity,
-  DoomHeadlessExecutionContext,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import type { DoomServerHostService } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import type { DoomHeadlessActivity, DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
+import type { DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
 import { RUNNER_RUNS_TYPE } from '../../constants/webRunners';
 import { reconcileActiveRunners, stopRunnerProcess } from '../reconcile';
 import type { RunnerDependencies } from '../runnerDependencies/type';

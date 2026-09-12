@@ -5,8 +5,8 @@ import {
   bundledDoomPiPackages,
   DOOMPI_RUNTIME_PACKAGES,
   isExternalRuntimePackage,
-} from '../../scripts/desktopRuntimePlugin.ts';
-import runtimeConfig from '../../vite.runtime.config.ts';
+} from '../../scripts/desktopRuntimePlugin';
+import runtimeConfig from '../../vite.runtime.config';
 
 describe('desktop release targets', () => {
   it.each(['darwin-arm64', 'linux-x64', 'linux-arm64'])('accepts %s', (target) => {

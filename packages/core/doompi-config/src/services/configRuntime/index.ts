@@ -1,23 +1,17 @@
-import {
-  DOOM_CORDIS_SESSION_SERVICE,
-  type DoomCordisSessionService,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
 import {
   createDisabledDoomMcpProjection,
   createDoomMcpProjectionService,
   DOOM_MCP_PROJECTION_SERVICE,
   isDoomMcpProjection,
-} from '@agimon-ai/doompi-extension-contracts/mcp-projection';
-import {
-  type DoomNotificationLevel,
-  readDoomNotificationService,
-} from '@agimon-ai/doompi-extension-contracts/notification';
+} from '@agimon-ai/doompi-core/mcp-projection';
+import { type DoomNotificationLevel, readDoomNotificationService } from '@agimon-ai/doompi-core/notification';
 import {
   createDoomReadinessCoordinator,
   DOOM_READINESS_SERVICE,
   type DoomReadinessHandle,
   type DoomReadinessNotification,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
+} from '@agimon-ai/doompi-core/readiness';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';

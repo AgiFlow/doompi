@@ -7,7 +7,7 @@
  */
 
 import { SubagentCapabilityPolicyStore } from '../../schemas/team/capabilityCeiling';
-import type { DoomChildSessionServiceProvider } from '@agimon-ai/doompi-extension-contracts/child-session';
+import type { DoomChildSessionServiceProvider } from '@agimon-ai/doompi-core/child';
 import { AgentDiscoveryService } from '../agentDiscovery';
 import { SkillDiscoveryService } from '../agentSkills';
 import { NativeTeamChannelService } from '../nativeTeamChannel';

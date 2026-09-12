@@ -5,7 +5,7 @@
  * package's own testing fixture rather than a hand-rolled stub, so a change to
  * the slot contract breaks this story at the type level.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { IntercomToolMessage } from './IntercomToolMessage';
 
 const props = (overrides: Omit<Parameters<typeof toolMessagePropsFixture>[0], 'toolName'>) =>

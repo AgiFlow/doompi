@@ -9,7 +9,7 @@ import {
   verifyBundleAsset,
   verifySignedBundleManifest,
 } from '@agimon-ai/doompi-web-security/browser';
-import { BUNDLE_UPDATED_MESSAGE, type BundleUpdatedMessage } from '../types/bundle.ts';
+import { BUNDLE_UPDATED_MESSAGE, type BundleUpdatedMessage } from '../types/bundle';
 import {
   clearActiveBundle,
   clearVerifiedPluginComposition,
@@ -20,9 +20,9 @@ import {
   readVerifiedPluginComposition,
   type ActiveBundleState,
   type VerifiedPluginCompositionState,
-} from './bundleCache.ts';
-import { BUNDLE_ASSET_POLICY_PATH, parseBundleAssetPolicy } from '../types/bundleAssetPolicy.ts';
-import { RAW_BUNDLE_PREFIX, trustedNetworkPath } from './networkPaths.ts';
+} from './bundleCache';
+import { BUNDLE_ASSET_POLICY_PATH, parseBundleAssetPolicy } from '@agimon-ai/doompi-core/web';
+import { RAW_BUNDLE_PREFIX, trustedNetworkPath } from './networkPaths';
 
 const worker = self as unknown as ServiceWorkerGlobalScope;
 const CACHE_PREFIX = 'doompi-bundle-';

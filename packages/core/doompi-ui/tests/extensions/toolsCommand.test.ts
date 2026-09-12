@@ -1,6 +1,6 @@
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { DOOM_MCP_STATUS_SERVICE, type McpStatusSnapshot } from '@agimon-ai/doompi-extension-contracts/mcp-status';
-import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protocol';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_MCP_STATUS_SERVICE, type McpStatusSnapshot } from '@agimon-ai/doompi-core/mcp-status';
+import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
 import type { ExtensionAPI, ExtensionContext, ToolInfo } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import doomPiUiExtension from '../../src/extensions/pi';

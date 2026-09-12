@@ -1,20 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ComposerCapture } from '@agimon-ai/doompi-web-contracts';
+import type { ComposerCapture } from '@agimon-ai/doompi-core/web';
 import {
   applyCaptureFrame,
   disconnectCaptures,
   onCaptureStatus,
   submitCapture,
-} from '../../src/web/stores/captureStore.ts';
-import { onComposerSubmitted } from '../../src/web/lib/composerSubmissions.ts';
-import { sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands.ts';
+} from '../../src/web/stores/captureStore';
+import { onComposerSubmitted } from '../../src/web/lib/composerSubmissions';
+import { sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands';
 
-vi.mock('../../src/web/lib/sessionProtocolCommands.ts', () => ({ sendSessionProtocolFrame: vi.fn() }));
+vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({ sendSessionProtocolFrame: vi.fn() }));
 
-vi.mock('../../src/web/stores/sessionsStore.ts', () => ({
+vi.mock('../../src/web/stores/sessionsStore', () => ({
   sessionsStore: { state: { byId: { s1: { attach: 'attached' } } } },
 }));
-vi.mock('../../src/web/stores/sessionStore.ts', () => ({ sessionStoreFor: () => ({ state: { streaming: false } }) }));
+vi.mock('../../src/web/stores/sessionStore', () => ({ sessionStoreFor: () => ({ state: { streaming: false } }) }));
 
 const bytes = new Uint8Array(33);
 bytes.set([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);

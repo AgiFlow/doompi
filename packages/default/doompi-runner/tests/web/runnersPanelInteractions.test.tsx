@@ -1,4 +1,4 @@
-import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import type { ComponentProps, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RunnerRunView } from '../../src/types/webRunners';

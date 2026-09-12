@@ -1,5 +1,5 @@
 import { NAME_PARAM, MAX_PROMPT_BYTES, STATUS } from '../constants/promptsApi';
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import { Hono } from 'hono';
 import { PROMPT_NAME_RULE } from '../constants/savedPromptDocument';
 import { describePrompt, isValidPromptName } from '../services/savedPromptDocument';

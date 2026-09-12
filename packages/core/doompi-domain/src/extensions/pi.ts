@@ -1,4 +1,4 @@
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import { createDomainRuntime } from '../controllers/domainRuntime';
 import { createDomainTelemetry } from '../services/logSinkTelemetry';
 import { DOMAIN_SOURCE } from '../types/domains';

@@ -5,7 +5,7 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessTool,
   DoomHeadlessToolResult,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { DEFAULT_MAX_BYTES, formatSize, truncateHead, truncateLine } from '@earendil-works/pi-coding-agent';
 import { resolveInputPath, isWritableFile } from '@agimon-ai/doompi-hashline/files';
 import { GrepParamsSchema, type GrepParams } from '../../schemas/grepTool';

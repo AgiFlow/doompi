@@ -1,18 +1,21 @@
+import { createMinorModeCatalogHost } from '@agimon-ai/doompi-minor-mode/catalog';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE, type MinorModeCatalogService } from '@agimon-ai/doompi-minor-mode';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
+import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_HEADLESS_OWNER,
   type DoomHeadlessActivity,
   type DoomHeadlessExecutionContext,
-  type DoomHeadlessMinorMode,
   type DoomHeadlessSelection,
   type DoomHeadlessTool,
   requireDoomHeadlessHost,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import type { DoomServerBundleEntry } from '@agimon-ai/doompi-extension-contracts/server-facet';
+} from '@agimon-ai/doompi-core/headless';
+import type { DoomServerBundleEntry } from '@agimon-ai/doompi-core/server-facet';
 import { describe, expect, it, vi } from 'vitest';
 import { Type } from 'typebox';
-import { HeadlessHost } from '../../../../src/controllers/headlessHost';
-import type { HeadlessHostOptions, ResolvedHeadlessResource } from '../../../../src/types/server/headlessHost';
+import { HeadlessHost } from '@agimon-ai/doompi-core/main';
+import type { HeadlessHostOptions, ResolvedHeadlessResource } from '@agimon-ai/doompi-core/main';
 
 const baseCandidate: DoomServerBundleEntry = {
   packageName: '@test/base-facet',
@@ -40,7 +43,7 @@ const initialSelection: DoomHeadlessSelection = {
   activeLayers: ['feature'],
   domains: ['ops'],
   profile: 'reviewer',
-  minorModes: ['trace'],
+  state: { 'minor-mode': ['trace'] },
 };
 
 type Deferred = {
@@ -68,6 +71,7 @@ interface FixtureOptions {
 interface Fixture {
   readonly root: Context;
   readonly host: HeadlessHost;
+  readonly catalog: MinorModeCatalogService;
   readonly tools: { current: readonly DoomHeadlessTool[] };
   readonly resources: { current: readonly ResolvedHeadlessResource[] };
   readonly command: ReturnType<typeof vi.fn>;
@@ -103,7 +107,7 @@ async function createFixture(options: FixtureOptions = {}): Promise<Fixture> {
   const resourceRead = vi.fn((context: DoomHeadlessExecutionContext) => `base:${context.selection.profile}`);
   const featureResourceRead = vi.fn(
     (context: DoomHeadlessExecutionContext) =>
-      `feature:${context.selection.domains.join(',')}:${context.selection.minorModes.join(',')}`,
+      `feature:${context.selection.domains.join(',')}:${(context.selection.state?.['minor-mode'] ?? []).join(',')}`,
   );
   const activityStop = vi.fn();
   const activityStart = vi.fn(() => activityStop);
@@ -151,6 +155,19 @@ async function createFixture(options: FixtureOptions = {}): Promise<Fixture> {
     })
     .await();
 
+  const catalog = createMinorModeCatalogHost({
+    sessionKind: 'headless',
+    context: { sessionManager: { getSessionId: () => host.context.sessionId } },
+    async routeInvocation(_request, _source, invoke) {
+      host.assertActive();
+      return invoke();
+    },
+  });
+  await root.plugin((context) => {
+    context.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, catalog);
+    context.effect(() => () => catalog.dispose());
+  });
+
   await root
     .extend({ [DOOM_HEADLESS_OWNER]: baseCandidate })
     .plugin((facetContext: Context) => {
@@ -197,9 +214,9 @@ async function createFixture(options: FixtureOptions = {}): Promise<Fixture> {
     .extend({ [DOOM_HEADLESS_OWNER]: featureCandidate })
     .plugin((facetContext: Context) => {
       const service = requireDoomHeadlessHost(facetContext);
-      service.registerMinorMode(featureMode);
+      facetContext.plugin(serverMinorModes([featureMode]));
       service.registerTool({
-        when: { domain: 'ops', minorMode: 'trace' },
+        when: { domain: 'ops', state: { 'minor-mode': 'trace' } },
         name: 'feature_tool',
         description: 'Feature tool',
         parameters: Type.Object({}),
@@ -212,24 +229,24 @@ async function createFixture(options: FixtureOptions = {}): Promise<Fixture> {
         },
       });
       service.registerResource({
-        when: { domain: 'ops', minorMode: 'trace' },
+        when: { domain: 'ops', state: { 'minor-mode': 'trace' } },
         name: 'feature_resource',
         kind: 'skill',
         read: featureResourceRead,
       });
       service.registerCommand({
-        when: { domain: 'ops', minorMode: 'trace' },
+        when: { domain: 'ops', state: { 'minor-mode': 'trace' } },
         name: 'feature_command',
         description: 'Feature command',
         execute: featureCommand,
       });
       service.registerHook({
-        when: { domain: 'ops', minorMode: 'trace' },
+        when: { domain: 'ops', state: { 'minor-mode': 'trace' } },
         event: options.featureHookEvent ?? 'before_agent_start',
         handle: featureHook,
       } as Parameters<typeof service.registerHook>[0]);
       const activity: DoomHeadlessActivity = {
-        when: { domain: 'ops', minorMode: 'trace' },
+        when: { domain: 'ops', state: { 'minor-mode': 'trace' } },
         name: 'feature_activity',
         start: activityStart,
       };
@@ -240,6 +257,7 @@ async function createFixture(options: FixtureOptions = {}): Promise<Fixture> {
   host.setAvailableSources([baseCandidate.packageName, featureCandidate.packageName]);
   return {
     root,
+    catalog,
     host,
     tools,
     resources,
@@ -305,9 +323,9 @@ describe('HeadlessHost selection lifecycle (host-unit evidence)', () => {
         { systemPrompt: 'start\nbase\nfeature' },
       ]);
 
-      const mode = fixture.host.catalog.list()[0]!;
+      const mode = fixture.catalog.list()[0]!;
       await expect(
-        fixture.host.catalog.invoke(
+        fixture.catalog.invoke(
           {
             operationId: 'inspect-1',
             mode: {
@@ -331,7 +349,7 @@ describe('HeadlessHost selection lifecycle (host-unit evidence)', () => {
         }),
       );
 
-      await fixture.host.select({ domains: [], minorModes: [], profile: 'operator' });
+      await fixture.host.select({ domains: [], state: {}, profile: 'operator' });
       expect(await fixture.host.readResources()).toEqual([
         { source: baseCandidate.packageName, name: 'base_resource', kind: 'context', text: 'base:operator' },
       ]);
@@ -348,13 +366,13 @@ describe('HeadlessHost selection lifecycle (host-unit evidence)', () => {
         { systemPrompt: 'disabled\nbase' },
       ]);
       expect(fixture.activityStop).toHaveBeenCalledOnce();
-      expect(fixture.host.catalog.list()).toHaveLength(1);
+      expect(fixture.catalog.list()).toHaveLength(1);
 
-      await fixture.host.select({ majorMode: 'review', activeLayers: [], domains: [], minorModes: [] });
+      await fixture.host.select({ majorMode: 'review', activeLayers: [], domains: [], state: {} });
       expect(fixture.tools.current.map((tool) => tool.name)).toEqual(['base_tool']);
-      expect(fixture.host.catalog.list()).toHaveLength(1);
+      expect(fixture.catalog.list()).toHaveLength(1);
       await expect(
-        fixture.host.catalog.invoke(
+        fixture.catalog.invoke(
           {
             operationId: 'inspect-inactive',
             mode: {
@@ -368,20 +386,20 @@ describe('HeadlessHost selection lifecycle (host-unit evidence)', () => {
           },
           'test-client',
         ),
-      ).rejects.toThrow("Minor-mode owner '@test/feature-facet' is inactive");
+      ).rejects.toThrow("Contribution owner '@test/feature-facet' is inactive");
 
       await fixture.host.select({
         majorMode: 'development',
         activeLayers: ['feature'],
         domains: ['ops'],
-        minorModes: ['trace'],
+        state: { 'minor-mode': ['trace'] },
         profile: 'reviewer',
       });
       expect(fixture.host.context.selection).toEqual(initialSelection);
       expect(fixture.tools.current.map((tool) => tool.name)).toEqual(['base_tool', 'feature_tool']);
       expect(fixture.resources.current.map((resource) => resource.name)).toEqual(['base_resource', 'feature_resource']);
       expect(fixture.activityStart).toHaveBeenCalledTimes(2);
-      expect(fixture.host.catalog.list()[0]).toMatchObject({
+      expect(fixture.catalog.list()[0]).toMatchObject({
         registrationId: mode.registrationId,
         ownerGeneration: mode.ownerGeneration,
       });
@@ -409,7 +427,7 @@ describe('HeadlessHost selection lifecycle (host-unit evidence)', () => {
       await fixture.host.select({});
       const oldTool = appliedTools.find((tool) => tool.name === 'feature_tool')!;
       blockSelection = true;
-      const selecting = fixture.host.select({ domains: [], minorModes: [] });
+      const selecting = fixture.host.select({ domains: [], state: {} });
       expect(fixture.host.status.ready).toBe(false);
       expect(() => fixture.host.listCommands()).toThrow('blocked');
       await expect(oldTool.execute('in-flight', {}, undefined, undefined, fixture.host.context)).rejects.toThrow(
@@ -442,7 +460,7 @@ describe('HeadlessHost selection lifecycle (host-unit evidence)', () => {
         majorMode: 'review',
         activeLayers: [],
         domains: [],
-        minorModes: [],
+        state: {},
         profile: 'operator',
       });
       expect(fixture.host.status.ready).toBe(true);
@@ -470,7 +488,7 @@ describe('HeadlessHost selection lifecycle (host-unit evidence)', () => {
         await fixture.host.select({});
         const dispatch = fixture.host.dispatchHook(event, { systemPrompt: 'start', args: {} });
         await entered.promise;
-        await fixture.host.select({ domains: [], minorModes: [] });
+        await fixture.host.select({ domains: [], state: {} });
         expect(fixture.host.status.ready).toBe(true);
         release.resolve();
         await expect(dispatch).rejects.toThrow('Selection changed while');
@@ -536,7 +554,7 @@ describe('HeadlessHost selection lifecycle (host-unit evidence)', () => {
     await fixture.root.fiber.dispose();
     expect(fixture.activityStop).toHaveBeenCalledOnce();
     expect(fixture.host.status.ready).toBe(false);
-    expect(fixture.host.catalog.list()).toEqual([]);
+    expect(fixture.catalog.list()).toEqual([]);
     await fixture.host.close();
     expect(fixture.activityStop).toHaveBeenCalledOnce();
   });

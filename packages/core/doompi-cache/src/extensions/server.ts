@@ -1,4 +1,4 @@
-import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { cacheHooks, cacheResource } from '../controllers/cacheHooks';
 export const cacheServerFacet = defineServerPlugin({
   name: '@agimon-ai/doompi-cache',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { performanceEntries, PERFORMANCE_MARKERS } from '../support/performanceFixture.ts';
+import { performanceEntries, PERFORMANCE_MARKERS } from '../support/performanceFixture';
 
 describe('performanceEntries', () => {
   it('keeps both logical workloads repeatable and their IDs distinct', () => {

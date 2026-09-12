@@ -1,4 +1,4 @@
-import { REMOTE_CHANNEL_ROUTE, REMOTE_HTTP_ROUTE, type RemoteChannelScope } from '../../types/remoteAccess.ts';
+import { REMOTE_CHANNEL_ROUTE, REMOTE_HTTP_ROUTE, type RemoteChannelScope } from '../../types/remoteAccess';
 import { createSealedTransport, sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
 /** Each concurrent transport owns independent nonce counters and a purpose-bound server channel. */

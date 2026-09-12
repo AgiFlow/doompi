@@ -4,7 +4,7 @@ import type {
   CockpitContainerHarnessModule,
   CockpitContainerRequest,
   CockpitContainerStart,
-} from '@agimon-ai/doompi-extension-contracts/cockpit-container';
+} from '@agimon-ai/doompi-core/cockpit-container';
 import { buildCockpitPlan, type CockpitGitIdentity } from '../cockpitPlan';
 import { parseRunFlags, assertRunFlags } from '../runFlags';
 import { cockpitDockerfile } from '../sandboxImage';

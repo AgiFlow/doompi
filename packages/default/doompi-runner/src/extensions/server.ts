@@ -1,4 +1,4 @@
-import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { createHeadlessBashTool, createHeadlessRunnersCommand } from '../controllers/headless';
 import { api } from '../controllers/runnerLogApi';
 import { summarizeLog } from '../services/logReader';

@@ -16,7 +16,7 @@ import type {
   LeaderAction as DoomLeaderExtensionAction,
   LeaderSegment as DoomLeaderSegment,
   LeaderTone as DoomLeaderTone,
-} from '@agimon-ai/doompi-extension-contracts/leader';
+} from '@agimon-ai/doompi-core/leader';
 
 interface AppLeaderAction {
   type: 'app';

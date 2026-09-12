@@ -4,7 +4,7 @@ import type {
   SessionMessageArgs,
   SessionService,
   ThinkingLevel,
-} from '@agimon-ai/doompi-extension-contracts/session-protocol';
+} from '@agimon-ai/doompi-core/session-protocol';
 
 type Frame = Record<string, unknown>;
 const senders = new Map<string, (frame: Frame) => void>();

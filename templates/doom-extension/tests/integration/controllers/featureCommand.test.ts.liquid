@@ -1,5 +1,5 @@
-import { createPiTestHost } from '@agimon-ai/doompi-extension-contracts/testing';
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import { expect, it, vi } from 'vitest';
 import { {{ commandName | snakeCase | upper }}_COMMAND_NAME } from '../../../src/constants/{{ commandName | camelCase }}';
 import { create{{ commandName | pascalCase }}Command } from '../../../src/controllers/{{ commandName | camelCase }}Command';

@@ -1,7 +1,7 @@
 import {
   AGENT_PLUGIN_MCP_SCHEMA_URL,
   type DoomMcpAgentPluginProjectionSource,
-} from '@agimon-ai/doompi-extension-contracts/mcp-projection';
+} from '@agimon-ai/doompi-core/mcp-projection';
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import { validateHeaderName, validateHeaderValue } from 'node:http';

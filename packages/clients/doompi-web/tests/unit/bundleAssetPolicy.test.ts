@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { classifyOptionalBundleAssets } from '../../src/adapters/bundleAssetPolicy.ts';
-import { parseBundleAssetPolicy } from '../../src/types/bundleAssetPolicy.ts';
+import { classifyOptionalBundleAssets } from '@agimon-ai/doompi/builders/web';
+import { parseBundleAssetPolicy } from '@agimon-ai/doompi-core/web';
 
 describe('bundle asset policy', () => {
   it('defers Mermaid and the PDF worker through graph ownership, while shared output stays eager', () => {

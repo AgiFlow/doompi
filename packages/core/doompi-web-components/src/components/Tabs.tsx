@@ -2,7 +2,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { Tabs as TabsPrimitive } from 'radix-ui';
 import { Slot } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+import { cn } from '../lib/cn';
 
 /**
  * The look a tab wears, whether Radix drives it or a router link does. It is

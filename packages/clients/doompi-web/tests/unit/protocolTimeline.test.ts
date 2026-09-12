@@ -1,6 +1,6 @@
-import type { TranscriptItem, UserTranscriptItem } from '@agimon-ai/doompi-extension-contracts/session-protocol';
+import type { TranscriptItem, UserTranscriptItem } from '@agimon-ai/doompi-core/session-protocol';
 import { describe, expect, it } from 'vitest';
-import { toQueuedEntries, toTimelineEntries } from '../../src/web/lib/protocolTimeline.ts';
+import { toQueuedEntries, toTimelineEntries } from '../../src/web/lib/protocolTimeline';
 
 const MODEL = { provider: 'anthropic', id: 'opus' };
 

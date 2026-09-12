@@ -1,5 +1,5 @@
 import { renderMcpCall, renderMcpResult } from '../tui/mcpToolRender';
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import { createMcpPiRuntime } from '../controllers/piRuntime';
 import { createMcpCommand } from '../controllers/mcpCommand';
 import { createMcpToolCollection } from '../tools/mcpToolCollection';

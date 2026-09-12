@@ -1,4 +1,4 @@
-import type { DoomApi } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi } from '@agimon-ai/doompi-core/package-api';
 import { KEY_SEPARATOR } from '../constants/settings';
 import { repositoryDoomConfigPath } from '../services/config';
 import { configScopeOf } from '../services/configPolicy';

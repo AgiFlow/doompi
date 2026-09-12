@@ -1,1 +1,1 @@
-export * from '../services/harnessState';
+export * from '../composition/harnessState';

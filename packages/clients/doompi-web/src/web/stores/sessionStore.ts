@@ -20,7 +20,7 @@ import {
   setSessionNameCommand,
   setThinkingLevelCommand,
   steerCommand,
-} from '../lib/commands.ts';
+} from '../lib/commands';
 import {
   appendQueued,
   appendUserPrompt,
@@ -35,10 +35,10 @@ import {
   type QueuedEntry,
   type SessionState,
   type TimelineEntry,
-} from '../lib/sessionModel.ts';
-import { HISTORY_REQUEST_TYPE } from '../../types/hub.ts';
-import { sendFrame, sendHubFrame } from '../lib/transport.ts';
-import { activeSessionId, sessionsStore } from './sessionsStore.ts';
+} from '../lib/sessionModel';
+import { HISTORY_REQUEST_TYPE } from '../../types/hub';
+import { sendFrame, sendHubFrame } from '../lib/transport';
+import { activeSessionId, sessionsStore } from './sessionsStore';
 
 /**
  * One store per session, created on first touch.

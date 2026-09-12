@@ -1,4 +1,4 @@
-import type { DoomHelpContribution, DoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';
+import type { DoomHelpContribution, DoomHelpService } from '@agimon-ai/doompi-core/help';
 import { DefaultHelpSkillMaterializer, defaultHelpCacheRoot, HelpIndexCache } from '../helpStorage';
 import { DefaultHelpIndexResolver } from '../llmsResolver';
 import { DefaultHelpActivationService } from '../helpActivation';

@@ -1,6 +1,6 @@
 // @scaffold-generated
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import { COMMAND_NAME } from '../../../src/constants/sandbox';

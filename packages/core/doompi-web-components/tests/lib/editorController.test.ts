@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boundedEditorEdits, boundedEditorRanges } from '../../src/lib/editorController.ts';
+import { boundedEditorEdits, boundedEditorRanges } from '../../src/lib/editorController';
 
 describe('boundedEditorEdits', () => {
   it('orders nonoverlapping edits for a single CodeMirror transaction', () => {

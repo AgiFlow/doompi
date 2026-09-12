@@ -9,7 +9,7 @@ import {
   dropComposerState,
   resetComposerStore,
   updateComposerState,
-} from '../../src/web/stores/composerStore.ts';
+} from '../../src/web/stores/composerStore';
 
 function base64(bytes: readonly number[]): string {
   return btoa(String.fromCharCode(...bytes));

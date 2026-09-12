@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 test('offers suggestions on an empty session and sends one', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);

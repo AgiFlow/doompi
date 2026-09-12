@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CompatibilityOptions } from '../../src/types/interfaces/compatibility';
+import type { CompatibilityOptions } from '../../src/cli/commands/compat/types';
 import {
   adaptAntigravityMcpDefinition,
   antigravityCompatibilityArgs,
@@ -11,8 +11,8 @@ import {
   launchCompatibility,
   signalExitCode,
   supportsCodexManagedProfile,
-} from '../../src/services/compatibility';
-import type { CompatibilityContext } from '../../src/services/compatibilityContext';
+} from '../../src/cli/commands/compat/providers';
+import type { CompatibilityContext } from '../../src/cli/commands/compat/context';
 
 function baseOptions(overrides: Partial<CompatibilityOptions> = {}): CompatibilityOptions {
   return {

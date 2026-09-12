@@ -21,27 +21,27 @@ vi.mock('@agimon-ai/doompi-config/majorModes', () => ({
   filterHookDisabledLayers: mocks.filterHookDisabledLayers,
   loadMajorModesConfig: mocks.loadMajorModesConfig,
 }));
-vi.mock('../../src/services/extensionAssembler', () => ({
+vi.mock('../../src/builders/cli/extensionAssembler', () => ({
   PERSONA_ENTRY: 'persona',
   resolveExtensionComposition: mocks.resolveExtensionComposition,
 }));
-vi.mock('../../src/services/extensionCompiler', () => ({
+vi.mock('../../src/compiler', () => ({
   compileExtensionSet: mocks.compileExtensionSet,
   extensionSetManifestPath: mocks.extensionSetManifestPath,
 }));
-vi.mock('../../src/services/moduleResolution', () => ({ ownEntry: mocks.ownEntry }));
-vi.mock('../../src/services/runtimeBundle', () => ({
+vi.mock('../../src/builders/cli/entryResolution', () => ({ ownEntry: mocks.ownEntry }));
+vi.mock('../../src/builders/cli/runtimeBundle', () => ({
   compileModeExtension: mocks.compileModeExtension,
 }));
-vi.mock('../../src/services/syncState', () => ({
+vi.mock('../../src/composition/syncState', () => ({
   createMapResolvers: mocks.createMapResolvers,
   readSyncState: mocks.readSyncState,
   syncDirectory: mocks.syncDirectory,
   writeSyncState: mocks.writeSyncState,
 }));
 
-import { buildSyncedRuntime } from '../../src/services/syncedRuntimeBuilder';
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/services/syncStateContract';
+import { buildSyncedRuntime } from '../../src/builders/cli';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
 import { testMcpProjection } from '../helpers/mcpProjection';
 
 const state = {
@@ -150,6 +150,30 @@ describe('buildSyncedRuntime', () => {
       expect.any(String),
     );
   });
+  it('starts all mode variants before waiting and preserves their declared order', async () => {
+    const pending: (() => void)[] = [];
+    mocks.compileModeExtension.mockImplementation(
+      ({ outputName }: { outputName: string }) =>
+        new Promise((resolve) =>
+          pending.push(() =>
+            resolve({ bundle: `/dist/${outputName}.mjs`, compilerManifest: `/manifests/${outputName}.json` }),
+          ),
+        ),
+    );
+    const building = buildSyncedRuntime('/repo');
+    expect(pending).toHaveLength(4);
+    expect(mocks.writeSyncState).not.toHaveBeenCalled();
+    for (const complete of pending.toReversed()) complete();
+    const result = await building;
+    expect(Object.keys(result.bundles)).toEqual([
+      'fingerprint:copilot:loud',
+      'fingerprint:copilot:mute',
+      'fingerprint:minimal:loud',
+      'fingerprint:minimal:mute',
+    ]);
+    expect(mocks.writeSyncState).toHaveBeenCalledOnce();
+  });
+
   it('uses the supplied home directory when loading major-mode configuration', async () => {
     await buildSyncedRuntime('/repo', { HOME: '/wrong-home' }, '/configured-home');
 

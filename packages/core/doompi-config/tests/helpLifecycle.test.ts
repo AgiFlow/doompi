@@ -1,5 +1,5 @@
-import { createPiTestHost } from '@agimon-ai/doompi-extension-contracts/testing';
-import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
 import { describe, expect, it } from 'vitest';
 import { registerConfigExtension } from '../src/extensions/pi';
 import { CONFIG_HELP_SKILL, PACKAGE_SOURCE } from '../src/constants/config';

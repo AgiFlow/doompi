@@ -1,12 +1,9 @@
 import { ASK_USER_QUESTION_TOOL_NAME } from '../src/constants/tool';
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { DOOM_MINOR_MODE_CATALOG_SERVICE, type MinorModeRecord } from '@agimon-ai/doompi-extension-contracts/mode';
-import { DOOM_NARRATION_SERVICE } from '@agimon-ai/doompi-extension-contracts/narration';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE, type MinorModeRecord } from '@agimon-ai/doompi-minor-mode';
+import { DOOM_NARRATION_SERVICE } from '@agimon-ai/doompi-core/narration';
 import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
-import {
-  type DoomToolSurfaceService,
-  requireDoomToolSurface,
-} from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import { type DoomToolSurfaceService, requireDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type AskUserQuestionToolDependencies } from '../src/tools/askUserQuestion';

@@ -1,8 +1,8 @@
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-extension-contracts/config';
-import { type PiPluginContributions } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-import { DOOM_TRANSITION_SERVICE } from '@agimon-ai/doompi-extension-contracts/transition';
+import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
+import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import { DOOM_TRANSITION_SERVICE } from '@agimon-ai/doompi-core/transition';
 import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
 import { DOOM_VOICE_TOOLS_SERVICE, requireDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import type { Context } from '@deepseek-ai/cordis';

@@ -1,22 +1,24 @@
+import * as webSync from '../../src/builders/web';
+import * as webBundle from '../../src/builders/web/bundle';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import { computeServerSourcesHash } from '../../src/services/syncState';
+import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
+import { computeServerSourcesHash } from '../../src/composition/syncState';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { piExtensionAliasPath, writePiExtensionAlias } from '../../src/services/piExtensionAlias';
-import { PI_DISPATCHER_VERSION } from '../../src/services/piExtensionDispatcher';
-import { DUPLICATE_REGISTRATION_DRIFT } from '../../src/services/projectPiSettings';
-import * as projectPiSettings from '../../src/services/projectPiSettings';
-import * as serverBundleSync from '../../src/services/serverBundleSync';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/services/syncLocation';
+import { piExtensionAliasPath, writePiExtensionAlias } from '../../src/builders/cli/piExtensionAlias';
+import { PI_DISPATCHER_VERSION } from '../../src/builders/cli/piExtensionDispatcher';
+import { DUPLICATE_REGISTRATION_DRIFT } from '../../src/builders/cli/projectSettings';
+import * as projectPiSettings from '../../src/builders/cli/projectSettings';
+import * as serverBundleSync from '../../src/builders/server';
+import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
   publishSyncRegistration,
   readSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '../../src/services/syncRegistration';
+} from '@agimon-ai/doompi-core/sync-registration';
 import {
   collectDrift,
   formatSyncResult,
@@ -25,9 +27,9 @@ import {
   selectionCompositionFingerprint,
   selectionEnvironment,
   toSelection,
-} from '../../src/controllers/syncCommand';
+} from '../../src/cli/commands/sync';
 import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
-import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '../../src/exports/piSettings';
+import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '@agimon-ai/doompi-core/pi-settings';
 import {
   computeInputsHash,
   readSyncState,
@@ -37,7 +39,7 @@ import {
   type SyncState,
   writeSyncState,
 } from '../../src/exports/syncState';
-import { createLayerResolvers } from '../../src/services/extensionAssembler';
+import { createLayerResolvers } from '../../src/builders/cli/extensionAssembler';
 import { testMcpProjection } from '../helpers/mcpProjection';
 
 const mocks = vi.hoisted(() => ({
@@ -60,13 +62,13 @@ const mocks = vi.hoisted(() => ({
   missingLayerPackageSpecifiers: vi.fn(() => [] as string[]),
 }));
 
-vi.mock('../../src/services/bootstrapLocator', () => ({
+vi.mock('../../src/builders/cli/bootstrapLocator', () => ({
   readBootstrapStatus: mocks.readBootstrapStatus,
 }));
-vi.mock('../../src/services/syncedRuntimeBuilder', () => ({
+vi.mock('../../src/builders/cli', () => ({
   buildSyncedRuntime: mocks.buildSyncedRuntime,
 }));
-vi.mock('../../src/services/layerPackageInstaller', () => ({
+vi.mock('../../src/composition/layerPackageInstaller', () => ({
   ensureLayerPackages: mocks.ensureLayerPackages,
   missingLayerPackageSpecifiers: mocks.missingLayerPackageSpecifiers,
 }));
@@ -717,23 +719,18 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(cliOnly?.webDirectory).toBeNull();
 
     const webRoot = path.join(root, 'web-host');
-    fs.mkdirSync(path.join(webRoot, 'dist'), { recursive: true });
-    fs.writeFileSync(
-      path.join(webRoot, 'dist', 'bundler.mjs'),
-      `import fs from 'node:fs';
-import path from 'node:path';
-export async function bundleCockpitWeb({ outDir }) {
-  const assetsDir = path.join(outDir, 'web');
-  fs.mkdirSync(assetsDir, { recursive: true });
-  fs.writeFileSync(path.join(assetsDir, 'index.html'), '<html></html>');
-  const plugins = path.join(outDir, 'plugins');
-  fs.mkdirSync(plugins, { recursive: true });
-  fs.writeFileSync(path.join(plugins, 'composition.js'), 'export {};');
-  fs.writeFileSync(path.join(plugins, 'manifest.json'), '{}');
-  return { assetsDir, pluginIds: [] };
-}
-`,
-    );
+    fs.mkdirSync(webRoot, { recursive: true });
+    fs.writeFileSync(path.join(webRoot, 'package.json'), JSON.stringify({ name: '@agimon-ai/doompi-web' }));
+    vi.spyOn(webBundle, 'bundleCockpitWeb').mockImplementation(async ({ outDir }) => {
+      const assetsDir = path.join(outDir, 'web');
+      fs.mkdirSync(assetsDir, { recursive: true });
+      fs.writeFileSync(path.join(assetsDir, 'index.html'), '<html></html>');
+      const plugins = path.join(outDir, 'plugins');
+      fs.mkdirSync(plugins, { recursive: true });
+      fs.writeFileSync(path.join(plugins, 'composition.js'), 'export {};');
+      fs.writeFileSync(path.join(plugins, 'manifest.json'), '{}');
+      return { assetsDir, pluginsDir: plugins, pluginIds: [] };
+    });
     const environment = { ...environmentFor(root), DOOMPI_WEB_PACKAGE_ROOT: webRoot };
     const buildsBefore = mocks.buildSyncedRuntime.mock.calls.length;
     await Promise.all([
@@ -784,6 +781,46 @@ export async function bundleCockpitWeb({ outDir }) {
     fs.appendFileSync(state.serverBundle!.descriptorPath, ' ');
     expect(() => readSyncRegistration(root, homeFor(root))).toThrow(/server descriptor hash/);
     expect(await new SyncCommand().execute(['sync', '--check'], environmentFor(root), root, capture().output)).toBe(1);
+  });
+
+  it('runs web beside runtime and waits for every target before cleaning up a failed generation', async () => {
+    const root = makeRepository();
+    const environment = environmentFor(root);
+    const location = resolveSyncLocation(root, homeFor(root));
+    let finishWeb!: () => void;
+    let webDirectory = '';
+    const web = vi.spyOn(webSync, 'syncWebBundle').mockImplementation(({ outputDirectory }) => {
+      webDirectory = outputDirectory;
+      return new Promise((resolve) => {
+        finishWeb = () => resolve({ status: 'skipped', reason: 'test' });
+      });
+    });
+    mocks.buildSyncedRuntime.mockImplementationOnce(async () => {
+      await vi.waitFor(() => expect(web).toHaveBeenCalledOnce());
+      throw new Error('runtime compilation failed');
+    });
+    let settled = false;
+    const syncing = new SyncCommand().execute(['sync'], environment, root, capture().output);
+    const checked = expect(syncing).rejects.toThrow('runtime compilation failed');
+    void syncing.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    try {
+      await vi.waitFor(() => expect(webDirectory).not.toBe(''));
+      expect(fs.existsSync(path.dirname(webDirectory))).toBe(true);
+      expect(settled).toBe(false);
+      expect(fs.existsSync(location.registrationPath)).toBe(false);
+    } finally {
+      finishWeb();
+      await checked;
+      web.mockRestore();
+    }
+    expect(fs.existsSync(path.dirname(webDirectory))).toBe(false);
   });
 
   it('preserves the selected generation when server bundle compilation fails', async () => {

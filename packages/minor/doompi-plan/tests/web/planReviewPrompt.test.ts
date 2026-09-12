@@ -1,5 +1,5 @@
-import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { ToolPromptDialog } from '@agimon-ai/doompi-web-contracts';
+import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import type { ToolPromptDialog } from '@agimon-ai/doompi-core/web';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CONTINUE_PLANNING_CHOICE,

@@ -25,7 +25,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { InlineAgent } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+import type { InlineAgent } from '../../schemas/subagentTool';
 
 import { type SessionScope, scopeSuspendedDir } from '../sessionPaths';
 import { parseVersioned } from '../versioned';

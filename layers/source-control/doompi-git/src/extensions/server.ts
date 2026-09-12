@@ -1,4 +1,4 @@
-import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { createGitSession } from '../controllers/gitSession';
 import { api } from '../controllers/hubApi';
 import { createWorktreesChannel } from '../controllers/worktreesChannel';

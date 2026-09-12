@@ -1,6 +1,3 @@
-vi.mock('@agimon-ai/doompi-extension-contracts/pi-extension', () =>
-  vi.importActual('../../../core/doompi-extension-contracts/src/exports/piExtension'),
-);
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,7 +8,7 @@ const hostMocks = vi.hoisted(() => ({
   plugin: vi.fn(),
 }));
 
-vi.mock('../../../core/doompi-extension-contracts/src/controllers/cordisHost', () => ({
+vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
   connectDoomCordisHost: hostMocks.connect,
 }));
 

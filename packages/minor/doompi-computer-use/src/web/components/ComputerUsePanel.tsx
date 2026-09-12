@@ -1,4 +1,4 @@
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
 import { activationUrl, COMPUTER_USE_DEFAULT_DURATION_MS, computerUseChannelType } from '../../types/computerUseApi';

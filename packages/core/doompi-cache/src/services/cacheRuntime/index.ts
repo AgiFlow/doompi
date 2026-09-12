@@ -5,7 +5,7 @@ import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   readMinorModeCatalog,
   type MinorModeRecord,
-} from '@agimon-ai/doompi-extension-contracts/mode';
+} from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { OwnedEnvironmentValue } from '../environment';

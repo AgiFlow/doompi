@@ -1,7 +1,4 @@
-import {
-  DOOM_SERVER_HOST_SERVICE,
-  type DoomServerHostService,
-} from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 import { teamServerFacet } from '../../../src/extensions/server';

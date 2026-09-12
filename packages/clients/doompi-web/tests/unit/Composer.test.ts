@@ -2,11 +2,11 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../src/web/components/PluginSurface.tsx', () => ({
+vi.mock('../../src/web/components/PluginSurface', () => ({
   PluginSurface: () => createElement('i', { 'data-testid': 'plugin-composer-action' }),
 }));
 
-import { Composer } from '../../src/web/features/session/Composer.tsx';
+import { Composer } from '../../src/web/features/session/Composer';
 
 describe('Composer plugin actions', () => {
   it('renders one action surface without hiding it at either breakpoint', () => {

@@ -21,7 +21,7 @@ export const DOOMPI_RUNTIME_PACKAGES = new Set([
   '@agimon-ai/doompi-cache',
   '@agimon-ai/doompi-config',
   '@agimon-ai/doompi-domain',
-  '@agimon-ai/doompi-extension-contracts',
+  '@agimon-ai/doompi-core',
   '@agimon-ai/doompi-major-mode',
   '@agimon-ai/doompi-notification',
   '@agimon-ai/doompi-profile',
@@ -37,7 +37,7 @@ const PLATFORM_PACKAGE_SUFFIX = /-(darwin|linux)-(arm64|x64)$/u;
 const EXTERNAL_RUNTIME_PACKAGES = new Set(['@earendil-works/pi-coding-agent']);
 
 const WEB_RUNTIME_PACKAGES = new Set([
-  '@agimon-ai/doompi-extension-contracts',
+  '@agimon-ai/doompi-core',
   '@agimon-ai/doompi-web-components',
   '@agimon-ai/doompi-web-security',
   '@earendil-works/pi-client',

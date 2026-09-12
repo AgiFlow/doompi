@@ -1,4 +1,4 @@
-import { createPiTestHost } from '@agimon-ai/doompi-extension-contracts/testing';
+import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import { goalExtension as registerGoalExtension } from '../../../src/extensions/pi';

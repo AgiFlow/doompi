@@ -1,4 +1,4 @@
-import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
+import type { ToolResultView } from '@agimon-ai/doompi-core/web';
 
 /** The TUI's collapsed budgets: ten preview lines for a write, twenty for a listing. */
 export const WRITE_COLLAPSED_LINES = 10;

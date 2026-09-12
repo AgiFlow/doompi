@@ -1,8 +1,5 @@
 import { askUserToolRender } from '../../src/tui/askUserToolRender';
-import {
-  DOOM_ASK_USER_BLOCKED_EVENT,
-  DOOM_ASK_USER_PROMPT_EVENT,
-} from '@agimon-ai/doompi-extension-contracts/ask-user';
+import { DOOM_ASK_USER_BLOCKED_EVENT, DOOM_ASK_USER_PROMPT_EVENT } from '@agimon-ai/doompi-core/ask-user';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';

@@ -1,9 +1,9 @@
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
 import {
   DOOM_API_CALLER_DEVICE_ID_HEADER,
   DOOM_API_CALLER_LOCALITY_HEADER,
   DOOM_API_CALLER_STEP_UP_HEADER,
-} from '@agimon-ai/doompi-extension-contracts/package-api';
+} from '@agimon-ai/doompi-core/package-api';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createComputerUseApi as createComputerUseApiImpl,

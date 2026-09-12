@@ -1,4 +1,4 @@
-import { type DoomHeadlessTool, type DoomHeadlessToolResult } from '@agimon-ai/doompi-extension-contracts/headless';
+import { type DoomHeadlessTool, type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
 import type { QuestionParams } from '../schemas/questionnaire';
 import { QuestionParamsSchema } from '../schemas/questionnaire';
 import { QuestionnaireCoordinator } from '../services/questionnaireCoordinator';

@@ -6,7 +6,7 @@ import {
   optionListHint,
   SectionLabel,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolPromptDialog, ToolPromptRenderProps } from '@agimon-ai/doompi-web-contracts';
+import type { ToolPromptDialog, ToolPromptRenderProps } from '@agimon-ai/doompi-core/web';
 import { useEffect, useRef, useState } from 'react';
 import { PLAN_REVIEW_OPTIONS, PLAN_REVIEW_TITLE } from '../../types/planApi';
 

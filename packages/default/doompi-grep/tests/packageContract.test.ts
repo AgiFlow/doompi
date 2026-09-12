@@ -25,11 +25,7 @@ const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 const manifestPath = path.join(packageDirectory, 'package.json');
 const piPeers = ['@earendil-works/pi-coding-agent', '@earendil-works/pi-tui'] as const;
-const doomDependencies = [
-  '@agimon-ai/doompi-extension-contracts',
-  '@agimon-ai/doompi-hashline',
-  '@agimon-ai/doompi-ui',
-] as const;
+const doomDependencies = ['@agimon-ai/doompi-core', '@agimon-ai/doompi-hashline', '@agimon-ai/doompi-ui'] as const;
 
 async function readManifest(): Promise<PackageManifest> {
   return JSON.parse(await readFile(manifestPath, 'utf8')) as PackageManifest;

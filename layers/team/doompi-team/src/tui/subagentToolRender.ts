@@ -1,4 +1,4 @@
-import type { SubagentToolParams } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+import type { SubagentToolParams } from '../schemas/subagentTool';
 import { DoomToolCall, renderToolHeading } from '@agimon-ai/doompi-ui/toolChrome';
 import type { Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
 import { type Component, truncateToWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui';

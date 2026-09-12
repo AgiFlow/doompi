@@ -11,7 +11,7 @@ import {
   type FablePlanResultPayload,
   FablePlanStartSchema,
   type FablePlanStartPayload,
-} from '@agimon-ai/doompi-extension-contracts/fable-plan';
+} from '../../schemas/fablePlanApi';
 import { Check } from 'typebox/value';
 import type {
   ResolvedSubagentCapabilityCeiling,

@@ -4,7 +4,7 @@
  * testing fixture rather than a hand-rolled stub, so a change to the tool
  * message contract breaks this story at the type level.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { DescribeAuthorToolsToolCard } from './DescribeAuthorToolsToolCard';
 
 const SHORT = ['author viewport tools', '- annotate_region', '- revise_fragment'].join('\n');

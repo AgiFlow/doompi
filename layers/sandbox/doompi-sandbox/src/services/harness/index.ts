@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import type { SandboxLaunchRequest } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
+import type { SandboxLaunchRequest } from '@agimon-ai/doompi-core/sandbox-harness';
 import { findDevcontainerConfig, runDevcontainerSession } from '../devcontainer/runtime';
 import { DEVCONTAINER_DISABLED_ENV } from '../devcontainer';
 import { availableLoginPorts } from '../loginPorts';

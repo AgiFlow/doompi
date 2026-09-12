@@ -1,11 +1,11 @@
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
   type DoomHeadlessCommand,
   type DoomHeadlessExecutionContext,
   type DoomHeadlessResource,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 import { sandboxServerFacet as sandboxHeadlessFacet } from '../../../src/extensions/server';

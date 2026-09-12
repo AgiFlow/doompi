@@ -12,7 +12,7 @@
  * ponytail: the stub answers reads only. Nothing here exercises save or
  * delete; add matching branches if a story needs the mutation states.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { API_BASE_PATH, PROMPTS_PATH } from '../../constants/webPrompts';
 import { type SavedPromptListResponse } from '../../types/webPrompts';
 import { PromptsDialogHost } from './PromptsDialogHost';

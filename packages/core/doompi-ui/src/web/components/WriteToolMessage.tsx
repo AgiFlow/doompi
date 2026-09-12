@@ -8,7 +8,7 @@ import {
   toolTone,
   useSyntaxLines,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import { resultText, type WriteCallView, writeCallView } from '../lib/builtinToolView';
 
 /**

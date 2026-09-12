@@ -7,7 +7,7 @@
  * variant sets the surface and the text colour the way a caller has to: a
  * scanner needs the dark modules darker than what surrounds them.
  */
-import { QrCode } from './QrCode.tsx';
+import { QrCode } from './QrCode';
 
 const PAIRING_URL = 'https://doompi-8f21c4.trycloudflare.com/pair#k=7Qb2Xr9LmT4';
 

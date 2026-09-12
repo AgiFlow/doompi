@@ -1,5 +1,5 @@
-import { sealedHttpSession } from './sealedSession.ts';
-import { DEV_PROXY_TARGETS_ROUTE, type DevProxyStateView, type DevProxyTarget } from '../../types/devProxy.ts';
+import { sealedHttpSession } from './sealedSession';
+import { DEV_PROXY_TARGETS_ROUTE, type DevProxyStateView, type DevProxyTarget } from '../../types/devProxy';
 
 /**
  * The dev proxy control plane, seen from the browser.

@@ -1,7 +1,7 @@
 import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { DoomConfigContext, DoomConfigPendingSelection } from '@agimon-ai/doompi-config/types';
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
-import type { TransitionSelectionSnapshot } from '@agimon-ai/doompi-extension-contracts/transition';
+import type { TransitionSelectionSnapshot } from '@agimon-ai/doompi-core/transition';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';

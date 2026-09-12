@@ -3,9 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
-import { packagedVersion } from './packageVersion.ts';
-import { contentTypeFor, resolveAssetPath } from '../services/staticAssets.ts';
-import type { WebServer, WebServerOptions } from '../types/bridge.ts';
+import { packagedVersion } from './packageVersion';
+import { contentTypeFor, resolveAssetPath } from '../services/staticAssets';
+import type { WebServer, WebServerOptions } from '../types/bridge';
 
 const INDEX_FILE = 'index.html';
 const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';

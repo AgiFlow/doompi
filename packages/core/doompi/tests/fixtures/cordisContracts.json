@@ -1,6 +1,6 @@
 [
   {
-    "packageName": "@agimon-ai/doompi-extension-contracts",
+    "packageName": "@agimon-ai/doompi-core",
     "subpath": "./ask-user",
     "values": {
       "DOOM_ASK_USER_PROMPT_EVENT": "doom/ask-user/prompt",
@@ -8,7 +8,7 @@
     }
   },
   {
-    "packageName": "@agimon-ai/doompi-extension-contracts",
+    "packageName": "@agimon-ai/doompi-core",
     "subpath": "./cordis-host",
     "values": {
       "DOOM_CORDIS_HOST_ABI_VERSION": 1,
@@ -19,7 +19,7 @@
     "functions": ["connectDoomCordisHost", "finalizeDoomCordisHost", "installDoomCordisHost"]
   },
   {
-    "packageName": "@agimon-ai/doompi-extension-contracts",
+    "packageName": "@agimon-ai/doompi-core",
     "subpath": "./help",
     "values": {
       "DOOM_HELP_SERVICE": "doom/help"
@@ -27,7 +27,7 @@
     "functions": ["createDoomHelpService", "readDoomHelpService", "requireDoomHelpService"]
   },
   {
-    "packageName": "@agimon-ai/doompi-extension-contracts",
+    "packageName": "@agimon-ai/doompi-core",
     "subpath": "./narration",
     "values": {
       "DOOM_NARRATION_SERVICE": "doom/narration"
@@ -35,7 +35,7 @@
     "functions": ["createNarrationRequest", "readDoomNarrationService", "requireDoomNarrationService"]
   },
   {
-    "packageName": "@agimon-ai/doompi-extension-contracts",
+    "packageName": "@agimon-ai/doompi-core",
     "subpath": "./skills",
     "values": {
       "DOOM_SKILL_SOURCES_SERVICE": "doom/skill-sources"
@@ -43,7 +43,7 @@
     "functions": ["createDoomSkillSourcesService", "readDoomSkillSourcesService", "requireDoomSkillSourcesService"]
   },
   {
-    "packageName": "@agimon-ai/doompi-extension-contracts",
+    "packageName": "@agimon-ai/doompi-core",
     "subpath": "./tool-overrides",
     "values": {
       "DOOM_TOOL_OVERRIDES_SERVICE": "doom/tool-overrides"
@@ -51,7 +51,7 @@
     "functions": ["createDoomToolOverridesService", "readDoomToolOverrides", "requireDoomToolOverrides"]
   },
   {
-    "packageName": "@agimon-ai/doompi-extension-contracts",
+    "packageName": "@agimon-ai/doompi-core",
     "subpath": "./ui-hub",
     "values": {
       "DOOM_UI_HUB_SERVICE": "doom/ui-hub"
@@ -70,13 +70,13 @@
     "packageName": "@agimon-ai/doompi-voice",
     "subpath": "./voice-reload-handoff",
     "values": {
-      "VOICE_RELOAD_HANDOFF_REGISTRY_KEY": "@agimon-ai/doompi-extension-contracts.voice-reload-handoff.v1",
+      "VOICE_RELOAD_HANDOFF_REGISTRY_KEY": "@agimon-ai/doompi-core.voice-reload-handoff.v1",
       "VOICE_RELOAD_HANDOFF_TTL_MS": 30000
     },
     "functions": ["createVoiceReloadHandoffStore"]
   },
   {
-    "packageName": "@agimon-ai/doompi-extension-contracts",
+    "packageName": "@agimon-ai/doompi-core",
     "subpath": "./background-work",
     "values": {
       "DOOM_BACKGROUND_WORK_SERVICE": "doom/background-work",
@@ -85,7 +85,7 @@
     "functions": ["readDoomBackgroundWorkService"]
   },
   {
-    "packageName": "@agimon-ai/doompi-extension-contracts",
+    "packageName": "@agimon-ai/doompi-team",
     "subpath": "./delegation",
     "values": {
       "DOOM_DELEGATION_SERVICE": "doom/delegation",
@@ -99,7 +99,7 @@
     "functions": ["readDoomDelegationService"]
   },
   {
-    "packageName": "@agimon-ai/doompi-extension-contracts",
+    "packageName": "@agimon-ai/doompi-team",
     "subpath": "./subagent-policy",
     "values": {
       "DOOM_SUBAGENT_POLICY_SERVICE": "doom/subagent-policy"
@@ -107,7 +107,7 @@
     "functions": ["readDoomSubagentPolicyService"]
   },
   {
-    "packageName": "@agimon-ai/doompi-extension-contracts",
+    "packageName": "@agimon-ai/doompi-team",
     "subpath": "./fable-plan",
     "values": {
       "DOOM_FABLE_PLAN_SERVICE": "doom/fable-plan"
@@ -115,7 +115,7 @@
     "functions": ["readDoomFablePlanService"]
   },
   {
-    "packageName": "@agimon-ai/doompi-extension-contracts",
+    "packageName": "@agimon-ai/doompi-core",
     "subpath": "./protocol",
     "functions": ["createProtocolRuntime", "defineJob", "defineNotification", "defineRequestReply"]
   }

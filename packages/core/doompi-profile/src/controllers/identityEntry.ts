@@ -1,7 +1,7 @@
 import {
   DOOM_PROFILE_IDENTITY_ENTRY_TYPE,
   type ProfileIdentityProjection,
-} from '@agimon-ai/doompi-extension-contracts/profile-identity';
+} from '@agimon-ai/doompi-core/profile-identity';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { PersonaIdentity } from '@agimon-ai/doompi-config/profiles';
 

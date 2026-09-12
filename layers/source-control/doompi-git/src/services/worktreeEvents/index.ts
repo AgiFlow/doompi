@@ -1,4 +1,4 @@
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
 
 export const GIT_WORKTREE_LIFECYCLE_EVENT = 'git_worktree_lifecycle';
 export const GIT_WORKTREE_MESSAGE_EVENT = 'git_worktree_message';

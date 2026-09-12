@@ -13,7 +13,7 @@ import {
   TrashIcon,
   type DotTone,
 } from '@agimon-ai/doompi-web-components';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
 import type { WebTask } from '../../types/webTasks';

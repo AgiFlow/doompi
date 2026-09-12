@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 test('keeps the conversation full width and moves composition surfaces into mobile drawers', async ({
   page,

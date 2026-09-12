@@ -9,8 +9,8 @@
  * declared open beside its own viewport throws before it can paint. Everything
  * inside the surface is the real part: only the <li> wrapper is stood in for.
  */
-import { STATUS_TONES } from '../types/tone.ts';
-import { Toast, ToastClose, ToastDescription, ToastTitle, toastVariants } from './Toast.tsx';
+import { STATUS_TONES } from '../types/tone';
+import { Toast, ToastClose, ToastDescription, ToastTitle, toastVariants } from './Toast';
 
 const meta = {
   title: 'Components/Toast',

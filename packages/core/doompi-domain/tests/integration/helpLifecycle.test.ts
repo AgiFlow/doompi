@@ -1,9 +1,5 @@
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import {
-  DOOM_HELP_SERVICE,
-  type DoomHelpContribution,
-  type DoomHelpService,
-} from '@agimon-ai/doompi-extension-contracts/help';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_HELP_SERVICE, type DoomHelpContribution, type DoomHelpService } from '@agimon-ai/doompi-core/help';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { domainsExtension } from '../../src/extensions/pi';

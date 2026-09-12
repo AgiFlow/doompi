@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import { Hono } from 'hono';
 import { baselineOf } from '../services/fileChanges';
 import { lineDiff, lineDiffFromEmpty } from '../services/lineDiff';

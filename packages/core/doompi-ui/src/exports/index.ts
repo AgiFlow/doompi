@@ -6,25 +6,25 @@ export {
   type DoomConfigActionInput,
   type DoomConfigContributionHandle,
   type DoomConfigContributionOptions,
-} from '@agimon-ai/doompi-extension-contracts/config';
+} from '@agimon-ai/doompi-core/config';
 export {
   type DoomFooterContributionDefinition,
   type DoomFooterContributionHandle,
   type DoomFooterContributionValue,
-} from '@agimon-ai/doompi-extension-contracts/footer';
+} from '@agimon-ai/doompi-core/footer';
 export {
   type DoomLeaderContributionHandle,
   type LeaderBinding as DoomLeaderBinding,
   type LeaderCommand as DoomLeaderCommand,
   type LeaderContribution as DoomLeaderContribution,
   type LeaderSegment as DoomLeaderSegment,
-} from '@agimon-ai/doompi-extension-contracts/leader';
+} from '@agimon-ai/doompi-core/leader';
 export {
   DOOM_UI_HUB_SERVICE,
   type DoomUiHubService,
   readDoomUiHub,
   requireDoomUiHub,
-} from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-core/ui-hub';
 export {
   createUiTelemetry,
   UI_EVENT,

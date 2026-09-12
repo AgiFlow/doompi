@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { DoomHubChannelHost } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { DoomHubChannelHost } from '@agimon-ai/doompi-core/hub-channel';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FileEditPaths } from '../../../src/services/fileEditPaths';
 import { createFilesChannel, readSessionFiles } from '../../../src/controllers/webFilesChannel';

@@ -74,7 +74,7 @@ import {
   Tooltip,
   TooltipProvider,
   TooltipTrigger,
-} from '../../src/exports/index.ts';
+} from '../../src/exports';
 
 const html = (node: React.ReactElement): string => renderToStaticMarkup(node);
 

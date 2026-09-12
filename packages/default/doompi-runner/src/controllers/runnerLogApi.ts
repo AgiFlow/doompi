@@ -1,4 +1,4 @@
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import fs from 'node:fs';

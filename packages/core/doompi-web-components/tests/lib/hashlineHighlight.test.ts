@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { hashlineGroups, hashlineGroupsKey } from '../../src/lib/hashlineHighlight.ts';
-import type { PresentedLine } from '../../src/lib/hashlineView.ts';
+import { hashlineGroups, hashlineGroupsKey } from '../../src/lib/hashlineHighlight';
+import type { PresentedLine } from '../../src/lib/hashlineView';
 
 const tagged = (line: number, content: string): PresentedLine => ({
   type: 'tagged',

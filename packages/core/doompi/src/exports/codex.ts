@@ -1,1 +1,1 @@
-export * from '../services/compatibility/codex';
+export * from '../cli/commands/compat/providers/codex';

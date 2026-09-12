@@ -67,7 +67,8 @@
   },
   "dependencies": {
     "@agimon-ai/doompi-config": "workspace:*",
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
+    "@agimon-ai/doompi-minor-mode": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-voice": "workspace:*",

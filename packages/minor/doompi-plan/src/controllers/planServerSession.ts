@@ -1,7 +1,8 @@
-import { type DoomHeadlessHostService } from '@agimon-ai/doompi-extension-contracts/headless';
-import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import { type DoomHeadlessToolResult } from '@agimon-ai/doompi-extension-contracts/headless';
-import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-extension-contracts/mode';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
+import { type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
+import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -66,7 +67,7 @@ export function createPlanServerSession(
 ): Omit<DoomServerSessionPlugin, 'tools'> & { tools: Parameters<DoomHeadlessHostService['registerTool']>[0][] } {
   let flavor: 'normal' | 'debug' | 'fable' = 'normal';
   let modeOwner: MinorModeOwner | undefined;
-  const modeSelected = (): boolean => host.context.selection.minorModes.includes(PLAN_MODE_ID);
+  const modeSelected = (): boolean => (host.context.selection.state?.['minor-mode'] ?? []).includes(PLAN_MODE_ID);
   const modeState = (): MinorModeState => {
     const active = modeSelected();
     return {
@@ -88,8 +89,12 @@ export function createPlanServerSession(
   };
   const publishMode = (): void => modeOwner?.publish();
   const selectPlan = async (enabled: boolean, nextFlavor = flavor): Promise<void> => {
-    const modes = host.context.selection.minorModes.filter((mode) => mode !== PLAN_MODE_ID);
-    await host.changeSelection({ axis: 'minorModes', minorModes: enabled ? [...modes, PLAN_MODE_ID] : modes });
+    const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== PLAN_MODE_ID);
+    await host.changeSelection({
+      axis: 'state',
+      key: 'minor-mode',
+      values: enabled ? [...modes, PLAN_MODE_ID] : modes,
+    });
     flavor = nextFlavor;
     publishMode();
   };
@@ -147,16 +152,16 @@ export function createPlanServerSession(
     },
   }).createOwner(undefined);
   return {
-    minorModes: [modeOwner],
+    services: [serverMinorModes([modeOwner])],
     toolRestrictions: [
       {
-        minorMode: PLAN_MODE_ID,
+        when: { state: { 'minor-mode': PLAN_MODE_ID } },
         allowedTools: PLAN_MODE_ALLOWED_TOOLS,
       },
     ],
     resources: [
       {
-        when: { minorMode: PLAN_MODE_ID },
+        when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
         name: 'doompi-use-plan',
         kind: 'skill',
         read: () => readPlanSkill(),
@@ -164,7 +169,7 @@ export function createPlanServerSession(
     ],
     tools: [
       {
-        when: { minorMode: PLAN_MODE_ID },
+        when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
         name: RECORD_DEBUG_EVIDENCE_TOOL,
         label: 'Record Debug Evidence',
         description: 'Record bounded debug evidence as optional planning context.',
@@ -193,7 +198,7 @@ export function createPlanServerSession(
         },
       },
       {
-        when: { minorMode: PLAN_MODE_ID },
+        when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
         name: RUN_FABLE_PLAN_TOOL,
         label: 'Run Fable Plan',
         description: 'Run the configured local Fable planning broker with bounded evidence.',
@@ -215,7 +220,7 @@ export function createPlanServerSession(
         },
       },
       {
-        when: { minorMode: PLAN_MODE_ID },
+        when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
         name: WRITE_PLAN_TOOL,
         label: 'Write Plan',
         description: 'Save the implementation plan already presented in the session.',
@@ -256,7 +261,7 @@ export function createPlanServerSession(
         },
       },
       {
-        when: { minorMode: PLAN_MODE_ID },
+        when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
         name: COMPLETE_PLAN_TOOL,
         label: 'Complete Plan',
         description: 'Ask for explicit exit-or-continue approval for the saved implementation plan.',
@@ -294,7 +299,7 @@ export function createPlanServerSession(
     ],
     hooks: [
       {
-        when: { minorMode: PLAN_MODE_ID },
+        when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
         event: 'before_agent_start',
         handle(event) {
           const prompt = typeof event.systemPrompt === 'string' ? event.systemPrompt : '';

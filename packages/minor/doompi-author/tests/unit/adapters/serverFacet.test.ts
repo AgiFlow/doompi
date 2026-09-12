@@ -1,15 +1,9 @@
-import {
-  DOOM_HEADLESS_HOST_SERVICE,
-  type DoomHeadlessHostService,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import {
-  DOOM_SERVER_HOST_SERVICE,
-  type DoomServerHostService,
-} from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { Context } from '@deepseek-ai/cordis';
+import { DOOM_HEADLESS_HOST_SERVICE, type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
+import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
-import { createDoomPluginRegistry } from '@agimon-ai/doompi-extension-contracts/plugin-protocol';
-import { createDoomServerHost } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { createDoomPluginRegistry } from '@agimon-ai/doompi-core/plugin-protocol';
+import { createDoomServerHost } from '@agimon-ai/doompi-core/server-facet';
 import { api } from '../../../src/controllers/authorApi';
 import { readAuthorPrompt } from '../../../src/services/authorPrompt';
 import authorServerFacetDefault, { authorServerFacet } from '../../../src/extensions/server';
@@ -85,12 +79,9 @@ describe('authorServerFacet', () => {
         return registration();
       },
     };
-    const context = {
-      get(name: string) {
-        return name === DOOM_HEADLESS_HOST_SERVICE ? agent : harness.context.get(name);
-      },
-      effect() {},
-    } as unknown as Context;
+    const context = new Context();
+    context.provide(DOOM_SERVER_HOST_SERVICE, harness.context.get(DOOM_SERVER_HOST_SERVICE));
+    context.provide(DOOM_HEADLESS_HOST_SERVICE, agent as unknown as DoomHeadlessHostService);
     const dispose = await authorServerFacet.apply(context);
     const tool = tools.find((tool) => tool.name === 'open_authoring_file')!;
     await expect(
@@ -100,6 +91,7 @@ describe('authorServerFacet', () => {
       } as never),
     ).resolves.toMatchObject({ isError: true });
     await dispose?.();
+    await context.fiber.dispose();
   });
 
   it('routes a validated workspace call with its authenticated connection ID', async () => {

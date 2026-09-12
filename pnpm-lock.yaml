@@ -72,6 +72,12 @@ importers:
       '@agimon-ai/vibe-lint':
         specifier: 0.0.1-alpha.29
         version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
+      '@agimon-ai/vibe-lint-plugin-doom-cli':
+        specifier: workspace:*
+        version: link:packages/tooling/vibe-lint-plugin-doom-cli
+      '@agimon-ai/vibe-lint-plugin-doom-core':
+        specifier: workspace:*
+        version: link:packages/tooling/vibe-lint-plugin-doom-core
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:packages/tooling/vibe-lint-plugin-doom-extension
@@ -126,9 +132,12 @@ importers:
 
   layers/ask-user/doompi-user-feedback:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-extension-contracts
+        version: link:../../../packages/core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-minor-mode
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-ui
@@ -138,9 +147,6 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../../packages/core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -190,9 +196,9 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-extension-contracts
+        version: link:../../../packages/core/doompi-core
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -218,9 +224,9 @@ importers:
 
   layers/sandbox/doompi-sandbox:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-extension-contracts
+        version: link:../../../packages/core/doompi-core
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -249,15 +255,12 @@ importers:
 
   layers/source-control/doompi-git:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-extension-contracts
+        version: link:../../../packages/core/doompi-core
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../../packages/core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -307,9 +310,12 @@ importers:
 
   layers/task/doompi-task:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-extension-contracts
+        version: link:../../../packages/core/doompi-core
+      '@agimon-ai/doompi-team':
+        specifier: workspace:*
+        version: link:../../team/doompi-team
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-telemetry
@@ -319,9 +325,6 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../../packages/core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -374,9 +377,9 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-extension-contracts
+        version: link:../../../packages/core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-telemetry
@@ -386,9 +389,6 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../../packages/core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -440,13 +440,14 @@ importers:
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/clients/doompi-desktop:
+    dependencies:
+      '@agimon-ai/doompi-config':
+        specifier: workspace:*
+        version: link:../../core/doompi-config
     devDependencies:
       '@agimon-ai/doompi':
         specifier: workspace:*
         version: link:../../core/doompi
-      '@agimon-ai/doompi-config':
-        specifier: workspace:*
-        version: link:../../core/doompi-config
       '@agimon-ai/doompi-web':
         specifier: workspace:*
         version: link:../doompi-web
@@ -480,15 +481,12 @@ importers:
       '@agimon-ai/doompi':
         specifier: workspace:*
         version: link:../../core/doompi
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
         version: link:../../core/doompi-web-security
@@ -592,18 +590,18 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../doompi-config
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../doompi-core
       '@agimon-ai/doompi-domain':
         specifier: workspace:*
         version: link:../doompi-domain
-      '@agimon-ai/doompi-extension-contracts':
-        specifier: workspace:*
-        version: link:../doompi-extension-contracts
-      '@agimon-ai/doompi-kernel':
-        specifier: workspace:*
-        version: link:../doompi-kernel
       '@agimon-ai/doompi-major-mode':
         specifier: workspace:*
         version: link:../doompi-major-mode
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../doompi-minor-mode
       '@agimon-ai/doompi-notification':
         specifier: workspace:*
         version: link:../doompi-notification
@@ -649,6 +647,12 @@ importers:
       '@simplewebauthn/server':
         specifier: ^14.0.1
         version: 14.0.1
+      '@tailwindcss/vite':
+        specifier: 4.3.3
+        version: 4.3.3(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+      '@vitejs/plugin-react':
+        specifier: 6.1.1
+        version: 6.1.1(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
       cross-spawn:
         specifier: 7.0.6
         version: 7.0.6
@@ -667,9 +671,15 @@ importers:
       rolldown:
         specifier: 1.2.7
         version: 1.2.7
+      tailwindcss:
+        specifier: 4.3.3
+        version: 4.3.3
       typebox:
         specifier: 1.3.25
         version: 1.3.25
+      vite:
+        specifier: 8.2.2
+        version: 8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
       ws:
         specifier: 8.21.3
         version: 8.21.3
@@ -680,6 +690,9 @@ importers:
       '@agimon-ai/doompi-runner':
         specifier: workspace:*
         version: link:../../default/doompi-runner
+      '@agimon-ai/vibe-lint-plugin-doom-cli':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-cli
       '@earendil-works/pi-ai':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
@@ -713,9 +726,9 @@ importers:
 
   packages/core/doompi-autostop:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../doompi-extension-contracts
+        version: link:../doompi-core
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -747,9 +760,12 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../doompi-extension-contracts
+        version: link:../doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../doompi-minor-mode
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -781,9 +797,9 @@ importers:
 
   packages/core/doompi-config:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../doompi-extension-contracts
+        version: link:../doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../doompi-telemetry
@@ -813,14 +829,126 @@ importers:
         specifier: 5.0.0
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/core/doompi-core:
+    dependencies:
+      '@agimon-ai/doompi-telemetry':
+        specifier: workspace:*
+        version: link:../doompi-telemetry
+      '@agimon-ai/doompi-web-security':
+        specifier: workspace:*
+        version: link:../doompi-web-security
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+      '@earendil-works/chord':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@earendil-works/pi-agent-core':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+      '@earendil-works/pi-ai':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+      '@earendil-works/pi-protocol':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@earendil-works/pi-server':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+      '@earendil-works/pi-session-backend-sqlite-node':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+      '@hono/node-server':
+        specifier: 2.1.1
+        version: 2.1.1(hono@4.13.5)
+      '@simplewebauthn/server':
+        specifier: ^14.0.1
+        version: 14.0.1
+      cross-spawn:
+        specifier: 7.0.6
+        version: 7.0.6
+      gpt-tokenizer:
+        specifier: 4.0.0
+        version: 4.0.0
+      hono:
+        specifier: 4.13.5
+        version: 4.13.5
+      minimatch:
+        specifier: 10.2.6
+        version: 10.2.6
+      protobufjs:
+        specifier: 8.8.0
+        version: 8.8.0
+      typebox:
+        specifier: 1.3.25
+        version: 1.3.25
+      ws:
+        specifier: 8.21.3
+        version: 8.21.3
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@agimon-ai/vibe-lint-plugin-doom-core':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-core
+      '@earendil-works/pi-client':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@earendil-works/pi-tui':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
+      '@types/cross-spawn':
+        specifier: 6.0.6
+        version: 6.0.6
+      '@types/node':
+        specifier: 26.4.1
+        version: 26.4.1
+      '@types/react':
+        specifier: 19.2.18
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: 19.2.7
+        version: 19.2.7(@types/react@19.2.18)
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: 19.2.8
+        version: 19.2.8(react@19.2.8)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/core/doompi-domain:
     dependencies:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../doompi-extension-contracts
+        version: link:../doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../doompi-minor-mode
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../doompi-telemetry
@@ -840,9 +968,6 @@ importers:
         specifier: 2.9.0
         version: 2.9.0
     devDependencies:
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../doompi-web-contracts
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:../../tooling/vibe-lint-plugin-doom-extension
@@ -868,59 +993,7 @@ importers:
         specifier: 5.0.0
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/core/doompi-extension-contracts:
-    dependencies:
-      '@agimon-ai/doompi-kernel':
-        specifier: workspace:*
-        version: link:../doompi-kernel
-      '@deepseek-ai/cordis':
-        specifier: 4.0.2
-        version: 4.0.2
-      '@earendil-works/chord':
-        specifier: 0.85.1
-        version: 0.85.1
-      typebox:
-        specifier: 1.3.25
-        version: 1.3.25
-    devDependencies:
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
-      '@types/node':
-        specifier: 26.4.1
-        version: 26.4.1
-      '@vitest/coverage-v8':
-        specifier: 4.1.11
-        version: 4.1.11(vitest@4.1.11)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 4.1.11
-        version: 4.1.11(@opentelemetry/api@1.9.1)(@types/node@26.4.1)(@vitest/coverage-v8@4.1.11)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
   packages/core/doompi-hashline:
-    devDependencies:
-      '@types/node':
-        specifier: 26.4.1
-        version: 26.4.1
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/core/doompi-kernel:
     devDependencies:
       '@types/node':
         specifier: 26.4.1
@@ -943,9 +1016,12 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../doompi-extension-contracts
+        version: link:../doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../doompi-minor-mode
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../doompi-telemetry
@@ -955,6 +1031,46 @@ importers:
       '@agimon-ai/doompi-voice':
         specifier: workspace:*
         version: link:../../minor/doompi-voice
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+      typebox:
+        specifier: 1.3.25
+        version: 1.3.25
+    devDependencies:
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+      '@earendil-works/pi-tui':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@types/node':
+        specifier: 26.4.1
+        version: 26.4.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/core/doompi-minor-mode:
+    dependencies:
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../doompi-core
+      '@agimon-ai/doompi-telemetry':
+        specifier: workspace:*
+        version: link:../doompi-telemetry
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -989,9 +1105,9 @@ importers:
 
   packages/core/doompi-notification:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../doompi-extension-contracts
+        version: link:../doompi-core
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1023,9 +1139,12 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../doompi-extension-contracts
+        version: link:../doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../doompi-minor-mode
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../doompi-telemetry
@@ -1042,9 +1161,6 @@ importers:
         specifier: 1.3.25
         version: 1.3.25
     devDependencies:
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../doompi-web-contracts
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:../../tooling/vibe-lint-plugin-doom-extension
@@ -1075,12 +1191,12 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../doompi-config
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../doompi-core
       '@agimon-ai/doompi-domain':
         specifier: workspace:*
         version: link:../doompi-domain
-      '@agimon-ai/doompi-extension-contracts':
-        specifier: workspace:*
-        version: link:../doompi-extension-contracts
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../doompi-telemetry
@@ -1146,12 +1262,15 @@ importers:
 
   packages/core/doompi-ui:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../doompi-extension-contracts
+        version: link:../doompi-core
       '@agimon-ai/doompi-hashline':
         specifier: workspace:*
         version: link:../doompi-hashline
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../doompi-minor-mode
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../doompi-telemetry
@@ -1165,9 +1284,6 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../doompi-web-contracts
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
@@ -1311,39 +1427,6 @@ importers:
         specifier: 5.0.0
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/core/doompi-web-contracts:
-    devDependencies:
-      '@tanstack/store':
-        specifier: 0.11.1
-        version: 0.11.1
-      '@types/node':
-        specifier: 26.4.1
-        version: 26.4.1
-      '@types/react':
-        specifier: 19.2.18
-        version: 19.2.18
-      '@types/react-dom':
-        specifier: 19.2.7
-        version: 19.2.7(@types/react@19.2.18)
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      react:
-        specifier: 19.2.8
-        version: 19.2.8
-      react-dom:
-        specifier: 19.2.8
-        version: 19.2.8(react@19.2.8)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
   packages/core/doompi-web-security:
     devDependencies:
       '@types/node':
@@ -1367,15 +1450,12 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../core/doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1401,9 +1481,9 @@ importers:
 
   packages/default/doompi-edit:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
       '@agimon-ai/doompi-hashline':
         specifier: workspace:*
         version: link:../../core/doompi-hashline
@@ -1413,9 +1493,6 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1465,9 +1542,9 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../core/doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
@@ -1477,9 +1554,6 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
         version: link:../../core/doompi-web-security
@@ -1541,9 +1615,9 @@ importers:
 
   packages/default/doompi-grep:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
       '@agimon-ai/doompi-hashline':
         specifier: workspace:*
         version: link:../../core/doompi-hashline
@@ -1553,9 +1627,6 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1608,9 +1679,9 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../core/doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
@@ -1645,18 +1716,15 @@ importers:
 
   packages/default/doompi-log:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
         version: link:../../core/doompi-web-security
@@ -1715,18 +1783,15 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../core/doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@agimon-ai/mcp-proxy':
         specifier: 0.31.22
         version: 0.31.22(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(zod@4.5.4))(zod@4.5.4)
@@ -1788,18 +1853,15 @@ importers:
 
   packages/default/doompi-prompt:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
         version: link:../../core/doompi-web-security
@@ -1852,9 +1914,9 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../core/doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
       '@agimon-ai/doompi-hashline':
         specifier: workspace:*
         version: link:../../core/doompi-hashline
@@ -1864,9 +1926,6 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1913,9 +1972,9 @@ importers:
 
   packages/default/doompi-runner:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
@@ -1925,9 +1984,6 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
         version: link:../../core/doompi-web-security
@@ -2030,15 +2086,15 @@ importers:
 
   packages/minor/doompi-author:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../../core/doompi-minor-mode
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
         version: link:../../core/doompi-web-security
@@ -2115,15 +2171,15 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../core/doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../../core/doompi-minor-mode
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -2167,18 +2223,18 @@ importers:
 
   packages/minor/doompi-goal:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../../core/doompi-minor-mode
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -2225,12 +2281,12 @@ importers:
 
   packages/minor/doompi-help:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
-      '@agimon-ai/doompi-web-contracts':
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
+        version: link:../../core/doompi-minor-mode
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -2259,18 +2315,18 @@ importers:
 
   packages/minor/doompi-loop:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../../core/doompi-minor-mode
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../core/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -2317,9 +2373,15 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../core/doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../../core/doompi-minor-mode
+      '@agimon-ai/doompi-team':
+        specifier: workspace:*
+        version: link:../../../layers/team/doompi-team
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
@@ -2329,9 +2391,6 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
         version: link:../../core/doompi-web-security
@@ -2381,9 +2440,12 @@ importers:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../core/doompi-config
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../../core/doompi-minor-mode
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
@@ -2393,9 +2455,6 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
         version: link:../../core/doompi-web-security
@@ -2451,9 +2510,12 @@ importers:
 
   packages/minor/doompi-workflow:
     dependencies:
-      '@agimon-ai/doompi-extension-contracts':
+      '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../../core/doompi-extension-contracts
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../../core/doompi-minor-mode
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
@@ -2463,9 +2525,6 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-contracts':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-contracts
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
         version: link:../../core/doompi-web-security
@@ -2521,6 +2580,50 @@ importers:
       typescript:
         specifier: 7.0.2
         version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/tooling/vibe-lint-plugin-doom-cli:
+    dependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+    devDependencies:
+      '@agimon-ai/vibe-lint':
+        specifier: 0.0.1-alpha.29
+        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
+      '@types/node':
+        specifier: 26.4.1
+        version: 26.4.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@6.0.3)
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/tooling/vibe-lint-plugin-doom-core:
+    dependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+    devDependencies:
+      '@agimon-ai/vibe-lint':
+        specifier: 0.0.1-alpha.29
+        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
+      '@types/node':
+        specifier: 26.4.1
+        version: 26.4.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@6.0.3)
       vitest:
         specifier: 5.0.0
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.4.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))

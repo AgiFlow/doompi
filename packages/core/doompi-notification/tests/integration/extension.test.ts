@@ -1,16 +1,10 @@
-import {
-  DOOM_ASK_USER_BLOCKED_EVENT,
-  DOOM_ASK_USER_PROMPT_EVENT,
-} from '@agimon-ai/doompi-extension-contracts/ask-user';
+import { DOOM_ASK_USER_BLOCKED_EVENT, DOOM_ASK_USER_PROMPT_EVENT } from '@agimon-ai/doompi-core/ask-user';
 import {
   connectDoomCordisHost,
   DOOM_CORDIS_HOST_QUERY_CHANNEL,
   installDoomCordisHost,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import {
-  DOOM_NOTIFICATION_ENTRY_TYPE,
-  readDoomNotificationService,
-} from '@agimon-ai/doompi-extension-contracts/notification';
+} from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_NOTIFICATION_ENTRY_TYPE, readDoomNotificationService } from '@agimon-ai/doompi-core/notification';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

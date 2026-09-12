@@ -53,8 +53,8 @@ import type {
   DoomChildSessionSource,
   DoomChildSessionServiceProvider,
   DoomChildSessionTerminalPiForkSource,
-} from '@agimon-ai/doompi-extension-contracts/child-session';
-import type { InlineAgent } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+} from '@agimon-ai/doompi-core/child';
+import type { InlineAgent } from '../../schemas/subagentTool';
 import type { SessionManager } from '@earendil-works/pi-coding-agent';
 import { PI_RUNTIME_NAME } from '../../types/environment';
 import type { NativeRunCoordinatorContract } from '../nativeRunCoordinator';

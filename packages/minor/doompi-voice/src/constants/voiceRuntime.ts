@@ -1,4 +1,4 @@
-import { DOOM_VOICE_SOURCE } from '../constants/voiceTools';
+import { DOOM_VOICE_SOURCE } from './voiceTools';
 
 export const VOICE_SOURCE = DOOM_VOICE_SOURCE;
 

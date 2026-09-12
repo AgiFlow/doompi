@@ -1,39 +1,33 @@
+import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
 import {
   formatVoiceActivity,
   formatAutoCaptureActivity,
   type VoiceFooterContributionValue,
 } from '../models/voiceActivity';
-import {
-  definePiTool,
-  type PiEventHandlers,
-  type PiPluginContributions,
-} from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiTool, type PiEventHandlers, type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import { COMMAND_NAME } from '../constants/voice';
 import path from 'node:path';
 import { globalDoomConfigPath, resolveVoiceConfig } from '@agimon-ai/doompi-config/config';
 import { getHarnessState } from '@agimon-ai/doompi-config/harnessStore';
-import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-extension-contracts/ask-user';
-import {
-  DOOM_CORDIS_SESSION_SERVICE,
-  requireDoomCordisSession,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import type { LeaderBinding } from '@agimon-ai/doompi-extension-contracts/leader';
+import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-core/ask-user';
+import { DOOM_CORDIS_SESSION_SERVICE, requireDoomCordisSession } from '@agimon-ai/doompi-core/cordis-host';
+import type { LeaderBinding } from '@agimon-ai/doompi-core/leader';
 import {
   defineMinorMode,
   type MinorModeOwner,
   type MinorModeOwnerActionContext,
   type MinorModeState,
-} from '@agimon-ai/doompi-extension-contracts/mode';
+} from '@agimon-ai/doompi-minor-mode';
 import {
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
   isNarrationRequest,
-} from '@agimon-ai/doompi-extension-contracts/narration';
+} from '@agimon-ai/doompi-core/narration';
 import { DOOM_VOICE_AUTO_MODE_ID as AUTO_COMMAND_NAME } from '../constants/voiceTools';
 import { createDoomVoiceToolsService, type VoiceToolSessionHandle } from '../services/voiceTools';
 import { DOOM_VOICE_TOOLS_SERVICE, VOICE_MODE_TOOL_NAMES, VOICE_NARRATE_TOOL_NAME } from '../constants/voiceTools';
 import { createVoiceReloadHandoffStore } from '../services/voiceReloadHandoff';
-import { type DoomToolRestriction } from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import { type DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { AutonomousTurnNonceFactory } from '../services/autonomousTurn';
@@ -823,8 +817,9 @@ export function createVoiceRuntime(
           cordis.effect(() => disposeAutoCaptureEvents);
         },
       },
+      piMinorModes([mode]),
     ],
-    minorModes: [mode],
+
     toolRestrictions: [
       {
         source: VOICE_SOURCE,

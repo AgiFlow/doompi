@@ -1,7 +1,7 @@
 /**
  * Expected failures, kept private to this package.
  *
- * `@agimon-ai/doompi-extension-contracts` does not export `invalidRequest` or
+ * `@agimon-ai/doompi-core` does not export `invalidRequest` or
  * an expected-error base, so this mirrors doompi-team's shape rather than
  * reaching across a layer boundary for it. The duplication is deliberate and
  * small; a shared helper would be the better answer only once a third package

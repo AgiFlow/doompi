@@ -1,1 +1,1 @@
-export * from '../controllers/syncCommand';
+export * from '../cli/commands/sync';

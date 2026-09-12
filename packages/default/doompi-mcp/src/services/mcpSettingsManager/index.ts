@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { DoomOAuthRedirect, DoomRepositorySyncView } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomOAuthRedirect, DoomRepositorySyncView } from '@agimon-ai/doompi-core/package-api';
 import type { McpServerStateChange, McpToolInfo, TokenStore } from '@agimon-ai/mcp-proxy';
 import type {
   McpAuthorizationFlow,

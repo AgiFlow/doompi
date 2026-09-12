@@ -5,7 +5,7 @@ import {
   restoreComposerDrafts,
   saveComposerDrafts,
   updateComposerState,
-} from '../../src/web/stores/composerStore.ts';
+} from '../../src/web/stores/composerStore';
 
 const store = new Map<string, string>();
 let throwOnWrite = false;

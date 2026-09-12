@@ -5,7 +5,7 @@ import {
   MessageLines,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   type WorkflowToolName,
   WORKFLOW_TOOL_NAMES,

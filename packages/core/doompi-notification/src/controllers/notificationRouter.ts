@@ -5,7 +5,7 @@ import {
   type DoomNotificationRequest,
   type DoomNotificationService,
   normalizeDoomNotificationRequest,
-} from '@agimon-ai/doompi-extension-contracts/notification';
+} from '@agimon-ai/doompi-core/notification';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { sendSystemNotification } from './systemNotification';
 

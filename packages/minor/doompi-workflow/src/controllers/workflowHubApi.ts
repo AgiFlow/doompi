@@ -8,7 +8,7 @@ import {
   type WorkflowRunRecord,
   type WorkflowStage,
 } from '@agimon-ai/workflow-mcp';
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import { type Context, Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { createWorkflowTerminalService } from '../services/workflowTerminal';

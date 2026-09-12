@@ -1,1 +1,1 @@
-export * from '../services/projectTrust';
+export * from '../composition/projectTrust';

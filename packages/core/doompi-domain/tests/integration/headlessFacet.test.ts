@@ -1,4 +1,4 @@
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,7 +7,7 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
   DoomHeadlessResource,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { domainServerFacet as domainHeadlessFacet } from '../../src/extensions/server';
@@ -53,7 +53,7 @@ async function setup() {
     repoRoot: root,
     sessionId: 'test',
     environment: {},
-    selection: { majorMode: 'development', activeLayers: [], domains: ['default'], minorModes: [] },
+    selection: { majorMode: 'development', activeLayers: [], domains: ['default'], state: {} },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {
       entries: () => [],

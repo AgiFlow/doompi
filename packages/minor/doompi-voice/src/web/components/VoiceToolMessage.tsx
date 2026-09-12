@@ -6,7 +6,7 @@ import {
   VolumeIcon,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import { VOICE_NARRATE_TOOL, voiceCallSummary, voiceResultLines } from '../lib/voiceToolRender';
 
 /**

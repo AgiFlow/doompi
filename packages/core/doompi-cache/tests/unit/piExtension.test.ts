@@ -13,7 +13,7 @@ vi.mock('../../src/services/cacheRuntime', () => ({
 }));
 vi.mock('../../src/services/promptCacheTelemetry', () => ({ PromptCacheTelemetryService: vi.fn() }));
 vi.mock('#doompi-cache-optimizer-source', () => ({ default: mocks.optimizer }));
-vi.mock('@agimon-ai/doompi-extension-contracts/pi-extension', () => ({
+vi.mock('@agimon-ai/doompi-core/pi-extension', () => ({
   definePiExtension: (_name: string, factory: (...args: unknown[]) => unknown) => {
     mocks.factory.mockImplementation(factory);
     return mocks.mount;

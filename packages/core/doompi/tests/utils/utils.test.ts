@@ -1,23 +1,23 @@
+import { ownEntry } from '../../src/builders/cli/entryResolution';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { isRecord, readJson, writeFileAtomic, writeJson } from '../../src/exports/json';
+import { isRecord, readJson, writeFileAtomic, writeJson } from '@agimon-ai/doompi-core/json';
 import {
   consumerPackageEntries,
   consumerPackageEntry,
   localEntries,
   optionalPackageEntries,
   optionalPackageEntry,
-  ownEntry,
   packageEntries,
   packageEntry,
   piCliPath,
   splitPackageSpecifier,
-} from '../../src/exports/moduleResolution';
+} from '@agimon-ai/doompi-core/module-resolution';
 import { findRepositoryRoot, isRepositoryRoot } from '../../src/exports/repository';
-import { toClaudeToolName, toPiToolName } from '../../src/exports/toolNames';
+import { toClaudeToolName, toPiToolName } from '@agimon-ai/doompi-core/tool-names';
 
 /** The meta-package root, whose manifest declares the local Doom closure. */
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
@@ -297,7 +297,7 @@ describe('harness utilities', () => {
     });
 
     it('resolves a fixed core extension from the host package closure', () => {
-      expect(optionalPackageEntry('@agimon-ai/doompi-config/extensions/pi')).toBeDefined();
+      expect(optionalPackageEntry('@agimon-ai/doompi-config/extensions/pi', import.meta.url)).toBeDefined();
     });
 
     it('resolves an optional layer extension to a runtime artifact', () => {
@@ -308,7 +308,7 @@ describe('harness utilities', () => {
     });
 
     it('uses vanilla Pi discovery metadata for a bare fixed core package', () => {
-      const entries = packageEntries('@agimon-ai/doompi-config');
+      const entries = packageEntries('@agimon-ai/doompi-config', import.meta.url);
 
       expect(entries).toHaveLength(1);
       expect(entries[0]?.replaceAll('\\', '/')).toMatch(/doompi-config\/dist\/extensions\/pi\.mjs$/u);
@@ -322,7 +322,7 @@ describe('harness utilities', () => {
     });
 
     it('resolves its own entries next to this module, matching the running extension', () => {
-      const entry = ownEntry('modeCatalog');
+      const entry = ownEntry('contextCatalog');
 
       expect(path.basename(path.dirname(entry))).toBe('extensions');
       // Source resolves TypeScript; published runtime resolves the compiled entry.

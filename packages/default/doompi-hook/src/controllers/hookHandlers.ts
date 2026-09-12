@@ -29,7 +29,7 @@ import {
   type ResolvedHook,
 } from '../types/hooks';
 
-import type { PiEventHandlers } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
 import type { HookRuntimeResolver, HookSession } from '../services/hookRuntime/type';
 
 /** Everything one dispatch resolved before it ran anything. */

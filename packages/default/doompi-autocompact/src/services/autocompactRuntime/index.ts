@@ -12,9 +12,9 @@ import {
   type DoomContextContributionError,
   type DoomContextContributionsService,
   type DoomContextContributionsSnapshot,
-} from '@agimon-ai/doompi-extension-contracts/context-contributions';
-import type { DoomFooterContributionHandle } from '@agimon-ai/doompi-extension-contracts/footer';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-core/context-contributions';
+import type { DoomFooterContributionHandle } from '@agimon-ai/doompi-core/footer';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from '@earendil-works/pi-coding-agent';
 import {

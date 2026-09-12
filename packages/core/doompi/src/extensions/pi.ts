@@ -1,8 +1,8 @@
 import { pathToFileURL } from 'node:url';
-import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';
+import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-core/child-process';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { acquireBootstrapClaim } from '../models/bootstrapClaim';
-import { findSyncedRoot, readStartupBootstrapStatus } from '../services/bootstrapLocator';
+import { acquireBootstrapClaim } from '../builders/cli/bootstrapClaim';
+import { findSyncedRoot, readStartupBootstrapStatus } from '../builders/cli/bootstrapLocator';
 
 type ExtensionFactory = (api: ExtensionAPI) => void | Promise<void>;
 

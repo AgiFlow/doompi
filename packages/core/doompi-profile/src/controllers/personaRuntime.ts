@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config';
-import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-extension-contracts/config';
-import { type PiEventHandlers, type PiPluginContributions } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
+import { type PiEventHandlers, type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import type { Context } from '@deepseek-ai/cordis';
 import { PROFILE_EVENT, type ProfileTelemetry } from '../types/telemetry';
 

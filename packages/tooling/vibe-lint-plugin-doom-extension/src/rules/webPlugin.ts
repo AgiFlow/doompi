@@ -23,7 +23,8 @@ const LEGACY_HUB_SENDERS = new Set(['@agimon-ai/doompi-git']);
 const WEB_TSCONFIG = 'tsconfig.json';
 const TYPES_ROOT = 'src/types';
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
-const CONTRACTS_PACKAGE = '@agimon-ai/doompi-web-contracts';
+const CONTRACTS_PACKAGE = '@agimon-ai/doompi-core';
+const WEB_CONTRACTS_ENTRY = `${CONTRACTS_PACKAGE}/web`;
 const COMPONENTS_PACKAGE = '@agimon-ai/doompi-web-components';
 /** The shared sealed transport; a plugin calling bare fetch sends plaintext to the tunnel's relay. */
 const SECURITY_BROWSER_PACKAGE = '@agimon-ai/doompi-web-security/browser';
@@ -32,7 +33,7 @@ const ALLOWED_BARE_SPECIFIERS = new Set([
   'react/jsx-runtime',
   '@tanstack/store',
   '@tanstack/react-store',
-  CONTRACTS_PACKAGE,
+  WEB_CONTRACTS_ENTRY,
   COMPONENTS_PACKAGE,
   SECURITY_BROWSER_PACKAGE,
 ]);
@@ -46,7 +47,7 @@ const ALLOWED_BARE_SPECIFIERS = new Set([
  * alternative, and those drift silently when the slot contract changes.
  */
 const STORY_SUFFIX = '.stories.tsx';
-const CONTRACTS_TESTING_PACKAGE = `${CONTRACTS_PACKAGE}/testing`;
+const CONTRACTS_TESTING_PACKAGE = `${WEB_CONTRACTS_ENTRY}/testing`;
 const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const WEB_PLUGIN_EXPORT = 'webPlugin';
 const DEFINE_WEB_PLUGIN = 'defineWebPlugin';
@@ -385,7 +386,7 @@ export const webPluginImportAllowlist: RuleDefinition = {
       }
     }
     if (offenders.size === 0) return null;
-    return `Web plugin code may import only react, @tanstack/store, @tanstack/react-store, ${CONTRACTS_PACKAGE}, ${COMPONENTS_PACKAGE}, its own ${WEB_ROOT}/** and src/types/** or src/constants/**; found: ${[...offenders].join(', ')}.`;
+    return `Web plugin code may import only react, @tanstack/store, @tanstack/react-store, ${WEB_CONTRACTS_ENTRY}, ${COMPONENTS_PACKAGE}, its own ${WEB_ROOT}/** and src/types/** or src/constants/**; found: ${[...offenders].join(', ')}.`;
   },
 };
 
@@ -521,7 +522,7 @@ function exportsWebPlugin(sourceFile: ts.SourceFile): boolean {
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteralLike(statement.moduleSpecifier)) {
       const bindings = statement.importClause?.namedBindings;
-      if (statement.moduleSpecifier.text === CONTRACTS_PACKAGE && bindings && ts.isNamedImports(bindings)) {
+      if (statement.moduleSpecifier.text === WEB_CONTRACTS_ENTRY && bindings && ts.isNamedImports(bindings)) {
         importsHelper ||= bindings.elements.some(
           (element) => (element.propertyName ?? element.name).text === DEFINE_WEB_PLUGIN,
         );
@@ -573,6 +574,6 @@ export const webPluginEntry: RuleDefinition = {
       const forwarded = readResolvedSource(target);
       if (forwarded && exportsWebPlugin(forwarded)) return null;
     }
-    return `The doompiWeb client entry must export ${WEB_PLUGIN_EXPORT} built with ${DEFINE_WEB_PLUGIN}(...) imported from ${CONTRACTS_PACKAGE}, directly or through one re-export; the host registry imports { ${WEB_PLUGIN_EXPORT} } from it.`;
+    return `The doompiWeb client entry must export ${WEB_PLUGIN_EXPORT} built with ${DEFINE_WEB_PLUGIN}(...) imported from ${WEB_CONTRACTS_ENTRY}, directly or through one re-export; the host registry imports { ${WEB_PLUGIN_EXPORT} } from it.`;
   },
 };

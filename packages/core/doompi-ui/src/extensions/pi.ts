@@ -1,10 +1,10 @@
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-import { DOOM_UI_HUB_SERVICE } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+import { DOOM_UI_HUB_SERVICE } from '@agimon-ai/doompi-core/ui-hub';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   createMinorModeCatalogClient,
   requireMinorModeCatalog,
-} from '@agimon-ai/doompi-extension-contracts/mode';
+} from '@agimon-ai/doompi-minor-mode';
 import { PACKAGE_SOURCE } from '../constants/ui';
 import { projectMinorModeRecords } from '../models/uiState';
 import { createUiTelemetry, type UiTelemetry } from '../services/telemetry';

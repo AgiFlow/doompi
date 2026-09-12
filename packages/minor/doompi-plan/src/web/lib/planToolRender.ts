@@ -1,5 +1,5 @@
 import type { MessageLine, MessageLineTone } from '@agimon-ai/doompi-web-components';
-import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
+import type { ToolResultView } from '@agimon-ai/doompi-core/web';
 
 /**
  * Purpose-first summaries for the plan-mode tools. The TUI leaves these on

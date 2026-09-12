@@ -1,4 +1,4 @@
-import type { ToolRendererContribution } from '@agimon-ai/doompi-web-contracts';
+import type { ToolRendererContribution } from '@agimon-ai/doompi-core/web';
 import { RunWorktreeToolMessage } from './RunWorktreeToolMessage';
 
 /** The timeline items for this package's tools. */

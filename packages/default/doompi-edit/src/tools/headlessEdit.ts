@@ -2,7 +2,7 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessTool,
   DoomHeadlessToolResult,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { EditParamsSchema, type EditParams } from '../schemas/editTool';
 import { executeHashlineEdit } from '../services/editTool';
 

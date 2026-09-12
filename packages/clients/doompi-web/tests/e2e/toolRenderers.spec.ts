@@ -1,5 +1,5 @@
-import { expect, test } from '../support/cockpit.ts';
-import { writeRunnerRecord } from '../support/runnerRuns.ts';
+import { expect, test } from '../support/cockpit';
+import { writeRunnerRecord } from '../support/runnerRuns';
 
 const ONE_PIXEL_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 // Tool renderers are plugin contributions, so this suite serves the

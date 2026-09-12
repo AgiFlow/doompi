@@ -101,13 +101,9 @@ describe('doompi-profile package contract', () => {
     expect(entry).toContain("statusKey: 'doom-profile'");
   });
 
-  it('keeps the web contract optional for headless installs while supporting web builds', async () => {
+  it('uses the shared core package for runtime and web capabilities', async () => {
     const manifest = await readManifest();
-
-    expect(manifest.dependencies?.['@agimon-ai/doompi-web-contracts']).toBeUndefined();
-    expect(manifest.devDependencies?.['@agimon-ai/doompi-web-contracts']).toBe('workspace:*');
-    expect(manifest.peerDependencies?.['@agimon-ai/doompi-web-contracts']).toBe('workspace:*');
-    expect(manifest.peerDependenciesMeta?.['@agimon-ai/doompi-web-contracts']).toEqual({ optional: true });
+    expect(manifest.dependencies?.['@agimon-ai/doompi-core']).toBe('workspace:*');
   });
 
   it('routes both Pi entries through a default-exported factory', async () => {

@@ -3,7 +3,7 @@ import {
   type SubagentPolicy,
   type SubagentPolicyHandle,
   SubagentPolicySchema,
-} from '@agimon-ai/doompi-extension-contracts/subagent-policy';
+} from '../../schemas/subagentPolicy';
 import { Check } from 'typebox/value';
 import type { SubagentCapabilityPolicyStore } from '../../schemas/team/capabilityCeiling';
 

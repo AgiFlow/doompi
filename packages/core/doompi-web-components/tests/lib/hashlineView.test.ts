@@ -8,7 +8,7 @@ import {
   READ_COLLAPSED_LINES,
   resultTextLines,
   takeTrailingNotice,
-} from '../../src/exports/index.ts';
+} from '../../src/exports';
 
 const text = (value: string) => ({ content: [{ type: 'text', text: value }] });
 

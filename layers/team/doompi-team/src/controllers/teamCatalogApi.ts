@@ -1,4 +1,4 @@
-import type { DoomApi, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import type { CatalogAgentInput } from '../services/webSubagentCatalog';
 import { AgentDiscoveryService, resolveActiveTeamModelSpecs } from '../services/agentDiscovery';
 

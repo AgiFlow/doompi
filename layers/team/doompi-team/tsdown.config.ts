@@ -2,6 +2,13 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: {
+    'fable-plan-api': 'src/schemas/fablePlanApi.ts',
+    'runtime-subagent-policy': 'src/schemas/subagentPolicy.ts',
+    'runtime-subagent-tool': 'src/schemas/subagentTool.ts',
+    'delegation-api': 'src/schemas/delegationApi.ts',
+    'fable-plan': 'src/exports/fablePlanApi.ts',
+    'subagent-policy': 'src/exports/subagentPolicy.ts',
+    'subagent-tool': 'src/exports/subagentTool.ts',
     delegation: 'src/exports/delegation.ts',
     capabilityCeiling: 'src/exports/capabilityCeiling.ts',
     index: 'src/exports/index.ts',

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type Page } from '@playwright/test';
-import { expect, test as cockpitTest } from '../support/cockpit.ts';
+import { expect, test as cockpitTest } from '../support/cockpit';
 
 const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
 const test = cockpitTest.extend<{ assetPackageRoot: string }>({

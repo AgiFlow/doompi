@@ -1,10 +1,6 @@
 import { AUTHOR_DESCRIBE_TOOL_NAME, AUTHOR_USE_TOOL_NAME } from '../constants/author';
 import { AuthorDescribeToolsInputSchema, AuthorUseToolsInputSchema } from '../schemas/authorFacade';
-import {
-  defineTool,
-  type DoomPluginTool,
-  type DoomPluginToolResult,
-} from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { defineTool, type DoomPluginTool, type DoomPluginToolResult } from '@agimon-ai/doompi-core/pi-extension';
 import {
   OpenAuthoringFileInputSchema,
   parseDescribeAuthorToolsInput,

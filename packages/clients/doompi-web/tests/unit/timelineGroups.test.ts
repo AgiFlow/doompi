@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { TimelineEntry, ToolEntry } from '../../src/web/lib/sessionModel.ts';
-import { groupSummary, groupTone, timelineUnits } from '../../src/web/lib/timelineGroups.ts';
+import type { TimelineEntry, ToolEntry } from '../../src/web/lib/sessionModel';
+import { groupSummary, groupTone, timelineUnits } from '../../src/web/lib/timelineGroups';
 
 function tool(id: string, name: string, state: Partial<ToolEntry> = {}): ToolEntry {
   return {

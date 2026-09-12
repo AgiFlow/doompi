@@ -1,6 +1,6 @@
-import { DIRECTORIES_API_ROUTE, type PiSessionHistoryItem, SESSIONS_API_ROUTE } from '../../types/hub.ts';
-import { sealedHttpSession } from './sealedSession.ts';
-import { fetchWithStepUp } from './stepUp.ts';
+import { DIRECTORIES_API_ROUTE, type PiSessionHistoryItem, SESSIONS_API_ROUTE } from '../../types/hub';
+import { sealedHttpSession } from './sealedSession';
+import { fetchWithStepUp } from './stepUp';
 
 export type CreateSessionResult = { sessionId: string } | { error: string };
 

@@ -1,4 +1,4 @@
-import { defineGlobalStore, type UserMessageActionRunContext } from '@agimon-ai/doompi-web-contracts';
+import { defineGlobalStore, type UserMessageActionRunContext } from '@agimon-ai/doompi-core/web';
 import type { DraftState } from './promptsActions';
 
 /**

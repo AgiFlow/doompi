@@ -1,4 +1,4 @@
-import { insideSandbox } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
+import { insideSandbox } from '@agimon-ai/doompi-core/sandbox-harness';
 import type { SandboxExtensionResult, SandboxExtensionService } from '../../types/extension';
 
 const SANDBOXED_MESSAGE = 'Sandboxed session: the agent, extensions, and tools run inside the container.';

@@ -1,1 +1,1 @@
-export * from '../controllers/doctorCommand';
+export * from '../cli/commands/doctor';

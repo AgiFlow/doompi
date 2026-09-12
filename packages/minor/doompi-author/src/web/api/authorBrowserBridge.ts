@@ -1,4 +1,4 @@
-import type { WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 import { Store } from '@tanstack/store';
 import type { AuthorBrowserMessage, AuthorHubMessage } from '../../types/webAuthor';
 import { AuthorRuntime } from './authorRuntime';

@@ -6,7 +6,7 @@
  * are built with `formatMcpSessionAuthStatus` rather than a hand-written JSON
  * literal, so a story cannot show a shape the parser would reject.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../types/webMcp';
 import { McpSessionAuthSection } from './McpSessionAuthSection';
 

@@ -1,4 +1,4 @@
-import type { DoomApiContext } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApiContext } from '@agimon-ai/doompi-core/package-api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { McpSettingsManager } from '../src/services/mcpSettingsManager';
 import { mcpHubApi } from '../src/controllers/mcpHubApi';

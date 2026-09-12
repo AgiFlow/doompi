@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildSandboxForwardArgs } from '../../src/controllers/sandboxArgs';
+import { buildSandboxForwardArgs } from '../../src/cli/commands/sandbox/args';
 import { parseHarnessArgs } from '../../src/exports/options';
-import type { HarnessOptions } from '../../src/types/interfaces/harness';
+import type { HarnessOptions } from '../../src/composition/types/harness';
 
 function parsedOptions(args: string[]): HarnessOptions {
   return { repoRoot: '/repo', ...parseHarnessArgs(args, {}, '/repo').options };

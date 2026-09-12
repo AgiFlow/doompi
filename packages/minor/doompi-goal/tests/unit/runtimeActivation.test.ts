@@ -1,4 +1,4 @@
-import type { MinorModeState } from '@agimon-ai/doompi-extension-contracts/mode';
+import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import type { GoalPiManager } from '../../src/controllers/goalManager';

@@ -1,4 +1,4 @@
-import { defineMinorMode } from '@agimon-ai/doompi-extension-contracts/mode';
+import { defineMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { AUTHOR_MODE_ID } from '../types/author';
 
 export interface AuthorModeBackend {

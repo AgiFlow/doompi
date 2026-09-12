@@ -1,6 +1,6 @@
 import { Store } from '@tanstack/store';
-import { addDevProxyTarget, fetchDevProxyTargets, removeDevProxyTarget } from '../lib/devProxyApi.ts';
-import type { DevProxyTarget } from '../../types/devProxy.ts';
+import { addDevProxyTarget, fetchDevProxyTargets, removeDevProxyTarget } from '../lib/devProxyApi';
+import type { DevProxyTarget } from '../../types/devProxy';
 
 /**
  * Registered dev proxy targets, as the remote dialog shows them.

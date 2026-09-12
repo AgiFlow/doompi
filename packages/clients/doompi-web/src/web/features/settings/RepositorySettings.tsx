@@ -14,11 +14,11 @@ import type {
   RepositorySettingsView,
   SettingsOrigin,
   SettingsRepository,
-} from '../../../types/settings.ts';
-import { readRepositorySettings, writeRepositorySelection } from '../../lib/settingsApi.ts';
-import { refreshSessionFacts } from '../../stores/sessionStore.ts';
-import { sessionsStore } from '../../stores/sessionsStore.ts';
-import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
+} from '../../../types/settings';
+import { readRepositorySettings, writeRepositorySelection } from '../../lib/settingsApi';
+import { refreshSessionFacts } from '../../stores/sessionStore';
+import { sessionsStore } from '../../stores/sessionsStore';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 /** Repository selection controls shared with package-owned management panels. */
 

@@ -1,4 +1,4 @@
-import type { DoomNotificationEntryData } from '@agimon-ai/doompi-extension-contracts/notification';
+import type { DoomNotificationEntryData } from '@agimon-ai/doompi-core/notification';
 
 export type BrowserNotificationDeliveryStatus =
   | 'delivered'

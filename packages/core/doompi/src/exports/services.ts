@@ -11,8 +11,8 @@ export {
   runInteractive,
   signalExitCode,
   supportsCodexManagedProfile,
-} from '../services/compatibility';
-export { buildCompatibilityContext, type CompatibilityContext } from '../services/compatibilityContext';
+} from '../cli/commands/compat/providers';
+export { buildCompatibilityContext, type CompatibilityContext } from '../cli/commands/compat/context';
 export {
   alreadyComposed,
   COMPOSED_ENV,
@@ -30,16 +30,16 @@ export {
   registerDoomFlags,
   type StartupFlags,
   startSyncedSession,
-} from '../controllers/composer';
+} from '../builders/cli/composition';
 export {
   buildHarnessContext,
   configurePreset,
   type HarnessContext,
   resolveHarnessProfile,
-} from '../services/harnessContext';
+} from '../builders/cli/harnessContext';
 // The launch plan and the layer installer are published so a session server can
 // run the same preparation the launcher does without spawning the CLI to do it.
-export { ensureLayerPackages, type EnsureLayerPackagesOptions } from '../services/layerPackageInstaller';
+export { ensureLayerPackages, type EnsureLayerPackagesOptions } from '../composition/layerPackageInstaller';
 // Drift detection, so a host can tell whether a session it is about to start
 // would run against artifacts sync has not produced yet.
 export {
@@ -48,21 +48,20 @@ export {
   type ReadSyncDriftOptions,
   type SyncDrift,
   type SyncDriftReason,
-} from '../services/syncDrift';
-export { readSyncRegistration, type SyncRegistration } from '../services/syncRegistration';
+} from '../composition/syncDrift';
 export {
   ensureElicitationSessionId,
   overridePiThemes,
   type PiLaunchPlan,
   resolveLaunchPlan,
-} from '../services/launchPlan';
-export { LAUNCHER_COMPOSITION_ENV, LAUNCHER_COMPOSITION_REQUEST_ENV } from '../constants/launcherComposition';
+} from '../builders/cli/launchPlan';
+export { LAUNCHER_COMPOSITION_ENV, LAUNCHER_COMPOSITION_REQUEST_ENV } from '../builders/cli/constants';
 export {
   buildRuntimeBundle,
   createRuntimeExtensionPlan,
   type RuntimeBundleBuild,
   type RuntimeExtensionPlan,
-} from '../services/runtimeBundle';
+} from '../builders/cli/runtimeBundle';
 // applyMajorMode, applyPersona and applyProfile are published by
 // @agimon-ai/doompi-config/selectionSwitch, while domain staging is published
 // by @agimon-ai/doompi-domain. These re-exports preserve the host's public API.
@@ -75,18 +74,8 @@ export {
   PROXY_SERVER_NAME,
   resolveMcpAllowlist,
 } from '@agimon-ai/doompi-domain/mcp';
-export { extensionLayers, needsRelaunch } from '../services/transitionClassifier';
-// MinorModeCatalogHost itself now lives in @agimon-ai/doompi-extension-contracts/transition,
-// where the packages that consume it can reach it without depending on the host.
-export { createMinorModeCatalogHost, type MinorModeCatalogHostOptions } from '../services/modeCatalog';
-export {
-  mergePiSettings,
-  type PiSettingsUpdate,
-  piSettingsPath,
-  readPiSettings,
-  serializePiSettings,
-  writePiSettings,
-} from '../services/piSettings';
+// Minor-mode catalog ownership belongs to the minor-mode package.
+export { createMinorModeCatalogHost, type MinorModeCatalogHostOptions } from '@agimon-ai/doompi-minor-mode/catalog';
 export {
   DUPLICATE_REGISTRATION_DRIFT,
   mergeProjectPiSettings,
@@ -95,7 +84,7 @@ export {
   readProjectPiSettings,
   serializeProjectPiSettings,
   writeProjectPiSettings,
-} from '../services/projectPiSettings';
+} from '../builders/cli/projectSettings';
 export {
   adaptAgentDefinition,
   collectResources,
@@ -118,4 +107,4 @@ export {
   syncDirectory,
   syncStatePath,
   writeSyncState,
-} from '../services/syncState';
+} from '../composition/syncState';

@@ -12,7 +12,8 @@ import {
   webPluginTypedCalls,
 } from '../../src/rules/webPlugin.js';
 
-const CONTRACTS = '@agimon-ai/doompi-web-contracts';
+const CORE_PACKAGE = '@agimon-ai/doompi-core';
+const CONTRACTS = '@agimon-ai/doompi-core/web';
 const COMPONENTS = '@agimon-ai/doompi-web-components';
 
 describe('Doom web plugin rules', () => {
@@ -208,7 +209,7 @@ describe('Doom web plugin rules', () => {
       expect(result).toContain('has no src/web/tsconfig.json');
       expect(result).toContain('must not declare doompiWeb.hub');
       expect(result).toContain("web/ imports 'src/types/webDemo.ts', which is not in the files allowlist");
-      expect(result).toContain(`${CONTRACTS} must be a dependency`);
+      expect(result).toContain(`${CORE_PACKAGE} must be a dependency`);
       expect(result).toContain(`${COMPONENTS} must be a dependency`);
     });
 
@@ -216,7 +217,7 @@ describe('Doom web plugin rules', () => {
       const manifest = writeManifest({
         name: 'p',
         files: ['src/web'],
-        dependencies: { [CONTRACTS]: 'workspace:*' },
+        dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/web/index.ts' },
       });
       expect(webPluginManifest.check?.(manifest, root)).toContain('client must be ./src/extensions/web.ts');
@@ -230,7 +231,7 @@ describe('Doom web plugin rules', () => {
       const manifest = writeManifest({
         name: 'p',
         files: ['dist', 'src/web', 'src/extensions/web.ts', 'src/types/webDemo.ts'],
-        dependencies: { [CONTRACTS]: 'workspace:*' },
+        dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: [
           { pluginId: 'demo', client: './src/extensions/web.ts' },
           { pluginId: 'demo-other', registrationOrder: 5, client: './src/extensions/web.ts' },
@@ -245,7 +246,7 @@ describe('Doom web plugin rules', () => {
       write('src/constants/limits.ts', 'export const LIMIT = 2;');
       const metadata = {
         name: 'p',
-        dependencies: { [CONTRACTS]: 'workspace:*' },
+        dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
       };
       const files = ['src/extensions/web.ts', 'src/types'];
@@ -263,7 +264,7 @@ describe('Doom web plugin rules', () => {
       write('src/types/cycle.ts', "export type Cycle = {}; import '../web/worker';");
       const metadata = {
         name: 'p',
-        dependencies: { [CONTRACTS]: 'workspace:*' },
+        dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
       };
       const files = ['src/extensions/web.ts', 'src/web/**', 'src/types'];
@@ -280,7 +281,7 @@ describe('Doom web plugin rules', () => {
       const manifest = writeManifest({
         name: 'p',
         files: ['dist', 'src/web', 'src/extensions/web.ts'],
-        dependencies: { [CONTRACTS]: 'workspace:*' },
+        dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
       });
       expect(webPluginManifest.check?.(manifest, root)).toBeNull();
@@ -293,10 +294,10 @@ describe('Doom web plugin rules', () => {
       const manifest = writeManifest({
         name: 'p',
         files: ['dist', 'src/web', 'src/extensions/web.ts'],
-        devDependencies: { [CONTRACTS]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
-        peerDependencies: { [CONTRACTS]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
+        devDependencies: { [CORE_PACKAGE]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
+        peerDependencies: { [CORE_PACKAGE]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
         peerDependenciesMeta: {
-          [CONTRACTS]: { optional: true },
+          [CORE_PACKAGE]: { optional: true },
           [COMPONENTS]: { optional: true },
         },
         doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
@@ -312,27 +313,27 @@ describe('Doom web plugin rules', () => {
       const baseManifest = {
         name: 'p',
         files: ['dist', 'src/web', 'src/extensions/web.ts'],
-        peerDependencies: { [CONTRACTS]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
+        peerDependencies: { [CORE_PACKAGE]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
       };
 
       const missingOptional = writeManifest({
         ...baseManifest,
-        devDependencies: { [CONTRACTS]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
+        devDependencies: { [CORE_PACKAGE]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
         peerDependenciesMeta: {},
       });
-      expect(webPluginManifest.check?.(missingOptional, root)).toContain(`${CONTRACTS} must be a dependency`);
+      expect(webPluginManifest.check?.(missingOptional, root)).toContain(`${CORE_PACKAGE} must be a dependency`);
       expect(webPluginManifest.check?.(missingOptional, root)).toContain(`${COMPONENTS} must be a dependency`);
 
       const missingDev = writeManifest({
         ...baseManifest,
         devDependencies: {},
         peerDependenciesMeta: {
-          [CONTRACTS]: { optional: true },
+          [CORE_PACKAGE]: { optional: true },
           [COMPONENTS]: { optional: true },
         },
       });
-      expect(webPluginManifest.check?.(missingDev, root)).toContain(`${CONTRACTS} must be a dependency`);
+      expect(webPluginManifest.check?.(missingDev, root)).toContain(`${CORE_PACKAGE} must be a dependency`);
       expect(webPluginManifest.check?.(missingDev, root)).toContain(`${COMPONENTS} must be a dependency`);
     });
   });
@@ -370,7 +371,7 @@ describe('Doom web plugin rules', () => {
       const manifest = writeManifest({
         name: 'p',
         files: ['dist', 'src/web', 'src/extensions/web.ts', 'src/types/webDemo.ts'],
-        dependencies: { [CONTRACTS]: 'workspace:*' },
+        dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: {
           pluginId: 'demo',
           client: './src/extensions/web.ts',
@@ -385,7 +386,7 @@ describe('Doom web plugin rules', () => {
       const manifest = writeManifest({
         name: 'p',
         files: ['dist', 'src/web', 'src/extensions/web.ts'],
-        dependencies: { [CONTRACTS]: 'workspace:*' },
+        dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
       });
       expect(webPluginManifest.check?.(manifest, root)).toContain('has no src/web/tsconfig.json');

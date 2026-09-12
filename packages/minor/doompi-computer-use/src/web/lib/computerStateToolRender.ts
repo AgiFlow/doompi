@@ -1,5 +1,5 @@
 import type { MessageLine } from '@agimon-ai/doompi-web-components';
-import { type ToolResultView, toolResultTextLines } from '@agimon-ai/doompi-web-contracts';
+import { type ToolResultView, toolResultTextLines } from '@agimon-ai/doompi-core/web';
 
 export const computerStateToolName = 'computer_state' as const;
 export const computerStateCollapsedLines = 8;

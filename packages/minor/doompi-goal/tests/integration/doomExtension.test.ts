@@ -2,8 +2,8 @@ import {
   DOOM_BACKGROUND_WORK_CHANGED_EVENT,
   DOOM_BACKGROUND_WORK_SERVICE,
   type DoomBackgroundWorkService,
-} from '@agimon-ai/doompi-extension-contracts/background-work';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-core/background-work';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

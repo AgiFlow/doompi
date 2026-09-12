@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 const state = (model: { id: string; provider: string }, thinkingLevel: string) => ({
   type: 'response',

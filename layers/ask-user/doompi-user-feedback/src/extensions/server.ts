@@ -1,5 +1,5 @@
 import { PACKAGE_SOURCE } from '../constants/package';
-import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { QuestionnaireCoordinator } from '../services/questionnaireCoordinator';
 import { createAskUserHeadlessTool } from '../tools/askUserHeadless';
 export const userFeedbackServerFacet = defineServerPlugin({

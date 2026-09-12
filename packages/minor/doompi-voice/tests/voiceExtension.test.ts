@@ -1,10 +1,7 @@
-import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-extension-contracts/ask-user';
-import {
-  DOOM_CORDIS_SESSION_SERVICE,
-  type DoomCordisSessionService,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { createNarrationRequest, readDoomNarrationService } from '@agimon-ai/doompi-extension-contracts/narration';
-import { createDoomToolSurface } from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-core/ask-user';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
+import { createNarrationRequest, readDoomNarrationService } from '@agimon-ai/doompi-core/narration';
+import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
 import { createDoomVoiceToolsService } from '../src/services/voiceTools';
 import { VOICE_MODE_TOOL_NAMES } from '../src/constants/voiceTools';
 import { Context } from '@deepseek-ai/cordis';

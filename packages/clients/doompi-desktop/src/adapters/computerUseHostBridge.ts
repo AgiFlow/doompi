@@ -1,5 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
-import { ComputerUseHost } from '../services/computerUseHost.ts';
+import { ComputerUseHost } from '../services/computerUseHost';
 import {
   COMPUTER_USE_IPC_CANCEL,
   COMPUTER_USE_IPC_REQUEST,
@@ -7,7 +7,7 @@ import {
   COMPUTER_USE_MAX_IPC_BYTES,
   type ComputerUseDesktopOperation,
   type ComputerUseDesktopRequest,
-} from '../types/computerUse.ts';
+} from '../types/computerUse';
 
 const OPERATIONS = new Set<ComputerUseDesktopOperation>(['status', 'targets', 'activate', 'observe', 'act', 'stop']);
 const MAX_ACTIVE_REQUESTS = 128;

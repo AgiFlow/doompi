@@ -1,4 +1,4 @@
-import { type DoomHeadlessHook, type DoomHeadlessResource } from '@agimon-ai/doompi-extension-contracts/headless';
+import { type DoomHeadlessHook, type DoomHeadlessResource } from '@agimon-ai/doompi-core/headless';
 
 import { readHookResource } from '../services/hookResource';
 function hookEntry(event: Readonly<Record<string, unknown>>): Record<string, unknown> {

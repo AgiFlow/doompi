@@ -82,6 +82,12 @@ Selectable packages resolve from the consumer repository through normal `node_mo
 
 A package's browser plugin keeps `src/extensions/web.ts` as its composition entry and groups implementation by responsibility: `lib/` for pure calculations, `api/` for browser transports, `stores/` for reactive state and channel reducers, `hooks/` for React subscriptions and effects, and `components/` for rendering. Imports point inward in that order. Shared wire contracts stay in `src/types/`, while server controllers stay outside the browser tree. Omit empty folders and keep state-specific types beside the store that owns them.
 
+## Runtime ownership
+
+`@agimon-ai/doompi-core` contains the kernel, reusable main and child systems, extension definitions, Pi integration, server APIs, and web capabilities. It is a dependency of other Doompi packages. Feature packages own their policy and feature services; `@agimon-ai/doompi-minor-mode` owns the mode catalog, commands, projection, and reload state.
+
+`@agimon-ai/doompi` owns CLI commands and distribution composition. Its `src/builders/cli`, `src/builders/server`, and `src/builders/web` each own subsystem composition and bundling. The CLI builder constructs Pi extensions, the server builder wires the Hono server and session services, and the web builder generates and bundles browser state and plugin wiring. Shared compiler, input, and cache mechanics live in `src/compiler`. Shared selection data and persisted state live in `src/composition`. Command handlers, help, options, and presentation are collocated under `src/cli/commands/<name>`, including the sync workflow. Server arguments and process signals live in `src/cli/server`. Builders and composition cannot import CLI code; the compiler cannot import builders, composition, or CLI code. Public command classes remain compatibility delegates to function implementations.
+
 ## Canonical composition
 
 `resolveExtensionComposition()` is the authority for the runtime graph. One call returns:
@@ -151,7 +157,7 @@ The host owns two lifecycle levels:
 - The runtime fiber publishes `doom/runtime` and `doom/tool-overrides` for the lifetime of the runner.
 - A session fiber is replaced on each `session_start` and publishes `doom/session` and `doom/context-contributions` for that session.
 
-Package services use namespaced `doom/*` keys. Neutral service types and serialization contracts live in `@agimon-ai/doompi-extension-contracts`; provider implementations are package-private. Required consumers declare their dependency with Cordis `inject`. It activates a consumer only while its provider exists and reactivates the consumer when the provider is replaced. Providers publish services and effects from the package plugin fiber that owns their lifetime.
+Package services use namespaced `doom/*` keys. Neutral service types and serialization contracts live in `@agimon-ai/doompi-core`; provider implementations are package-private. Required consumers declare their dependency with Cordis `inject`. It activates a consumer only while its provider exists and reactivates the consumer when the provider is replaced. Providers publish services and effects from the package plugin fiber that owns their lifetime.
 
 The context-contribution broker orders provider snapshots and isolates provider failures. Providers are responsible for bounding and redacting their own text before returning it.
 
@@ -180,7 +186,7 @@ Reload is terminal for the calling handler. After `await ctx.reload()`, code mus
 
 ## Parent and detached-child isolation
 
-Core composition produces a dedicated child activation list. A detached child starts its own Pi runner with its own host, required child core, selected feature and selection-specific entries, and finalizer.
+The CLI builder produces a dedicated child activation list. A detached child starts its own Pi runner with its own host, required child core, selected feature and selection-specific entries, and finalizer.
 
 The child does not inherit the parent Cordis root, transition coordinator, live service instances, or mutable session registries. Data that crosses the process boundary is an explicit serialized projection owned by the launching feature. Parent and child activation lists share the same resolver interpretation and participate in the same composition fingerprint.
 
@@ -190,11 +196,11 @@ A standard feature declares `definePiExtension`, `defineServerPlugin`, or `defin
 
 Pi and server helpers own Cordis initialization, registration, readiness, rollback, and disposal. Optional `onStart`, `onStop`, and `onDispose` hooks cover external work and final instance resources. Shutdown aborts the instance signal, waits for startup, stops work, unregisters in reverse order, and disposes the instance. Keep provider plugins in named service folders and compose them through `services`; use owning injections and typed `require...` accessors for required providers.
 
-Fixed tools and modes use arrays. Dynamic Pi catalogs use typed `snapshot()`/`subscribe(listener)` collections. A new tool declaration with the same name replaces the current implementation and aborts old invocations; removal makes the registered wrapper unavailable. The helper owns catalog subscriptions and minor-mode owner attachment and withdrawal.
+Fixed tools and modes use arrays. Dynamic Pi catalogs use typed `snapshot()`/`subscribe(listener)` collections. A new tool declaration with the same name replaces the current implementation and aborts old invocations; removal makes the registered wrapper unavailable. Core helpers own tool subscriptions. The minor-mode package owns mode collections, subscriptions, owner attachment, and withdrawal through its Pi and server services.
 
 Reusable public APIs live in flat `src/exports` forwarding files. Tsdown builds those and direct extension entries separately. Services own logic and IO, models own mutable state, controllers own request handling, and tools consume services/models. Shared schemas, types, and constants remain in their named folders. Do not add adapters, containers, commands, or providers roots.
 
-The core package bootstrap is host infrastructure: it claims a synchronized load before awaiting and stays inert outside a synced repository. It must load the canonical host before normal feature helpers connect to that host.
+The doompi package bootstrap is host infrastructure: it claims a synchronized load before awaiting and stays inert outside a synced repository. It must load the canonical host before normal feature helpers connect to that host.
 
 The following system invariants apply across packages:
 
@@ -202,7 +208,7 @@ The following system invariants apply across packages:
 - Declare dependencies on packages whose public contracts you consume. Voice owns its shared contracts, so consumers install its runtime dependency closure even when Voice is not selected.
 - Activate feature plugins through the configured composition. Importing a shared contract must not activate its provider.
 - Keep Runner RMUX binaries in artifact-only target packages.
-- Put neutral cross-package contracts in `@agimon-ai/doompi-extension-contracts` and concrete implementations in provider packages.
+- Put neutral cross-package contracts in `@agimon-ai/doompi-core` and concrete implementations in provider packages.
 - Preserve authored order and occurrence provenance, then deduplicate activation only by canonical path.
 - Use the single composition fingerprint at every runtime boundary.
 - Let Pi own factory reload and module replacement.
@@ -214,16 +220,16 @@ The following system invariants apply across packages:
 
 `pnpm lint:vibe --preflight-only` builds the repository-owned Doom extension plugin, then checks architectural lifecycle, package-boundary, and prompt-resource rules according to each package's configured severity. `pnpm nx run @agimon-ai/doompi:test-system` exercises installed packed entries and runtime modes.
 
-| Responsibility            | Entry points                                                                                      |
-| ------------------------- | ------------------------------------------------------------------------------------------------- |
-| Composition               | [`extensionAssembler.ts`](../packages/core/doompi/src/services/extensionAssembler/index.ts)       |
-| Launcher bundle           | [`runtimeBundle.ts`](../packages/core/doompi/src/services/runtimeBundle/index.ts)                 |
-| Synchronized state        | [`syncState.ts`](../packages/core/doompi/src/services/syncState/index.ts)                         |
-| Synchronized bundle build | [`syncedRuntimeBuilder.ts`](../packages/core/doompi/src/services/syncedRuntimeBuilder/index.ts)   |
-| Artifact validation       | [`bootstrapLocator.ts`](../packages/core/doompi/src/services/bootstrapLocator/index.ts)           |
-| Package bootstrap         | [`pi.ts`](../packages/core/doompi/src/extensions/pi.ts)                                           |
-| Transition classification | [`transitionClassifier.ts`](../packages/core/doompi/src/services/transitionClassifier/index.ts)   |
-| Transition serialization  | [`transitionCoordinator.ts`](../packages/core/doompi/src/services/transitionCoordinator/index.ts) |
-| Pi transition entry       | [`transitionCoordinator.ts`](../packages/core/doompi/src/extensions/transitionCoordinator.ts)     |
-| Cordis host lifecycle     | [`cordisHost.ts`](../packages/core/doompi-extension-contracts/src/controllers/cordisHost.ts)      |
-| Config readiness barrier  | [`pi.ts`](../packages/core/doompi-config/src/extensions/pi.ts)                                    |
+| Responsibility            | Entry points                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Composition               | [`extensionAssembler.ts`](../packages/core/doompi/src/builders/cli/extensionAssembler/index.ts)        |
+| Launcher bundle           | [`runtimeBundle.ts`](../packages/core/doompi/src/builders/cli/runtimeBundle/index.ts)                  |
+| Synchronized state        | [`syncState.ts`](../packages/core/doompi/src/composition/syncState/index.ts)                           |
+| Synchronized bundle build | [`syncedRuntimeBuilder.ts`](../packages/core/doompi/src/builders/cli/index.ts)                         |
+| Artifact validation       | [`bootstrapLocator.ts`](../packages/core/doompi/src/builders/cli/bootstrapLocator/index.ts)            |
+| Package bootstrap         | [`pi.ts`](../packages/core/doompi/src/extensions/pi.ts)                                                |
+| Transition classification | [`transitionClassifier.ts`](../packages/core/doompi-core/src/services/transitionClassifier/index.ts)   |
+| Transition serialization  | [`transitionCoordinator.ts`](../packages/core/doompi-core/src/services/transitionCoordinator/index.ts) |
+| Pi transition entry       | [`transitionCoordinator.ts`](../packages/core/doompi/src/extensions/transitionCoordinator.ts)          |
+| Cordis host lifecycle     | [`cordisHost.ts`](../packages/core/doompi-core/src/pi/cordisHost.ts)                                   |
+| Config readiness barrier  | [`pi.ts`](../packages/core/doompi-config/src/extensions/pi.ts)                                         |

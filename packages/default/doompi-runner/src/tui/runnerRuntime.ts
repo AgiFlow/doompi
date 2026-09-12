@@ -3,15 +3,15 @@ import {
   type BackgroundWorkProviderHandle,
   DOOM_BACKGROUND_WORK_SERVICE,
   readDoomBackgroundWorkService,
-} from '@agimon-ai/doompi-extension-contracts/background-work';
-import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
-import type { DoomFooterContributionHandle } from '@agimon-ai/doompi-extension-contracts/footer';
+} from '@agimon-ai/doompi-core/background-work';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
+import type { DoomFooterContributionHandle } from '@agimon-ai/doompi-core/footer';
 import {
   createDoomReadinessCoordinator,
   type DoomReadinessCoordinator,
   readDoomReadinessCoordinator,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-core/readiness';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';

@@ -4,10 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHistoryOwnership, historyOwnershipLockPath } from '../../src/services/historyOwnership';
-import { CliApp } from '../../src/controllers/cliApp';
-import { HistoryImportCommand } from '../../src/controllers/historyImportCommand';
-import { routeCommand } from '../../src/controllers/router';
+import { createHistoryOwnership, historyOwnershipLockPath } from '@agimon-ai/doompi-core/history-ownership';
+import { CliApp } from '../../src/cli/cliApp';
+import { runHistoryImport } from '../../src/cli/commands/history-import';
+import { routeCommand } from '../../src/cli/router';
 
 function v3Source(): string {
   return [
@@ -38,7 +38,7 @@ function v3Source(): string {
     .concat('\n');
 }
 const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
-const historyModule = path.join(packageDirectory, 'dist/history.mjs');
+const historyModule = fileURLToPath(import.meta.resolve('@agimon-ai/doompi-core/history'));
 const cliModule = path.join(packageDirectory, 'dist/bin/cli.mjs');
 
 function childResult(child: ChildProcess): Promise<{
@@ -217,9 +217,9 @@ describe('history-import CLI', () => {
     const source = v3Source();
     fs.writeFileSync(sourcePath, source);
 
-    await expect(
-      new HistoryImportCommand().execute(['history-import', sourcePath, destinationPath], {}, root),
-    ).rejects.toThrow(/confirm-offline/i);
+    await expect(runHistoryImport(['history-import', sourcePath, destinationPath], {}, root)).rejects.toThrow(
+      /confirm-offline/i,
+    );
 
     expect(fs.readFileSync(sourcePath, 'utf8')).toBe(source);
     expect(fs.existsSync(`${sourcePath}.original`)).toBe(false);
@@ -237,12 +237,7 @@ describe('history-import CLI', () => {
     const output = { write: vi.fn() };
 
     await expect(
-      new HistoryImportCommand().execute(
-        ['history-import', 'legacy.jsonl', 'canonical.jsonl', '--confirm-offline'],
-        {},
-        root,
-        output,
-      ),
+      runHistoryImport(['history-import', 'legacy.jsonl', 'canonical.jsonl', '--confirm-offline'], {}, root, output),
     ).resolves.toBe(0);
 
     const result = JSON.parse(output.write.mock.calls[0]![0] as string) as {
@@ -272,11 +267,11 @@ describe('history-import CLI', () => {
     const destinationPath = path.join(root, 'canonical.jsonl');
     fs.writeFileSync(sourcePath, v3Source());
     const output = { write: vi.fn() };
-    const command = new HistoryImportCommand();
+
     const args = ['history-import', sourcePath, destinationPath, '--confirm-offline'];
 
-    await command.execute(args, {}, root, output);
-    await expect(command.execute(args, {}, root, output)).resolves.toBe(0);
+    await runHistoryImport(args, {}, root, output);
+    await expect(runHistoryImport(args, {}, root, output)).resolves.toBe(0);
 
     expect(JSON.parse(output.write.mock.calls[1]![0] as string)).toMatchObject({ status: 'already-published' });
     expect(fs.existsSync(historyOwnershipLockPath(sourcePath))).toBe(false);
@@ -290,11 +285,7 @@ describe('history-import CLI', () => {
     const sourceLease = await createHistoryOwnership({ sourceFormat: 'v3' }).acquire(sourcePath);
     try {
       await expect(
-        new HistoryImportCommand().execute(
-          ['history-import', sourcePath, destinationPath, '--confirm-offline'],
-          {},
-          root,
-        ),
+        runHistoryImport(['history-import', sourcePath, destinationPath, '--confirm-offline'], {}, root),
       ).rejects.toThrow(/already exists|ambiguous|lock/i);
       expect(fs.existsSync(historyOwnershipLockPath(sourcePath))).toBe(true);
       expect(fs.existsSync(historyOwnershipLockPath(destinationPath))).toBe(false);
@@ -310,11 +301,7 @@ describe('history-import CLI', () => {
     const destinationLease = await createHistoryOwnership().acquire(destinationPath);
     try {
       await expect(
-        new HistoryImportCommand().execute(
-          ['history-import', sourcePath, destinationPath, '--confirm-offline'],
-          {},
-          root,
-        ),
+        runHistoryImport(['history-import', sourcePath, destinationPath, '--confirm-offline'], {}, root),
       ).rejects.toThrow(/already exists|ambiguous|lock/i);
       expect(fs.existsSync(historyOwnershipLockPath(sourcePath))).toBe(false);
       expect(fs.existsSync(historyOwnershipLockPath(destinationPath))).toBe(true);
@@ -330,11 +317,7 @@ describe('history-import CLI', () => {
     fs.writeFileSync(sourcePath, source);
 
     await expect(
-      new HistoryImportCommand().execute(
-        ['history-import', sourcePath, destinationPath, '--confirm-offline'],
-        {},
-        root,
-      ),
+      runHistoryImport(['history-import', sourcePath, destinationPath, '--confirm-offline'], {}, root),
     ).rejects.toThrow(/Unsupported legacy v3 record type/i);
 
     expect(fs.readFileSync(sourcePath, 'utf8')).toBe(source);
@@ -352,7 +335,7 @@ describe('history-import CLI', () => {
     fs.linkSync(sourcePath, aliasPath);
 
     await expect(
-      new HistoryImportCommand().execute(['history-import', aliasPath, destinationPath, '--confirm-offline'], {}, root),
+      runHistoryImport(['history-import', aliasPath, destinationPath, '--confirm-offline'], {}, root),
     ).rejects.toThrow(/independent regular file/i);
 
     expect(fs.existsSync(`${aliasPath}.original`)).toBe(false);
@@ -369,11 +352,7 @@ describe('history-import CLI', () => {
     fs.writeFileSync(destinationLock, '{not-json');
 
     await expect(
-      new HistoryImportCommand().execute(
-        ['history-import', sourcePath, destinationPath, '--confirm-offline'],
-        {},
-        root,
-      ),
+      runHistoryImport(['history-import', sourcePath, destinationPath, '--confirm-offline'], {}, root),
     ).rejects.toThrow(/lock|ambiguous/i);
 
     expect(fs.readFileSync(destinationLock, 'utf8')).toBe('{not-json');

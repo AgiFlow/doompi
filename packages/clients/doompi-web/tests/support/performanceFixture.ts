@@ -1,4 +1,4 @@
-import type { HeadlessSession, Frame } from './headlessSession.ts';
+import type { HeadlessSession, Frame } from './headlessSession';
 
 export const PERFORMANCE_BACKLOG_LIMIT = 2_000;
 export const PERFORMANCE_MARKERS = { large: 'PERF_LARGE_READY', small: 'PERF_SMALL_READY' } as const;

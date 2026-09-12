@@ -1,9 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  DoomHubChannelSource,
-  DoomHubSessionScope,
-  DoomHubChannel,
-} from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { DoomHubChannelSource, DoomHubSessionScope, DoomHubChannel } from '@agimon-ai/doompi-core/hub-channel';
 import {
   API_BASE_PATH,
   computerUseChannelType,

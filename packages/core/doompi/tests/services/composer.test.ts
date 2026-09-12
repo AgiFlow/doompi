@@ -6,13 +6,13 @@ import { loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/ma
 import { extensionToolSource } from '@agimon-ai/doompi-ui/extensionName';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { acquireCompositionClaim } from '../../src/models/compositionState';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/services/syncLocation';
+import { acquireCompositionClaim } from '../../src/builders/cli/compositionState';
+import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '../../src/services/syncRegistration';
+} from '@agimon-ai/doompi-core/sync-registration';
 import { HARNESS_STATE_POINTER, readHarnessState, resetHarnessStore } from '../../src/exports/harnessState';
 import {
   alreadyComposed,
@@ -39,8 +39,12 @@ import {
   type SyncState,
   writeSyncState,
 } from '../../src/exports/syncState';
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/services/syncStateContract';
-import { assembleExtensions, PERSONA_ENTRY, resolveExtensionComposition } from '../../src/services/extensionAssembler';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+import {
+  assembleExtensions,
+  PERSONA_ENTRY,
+  resolveExtensionComposition,
+} from '../../src/builders/cli/extensionAssembler';
 import { testMcpProjection } from '../helpers/mcpProjection';
 
 /** Digest a compiler manifest must now record so freshness is judged by content. */

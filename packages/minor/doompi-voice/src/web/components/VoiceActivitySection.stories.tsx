@@ -8,7 +8,7 @@
  * is not in a status: it comes from the page-wide media store, which is keyed
  * by session id, so only that variant's session sees it.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { VoiceActivitySection } from './VoiceActivitySection';
 import { voiceMediaBrowserState } from '../stores/voiceMediaWakeStore';
 

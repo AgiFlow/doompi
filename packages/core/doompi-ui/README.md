@@ -39,7 +39,7 @@ UI is attached.
 ## Contribute to Leader Space
 
 ```ts
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 
 export function reviewPlugin(ctx: Context): void {
@@ -91,7 +91,7 @@ and the direct UI hub service live in extension contracts. Use these exports rat
 generated `dist` paths.
 
 ```ts
-import { DOOM_UI_HUB_SERVICE } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { DOOM_UI_HUB_SERVICE } from '@agimon-ai/doompi-core/ui-hub';
 import { DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
 ```
 

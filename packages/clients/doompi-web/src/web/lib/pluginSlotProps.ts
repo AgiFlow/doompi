@@ -6,12 +6,12 @@ import type {
   WebPluginContextItem,
   WebPluginSlotProps,
   WebPluginContextInventoryItem,
-} from '@agimon-ai/doompi-web-contracts';
+} from '@agimon-ai/doompi-core/web';
 import { createElement, type ReactNode } from 'react';
-import { fileTabForPath } from './composition.ts';
-import { pluginContextActions, slotFills } from './pluginRegistry.ts';
-import { renderThread } from './threadRenderer.ts';
-import { sendFrame } from './transport.ts';
+import { fileTabForPath } from './composition';
+import { pluginContextActions, slotFills } from './pluginRegistry';
+import { renderThread } from './threadRenderer';
+import { sendFrame } from './transport';
 /** The host's hold on the focused session's runtime tabs, bound in by the caller that owns the store. */
 export interface TransientTabActions {
   open: (tab: TransientTab) => void;

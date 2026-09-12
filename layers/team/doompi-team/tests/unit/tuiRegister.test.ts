@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
-import type { DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentConfig } from '../../src/types/agent';
@@ -298,12 +298,12 @@ describe('registerAgentStatus', () => {
 
     const dispose = registerStatusForTest(pi, uiHub, { scheduler, tracker, environment: {} });
     handlers.get('session_start')?.({}, ctx);
-    expect(setStatus).toHaveBeenLastCalledWith(FLEET_STATUS_KEY, 'Agents ○');
+    expect(setStatus).toHaveBeenLastCalledWith(FLEET_STATUS_KEY, 'Agents ◐');
     expect(footerUpdate).toHaveBeenLastCalledWith({
-      fullText: 'Agents ○',
-      compactText: 'A ○',
-      fullSegments: [{ text: 'Agents ' }, { text: '○', color: agentIdentityColor('run-1') }],
-      compactSegments: [{ text: 'A ' }, { text: '○', color: agentIdentityColor('run-1') }],
+      fullText: 'Agents ◐',
+      compactText: 'A ◐',
+      fullSegments: [{ text: 'Agents ' }, { text: '◐', color: agentIdentityColor('run-1') }],
+      compactSegments: [{ text: 'A ' }, { text: '◐', color: agentIdentityColor('run-1') }],
     });
 
     tracker.jobs = [{ runId: 'run-1', status: 'completed' }];

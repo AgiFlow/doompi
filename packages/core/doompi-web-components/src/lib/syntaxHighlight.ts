@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
-import { DOOM_SYNTAX_STYLES } from './editorTheme.ts';
-import { type GrammarKey, grammarKeyOf, loadGrammar } from './editorLanguage.ts';
+import { DOOM_SYNTAX_STYLES } from './editorTheme';
+import { type GrammarKey, grammarKeyOf, loadGrammar } from './editorLanguage';
 
 /**
  * Static syntax highlighting for read-only code, the timeline's half of the

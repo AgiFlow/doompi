@@ -70,11 +70,10 @@
   },
   "dependencies": {
     "@agimon-ai/doompi-config": "workspace:*",
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "cross-spawn": "7.0.6",

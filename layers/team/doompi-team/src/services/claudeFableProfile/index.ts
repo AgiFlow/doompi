@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { FABLE_PLAN_MODEL, FABLE_PLAN_PROFILE } from '@agimon-ai/doompi-extension-contracts/fable-plan';
+import { FABLE_PLAN_MODEL, FABLE_PLAN_PROFILE } from '../../schemas/fablePlanApi';
 import { runtimeBinaryEnvVar } from '../../types/environment';
 
 export const CLAUDE_FABLE_PROFILE = FABLE_PLAN_PROFILE;

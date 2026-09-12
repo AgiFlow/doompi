@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import { Hono } from 'hono';
 import {
   API_BASE_PATH,

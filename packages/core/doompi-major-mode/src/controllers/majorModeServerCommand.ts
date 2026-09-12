@@ -1,5 +1,5 @@
 import { loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
-import { type DoomHeadlessCommand, type DoomHeadlessHostService } from '@agimon-ai/doompi-extension-contracts/headless';
+import { type DoomHeadlessCommand, type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
 import { MAJOR_MODE_COMMAND, majorModeOptionLabel } from '../services/majorModeText';
 
 export function createMajorModeServerCommand(host: DoomHeadlessHostService): DoomHeadlessCommand {

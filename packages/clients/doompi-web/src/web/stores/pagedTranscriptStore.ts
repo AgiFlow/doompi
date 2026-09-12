@@ -4,7 +4,7 @@ import type {
   SessionService,
   SessionServiceState,
   TranscriptPage,
-} from '@agimon-ai/doompi-extension-contracts/session-protocol';
+} from '@agimon-ai/doompi-core/session-protocol';
 import {
   bindHistoryReader,
   resetSessionStore,
@@ -12,8 +12,8 @@ import {
   endSessionReplay,
   releaseProtocolTranscript,
   setHasNewerHistory,
-} from './sessionStore.ts';
-import { recordBrowserPerformance } from '../lib/browserTelemetry.ts';
+} from './sessionStore';
+import { recordBrowserPerformance } from '../lib/browserTelemetry';
 
 const MAX_PAGES = 5;
 const PAGE_SIZE = 100;

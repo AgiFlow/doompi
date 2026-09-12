@@ -1,7 +1,7 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
-import type { DotTone as Tone } from '../types/tone.ts';
+import { cn } from '../lib/cn';
+import type { DotTone as Tone } from '../types/tone';
 
 export const dotVariants = cva('inline-block shrink-0 rounded-full', {
   variants: {

@@ -6,15 +6,15 @@ import type {
   DoomConfigInvocation,
   DoomConfigSectionView,
   DoomExtensionContext,
-} from '@agimon-ai/doompi-extension-contracts/config';
+} from '@agimon-ai/doompi-core/config';
 import type {
   DoomFooterContributionDefinition,
   DoomFooterContributionHandle,
   DoomFooterContributionValue,
   DoomFooterStatus,
-} from '@agimon-ai/doompi-extension-contracts/footer';
-import type { DoomLeaderActionHandlerOptions, LeaderBinding } from '@agimon-ai/doompi-extension-contracts/leader';
-import type { DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-core/footer';
+import type { DoomLeaderActionHandlerOptions, LeaderBinding } from '@agimon-ai/doompi-core/leader';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import type { DoomLeaderDiagnostic, DoomLeaderRegistry } from '../leaderRegistry';
 
 type Listener = () => void;

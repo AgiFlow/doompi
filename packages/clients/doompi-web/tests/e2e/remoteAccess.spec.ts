@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 const TUNNEL_HOST = 'calm-river-1234.trycloudflare.com';
 const SIGNER_PUBLIC_KEY = 'A'.repeat(90);

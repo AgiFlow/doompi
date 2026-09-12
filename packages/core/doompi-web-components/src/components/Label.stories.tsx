@@ -3,8 +3,8 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Label } from './Label.tsx';
-import { Checkbox } from './Checkbox.tsx';
+import { Label } from './Label';
+import { Checkbox } from './Checkbox';
 
 const meta = {
   title: 'Components/Label',

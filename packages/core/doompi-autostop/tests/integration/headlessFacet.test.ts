@@ -1,11 +1,11 @@
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHook,
   type DoomHeadlessHostService,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { autoStopServerFacet as autoStopHeadlessFacet } from '../../src/extensions/server';
 
@@ -18,7 +18,7 @@ async function fixture(states: Array<{ hasPendingMessages: boolean; isIdle: bool
     repoRoot: '/repo',
     sessionId: 'autostop-test',
     environment: {},
-    selection: { majorMode: 'development', activeLayers: [], domains: [], minorModes: [] },
+    selection: { majorMode: 'development', activeLayers: [], domains: [], state: {} },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {
       entries: () => [],

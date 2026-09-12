@@ -1,9 +1,9 @@
-import { subscribeThreadFrame, unsubscribeThreadFrame } from '../../types/hub.ts';
-import { sendHubFrame } from '../lib/transport.ts';
-import { applySessionFrame, dropSessionStore } from './sessionStore.ts';
+import { subscribeThreadFrame, unsubscribeThreadFrame } from '../../types/hub';
+import { sendHubFrame } from '../lib/transport';
+import { applySessionFrame, dropSessionStore } from './sessionStore';
 import type { Context } from '@earendil-works/chord';
-import type { SessionService, SessionServiceState } from '@agimon-ai/doompi-extension-contracts/session-protocol';
-import { createPagedTranscript } from './pagedTranscriptStore.ts';
+import type { SessionService, SessionServiceState } from '@agimon-ai/doompi-core/session-protocol';
+import { createPagedTranscript } from './pagedTranscriptStore';
 
 /** A session id is a registry id and never starts with this, so a thread's fold cannot shadow a session's. */
 const THREAD_KEY_PREFIX = 'thread:';

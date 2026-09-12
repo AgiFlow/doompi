@@ -5,8 +5,8 @@ import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import { readManifest } from './webPlugin.js';
 import { projectPath } from './manifestEntries.js';
 
-const CONTRACTS = '@agimon-ai/doompi-extension-contracts';
-const ALLOWED_DOOM_DEPENDENCIES = new Set([CONTRACTS, '@agimon-ai/doompi-kernel']);
+const CONTRACTS = '@agimon-ai/doompi-core';
+const ALLOWED_DOOM_DEPENDENCIES = new Set([CONTRACTS, '@agimon-ai/doompi-core/kernel']);
 // These feature names belong to their package owners, including type-only contracts.
 const FEATURE_NAME =
   /(?:^|[^a-z])(?:author|voice|goal|loop|workflow|git|runner)(?=[^a-z]|$)|^(?:Author|Voice|Goal|Loop|Workflow|Git|Runner)(?=[A-Z])|^(?:AUTHOR|VOICE|GOAL|LOOP|WORKFLOW|GIT|RUNNER)(?:_|$)/u;

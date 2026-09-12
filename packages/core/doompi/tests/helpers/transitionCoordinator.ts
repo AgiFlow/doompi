@@ -1,14 +1,10 @@
+import { filterHookDisabledLayers, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
+import { extensionLayers } from '../../src/composition/transitionLayers';
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import {
-  DOOM_TRANSITION_SERVICE,
-  type DoomTransitionCoordinator,
-} from '@agimon-ai/doompi-extension-contracts/transition';
+import { DOOM_TRANSITION_SERVICE, type DoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
 import { Context } from '@deepseek-ai/cordis';
-import { createDoomTransitionCoordinator } from '../../src/services/transitionCoordinator';
-import type {
-  TransitionSelectionSnapshot,
-  TransitionSynchronization,
-} from '@agimon-ai/doompi-extension-contracts/transition';
+import { createDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition-coordinator';
+import type { TransitionSelectionSnapshot, TransitionSynchronization } from '@agimon-ai/doompi-core/transition';
 
 interface TestCoordinatorOptions {
   readonly current: TransitionSelectionSnapshot;
@@ -35,12 +31,14 @@ export function bindTestTransitionCoordinator(
   sessionId: string,
   options: TestCoordinatorOptions,
 ): { readonly coordinator: DoomTransitionCoordinator; dispose(): void } {
+  const config = options.majorModesConfig ?? defaultMajorModes(options.current);
   const coordinator = createDoomTransitionCoordinator({
     sessionId,
     classifierContext: () => ({
       current: options.current,
-      majorModesConfig: options.majorModesConfig ?? defaultMajorModes(options.current),
-      hooksEnabled: options.hooksEnabled ?? true,
+      resolveLayers: (majorMode) =>
+        filterHookDisabledLayers(config, resolveLayers(config, majorMode), options.hooksEnabled ?? true),
+      extensionLayers: (layers) => extensionLayers(config, layers),
       synchronization: options.synchronization ?? { kind: 'launcher' },
     }),
   });

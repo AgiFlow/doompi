@@ -1,4 +1,4 @@
-import type { DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import {
   MANUAL_TRANSCRIPTION_DURATION_HEADER,
   MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,

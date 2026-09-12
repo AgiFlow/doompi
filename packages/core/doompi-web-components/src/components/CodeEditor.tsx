@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
-import { cn } from '../lib/cn.ts';
-import type { CodeEditorProps } from '../types/editor.ts';
-import { Skeleton } from './Skeleton.tsx';
+import { cn } from '../lib/cn';
+import type { CodeEditorProps } from '../types/editor';
+import { Skeleton } from './Skeleton';
 
 /**
  * A code editor: line numbers, syntax colour, folding, undo, and a search
@@ -13,7 +13,7 @@ import { Skeleton } from './Skeleton.tsx';
  * business in that first load. What this module holds is the boundary, so the
  * cost is paid on the first render that asks for an editor and never again.
  */
-const CodeEditorView = lazy(async () => ({ default: (await import('./CodeEditorView.tsx')).CodeEditorView }));
+const CodeEditorView = lazy(async () => ({ default: (await import('./CodeEditorView')).CodeEditorView }));
 
 export function CodeEditor({ className, ...props }: CodeEditorProps) {
   return (

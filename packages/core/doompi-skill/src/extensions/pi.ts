@@ -1,4 +1,4 @@
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import { createSkillRuntime } from '../controllers/skillRuntime';
 import { LEADER_SOURCE } from '../types/skills';
 export const skillsExtension = definePiExtension(LEADER_SOURCE, ({ pi }) => ({

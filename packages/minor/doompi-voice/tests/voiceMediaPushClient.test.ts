@@ -1,4 +1,4 @@
-import { driveChannel } from '@agimon-ai/doompi-web-contracts/testing';
+import { driveChannel } from '@agimon-ai/doompi-core/web/testing';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER, type VoiceMediaClientEvent } from '../src/types/clientMedia';

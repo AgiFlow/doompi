@@ -87,10 +87,7 @@ describe('doompi-autostop package contract', () => {
 
     expect(declared).not.toContain('@agimon-ai/doompi');
     // The idle policy needs only the shared host contract and Cordis lifecycle.
-    expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual([
-      '@agimon-ai/doompi-extension-contracts',
-      '@deepseek-ai/cordis',
-    ]);
+    expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual(['@agimon-ai/doompi-core', '@deepseek-ai/cordis']);
   });
 
   it('ships an H1-led Help index whose linked resources are allowlisted', async () => {

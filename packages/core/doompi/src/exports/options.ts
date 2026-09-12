@@ -1,1 +1,1 @@
-export * from '../controllers/options';
+export * from '../cli/options';

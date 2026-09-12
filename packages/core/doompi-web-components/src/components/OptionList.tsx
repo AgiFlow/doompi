@@ -1,7 +1,7 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ComponentProps, type ReactNode, useEffect, useRef } from 'react';
-import { cn } from '../lib/cn.ts';
-import { optionMarker } from '../lib/optionList.ts';
+import { cn } from '../lib/cn';
+import { optionMarker } from '../lib/optionList';
 
 export const optionListVariants = cva('flex min-h-0 flex-1 flex-col overflow-y-auto', {
   variants: {

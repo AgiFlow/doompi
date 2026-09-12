@@ -1,33 +1,34 @@
+import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { workflowSkillDirectory } from '../services/workflowResource';
-import type { PiPluginContributions, PiEventHandlers } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import type { PiPluginContributions, PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, extname, resolve } from 'node:path';
-import { resolveRootSessionId, SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';
+import { resolveRootSessionId, SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
 import {
   defineMinorMode,
   type MinorModeOwner,
   type MinorModeOwnerActionContext,
   type MinorModeState,
-} from '@agimon-ai/doompi-extension-contracts/mode';
+} from '@agimon-ai/doompi-minor-mode';
 import {
   createNarrationRequest,
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
   requireDoomNarrationService,
-} from '@agimon-ai/doompi-extension-contracts/narration';
+} from '@agimon-ai/doompi-core/narration';
 import {
   createDoomReadinessCoordinator,
   type DoomReadinessCoordinator,
   type DoomReadinessHandle,
   type DoomReadinessNotification,
   readDoomReadinessCoordinator,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
+} from '@agimon-ai/doompi-core/readiness';
 
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context } from '@deepseek-ai/cordis';
 import {
@@ -440,7 +441,7 @@ export interface WorkflowPiExtensionOptions {
 
 export interface WorkflowPiRuntime extends Pick<
   PiPluginContributions,
-  'events' | 'shortcuts' | 'messageRenderers' | 'services' | 'minorModes' | 'toolRestrictions'
+  'events' | 'shortcuts' | 'messageRenderers' | 'services' | 'toolRestrictions'
 > {
   readonly commands: readonly (readonly [...Parameters<ExtensionAPI['registerCommand']>])[];
   readonly toolDependencies: WorkflowPiToolDependencies;
@@ -2454,7 +2455,7 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
     messageRenderers,
     toolDependencies,
     waitForReadiness,
-    services,
+    services: [...(services ?? []), piMinorModes([modeContribution])],
     shortcuts: [
       [
         UNFOLLOW_SHORTCUT,
@@ -2507,7 +2508,7 @@ export function createWorkflowPiRuntime(pi: ExtensionAPI, options: WorkflowPiExt
       ],
     ],
     events: { session_start: onSessionStart, resources_discover: onResourcesDiscover },
-    minorModes: [modeContribution],
+
     toolRestrictions: [
       {
         source: PACKAGE_SOURCE,

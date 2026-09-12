@@ -3,12 +3,9 @@ import {
   type DoomHeadlessActivity,
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHostService,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-extension-contracts/hub-channel';
-import {
-  DOOM_SERVER_HOST_SERVICE,
-  type DoomServerHostService,
-} from '@agimon-ai/doompi-extension-contracts/server-facet';
+} from '@agimon-ai/doompi-core/headless';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { runnerServerFacet } from '../../../src/extensions/server';

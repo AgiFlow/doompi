@@ -1,6 +1,6 @@
-import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { createSandboxCommand } from './doomSandboxCommand';
-import { type DoomHeadlessActivity, type DoomHeadlessResource } from '@agimon-ai/doompi-extension-contracts/headless';
+import { type DoomHeadlessActivity, type DoomHeadlessResource } from '@agimon-ai/doompi-core/headless';
 import { DefaultSandboxExtensionService } from '../services/extensionService';
 import { startBroker, type RunningBroker } from '../services/brokerHost';
 

@@ -8,7 +8,7 @@ import {
   resultTextLines,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import { grepCallView } from '../lib/grepToolView';
 
 /**

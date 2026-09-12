@@ -2,9 +2,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { expect, it } from 'vitest';
-import { HistoryImportCommand } from '../../../../src/controllers/historyImportCommand';
-import { openSqliteSessionStorage } from '../../../../src/services/sqliteSessionStorage';
-import { createHistoryOwnership } from '../../../../src/services/historyOwnership';
+import { runHistoryImport } from '../../../../src/cli/commands/history-import';
+import { openSqliteSessionStorage } from '@agimon-ai/doompi-core/sqlite-session-storage';
+import { createHistoryOwnership } from '@agimon-ai/doompi-core/history-ownership';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 
 it('imports v4 history without modifying the source and verifies a repeated offline import', async () => {
@@ -31,15 +31,15 @@ it('imports v4 history without modifying the source and verifies a repeated offl
         .map((record) => JSON.stringify(record))
         .join('\n') + '\n';
     await fs.writeFile(source, original);
-    const command = new HistoryImportCommand();
+
     const output: string[] = [];
     const args = ['history-import', source, destination, '--format', 'sqlite', '--confirm-offline'];
-    await command.execute(args, process.env, directory, {
+    await runHistoryImport(args, process.env, directory, {
       write: (text) => {
         output.push(text);
       },
     });
-    await command.execute(args, process.env, directory, {
+    await runHistoryImport(args, process.env, directory, {
       write: (text) => {
         output.push(text);
       },
@@ -96,7 +96,7 @@ it('normalizes v3 through Pi before publishing the SQLite destination', async ()
         .join('\n') + '\n';
     await fs.writeFile(source, original);
     const output: string[] = [];
-    await new HistoryImportCommand().execute(
+    await runHistoryImport(
       ['history-import', source, destination, '--format', 'sqlite', '--confirm-offline'],
       process.env,
       directory,

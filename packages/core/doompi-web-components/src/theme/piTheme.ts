@@ -1,5 +1,5 @@
-import type { ThemeConfig, ThemeScheme } from '../types/theme.ts';
-import { parseThemeConfig } from './parse.ts';
+import type { ThemeConfig, ThemeScheme } from '../types/theme';
+import { parseThemeConfig } from './parse';
 
 /**
  * The Pi TUI theme shape (theme-schema.json): a palette of named vars and

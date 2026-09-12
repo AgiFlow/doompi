@@ -1,4 +1,4 @@
-import type { DoomHubChannel, DoomHubChannelSource } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { DoomHubChannel, DoomHubChannelSource } from '@agimon-ai/doompi-core/hub-channel';
 import { RUNNER_RUNS_TYPE } from '../../constants/webRunners';
 import { type RunnerRunView } from '../../types/webRunners';
 

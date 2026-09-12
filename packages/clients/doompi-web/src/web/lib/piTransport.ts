@@ -1,5 +1,5 @@
 import type { ByteTransport, ByteTransportFactory, ByteTransportHandlers } from '@earendil-works/pi-client';
-import { sealedProtocolSession } from './sealedSession.ts';
+import { sealedProtocolSession } from './sealedSession';
 
 const PROTOCOL_PATH = '/api/pi';
 const MAX_PENDING_BYTES = 64 * 1024 * 1024;

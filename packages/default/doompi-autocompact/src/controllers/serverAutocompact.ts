@@ -1,5 +1,5 @@
 import { loadDoomConfig } from '@agimon-ai/doompi-config';
-import { type DoomHeadlessActivity, type DoomHeadlessResource } from '@agimon-ai/doompi-extension-contracts/headless';
+import { type DoomHeadlessActivity, type DoomHeadlessResource } from '@agimon-ai/doompi-core/headless';
 
 export const autocompactResource: DoomHeadlessResource = {
   name: 'doompi/autocompact-config',

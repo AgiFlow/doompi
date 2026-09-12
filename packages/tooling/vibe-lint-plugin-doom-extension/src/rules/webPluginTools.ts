@@ -263,7 +263,7 @@ function toolDefinitions(configRoot: string): { tools: ToolDefinition[]; ignored
     if (isTestPath(filePath)) continue;
     const helperPath = projectPath(filePath, configRoot);
     if (
-      readManifest(configRoot)?.name === '@agimon-ai/doompi-extension-contracts' &&
+      readManifest(configRoot)?.name === '@agimon-ai/doompi-core' &&
       (helperPath === 'src/controllers/piExtension.ts' || helperPath === 'src/controllers/serverPlugin.ts')
     )
       continue;

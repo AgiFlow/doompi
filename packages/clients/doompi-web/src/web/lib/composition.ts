@@ -1,6 +1,6 @@
-import type { DockFaceContribution, SelectionAxisContribution, TransientTab } from '@agimon-ai/doompi-web-contracts';
+import type { DockFaceContribution, SelectionAxisContribution, TransientTab } from '@agimon-ai/doompi-core/web';
 import { useCallback, useSyncExternalStore } from 'react';
-import type { MinorModeProjection, MinorModeRecordProjection } from '../../types/hub.ts';
+import type { MinorModeProjection, MinorModeRecordProjection } from '../../types/hub';
 import {
   pluginActivityGroups,
   pluginDockFaces,
@@ -9,8 +9,8 @@ import {
   pluginSelectionAxes,
   subscribeWebPluginRegistry,
   webPluginRegistryRevision,
-} from './pluginRegistry.ts';
-import { stripAnsi } from './statusLine.ts';
+} from './pluginRegistry';
+import { stripAnsi } from './statusLine';
 
 export interface SelectionAxis {
   name: string;

@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { parseServeOptions } from '../../src/services/serveOptions.ts';
-import { contentTypeFor, resolveAssetPath } from '../../src/services/staticAssets.ts';
+import { parseServeOptions } from '../../src/services/serveOptions';
+import { contentTypeFor, resolveAssetPath } from '../../src/services/staticAssets';
 
 describe('parseServeOptions', () => {
   it('defaults to a loopback presentation server and the local headless endpoint', () => {

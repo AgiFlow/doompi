@@ -1,4 +1,4 @@
-import { type DoomHeadlessHook, type DoomHeadlessResource } from '@agimon-ai/doompi-extension-contracts/headless';
+import { type DoomHeadlessHook, type DoomHeadlessResource } from '@agimon-ai/doompi-core/headless';
 import { sha256Base64Url } from '../services/digest';
 import { canonicalJson } from '../services/canonical';
 import { createPromptCacheKey, createPromptCacheModelFingerprint } from '../services/namespace';

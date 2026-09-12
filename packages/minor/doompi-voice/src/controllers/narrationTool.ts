@@ -2,7 +2,7 @@ import {
   MAX_NARRATION_TEXT_CHARACTERS,
   NarrationRequestSchema,
   normalizeNarrationText,
-} from '@agimon-ai/doompi-extension-contracts/narration';
+} from '@agimon-ai/doompi-core/narration';
 import { VOICE_NARRATE_TOOL_NAME } from '../constants/voiceTools';
 import { type VoiceToolErrorPayload } from '../schemas/voiceTools';
 import { type VoiceToolSessionHandle } from '../services/voiceTools';

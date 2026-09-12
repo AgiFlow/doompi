@@ -1,10 +1,7 @@
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import type { LeaderBinding } from '@agimon-ai/doompi-extension-contracts/leader';
-import {
-  DOOM_NOTIFICATION_SERVICE,
-  type DoomNotificationService,
-} from '@agimon-ai/doompi-extension-contracts/notification';
-import { requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import type { LeaderBinding } from '@agimon-ai/doompi-core/leader';
+import { DOOM_NOTIFICATION_SERVICE, type DoomNotificationService } from '@agimon-ai/doompi-core/notification';
+import { requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type {
   KeybindingsManager as CodingKeybindingsManager,
   ExtensionAPI,

@@ -15,7 +15,7 @@ import {
   DOOM_DELEGATION_STARTED_EVENT,
   DOOM_DELEGATION_UPDATED_EVENT,
   type DoomDelegationService,
-} from '@agimon-ai/doompi-extension-contracts/delegation';
+} from '@agimon-ai/doompi-team/delegation';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import {

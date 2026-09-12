@@ -1,4 +1,4 @@
-import { definePiTool, type PiToolDeclaration } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiTool, type PiToolDeclaration } from '@agimon-ai/doompi-core/pi-extension';
 import {
   createEditToolDefinition,
   createFindToolDefinition,

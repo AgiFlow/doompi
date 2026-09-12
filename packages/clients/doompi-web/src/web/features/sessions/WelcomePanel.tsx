@@ -1,5 +1,5 @@
 import { Button, EmptyState, Kbd, PlusIcon } from '@agimon-ai/doompi-web-components';
-import { openNewSession } from '../../stores/newSessionStore.ts';
+import { openNewSession } from '../../stores/newSessionStore';
 
 /**
  * What the cockpit shows before there is anything to show.

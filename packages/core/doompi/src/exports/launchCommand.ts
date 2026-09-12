@@ -1,1 +1,1 @@
-export * from '../controllers/launchCommand';
+export * from '../cli/commands/launch';

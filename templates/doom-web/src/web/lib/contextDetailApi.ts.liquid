@@ -1,4 +1,4 @@
-import { type ContextItemDetail, type ContextItemKind, itemDetailUrl } from '@agimon-ai/doompi/context-api';
+import { type ContextItemDetail, type ContextItemKind, itemDetailUrl } from '@agimon-ai/doompi-core/context-api';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
 /**

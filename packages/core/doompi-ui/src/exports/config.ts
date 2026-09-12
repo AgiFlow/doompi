@@ -15,7 +15,7 @@ export type {
   DoomConfigInvocation,
   DoomConfigSectionView,
   DoomExtensionContext,
-} from '@agimon-ai/doompi-extension-contracts/config';
+} from '@agimon-ai/doompi-core/config';
 export {
   CONFIG_ACTION,
   ConfigActionSchema,
@@ -27,4 +27,4 @@ export {
   ConfigSourceSchema,
   ConfigStatusSchema,
   ConfigStepSchema,
-} from '@agimon-ai/doompi-extension-contracts/config';
+} from '@agimon-ai/doompi-core/config';

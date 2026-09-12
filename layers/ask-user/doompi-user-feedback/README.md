@@ -99,7 +99,7 @@ without retaining the old provider.
 ## Public API
 
 Question and result types are available from the package root. Cross-extension ask-user events and
-Voice services come from `@agimon-ai/doompi-extension-contracts`; consumers should use those Cordis
+Voice services come from `@agimon-ai/doompi-core`; consumers should use those Cordis
 contracts. Pi loads the default export of `/extensions/pi` through package metadata, so installation
 does not require a manual registration call.
 

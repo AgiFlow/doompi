@@ -1,8 +1,5 @@
-import {
-  createDoomReadinessCoordinator,
-  DOOM_READINESS_SERVICE,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { createDoomReadinessCoordinator, DOOM_READINESS_SERVICE } from '@agimon-ai/doompi-core/readiness';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

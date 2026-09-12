@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { mirrorComposition } from '../compositionMirror';
-import type { DoomHubSessionService } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { DoomHubSessionService } from '@agimon-ai/doompi-core/hub-channel';
 import { registryFile, worktreesRoot } from '../paths';
 import { repositoryId, repositoryLabel, shortId } from '../repositoryIdentity';
 import { MAX_WORKTREE_MESSAGE_BYTES, type WorktreeMessageInbox, type WorktreeMessageParty } from '../worktreeEvents';

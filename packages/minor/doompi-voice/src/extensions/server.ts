@@ -1,4 +1,4 @@
-import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { createVoiceServer } from '../controllers/voiceServer';
 import { createVoiceMediaWakeChannel, createVoiceOwnershipChannel } from '../controllers/voiceMediaHubChannel';
 import { api } from '../controllers/voiceSessionApi';

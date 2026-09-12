@@ -1,4 +1,4 @@
-import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { createSubagentsChannel } from '../controllers/webSubagentsChannel';
 import { createSubagentCatalogChannel } from '../controllers/webSubagentCatalogChannel';
 import { api } from '../controllers/teamCatalogApi';
@@ -6,20 +6,16 @@ import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessTool,
   type DoomHeadlessToolResult,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import { readDoomChildSessionService } from '@agimon-ai/doompi-extension-contracts/child-session';
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+} from '@agimon-ai/doompi-core/headless';
+import { readDoomChildSessionService } from '@agimon-ai/doompi-core/child';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
 import type { NativeAsyncJobProjection, TrackedAsyncJob } from '../services/asyncJobTracker';
-import { DOOM_BACKGROUND_WORK_SERVICE } from '@agimon-ai/doompi-extension-contracts/background-work';
-import { DOOM_DELEGATION_SERVICE } from '@agimon-ai/doompi-extension-contracts/delegation';
-import { DOOM_SUBAGENT_POLICY_SERVICE } from '@agimon-ai/doompi-extension-contracts/subagent-policy';
+import { DOOM_BACKGROUND_WORK_SERVICE } from '@agimon-ai/doompi-core/background-work';
+import { DOOM_DELEGATION_SERVICE } from '../schemas/delegationApi';
+import { DOOM_SUBAGENT_POLICY_SERVICE } from '../schemas/subagentPolicy';
 import type { Context } from '@deepseek-ai/cordis';
 import { Check } from 'typebox/value';
-import {
-  SUBAGENT_ACTIONS,
-  SubagentParams,
-  type SubagentToolParams,
-} from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+import { SUBAGENT_ACTIONS, SubagentParams, type SubagentToolParams } from '../schemas/subagentTool';
 import { catalogModels, presentCatalog } from '../services/webSubagentCatalog';
 import {
   SUBAGENT_CATALOG_TYPE,

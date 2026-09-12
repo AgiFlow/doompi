@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import { Hono } from 'hono';
 import { createAuthorBridgeState, type AuthorBridgeState } from '../models/authorBridgeState';
 import { API_BASE_PATH, AUTHOR_STATE_PATH, type AuthorSessionView } from '../types/authorApi';

@@ -2,7 +2,7 @@ import {
   createDoomToolSurface,
   DOOM_TOOL_SURFACE_SERVICE,
   type DoomToolSurfaceService,
-} from '@agimon-ai/doompi-extension-contracts/tool-surface';
+} from '@agimon-ai/doompi-core/tool-surface';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';

@@ -1,5 +1,5 @@
 import { listDomainNames } from '@agimon-ai/doompi-config/domains';
-import { type DoomHeadlessCommand, type DoomHeadlessHostService } from '@agimon-ai/doompi-extension-contracts/headless';
+import { type DoomHeadlessCommand, type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
 import {
   DOMAIN_COMMAND,
   domainToggleOptions,

@@ -7,7 +7,7 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
   DoomHeadlessResource,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { majorModeServerFacet as majorModeHeadlessFacet } from '../../src/extensions/server';
 
@@ -59,7 +59,7 @@ async function setup() {
     repoRoot: root,
     sessionId: 'test',
     environment: {},
-    selection: { majorMode: 'development', activeLayers: [], domains: [], minorModes: [] },
+    selection: { majorMode: 'development', activeLayers: [], domains: [], state: {} },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {
       entries: () => [],

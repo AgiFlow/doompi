@@ -1,5 +1,5 @@
-import type { LeaderTone } from '@agimon-ai/doompi-extension-contracts/leader';
-import type { MinorModeRecord, ModeTextColor } from '@agimon-ai/doompi-extension-contracts/mode';
+import type { LeaderTone } from '@agimon-ai/doompi-core/leader';
+import type { MinorModeRecord, ModeTextColor } from '@agimon-ai/doompi-minor-mode';
 
 export interface LeaderOption {
   key: string;

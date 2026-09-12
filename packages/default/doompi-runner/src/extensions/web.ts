@@ -1,4 +1,4 @@
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { BashToolMessage } from '../web/components/BashToolMessage';
 import { RunnersActivitySection } from '../web/components/RunnersActivitySection';
 import { runnersTab } from '../web/components/RunnersPanel';

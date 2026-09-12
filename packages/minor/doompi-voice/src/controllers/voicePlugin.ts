@@ -1,14 +1,11 @@
 import { createVoiceDependencies } from '../services/voiceDependencies';
 import { resolveVoiceConfig } from '@agimon-ai/doompi-config/config';
-import { type PiPluginContributions } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-import {
-  type DoomReadinessCoordinator,
-  readDoomReadinessCoordinator,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
-import type { DoomConfigContributionHandle } from '@agimon-ai/doompi-extension-contracts/config';
-import type { DoomFooterContributionHandle } from '@agimon-ai/doompi-extension-contracts/footer';
-import type { DoomLeaderContributionHandle, LeaderBinding } from '@agimon-ai/doompi-extension-contracts/leader';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import { type DoomReadinessCoordinator, readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
+import type { DoomConfigContributionHandle } from '@agimon-ai/doompi-core/config';
+import type { DoomFooterContributionHandle } from '@agimon-ai/doompi-core/footer';
+import type { DoomLeaderContributionHandle, LeaderBinding } from '@agimon-ai/doompi-core/leader';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { VoiceConfigController } from './voiceConfig';

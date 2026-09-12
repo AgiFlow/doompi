@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { AuthorPanel } from '../../src/web/components/AuthorPanel';
 import { AuthorRegionDrafts } from '../../src/web/components/AuthorRegionDrafts';
 import { AuthorToolPalette } from '../../src/web/components/AuthorToolPalette';
@@ -14,7 +14,7 @@ vi.mock('react', async (original) => ({
 vi.mock('@tanstack/react-store', () => ({
   useStore: (store: { state: unknown }, selector: (state: unknown) => unknown) => selector(store.state),
 }));
-vi.mock('../../src/web/stores/authorCapture.ts', async (original) => ({
+vi.mock('../../src/web/stores/authorCapture', async (original) => ({
   ...(await original<typeof import('../../src/web/stores/authorCapture')>()),
   multiRegionCaptureProvider: vi.fn(() => ({
     capture: vi.fn(async () => ({ data: 'aW1hZ2U=', mimeType: 'image/png' })),

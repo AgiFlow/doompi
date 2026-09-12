@@ -1,15 +1,9 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  readDoomMcpProjectionService,
-  type DoomMcpProjection,
-} from '@agimon-ai/doompi-extension-contracts/mcp-projection';
-import { readDoomReadinessCoordinator } from '@agimon-ai/doompi-extension-contracts/readiness';
-import {
-  DOOM_NOTIFICATION_SERVICE,
-  type DoomNotificationService,
-} from '@agimon-ai/doompi-extension-contracts/notification';
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { readDoomMcpProjectionService, type DoomMcpProjection } from '@agimon-ai/doompi-core/mcp-projection';
+import { readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
+import { DOOM_NOTIFICATION_SERVICE, type DoomNotificationService } from '@agimon-ai/doompi-core/notification';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 
 const mocks = vi.hoisted(() => ({
   harness: {

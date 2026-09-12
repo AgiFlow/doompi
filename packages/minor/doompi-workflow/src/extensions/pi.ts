@@ -1,9 +1,6 @@
-import { definePiExtension, definePiTool } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-import {
-  DOOM_SKILL_SOURCES_SERVICE,
-  requireDoomSkillSourcesService,
-} from '@agimon-ai/doompi-extension-contracts/skills';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
+import { DOOM_SKILL_SOURCES_SERVICE, requireDoomSkillSourcesService } from '@agimon-ai/doompi-core/skills';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import { createWorkflowPiRuntime, type WorkflowPiExtensionOptions } from '../tui/workflowRuntime';
 import { registerLeaderContribution } from '../tui/leader';
@@ -92,7 +89,7 @@ export const workflowExtension = definePiExtension<Partial<WorkflowPiExtensionOp
       shortcuts: runtime.shortcuts?.map(([key, shortcut]) => fence.shortcut(key, shortcut)),
       events: fence.events(runtime.events ?? {}),
       messageRenderers: runtime.messageRenderers,
-      minorModes: runtime.minorModes,
+
       toolRestrictions: [
         ...(runtime.toolRestrictions ?? []),
         ...(dispatcher ? [{ source: `${PACKAGE_SOURCE}/dispatcher`, restrict: dispatcherToolRestriction() }] : []),

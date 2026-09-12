@@ -1,4 +1,4 @@
-import { sendSessionProtocolFrame } from './sessionProtocolCommands.ts';
+import { sendSessionProtocolFrame } from './sessionProtocolCommands';
 
 type Frame = Record<string, unknown>;
 

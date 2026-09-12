@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { listDomainNames, type PluginSkillDiscovery, resolvePluginEntries } from '@agimon-ai/doompi-config/domains';
-import type { SkillSourceContribution } from '@agimon-ai/doompi-extension-contracts/skills';
+import type { SkillSourceContribution } from '@agimon-ai/doompi-core/skills';
 import { formatSkillsForPrompt, loadSkillsFromDir, type Skill } from '@earendil-works/pi-coding-agent';
 import { materializePluginEntries } from '@agimon-ai/doompi-domain/plugins';
 

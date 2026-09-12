@@ -4,15 +4,15 @@ import type {
   SessionServiceState,
   TranscriptPage,
   TranscriptPageRequest,
-} from '@agimon-ai/doompi-extension-contracts/session-protocol';
-import { createPagedTranscript } from '../../src/web/stores/pagedTranscriptStore.ts';
+} from '@agimon-ai/doompi-core/session-protocol';
+import { createPagedTranscript } from '../../src/web/stores/pagedTranscriptStore';
 import {
   applySessionFrame,
   dropSessionStore,
   requestOlderHistory,
   requestNewerHistory,
   sessionStoreFor,
-} from '../../src/web/stores/sessionStore.ts';
+} from '../../src/web/stores/sessionStore';
 
 const id = 'paged-test';
 afterEach(() => dropSessionStore(id));

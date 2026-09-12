@@ -13,7 +13,7 @@ import {
 } from '../../src/services/externalProcessIpc';
 import { createSessionScope, type SessionScope } from '../../src/services/sessionPaths';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
-import type { DoomChildSessionHandle } from '@agimon-ai/doompi-extension-contracts/child-session';
+import type { DoomChildSessionHandle } from '@agimon-ai/doompi-core/child';
 
 const trackers: AsyncJobTracker[] = [];
 const externalIpcs: ExternalProcessIpc[] = [];

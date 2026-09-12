@@ -12,7 +12,7 @@
  * - Asserting on surface.active() immediately after construction: cordis.inject
  *   resolves asynchronously and the surface is still unrestricted there.
  */
-import { createDoomToolSurface } from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
 import { describe, expect, it } from 'vitest';
 import { {{ restrictionName | camelCase }}ToolRestriction } from '../../../src/services/{{ restrictionName | camelCase }}Tools';
 

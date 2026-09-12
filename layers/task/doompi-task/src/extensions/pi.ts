@@ -5,21 +5,21 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProviderHandle,
   readDoomBackgroundWorkService,
-} from '@agimon-ai/doompi-extension-contracts/background-work';
-import { definePiExtension, definePiTool } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+} from '@agimon-ai/doompi-core/background-work';
+import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
 import {
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
   requireDoomContextContributions,
-} from '@agimon-ai/doompi-extension-contracts/context-contributions';
-import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-extension-contracts/delegation';
+} from '@agimon-ai/doompi-core/context-contributions';
+import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-team/delegation';
 import {
   createNarrationRequest,
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
   requireDoomNarrationService,
-} from '@agimon-ai/doompi-extension-contracts/narration';
-import { readDoomReadinessCoordinator } from '@agimon-ai/doompi-extension-contracts/readiness';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-core/narration';
+import { readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { KeyId } from '@earendil-works/pi-tui';
 import { Text } from '@earendil-works/pi-tui';

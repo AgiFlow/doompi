@@ -4,7 +4,7 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
   DoomHeadlessResource,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { describe, expect, it, vi } from 'vitest';
 import { uiServerFacet } from '../../src/extensions/server';
 

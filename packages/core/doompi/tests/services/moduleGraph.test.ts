@@ -35,18 +35,18 @@ describe('startup module graph boundaries', () => {
     // happen before anything else is read, so it may not pull in a graph.
     expect(runtimeImports(bootstrap)).toEqual([
       "import { pathToFileURL } from 'node:url';",
-      "import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';",
-      "import { acquireBootstrapClaim } from '../models/bootstrapClaim';",
-      "import { findSyncedRoot, readStartupBootstrapStatus } from '../services/bootstrapLocator';",
+      "import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-core/child-process';",
+      "import { acquireBootstrapClaim } from '../builders/cli/bootstrapClaim';",
+      "import { findSyncedRoot, readStartupBootstrapStatus } from '../builders/cli/bootstrapLocator';",
     ]);
-    expect(runtimeImports(source('src/models/bootstrapClaim.ts'))).toEqual(["import path from 'node:path';"]);
+    expect(runtimeImports(source('src/builders/cli/bootstrapClaim.ts'))).toEqual(["import path from 'node:path';"]);
     expect(bootstrap).not.toContain('startupPrecompiler');
     expect(bootstrap).not.toContain('syncedRuntimeBuilder');
   });
 
   it('loads domain switching through the standalone fixed-core package', () => {
-    const composer = source('src/controllers/composer.ts');
-    const composition = source('src/services/extensionAssembler/index.ts');
+    const composer = source('src/builders/cli/composition.ts');
+    const composition = source('src/builders/cli/extensionAssembler/index.ts');
 
     expect(composer).toContain('@agimon-ai/doompi-domain/apply');
     expect(composer).not.toContain("'./matrixSwitcher.ts'");
@@ -58,7 +58,7 @@ describe('startup module graph boundaries', () => {
     const paths = [
       'src/extensions/composedPi.ts',
       'src/extensions/styleSystem.ts',
-      'src/services/harnessState/index.ts',
+      'src/composition/harnessState/index.ts',
     ];
 
     for (const relativePath of paths) {

@@ -4,7 +4,7 @@ import {
   supersedeDoomConfigTransition,
 } from '@agimon-ai/doompi-config/piContext';
 import type { DoomConfigContext, DoomConfigPendingSelection } from '@agimon-ai/doompi-config/types';
-import type { TransitionSelectionSnapshot } from '@agimon-ai/doompi-extension-contracts/transition';
+import type { TransitionSelectionSnapshot } from '@agimon-ai/doompi-core/transition';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 

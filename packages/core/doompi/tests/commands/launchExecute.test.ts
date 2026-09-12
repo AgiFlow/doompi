@@ -5,8 +5,8 @@ import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LaunchCommand } from '../../src/controllers/launchCommand';
-import { HARNESS_EVENT, type HarnessTelemetry } from '../../src/exports/logSinkTelemetry';
+import { LaunchCommand } from '../../src/cli/commands/launch';
+import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/log-sink-telemetry';
 import type { HarnessContext } from '../../src/exports/harnessContext';
 
 const spawnMock = vi.hoisted(() => vi.fn());
@@ -15,7 +15,7 @@ const runtimeBundleMocks = vi.hoisted(() => ({
   createRuntimeExtensionPlan: vi.fn(),
 }));
 vi.mock('cross-spawn', () => ({ default: spawnMock }));
-vi.mock('../../src/services/runtimeBundle', () => runtimeBundleMocks);
+vi.mock('../../src/builders/cli/runtimeBundle', () => runtimeBundleMocks);
 
 const realStdin = process.stdin;
 

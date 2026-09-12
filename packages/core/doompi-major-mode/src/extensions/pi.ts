@@ -1,4 +1,4 @@
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import { createMajorModeRuntime } from '../controllers/majorModeRuntime';
 import { createMajorModeTelemetry } from '../services/logSinkTelemetry';
 import { MAJOR_MODE_SOURCE } from '../types/majorMode';

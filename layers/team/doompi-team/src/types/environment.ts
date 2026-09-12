@@ -23,7 +23,7 @@ export {
   SUBAGENT_CHILD_ENV,
   SUBAGENT_PARENT_SESSION_ENV,
   SUBAGENT_ROOT_SESSION_ENV,
-} from '@agimon-ai/doompi-extension-contracts/child-process';
+} from '@agimon-ai/doompi-core/child-process';
 
 export const SUBAGENT_RUN_ID_ENV = 'PI_SUBAGENT_RUN_ID';
 export const SUBAGENT_CHILD_AGENT_ENV = 'PI_SUBAGENT_CHILD_AGENT';

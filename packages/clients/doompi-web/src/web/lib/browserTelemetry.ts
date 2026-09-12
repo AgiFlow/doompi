@@ -1,4 +1,4 @@
-import { sealedHttpSession } from './sealedSession.ts';
+import { sealedHttpSession } from './sealedSession';
 
 const ROUTE = '/api/telemetry/browser';
 const MAX_QUEUE = 32;

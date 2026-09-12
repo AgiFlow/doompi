@@ -1,5 +1,5 @@
 import { BookmarkPlusIcon } from '@agimon-ai/doompi-web-components';
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { PromptsComposerMenuItem } from '../web/components/PromptsComposerMenuItem';
 import { PromptsDialogHost } from '../web/components/PromptsDialogHost';
 import { requestMessagePromptDraft } from '../web/lib/messagePromptDraft';

@@ -1,4 +1,4 @@
-import type { ThreadViewOptions } from '@agimon-ai/doompi-web-contracts';
+import type { ThreadViewOptions } from '@agimon-ai/doompi-core/web';
 import type { ReactNode } from 'react';
 
 type ThreadRenderer = (sessionId: string, threadId: string, options?: ThreadViewOptions) => ReactNode;

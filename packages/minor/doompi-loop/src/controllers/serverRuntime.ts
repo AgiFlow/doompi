@@ -1,4 +1,5 @@
-import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-extension-contracts/mode';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
+import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import { createDoomLoopLaunchersService, type LoopLaunchersDependencies } from '../services/loopLaunchers';
 import type { DoomLoopLaunchersService, LoopLauncherRegistration, StoppableLoop } from '../schemas/loopLaunchers';
 import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../constants/loop';
@@ -30,17 +31,14 @@ function numberInput(value: unknown, fallback: number): number {
   return parsed;
 }
 
-import {
-  type DoomHeadlessExecutionContext,
-  type DoomHeadlessHostService,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { type DoomHeadlessExecutionContext, type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 export function createSessionState(host: DoomHeadlessHostService): DoomServerSessionPlugin {
   let launchers: DoomLoopLaunchersService | undefined;
   let defaultRegistration: LoopLauncherRegistration | undefined;
   let unsubscribe: (() => void) | undefined;
   let modeOwner: MinorModeOwner | undefined;
-  const modeSelected = (): boolean => host.context.selection.minorModes.includes(MODE_ID);
+  const modeSelected = (): boolean => (host.context.selection.state?.['minor-mode'] ?? []).includes(MODE_ID);
   const modeState = (): MinorModeState => {
     const launcherCount = launchers?.listLaunchers().length ?? 0;
     const active = (launchers?.listInstances().length ?? 0) > 0;
@@ -164,8 +162,8 @@ export function createSessionState(host: DoomHeadlessHostService): DoomServerSes
     async handleAction(_runtime, actionId, argumentsValue, { signal }) {
       signal.throwIfAborted();
       if (actionId === 'start' && !launchers) {
-        const modes = host.context.selection.minorModes.filter((mode) => mode !== MODE_ID);
-        await host.changeSelection({ axis: 'minorModes', minorModes: [...modes, MODE_ID] });
+        const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== MODE_ID);
+        await host.changeSelection({ axis: 'state', key: 'minor-mode', values: [...modes, MODE_ID] });
       }
       if (!launchers) throw new Error('Loop activity is not active.');
       if (actionId === 'start') {
@@ -182,8 +180,8 @@ export function createSessionState(host: DoomHeadlessHostService): DoomServerSes
           String(argumentsValue.reason ?? 'Stopped through minor_mode.'),
         );
         if (stopped && launchers.listInstances().length === 0) {
-          const modes = host.context.selection.minorModes.filter((mode) => mode !== MODE_ID);
-          await host.changeSelection({ axis: 'minorModes', minorModes: modes });
+          const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== MODE_ID);
+          await host.changeSelection({ axis: 'state', key: 'minor-mode', values: modes });
         }
         publishMode();
         return { message: stopped ? 'Loop stopped.' : 'Loop instance was not active.' };
@@ -192,19 +190,25 @@ export function createSessionState(host: DoomHeadlessHostService): DoomServerSes
     },
   }).createOwner(undefined);
   return {
-    minorModes: [modeOwner],
+    services: [serverMinorModes([modeOwner])],
     resources: [
       {
-        when: { minorMode: MODE_ID },
+        when: { state: { 'minor-mode': MODE_ID }, attribution: { kind: 'minor', mode: MODE_ID } },
         name: 'doompi-use-loop',
         kind: 'skill',
         read: () => readLoopResource(),
       },
     ],
-    activities: [{ when: { minorMode: MODE_ID }, name: 'doompi-loop', start: startActivity }],
+    activities: [
+      {
+        when: { state: { 'minor-mode': MODE_ID }, attribution: { kind: 'minor', mode: MODE_ID } },
+        name: 'doompi-loop',
+        start: startActivity,
+      },
+    ],
     commands: [
       {
-        when: { minorMode: MODE_ID },
+        when: { state: { 'minor-mode': MODE_ID }, attribution: { kind: 'minor', mode: MODE_ID } },
         name: START_COMMAND_NAME,
         description: 'Start a registered loop.',
         async execute(args: string, execution: DoomHeadlessExecutionContext) {
@@ -223,7 +227,7 @@ export function createSessionState(host: DoomHeadlessHostService): DoomServerSes
         },
       },
       {
-        when: { minorMode: MODE_ID },
+        when: { state: { 'minor-mode': MODE_ID }, attribution: { kind: 'minor', mode: MODE_ID } },
         name: LIST_COMMAND_NAME,
         description: 'List and stop active loops.',
         async execute(_args: string, execution: DoomHeadlessExecutionContext) {
@@ -235,7 +239,7 @@ export function createSessionState(host: DoomHeadlessHostService): DoomServerSes
     ],
     hooks: [
       {
-        when: { minorMode: MODE_ID },
+        when: { state: { 'minor-mode': MODE_ID }, attribution: { kind: 'minor', mode: MODE_ID } },
         event: 'session_shutdown',
         async handle() {
           await launchers?.stopAll('Headless session shutdown.');

@@ -1,7 +1,7 @@
-import { sealedHttpSession } from '../../lib/sealedSession.ts';
-import { fetchWithStepUp } from '../../lib/stepUp.ts';
-import type { InstalledSettingsPanel } from '../../lib/pluginRegistry.ts';
-import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
+import { sealedHttpSession } from '../../lib/sealedSession';
+import { fetchWithStepUp } from '../../lib/stepUp';
+import type { InstalledSettingsPanel } from '../../lib/pluginRegistry';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 /**
  * The frame around a settings page a package draws itself.

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { shutdownRuntime, startRuntime, writeMinimalDoomRepository } from './packHelpers';
+import { packageRootFor } from './packageMatrix';
 import { type ScriptedModel, startScriptedModel } from './support/scriptedModel';
 
 /**
@@ -27,9 +28,8 @@ const TEST_TIMEOUT_MS = 120_000;
 /** The turn is one round trip to a local server; a slow machine is still seconds. */
 const SETTLE_TIMEOUT_MS = 60_000;
 /**
- * The first launch in a fresh agent directory installs the published DoomPi
- * packages the checked-in modes file names, which is a registry download and
- * an npm install, not a turn. That is warmed once here so no test measures it:
+ * The fixture resolves DoomPi packages from the workspace. The first launch
+ * compiles that composition and may install external packages, not a turn. That is warmed once here so no test measures it:
  * on a cold or contended runner the install can take several minutes, and the
  * failure otherwise looks like a composition that never answered.
  */
@@ -42,7 +42,7 @@ interface Fixture {
 
 const fixtures: string[] = [];
 const models: ScriptedModel[] = [];
-/** Shared so the registry-backed package install happens once in the warm-up. */
+/** Shared so any external package installation happens once in the warm-up. */
 let agentDirectory = '';
 let warmedPackageDirectory = '';
 
@@ -54,8 +54,11 @@ beforeAll(async () => {
   try {
     runtime.send({ id: 'warmup', type: 'prompt', message: 'say hello' });
     await runtime.waitForRecord((record) => record.type === 'agent_settled', WARMUP_TIMEOUT_MS);
-    warmedPackageDirectory = path.join(agentDirectory, 'managed-packages');
-    fs.cpSync(path.join(fixture.root, '.pi', 'npm'), warmedPackageDirectory, { recursive: true });
+    const installed = path.join(fixture.root, '.pi', 'npm');
+    if (fs.existsSync(installed)) {
+      warmedPackageDirectory = path.join(agentDirectory, 'managed-packages');
+      fs.cpSync(installed, warmedPackageDirectory, { recursive: true });
+    }
   } finally {
     await shutdownRuntime(runtime);
     await model.close();
@@ -84,7 +87,10 @@ function createFixture(model: ScriptedModel): Fixture {
   const home = path.join(base, 'home');
   for (const directory of [root, home]) fs.mkdirSync(directory, { recursive: true });
   writeMinimalDoomRepository(root);
-  fs.copyFileSync(CHECKED_IN_MODES, path.join(root, '.doom', 'modes.yaml'));
+  const modes = fs
+    .readFileSync(CHECKED_IN_MODES, 'utf8')
+    .replace(/"(@agimon-ai\/doompi-[a-z-]+)"/gu, (_match, name: string) => JSON.stringify(packageRootFor(name)));
+  fs.writeFileSync(path.join(root, '.doom', 'modes.yaml'), modes);
   if (warmedPackageDirectory !== '') {
     fs.cpSync(warmedPackageDirectory, path.join(root, '.pi', 'npm'), { recursive: true });
   }

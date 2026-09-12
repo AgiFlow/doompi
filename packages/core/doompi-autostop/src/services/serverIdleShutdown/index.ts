@@ -1,4 +1,4 @@
-import type { DoomHeadlessHostService, DoomHeadlessHook } from '@agimon-ai/doompi-extension-contracts/headless';
+import type { DoomHeadlessHostService, DoomHeadlessHook } from '@agimon-ai/doompi-core/headless';
 import { DEFAULT_AUTO_STOP_DELAYS } from '../../constants/idlePolicy';
 import { decideOnRecheck, decideOnSettled } from '../idlePolicy';
 import type { ServerIdleShutdown } from './type';

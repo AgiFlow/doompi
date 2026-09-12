@@ -1,6 +1,6 @@
-import type { DoomHelpDiagnostic, DoomHelpSkill } from '@agimon-ai/doompi-extension-contracts/help';
-import type { MinorModeCatalogService } from '@agimon-ai/doompi-extension-contracts/mode';
-import type { DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import type { DoomHelpDiagnostic, DoomHelpSkill } from '@agimon-ai/doompi-core/help';
+import type { MinorModeCatalogService } from '@agimon-ai/doompi-minor-mode';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HelpActivationService, HelpRuntimeState } from '../../../src/types/help';
 
@@ -42,7 +42,7 @@ const mocks = vi.hoisted(() => ({
   actionDispose: vi.fn(),
 }));
 
-vi.mock('@agimon-ai/doompi-extension-contracts/mode', () => ({
+vi.mock('@agimon-ai/doompi-minor-mode', () => ({
   registerMinorModeOwner: (_host: unknown, definition: NonNullable<typeof mocks.modeDefinition>) => {
     mocks.modeDefinition = definition;
     return { publish: mocks.modePublish, dispose: mocks.modeDispose };

@@ -1,18 +1,21 @@
 import {
+  DOOM_HEADLESS_OWNER as TEST_OWNER,
+  DOOM_HEADLESS_HOST_SERVICE as TEST_AGENT,
+} from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE as TEST_SERVER, type DoomServerFacet } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE as TEST_CATALOG } from '@agimon-ai/doompi-minor-mode';
+import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
+import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
   type DoomHeadlessCommand,
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHook,
   type DoomHeadlessHostService,
-  type DoomHeadlessMinorMode,
   type DoomHeadlessResource,
   type DoomHeadlessTool,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import {
-  DOOM_SERVER_HOST_SERVICE,
-  type DoomServerHostService,
-} from '@agimon-ai/doompi-extension-contracts/server-facet';
+} from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 import { workflowServerFacet } from '../../../src/extensions/server';
@@ -64,7 +67,7 @@ async function fixture() {
     repoRoot: process.cwd(),
     sessionId: 'workflow-headless-test',
     get selection() {
-      return { majorMode: 'copilot', activeLayers: [], domains: [], minorModes };
+      return { majorMode: 'copilot', activeLayers: [], domains: [], state: { 'minor-mode': minorModes } };
     },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {
@@ -86,15 +89,16 @@ async function fixture() {
   const registration = { dispose: vi.fn() };
   const publish = vi.fn();
   const modeDispose = vi.fn();
+  const registerOwner = vi.fn((mode: DoomHeadlessMinorMode) => {
+    modes.push(mode);
+    return { publish, dispose: modeDispose };
+  });
   const host = {
     context: execution,
-    changeSelection: vi.fn(async ({ minorModes: selected }: { minorModes?: string[] }) => {
+    changeSelection: vi.fn(async ({ values: selected }: { values?: string[] }) => {
       if (selected) minorModes = selected;
     }),
-    registerMinorMode: (mode: DoomHeadlessMinorMode) => {
-      modes.push(mode);
-      return { publish, dispose: modeDispose };
-    },
+    assertActive: vi.fn(),
     registerToolRestriction: () => registration,
     registerActivity: (activity: DoomHeadlessActivity) => {
       activities.push(activity);
@@ -125,7 +129,7 @@ async function fixture() {
   const context = new Context();
   context.provide(DOOM_SERVER_HOST_SERVICE, serverHost);
   context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
-  const close = await workflowServerFacet.apply(context);
+  const close = await mountFacet(workflowServerFacet, context, host, registerOwner);
   return { execution, modes, activities, tools, resources, commands, hooks, publish, modeDispose, registration, close };
 }
 
@@ -254,3 +258,22 @@ describe('workflow headless facet', () => {
     expect(test.registration.dispose).toHaveBeenCalled();
   });
 });
+
+async function mountFacet(
+  facet: DoomServerFacet,
+  existing: Context,
+  host: DoomHeadlessHostService,
+  registerOwner: ReturnType<typeof vi.fn>,
+) {
+  const root = new Context();
+  root.provide(TEST_SERVER, existing.get(TEST_SERVER));
+  root.provide(TEST_AGENT, host);
+  root.provide(TEST_CATALOG, { registerOwner } as never);
+  const owner = root.extend({ [TEST_OWNER]: { packageName: '@fixture/mode' } });
+  const release = await facet.apply(owner);
+  await vi.waitFor(() => expect(registerOwner).toHaveBeenCalled());
+  return async () => {
+    await release?.();
+    await root.fiber.dispose();
+  };
+}

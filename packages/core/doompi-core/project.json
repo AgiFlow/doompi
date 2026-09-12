@@ -1,0 +1,13 @@
+{
+  "name": "@agimon-ai/doompi-core",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/core/doompi-core/src",
+  "projectType": "library",
+  "tags": ["stage:active"],
+  "sourceTemplate": "doom-core",
+  "targets": {
+    "test": {
+      "dependsOn": ["build"]
+    }
+  }
+}

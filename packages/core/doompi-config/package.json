@@ -146,7 +146,7 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "yaml": "2.9.0"

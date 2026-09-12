@@ -8,7 +8,7 @@ import {
   materializeSharedBuild,
   publishSharedBuild,
   withSharedBuildLock,
-} from '../../src/services/sharedBuildCache';
+} from '../../src/compiler/cache';
 
 const temporaryDirectories: string[] = [];
 

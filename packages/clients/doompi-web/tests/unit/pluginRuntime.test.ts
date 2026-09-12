@@ -1,6 +1,6 @@
-import type { WebPluginDefinition, WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginDefinition, WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SessionWebComposition } from '../../src/types/hub.ts';
+import type { SessionWebComposition } from '../../src/types/hub';
 
 const mocks = vi.hoisted(() => ({
   activateVerifiedPluginComposition: vi.fn(),
@@ -19,18 +19,18 @@ const mocks = vi.hoisted(() => ({
   webPluginDiagnostics: vi.fn(() => []),
 }));
 
-vi.mock('../../src/pwa/workerClient.ts', () => ({
+vi.mock('../../src/pwa/workerClient', () => ({
   activateVerifiedPluginComposition: mocks.activateVerifiedPluginComposition,
 }));
-vi.mock('../../src/web/lib/pluginRegistry.ts', () => mocks);
-vi.mock('../../src/web/lib/sealedSession.ts', () => ({ sealedHttpSession: { fetch: mocks.fetch } }));
+vi.mock('../../src/web/lib/pluginRegistry', () => mocks);
+vi.mock('../../src/web/lib/sealedSession', () => ({ sealedHttpSession: { fetch: mocks.fetch } }));
 
 import {
   refreshWebPluginCompositions,
   focusSessionWebPlugins,
   removeSessionWebPluginRuntime,
   startSessionWebPluginRuntime,
-} from '../../src/web/lib/pluginRuntime.ts';
+} from '../../src/web/lib/pluginRuntime';
 
 interface FakeElement {
   dataset: Record<string, string>;

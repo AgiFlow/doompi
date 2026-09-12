@@ -150,7 +150,7 @@ describe('Doom package convention rules', () => {
   });
 
   it('reserves raw Pi EventBus access for the exact Cordis host discovery adapter', () => {
-    writeManifest({ name: '@agimon-ai/doompi-extension-contracts' });
+    writeManifest({ name: '@agimon-ai/doompi-core' });
     const raw = write('src/extensions/pi.ts', "pi.events.emit('ready', {});");
     const safe = write('src/services/events.ts', 'protocol.emitReady();');
     const hiddenRaw = write('src/schemas/askUser.ts', "events.on('ready', handler);");
@@ -167,7 +167,7 @@ describe('Doom package convention rules', () => {
     const typedRaw = write(
       'src/services/typed.ts',
       [
-        `import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protocol';`,
+        `import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';`,
         `export function bridge(bus: EventBusLike) { bus.emit('ready', payload); }`,
       ].join('\n'),
     );
@@ -229,19 +229,19 @@ describe('Doom package convention rules', () => {
     const runtime = write(
       'src/controllers/runtime.ts',
       [
-        `import { createProtocolRuntime as createRuntime } from '@agimon-ai/doompi-extension-contracts/protocol';`,
-        `import { DoomFooterStatusRegistry } from '@agimon-ai/doompi-extension-contracts/footer';`,
+        `import { createProtocolRuntime as createRuntime } from '@agimon-ai/doompi-core/protocol';`,
+        `import { DoomFooterStatusRegistry } from '@agimon-ai/doompi-core/footer';`,
         `createRuntime(options);`,
         `new DoomFooterStatusRegistry();`,
       ].join('\n'),
     );
     const typeOnly = write(
       'src/types/runtime.ts',
-      `import type { ProtocolRuntime } from '@agimon-ai/doompi-extension-contracts/protocol';`,
+      `import type { ProtocolRuntime } from '@agimon-ai/doompi-core/protocol';`,
     );
     const schema = write(
       'src/schemas/leader.ts',
-      `import { createDoomLeaderContribution } from '@agimon-ai/doompi-extension-contracts/leader';`,
+      `import { createDoomLeaderContribution } from '@agimon-ai/doompi-core/leader';`,
     );
     const reexportedLegacyHelper = write(
       'src/controllers/leader.ts',
@@ -250,30 +250,30 @@ describe('Doom package convention rules', () => {
     const namespaceLegacyHelper = write(
       'src/controllers/narration.ts',
       [
-        `import * as narration from '@agimon-ai/doompi-extension-contracts/narration';`,
+        `import * as narration from '@agimon-ai/doompi-core/narration';`,
         `narration?.createNarrationRequester(options);`,
       ].join('\n'),
     );
     const defaultProtocolRuntime = write(
       'src/controllers/defaultRuntime.ts',
-      `import runtime from '@agimon-ai/doompi-extension-contracts/protocol';`,
+      `import runtime from '@agimon-ai/doompi-core/protocol';`,
     );
     const legacyReexport = write(
       'src/exports/legacy.ts',
-      `export { registerDoomHelpContribution } from '@agimon-ai/doompi-extension-contracts/help';`,
+      `export { registerDoomHelpContribution } from '@agimon-ai/doompi-core/help';`,
     );
     const cordisCatalog = write(
       'src/controllers/catalog.ts',
       [
-        `import { createMinorModeCatalogClient } from '@agimon-ai/doompi-extension-contracts/mode-client';`,
-        `import { registerMinorModeOwner } from '@agimon-ai/doompi-extension-contracts/mode-owner';`,
+        `import { createMinorModeCatalogClient } from '@agimon-ai/doompi-core/mode-client';`,
+        `import { registerMinorModeOwner } from '@agimon-ai/doompi-core/mode-owner';`,
         `createMinorModeCatalogClient(injectedCatalog);`,
         `registerMinorModeOwner(injectedCatalog, definition);`,
       ].join('\n'),
     );
     const futureProtocolRuntime = write(
       'src/controllers/futureRuntime.ts',
-      `import { createFutureTransport } from '@agimon-ai/doompi-extension-contracts/protocol';`,
+      `import { createFutureTransport } from '@agimon-ai/doompi-core/protocol';`,
     );
 
     const result = noSameRunnerProtocol.check?.(runtime, root, boundaryContext());
@@ -296,7 +296,7 @@ describe('Doom package convention rules', () => {
       'createFutureTransport',
     );
 
-    writeManifest({ name: '@agimon-ai/doompi-extension-contracts' });
+    writeManifest({ name: '@agimon-ai/doompi-core' });
     const legacyContractRuntime = write(
       'src/schemas/help.ts',
       [
@@ -402,9 +402,9 @@ const mounts = { global: {} }; export const selected = mounts.global;`,
   it('centralizes Doom protocol channel literals', () => {
     const literal = write('src/services/events.ts', "export const channel = 'doom:run:start';");
     const nonSource = write('src/services/events.json', '"doom:run:start"');
-    const contract = write('doompi-extension-contracts/src/protocol.ts', "export const channel = 'doom:run:start';");
+    const contract = write('doompi-core/src/protocol.ts', "export const channel = 'doom:run:start';");
 
-    expect(noProtocolChannelLiterals.check?.(literal, root, boundaryContext())).toContain('doompi-extension-contracts');
+    expect(noProtocolChannelLiterals.check?.(literal, root, boundaryContext())).toContain('doompi-core');
     expect(noProtocolChannelLiterals.check?.(nonSource, root, boundaryContext())).toBeNull();
     expect(noProtocolChannelLiterals.check?.(contract, root, boundaryContext())).toBeNull();
     expect(
@@ -501,7 +501,7 @@ const mounts = { global: {} }; export const selected = mounts.global;`,
   });
 
   it('allows the contracts package arbiter and its fake host to drive the setter', () => {
-    writeManifest({ name: '@agimon-ai/doompi-extension-contracts' });
+    writeManifest({ name: '@agimon-ai/doompi-core' });
     const arbiter = write('src/services/toolSurface/index.ts', 'options.setActiveTools(next);');
     const fakeHost = write('src/controllers/piTestHost.ts', 'host.setActiveTools(names);');
     const other = write('src/services/other.ts', 'pi.setActiveTools(names);');

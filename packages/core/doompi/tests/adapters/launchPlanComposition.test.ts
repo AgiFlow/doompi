@@ -2,17 +2,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HarnessContext } from '../../src/services/harnessContext';
-import type { HarnessTelemetry } from '../../src/exports/logSinkTelemetry';
-import { LAUNCHER_COMPOSITION_ENV } from '../../src/constants/launcherComposition';
+import type { HarnessContext } from '../../src/builders/cli/harnessContext';
+import type { HarnessTelemetry } from '@agimon-ai/doompi-core/log-sink-telemetry';
+import { LAUNCHER_COMPOSITION_ENV } from '../../src/builders/cli/constants';
 
 const runtimeBundleMocks = vi.hoisted(() => ({
   buildRuntimeBundle: vi.fn(),
   createRuntimeExtensionPlan: vi.fn(),
 }));
-vi.mock('../../src/services/runtimeBundle', () => runtimeBundleMocks);
+vi.mock('../../src/builders/cli/runtimeBundle', () => runtimeBundleMocks);
 
-const { resolveLaunchPlan } = await import('../../src/services/launchPlan');
+const { resolveLaunchPlan } = await import('../../src/builders/cli/launchPlan');
 
 const FINGERPRINT = 'f'.repeat(64);
 const BUNDLE = '/cache/dist/copilot.ffffffffffff.mjs';

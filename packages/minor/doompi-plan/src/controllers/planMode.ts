@@ -6,13 +6,13 @@ import path from 'node:path';
 import { globalDoomConfigPath } from '@agimon-ai/doompi-config';
 import { setDoomConfigValue, unsetDoomConfigValue } from '@agimon-ai/doompi-config/configWriter';
 import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-author/author-facade';
-import { CONFIG_ACTION, type DoomConfigContributionHandle } from '@agimon-ai/doompi-extension-contracts/config';
+import { CONFIG_ACTION, type DoomConfigContributionHandle } from '@agimon-ai/doompi-core/config';
 import {
   DOOM_FABLE_PLAN_SERVICE,
   FABLE_PLAN_REQUESTER as CONTRACT_FABLE_PLAN_REQUESTER,
   type DoomFablePlanService,
   readDoomFablePlanService,
-} from '@agimon-ai/doompi-extension-contracts/fable-plan';
+} from '@agimon-ai/doompi-team/fable-plan';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   MINOR_MODE_TOOL_NAME,
@@ -21,22 +21,22 @@ import {
   type MinorModeState,
   registerMinorModeOwner,
   requireMinorModeCatalog,
-} from '@agimon-ai/doompi-extension-contracts/mode';
+} from '@agimon-ai/doompi-minor-mode';
 import {
   createNarrationRequest,
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
   requireDoomNarrationService,
-} from '@agimon-ai/doompi-extension-contracts/narration';
+} from '@agimon-ai/doompi-core/narration';
 import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
-import type { LeaderBinding, DoomLeaderContributionHandle } from '@agimon-ai/doompi-extension-contracts/leader';
+import type { LeaderBinding, DoomLeaderContributionHandle } from '@agimon-ai/doompi-core/leader';
 import {
   DOOM_SUBAGENT_POLICY_SERVICE,
   type DoomSubagentPolicyService,
   readDoomSubagentPolicyService,
   type SubagentPolicyHandle,
-} from '@agimon-ai/doompi-extension-contracts/subagent-policy';
-import { isSubagentAction, subagentActionAcceptsField } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+} from '@agimon-ai/doompi-team/subagent-policy';
+import { isSubagentAction, subagentActionAcceptsField } from '@agimon-ai/doompi-team/subagent-tool';
 import {
   DOOM_VOICE_TOOLS_SERVICE,
   requireDoomVoiceToolsService,
@@ -48,10 +48,10 @@ import {
   type DoomToolRestriction,
   type DoomToolRestrictionHandle,
   readDoomToolSurface,
-} from '@agimon-ai/doompi-extension-contracts/tool-surface';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-core/tool-surface';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
-import type { PiPluginContributions } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import type { ExtensionAPI, ExtensionContext, ToolCallEvent } from '@earendil-works/pi-coding-agent';
 import { PlanPointerService } from '../services/planPointer';
 import { createPlanTelemetry, PLAN_EVENT, type PlanTelemetry } from '../services/logSinkTelemetry';

@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { webPluginToolRenderers } from '../../src/rules/webPluginTools.js';
 
-const CONTRACTS = '@agimon-ai/doompi-web-contracts';
+const CONTRACTS = '@agimon-ai/doompi-core/web';
 
 describe('web-plugin-tool-renderers', () => {
   let root: string;
@@ -39,13 +39,13 @@ describe('web-plugin-tool-renderers', () => {
     `import { defineWebPlugin } from '${CONTRACTS}';\nexport const webPlugin = defineWebPlugin({ id: 'demo', toolRenderers: [{ tools: ${tools}, ${extra}message: X }] });`;
 
   it('exempts generic contract helper registration only at its owned controller paths', () => {
-    const file = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-extension-contracts' }));
+    const file = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-core' }));
     write('src/controllers/piExtension.ts', tool('item.name'));
     write('src/controllers/serverPlugin.ts', tool('item.name'));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
     write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
     expect(webPluginToolRenderers.check?.(file, root)).toContain('ships no doompiWeb');
-    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-extension-contracts' }));
+    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-core' }));
     write('src/controllers/unowned.ts', tool("'other'"));
     expect(webPluginToolRenderers.check?.(file, root)).toContain('ships no doompiWeb');
   });

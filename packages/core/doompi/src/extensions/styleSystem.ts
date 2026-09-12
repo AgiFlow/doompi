@@ -3,11 +3,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-extension-contracts/config';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
+import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ToolResultEvent } from '@earendil-works/pi-coding-agent';
-import { createHarnessTelemetry, HARNESS_EVENT, type HarnessTelemetry } from '../services/logSinkTelemetry';
+import {
+  createHarnessTelemetry,
+  HARNESS_EVENT,
+  type HarnessTelemetry,
+} from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
 
 interface StoryRenderRequest {
   storyPath: string;

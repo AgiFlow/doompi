@@ -44,8 +44,8 @@ export default defineConfig({
         replacement: source('../../core/doompi-ui/src/exports/doomOverlay.ts'),
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/child-process',
-        replacement: source('../../core/doompi-extension-contracts/src/exports/childProcess'),
+        find: '@agimon-ai/doompi-core/child-process',
+        replacement: source('../../core/doompi-core/src/exports/childProcess'),
       },
       {
         find: /^@agimon-ai\/doompi-config\/(.*)$/,

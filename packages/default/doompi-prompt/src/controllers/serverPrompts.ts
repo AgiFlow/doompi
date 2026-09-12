@@ -1,5 +1,5 @@
 import { COMMAND_NAME, SERVER_COMMAND_DESCRIPTION } from '../constants/prompts';
-import type { DoomHeadlessCommand } from '@agimon-ai/doompi-extension-contracts/headless';
+import type { DoomHeadlessCommand } from '@agimon-ai/doompi-core/headless';
 import { savedPrompts } from '../services/savedPrompts';
 export const serverPromptCommand: DoomHeadlessCommand = {
   name: COMMAND_NAME,

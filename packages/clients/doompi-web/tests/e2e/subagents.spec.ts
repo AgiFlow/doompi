@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 import {
   appendRunJournal,
   journalEntry,
@@ -7,7 +7,7 @@ import {
   writeAgentDefinition,
   writeRunJournal,
   writeRunStatus,
-} from '../support/subagentRuns.ts';
+} from '../support/subagentRuns';
 
 // The fixture's first session is always 's1'; its doom-team scope is global
 // per session id, so every test starts and ends with it clean. That same

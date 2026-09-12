@@ -176,15 +176,16 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-hashline": "workspace:*",
+    "@agimon-ai/doompi-minor-mode": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",
     "@tanstack/react-store": "0.11.1",
@@ -199,8 +200,8 @@
     "vitest": "5.0.0"
   },
   "peerDependencies": {
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1"
   },
@@ -208,7 +209,7 @@
     "@agimon-ai/doompi-web-components": {
       "optional": true
     },
-    "@agimon-ai/doompi-web-contracts": {
+    "@agimon-ai/doompi-core": {
       "optional": true
     }
   },

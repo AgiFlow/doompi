@@ -50,8 +50,8 @@ describe('agent fleet status', () => {
     ];
 
     expect(activeAgentCount(tracker)).toBe(3);
-    expect(agentStatusText(tracker)).toBe('Agents ○○○✓✗■');
-    expect(agentFleetStatus(tracker)?.footer.compactText).toBe('A ○○○✓✗■');
+    expect(agentStatusText(tracker)).toBe('Agents ○●○✓✗■');
+    expect(agentFleetStatus(tracker)?.footer.compactText).toBe('A ○●○✓✗■');
   });
 
   it('preserves tracker insertion order even when timestamps disagree', () => {
@@ -67,6 +67,16 @@ describe('agent fleet status', () => {
     expect(segments?.[2]?.color).toBe(agentIdentityColor('inserted-second'));
   });
 
+  it('pulses a running job before activity telemetry arrives', () => {
+    const tracker = new FakeTracker();
+    tracker.jobs = [{ runId: 'run-native', status: 'running' }];
+
+    const frames = [0, 1, 2].map((frame) => agentFleetStatus(tracker, frame)!);
+    const glyphs = frames.map((status) => status.footer.compactSegments?.[1]?.text);
+
+    expect(new Set(glyphs)).toEqual(new Set(AGENT_PULSE_FRAMES));
+    expect(frames.every((status) => status.pulsing)).toBe(true);
+  });
   it('uses stable run instance colors, pulses active work, and renders attention as a warning', () => {
     const tracker = new FakeTracker();
     tracker.jobs = [
@@ -117,7 +127,7 @@ describe('agent fleet status', () => {
     const status = agentFleetStatus(tracker)!;
 
     expect(status.footer.compactText.length).toBeLessThanOrEqual(24);
-    expect(status.footer.compactText).toMatch(/^A ○+…\+\d+$/u);
+    expect(status.footer.compactText).toMatch(/^A [◐●◑]+…\+\d+$/u);
   });
 
   it('publishes active and completed states, then clears an empty tracker', () => {
@@ -132,7 +142,7 @@ describe('agent fleet status', () => {
     tracker.jobs = [];
     publishAgentStatus(ctx, tracker);
 
-    expect(setStatus).toHaveBeenNthCalledWith(1, FLEET_STATUS_KEY, 'Agents ○');
+    expect(setStatus).toHaveBeenNthCalledWith(1, FLEET_STATUS_KEY, 'Agents ●');
     expect(setStatus).toHaveBeenNthCalledWith(2, FLEET_STATUS_KEY, 'Agents ✓');
     expect(setStatus).toHaveBeenNthCalledWith(3, FLEET_STATUS_KEY, undefined);
   });

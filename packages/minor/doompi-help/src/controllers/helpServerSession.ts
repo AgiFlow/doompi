@@ -1,15 +1,16 @@
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { readHelpResource } from '../services/helpResources';
-import { type DoomHeadlessCommand, type DoomHeadlessResource } from '@agimon-ai/doompi-extension-contracts/headless';
-import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-extension-contracts/mode';
+import { type DoomHeadlessCommand, type DoomHeadlessResource } from '@agimon-ai/doompi-core/headless';
+import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 
 const HELP_MODE_ID = 'help';
 
-import { type DoomHeadlessHostService } from '@agimon-ai/doompi-extension-contracts/headless';
-import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 export function createHelpServerSession(host: DoomHeadlessHostService): DoomServerSessionPlugin {
   let modeOwner: MinorModeOwner | undefined;
   const modeState = (): MinorModeState => {
-    const active = host.context.selection.minorModes.includes(HELP_MODE_ID);
+    const active = (host.context.selection.state?.['minor-mode'] ?? []).includes(HELP_MODE_ID);
     return {
       activation: active ? 'active' : 'inactive',
       condition: 'ready',
@@ -29,19 +30,23 @@ export function createHelpServerSession(host: DoomHeadlessHostService): DoomServ
     };
   };
   const selectMode = async (enabled: boolean): Promise<void> => {
-    const modes = host.context.selection.minorModes.filter((mode) => mode !== HELP_MODE_ID);
-    await host.changeSelection({ axis: 'minorModes', minorModes: enabled ? [...modes, HELP_MODE_ID] : modes });
+    const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== HELP_MODE_ID);
+    await host.changeSelection({
+      axis: 'state',
+      key: 'minor-mode',
+      values: enabled ? [...modes, HELP_MODE_ID] : modes,
+    });
     modeOwner?.publish();
   };
   const resources: DoomHeadlessResource[] = [
     {
-      when: { minorMode: HELP_MODE_ID },
+      when: { state: { 'minor-mode': HELP_MODE_ID }, attribution: { kind: 'minor', mode: HELP_MODE_ID } },
       name: 'doompi-help',
       kind: 'context',
       read: () => readHelpResource('llms.txt'),
     },
     {
-      when: { minorMode: HELP_MODE_ID },
+      when: { state: { 'minor-mode': HELP_MODE_ID }, attribution: { kind: 'minor', mode: HELP_MODE_ID } },
       name: 'doompi-use-help',
       kind: 'skill',
       read: () => readHelpResource('src/prompts/doompi-use-help/SKILL.md'),
@@ -93,7 +98,7 @@ export function createHelpServerSession(host: DoomHeadlessHostService): DoomServ
     },
   }).createOwner(undefined);
   return {
-    minorModes: [modeOwner],
+    services: [serverMinorModes([modeOwner])],
     resources,
     commands: [command],
   };

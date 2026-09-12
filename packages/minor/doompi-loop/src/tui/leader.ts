@@ -1,4 +1,4 @@
-import type { DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../constants/loop';
 import { LOOPS_GROUP_ORDER, PACKAGE_SOURCE } from '../constants/piLoop';
 

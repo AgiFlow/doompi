@@ -1,7 +1,7 @@
 import type { Context } from '@earendil-works/chord';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { SessionService } from '@agimon-ai/doompi-extension-contracts/session-protocol';
-import { bindSessionProtocol, sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands.ts';
+import type { SessionService } from '@agimon-ai/doompi-core/session-protocol';
+import { bindSessionProtocol, sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands';
 
 const releases: (() => void)[] = [];
 

@@ -1,5 +1,5 @@
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-import { SUBAGENT_CHILD_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+import { SUBAGENT_CHILD_ENV } from '@agimon-ai/doompi-core/child-process';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { createNotificationRuntime, type NotificationExtensionOptions } from '../controllers/notificationRuntime';
 

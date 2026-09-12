@@ -1,8 +1,5 @@
-vi.mock('@agimon-ai/doompi-extension-contracts/pi-extension', () =>
-  vi.importActual('../../../core/doompi-extension-contracts/src/exports/piExtension'),
-);
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -31,7 +28,7 @@ vi.mock('@agimon-ai/doompi-telemetry', () => ({
     shutdown: runtimeMocks.shutdownTelemetry,
   }),
 }));
-vi.mock('../../../core/doompi-extension-contracts/src/controllers/cordisHost', () => ({
+vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
   connectDoomCordisHost: async () => {
     const root = runtimeMocks.createCordisRoot() as Context;
     await runtimeMocks.prepareCordisRoot(root);

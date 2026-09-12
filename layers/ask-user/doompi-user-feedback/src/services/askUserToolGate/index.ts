@@ -1,4 +1,4 @@
-import type { DoomToolRestriction } from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
 
 /**
  * Hides the questionnaire tool while nobody can answer it.

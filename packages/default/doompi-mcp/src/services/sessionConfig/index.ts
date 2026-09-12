@@ -4,7 +4,7 @@ import {
   DOOM_MCP_SESSION_ENV_VAR,
   doomMcpSessionEnvironment,
   readDoomMcpSessionConfig,
-} from '@agimon-ai/doompi-extension-contracts/mcp-session';
+} from '@agimon-ai/doompi-core/mcp-session';
 import type { McpAllowlist, McpSessionConfig } from '../../types/mcpConfig';
 
 function asStringArray(value: unknown): string[] | undefined {

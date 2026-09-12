@@ -11,31 +11,23 @@ const mocks = vi.hoisted(() => ({
   syncOptions: vi.fn(),
 }));
 
-vi.mock('../../src/services/layerPackageInstaller', () => ({
+vi.mock('../../src/composition/layerPackageInstaller', () => ({
   ensureLayerPackages: mocks.ensureLayerPackages,
 }));
 
-vi.mock('../../src/services/syncDrift', () => ({
+vi.mock('../../src/composition/syncDrift', () => ({
   readSyncDrift: mocks.readSyncDrift,
 }));
 
-vi.mock('../../src/controllers/buildCommand', () => ({
-  BuildCommand: class {
-    execute = mocks.buildExecute;
+vi.mock('../../src/cli/commands/sync/prepare', () => ({ prepareSync: mocks.buildExecute }));
+vi.mock('../../src/cli/commands/sync', () => ({
+  synchronize: (...args: unknown[]) => {
+    mocks.syncOptions(args[4]);
+    return mocks.syncExecute(...args.slice(0, 4));
   },
 }));
 
-vi.mock('../../src/controllers/syncCommand', () => ({
-  SyncCommand: class {
-    execute = mocks.syncExecute;
-
-    constructor(options: unknown) {
-      mocks.syncOptions(options);
-    }
-  },
-}));
-
-import { SyncPipeline } from '../../src/controllers/syncPipeline';
+import { runSync } from '../../src/cli/commands/sync/workflow';
 
 const environment = { DOOMPI_ROOT: '/repo' };
 const output = { write: vi.fn((_chunk: string) => true) };
@@ -69,12 +61,7 @@ describe('SyncPipeline', () => {
     });
 
     await expect(
-      new SyncPipeline({ settingsMode: 'embedded' }).execute(
-        ['sync', '--major-mode', 'minimal'],
-        environment,
-        '/repo',
-        output,
-      ),
+      runSync(['sync', '--major-mode', 'minimal'], environment, '/repo', output, { settingsMode: 'embedded' }),
     ).resolves.toBe(0);
 
     expect(order).toEqual(['packages', 'build', 'sync']);
@@ -82,10 +69,11 @@ describe('SyncPipeline', () => {
       expect.objectContaining({ repoRoot: '/repo', refresh: true, environment }),
     );
     expect(mocks.buildExecute).toHaveBeenCalledWith(
-      ['build', '--major-mode', 'minimal'],
+      ['sync', '--major-mode', 'minimal'],
       environment,
       '/repo',
       expect.any(Object),
+      undefined,
     );
     expect(mocks.syncOptions).toHaveBeenCalledWith(
       expect.objectContaining({ settingsMode: 'embedded', lockHeld: true }),
@@ -99,7 +87,7 @@ describe('SyncPipeline', () => {
       options.requireWebBundle ? { fresh: false, reasons: ['cockpit-bundle-missing'] } : { fresh: true, reasons: [] },
     );
 
-    await expect(new SyncPipeline().execute(['sync'], webEnvironment, '/repo', output)).resolves.toBe(0);
+    await expect(runSync(['sync'], webEnvironment, '/repo', output)).resolves.toBe(0);
 
     expect(mocks.readSyncDrift).toHaveBeenCalledWith(
       expect.objectContaining({ repoRoot: '/repo', requireWebBundle: true }),
@@ -122,24 +110,23 @@ describe('SyncPipeline', () => {
     );
     const globalEnvironment = { HOME: homeDirectory };
 
-    await expect(
-      new SyncPipeline().execute(['sync', '--force'], globalEnvironment, currentDirectory, output),
-    ).resolves.toBe(0);
+    await expect(runSync(['sync', '--force'], globalEnvironment, currentDirectory, output)).resolves.toBe(0);
 
     expect(mocks.ensureLayerPackages).toHaveBeenCalledWith(
       expect.objectContaining({ repoRoot: globalRoot, environment: globalEnvironment }),
     );
     expect(mocks.buildExecute).toHaveBeenCalledWith(
-      ['build', '--force'],
+      ['sync', '--force'],
       globalEnvironment,
       currentDirectory,
       expect.any(Object),
+      undefined,
     );
     expect(mocks.syncExecute).toHaveBeenCalledWith(['sync', '--force'], globalEnvironment, currentDirectory, output);
   });
 
   it('keeps check mode read-only by skipping the package refresh and the build', async () => {
-    await expect(new SyncPipeline().execute(['sync', '--check'], environment, '/repo', output)).resolves.toBe(0);
+    await expect(runSync(['sync', '--check'], environment, '/repo', output)).resolves.toBe(0);
 
     expect(mocks.ensureLayerPackages).not.toHaveBeenCalled();
     expect(mocks.buildExecute).not.toHaveBeenCalled();
@@ -152,7 +139,7 @@ describe('SyncPipeline', () => {
       return { installed: [], updated: [{ name: '@scope/team', from: '1.0.0', to: '1.1.0' }], unchecked: [] };
     });
 
-    await expect(new SyncPipeline().execute(['sync'], environment, '/repo', output)).resolves.toBe(0);
+    await expect(runSync(['sync'], environment, '/repo', output)).resolves.toBe(0);
 
     const written = output.write.mock.calls.map(([chunk]) => chunk).join('');
     expect(written).toContain('packages: @scope/team 1.0.0 -> 1.1.0');
@@ -166,7 +153,7 @@ describe('SyncPipeline', () => {
       unchecked: ['@scope/help'],
     });
 
-    await expect(new SyncPipeline().execute(['sync'], environment, '/repo', output)).resolves.toBe(0);
+    await expect(runSync(['sync'], environment, '/repo', output)).resolves.toBe(0);
 
     const written = output.write.mock.calls.map(([chunk]) => chunk).join('');
     expect(written).toContain('packages: installed 1 missing package, 1 package left unchecked');
@@ -185,7 +172,7 @@ describe('SyncPipeline', () => {
       },
     );
 
-    await expect(new SyncPipeline().execute(['sync'], environment, '/repo', output)).resolves.toBe(9);
+    await expect(runSync(['sync'], environment, '/repo', output)).resolves.toBe(9);
 
     const written = output.write.mock.calls.map(([chunk]) => chunk).join('');
     expect(written).toContain('build:    failed');
@@ -195,7 +182,7 @@ describe('SyncPipeline', () => {
   it('does not synchronize after a failed internal build', async () => {
     mocks.buildExecute.mockResolvedValue(9);
 
-    await expect(new SyncPipeline().execute(['sync'], environment, '/repo', output)).resolves.toBe(9);
+    await expect(runSync(['sync'], environment, '/repo', output)).resolves.toBe(9);
 
     expect(mocks.syncExecute).not.toHaveBeenCalled();
   });

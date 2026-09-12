@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseServeOptions, serveHelp } from '../../src/services/serveOptions.ts';
+import { parseServeOptions, serveHelp } from '../../src/services/serveOptions';
 
 describe('doompi-web command options', () => {
   it('keeps the no-argument presentation defaults', () => {
@@ -47,6 +47,18 @@ describe('doompi-web command options', () => {
     expect(() => parseServeOptions(['--port', 'http'])).toThrow('--port expects a port number, received "http".');
     expect(() => parseServeOptions(['--port=70000'])).toThrow('--port expects a port number, received "70000".');
     expect(() => parseServeOptions(['--headless-url'])).toThrow('--headless-url needs a value');
+  });
+
+  it.each(['--host=', '--assets=', '--headless-token=', '--host=--port'])(
+    'rejects empty or option-shaped values: %s',
+    (flag) => {
+      expect(() => parseServeOptions([flag])).toThrow('needs a value');
+    },
+  );
+
+  it('accepts ephemeral ports and option terminators', () => {
+    expect(parseServeOptions(['--port=0', '--']).port).toBe(0);
+    expect(() => parseServeOptions(['--port=-1'])).toThrow('expects a port number');
   });
 
   it('recognizes standard help and version flags', () => {

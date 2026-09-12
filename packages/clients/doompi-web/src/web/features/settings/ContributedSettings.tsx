@@ -11,7 +11,7 @@ import {
   SelectValue,
   Switch,
 } from '@agimon-ai/doompi-web-components';
-import type { SettingsFieldContribution, SettingsSectionContribution } from '@agimon-ai/doompi-web-contracts';
+import type { SettingsFieldContribution, SettingsSectionContribution } from '@agimon-ai/doompi-core/web';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   SettingsConfigView,
@@ -19,17 +19,17 @@ import type {
   SettingsOrigin,
   SettingsScope,
   SettingsValueView,
-} from '../../../types/settings.ts';
-import { listSettingsModels, readSettingsConfig, writeSettingsValue } from '../../lib/settingsApi.ts';
+} from '../../../types/settings';
+import { listSettingsModels, readSettingsConfig, writeSettingsValue } from '../../lib/settingsApi';
 import {
   canSaveSettings,
   plannedSettingsWrites,
   settingsKeyOf as keyOf,
   settingsLockedReason as lockedReason,
-} from '../../lib/settingsDraft.ts';
-import { refreshSessionFacts } from '../../stores/sessionStore.ts';
-import { sessionsStore } from '../../stores/sessionsStore.ts';
-import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
+} from '../../lib/settingsDraft';
+import { refreshSessionFacts } from '../../stores/sessionStore';
+import { sessionsStore } from '../../stores/sessionsStore';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 /**
  * A settings page a package contributed, rendered by the host.

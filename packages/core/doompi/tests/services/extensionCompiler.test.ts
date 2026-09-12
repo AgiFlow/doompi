@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { extensionToolSource } from '@agimon-ai/doompi-ui/extensionName';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { compileExtensionModule, compileExtensionSet } from '../../src/services/extensionCompiler';
+import { compileExtensionModule, compileExtensionSet } from '../../src/compiler';
 
 const temporaryDirectories: string[] = [];
 
@@ -1351,4 +1351,21 @@ describe('compiled extension sets', () => {
     ).toEqual([]);
     expect(source, manifest.name).not.toContain(path.join(repositoryRoot, 'node_modules'));
   });
+});
+
+// Managed extensions omit optional host peers. The compiler must use the host's copy.
+it('compiles an installed extension without a local Pi TUI dependency', async () => {
+  const root = temporaryDirectory();
+  const entry = writeModule(
+    root,
+    'installed-extension',
+    "import { visibleWidth } from '@earendil-works/pi-tui'; export default api => api.push(visibleWidth('hello'));",
+  );
+  const output = await compileExtensionSet([entry], path.join(root, 'cache'));
+  const values: number[] = [];
+  await (
+    await loadFactory(output)
+  )(values);
+  expect(values).toEqual([5]);
+  expect(readCompiledSource(output)).toContain('/pi-tui/dist/index.js');
 });

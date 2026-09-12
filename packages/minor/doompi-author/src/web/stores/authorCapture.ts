@@ -1,4 +1,4 @@
-import type { ComposerCapture, WebPluginContextItem } from '@agimon-ai/doompi-web-contracts';
+import type { ComposerCapture, WebPluginContextItem } from '@agimon-ai/doompi-core/web';
 import type { AuthorWorkspaceDocument } from './authorWorkspaceStore';
 import type { AuthorCrop, AuthorNativeAnchor, AuthorRegionDraft } from '../lib/authorViewportTypes';
 

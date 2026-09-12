@@ -1,6 +1,6 @@
 import { SUBAGENT_SAFETY_GUIDANCE } from '../../constants/team';
 export { SUBAGENT_SAFETY_GUIDANCE } from '../../constants/team';
-import { SUBAGENT_ACTIONS } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+import { SUBAGENT_ACTIONS } from '../../schemas/subagentTool';
 
 const ACTION_SUMMARY = [
   `${SUBAGENT_ACTIONS.agents}: list executable agents or inspect one by name`,

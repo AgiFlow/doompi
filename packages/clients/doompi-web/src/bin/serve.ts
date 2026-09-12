@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { packagedVersion } from '../adapters/packageVersion.ts';
-import { parseServeOptions, serveHelp } from '../services/serveOptions.ts';
+import { packagedVersion } from '../adapters/packageVersion';
+import { parseServeOptions, serveHelp } from '../services/serveOptions';
 
 function notice(message: string): void {
   process.stderr.write(`[doompi-web] ${message}\n`);
@@ -17,7 +17,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { serveWeb } = await import('../adapters/httpServer.ts');
+  const { serveWeb } = await import('../adapters/httpServer');
   const server = await serveWeb({
     port: options.port,
     host: options.host,

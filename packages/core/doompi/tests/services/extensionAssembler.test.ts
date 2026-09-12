@@ -10,7 +10,7 @@ import {
   type ExtensionLayerResolvers,
   packageAttribution,
   resolveExtensionComposition,
-} from '../../src/services/extensionAssembler';
+} from '../../src/builders/cli/extensionAssembler';
 
 const CONFIG_PATH = '/repo/.doom/modes.yaml';
 const REPOSITORY_ROOT = path.resolve(__dirname, '..', 'fixtures', 'repository');
@@ -160,10 +160,11 @@ describe('standard extension composition', () => {
     const config = modes({ feature: layer({ packages: ['feature-package'] }) });
     const entries = assembleExtensions(context(config));
 
-    expect(entries.slice(0, 6)).toEqual([
+    expect(entries.slice(0, 7)).toEqual([
       '/own/cordisHost.ts',
       '/own/terminalChildSession.ts',
-      '/own/modeCatalog.ts',
+      '/package/@agimon-ai/doompi-minor-mode/extensions/pi.mjs',
+      '/own/contextCatalog.ts',
       '/package/@agimon-ai/doompi-config/extensions/pi.mjs',
       '/own/transitionCoordinator.ts',
       '/package/@agimon-ai/doompi-ui/extensions/pi.mjs',

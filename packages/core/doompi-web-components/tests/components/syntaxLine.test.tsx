@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { SyntaxLine } from '../../src/components/SyntaxText.tsx';
+import { SyntaxLine } from '../../src/components/SyntaxText';
 
 describe('syntax line presentation', () => {
   it('renders escaped plain text while highlighting is unavailable', () => {

@@ -1,5 +1,5 @@
 import { Button, type StatusTone } from '@agimon-ai/doompi-web-components';
-import type { SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
+import type { SessionFrameSender } from '@agimon-ai/doompi-core/web';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import type { SubagentRun, SubagentRunState } from '../../types/webSubagents';
 import { formatRunDuration } from '../lib/format';

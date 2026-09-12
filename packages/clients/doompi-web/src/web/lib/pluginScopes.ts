@@ -1,4 +1,4 @@
-import type { WebPluginDefinition, WebPluginScope } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginDefinition, WebPluginScope } from '@agimon-ai/doompi-core/web';
 
 /** Select one declared mount from a verified composition. */
 export function pluginsAtScope(plugins: readonly WebPluginDefinition[], scope: WebPluginScope): WebPluginDefinition[] {

@@ -8,7 +8,7 @@ import {
   mintPairingCode,
   revokeDevice,
   saveRemoteSettings,
-} from '../../src/web/lib/remoteApi.ts';
+} from '../../src/web/lib/remoteApi';
 
 const original = globalThis.fetch;
 

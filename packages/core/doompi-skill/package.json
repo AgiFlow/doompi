@@ -72,8 +72,8 @@
   },
   "dependencies": {
     "@agimon-ai/doompi-config": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-domain": "workspace:*",
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",

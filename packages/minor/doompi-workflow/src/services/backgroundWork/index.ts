@@ -19,7 +19,7 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProviderHandle,
   readDoomBackgroundWorkService,
-} from '@agimon-ai/doompi-extension-contracts/background-work';
+} from '@agimon-ai/doompi-core/background-work';
 import type { Context } from '@deepseek-ai/cordis';
 
 export interface RunProviderItem {

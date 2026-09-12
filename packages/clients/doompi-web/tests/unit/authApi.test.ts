@@ -6,7 +6,7 @@ import {
   logoutProvider,
   readLogin,
   startLogin,
-} from '../../src/web/lib/authApi.ts';
+} from '../../src/web/lib/authApi';
 
 function respond(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

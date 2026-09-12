@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { trustedNetworkPath } from '../../src/pwa/networkPaths.ts';
+import { trustedNetworkPath } from '../../src/pwa/networkPaths';
 
 /**
  * The service worker answers everything else from the signed bundle cache, so

@@ -5,13 +5,13 @@ import {
   DOOM_COCKPIT_SERVER_ID,
   DoomSessionManagementService,
   DoomSessionService,
-} from '@agimon-ai/doompi-extension-contracts/session-protocol';
-import { createProtocolTransport, protocolSocketUrl } from '../lib/piTransport.ts';
-import { recordBrowserPerformance } from '../lib/browserTelemetry.ts';
-import { createPagedTranscript } from '../stores/pagedTranscriptStore.ts';
-import { releaseProtocolTranscript, applySessionFrame, refreshSessionFacts } from '../stores/sessionStore.ts';
-import { bindSessionProtocol } from '../lib/sessionProtocolCommands.ts';
-import { bindThreadReader } from '../stores/threadStore.ts';
+} from '@agimon-ai/doompi-core/session-protocol';
+import { createProtocolTransport, protocolSocketUrl } from '../lib/piTransport';
+import { recordBrowserPerformance } from '../lib/browserTelemetry';
+import { createPagedTranscript } from '../stores/pagedTranscriptStore';
+import { releaseProtocolTranscript, applySessionFrame, refreshSessionFacts } from '../stores/sessionStore';
+import { bindSessionProtocol } from '../lib/sessionProtocolCommands';
+import { bindThreadReader } from '../stores/threadStore';
 
 /** How long to wait before dialling again after the protocol socket drops. */
 const RECONNECT_MS = 700;

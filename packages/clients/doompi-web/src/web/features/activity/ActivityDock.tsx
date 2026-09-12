@@ -1,15 +1,15 @@
 import { Button, EmptyState, Kbd, StatusBadge } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef } from 'react';
-import { PluginSurface } from '../../components/PluginSurface.tsx';
-import { type ActivityGroup, useActivityGroups, useDockFaces } from '../../lib/composition.ts';
-import { activityGroupSlot, HOST_SLOTS, slotFills } from '../../lib/pluginRegistry.ts';
-import { usePluginSlotProps } from '../../stores/usePluginSlotProps.ts';
-import { useActiveSession } from '../../stores/sessionStore.ts';
-import { sessionsStore } from '../../stores/sessionsStore.ts';
-import { setDockTab, uiStore } from '../../stores/uiStore.ts';
-import { ContextPanel } from './ContextPanel.tsx';
-import { DockTabs } from './DockTabs.tsx';
+import { PluginSurface } from '../../components/PluginSurface';
+import { type ActivityGroup, useActivityGroups, useDockFaces } from '../../lib/composition';
+import { activityGroupSlot, HOST_SLOTS, slotFills } from '../../lib/pluginRegistry';
+import { usePluginSlotProps } from '../../stores/usePluginSlotProps';
+import { useActiveSession } from '../../stores/sessionStore';
+import { sessionsStore } from '../../stores/sessionsStore';
+import { setDockTab, uiStore } from '../../stores/uiStore';
+import { ContextPanel } from './ContextPanel';
+import { DockTabs } from './DockTabs';
 
 /**
  * The column for everything that is not the transcript.

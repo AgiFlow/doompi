@@ -1,1 +1,1 @@
-export * from '../controllers/compatibilityCommand';
+export * from '../cli/commands/compat';

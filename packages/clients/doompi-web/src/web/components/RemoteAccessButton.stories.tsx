@@ -3,7 +3,7 @@
  * looking for a bare `const meta`, so the export is not named at the point of
  * definition.
  */
-import { RemoteAccessButton } from './RemoteAccessButton.tsx';
+import { RemoteAccessButton } from './RemoteAccessButton';
 
 const noop = (): void => undefined;
 

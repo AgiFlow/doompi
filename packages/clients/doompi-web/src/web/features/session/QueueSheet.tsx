@@ -10,7 +10,7 @@ import {
   TrashIcon,
 } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
-import type { QueuedEntry } from '../../lib/sessionModel.ts';
+import type { QueuedEntry } from '../../lib/sessionModel';
 
 export function QueueSheet({
   count,

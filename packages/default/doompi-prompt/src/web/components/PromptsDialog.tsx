@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@agimon-ai/doompi-web-components';
-import type { SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
+import type { SessionFrameSender } from '@agimon-ai/doompi-core/web';
 import { useEffect, useState } from 'react';
 import type { SavedPromptView } from '../../types/webPrompts';
 import { PromptEditor } from './PromptEditor';

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import { expect, test } from '../support/cockpit.ts';
-import { moveWorkflowRun, workflowRunDir, writeWorkflowArtifact, writeWorkflowRun } from '../support/workflowRuns.ts';
+import { expect, test } from '../support/cockpit';
+import { moveWorkflowRun, workflowRunDir, writeWorkflowArtifact, writeWorkflowRun } from '../support/workflowRuns';
 
 // The workflows tab is not in the package's own bundle: it arrives through
 // the doompi sync path, so this suite serves the synced-style bundle the

@@ -1,4 +1,4 @@
-import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
 import {
   type WorkflowLaunchInput,
   type WorkflowRunSelector,

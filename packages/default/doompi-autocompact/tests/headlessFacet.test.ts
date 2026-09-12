@@ -1,5 +1,5 @@
-import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/headless';
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +9,7 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
   DoomHeadlessResource,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { autocompactServerFacet as autocompactHeadlessFacet } from '../src/extensions/server';
 
@@ -51,7 +51,7 @@ async function fixture(cwd = root) {
     repoRoot: root,
     sessionId: 'autocompact-test',
     environment: {},
-    selection: { majorMode: 'development', activeLayers: [], domains: [], minorModes: [] },
+    selection: { majorMode: 'development', activeLayers: [], domains: [], state: {} },
     client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
     session: {
       entries: () => [],
@@ -128,7 +128,7 @@ describe('autocompact headless configuration projection', () => {
       repoRoot: root,
       sessionId: 'autocompact-test',
       environment: {},
-      selection: { majorMode: 'development', activeLayers: [], domains: [], minorModes: [] },
+      selection: { majorMode: 'development', activeLayers: [], domains: [], state: {} },
       client: { notify: vi.fn(), request: vi.fn(), setStatus },
       session: {
         entries: () => [],

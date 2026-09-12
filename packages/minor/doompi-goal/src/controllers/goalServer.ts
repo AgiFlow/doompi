@@ -1,12 +1,13 @@
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/goal';
 import {
   type DoomHeadlessHostService,
   type DoomHeadlessToolResult,
   type DoomHeadlessTool,
   type DoomHeadlessCommand,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import { defineMinorMode, type MinorModeOwner } from '@agimon-ai/doompi-extension-contracts/mode';
+} from '@agimon-ai/doompi-core/headless';
+import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { defineMinorMode, type MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
 import { readGoalSkill } from '../services/packageResources';
 import { createGoal, goalSummary, isContradictoryCompletionSummary, transitionGoal } from '../models/stateMachine';
 import { parseGoalCommand, validateObjective } from '../services/parser';
@@ -19,7 +20,7 @@ import {
 } from '../services/tools';
 import { decodeGoalStateEntries } from '../models/stateCodec';
 import type { ActiveGoal } from '../types/goal';
-import type { MinorModeState } from '@agimon-ai/doompi-extension-contracts/mode';
+import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';
 
 const COMPLETE_TOOL = 'goal_complete';
 const BLOCKED_TOOL = 'goal_blocked';
@@ -54,7 +55,7 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
   let goal: ActiveGoal | undefined;
   let modeOwner: MinorModeOwner | undefined;
   const modeState = (): MinorModeState => {
-    const selected = host.context.selection.minorModes.includes('goal');
+    const selected = (host.context.selection.state?.['minor-mode'] ?? []).includes('goal');
     const retained = selected && goal !== undefined && goal.status !== 'complete';
     const condition =
       goal?.status === 'paused'
@@ -90,8 +91,8 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
     await host.context.session.appendCustomEntry('goal-state', { goal: goal ?? null });
   };
   const selectMode = async (enabled: boolean): Promise<void> => {
-    const modes = host.context.selection.minorModes.filter((mode) => mode !== 'goal');
-    await host.changeSelection({ axis: 'minorModes', minorModes: enabled ? [...modes, 'goal'] : modes });
+    const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== 'goal');
+    await host.changeSelection({ axis: 'state', key: 'minor-mode', values: enabled ? [...modes, 'goal'] : modes });
     updateToolRestriction();
     publishMode();
   };
@@ -156,10 +157,10 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
     },
   }).createOwner(undefined);
   return {
-    minorModes: [modeOwner],
+    services: [serverMinorModes([modeOwner])],
     resources: [
       {
-        when: { minorMode: 'goal' },
+        when: { state: { 'minor-mode': 'goal' }, attribution: { kind: 'minor', mode: 'goal' } },
         name: 'doompi-use-goal',
         kind: 'skill',
         read: () => readGoalSkill(),
@@ -167,7 +168,7 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
     ],
     tools: [
       {
-        when: { minorMode: 'goal' },
+        when: { state: { 'minor-mode': 'goal' }, attribution: { kind: 'minor', mode: 'goal' } },
         name: COMPLETE_TOOL,
         label: 'Goal complete',
         description: 'Mark the active goal complete after verifying every requirement.',
@@ -198,7 +199,7 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
         },
       },
       {
-        when: { minorMode: 'goal' },
+        when: { state: { 'minor-mode': 'goal' }, attribution: { kind: 'minor', mode: 'goal' } },
         name: BLOCKED_TOOL,
         label: 'Goal blocked',
         description: 'Mark the active goal blocked after the same external blocker recurs with evidence.',
@@ -288,7 +289,7 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
         },
       },
       {
-        when: { minorMode: 'goal' },
+        when: { state: { 'minor-mode': 'goal' }, attribution: { kind: 'minor', mode: 'goal' } },
         event: 'before_agent_start',
         handle(event) {
           if (!goal || goal.status !== 'active') return undefined;
@@ -300,7 +301,7 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
     toolRestrictions: [
       {
         source: '@agimon-ai/doompi-goal',
-        restrict: () => ({ minorMode: 'goal', allowedTools: goalToolNamesForState(goal) }),
+        restrict: () => ({ when: { state: { 'minor-mode': 'goal' } }, allowedTools: goalToolNamesForState(goal) }),
         subscribe(listener) {
           restrictionListeners.add(listener);
           return () => restrictionListeners.delete(listener);

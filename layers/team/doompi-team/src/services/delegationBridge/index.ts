@@ -35,7 +35,7 @@ import {
   type DelegationRequest,
   DelegationRequestSchema,
   type DelegationResult,
-} from '@agimon-ai/doompi-extension-contracts/delegation';
+} from '../../schemas/delegationApi';
 import type { Context } from '@deepseek-ai/cordis';
 import { Check } from 'typebox/value';
 

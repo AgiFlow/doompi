@@ -39,7 +39,7 @@ describe('@agimon-ai/doompi-plan package shape', () => {
   });
 
   it('depends on shared Cordis contracts rather than a concrete feedback provider', () => {
-    expect(packageJson.dependencies?.['@agimon-ai/doompi-extension-contracts']).toBe('workspace:*');
+    expect(packageJson.dependencies?.['@agimon-ai/doompi-core']).toBe('workspace:*');
     expect(packageJson.dependencies?.['@agimon-ai/doompi-user-feedback']).toBeUndefined();
   });
 

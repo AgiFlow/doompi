@@ -1,7 +1,4 @@
-import {
-  type AgentModelProjection,
-  DOOM_AGENT_MODEL_ENTRY_TYPE,
-} from '@agimon-ai/doompi-extension-contracts/agent-model';
+import { type AgentModelProjection, DOOM_AGENT_MODEL_ENTRY_TYPE } from '@agimon-ai/doompi-core/agent-model';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 /**

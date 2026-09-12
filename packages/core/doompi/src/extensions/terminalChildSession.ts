@@ -1,13 +1,13 @@
 import path from 'node:path';
-import { DOOM_CHILD_SESSION_SERVICE } from '@agimon-ai/doompi-extension-contracts/child-session';
+import { DOOM_CHILD_SESSION_SERVICE } from '@agimon-ai/doompi-core/child';
 import {
   connectDoomCordisHost,
   DOOM_CORDIS_SESSION_SERVICE,
   type DoomCordisSessionService,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
+} from '@agimon-ai/doompi-core/cordis-host';
 import type { Context } from '@deepseek-ai/cordis';
 import { getAgentDir, ModelRuntime, type ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { createTerminalPiChildSessionServiceProvider } from '../controllers/terminalPiChildSessionService';
+import { createTerminalPiChildSessionServiceProvider } from '@agimon-ai/doompi-core/terminal-pi-child-session-service';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi/terminal-child-session';
 

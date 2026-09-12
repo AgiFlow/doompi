@@ -1,6 +1,6 @@
 import { browserSupportsWebAuthn, startAuthentication, startRegistration } from '@simplewebauthn/browser';
-import { REMOTE_API_ROUTE, STEP_UP_HEADER } from '../../types/remoteAccess.ts';
-import { rememberHostChannelKey, sealedHttpSession } from './sealedSession.ts';
+import { REMOTE_API_ROUTE, STEP_UP_HEADER } from '../../types/remoteAccess';
+import { rememberHostChannelKey, sealedHttpSession } from './sealedSession';
 
 /**
  * The browser half of the passkey ceremonies.

@@ -7,8 +7,8 @@ import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHostService,
   type DoomHeadlessTool,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+} from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readServerFacet } from '../src/extensions/server';

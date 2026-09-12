@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { ToolPathLink } from './ToolPathLink.tsx';
+import { ToolPathLink } from './ToolPathLink';
 
 const PATH = 'packages/core/doompi-web-components/src/components/ToolPathLink.tsx';
 

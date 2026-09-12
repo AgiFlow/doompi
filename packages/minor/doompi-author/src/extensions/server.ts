@@ -1,4 +1,5 @@
-import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { AUTHOR_PACKAGE_SOURCE, AUTHOR_FACADE_TOOL_NAMES, AUTHOR_GUIDANCE } from '../constants/author';
 import { createAuthorChannel } from '../controllers/webAuthorChannel';
 import { createAuthorBridgeMethod } from '../controllers/authorBridgeMethod';
@@ -24,35 +25,49 @@ export const authorServerFacet = defineServerPlugin({
     api: [api],
     ...(agent
       ? {
-          minorModes: [
-            authorMinorMode.createOwner({
-              isActive: () => agent.context.selection.minorModes.includes(authorMinorMode.descriptor.id),
-              detail: () => 'document authoring available',
-              async setActive(enabled) {
-                const modes = agent.context.selection.minorModes.filter((id) => id !== authorMinorMode.descriptor.id);
-                await agent.changeSelection({
-                  axis: 'minorModes',
-                  minorModes: enabled ? [...modes, authorMinorMode.descriptor.id] : modes,
-                });
-              },
-            }),
+          services: [
+            serverMinorModes([
+              authorMinorMode.createOwner({
+                isActive: () =>
+                  (agent.context.selection.state?.['minor-mode'] ?? []).includes(authorMinorMode.descriptor.id),
+                detail: () => 'document authoring available',
+                async setActive(enabled) {
+                  const modes = (agent.context.selection.state?.['minor-mode'] ?? []).filter(
+                    (id) => id !== authorMinorMode.descriptor.id,
+                  );
+                  await agent.changeSelection({
+                    axis: 'state',
+                    key: 'minor-mode',
+                    values: enabled ? [...modes, authorMinorMode.descriptor.id] : modes,
+                  });
+                },
+              }),
+            ]),
           ],
         }
       : {}),
     toolRestrictions: [
-      { minorMode: 'author', allowedTools: [OPEN_AUTHORING_FILE_TOOL_NAME, ...AUTHOR_FACADE_TOOL_NAMES] },
+      {
+        when: { state: { 'minor-mode': 'author' } },
+        allowedTools: [OPEN_AUTHORING_FILE_TOOL_NAME, ...AUTHOR_FACADE_TOOL_NAMES],
+      },
     ],
     resources: [
-      { when: { minorMode: 'author' }, name: 'doompi-use-author', kind: 'skill', read: () => readAuthorPrompt() },
+      {
+        when: { state: { 'minor-mode': 'author' }, attribution: { kind: 'minor', mode: 'author' } },
+        name: 'doompi-use-author',
+        kind: 'skill',
+        read: () => readAuthorPrompt(),
+      },
     ],
     tools: createAuthorTools(createAuthorCatalog()).map((tool) => ({
       ...tool,
-      when: { minorMode: 'author' },
+      when: { state: { 'minor-mode': 'author' }, attribution: { kind: 'minor', mode: 'author' } },
     })),
     commands: [createAuthorCommand()],
     hooks: [
       {
-        when: { minorMode: 'author' },
+        when: { state: { 'minor-mode': 'author' }, attribution: { kind: 'minor', mode: 'author' } },
         event: 'before_agent_start',
         handle(event) {
           const systemPrompt = typeof event.systemPrompt === 'string' ? event.systemPrompt : '';

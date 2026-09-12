@@ -15,12 +15,12 @@ import {
   type MinorModeActionResponse,
   type MinorModeCatalogService,
   type MinorModeRecord,
-} from '@agimon-ai/doompi-extension-contracts/mode';
+} from '@agimon-ai/doompi-minor-mode';
 import {
   createDoomToolSurface,
   DOOM_TOOL_SURFACE_SERVICE,
   type DoomToolSurfaceService,
-} from '@agimon-ai/doompi-extension-contracts/tool-surface';
+} from '@agimon-ai/doompi-core/tool-surface';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {

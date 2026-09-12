@@ -1,4 +1,4 @@
-import { DOOM_NOTIFICATION_ENTRY_TYPE } from '@agimon-ai/doompi-extension-contracts/notification';
+import { DOOM_NOTIFICATION_ENTRY_TYPE } from '@agimon-ai/doompi-core/notification';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import { createDoomNotificationRouter } from '../../src/controllers/notificationRouter';

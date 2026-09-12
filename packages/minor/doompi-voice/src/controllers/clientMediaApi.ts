@@ -4,7 +4,7 @@ import { globalDoomConfigPath } from '@agimon-ai/doompi-config/config';
 import { REALTIME_LIMITS, REALTIME_ROUTES, type RealtimeBrowserState, type RealtimeProvider } from '../types/realtime';
 import { RealtimeMediaBroker } from '../services/realtimeMediaBroker';
 import { createRealtimeRuntime } from '../services/realtimeRuntime';
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import {
   VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
@@ -32,7 +32,7 @@ import {
   VOICE_MEDIA_ROUTES,
   VOICE_MEDIA_SAMPLE_RATE,
 } from '../types/clientMedia';
-import type { DoomDirectEventBus } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
 import {
   VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS,
   VOICE_OWNERSHIP_FRAME_TYPE,

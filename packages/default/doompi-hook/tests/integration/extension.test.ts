@@ -1,15 +1,9 @@
-vi.mock('@agimon-ai/doompi-extension-contracts/pi-extension', () =>
-  vi.importActual('../../../../core/doompi-extension-contracts/src/controllers/piExtension'),
-);
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
-import {
-  createDoomReadinessCoordinator,
-  DOOM_READINESS_SERVICE,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
-import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+import { createDoomReadinessCoordinator, DOOM_READINESS_SERVICE } from '@agimon-ai/doompi-core/readiness';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,7 +15,7 @@ import { type PiHarness, piHarness, SESSION_ID, stubRunner, TEST_CORDIS_ROOT } f
 const cordisHost = vi.hoisted(() => ({ resolveRoot: (_pi: unknown): unknown => undefined }));
 const cordisRoots: Context[] = [];
 
-vi.mock('../../../../core/doompi-extension-contracts/src/controllers/cordisHost', () => ({
+vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
   connectDoomCordisHost: async (pi: unknown) => ({
     root: cordisHost.resolveRoot(pi),
     runtime: { abiVersion: 1, generation: 'hook-test', hostId: 'hook-test', mode: 'composed' },

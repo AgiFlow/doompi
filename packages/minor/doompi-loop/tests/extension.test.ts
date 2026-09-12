@@ -2,7 +2,7 @@ import {
   DOOM_CORDIS_SESSION_SERVICE,
   installDoomCordisHost,
   type DoomCordisSessionService,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
+} from '@agimon-ai/doompi-core/cordis-host';
 import {
   DOOM_LOOP_LAUNCHERS_SERVICE,
   type DoomLoopLaunchersService,
@@ -14,8 +14,8 @@ import {
   type MinorModeArguments,
   type MinorModeCatalogService,
   type MinorModeOwnerDefinition,
-} from '@agimon-ai/doompi-extension-contracts/mode';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-minor-mode';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { Context, type Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

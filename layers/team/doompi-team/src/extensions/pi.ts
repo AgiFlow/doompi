@@ -2,7 +2,7 @@ import { createSubagentTool } from '../tools/subagent';
 import { createIntercomTool } from '../tools/intercom';
 import { validateParams as validateSubagentParams } from '../services/subagentTool';
 import { renderSubagentCall, renderSubagentResult } from '../tui/subagentToolRender';
-import { definePiExtension, definePiTool } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
 /**
  * Install the Team feature into one package-local Cordis root.
  *
@@ -13,29 +13,26 @@ import { definePiExtension, definePiTool } from '@agimon-ai/doompi-extension-con
  * asynchronous session-start continuations are fenced by a generation token.
  */
 
-import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
-import { readDoomChildSessionService } from '@agimon-ai/doompi-extension-contracts/child-session';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
+import { readDoomChildSessionService } from '@agimon-ai/doompi-core/child';
 import {
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
   requireDoomContextContributions,
-} from '@agimon-ai/doompi-extension-contracts/context-contributions';
+} from '@agimon-ai/doompi-core/context-contributions';
 import {
   DOOM_CORDIS_SESSION_SERVICE,
   requireDoomCordisSession,
   type DoomCordisSessionService,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import {
-  DOOM_MCP_TOOL_RESOLVER_SERVICE,
-  requireDoomMcpToolResolver,
-} from '@agimon-ai/doompi-extension-contracts/mcp-tool-resolver';
+} from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_MCP_TOOL_RESOLVER_SERVICE, requireDoomMcpToolResolver } from '@agimon-ai/doompi-core/mcp-tool-resolver';
 import {
   createDoomReadinessCoordinator,
   type DoomReadinessCoordinator,
   type DoomReadinessHandle,
   type DoomReadinessNotification,
   readDoomReadinessCoordinator,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-core/readiness';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context, Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';

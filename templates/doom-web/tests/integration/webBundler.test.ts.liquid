@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { bundleCockpitWeb } from '../../src/adapters/webBundler.ts';
+import { bundleCockpitWeb } from '@agimon-ai/doompi/builders/web';
 
 const workflowRoot = fileURLToPath(new URL('../../../../minor/doompi-workflow', import.meta.url));
 const planRoot = fileURLToPath(new URL('../../../../minor/doompi-plan', import.meta.url));
@@ -107,16 +107,17 @@ describe('the sync-time cockpit bundler', () => {
     // and the bundle still builds from the rest.
     const malformed = brokenPackage({
       name: 'malformed',
-      doompiWeb: { pluginId: 'Bad Case', client: './web/index.ts' },
+      doompiWeb: { scopes: ['session'], pluginId: 'Bad Case', client: './web/index.ts' },
     });
     const entryless = brokenPackage({
       name: 'entryless',
-      doompiWeb: { pluginId: 'entryless', client: './web/index.ts' },
+      doompiWeb: { scopes: ['session'], pluginId: 'entryless', client: './web/index.ts' },
     });
 
     // The real thing: Vite compiles the host shell plus doompi-workflow's
     // shipped web source, discovered from its doompiWeb manifest alone.
     const result = await bundleCockpitWeb({
+      hostRoot: fileURLToPath(new URL('../..', import.meta.url)),
       pluginRoots: [teamRoot, malformed, workflowRoot, entryless, planRoot],
       outDir,
       onNotice: (message) => notices.push(message),
@@ -169,7 +170,11 @@ describe('the sync-time cockpit bundler', () => {
     expect(fs.realpathSync(installed.publicSecurityRoot)).toBe(fs.realpathSync(installed.physicalSecurityRoot));
     expect(fs.realpathSync(installed.physicalSecurityRoot)).not.toBe(fs.realpathSync(securityPackageRoot));
 
-    const result = await bundleCockpitWeb({ pluginRoots: [installed.pluginRoot], outDir });
+    const result = await bundleCockpitWeb({
+      hostRoot: fileURLToPath(new URL('../..', import.meta.url)),
+      pluginRoots: [installed.pluginRoot],
+      outDir,
+    });
 
     expect(result.pluginIds).toContain('security-singleton-probe');
     expect(bundledJsHas(result.assetsDir, 'security-singleton-probe')).toBe(true);
@@ -181,7 +186,11 @@ describe('the sync-time cockpit bundler', () => {
     const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-voice-bundle-'));
     cleanups.push(() => fs.rmSync(outDir, { recursive: true, force: true }));
 
-    const result = await bundleCockpitWeb({ pluginRoots: [voiceRoot], outDir });
+    const result = await bundleCockpitWeb({
+      hostRoot: fileURLToPath(new URL('../..', import.meta.url)),
+      pluginRoots: [voiceRoot],
+      outDir,
+    });
     const pluginFiles = filesBelow(result.pluginsDir);
     const bundledJavaScript = pluginFiles
       .filter((file) => file.endsWith('.js'))

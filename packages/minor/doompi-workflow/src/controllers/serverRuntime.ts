@@ -1,9 +1,10 @@
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessContent,
   type DoomHeadlessToolResult,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-extension-contracts/mode';
+} from '@agimon-ai/doompi-core/headless';
+import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import { readWorkflowSkill as skill } from '../services/workflowResource';
 import { createEmbeddedWorkflowFeature } from '@agimon-ai/workflow-mcp';
 import { z } from 'zod';
@@ -36,11 +37,8 @@ function callResult(value: unknown): DoomHeadlessToolResult {
   return { content, details: value };
 }
 
-import { type DoomHeadlessHostService } from '@agimon-ai/doompi-extension-contracts/headless';
-import {
-  type DoomServerHostService,
-  type DoomServerSessionPlugin,
-} from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import { type DoomServerHostService, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 export function createWorkflowServerRuntime(
   host: DoomHeadlessHostService,
   serverHost: DoomServerHostService,
@@ -80,7 +78,7 @@ export function createWorkflowServerRuntime(
   });
   let control: ReturnType<typeof feature.createRunControl> | undefined;
   let modeOwner: MinorModeOwner | undefined;
-  const modeSelected = (): boolean => host.context.selection.minorModes.includes(WORKFLOW_MODE_ID);
+  const modeSelected = (): boolean => (host.context.selection.state?.['minor-mode'] ?? []).includes(WORKFLOW_MODE_ID);
   const modeState = (): MinorModeState => {
     const active = modeSelected();
     return {
@@ -94,8 +92,12 @@ export function createWorkflowServerRuntime(
     };
   };
   const selectMode = async (enabled: boolean): Promise<void> => {
-    const modes = host.context.selection.minorModes.filter((mode) => mode !== WORKFLOW_MODE_ID);
-    await host.changeSelection({ axis: 'minorModes', minorModes: enabled ? [...modes, WORKFLOW_MODE_ID] : modes });
+    const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== WORKFLOW_MODE_ID);
+    await host.changeSelection({
+      axis: 'state',
+      key: 'minor-mode',
+      values: enabled ? [...modes, WORKFLOW_MODE_ID] : modes,
+    });
     modeOwner?.publish();
   };
   modeOwner = defineMinorMode({
@@ -137,10 +139,10 @@ export function createWorkflowServerRuntime(
     },
   }).createOwner(undefined);
   return {
-    minorModes: [modeOwner],
+    services: [serverMinorModes([modeOwner])],
     toolRestrictions: [
       {
-        minorMode: WORKFLOW_MODE_ID,
+        when: { state: { 'minor-mode': WORKFLOW_MODE_ID } },
         allowedTools: [LIST_TOOL, LAUNCH_TOOL, RUN_TOOL],
       },
     ],
@@ -152,7 +154,7 @@ export function createWorkflowServerRuntime(
         },
       },
       {
-        when: { minorMode: WORKFLOW_MODE_ID },
+        when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         event: 'session_shutdown',
         handle: () => {
           control?.dispose();
@@ -162,19 +164,19 @@ export function createWorkflowServerRuntime(
     ],
     resources: [
       {
-        when: { minorMode: WORKFLOW_MODE_ID },
+        when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: 'doompi-author-workflow',
         kind: 'skill',
         read: () => skill('doompi-author-workflow'),
       },
       {
-        when: { minorMode: WORKFLOW_MODE_ID },
+        when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: 'doompi-use-workflow',
         kind: 'skill',
         read: () => skill('doompi-use-workflow'),
       },
       {
-        when: { minorMode: WORKFLOW_MODE_ID },
+        when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: 'workflow-recovery',
         kind: 'skill',
         read: () => skill('workflow-recovery'),
@@ -182,7 +184,7 @@ export function createWorkflowServerRuntime(
     ],
     activities: [
       {
-        when: { minorMode: WORKFLOW_MODE_ID },
+        when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: SOURCE,
         async start(executionContext) {
           control = feature.createRunControl({});
@@ -197,7 +199,7 @@ export function createWorkflowServerRuntime(
     ],
     tools: [
       {
-        when: { minorMode: WORKFLOW_MODE_ID },
+        when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: LIST_TOOL,
         label: 'List Workflows',
         description: 'List workflow definitions available in this repository.',
@@ -213,7 +215,7 @@ export function createWorkflowServerRuntime(
         },
       },
       {
-        when: { minorMode: WORKFLOW_MODE_ID },
+        when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: LAUNCH_TOOL,
         label: 'Launch Workflow',
         description: 'Start a workflow run and return its recorded launch result.',
@@ -225,7 +227,7 @@ export function createWorkflowServerRuntime(
         },
       },
       {
-        when: { minorMode: WORKFLOW_MODE_ID },
+        when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: RUN_TOOL,
         label: 'Workflow Run',
         description: 'Inspect the status of a workflow run or request cooperative control.',
@@ -269,7 +271,7 @@ export function createWorkflowServerRuntime(
     ],
     commands: [
       {
-        when: { minorMode: WORKFLOW_MODE_ID },
+        when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: 'workflow-launch',
         description: 'Launch a workflow from a slash command.',
         async execute(args: string, execution: DoomHeadlessExecutionContext) {

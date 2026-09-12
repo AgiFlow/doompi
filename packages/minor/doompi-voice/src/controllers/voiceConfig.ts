@@ -18,12 +18,7 @@ import path from 'node:path';
 import { globalDoomConfigDirectory, globalDoomConfigPath } from '@agimon-ai/doompi-config/config';
 import { type DoomConfigEdit, writeDoomConfigValues } from '@agimon-ai/doompi-config/configWriter';
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config/types';
-import {
-  CONFIG_ACTION,
-  type ConfigChoice,
-  type ConfigSection,
-  type ConfigStep,
-} from '@agimon-ai/doompi-extension-contracts/config';
+import { CONFIG_ACTION, type ConfigChoice, type ConfigSection, type ConfigStep } from '@agimon-ai/doompi-core/config';
 import {
   catalogEntryById,
   ENGINE_TOOLING,

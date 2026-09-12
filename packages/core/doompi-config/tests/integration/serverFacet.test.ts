@@ -2,12 +2,9 @@ import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
   DoomHeadlessResource,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/headless';
-import {
-  DOOM_SERVER_HOST_SERVICE,
-  type DoomServerHostService,
-} from '@agimon-ai/doompi-extension-contracts/server-facet';
+} from '@agimon-ai/doompi-core/headless';
+import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 import { configServerFacet } from '../../src/extensions/server';

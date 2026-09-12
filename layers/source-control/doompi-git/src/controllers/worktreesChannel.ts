@@ -9,7 +9,7 @@ import type {
   DoomHubChannelSource,
   DoomHubSessionScope,
   DoomHubSessionService,
-} from '@agimon-ai/doompi-extension-contracts/hub-channel';
+} from '@agimon-ai/doompi-core/hub-channel';
 import { DoomGitExpectedError, HubUnavailableError } from '../services/errors';
 import { GIT_WORKTREE_LIFECYCLE_EVENT, isWorktreeLifecycleEvent } from '../services/worktreeEvents';
 import { GIT_WORKTREES_TYPE, type GitWorktreesCommand, type WorktreeView } from '../types/webWorktrees';

@@ -2,10 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  AGENT_PLUGIN_MCP_SCHEMA_URL,
-  type DoomMcpProjection,
-} from '@agimon-ai/doompi-extension-contracts/mcp-projection';
+import { AGENT_PLUGIN_MCP_SCHEMA_URL, type DoomMcpProjection } from '@agimon-ai/doompi-core/mcp-projection';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildMcpConfigGroups } from '../src/services/configSources';
 import { mcpSessionConfigFromProjection } from '../src/services/projection';

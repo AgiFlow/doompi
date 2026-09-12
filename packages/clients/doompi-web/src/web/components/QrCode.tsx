@@ -1,5 +1,5 @@
 import { cn } from '@agimon-ai/doompi-web-components';
-import { qrMatrix } from '../lib/qrMatrix.ts';
+import { qrMatrix } from '../lib/qrMatrix';
 
 /** Modules of white space a scanner needs around the code, per the QR spec. */
 const QUIET_ZONE = 4;

@@ -1,1 +1,1 @@
-export * from '../services/compatibilityContext';
+export * from '../cli/commands/compat/context';

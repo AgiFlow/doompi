@@ -1,4 +1,4 @@
-import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { PACKAGE_SOURCE } from '../constants/package';
 import { createHeadlessReadTool } from '../services/readTool';
 

@@ -1,4 +1,4 @@
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { gitToolRenderers } from '../web/components/toolRenderers';
 import { WorktreesActivitySection } from '../web/components/WorktreesActivitySection';
 import { worktreesTab } from '../web/components/WorktreesPanel';

@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { neutralExtensionContracts } from '../../src/rules/neutralContracts.js';
 
 const roots: string[] = [];
-function fixture(source: string, relative = 'src/schemas/protocol.ts', name = '@agimon-ai/doompi-extension-contracts') {
+function fixture(source: string, relative = 'src/schemas/protocol.ts', name = '@agimon-ai/doompi-core') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neutral-contracts-'));
   roots.push(root);
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name }));
@@ -42,7 +42,7 @@ describe('neutral extension contracts', () => {
   it('rejects feature manifest exports and dependencies', () => {
     const { root, file } = fixture(
       JSON.stringify({
-        name: '@agimon-ai/doompi-extension-contracts',
+        name: '@agimon-ai/doompi-core',
         dependencies: { '@agimon-ai/doompi-author': 'workspace:*' },
         exports: { './author-facade': './dist/author.mjs' },
       }),

@@ -1,9 +1,9 @@
 import { Button, Spinner } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect } from 'react';
-import { refreshRemoteState, remoteAccessStore } from '../../stores/remoteAccessStore.ts';
-import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
-import { TunnelSettings } from './TunnelSettings.tsx';
+import { refreshRemoteState, remoteAccessStore } from '../../stores/remoteAccessStore';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
+import { TunnelSettings } from './TunnelSettings';
 
 /** Persistent tunnel configuration, separate from the dialog that starts and pairs a remote session. */
 export function RemoteControlSettings() {

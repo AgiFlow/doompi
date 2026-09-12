@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createWorkflowsChannel } from '../src/controllers/workflowsHubChannel';
 import { readWorkflowRuns } from '../src/services/workflowWatcher';

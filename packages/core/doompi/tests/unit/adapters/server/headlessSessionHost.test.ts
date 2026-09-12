@@ -1,3 +1,8 @@
+import { restoreMinorModeSelection } from '@agimon-ai/doompi-minor-mode/projection';
+import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
+import minorModeServerFacet from '@agimon-ai/doompi-minor-mode/extensions/server';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
+import { publishHeadlessSelectionStatus } from '../../../../src/builders/server/selectionStatus';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,15 +19,24 @@ import {
   type Api,
 } from '@earendil-works/pi-ai';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import { DOOM_HEADLESS_HOST_SERVICE, requireDoomHeadlessHost } from '@agimon-ai/doompi-extension-contracts/headless';
-import type { LoadedServerFacet } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { DOOM_HEADLESS_HOST_SERVICE, requireDoomHeadlessHost } from '@agimon-ai/doompi-core/headless';
+import type { LoadedServerFacet } from '@agimon-ai/doompi-core/server-facet';
 import {
   createHeadlessSessionHost,
-  restoreHeadlessSelection,
+  restoreHeadlessSelection as restoreCoreSelection,
   validateDirectHeadlessArgs,
-} from '../../../../src/controllers/headlessSessionHost';
-import { readContextDetail } from '../../../../src/services/contextDetailStore';
-import { serveSessionApis } from '../../../../src/controllers/packageApiServer';
+} from '@agimon-ai/doompi-core/main';
+import { readContextDetail } from '@agimon-ai/doompi-core/context-detail-store';
+import { serveSessionApis } from '@agimon-ai/doompi-core/package-api-server';
+
+function restoreHeadlessSelection(
+  entries: Parameters<typeof restoreCoreSelection>[0],
+  fallback: Parameters<typeof restoreCoreSelection>[1],
+) {
+  const selection = restoreCoreSelection(entries, fallback);
+  const values = restoreMinorModeSelection(entries);
+  return values ? { ...selection, state: { ...selection.state, 'minor-mode': values } } : selection;
+}
 
 const model: Model<Api> = {
   id: 'test',
@@ -68,7 +82,12 @@ describe('headless startup', () => {
   });
 
   it('restores the latest valid control and minor-mode projections from history', () => {
-    const fallback = { majorMode: 'copilot', activeLayers: ['tools'], domains: ['development'], minorModes: [] };
+    const fallback = {
+      majorMode: 'copilot',
+      activeLayers: ['tools'],
+      domains: ['development'],
+      state: { 'minor-mode': [] },
+    };
     const entries = [
       {
         type: 'custom',
@@ -92,7 +111,7 @@ describe('headless startup', () => {
       activeLayers: ['tools'],
       profile: 'caveman',
       domains: ['testing', 'engineering'],
-      minorModes: ['goal'],
+      state: { 'minor-mode': ['goal'] },
     });
   });
 
@@ -101,7 +120,7 @@ describe('headless startup', () => {
       majorMode: 'copilot',
       activeLayers: ['tools'],
       domains: ['development'],
-      minorModes: ['fallback'],
+      state: { 'minor-mode': ['fallback'] },
     };
     for (const selection of [
       null,
@@ -140,7 +159,7 @@ describe('headless startup', () => {
       ...fallback,
       majorMode: 'minimal',
       domains: [],
-      minorModes: ['active'],
+      state: { 'minor-mode': ['active'] },
     });
     expect(
       restoreHeadlessSelection(
@@ -291,26 +310,30 @@ describe('headless startup', () => {
         inject: [DOOM_HEADLESS_HOST_SERVICE],
         apply(context) {
           const host = requireDoomHeadlessHost(context);
-          host.registerMinorMode({
-            descriptor: {
-              source: '@test/control',
-              id: 'fixture-mode',
-              label: 'Fixture mode',
-              description: 'Fixture headless mode',
-              order: 1,
-              actions: [
-                {
-                  id: 'toggle',
-                  label: 'Toggle',
-                  description: 'Toggle mode',
-                  contexts: ['headless'],
-                  parameters: [],
+          context.plugin(
+            serverMinorModes([
+              {
+                descriptor: {
+                  source: '@test/control',
+                  id: 'fixture-mode',
+                  label: 'Fixture mode',
+                  description: 'Fixture headless mode',
+                  order: 1,
+                  actions: [
+                    {
+                      id: 'toggle',
+                      label: 'Toggle',
+                      description: 'Toggle mode',
+                      contexts: ['headless'],
+                      parameters: [],
+                    },
+                  ],
                 },
-              ],
-            },
-            initialState: { activation: 'active', condition: 'ready', actions: [{ id: 'toggle', enabled: true }] },
-            handleAction: modeAction,
-          });
+                initialState: { activation: 'active', condition: 'ready', actions: [{ id: 'toggle', enabled: true }] },
+                handleAction: modeAction,
+              },
+            ]),
+          );
           host.registerCommand({
             name: 'mode',
             description: 'Change mode',
@@ -332,6 +355,11 @@ describe('headless startup', () => {
       },
       facet: profileServerFacet,
     };
+    const minor: LoadedServerFacet = {
+      ...control,
+      declaration: { ...control.declaration, packageName: '@agimon-ai/doompi-minor-mode' },
+      facet: minorModeServerFacet,
+    };
     const admittedEnvironment = { PI_CODING_AGENT_DIR: root };
     let session: Awaited<ReturnType<typeof createHeadlessSessionHost>> | undefined;
     let apis: Awaited<ReturnType<typeof serveSessionApis>> | undefined;
@@ -343,7 +371,12 @@ describe('headless startup', () => {
         sessionName: 'Test',
         agentArgs: ['--session-dir', root],
         environment: admittedEnvironment,
-        candidates: [facet.declaration, control.declaration, profile.declaration],
+        candidates: [minor.declaration, facet.declaration, control.declaration, profile.declaration],
+        publishSelectionStatus: publishHeadlessSelectionStatus,
+        contextGroups: (context) =>
+          (readMinorModeCatalog(context)?.list() ?? [])
+            .filter(({ state }) => state.activation === 'active')
+            .map(({ descriptor }) => ({ id: descriptor.id, label: descriptor.label, kind: 'minor' })),
         resolveSelection: (requested) => {
           const config = loadMajorModesConfig(root, path.join(root, 'home'));
           return {
@@ -355,7 +388,7 @@ describe('headless startup', () => {
           majorMode: 'development',
           activeLayers: ['tools'],
           domains: [],
-          minorModes: ['fixture-mode'],
+          state: { 'minor-mode': ['fixture-mode'] },
           profile: 'writer',
         },
       });
@@ -374,7 +407,7 @@ describe('headless startup', () => {
         },
         hubToken: 'test-hub-token',
         apis: [],
-        facets: [facet, control, profile],
+        facets: [minor, facet, control, profile],
         prepareFacets: session.prepareFacets,
         activateFacets: session.activateFacets,
         canDispatch: session.canDispatch,
@@ -449,10 +482,10 @@ describe('headless startup', () => {
       );
       const harness = session.runtime.harness;
       expect(session.runtime.listCommands()).toEqual([
+        { name: 'minor', description: 'Toggle or drive minor modes' },
         { name: 'fixture', description: 'Fixture command' },
         { name: 'mode', description: 'Change mode' },
         { name: 'profile', description: 'Show or change the active DoomPi profile.' },
-        { name: 'minor', description: 'Toggle or drive minor modes' },
       ]);
 
       await session.runtime.prompt('/minor fixture-mode toggle');
@@ -482,9 +515,9 @@ describe('headless startup', () => {
       ).toHaveLength(2);
       expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({ revision: 2 });
       expect(session.runtime.listCommands()).toEqual([
+        { name: 'minor', description: 'Toggle or drive minor modes' },
         { name: 'mode', description: 'Change mode' },
         { name: 'profile', description: 'Show or change the active DoomPi profile.' },
-        { name: 'minor', description: 'Toggle or drive minor modes' },
       ]);
       await expect(session.host!.dispatchCommand('fixture', 'stale')).rejects.toThrow('inactive or unknown');
       expect(executeCommand).toHaveBeenCalledTimes(2);

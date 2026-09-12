@@ -9,17 +9,17 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useMemo, useState } from 'react';
-import type { SettingsRepository } from '../../../types/settings.ts';
-import { focusWorkspaceWebPlugins } from '../../lib/pluginRuntime.ts';
-import { listSettingsRepositories } from '../../lib/settingsApi.ts';
-import type { SettingsSection } from '../../lib/settingsSections.ts';
-import { sealedHttpSession } from '../../lib/sealedSession.ts';
-import { fetchWithStepUp } from '../../lib/stepUp.ts';
-import { sessionsStore } from '../../stores/sessionsStore.ts';
-import { ContributedSettings } from './ContributedSettings.tsx';
-import { RepositorySettings } from './RepositorySettings.tsx';
-import { SettingsMenu } from './SettingsMenu.tsx';
-import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
+import type { SettingsRepository } from '../../../types/settings';
+import { focusWorkspaceWebPlugins } from '../../lib/pluginRuntime';
+import { listSettingsRepositories } from '../../lib/settingsApi';
+import type { SettingsSection } from '../../lib/settingsSections';
+import { sealedHttpSession } from '../../lib/sealedSession';
+import { fetchWithStepUp } from '../../lib/stepUp';
+import { sessionsStore } from '../../stores/sessionsStore';
+import { ContributedSettings } from './ContributedSettings';
+import { RepositorySettings } from './RepositorySettings';
+import { SettingsMenu } from './SettingsMenu';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 const LAST_REPOSITORY_KEY = 'doompi.settings.repository';
 

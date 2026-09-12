@@ -12,8 +12,8 @@ import {
   missingLayerPackageSpecifiers,
   packageManagerCommandWithStderr,
   SAFE_TRANSITIVE_OVERRIDES,
-} from '../../src/services/layerPackageInstaller';
-import type { ExtensionLayerResolvers } from '../../src/services/extensionAssembler';
+} from '../../src/composition/layerPackageInstaller';
+import type { ExtensionLayerResolvers } from '../../src/builders/cli/extensionAssembler';
 
 const EMPTY_RESOLVED_PATHS: ResolvedPaths = {
   extensions: [],
@@ -233,9 +233,9 @@ describe('ensureLayerPackages', () => {
         packages: {
           '@agimon-ai/doompi-help': {
             archive: path.basename(archive),
-            dependencies: ['@agimon-ai/doompi-extension-contracts'],
+            dependencies: ['@agimon-ai/doompi-core'],
           },
-          '@agimon-ai/doompi-extension-contracts': {
+          '@agimon-ai/doompi-core': {
             archive: path.basename(dependencyArchive),
             dependencies: [],
           },
@@ -276,7 +276,7 @@ describe('ensureLayerPackages', () => {
     expect(manifestDependencies(root)).toEqual({
       '@agimon-ai/doompi-help': `file:${archive}`,
       '@scope/external': '*',
-      '@agimon-ai/doompi-extension-contracts': `file:${dependencyArchive}`,
+      '@agimon-ai/doompi-core': `file:${dependencyArchive}`,
     });
   });
   it('does not create or call a package manager when every package resolves outside Pi storage', async () => {

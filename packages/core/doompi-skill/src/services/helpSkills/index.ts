@@ -4,7 +4,7 @@ import {
   type DoomHelpService,
   type DoomHelpSkill,
   type DoomHelpSnapshot,
-} from '@agimon-ai/doompi-extension-contracts/help';
+} from '@agimon-ai/doompi-core/help';
 import { createSyntheticSourceInfo, type Skill } from '@earendil-works/pi-coding-agent';
 
 export interface SkillInventoryInput {

@@ -8,7 +8,7 @@
  * have delivered. The artifact carries no previewUrl: the renderer has nothing
  * to serve it, and an empty <video> box says less than the rest of the card.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { ComputerUsePanel } from './ComputerUsePanel';
 import type { ComputerUseChannelPayload } from '../../types/computerUseApi';
 import { computerUse } from '../stores/computerUseStore';

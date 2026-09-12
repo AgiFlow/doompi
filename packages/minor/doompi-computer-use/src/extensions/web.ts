@@ -1,4 +1,4 @@
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { COMPUTER_USE_MODE_ID, COMPUTER_USE_MODE_STATUS_KEY, COMPUTER_USE_STATUS_KEY } from '../types/computerUseApi';
 import { ComputerActionToolCard } from '../web/components/ComputerActionToolCard';
 import { ComputerExecToolCard } from '../web/components/ComputerExecToolCard';

@@ -3,7 +3,7 @@ import type {
   DoomHubChannelSource as HubChannelSource,
   DoomHubSessionScope as HubSessionScope,
   DoomHubChannel as WebHubChannel,
-} from '@agimon-ai/doompi-extension-contracts/hub-channel';
+} from '@agimon-ai/doompi-core/hub-channel';
 import { SUBAGENT_CATALOG_TYPE, type SubagentCatalogPayload } from '../types/webSubagents';
 
 function isRecord(value: unknown): value is Record<string, unknown> {

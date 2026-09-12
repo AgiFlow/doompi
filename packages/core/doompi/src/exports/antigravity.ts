@@ -1,1 +1,1 @@
-export * from '../services/compatibility/antigravity';
+export * from '../cli/commands/compat/providers/antigravity';

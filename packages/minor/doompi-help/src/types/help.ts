@@ -3,7 +3,7 @@ import type {
   DoomHelpContribution,
   DoomHelpDiagnostic,
   DoomHelpSkill,
-} from '@agimon-ai/doompi-extension-contracts/help';
+} from '@agimon-ai/doompi-core/help';
 
 export interface HelpPackageIdentity {
   source: string;

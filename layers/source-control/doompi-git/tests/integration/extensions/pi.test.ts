@@ -1,7 +1,7 @@
 // @scaffold-generated
-import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-extension-contracts/testing';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-core/testing';
+import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
 import { describe, expect, it, vi } from 'vitest';
 import { COMMAND_NAME } from '../../../src/constants/git';
 import { activateGitExtension } from '../../../src/extensions/pi';

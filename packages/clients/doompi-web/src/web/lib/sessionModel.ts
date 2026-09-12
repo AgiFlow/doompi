@@ -1,4 +1,4 @@
-import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
+import type { ToolResultView } from '@agimon-ai/doompi-core/web';
 import {
   AGENT_MODEL_ENTRY_TYPE,
   CONTEXT_ENTRY_TYPE,
@@ -7,9 +7,9 @@ import {
   MINOR_MODE_ENTRY_TYPE,
   type MinorModeProjection,
   PROFILE_IDENTITY_ENTRY_TYPE,
-} from '../../types/hub.ts';
-import { parseDoomNotificationEntry } from '../../types/notification.ts';
-import { BUILTIN_COMMANDS } from './commands.ts';
+} from '../../types/hub';
+import { parseDoomNotificationEntry } from '../../types/notification';
+import { BUILTIN_COMMANDS } from './commands';
 
 export type EntryKind = 'user' | 'assistant' | 'tool' | 'notice';
 

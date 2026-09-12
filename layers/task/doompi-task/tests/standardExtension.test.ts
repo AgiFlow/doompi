@@ -2,18 +2,15 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProvider,
   type DoomBackgroundWorkService,
-} from '@agimon-ai/doompi-extension-contracts/background-work';
+} from '@agimon-ai/doompi-core/background-work';
 import {
   createDoomContextContributionsService,
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
-} from '@agimon-ai/doompi-extension-contracts/context-contributions';
-import { DOOM_DELEGATION_SERVICE, type DoomDelegationService } from '@agimon-ai/doompi-extension-contracts/delegation';
-import {
-  createDoomReadinessCoordinator,
-  DOOM_READINESS_SERVICE,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
-import { DOOM_NARRATION_SERVICE, type DoomNarrationService } from '@agimon-ai/doompi-extension-contracts/narration';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-core/context-contributions';
+import { DOOM_DELEGATION_SERVICE, type DoomDelegationService } from '@agimon-ai/doompi-team/delegation';
+import { createDoomReadinessCoordinator, DOOM_READINESS_SERVICE } from '@agimon-ai/doompi-core/readiness';
+import { DOOM_NARRATION_SERVICE, type DoomNarrationService } from '@agimon-ai/doompi-core/narration';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -51,7 +48,7 @@ const runtimeMocks = vi.hoisted(() => ({
 }));
 const cordisRoots: Context[] = [];
 
-vi.mock('../../../../packages/core/doompi-extension-contracts/src/controllers/cordisHost', () => ({
+vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
   connectDoomCordisHost: async () => ({
     root: runtimeMocks.createCordisRoot(),
     runtime: { abiVersion: 1, generation: 'task-test', hostId: 'task-test', mode: 'composed' },

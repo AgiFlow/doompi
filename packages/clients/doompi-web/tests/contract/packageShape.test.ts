@@ -58,11 +58,6 @@ describe('doompi-web package contract', () => {
         import: './dist/index.mjs',
         require: './dist/index.cjs',
       },
-      './bundler': {
-        types: './dist/bundler.d.mts',
-        import: './dist/bundler.mjs',
-        require: './dist/bundler.cjs',
-      },
       './package.json': './package.json',
     });
   });
@@ -84,9 +79,8 @@ describe('doompi-web package contract', () => {
     // session, API, and authorization runtimes do not.
     expect(runtime).toEqual([
       '@agimon-ai/doompi',
-      '@agimon-ai/doompi-extension-contracts',
+      '@agimon-ai/doompi-core',
       '@agimon-ai/doompi-web-components',
-      '@agimon-ai/doompi-web-contracts',
       '@agimon-ai/doompi-web-security',
       '@codemirror/state',
       '@codemirror/view',

@@ -1,1 +1,1 @@
-export * from '../services/repository';
+export * from '../composition/repository';

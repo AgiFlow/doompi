@@ -24,7 +24,7 @@ Do not declare `doompiWeb.hub`. Host-side channels and HTTP handlers belong to a
 The client entry exports one `webPlugin` definition:
 
 ```ts
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 
 export const webPlugin = defineWebPlugin({
   id: 'example',

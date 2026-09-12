@@ -1,4 +1,4 @@
-import type { DoomApi, DoomApiContext } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiContext } from '@agimon-ai/doompi-core/package-api';
 import { MCP_AUTHORIZATION_API_PATH, MCP_DISCOVERY_API_PATH, MCP_REPOSITORY_API_PATH } from '../types/webMcp';
 import { McpSettingsManager } from '../services/mcpSettingsManager';
 

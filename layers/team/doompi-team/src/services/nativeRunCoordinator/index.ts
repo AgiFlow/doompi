@@ -3,7 +3,7 @@ import type {
   DoomChildSessionHandle,
   DoomChildSessionRequest,
   DoomChildSessionServiceProvider,
-} from '@agimon-ai/doompi-extension-contracts/child-session';
+} from '@agimon-ai/doompi-core/child';
 import type { SessionScope } from '../sessionPaths';
 import type { AsyncJobTracker, NativeAsyncJobProjection } from '../asyncJobTracker';
 import type { NativeRunProjectionSink } from '../nativeRunProjection';

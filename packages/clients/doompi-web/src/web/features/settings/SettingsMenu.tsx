@@ -10,7 +10,7 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { settingsSections, type SettingsSection, type SettingsWorkspace } from '../../lib/settingsSections.ts';
+import { settingsSections, type SettingsSection, type SettingsWorkspace } from '../../lib/settingsSections';
 
 function SectionLinks({
   active,

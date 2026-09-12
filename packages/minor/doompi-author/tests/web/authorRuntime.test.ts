@@ -1,4 +1,4 @@
-import type { ModelContext, ModelContextTool, WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+import type { ModelContext, ModelContextTool, WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 import { describe, expect, it, vi } from 'vitest';
 import { AuthorClientBroker } from '../../src/web/api/authorBroker';
 import { AuthorRuntime } from '../../src/web/api/authorRuntime';

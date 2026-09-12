@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 import { extensionName, extensionToolSource, withExtensionSource } from '../src/services/extensionSource';
-import { buildToolSources, type McpServerStatus, type ToolInfo } from '../src/services/toolInventory';
+import { buildToolSources, type McpServerStatus, type ToolInfo } from '@agimon-ai/doompi-core/tool-inventory';
 
 function tool(name: string, source: string, path = `<${source}>`): ToolInfo {
   return {

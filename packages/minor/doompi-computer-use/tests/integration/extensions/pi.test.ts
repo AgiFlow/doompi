@@ -1,4 +1,4 @@
-import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-extension-contracts/testing';
+import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { computerUseExtension as activateComputerUseExtension } from '../../../src/extensions/pi';
 import { COMPUTER_USE_TOOL_NAMES } from '../../../src/constants/computerUse';

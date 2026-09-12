@@ -1,10 +1,10 @@
 import { Store } from '@tanstack/store';
-import type { CaptureStatusEvent, ComposerCapture, ComposerSubmission } from '@agimon-ai/doompi-web-contracts';
-import { validateComposerCapture } from './composerStore.ts';
-import { sessionStoreFor } from './sessionStore.ts';
-import { sessionsStore } from './sessionsStore.ts';
-import { publishComposerSubmission } from '../lib/composerSubmissions.ts';
-import { sendFrame } from '../lib/transport.ts';
+import type { CaptureStatusEvent, ComposerCapture, ComposerSubmission } from '@agimon-ai/doompi-core/web';
+import { validateComposerCapture } from './composerStore';
+import { sessionStoreFor } from './sessionStore';
+import { sessionsStore } from './sessionsStore';
+import { publishComposerSubmission } from '../lib/composerSubmissions';
+import { sendFrame } from '../lib/transport';
 
 interface PendingCapture {
   submission: ComposerSubmission;

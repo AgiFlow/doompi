@@ -1,7 +1,7 @@
 import { Accordion as AccordionPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { ChevronDownIcon } from '../icons/icons.ts';
-import { cn } from '../lib/cn.ts';
+import { ChevronDownIcon } from '../icons/icons';
+import { cn } from '../lib/cn';
 
 /** Several collapsibles that know about each other; pass type="single" for one open at a time. */
 export function Accordion(props: ComponentProps<typeof AccordionPrimitive.Root>) {

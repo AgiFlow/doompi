@@ -1,6 +1,6 @@
 import { Switch as SwitchPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+import { cn } from '../lib/cn';
 
 /** An on/off track; use it where the change takes effect immediately, a checkbox where it needs a save. */
 export function Switch({ className, ...props }: ComponentProps<typeof SwitchPrimitive.Root>) {

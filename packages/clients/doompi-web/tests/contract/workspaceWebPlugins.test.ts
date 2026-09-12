@@ -1,20 +1,20 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { WebPluginDefinition, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import type { WebPluginDefinition, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import type { ComponentType } from 'react';
 import { afterAll, describe, expect, it } from 'vitest';
-import { scanWebPlugins } from '../../src/adapters/webPluginScan.ts';
-import { activityGroups, PACKAGED_MINOR_MODES, PACKAGED_SELECTION_AXES } from '../../src/web/lib/composition.ts';
+import { scanWebPlugins } from '@agimon-ai/doompi/builders/web';
+import { activityGroups, PACKAGED_MINOR_MODES, PACKAGED_SELECTION_AXES } from '../../src/web/lib/composition';
 import {
   installWebPlugins,
   pluginMinorModes,
   pluginSelectionAxes,
   resetWebPlugins,
   webPluginDiagnostics,
-} from '../../src/web/lib/pluginRegistry.ts';
-import { pluginsAtScope } from '../../src/web/lib/pluginScopes.ts';
-import { HOST_ROOT, pluginPackageRoots } from '../support/pluginRoots.ts';
+} from '../../src/web/lib/pluginRegistry';
+import { pluginsAtScope } from '../../src/web/lib/pluginScopes';
+import { HOST_ROOT, pluginPackageRoots } from '../support/pluginRoots';
 
 /**
  * Every workspace plugin's client definition, imported once.

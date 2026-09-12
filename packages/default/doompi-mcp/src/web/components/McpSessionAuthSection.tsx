@@ -9,7 +9,7 @@ import {
   DialogTitle,
   Input,
 } from '@agimon-ai/doompi-web-components';
-import type { SessionFrameSender, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { SessionFrameSender, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useEffect, useRef, useState } from 'react';
 import { MCP_SESSION_AUTH_STATUS_KEY, parseMcpSessionAuthStatus } from '../../types/webMcp';
 

@@ -6,14 +6,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ readSyncRegistration: vi.fn() }));
 
-vi.mock('@agimon-ai/doompi/services', () => ({ readSyncRegistration: mocks.readSyncRegistration }));
+vi.mock('@agimon-ai/doompi-core/sync-registration', () => ({ readSyncRegistration: mocks.readSyncRegistration }));
 
 import {
   WEB_PLUGIN_RUNTIME_SPECIFIERS,
   readDevPluginRoots,
   webPluginRuntimeAliases,
   webPluginRuntimeGlobal,
-} from '../../src/adapters/webPluginVite.ts';
+} from '@agimon-ai/doompi/builders/web';
 
 const temporaryDirectories: string[] = [];
 
@@ -38,7 +38,7 @@ describe('the standalone plugin runtime facade', () => {
       'react-dom/client',
       '@tanstack/store',
       '@tanstack/react-store',
-      '@agimon-ai/doompi-web-contracts',
+      '@agimon-ai/doompi-core/web',
       '@agimon-ai/doompi-web-components',
       '@agimon-ai/doompi-web-security/browser',
       '@codemirror/state',

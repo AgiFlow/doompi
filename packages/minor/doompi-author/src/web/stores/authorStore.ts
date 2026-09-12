@@ -1,4 +1,4 @@
-import { defineSessionStore, type SessionChannelContribution } from '@agimon-ai/doompi-web-contracts';
+import { defineSessionStore, type SessionChannelContribution } from '@agimon-ai/doompi-core/web';
 import { authorChannelType, type AuthorHubMessage, type AuthorWebView } from '../../types/webAuthor';
 import { applyAuthorHubMessage, authorBridgeView, dropAuthorViewportSession } from '../api/authorBrowserBridge';
 import { clearAuthorGridGeometry } from '../lib/authorGrid';

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { doctorHelp, syncHelp } from '../../src/controllers/help';
-import { CompatibilityCommand } from '../../src/controllers/compatibilityCommand';
-import { DoctorCommand } from '../../src/controllers/doctorCommand';
-import { InitCommand } from '../../src/controllers/initCommand';
-import { SyncPipeline } from '../../src/controllers/syncPipeline';
+import { doctorHelp, syncHelp } from '../../src/cli/help';
+import { CompatibilityCommand } from '../../src/cli/commands/compat';
+import { DoctorCommand } from '../../src/cli/commands/doctor';
+import { InitCommand } from '../../src/cli/commands/init';
+import { runSync } from '../../src/cli/commands/sync/workflow';
 
 /** Collects what a command wrote so a help run can be checked for side effects. */
 function recorder(): { write: (chunk: string) => boolean; text: () => string } {
@@ -21,7 +21,7 @@ describe('subcommand help', () => {
   it('prints sync help instead of running a sync', async () => {
     const output = recorder();
 
-    await expect(new SyncPipeline().execute(['sync', '--help'], {}, process.cwd(), output)).resolves.toBe(0);
+    await expect(runSync(['sync', '--help'], {}, process.cwd(), output)).resolves.toBe(0);
 
     // Exactly the help text and nothing else: any sync work would have written
     // progress or a result line, which is what the old behaviour did.
@@ -31,7 +31,7 @@ describe('subcommand help', () => {
   it('prints sync help for --check --help as well', async () => {
     const output = recorder();
 
-    await expect(new SyncPipeline().execute(['sync', '--check', '--help'], {}, process.cwd(), output)).resolves.toBe(0);
+    await expect(runSync(['sync', '--check', '--help'], {}, process.cwd(), output)).resolves.toBe(0);
 
     expect(output.text()).toBe(syncHelp());
   });

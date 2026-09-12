@@ -8,8 +8,8 @@
  * Each block opens on its first question: the prompt shows one question at a
  * time and the arrow keys walk the rest, which a screenshot cannot press.
  */
-import type { ToolPromptDialog } from '@agimon-ai/doompi-web-contracts';
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import type { ToolPromptDialog } from '@agimon-ai/doompi-core/web';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { QuestionnairePrompt } from './QuestionnairePrompt';
 
 const TOOL_NAME = 'ask_user_question';

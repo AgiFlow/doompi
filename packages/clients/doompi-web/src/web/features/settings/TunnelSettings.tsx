@@ -1,7 +1,7 @@
 import { Button, Input, RadioGroup, RadioGroupCard } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
-import type { TunnelConfig } from '../../../types/remoteAccess.ts';
-import { updateRemoteSettings } from '../../stores/remoteAccessStore.ts';
+import type { TunnelConfig } from '../../../types/remoteAccess';
+import { updateRemoteSettings } from '../../stores/remoteAccessStore';
 
 const PUBLIC_HOSTNAME =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu;

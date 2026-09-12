@@ -1,1 +1,1 @@
-export * from '../controllers/matrixOptions';
+export * from '../cli/matrixOptions';

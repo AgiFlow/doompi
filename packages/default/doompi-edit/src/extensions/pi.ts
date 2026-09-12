@@ -1,4 +1,4 @@
-import { definePiExtension, definePiTool } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
 import { PACKAGE_SOURCE } from '../constants/package';
 import { createHashlineEditTool } from '../tools/piEdit';
 

@@ -1,4 +1,4 @@
-import type { TranscriptItem, TranscriptPage } from '@agimon-ai/doompi-extension-contracts/session-protocol';
+import type { TranscriptItem, TranscriptPage } from '@agimon-ai/doompi-core/session-protocol';
 import type { FleetTranscriptEvent, FleetTranscriptTail } from '../fleetTranscript';
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -26,7 +26,9 @@ function transcriptItem(value: unknown): TranscriptItem | undefined {
 export function nativeTranscriptTail(runId: string, page: TranscriptPage): FleetTranscriptTail {
   const events: FleetTranscriptEvent[] = [];
   const calls = new Map<string, FleetTranscriptEvent>();
-  const items = [...page.entries, ...page.drafts].map(transcriptItem).filter((item): item is TranscriptItem => Boolean(item));
+  const items = [...page.entries, ...page.drafts]
+    .map(transcriptItem)
+    .filter((item): item is TranscriptItem => Boolean(item));
   for (const item of items) {
     if (item.role === 'user') {
       const text = textParts(item.content);
@@ -38,7 +40,12 @@ export function nativeTranscriptTail(runId: string, page: TranscriptPage): Fleet
         if (part.type === 'thinking' && part.thinking.trim())
           events.push({ kind: 'thinking', at: item.timestamp, text: part.thinking });
         else if (part.type === 'text' && part.text.trim())
-          events.push({ kind: 'assistant', at: item.timestamp, text: part.text, model: `${item.model.provider}/${item.model.id}` });
+          events.push({
+            kind: 'assistant',
+            at: item.timestamp,
+            text: part.text,
+            model: `${item.model.provider}/${item.model.id}`,
+          });
         else if (part.type === 'toolCall') {
           const event: FleetTranscriptEvent = {
             kind: 'tool',

@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 // A cockpit nobody has started a session in. The fixture's `cockpit.session`
 // is sessions[0] and there is none, so nothing here may touch it.

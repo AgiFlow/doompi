@@ -1,4 +1,4 @@
-import { definePiTool, type PiToolDeclaration } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiTool, type PiToolDeclaration } from '@agimon-ai/doompi-core/pi-extension';
 import type { McpClientManagerService } from '@agimon-ai/mcp-proxy';
 import type { AgentToolResult, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';

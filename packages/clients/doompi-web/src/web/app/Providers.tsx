@@ -1,22 +1,22 @@
 import { TooltipProvider } from '@agimon-ai/doompi-web-components';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { useEffect } from 'react';
-import { PairingApprovalDialog } from '../features/remote/PairingApprovalDialog.tsx';
-import { RemoteAccessDialog } from '../features/remote/RemoteAccessDialog.tsx';
-import { ThreadView } from '../features/session/ThreadView.tsx';
-import { onComposerSubmitted } from '../lib/composerSubmissions.ts';
-import { onCaptureStatus } from '../stores/captureStore.ts';
-import { acquireModelContext, disposeModelContextAdapter } from '../lib/modelContextAdapter.ts';
-import { installWebPlugins, webPluginDiagnostics, webPluginsInstalled } from '../lib/pluginRegistry.ts';
-import { startSessionWebPluginRuntime } from '../lib/pluginRuntime.ts';
-import { bindThreadRenderer } from '../lib/threadRenderer.ts';
-import { invokeServerMethod, onHubConnected, sendFrame, sendHubFrame } from '../lib/transport.ts';
-import { routeTree } from '../routes/routeTree.tsx';
-import { restoreSealedSession } from '../lib/sealedSession.ts';
-import { restoreLivePushRegistration } from '../lib/livePush.ts';
-import { refreshRemoteState } from '../stores/remoteAccessStore.ts';
-import { startSessionRuntime } from './sessionRuntime.ts';
-import { webPlugins } from './webPlugins.generated.ts';
+import { PairingApprovalDialog } from '../features/remote/PairingApprovalDialog';
+import { RemoteAccessDialog } from '../features/remote/RemoteAccessDialog';
+import { ThreadView } from '../features/session/ThreadView';
+import { onComposerSubmitted } from '../lib/composerSubmissions';
+import { onCaptureStatus } from '../stores/captureStore';
+import { acquireModelContext, disposeModelContextAdapter } from '../lib/modelContextAdapter';
+import { installWebPlugins, webPluginDiagnostics, webPluginsInstalled } from '../lib/pluginRegistry';
+import { startSessionWebPluginRuntime } from '../lib/pluginRuntime';
+import { bindThreadRenderer } from '../lib/threadRenderer';
+import { invokeServerMethod, onHubConnected, sendFrame, sendHubFrame } from '../lib/transport';
+import { routeTree } from '../routes/routeTree';
+import { restoreSealedSession } from '../lib/sealedSession';
+import { restoreLivePushRegistration } from '../lib/livePush';
+import { refreshRemoteState } from '../stores/remoteAccessStore';
+import { startSessionRuntime } from './sessionRuntime';
+import { webPlugins } from './webPlugins.generated';
 
 // Module scope: the registry is complete before the first render reads it.
 // A collision between two installed plugins never blanks the page; it is

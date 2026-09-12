@@ -4,11 +4,8 @@ import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessActivity,
   type DoomHeadlessHook,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import type {
-  DoomServerPluginContext,
-  DoomServerSessionPlugin,
-} from '@agimon-ai/doompi-extension-contracts/server-facet';
+} from '@agimon-ai/doompi-core/headless';
+import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { createDoomIgnoreMatcher } from '../services/doomIgnore';
 import { filesChannelType } from '../types/webFiles';
 import { EditTracker } from '../services/editTracker';

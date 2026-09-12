@@ -1,6 +1,6 @@
 import { Slot } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+import { cn } from '../lib/cn';
 
 export interface PanelProps extends ComponentProps<'div'> {
   /** Render the child element instead of a <div>, so a list row can be a panel. */

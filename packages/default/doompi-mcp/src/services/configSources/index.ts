@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { normalizeAgentPluginMcpSource } from '@agimon-ai/doompi-config/agentPluginMcp';
-import type { DoomMcpNativeProjectionSource } from '@agimon-ai/doompi-extension-contracts/mcp-projection';
+import type { DoomMcpNativeProjectionSource } from '@agimon-ai/doompi-core/mcp-projection';
 import type { McpConfigGroups, McpConfigGroupsInput, McpConfigSource } from '../../types/mcpConfig';
 
 /** Wrapper entry used by non-Doom clients to expose `mcp-config.yaml` as one MCP. */

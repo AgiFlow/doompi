@@ -1,4 +1,4 @@
-import { defineSlot } from '@agimon-ai/doompi-web-contracts';
+import { defineSlot } from '@agimon-ai/doompi-core/web';
 
 /**
  * The slot the run detail sheet opens beside its stop control: an independent

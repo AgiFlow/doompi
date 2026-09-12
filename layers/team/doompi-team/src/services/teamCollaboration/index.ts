@@ -2,11 +2,8 @@ import {
   DOOM_CORDIS_SESSION_SERVICE,
   requireDoomCordisSession,
   type DoomCordisSessionService,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import {
-  DOOM_BACKGROUND_WORK_SERVICE,
-  type DoomBackgroundWorkService,
-} from '@agimon-ai/doompi-extension-contracts/background-work';
+} from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_BACKGROUND_WORK_SERVICE, type DoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
 import {
   type DelegationCancel,
   type DelegationRequest,
@@ -20,12 +17,9 @@ import {
   DOOM_DELEGATION_STARTED_EVENT,
   DOOM_DELEGATION_UPDATED_EVENT,
   type DoomDelegationService,
-} from '@agimon-ai/doompi-extension-contracts/delegation';
-import { DOOM_FABLE_PLAN_SERVICE, type DoomFablePlanService } from '@agimon-ai/doompi-extension-contracts/fable-plan';
-import {
-  DOOM_SUBAGENT_POLICY_SERVICE,
-  type DoomSubagentPolicyService,
-} from '@agimon-ai/doompi-extension-contracts/subagent-policy';
+} from '../../schemas/delegationApi';
+import { DOOM_FABLE_PLAN_SERVICE, type DoomFablePlanService } from '../../schemas/fablePlanApi';
+import { DOOM_SUBAGENT_POLICY_SERVICE, type DoomSubagentPolicyService } from '../../schemas/subagentPolicy';
 import type { Context, Fiber } from '@deepseek-ai/cordis';
 import type { AsyncJobTracker } from '../asyncJobTracker';
 import type { DelegationBridge, DelegationSessionContext } from '../delegationBridge';

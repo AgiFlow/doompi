@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SUBAGENT_ACTIONS } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+import { SUBAGENT_ACTIONS } from '../../src/exports/subagentTool';
 import { SUBAGENT_SAFETY_GUIDANCE, SUBAGENT_TOOL_DESCRIPTION } from '../../src/services/toolDescription';
 
 describe('SUBAGENT_TOOL_DESCRIPTION', () => {

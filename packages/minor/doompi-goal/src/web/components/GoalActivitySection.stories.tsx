@@ -6,7 +6,7 @@
  * The row reads the session's own footer status, so the variants are status
  * lines in the shape `formatGoalStatusView` writes, not hand-built view models.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { GoalActivitySection } from './GoalActivitySection';
 import { GOAL_VIEW_STATUS_KEY, formatGoalStatusView } from '../../types/goalView';
 

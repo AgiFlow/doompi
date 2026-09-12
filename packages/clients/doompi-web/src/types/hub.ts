@@ -1,4 +1,4 @@
-import type { BridgeState, SessionFrame } from './session.ts';
+import type { BridgeState, SessionFrame } from './session';
 
 /**
  * Wire vocabulary between the hub and its pages.
@@ -139,14 +139,14 @@ export const HUB_RESYNCED_TYPE = 'hub_resynced';
 /**
  * The custom session entry the DoomPi runtime journals with its minor-mode
  * catalog projection; it arrives inside Pi's entry_appended frames. The shape
- * mirrors MinorModeProjection in doompi-extension-contracts.
+ * mirrors MinorModeProjection in doompi-minor-mode.
  */
 export const MINOR_MODE_ENTRY_TYPE = 'doom-minor-modes';
 
 /**
  * The custom session entry the DoomPi runtime journals when the agent's model
  * changes without a client having asked for it. The shape mirrors
- * AgentModelProjection in doompi-extension-contracts.
+ * AgentModelProjection in doompi-core.
  *
  * Pi reports a thinking-level switch on the wire, so that field follows from
  * the frame alone. It has no wire event for the model, so plan mode applying
@@ -166,7 +166,7 @@ export const CONTEXT_ENTRY_TYPE = 'doom-context';
 /**
  * The custom session entry doompi-profile journals naming the persona the
  * session speaks as. The shape mirrors ProfileIdentityProjection in
- * doompi-extension-contracts.
+ * doompi-core.
  *
  * Unlike the entries above, this one is transcript rather than projection: it
  * stays in journal order and is never collapsed to the latest record, because a
@@ -177,7 +177,7 @@ export const PROFILE_IDENTITY_ENTRY_TYPE = 'doom-profile-identity';
 /**
  * The custom session entry doompi-domain journals once Pi has rebuilt its
  * resource catalog for a reload; it mirrors DOOM_RESOURCE_CATALOG_ENTRY_TYPE in
- * doompi-extension-contracts.
+ * doompi-core.
  *
  * A reload is what changes the skills the composer offers under `$`, and Pi
  * reports nothing else for one, so this entry is the cockpit's only notice that

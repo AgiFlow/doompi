@@ -3,7 +3,7 @@
  * looking for a bare `const meta`. The section reads its rows out of one
  * session status string, so each variant is a different value for that key.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { LOOP_VIEW_STATUS_KEY } from '../../types/loopView';
 import { LoopsActivitySection } from './LoopsActivitySection';
 

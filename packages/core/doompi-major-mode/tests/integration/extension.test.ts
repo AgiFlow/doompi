@@ -3,12 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import {
-  createDoomHelpService,
-  DOOM_HELP_SERVICE,
-  type DoomHelpService,
-} from '@agimon-ai/doompi-extension-contracts/help';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { createDoomHelpService, DOOM_HELP_SERVICE, type DoomHelpService } from '@agimon-ai/doompi-core/help';
 import {
   DOOM_VOICE_TOOLS_SERVICE,
   createDoomVoiceToolsService,

@@ -2,7 +2,7 @@ import { Button } from '@agimon-ai/doompi-web-components';
 import { AuthorGridOverlay, autonomousVoiceGridVisible } from './AuthorGridOverlay';
 import { AuthorMediaView } from './AuthorMediaView';
 import { AuthorTextView } from './AuthorTextView';
-import type { FileLinkSource, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { FileLinkSource, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 import { focusAuthorViewport } from '../api/authorBrowserBridge';

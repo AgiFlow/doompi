@@ -52,11 +52,7 @@ describe('doompi-read package contract', () => {
     expect(manifest.private).toBeUndefined();
     expect(manifest.type).toBe('module');
     expect(manifest.publishConfig?.access).toBe('public');
-    for (const dependency of [
-      '@agimon-ai/doompi-extension-contracts',
-      '@agimon-ai/doompi-hashline',
-      '@agimon-ai/doompi-ui',
-    ]) {
+    for (const dependency of ['@agimon-ai/doompi-core', '@agimon-ai/doompi-hashline', '@agimon-ai/doompi-ui']) {
       expect(manifest.dependencies?.[dependency]).toBe('workspace:*');
     }
     for (const dependency of piPeers) {

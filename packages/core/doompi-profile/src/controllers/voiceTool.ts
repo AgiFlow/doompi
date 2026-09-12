@@ -1,5 +1,5 @@
 import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
-import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-extension-contracts/transition';
+import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
 import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
 import type { DoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import type { Context } from '@deepseek-ai/cordis';

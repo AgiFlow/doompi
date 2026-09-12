@@ -1,4 +1,4 @@
-import { renderPlugin } from '@agimon-ai/doompi-web-contracts/testing';
+import { renderPlugin } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it, vi } from 'vitest';
 import type { IssueSample, MetricsBucket, MetricsGroup, MetricsTool } from '../../src/types/webMetrics';
 import { GroupBars } from '../../src/web/components/charts/GroupBars';

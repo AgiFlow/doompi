@@ -6,7 +6,7 @@ import type {
   ModelContextTool,
   ModelContextToolChangeListener,
   ModelContextToolDescriptor,
-} from '@agimon-ai/doompi-web-contracts';
+} from '@agimon-ai/doompi-core/web';
 
 interface RegisteredTool {
   readonly descriptor: ModelContextToolDescriptor;

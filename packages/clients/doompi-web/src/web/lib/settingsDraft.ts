@@ -1,5 +1,5 @@
-import type { SettingsFieldContribution } from '@agimon-ai/doompi-web-contracts';
-import type { SettingsScope, SettingsValueView, SettingsWriteRequest } from '../../types/settings.ts';
+import type { SettingsFieldContribution } from '@agimon-ai/doompi-core/web';
+import type { SettingsScope, SettingsValueView, SettingsWriteRequest } from '../../types/settings';
 
 /**
  * What a settings page does with pending edits, kept out of the component so it

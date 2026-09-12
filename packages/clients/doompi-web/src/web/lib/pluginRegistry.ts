@@ -20,10 +20,10 @@ import type {
   WebPluginDefinition,
   WebPluginRuntime,
   WebPluginSlotProps,
-} from '@agimon-ai/doompi-web-contracts';
+} from '@agimon-ai/doompi-core/web';
 import type { ComponentType } from 'react';
-import { leaderConflicts } from './leaderTree.ts';
-import { mergeScopedPlugins, pluginsAtScope } from './pluginScopes.ts';
+import { leaderConflicts } from './leaderTree';
+import { mergeScopedPlugins, pluginsAtScope } from './pluginScopes';
 
 /**
  * The installed plugin set.

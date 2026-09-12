@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHeadlessHub, serveHeadlessServer, type HeadlessSessionHost } from '@agimon-ai/doompi/server';
+import { createHeadlessHub, serveHeadlessServer, type HeadlessSessionHost } from '@agimon-ai/doompi-core/server';
 import { test as base } from '@playwright/test';
-import { serveWeb } from '../../src/adapters/httpServer.ts';
-import { type HeadlessSession, startHeadlessSession } from './headlessSession.ts';
-import { startRunnerApiServer, type RunnerApiServer } from './runnerRuns.ts';
+import { serveWeb } from '../../src/adapters/httpServer';
+import { type HeadlessSession, startHeadlessSession } from './headlessSession';
+import { startRunnerApiServer, type RunnerApiServer } from './runnerRuns';
 
 const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
 

@@ -1,6 +1,6 @@
 import { Progress as ProgressPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+import { cn } from '../lib/cn';
 
 /** A determinate bar; leave `value` undefined and Radix reports it as indeterminate. */
 export function Progress({ className, value, ...props }: ComponentProps<typeof ProgressPrimitive.Root>) {

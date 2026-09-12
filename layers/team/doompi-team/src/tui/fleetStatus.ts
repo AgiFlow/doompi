@@ -1,4 +1,4 @@
-import type { DoomFooterContributionValue, FooterTextSegment } from '@agimon-ai/doompi-extension-contracts/footer';
+import type { DoomFooterContributionValue, FooterTextSegment } from '@agimon-ai/doompi-core/footer';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import {
@@ -51,6 +51,12 @@ function stableOffset(value: string): number {
   return hash % AGENT_PULSE_FRAMES.length;
 }
 
+function isPulsing(job: TrackedAsyncJob): boolean {
+  return (
+    (job.status === 'running' && job.activityState === undefined) ||
+    (job.activityState !== undefined && PULSING_ACTIVITY_STATES.has(job.activityState))
+  );
+}
 function activeAgents(tracker: TrackedAsyncJobsContract): TrackedAsyncJob[] {
   return tracker.list().filter((job) => !job.status || !TERMINAL_ASYNC_JOB_STATES.has(job.status));
 }
@@ -61,8 +67,9 @@ function dotFor(job: TrackedAsyncJob, frame: number): AgentDot {
   if (job.status === FAILED_JOB_STATE) return { glyph: FAILED_GLYPH, color };
   if (job.status && STOPPED_JOB_STATES.has(job.status)) return { glyph: STOPPED_GLYPH, color };
   if (job.activityState === NEEDS_ATTENTION_STATE) return { glyph: ATTENTION_GLYPH, color: 'warning' };
-  if (!job.activityState || !PULSING_ACTIVITY_STATES.has(job.activityState)) return { glyph: WAITING_GLYPH, color };
-  return { glyph: AGENT_PULSE_FRAMES[(frame + stableOffset(job.runId)) % AGENT_PULSE_FRAMES.length]!, color };
+  if (isPulsing(job))
+    return { glyph: AGENT_PULSE_FRAMES[(frame + stableOffset(job.runId)) % AGENT_PULSE_FRAMES.length]!, color };
+  return { glyph: WAITING_GLYPH, color };
 }
 
 function projectDots(
@@ -103,9 +110,7 @@ export function agentFleetStatus(tracker: TrackedAsyncJobsContract, frame = 0): 
   const dots = jobs.map((job) => dotFor(job, frame));
   const full = projectDots(jobs, dots, FULL_PREFIX, FULL_TEXT_LIMIT);
   const compact = projectDots(jobs, dots, COMPACT_PREFIX, COMPACT_TEXT_LIMIT);
-  const pulsing = activeAgents(tracker).some(
-    (job) => job.activityState !== undefined && PULSING_ACTIVITY_STATES.has(job.activityState),
-  );
+  const pulsing = activeAgents(tracker).some(isPulsing);
   return {
     text: full.text,
     footer: {

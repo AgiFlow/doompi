@@ -1,4 +1,4 @@
-import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { openCatalog, openWorkflowCatalogForContext, workflowCatalogChannel } from '../web/stores/catalogStore';
 import { WorkflowsActivitySection } from '../web/components/WorkflowsActivitySection';
 import { workflowsTab } from '../web/components/WorkflowsPanel';

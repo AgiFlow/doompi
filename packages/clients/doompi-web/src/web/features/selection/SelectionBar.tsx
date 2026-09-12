@@ -23,13 +23,13 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
-import { PluginSurface } from '../../components/PluginSurface.tsx';
-import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
-import { minorModes, type MinorMode, selectionAxes } from '../../lib/composition.ts';
-import type { AgentInfo, DialogRequest, ModelChoice } from '../../lib/sessionModel.ts';
-import { focusPrompt } from '../../lib/promptFocus.ts';
-import { parseSelection } from '../../lib/statusLine.ts';
-import { menuStore, setPendingMenu } from '../../stores/menuStore.ts';
+import { PluginSurface } from '../../components/PluginSurface';
+import { HOST_SLOTS } from '../../lib/pluginRegistry';
+import { minorModes, type MinorMode, selectionAxes } from '../../lib/composition';
+import type { AgentInfo, DialogRequest, ModelChoice } from '../../lib/sessionModel';
+import { focusPrompt } from '../../lib/promptFocus';
+import { parseSelection } from '../../lib/statusLine';
+import { menuStore, setPendingMenu } from '../../stores/menuStore';
 import {
   answerDialogValue,
   cancelDialog,
@@ -38,9 +38,9 @@ import {
   selectModel,
   selectThinkingLevel,
   useActiveSession,
-} from '../../stores/sessionStore.ts';
-import { setDockOpen, setDockTab } from '../../stores/uiStore.ts';
-import { sessionsStore } from '../../stores/sessionsStore.ts';
+} from '../../stores/sessionStore';
+import { setDockOpen, setDockTab } from '../../stores/uiStore';
+import { sessionsStore } from '../../stores/sessionsStore';
 
 // The known axes keep their mockup styling; a plugin-declared axis the host
 // has no entry for reads in the neutral tone.

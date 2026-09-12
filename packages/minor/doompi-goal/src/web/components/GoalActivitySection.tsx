@@ -6,7 +6,7 @@ import {
   DropdownMenuTrigger,
   KebabIcon,
 } from '@agimon-ai/doompi-web-components';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useState } from 'react';
 import { GOAL_VIEW_STATUS_KEY, parseGoalStatusView } from '../../types/goalView';
 import { EditGoalDialog } from './EditGoalDialog';

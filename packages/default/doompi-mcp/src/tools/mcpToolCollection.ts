@@ -1,4 +1,4 @@
-import type { PiToolCollection, PiToolDeclaration } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import type { PiToolCollection, PiToolDeclaration } from '@agimon-ai/doompi-core/pi-extension';
 import type { McpSession } from '../services/mcpSession';
 import type { CatalogTool } from '../services/mcpCatalog';
 import { createMcpTool, type McpToolRenderers } from './mcpTools';

@@ -4,12 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadDoomConfig } from '@agimon-ai/doompi-config';
 import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItem, shell } from 'electron';
-import { createMacOsComputerUseBackend } from '../adapters/macos/computerUseBackend.ts';
-import { freePort, portIsFree, startHub } from '../adapters/hubProcess.ts';
-import { createMainWindow, showCockpit } from '../adapters/mainWindow.ts';
-import { ComputerUseHost } from '../services/computerUseHost.ts';
-import { DEFAULT_HEADLESS_PORT, DEFAULT_PORT, headlessEntry, hubEntry, LOOPBACK_HOST } from '../services/hubLaunch.ts';
-import type { RunningHub } from '../types/hub.ts';
+import { createMacOsComputerUseBackend } from '../adapters/macos/computerUseBackend';
+import { freePort, portIsFree, startHub } from '../adapters/hubProcess';
+import { createMainWindow, showCockpit } from '../adapters/mainWindow';
+import { ComputerUseHost } from '../services/computerUseHost';
+import { DEFAULT_HEADLESS_PORT, DEFAULT_PORT, headlessEntry, hubEntry, LOOPBACK_HOST } from '../services/hubLaunch';
+import type { RunningHub } from '../types/hub';
 
 const EXTERNAL_PROTOCOLS = new Set(['https:']);
 

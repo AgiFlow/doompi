@@ -3,8 +3,8 @@ import type {
   ComputerUseDesktopRequest,
   ComputerUseDesktopResponse,
   ComputerUseStopResult,
-} from '../types/computerUse.ts';
-import { COMPUTER_USE_IPC_RESPONSE, COMPUTER_USE_IPC_VERSION } from '../types/computerUse.ts';
+} from '../types/computerUse';
+import { COMPUTER_USE_IPC_RESPONSE, COMPUTER_USE_IPC_VERSION } from '../types/computerUse';
 
 const DEFAULT_DURATION_SECONDS = 300;
 const MAX_DURATION_SECONDS = 1800;

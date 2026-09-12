@@ -3,8 +3,8 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { StatusBadge } from './StatusBadge.tsx';
-import { STATUS_TONES } from '../types/tone.ts';
+import { StatusBadge } from './StatusBadge';
+import { STATUS_TONES } from '../types/tone';
 
 const SIZES = ['xs', 'sm', 'md', 'lg'] as const;
 

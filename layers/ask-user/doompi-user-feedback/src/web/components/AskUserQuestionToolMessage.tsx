@@ -5,7 +5,7 @@ import {
   MessageItemStatus,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import { askCallSummary, askResultView } from '../lib/askUserText';
 
 /** The answered list, or the outcome that stood in for it. */

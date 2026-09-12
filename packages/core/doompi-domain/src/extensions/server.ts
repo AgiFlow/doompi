@@ -1,4 +1,4 @@
-import { defineServerPlugin } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { createDomainServerCommand } from '../controllers/domainServerCommand';
 import { readPackageResource } from '../services/packageResources';
 import { DOMAIN_SOURCE } from '../types/domains';

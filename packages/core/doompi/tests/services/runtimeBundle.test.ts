@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SyncLocation } from '../../src/services/syncLocation';
+import type { SyncLocation } from '@agimon-ai/doompi-core/sync-location';
 import type { HarnessContext } from '../../src/exports/harnessContext';
 
 const mocks = vi.hoisted(() => ({
@@ -11,17 +11,21 @@ const mocks = vi.hoisted(() => ({
   writeFileAtomic: vi.fn(),
 }));
 
-vi.mock('../../src/services/extensionAssembler', () => ({
+vi.mock('../../src/builders/cli/extensionAssembler', () => ({
   createLayerResolvers: mocks.createLayerResolvers,
   resolveExtensionComposition: mocks.resolveExtensionComposition,
 }));
-vi.mock('../../src/services/extensionCompiler', () => ({
+vi.mock('../../src/compiler', () => ({
   compileExtensionSet: mocks.compileExtensionSet,
   extensionSetManifestPath: mocks.extensionSetManifestPath,
 }));
-vi.mock('../../src/services/json', () => ({ writeFileAtomic: mocks.writeFileAtomic }));
+vi.mock('@agimon-ai/doompi-core/runtime-json', () => ({ writeFileAtomic: mocks.writeFileAtomic }));
 
-import { buildRuntimeBundle, compileModeExtension, createRuntimeExtensionPlan } from '../../src/services/runtimeBundle';
+import {
+  buildRuntimeBundle,
+  compileModeExtension,
+  createRuntimeExtensionPlan,
+} from '../../src/builders/cli/runtimeBundle';
 
 describe('runtime bundle', () => {
   const location = {

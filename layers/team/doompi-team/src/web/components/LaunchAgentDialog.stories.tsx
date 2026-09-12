@@ -5,7 +5,7 @@
  * to the body, so one instance is shown; the frame sender comes from the
  * contracts package's own testing fixture.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import type { SubagentCatalogAgent } from '../../types/webSubagents';
 import { LaunchAgentDialog } from './LaunchAgentDialog';
 

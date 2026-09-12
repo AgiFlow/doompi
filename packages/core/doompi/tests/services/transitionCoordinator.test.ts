@@ -1,12 +1,14 @@
+import { resolveLayers } from '@agimon-ai/doompi-config/majorModes';
+import { extensionLayers } from '../../src/composition/transitionLayers';
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import type { MinorModeActionRequest } from '@agimon-ai/doompi-extension-contracts/mode';
+import type { MinorModeActionRequest } from '@agimon-ai/doompi-minor-mode';
 import { describe, expect, it, vi } from 'vitest';
-import type { MinorModeCatalogHost } from '@agimon-ai/doompi-extension-contracts/transition';
+import type { MinorModeCatalogService as MinorModeCatalogHost } from '@agimon-ai/doompi-minor-mode';
 import {
   createDoomTransitionCoordinator,
   type TransitionCoordinatorOptions,
-} from '../../src/services/transitionCoordinator';
-import type { DoomTransitionRequest, TransitionTarget } from '@agimon-ai/doompi-extension-contracts/transition';
+} from '@agimon-ai/doompi-core/transition-coordinator';
+import type { DoomTransitionRequest, TransitionTarget } from '@agimon-ai/doompi-core/transition';
 
 const fingerprints = { copilot: 'a'.repeat(64), team: 'b'.repeat(64) } as const;
 
@@ -33,8 +35,8 @@ function createCoordinator(overrides: Partial<TransitionCoordinatorOptions> = {}
         layers: ['task'],
         profile: 'default',
       },
-      majorModesConfig: config,
-      hooksEnabled: true,
+      resolveLayers: (majorMode) => resolveLayers(config, majorMode),
+      extensionLayers: (layers) => extensionLayers(config, layers),
       synchronization: { kind: 'launcher' },
     }),
     ...overrides,
@@ -78,15 +80,13 @@ function catalog(invoke = vi.fn().mockResolvedValue({})): MinorModeCatalogHost {
 }
 
 describe('Doom transition coordinator', () => {
-  it('plans with the attached live minor-mode snapshot', () => {
+  it('plans a feature-owned live capability without changing structural selection', () => {
     const coordinator = createCoordinator();
-    coordinator.attachMinorModeCatalog(catalog());
 
-    const transitionPlan = coordinator.plan(
-      request({ axis: 'minor-mode', action: minorAction(), requesterSource: '@agimon-ai/requester' }),
-    );
+    const transitionPlan = coordinator.plan(request({ axis: 'live', capability: 'minor-mode' }));
 
-    expect(transitionPlan.candidate.minorModes).toMatchObject({ hostGeneration: 'catalog-1' });
+    expect(transitionPlan).toMatchObject({ axis: 'live', disposition: 'live' });
+    expect(transitionPlan.candidate).toEqual(transitionPlan.previous);
   });
 
   it('reports unchanged and queued outcomes without inventing execution primitives', async () => {
@@ -109,8 +109,8 @@ describe('Doom transition coordinator', () => {
           layers: ['task'],
           compositionFingerprint: fingerprints.copilot,
         },
-        majorModesConfig: config,
-        hooksEnabled: true,
+        resolveLayers: (majorMode) => resolveLayers(config, majorMode),
+        extensionLayers: (layers) => extensionLayers(config, layers),
         synchronization: {
           kind: 'synchronized',
           resolutionAvailable: true,
@@ -152,12 +152,13 @@ describe('Doom transition coordinator', () => {
   it('delegates live minor-mode actions to the existing catalog', async () => {
     const invoke = vi.fn().mockResolvedValue({});
     const coordinator = createCoordinator();
-    coordinator.attachMinorModeCatalog(catalog(invoke));
+    const modes = catalog(invoke);
     const action = minorAction();
 
-    const outcome = await coordinator.execute(
-      request({ axis: 'minor-mode', action, requesterSource: '@agimon-ai/requester' }),
-    );
+    const outcome = await coordinator.execute(request({ axis: 'live', capability: 'minor-mode' }), async () => {
+      await modes.invoke(action, '@agimon-ai/requester', undefined);
+      return 'applied';
+    });
 
     expect(outcome.outcome).toBe('applied');
     expect(invoke).toHaveBeenCalledWith(action, '@agimon-ai/requester', undefined);
@@ -167,11 +168,9 @@ describe('Doom transition coordinator', () => {
     const invoke = vi.fn().mockResolvedValue({});
     const execution = vi.fn(async () => 'applied' as const);
     const coordinator = createCoordinator();
-    coordinator.attachMinorModeCatalog(catalog(invoke));
     const transition = request({
-      axis: 'minor-mode',
-      action: minorAction(),
-      requesterSource: '@agimon-ai/doompi-voice',
+      axis: 'live',
+      capability: 'minor-mode',
     });
 
     await expect(coordinator.execute(transition, execution)).resolves.toMatchObject({ outcome: 'applied' });
@@ -180,14 +179,10 @@ describe('Doom transition coordinator', () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
-  it('rejects a minor-mode request when no catalog is attached', async () => {
+  it('rejects a live capability request when no feature executor is provided', async () => {
     const coordinator = createCoordinator();
 
-    await expect(
-      coordinator.execute(
-        request({ axis: 'minor-mode', action: minorAction(), requesterSource: '@agimon-ai/requester' }),
-      ),
-    ).resolves.toMatchObject({
+    await expect(coordinator.execute(request({ axis: 'live', capability: 'minor-mode' }))).resolves.toMatchObject({
       outcome: 'rejected',
       diagnostics: expect.arrayContaining(['transition.rejected.unavailable']),
     });
@@ -235,8 +230,8 @@ describe('Doom transition coordinator', () => {
       executeStructural,
       classifierContext: () => ({
         current,
-        majorModesConfig: config,
-        hooksEnabled: true,
+        resolveLayers: (majorMode) => resolveLayers(config, majorMode),
+        extensionLayers: (layers) => extensionLayers(config, layers),
         synchronization: { kind: 'launcher' },
       }),
     });
@@ -364,8 +359,8 @@ describe('Doom transition coordinator', () => {
       executeStructural,
       classifierContext: () => ({
         current: { domains: [], majorMode: 'copilot', layers: ['task'] },
-        majorModesConfig: config,
-        hooksEnabled: true,
+        resolveLayers: (majorMode) => resolveLayers(config, majorMode),
+        extensionLayers: (layers) => extensionLayers(config, layers),
         synchronization: {
           kind: 'synchronized',
           resolutionAvailable: false,

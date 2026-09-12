@@ -7,8 +7,8 @@
  * `Playground` is the name the DoomPi style-system extension renders by default
  * when a story file is written or edited.
  */
-import { Badge } from './Badge.tsx';
-import { CHIP_TONES } from '../types/tone.ts';
+import { Badge } from './Badge';
+import { CHIP_TONES } from '../types/tone';
 
 const SIZES = ['xs', 'sm', 'md', 'lg'] as const;
 

@@ -60,11 +60,11 @@ export {
   requireHarnessRoot,
   resetHarnessStore,
   updateHarnessState,
-} from '../services/harnessState';
+} from '../composition/harnessState';
 export {
   applyProjectTrust,
   type DoomConfig,
   hasProjectTrustOption,
   loadDoomConfig,
   type ProjectTrust,
-} from '../services/projectTrust';
+} from '../composition/projectTrust';

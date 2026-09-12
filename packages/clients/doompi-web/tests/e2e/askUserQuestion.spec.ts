@@ -1,5 +1,5 @@
-import { expect, test } from '../support/cockpit.ts';
-import type { HeadlessSession } from '../support/headlessSession.ts';
+import { expect, test } from '../support/cockpit';
+import type { HeadlessSession } from '../support/headlessSession';
 
 // The questionnaire is a plugin contribution, so this suite serves the
 // synced-style bundle built from every workspace plugin: doompi-user-feedback

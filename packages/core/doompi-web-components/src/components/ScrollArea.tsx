@@ -1,6 +1,6 @@
 import { ScrollArea as ScrollAreaPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+import { cn } from '../lib/cn';
 
 /**
  * A scroll container with a styled bar. The base stylesheet already themes

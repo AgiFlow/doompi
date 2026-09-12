@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 /** One journalled user message, as Pi's get_entries reports it. */
 const message = (index: number) => ({

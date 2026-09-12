@@ -326,7 +326,7 @@ mode and domain into a distribution Pi can load quickly.
 [`@agimon-ai/doompi-config`][pkg-doompi-config] resolves the four YAML files and exposes the
 configuration API. [`@agimon-ai/doompi-domain`][pkg-doompi-domain] owns domain selection, plugin
 materialization, resource staging, and MCP scoping.
-[`@agimon-ai/doompi-extension-contracts`][pkg-doompi-extension-contracts] contains the shared
+[`@agimon-ai/doompi-core`][pkg-doompi-core] contains the shared
 Cordis service and event contracts used by extension authors.
 [`@agimon-ai/doompi-hashline`][pkg-doompi-hashline] provides the shared snapshot tags and line-anchor
 protocol. [`@agimon-ai/doompi-read`][pkg-doompi-read] and [`@agimon-ai/doompi-grep`][pkg-doompi-grep]
@@ -744,7 +744,7 @@ MIT
 
 ## Maintainer release order
 
-Publish [`@agimon-ai/doompi-extension-contracts`][pkg-doompi-extension-contracts] and
+Publish [`@agimon-ai/doompi-core`][pkg-doompi-core] and
 [`@agimon-ai/doompi-hashline`][pkg-doompi-hashline] first, then
 [`@agimon-ai/doompi-help`][pkg-doompi-help], and only then the
 [`@agimon-ai/doompi`][pkg-doompi] runtime that consumes them. Generated changelogs remain owned
@@ -786,4 +786,4 @@ loaded extension graph inside the same release boundary as the packages that con
 [pkg-doompi-goal]: https://www.npmjs.com/package/@agimon-ai/doompi-goal
 [pkg-doompi-workflow]: https://www.npmjs.com/package/@agimon-ai/doompi-workflow
 [pkg-doompi-voice]: https://www.npmjs.com/package/@agimon-ai/doompi-voice
-[pkg-doompi-extension-contracts]: https://www.npmjs.com/package/@agimon-ai/doompi-extension-contracts
+[pkg-doompi-core]: https://www.npmjs.com/package/@agimon-ai/doompi-core

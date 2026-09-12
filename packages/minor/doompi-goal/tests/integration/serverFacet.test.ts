@@ -1,19 +1,18 @@
-import type { Context } from '@deepseek-ai/cordis';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-minor-mode';
+import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
+import { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
+  DOOM_HEADLESS_OWNER,
   type DoomHeadlessCommand,
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHook,
   type DoomHeadlessHostService,
-  type DoomHeadlessMinorMode,
   type DoomHeadlessResource,
   type DoomHeadlessSelection,
   type DoomHeadlessTool,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import {
-  DOOM_SERVER_HOST_SERVICE,
-  type DoomServerHostService,
-} from '@agimon-ai/doompi-extension-contracts/server-facet';
+} from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
 import { describe, expect, it, vi } from 'vitest';
 import { goalServerFacet } from '../../src/extensions/server';
 
@@ -22,7 +21,7 @@ async function fixture() {
     majorMode: 'copilot',
     activeLayers: [],
     domains: [],
-    minorModes: [],
+    state: {},
   };
   const appendedEntries: unknown[][] = [];
   const commands: DoomHeadlessCommand[] = [];
@@ -59,12 +58,9 @@ async function fixture() {
   } as unknown as DoomHeadlessExecutionContext;
   const host = {
     context: execution,
-    changeSelection: async (change: { axis: 'minorModes'; minorModes: string[] }) => {
-      selection = { ...selection, minorModes: change.minorModes };
-    },
-    registerMinorMode: (value: DoomHeadlessMinorMode) => {
-      mode = value;
-      return { publish, dispose };
+    assertActive: vi.fn(),
+    changeSelection: async (change: { axis: 'state'; key: string; values: string[] }) => {
+      selection = { ...selection, state: { ...selection.state, [change.key]: change.values } };
     },
     registerToolRestriction: registration,
     registerResource: (value: DoomHeadlessResource) => {
@@ -85,11 +81,22 @@ async function fixture() {
     },
   } as unknown as DoomHeadlessHostService;
   const serverHost = { scope: 'session' } as DoomServerHostService;
-  const close = await goalServerFacet.apply({
-    effect() {},
-    get: (service: string) =>
-      service === DOOM_SERVER_HOST_SERVICE ? serverHost : service === DOOM_HEADLESS_HOST_SERVICE ? host : undefined,
-  } as unknown as Context);
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, serverHost);
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  context.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, {
+    registerOwner(value: DoomHeadlessMinorMode) {
+      mode = value;
+      return { publish, dispose };
+    },
+  } as never);
+  const owner = context.extend({ [DOOM_HEADLESS_OWNER]: { packageName: '@agimon-ai/doompi-goal' } });
+  const release = await goalServerFacet.apply(owner);
+  await vi.waitFor(() => expect(mode).toBeDefined());
+  const close = async () => {
+    await release?.();
+    await context.fiber.dispose();
+  };
   return {
     execution,
     selection: () => selection,
@@ -125,7 +132,7 @@ describe('goal server facet', () => {
     await expect(startHook.handle({}, test.execution)).resolves.toBeUndefined();
     await command.execute('Ship the feature', test.execution);
 
-    expect(test.selection().minorModes).toEqual(['goal']);
+    expect(test.selection().state?.['minor-mode']).toEqual(['goal']);
     expect(test.appendedEntries).toHaveLength(1);
     expect(test.appendedEntries[0]).toEqual([
       'goal-state',
@@ -156,7 +163,7 @@ describe('goal server facet', () => {
       test.execution,
     );
     expect(result).toMatchObject({ details: { completed: true } });
-    expect(test.selection().minorModes).toEqual([]);
+    expect(test.selection().state?.['minor-mode']).toEqual([]);
 
     await test.close?.();
     expect(test.dispose).toHaveBeenCalled();

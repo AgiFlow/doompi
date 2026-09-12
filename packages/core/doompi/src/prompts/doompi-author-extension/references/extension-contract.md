@@ -79,7 +79,7 @@ Omit unused folders. There are no adapters, container, commands, or providers ro
 The helper joins the shared Cordis host and owns registration and teardown. A Pi entry composes typed declarations:
 
 ```ts
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import { createReviewCommand } from '../controllers/reviewCommand';
 import { createReviewService } from '../services/review';
 

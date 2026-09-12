@@ -1,28 +1,10 @@
 import { defineConfig } from 'tsdown';
 
-// Public entries mirror package exports. Internal dynamic entrypoints are
-// listed explicitly as well so a source import cannot point outside the tarball.
-
-const output = {
-  exports: false,
-  format: ['esm', 'cjs'] as ('esm' | 'cjs')[],
-  minify: {
-    compress: true,
-    mangle: { toplevel: true },
-    codegen: { removeWhitespace: true },
-  },
-  platform: 'node' as const,
-  sourcemap: true,
-};
-
 export default defineConfig({
-  ...output,
-  name: 'package',
   entry: {
+    'builders/web': 'src/exports/webBuilder.ts',
+    'extensions/context-catalog': 'src/extensions/contextCatalog.ts',
     index: 'src/exports/index.ts',
-    'context-api': 'src/exports/contextApi.ts',
-    server: 'src/exports/server.ts',
-    history: 'src/exports/history.ts',
     'bin/cli': 'src/bin/cli.ts',
     'bin/doomRunner': 'src/bin/doomRunner.ts',
     'bin/dpi': 'src/bin/dpi.ts',
@@ -50,11 +32,9 @@ export default defineConfig({
     'extensions/cordis-host': 'src/extensions/cordisHost.ts',
     'extensions/composed-pi': 'src/extensions/composedPi.ts',
     'extensions/effort': 'src/extensions/effort.ts',
-    'extensions/mode-catalog': 'src/extensions/modeCatalog.ts',
     'extensions/terminal-child-session': 'src/extensions/terminalChildSession.ts',
     'extensions/ollama-provider': 'src/extensions/ollamaProvider.ts',
     'extensions/style-system': 'src/extensions/styleSystem.ts',
-    'log-sink-telemetry': 'src/exports/logSinkTelemetry.ts',
     services: 'src/exports/services.ts',
     compatibility: 'src/exports/compatibility.ts',
     antigravity: 'src/exports/antigravity.ts',
@@ -65,23 +45,22 @@ export default defineConfig({
     composer: 'src/exports/composer.ts',
     'harness-context': 'src/exports/harnessContext.ts',
     'matrix-switcher': 'src/exports/matrixSwitcher.ts',
-    'mode-catalog': 'src/exports/modeCatalog.ts',
     'mcp-filter': 'src/exports/mcpFilter.ts',
-    'pi-settings': 'src/exports/piSettings.ts',
     'resource-collector': 'src/exports/resourceCollector.ts',
     'sync-state': 'src/exports/syncState.ts',
     utils: 'src/exports/utils.ts',
-    json: 'src/exports/json.ts',
-    'module-resolution': 'src/exports/moduleResolution.ts',
     repository: 'src/exports/repository.ts',
-    'tool-names': 'src/exports/toolNames.ts',
     'extensions/launcher-bootstrap': 'src/extensions/launcherBootstrap.ts',
     'extensions/transition-coordinator': 'src/extensions/transitionCoordinator.ts',
     'bin/serve': 'src/bin/serve.ts',
-    'services/syncedRuntimeBuilder/index': 'src/services/syncedRuntimeBuilder/index.ts',
-    'services/extensionAssembler/index': 'src/services/extensionAssembler/index.ts',
+    'builders/cli/index': 'src/builders/cli/index.ts',
+    'builders/cli/extensionAssembler/index': 'src/builders/cli/extensionAssembler/index.ts',
   },
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },
+  exports: false,
+  format: ['esm', 'cjs'],
+  platform: 'node',
+  sourcemap: true,
   unbundle: true,
 });

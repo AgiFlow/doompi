@@ -1,4 +1,4 @@
-import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-extension-contracts/mcp-session';
+import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-core/mcp-session';
 import { describe, expect, it } from 'vitest';
 import { mcpSessionEnvironment } from '../../src/services/mcpSessionEnvironment';
 

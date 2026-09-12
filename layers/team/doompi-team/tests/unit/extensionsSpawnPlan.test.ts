@@ -29,7 +29,7 @@ import type {
   DoomChildSessionRequest,
   DoomChildSessionService,
   DoomChildSessionServiceProvider,
-} from '@agimon-ai/doompi-extension-contracts/child-session';
+} from '@agimon-ai/doompi-core/child';
 import type { NativeRunCoordinatorContract } from '../../src/services/nativeRunCoordinator';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 function agentConfig(name: string, overrides: Partial<AgentConfig> = {}): AgentConfig {

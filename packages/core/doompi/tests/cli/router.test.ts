@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { informationalRequest, KNOWN_COMMANDS, routeCommand, wantsHelp } from '../../src/controllers/router';
+import { informationalRequest, KNOWN_COMMANDS, routeCommand, wantsHelp } from '../../src/cli/router';
 
 describe('routeCommand', () => {
   it.each([...KNOWN_COMMANDS])('routes %s when it leads the line', (command) => {

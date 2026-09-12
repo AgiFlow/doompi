@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { agentHasWriteTools } from '../agentMemory';
@@ -25,7 +25,7 @@ import {
   SUBAGENT_ACTIONS,
   type SubagentAction,
   type SubagentToolParams,
-} from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+} from '../../schemas/subagentTool';
 import {
   captureSessionForkSource,
   type SpawnPlannerContract,

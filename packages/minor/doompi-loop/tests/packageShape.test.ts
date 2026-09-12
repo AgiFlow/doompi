@@ -75,7 +75,7 @@ describe('doom-loop package boundary', () => {
       }),
     );
     expect(manifest.dependencies?.['@agimon-ai/doompi-web-components']).toBe('workspace:*');
-    expect(manifest.dependencies?.['@agimon-ai/doompi-web-contracts']).toBe('workspace:*');
+    expect(manifest.dependencies?.['@agimon-ai/doompi-core']).toBe('workspace:*');
   });
 
   it('removes rig package dependencies and config imports', async () => {

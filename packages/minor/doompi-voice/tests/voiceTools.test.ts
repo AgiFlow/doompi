@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis';
-import { definePiExtension, type PiToolCollection } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension, type PiToolCollection } from '@agimon-ai/doompi-core/pi-extension';
 import { createDoomVoiceToolsService, type VoiceToolDefinition } from '../src/services/voiceTools';
 import { VoiceToolDescribeInputSchema } from '../src/schemas/voiceTools';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';

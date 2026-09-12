@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 test('answers a select request, the shape a permission prompt uses', async ({ page, cockpit }) => {
   await page.setViewportSize({ width: 390, height: 844 });

@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HistoryExportCommand } from '../../src/controllers/historyExportCommand';
-import { CliApp } from '../../src/controllers/cliApp';
+import { runHistoryExport } from '../../src/cli/commands/history-export';
+import { CliApp } from '../../src/cli/cliApp';
 
 function v4Source(): string {
   return `${JSON.stringify({
@@ -39,9 +39,7 @@ describe('history-export CLI', () => {
     [['a', 'b', 'extra'], 'Unexpected history-export argument'],
   ])('rejects invalid paths without writing files: %j', async (args, error) => {
     const output = { write: vi.fn() };
-    await expect(new HistoryExportCommand().execute(['history-export', ...args], {}, root, output)).rejects.toThrow(
-      error,
-    );
+    await expect(runHistoryExport(['history-export', ...args], {}, root, output)).rejects.toThrow(error);
     expect(fs.readdirSync(root)).toEqual([]);
     expect(output.write).not.toHaveBeenCalled();
   });
@@ -50,11 +48,9 @@ describe('history-export CLI', () => {
     fs.writeFileSync(path.join(root, 'source.jsonl'), v4Source());
     const suffix = long ? '-path' : '';
     const output = { write: vi.fn() };
-    const command = new HistoryExportCommand();
-    expect(command.matches(['history-export'])).toBe(true);
-    expect(command.matches(['history-import'])).toBe(false);
+
     await expect(
-      command.execute(
+      runHistoryExport(
         [
           'history-export',
           `--source${suffix}=source.jsonl`,
@@ -82,9 +78,8 @@ describe('history-export CLI', () => {
   it('exports only v4 input to distinct v3 output and reports the result', async () => {
     fs.writeFileSync(path.join(root, 'source.jsonl'), v4Source());
     const output = { write: vi.fn() };
-    const command = new HistoryExportCommand();
 
-    await expect(command.execute(['history-export', 'source.jsonl', 'derived.jsonl'], {}, root, output)).resolves.toBe(
+    await expect(runHistoryExport(['history-export', 'source.jsonl', 'derived.jsonl'], {}, root, output)).resolves.toBe(
       0,
     );
 
@@ -110,9 +105,9 @@ describe('history-export CLI', () => {
     const destinationPath = path.join(root, 'derived.jsonl');
     fs.writeFileSync(destinationPath, 'unrelated');
 
-    await expect(
-      new HistoryExportCommand().execute(['history-export', 'source.jsonl', 'derived.jsonl'], {}, root),
-    ).rejects.toThrow(/overwrite|existing/i);
+    await expect(runHistoryExport(['history-export', 'source.jsonl', 'derived.jsonl'], {}, root)).rejects.toThrow(
+      /overwrite|existing/i,
+    );
     expect(fs.readFileSync(destinationPath, 'utf8')).toBe('unrelated');
   });
 

@@ -6,7 +6,7 @@
  * JSON, so nothing may hold non-serializable values.
  */
 
-import type { InlineAgent } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+import type { InlineAgent } from '@agimon-ai/doompi-team/subagent-tool';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'deleted';
 

@@ -38,4 +38,4 @@ pnpm build
 
 ## Plugin lifecycle
 
-Author uses the shared [plugin lifecycle contract](../../core/doompi-extension-contracts/docs/plugins.md). Pi and server entries compose shared tool and command declarations; controllers own Author behavior, and the helpers own registration and disposal. Minor-mode entry and exit are independent of plugin mounting.
+Author uses the shared [plugin lifecycle contract](../../core/doompi-core/docs/plugins.md). Pi and server entries compose shared tool and command declarations; controllers own Author behavior, and the helpers own registration and disposal. Minor-mode entry and exit are independent of plugin mounting.

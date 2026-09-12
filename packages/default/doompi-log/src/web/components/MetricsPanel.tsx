@@ -7,7 +7,7 @@ import {
   SelectValue,
   Spinner,
 } from '@agimon-ai/doompi-web-components';
-import type { SettingsPanelProps } from '@agimon-ai/doompi-web-contracts';
+import type { SettingsPanelProps } from '@agimon-ai/doompi-core/web';
 import { useEffect, useState } from 'react';
 import {
   isMetricsUnavailable,

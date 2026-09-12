@@ -1,14 +1,14 @@
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHook,
   DoomHeadlessHostService,
   DoomHeadlessResource,
-} from '@agimon-ai/doompi-extension-contracts/headless';
+} from '@agimon-ai/doompi-core/headless';
 import { describe, expect, it, vi } from 'vitest';
 import { hookServerFacet } from '../../../src/extensions/server';
-import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/headless';
+import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-core/headless';
 
 describe('hook headless facet', () => {
   it('records lifecycle hooks, clears shutdown status, and exposes authoring guidance', async () => {

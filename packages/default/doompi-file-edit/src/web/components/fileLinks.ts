@@ -1,4 +1,4 @@
-import type { FileLinkSource, TransientTab } from '@agimon-ai/doompi-web-contracts';
+import type { FileLinkSource, TransientTab } from '@agimon-ai/doompi-core/web';
 import type { FilesItemView } from '../../types/webFiles';
 import { fileTab } from './FilePanel';
 import { filePreviewTab } from './FilePreviewPanel';

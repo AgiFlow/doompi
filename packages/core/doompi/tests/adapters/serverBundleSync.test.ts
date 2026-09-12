@@ -4,14 +4,14 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import { loadServerBundle } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
+import { loadServerBundle } from '@agimon-ai/doompi-core/server-facet';
 import { afterEach, describe, expect, it } from 'vitest';
-import { compileExtensionModule } from '../../src/services/extensionCompiler';
-import { syncServerBundle, type ServerBundleSyncInput } from '../../src/services/serverBundleSync';
-import type { ExtensionComposition } from '../../src/services/extensionAssembler';
-import { serverBundleIsFresh } from '../../src/services/syncDrift';
-import { computeServerSourcesHash } from '../../src/services/syncState';
+import { compileExtensionModule } from '../../src/compiler';
+import { syncServerBundle, type ServerBundleSyncInput } from '../../src/builders/server';
+import type { ExtensionComposition } from '../../src/builders/cli/extensionAssembler';
+import { serverBundleIsFresh } from '../../src/composition/syncDrift';
+import { computeServerSourcesHash } from '../../src/composition/syncState';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -399,16 +399,13 @@ describe('syncServerBundle', () => {
       linkInstalledDependencies(
         runnerManifest,
         sourceRoot,
-        new Set(['@agimon-ai/doompi-extension-contracts', 'hono', ...resourceManifests.keys()]),
+        new Set(['@agimon-ai/doompi-core', 'hono', ...resourceManifests.keys()]),
       );
       for (const [packageName, manifestPath] of resourceManifests) {
         copyInstalledPackage(manifestPath, path.join(runnerDirectory, 'node_modules', ...packageName.split('/')));
       }
-      const contractsManifest = installedRequire.resolve('@agimon-ai/doompi-extension-contracts/package.json');
-      copyInstalledPackage(
-        contractsManifest,
-        path.join(sourceRoot, 'node_modules', '@agimon-ai', 'doompi-extension-contracts'),
-      );
+      const contractsManifest = installedRequire.resolve('@agimon-ai/doompi-core/package.json');
+      copyInstalledPackage(contractsManifest, path.join(sourceRoot, 'node_modules', '@agimon-ai', 'doompi-core'));
       const honoManifest = path.join(path.dirname(runnerManifest), 'node_modules', 'hono', 'package.json');
       copyInstalledPackage(honoManifest, path.join(sourceRoot, 'node_modules', 'hono'));
 

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { sealedHttpSession } from '../../src/web/lib/sealedSession.ts';
+import { sealedHttpSession } from '../../src/web/lib/sealedSession';
 import {
   disableLivePush,
   enableLivePush,
   livePushStatus,
   restoreLivePushRegistration,
-} from '../../src/web/lib/livePush.ts';
+} from '../../src/web/lib/livePush';
 
 const APPLICATION_KEY = 'B'.repeat(88);
 

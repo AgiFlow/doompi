@@ -80,7 +80,7 @@ import {
   DOOM_SERVER_HOST_SERVICE,
   requireDoomServerHost,
   type DoomServerFacet,
-} from '@agimon-ai/doompi-extension-contracts/server-facet';
+} from '@agimon-ai/doompi-core/server-facet';
 import { api } from '../exampleApi';
 
 export default {
@@ -101,7 +101,7 @@ The API owns its base path. Eligible registrations compete for paths in determin
 Keep the API implementation reusable, separate from the facet entry:
 
 ```ts
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 
 export const api: DoomApi = {
   basePath: 'example',
@@ -138,7 +138,7 @@ A hub context may include an opaque repository resolver and synchronized reposit
 
 Before forwarding a browser request, the hub discards incoming copies of its trusted caller headers. It then stamps locality, paired-device identity when remote, and the result of any required passkey step-up.
 
-A handler can read that context with `doomApiCallerFrom(request.headers)` from `@agimon-ai/doompi-extension-contracts/package-api`.
+A handler can read that context with `doomApiCallerFrom(request.headers)` from `@agimon-ai/doompi-core/package-api`.
 
 This metadata answers who reached the handler and through which boundary. It does not replace operation-specific authorization. A package that writes credentials, starts processes, or opens new paths must still validate the request and enforce its own scope.
 

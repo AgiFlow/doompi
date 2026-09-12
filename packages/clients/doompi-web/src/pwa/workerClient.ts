@@ -1,5 +1,5 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
-import type { SessionWebComposition } from '../types/hub.ts';
+import type { SessionWebComposition } from '../types/hub';
 
 export interface BundleActivationRequest {
   publicKey: string;

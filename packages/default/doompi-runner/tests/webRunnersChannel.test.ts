@@ -1,4 +1,4 @@
-import type { DoomDirectEventBus, DoomHubChannelHost } from '@agimon-ai/doompi-extension-contracts/hub-channel';
+import type { DoomDirectEventBus, DoomHubChannelHost } from '@agimon-ai/doompi-core/hub-channel';
 import { describe, expect, it } from 'vitest';
 import { createRunnersChannel } from '../src/services/runnersChannel';
 import type { RunnerRunView } from '../src/types/webRunners';

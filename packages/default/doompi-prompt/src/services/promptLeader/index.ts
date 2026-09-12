@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
-import type { DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { COMMAND_NAME } from '../../constants/prompts';
 import {
   LEADER_BINDING_PREFIX,

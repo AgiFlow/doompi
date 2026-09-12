@@ -34,7 +34,8 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-domain': 'packages/core/doompi-domain',
   '@agimon-ai/doompi-edit': 'packages/default/doompi-edit',
   '@agimon-ai/doompi-git': 'layers/source-control/doompi-git',
-  '@agimon-ai/doompi-extension-contracts': 'packages/core/doompi-extension-contracts',
+  '@agimon-ai/doompi-core': 'packages/core/doompi-core',
+  '@agimon-ai/doompi-minor-mode': 'packages/core/doompi-minor-mode',
   '@agimon-ai/doompi-file-edit': 'packages/default/doompi-file-edit',
   '@agimon-ai/doompi-goal': 'packages/minor/doompi-goal',
   '@agimon-ai/doompi-grep': 'packages/default/doompi-grep',
@@ -45,7 +46,6 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-model-guidance': 'layers/llm/doompi-model-guidance',
   '@agimon-ai/doompi-loop': 'packages/minor/doompi-loop',
   '@agimon-ai/doompi-major-mode': 'packages/core/doompi-major-mode',
-  '@agimon-ai/doompi-kernel': 'packages/core/doompi-kernel',
   '@agimon-ai/doompi-mcp': 'packages/default/doompi-mcp',
   '@agimon-ai/doompi-notification': 'packages/core/doompi-notification',
   '@agimon-ai/doompi-plan': 'packages/minor/doompi-plan',
@@ -70,12 +70,12 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-user-feedback': 'layers/ask-user/doompi-user-feedback',
   '@agimon-ai/doompi-voice': 'packages/minor/doompi-voice',
   '@agimon-ai/doompi-web-components': 'packages/core/doompi-web-components',
-  '@agimon-ai/doompi-web-contracts': 'packages/core/doompi-web-contracts',
   '@agimon-ai/doompi-web-security': 'packages/core/doompi-web-security',
   '@agimon-ai/doompi-workflow': 'packages/minor/doompi-workflow',
 };
 
 const STANDARD_PI_NAMES = [
+  '@agimon-ai/doompi-minor-mode',
   '@agimon-ai/doompi-autocompact',
   '@agimon-ai/doompi-autostop',
   '@agimon-ai/doompi-author',

@@ -1,4 +1,4 @@
-import type { DoomTransitionResult } from '@agimon-ai/doompi-extension-contracts/transition';
+import type { DoomTransitionResult } from '@agimon-ai/doompi-core/transition';
 import { VOICE_TOOL_MAX_DOMAIN_COUNT } from '@agimon-ai/doompi-voice/voice-tools';
 import { describe, expect, it } from 'vitest';
 import {

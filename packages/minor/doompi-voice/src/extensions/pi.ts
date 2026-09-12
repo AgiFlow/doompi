@@ -1,4 +1,4 @@
-import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import { createVoicePiRuntime } from '../controllers/voicePlugin';
 import type { VoiceExtensionOptions } from '../controllers/voice';
 export const voicePiExtension = definePiExtension<VoiceExtensionOptions>(

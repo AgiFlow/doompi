@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+import { cn } from '../lib/cn';
 
 /** The blinking block that marks text still arriving. */
 export function StreamCursor({ className, ...props }: ComponentProps<'span'>) {

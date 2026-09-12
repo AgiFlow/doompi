@@ -9,18 +9,18 @@ import {
   piExtensionAliasIsCurrent,
   piExtensionAliasPath,
   writePiExtensionAlias,
-} from '../../src/services/piExtensionAlias';
+} from '../../src/builders/cli/piExtensionAlias';
 import {
   PI_DISPATCHER_VERSION,
   piExtensionDispatcherIsUpgradeable,
   piExtensionDispatcherVersion,
-} from '../../src/services/piExtensionDispatcher';
+} from '../../src/builders/cli/piExtensionDispatcher';
 import {
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '../../src/services/syncRegistration';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/services/syncLocation';
+} from '@agimon-ai/doompi-core/sync-registration';
+import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 
 const temporaryRoots: string[] = [];
 

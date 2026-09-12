@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
-import { attachComputerUseHostBridge } from '../../src/adapters/computerUseHostBridge.ts';
-import { ComputerUseHost } from '../../src/services/computerUseHost.ts';
-import type { ComputerUseBackend } from '../../src/types/computerUse.ts';
+import { attachComputerUseHostBridge } from '../../src/adapters/computerUseHostBridge';
+import { ComputerUseHost } from '../../src/services/computerUseHost';
+import type { ComputerUseBackend } from '../../src/types/computerUse';
 
 class FakeChild extends EventEmitter {
   readonly sent: unknown[] = [];

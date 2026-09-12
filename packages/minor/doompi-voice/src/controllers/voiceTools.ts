@@ -1,4 +1,4 @@
-import { definePiTool, type PiToolCollection } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiTool, type PiToolCollection } from '@agimon-ai/doompi-core/pi-extension';
 import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '../constants/voiceTools';
 import {
   type VoiceToolBatchResult,

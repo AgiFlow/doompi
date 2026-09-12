@@ -1,4 +1,4 @@
-import type { DoomMcpResolvedToolSelection } from '@agimon-ai/doompi-extension-contracts/mcp-tool-resolver';
+import type { DoomMcpResolvedToolSelection } from '@agimon-ai/doompi-core/mcp-tool-resolver';
 import type { McpServerView } from '../../types/mcp';
 import type {
   McpCatalogSnapshot,

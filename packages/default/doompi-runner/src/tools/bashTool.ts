@@ -1,4 +1,4 @@
-import { definePiTool, type PiToolDeclaration } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { definePiTool, type PiToolDeclaration } from '@agimon-ai/doompi-core/pi-extension';
 import { BASH_TOOL_LABEL, BASH_TOOL_NAME, MS_PER_SECOND } from '../constants/bashTool';
 import { type BashParams, BashParamsSchema } from '../schemas/bashTool';
 import { formatRunResult, parseResultPragma, textResult } from '../services/bashResult';

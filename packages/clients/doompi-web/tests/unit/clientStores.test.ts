@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands.ts';
+import { sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands';
 
-vi.mock('../../src/web/lib/sessionProtocolCommands.ts', () => ({ sendSessionProtocolFrame: vi.fn() }));
-import type { SessionSummary } from '../../src/types/hub.ts';
+vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({ sendSessionProtocolFrame: vi.fn() }));
+import type { SessionSummary } from '../../src/types/hub';
 import {
   abortCommand,
   clearQueueCommand,
@@ -19,7 +19,7 @@ import {
   setModelCommand,
   setThinkingLevelCommand,
   steerCommand,
-} from '../../src/web/lib/commands.ts';
+} from '../../src/web/lib/commands';
 import {
   bindTransport,
   notifyHubConnected,
@@ -27,7 +27,7 @@ import {
   releaseTransport,
   sendFrame,
   sendHubFrame,
-} from '../../src/web/lib/transport.ts';
+} from '../../src/web/lib/transport';
 import {
   dropThreads,
   heldThreads,
@@ -36,7 +36,7 @@ import {
   subscribeThread,
   threadStoreKey,
   unsubscribeThread,
-} from '../../src/web/stores/threadStore.ts';
+} from '../../src/web/stores/threadStore';
 import {
   closeTransientTab,
   dropTransientTabs,
@@ -45,14 +45,14 @@ import {
   resetTransientTabs,
   transientTabsOf,
   transientTabsStore,
-} from '../../src/web/stores/transientTabsStore.ts';
+} from '../../src/web/stores/transientTabsStore';
 import {
   closePalette,
   openPalette,
   paletteStore,
   setPalettePath,
   togglePalette,
-} from '../../src/web/stores/paletteStore.ts';
+} from '../../src/web/stores/paletteStore';
 import {
   abortRun,
   beginSessionReplay,
@@ -79,7 +79,7 @@ import {
   rewindToMessage,
   sessionStoreFor,
   submitMessage,
-} from '../../src/web/stores/sessionStore.ts';
+} from '../../src/web/stores/sessionStore';
 import {
   applySessionBacklog,
   applySessionRemoved,
@@ -93,13 +93,13 @@ import {
   sessionsStore,
   setActiveSession,
   waitForSession,
-} from '../../src/web/stores/sessionsStore.ts';
+} from '../../src/web/stores/sessionsStore';
 import {
   closeNewSession,
   newSessionStore,
   openNewSession,
   resetNewSessionStore,
-} from '../../src/web/stores/newSessionStore.ts';
+} from '../../src/web/stores/newSessionStore';
 
 type Frame = Record<string, unknown>;
 
@@ -553,7 +553,7 @@ describe('sessionsStore', () => {
 
 describe('menuStore', () => {
   it('anchors a fresh selection command and expires a stale one', async () => {
-    const { setPendingMenu, clearPendingMenu, pendingMenuFor } = await import('../../src/web/stores/menuStore.ts');
+    const { setPendingMenu, clearPendingMenu, pendingMenuFor } = await import('../../src/web/stores/menuStore');
     clearPendingMenu();
     expect(pendingMenuFor(Date.now())).toBeNull();
 
@@ -568,7 +568,7 @@ describe('menuStore', () => {
 
   it('spends the anchor on the dialog that answers it, and releases the claim', async () => {
     const { claimDialogMenu, menuStore, releaseDialogMenu, resetMenuStore, setPendingMenu } =
-      await import('../../src/web/stores/menuStore.ts');
+      await import('../../src/web/stores/menuStore');
     resetMenuStore();
 
     setPendingMenu('domains');
@@ -590,7 +590,7 @@ describe('menuStore', () => {
 
 describe('promptFocus', () => {
   it('hands the keyboard back to the registered input, and never to a disabled one', async () => {
-    const { focusPrompt, registerPromptInput } = await import('../../src/web/lib/promptFocus.ts');
+    const { focusPrompt, registerPromptInput } = await import('../../src/web/lib/promptFocus');
 
     let focused = 0;
     const selections: Array<[number, number]> = [];

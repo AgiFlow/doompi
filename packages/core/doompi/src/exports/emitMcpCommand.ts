@@ -1,1 +1,1 @@
-export * from '../controllers/emitMcpCommand';
+export * from '../cli/commands/emit-mcp';

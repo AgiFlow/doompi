@@ -7,7 +7,7 @@ import {
   SyntaxText,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import type { McpResultBlock } from '../../types/webMcp';
 import {
   type McpStatusTone,

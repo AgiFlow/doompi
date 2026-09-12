@@ -1,4 +1,4 @@
-import type { MinorModeRecord } from '@agimon-ai/doompi-extension-contracts/mode';
+import type { MinorModeRecord } from '@agimon-ai/doompi-minor-mode';
 import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
 
 /**

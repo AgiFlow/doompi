@@ -7,9 +7,9 @@ import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessSelection,
   type DoomHeadlessTool,
-} from '@agimon-ai/doompi-extension-contracts/headless';
-import type { DoomServerBundleEntry } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import { HeadlessHost } from '../../../../src/controllers/headlessHost';
+} from '@agimon-ai/doompi-core/headless';
+import type { DoomServerBundleEntry } from '@agimon-ai/doompi-core/server-facet';
+import { HeadlessHost } from '@agimon-ai/doompi-core/main';
 
 const candidate: DoomServerBundleEntry = {
   packageName: '@test/tools',
@@ -23,7 +23,7 @@ const initial: DoomHeadlessSelection = {
   majorMode: 'development',
   activeLayers: ['tools'],
   domains: [],
-  minorModes: [],
+  state: {},
 };
 
 async function setup(
@@ -91,11 +91,14 @@ async function setup(
           name: 'gated_tool',
           description: 'gated',
           parameters: Type.Object({}),
-          when: { minorMode: 'restricted' },
+          when: { state: { 'minor-mode': 'restricted' }, attribution: { kind: 'minor', mode: 'restricted' } },
           execute,
         });
       }
-      service.registerToolRestriction({ minorMode: 'restricted', allowedTools: ['other_tool'] });
+      service.registerToolRestriction({
+        when: { state: { 'minor-mode': 'restricted' } },
+        allowedTools: ['other_tool'],
+      });
       service.registerActivity({ name: 'watch', start });
     })
     .await();
@@ -304,7 +307,7 @@ describe('retained headless contributions', () => {
     try {
       await fixture.host.select({});
       expect(tools.map((tool) => tool.name)).toEqual(['test_tool']);
-      await fixture.host.select({ minorModes: ['restricted'] });
+      await fixture.host.select({ state: { 'minor-mode': ['restricted'] } });
       expect(tools).toEqual([]);
     } finally {
       await fixture.close();

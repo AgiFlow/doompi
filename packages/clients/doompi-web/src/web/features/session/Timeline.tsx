@@ -1,4 +1,4 @@
-import type { UserMessageActionRunContext, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { UserMessageActionRunContext, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   Avatar,
   AvatarFallback,
@@ -18,19 +18,19 @@ import { Fragment, memo, type ReactNode, useCallback, useLayoutEffect, useMemo, 
 import { useStore } from '@tanstack/react-store';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Store } from '@tanstack/store';
-import { fileTabForPath, useActivityGroups, useFileLinks } from '../../lib/composition.ts';
-import { parseFileMentions } from '../../lib/fileMentions.ts';
-import { pluginToolRenderer, pluginUserMessageActions } from '../../lib/pluginRegistry.ts';
-import { focusPrompt } from '../../lib/promptFocus.ts';
+import { fileTabForPath, useActivityGroups, useFileLinks } from '../../lib/composition';
+import { parseFileMentions } from '../../lib/fileMentions';
+import { pluginToolRenderer, pluginUserMessageActions } from '../../lib/pluginRegistry';
+import { focusPrompt } from '../../lib/promptFocus';
 import {
   isSupportedImageMimeType,
   type ProfileIdentity,
   type SessionState,
   type TimelineEntry,
   type ToolEntry,
-} from '../../lib/sessionModel.ts';
-import { groupSummary, groupTone, timelineUnits } from '../../lib/timelineGroups.ts';
-import { appendComposerQuote } from '../../stores/composerStore.ts';
+} from '../../lib/sessionModel';
+import { groupSummary, groupTone, timelineUnits } from '../../lib/timelineGroups';
+import { appendComposerQuote } from '../../stores/composerStore';
 import {
   requestOlderHistory,
   requestNewerHistory,
@@ -39,15 +39,15 @@ import {
   sessionStoreFor,
   submitMessage,
   useActiveSession,
-} from '../../stores/sessionStore.ts';
-import { sessionsStore } from '../../stores/sessionsStore.ts';
-import { openTransientTab } from '../../stores/transientTabsStore.ts';
-import { useOpenTab } from '../../stores/useOpenTab.ts';
-import { usePluginSlotProps } from '../../stores/usePluginSlotProps.ts';
-import { useWebPluginRegistry } from '../../stores/useWebPluginRegistry.ts';
-import { MentionPreviews } from './MentionPreviews.tsx';
-import { MessageMarkdown, type MessageFileLinkHandler } from './MessageMarkdown.tsx';
-import { ToolCard } from './ToolCard.tsx';
+} from '../../stores/sessionStore';
+import { sessionsStore } from '../../stores/sessionsStore';
+import { openTransientTab } from '../../stores/transientTabsStore';
+import { useOpenTab } from '../../stores/useOpenTab';
+import { usePluginSlotProps } from '../../stores/usePluginSlotProps';
+import { useWebPluginRegistry } from '../../stores/useWebPluginRegistry';
+import { MentionPreviews } from './MentionPreviews';
+import { MessageMarkdown, type MessageFileLinkHandler } from './MessageMarkdown';
+import { ToolCard } from './ToolCard';
 
 const SUGGESTIONS = [
   'review the working tree and summarise the diff',

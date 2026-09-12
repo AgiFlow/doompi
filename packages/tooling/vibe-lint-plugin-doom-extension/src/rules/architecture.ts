@@ -131,11 +131,10 @@ const DEFAULT_FIXED_CORE_PACKAGES = [
 const DEFAULT_PACKAGE_LAYER_ORDER = ['contracts', 'platform', 'integration', 'extension', 'host'];
 const DEFAULT_PACKAGE_LAYER_FALLBACK = 'extension';
 const DEFAULT_PACKAGE_LAYERS: Readonly<Record<string, string>> = {
-  '@agimon-ai/doompi-extension-contracts': 'contracts',
+  '@agimon-ai/doompi-core': 'contracts',
+  '@agimon-ai/doompi-minor-mode': 'platform',
   '@agimon-ai/doompi-hashline': 'contracts',
-  '@agimon-ai/doompi-kernel': 'contracts',
   '@agimon-ai/doompi-telemetry': 'contracts',
-  '@agimon-ai/doompi-web-contracts': 'contracts',
   '@agimon-ai/doompi-web-components': 'contracts',
   '@agimon-ai/doompi-config': 'platform',
   '@agimon-ai/doompi-ui': 'platform',
@@ -144,25 +143,15 @@ const DEFAULT_PACKAGE_LAYERS: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi': 'host',
 };
 const DEFAULT_INFRASTRUCTURE_PACKAGES = [
-  '@agimon-ai/doompi-extension-contracts',
+  '@agimon-ai/doompi-core',
   '@agimon-ai/doompi-hashline',
-  '@agimon-ai/doompi-kernel',
   '@agimon-ai/doompi-telemetry',
 ];
 const DEFAULT_FEATURE_PACKAGE_PREFIXES = ['@agimon-ai/doompi-'];
-const DEFAULT_FOUNDATION_PACKAGES = [
-  '@agimon-ai/doompi-extension-contracts',
-  '@agimon-ai/doompi-hashline',
-  '@agimon-ai/doompi-kernel',
-];
+const DEFAULT_FOUNDATION_PACKAGES = ['@agimon-ai/doompi-core', '@agimon-ai/doompi-hashline'];
 const DEFAULT_FOUNDATION_PACKAGE_PREFIXES = ['@agimon-ai/foundation-'];
 const DEFAULT_PI_PACKAGE_PREFIXES = ['@agimon-ai/doompi-'];
-const DEFAULT_NON_PI_PACKAGES = [
-  '@agimon-ai/doompi-extension-contracts',
-  '@agimon-ai/doompi-hashline',
-  '@agimon-ai/doompi-kernel',
-  '@agimon-ai/doompi-telemetry',
-];
+const DEFAULT_NON_PI_PACKAGES = ['@agimon-ai/doompi-core', '@agimon-ai/doompi-hashline', '@agimon-ai/doompi-telemetry'];
 const DEFAULT_NON_PI_PACKAGE_PREFIXES = ['@agimon-ai/doompi-runner-rmux-', '@agimon-ai/doompi-runner-rtk-'];
 const DEFAULT_FIXED_FEATURE_IDENTIFIERS = [
   'curatedComposition',
@@ -191,21 +180,21 @@ const CAPABILITIES_PACKAGE_FRAGMENT = 'doompi-capabilities';
 const PACKAGE_MANIFEST_PATH = 'package.json';
 const DOOM_PACKAGE_NAME = '@agimon-ai/doompi';
 const DOOM_PACKAGE_PREFIX = `${DOOM_PACKAGE_NAME}-`;
-const CORDIS_CONTRACTS_PACKAGE = '@agimon-ai/doompi-extension-contracts';
+const CORDIS_CONTRACTS_PACKAGE = '@agimon-ai/doompi-core';
 /**
  * The reserved ABI vocabulary keeps internal wiring out of public exports. A
  * package that owns one of those words as its whole public subject is exempt
  * for that word only, so the ban still holds for every other package.
  */
-const ABI_VOCABULARY_OWNERS = new Map<string, RegExp>([['@agimon-ai/doompi-kernel', /kernel/i]]);
+const ABI_VOCABULARY_OWNERS = new Map<string, RegExp>([['@agimon-ai/doompi-core', /kernel/i]]);
 const CORDIS_HOST_ADAPTER_PATH = 'src/controllers/cordisHost.ts';
 const NATIVE_HOST_PACKAGE = '@agimon-ai/doompi';
 const NATIVE_HEADLESS_HOST_PATH = 'src/controllers/headlessHost.ts';
 /** The server's own host runner: one Context per headless server process. */
 const SERVER_FACET_LOADER_PATH = 'src/controllers/serverFacetLoader.ts';
 const CORDIS_HOST_ADAPTER_PATHS = [CORDIS_HOST_ADAPTER_PATH, SERVER_FACET_LOADER_PATH];
-const CORDIS_HOST_EXPORT = '@agimon-ai/doompi-extension-contracts/cordis-host';
-const LEGACY_SESSION_CONTEXT_EXPORT = '@agimon-ai/doompi-extension-contracts/session-context';
+const CORDIS_HOST_EXPORT = '@agimon-ai/doompi-core/cordis-host';
+const LEGACY_SESSION_CONTEXT_EXPORT = '@agimon-ai/doompi-core/session-context';
 const LEGACY_SESSION_CONTEXT_PATHS = new Set(['src/exports/sessionContext.ts', 'src/schemas/sessionContext.ts']);
 const DOOM_HOST_CORDIS_FEATURE_PATHS = [
   'src/extensions/modeCatalog.ts',
@@ -1388,11 +1377,12 @@ function ownedCordisScopes(units: readonly CordisSourceUnit[]): OwnedCordisScope
             if (scope) inspectScope(scope);
           } else if (declaration && ts.isObjectLiteralExpression(declaration)) {
             for (const property of declaration.properties) {
-              if (
-                ts.isPropertyAssignment(property) &&
-                ['global', 'workspace', 'session'].includes(property.name.getText())
-              )
-                inspectScope(property.initializer);
+              if (!property.name || !['global', 'workspace', 'session'].includes(property.name.getText())) continue;
+              if (ts.isPropertyAssignment(property)) inspectScope(property.initializer);
+              if (ts.isMethodDeclaration(property)) {
+                markHookContext(property);
+                inspectContributions(property);
+              }
             }
           }
         }
@@ -1729,7 +1719,7 @@ function cordisServiceInjectionViolations(configRoot: string): string[] {
     .filter((filePath) => {
       const helper = projectPath(filePath, configRoot);
       return !(
-        readPackageManifest(configRoot)?.name === '@agimon-ai/doompi-extension-contracts' &&
+        readPackageManifest(configRoot)?.name === '@agimon-ai/doompi-core' &&
         (helper === 'src/controllers/piExtension.ts' || helper === 'src/controllers/serverPlugin.ts')
       );
     })

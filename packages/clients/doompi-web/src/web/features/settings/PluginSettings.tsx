@@ -1,7 +1,7 @@
 import { Panel, SectionLabel } from '@agimon-ai/doompi-web-components';
-import type { WebPluginDefinition } from '@agimon-ai/doompi-web-contracts';
-import { installedWebPlugins, webPluginDiagnostics } from '../../lib/pluginRegistry.ts';
-import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
+import type { WebPluginDefinition } from '@agimon-ai/doompi-core/web';
+import { installedWebPlugins, webPluginDiagnostics } from '../../lib/pluginRegistry';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 /** What one plugin contributes, as counts: enough to see it landed without opening its code. */
 function contributions(plugin: WebPluginDefinition): string[] {

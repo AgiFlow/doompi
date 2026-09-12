@@ -7,7 +7,7 @@ import {
   FABLE_PLAN_REQUESTER,
   FABLE_PLAN_RUNTIME,
   type FablePlanStartPayload,
-} from '@agimon-ai/doompi-extension-contracts/fable-plan';
+} from '../../src/exports/fablePlanApi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFablePlanBridge } from '../../src/services/fablePlanBridge';
 import { SubagentCapabilityPolicyStore } from '../../src/schemas/team/capabilityCeiling';

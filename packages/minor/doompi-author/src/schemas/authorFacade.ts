@@ -1,6 +1,6 @@
 import { type Static, Type } from 'typebox';
-import { defineDoomPluginMethod } from '@agimon-ai/doompi-extension-contracts/plugin-protocol';
-import type { DoomApiScope } from '@agimon-ai/doompi-extension-contracts/package-api';
+import { defineDoomPluginMethod } from '@agimon-ai/doompi-core/plugin-protocol';
+import type { DoomApiScope } from '@agimon-ai/doompi-core/package-api';
 
 const AuthorCapabilityNameSchema = Type.String({
   minLength: 1,

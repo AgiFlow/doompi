@@ -1,4 +1,4 @@
-import { defineSessionStore, type ContextActionRunContext, type TransientTab } from '@agimon-ai/doompi-web-contracts';
+import { defineSessionStore, type ContextActionRunContext, type TransientTab } from '@agimon-ai/doompi-core/web';
 import {
   WORKFLOW_CATALOG_TYPE,
   type WorkflowCatalogEntryView,

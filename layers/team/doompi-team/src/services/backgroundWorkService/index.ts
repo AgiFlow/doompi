@@ -5,7 +5,7 @@ import {
   type BackgroundWorkProviderHandle,
   type DoomBackgroundWorkService,
   type DoomBackgroundWorkSnapshot,
-} from '@agimon-ai/doompi-extension-contracts/background-work';
+} from '@agimon-ai/doompi-core/background-work';
 import type { Context } from '@deepseek-ai/cordis';
 import { Check } from 'typebox/value';
 

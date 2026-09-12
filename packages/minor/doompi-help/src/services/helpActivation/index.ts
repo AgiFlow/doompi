@@ -5,7 +5,7 @@ import {
   type DoomHelpContribution,
   type DoomHelpDiagnostic,
   type DoomHelpSkill,
-} from '@agimon-ai/doompi-extension-contracts/help';
+} from '@agimon-ai/doompi-core/help';
 import type {
   HelpActivationDependencies,
   HelpActivationService,

@@ -1,7 +1,7 @@
-import { definePiExtension, definePiTool } from '@agimon-ai/doompi-extension-contracts/pi-extension';
-import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-extension-contracts/mode';
-import { DOOM_NARRATION_SERVICE, requireDoomNarrationService } from '@agimon-ai/doompi-extension-contracts/narration';
-import { type DoomToolRestriction } from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
+import { DOOM_NARRATION_SERVICE, requireDoomNarrationService } from '@agimon-ai/doompi-core/narration';
+import { type DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { askUserToolRestriction } from '../services/askUserToolGate';
 import { isAutonomousVoiceActive } from '../services/autonomousVoiceMode';

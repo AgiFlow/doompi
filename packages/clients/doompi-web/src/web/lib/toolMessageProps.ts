@@ -1,5 +1,5 @@
-import type { ToolMessageRenderProps, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
-import type { ToolEntry } from './sessionModel.ts';
+import type { ToolMessageRenderProps, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import type { ToolEntry } from './sessionModel';
 
 /** The props a tool's message renderer receives: the slot actions plus the call and its newest result. */
 export function toolMessageProps(

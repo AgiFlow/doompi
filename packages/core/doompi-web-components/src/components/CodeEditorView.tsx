@@ -23,11 +23,11 @@ import {
 } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { useEffect, useImperativeHandle, useLayoutEffect, useRef } from 'react';
-import { cn } from '../lib/cn.ts';
-import { boundedEditorEdits, boundedEditorRanges } from '../lib/editorController.ts';
-import { grammarKeyOf, loadGrammar } from '../lib/editorLanguage.ts';
-import { DOOM_EDITOR_STYLES, DOOM_SYNTAX_STYLES } from '../lib/editorTheme.ts';
-import type { CodeEditorProps, EditorSelectionRange, EditorViewportRectangle } from '../types/editor.ts';
+import { cn } from '../lib/cn';
+import { boundedEditorEdits, boundedEditorRanges } from '../lib/editorController';
+import { grammarKeyOf, loadGrammar } from '../lib/editorLanguage';
+import { DOOM_EDITOR_STYLES, DOOM_SYNTAX_STYLES } from '../lib/editorTheme';
+import type { CodeEditorProps, EditorSelectionRange, EditorViewportRectangle } from '../types/editor';
 
 function selectionRange(editor: { readonly state: EditorState }, from: number, to: number): EditorSelectionRange {
   const start = Math.min(from, to);
