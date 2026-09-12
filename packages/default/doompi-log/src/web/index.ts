@@ -12,12 +12,14 @@ import { MetricsPanel } from './components/MetricsPanel.tsx';
  */
 export const webPlugin = defineWebPlugin({
   id: 'log',
-  settingsPanels: [
-    {
-      id: 'metrics',
-      label: 'metrics',
-      detail: 'where this machine spent its tokens and its money',
-      component: MetricsPanel,
-    },
-  ],
+  global: {
+    settingsPanels: [
+      {
+        id: 'metrics',
+        label: 'metrics',
+        detail: 'where this machine spent its tokens and its money',
+        component: MetricsPanel,
+      },
+    ],
+  },
 });

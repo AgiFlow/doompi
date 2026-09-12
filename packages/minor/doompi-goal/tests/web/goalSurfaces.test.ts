@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../src/types/goalView.ts';
 import { EditGoalDialog } from '../../src/web/components/EditGoalDialog.tsx';
 import { GoalActivitySection } from '../../src/web/components/GoalActivitySection.tsx';
-import { webPlugin } from '../../src/web/index.ts';
+import { webPlugin as scopedWebPlugin } from '../../src/web/index.ts';
+const webPlugin = {
+  id: scopedWebPlugin.id,
+  ...scopedWebPlugin.global,
+  ...scopedWebPlugin.workspace,
+  ...scopedWebPlugin.session,
+};
 import { RemoveGoalDialog } from '../../src/web/components/RemoveGoalDialog.tsx';
 
 /**

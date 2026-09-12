@@ -18,7 +18,7 @@ export const WORKFLOW_SCREEN_EVENT = 'screen';
 
 /** Where a run's routes live, below the mount every hub-scoped package API shares. */
 export function workflowRunPath(workspace: string, runKey: string): string {
-  return `/api/plugin/${WORKFLOW_API_BASE_PATH}/runs/${encodeURIComponent(workspace)}/${encodeURIComponent(runKey)}`;
+  return `/api/global/plugin/${WORKFLOW_API_BASE_PATH}/runs/${encodeURIComponent(workspace)}/${encodeURIComponent(runKey)}`;
 }
 
 /** What a surface may do with one run's terminal, and why anything is missing. */

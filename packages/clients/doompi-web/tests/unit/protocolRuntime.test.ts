@@ -68,6 +68,8 @@ vi.mock('../../src/web/stores/sessionStore.ts', () => ({
   },
   releaseProtocolTranscript: fake.release,
   refreshSessionFacts: fake.refresh,
+  bindHistoryReader: () => () => {},
+  setHasNewerHistory: () => {},
 }));
 
 import { startProtocolRuntime, type ProtocolRuntime } from '../../src/web/app/protocolRuntime.ts';
@@ -86,7 +88,6 @@ function sessionState() {
       attached: true,
       locked: false,
       revision: 0,
-      transcript: [],
       queuedSteer: [],
       queuedSteerCount: 0,
     },
@@ -112,7 +113,20 @@ beforeEach(() => {
   disposeBinding = vi.fn().mockResolvedValue(undefined);
   fake.order = [];
   fake.binding.mockImplementation(() => ({
-    use: () => ({ state }),
+    use: () => ({
+      state,
+      readTranscriptPage: async () => ({
+        entries: [],
+        context: [],
+        drafts: [],
+        olderCursor: null,
+        newerCursor: null,
+        startCursor: null,
+        endCursor: null,
+        generation: 0,
+        revision: state.state.presentation?.revision ?? 0,
+      }),
+    }),
     ready: async () => {},
     dispose: disposeBinding,
   }));
@@ -142,15 +156,13 @@ describe('protocol attachment recovery', () => {
     expect(fake.request).toHaveBeenCalledTimes(3);
     expect(fake.connect).toHaveBeenCalledTimes(1);
 
-    state.state.snapshot.transcript = [
-      { id: 'new', role: 'user', content: [{ type: 'text', text: 'live again' }], timestamp: 1 },
-    ];
+    const frame = {
+      type: 'entry_appended' as const,
+      entry: { type: 'message', id: 'new', message: { role: 'user', content: 'live again' } },
+    };
+    state.state.presentation = { revision: 1, dropped: 0, events: [{ sequence: 1, frame }], projections: [] };
     state.publish(BACKGROUND_CONTEXT);
-    expect(fake.publish).toHaveBeenLastCalledWith(
-      'session-1',
-      [expect.objectContaining({ text: 'live again' })],
-      false,
-    );
+    expect(fake.applyFrame).toHaveBeenLastCalledWith('session-1', frame, { replay: false });
   });
 
   it('cancels attachment retries when the page stops focusing the session', async () => {
@@ -177,7 +189,24 @@ describe('protocol attachment recovery', () => {
     const pending = new Promise<void>((resolve) => {
       ready = resolve;
     });
-    fake.binding.mockImplementation(() => ({ use: () => ({ state }), ready: () => pending, dispose: disposeBinding }));
+    fake.binding.mockImplementation(() => ({
+      use: () => ({
+        state,
+        readTranscriptPage: async () => ({
+          entries: [],
+          context: [],
+          drafts: [],
+          olderCursor: null,
+          newerCursor: null,
+          startCursor: null,
+          endCursor: null,
+          generation: 0,
+          revision: state.state.presentation?.revision ?? 0,
+        }),
+      }),
+      ready: () => pending,
+      dispose: disposeBinding,
+    }));
     await start();
     fake.publish.mockClear();
     runtime!.stop();
@@ -186,24 +215,18 @@ describe('protocol attachment recovery', () => {
     expect(fake.publish).not.toHaveBeenCalled();
     expect(disposeBinding).toHaveBeenCalledTimes(1);
   });
-  it('resets before applying a branch snapshot and replays when resetRevision advances', async () => {
+  it('reloads history after branch navigation', async () => {
     await start();
-    fake.order = [];
-    state.state.snapshot.transcript = [
-      { id: 'user-1', role: 'user', content: [{ type: 'text', text: 'new branch' }], timestamp: 1 },
-    ];
-    state.state.snapshot.queuedSteer = [
-      { id: 'queued-1', role: 'user', content: [{ type: 'text', text: 'later' }], timestamp: 2 },
-    ];
+    fake.reset.mockClear();
     state.state.presentation = {
       revision: 1,
-      resetRevision: 1,
       dropped: 0,
       projections: [],
-      events: [{ sequence: 1, frame: { type: 'agent_start' } }],
+      events: [{ sequence: 1, frame: { type: 'navigation_end' } }],
     };
     state.publish(BACKGROUND_CONTEXT);
-    expect(fake.order).toEqual(['begin', 'reset', 'transcript', 'queue', 'frame', 'end']);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fake.reset).toHaveBeenCalledOnce();
   });
   it('delivers changed presentation projections without requiring a replay', async () => {
     await start();
@@ -226,10 +249,10 @@ describe('protocol attachment recovery', () => {
       revision: 2,
       dropped: 0,
       projections: [{ sequence: 2, frame }],
-      events: [{ sequence: 1, frame: { type: 'agent_start' } }],
+      events: [{ sequence: 2, frame }],
     };
     state.publish(BACKGROUND_CONTEXT);
-    expect(fake.order).toEqual(['transcript', 'queue', 'frame']);
+    expect(fake.order).toEqual(['frame']);
     expect(fake.applyFrame).toHaveBeenCalledExactlyOnceWith('session-1', frame, { replay: false });
   });
 
@@ -245,6 +268,7 @@ describe('protocol attachment recovery', () => {
     fake.order = [];
     state.state.presentation = { revision: 1, dropped: 0, projections: [], events: [] };
     state.publish(BACKGROUND_CONTEXT);
+    await vi.advanceTimersByTimeAsync(0);
     expect(fake.order[0]).toBe('begin');
     expect(fake.order[1]).toBe('reset');
   });

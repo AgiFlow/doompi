@@ -42,7 +42,7 @@ export interface MountedPackageApi {
   close(): void;
 }
 
-const DEFAULT_SCOPE: DoomApiScope = 'hub';
+const DEFAULT_SCOPE: DoomApiScope = 'global';
 const DEFAULT_CWD = '/repo';
 /** Any origin will do: the host routes on path, and a Request needs an absolute URL. */
 const ORIGIN = 'http://host';

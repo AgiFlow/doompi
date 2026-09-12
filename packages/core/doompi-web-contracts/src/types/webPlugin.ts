@@ -711,6 +711,8 @@ export interface ToolRendererContribution {
 }
 /** What a plugin's optional runtime may do through the page's hub socket. */
 export interface WebPluginRuntime {
+  /** Identity of the independently owned runtime mount. */
+  mount?: WebPluginMount;
   sendSessionFrame: SessionFrameSender;
   sendHubFrame(frame: Record<string, unknown>): void;
   onHubConnected(listener: () => void): () => void;
@@ -723,6 +725,10 @@ export interface WebPluginRuntime {
 }
 export interface WebPluginDefinition {
   id: string;
+  /** Independently installed contributions, using the same ownership levels as server facets. */
+  global?: WebPluginContributions;
+  workspace?: WebPluginContributions;
+  session?: WebPluginContributions;
   tabs?: TabContribution[];
   /** Optional faces placed after the host-owned Activity and Context faces. */
   dockFaces?: DockFaceContribution[];
@@ -790,3 +796,11 @@ export interface WebPluginDefinition {
   /** Started after the host runtime, for page-lifetime needs such as hub frames; the return value disposes. */
   start?(runtime: WebPluginRuntime): (() => void) | void;
 }
+
+export type WebPluginScope = 'global' | 'workspace' | 'session';
+export type WebPluginContributions = Omit<WebPluginDefinition, 'id' | WebPluginScope>;
+
+export type WebPluginMount =
+  | { scope: 'global' }
+  | { scope: 'workspace'; workspaceId: string }
+  | { scope: 'session'; workspaceId: string; sessionId: string };

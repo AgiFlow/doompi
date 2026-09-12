@@ -49,7 +49,7 @@ describe('fileEditsServerFacet', () => {
   });
 
   it('registers the file-edits channel in hub scope', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
     expect(typeof fileEditsServerFacet.apply(harness.context)).toBe('function');
     expect(harness.registered).toEqual([]);
     expect(harness.channels).toHaveLength(1);
@@ -61,7 +61,7 @@ describe('fileEditsServerFacet', () => {
     fileEditsServerFacet.apply(session.context)?.();
     expect(session.state.disposed).toBe(1);
 
-    const hub = hostContext('hub');
+    const hub = hostContext('global');
     fileEditsServerFacet.apply(hub.context)?.();
     expect(hub.state.disposed).toBe(1);
   });

@@ -31,7 +31,7 @@ function setup() {
   const commands: DoomHeadlessCommand[] = [];
   const resources: DoomHeadlessResource[] = [];
   const disposed = vi.fn();
-  const select = vi.fn(async () => undefined);
+  const changeSelection = vi.fn(async () => undefined);
   const host = {
     registerResource: (resource: DoomHeadlessResource) => {
       resources.push(resource);
@@ -41,7 +41,7 @@ function setup() {
       commands.push(command);
       return { dispose: disposed };
     },
-    select,
+    changeSelection,
   } as unknown as DoomHeadlessHostService;
   const dispose = domainHeadlessFacet.apply({ get: () => host } as unknown as Context);
   const execution: DoomHeadlessExecutionContext = {
@@ -61,12 +61,12 @@ function setup() {
     },
     shutdown: vi.fn(),
   };
-  return { command: commands[0]!, execution, select, resources, dispose, disposed };
+  return { changeSelection, command: commands[0]!, execution, resources, dispose, disposed };
 }
 
 describe('headless domains command', () => {
   it('opens a typed toggle picker and applies the resulting domain set', async () => {
-    const { command, execution, select } = setup();
+    const { changeSelection, command, execution } = setup();
     vi.mocked(execution.client.request).mockResolvedValue('[ ] web');
     await command.execute('', execution);
     expect(execution.client.request).toHaveBeenCalledExactlyOnceWith({
@@ -77,29 +77,29 @@ describe('headless domains command', () => {
         { label: '[ ] web', value: '[ ] web' },
       ],
     });
-    expect(select).toHaveBeenCalledExactlyOnceWith({ domains: ['default', 'web'] });
+    expect(changeSelection).toHaveBeenCalledExactlyOnceWith({ axis: 'domains', domains: ['default', 'web'] });
   });
 
   it.each([undefined, false, ''])('does not transition when the picker is cancelled: %s', async (answer) => {
-    const { command, execution, select } = setup();
+    const { changeSelection, command, execution } = setup();
     vi.mocked(execution.client.request).mockResolvedValue(answer);
     await command.execute('', execution);
-    expect(select).not.toHaveBeenCalled();
+    expect(changeSelection).not.toHaveBeenCalled();
   });
 
   it('validates requested and picker domain names before selecting', async () => {
-    const { command, execution, select } = setup();
+    const { changeSelection, command, execution } = setup();
     await expect(command.execute('foreign', execution)).rejects.toThrow('Unknown domain: foreign');
     vi.mocked(execution.client.request).mockResolvedValue('[ ] foreign');
     await expect(command.execute('', execution)).rejects.toThrow('Unknown domain: foreign');
-    expect(select).not.toHaveBeenCalled();
+    expect(changeSelection).not.toHaveBeenCalled();
   });
 
   it('skips an unchanged explicit selection and propagates selection failures', async () => {
-    const { command, execution, select } = setup();
+    const { changeSelection, command, execution } = setup();
     await command.execute('default', execution);
-    expect(select).not.toHaveBeenCalled();
-    select.mockRejectedValueOnce(new Error('Selection was not applied'));
+    expect(changeSelection).not.toHaveBeenCalled();
+    changeSelection.mockRejectedValueOnce(new Error('Selection was not applied'));
     await expect(command.execute('web', execution)).rejects.toThrow('Selection was not applied');
   });
 

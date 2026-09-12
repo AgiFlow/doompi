@@ -94,7 +94,9 @@ function readHubRows() {
 async function readApiDetail(filePath: string): Promise<FileEditsDetailView> {
   const app = createFileEditsApi({ sessionId: SESSION_ID, cwd });
   const response = await app.fetch(
-    new Request(`http://host${detailUrl(SESSION_ID, filePath).replace('/api/plugin/file-edits', '')}`),
+    new Request(
+      `http://host${detailUrl(SESSION_ID, filePath).replace(/^\/api\/sessions\/[^/]+\/plugin\/file-edits/, '')}`,
+    ),
   );
   expect(response.status).toBe(200);
   return (await response.json()) as FileEditsDetailView;

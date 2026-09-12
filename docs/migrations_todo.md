@@ -2,6 +2,36 @@
 
 This ledger records verified evidence and unresolved gates for [migrations.md](./migrations.md). Source presence is not runtime evidence. A gate is accepted only when the named command or scenario has passed and its result is retained.
 
+## Command selection checkpoint (2026-09-12)
+
+- Verified: The server wrapper no longer waits for an agent settlement frame after a handled slash command. The focused runtime test passed 13 assertions, including consecutive commands with and without telemetry. Uncached core lint, typecheck, and build passed.
+- Verified: A fresh isolated backend on port 7457 and browser on port 7455 activated Plan through its Normal flavor picker, changed Profile from Ponytail to Caveman, deactivated Plan, and activated Help. Help and Caveman remained selected after browser refresh. The earlier cockpit ports were not restarted.
+- Verified: The uncached MCP lint, typecheck, build, and test targets passed after accepting the current worktree repository ID in the workspace MCP route. The focused MCP route tests passed 17 assertions.
+- Open: The most recent packed-install system run passed 379 tests, skipped 1, and failed 3 among 383. Two failures occurred during sync, with one reporting a missing compiled `mcpSession.mjs` while parallel builds were replacing outputs. The first failed during `sync --check`. Packed-install approval remains open pending a clean rerun and diagnosis.
+- Open: The uncached full core test target passed 813 tests, skipped 27, and failed 5 across the existing harness-options, extension-compiler, server-facet, and terminal-child fixtures. Browser Playwright, staged desktop E2E, and long-conversation load checks remain to be completed. The isolated 7445 cockpit still runs the older backend process; use port 7455 for this command fix until that process is restarted.
+
+## SQLite transcript checkpoint (2026-09-12)
+
+This checkpoint supersedes the older test counts below for the current uncommitted SQLite transcript change.
+
+- Verified: Server root journals and native server child journals use SQLite. The focused storage tests passed for two live harness turns, ordered settlement markers, active child reads, completed child reads, and indexed page reads at 1,000, 10,000, and 100,000 entries. Explicit v3-to-SQLite import tests passed. Browser cache tests passed for bidirectional paging and bounded retention.
+- Verified: In an isolated Doom home, forced checkout-scoped sync published a fresh generation. The headless process on port 7447 created a session, answered a browser prompt on port 7445, and restored the prompt, response, settlement marker, profile label, context, and cost after refresh. Its journal contains eight SQLite entries. The other cockpit ports were not used.
+- Verified: Log Sink received `doompi_server.transcript_page`, `web.browser.transcript_page`, `web.browser.transcript_render`, and prompt latency events for this session. The refreshed eight-entry page read took 0.91 ms on the server; its browser page fetch took 13 ms and render took 1 ms. These are one isolated smoke run, not a sustained-load benchmark.
+- Verified: `pnpm lint:vibe --preflight-only` passed across 3,155 files. The uncached core and web builds passed after the paging-store move. These results predate the final cleanup and do not close the final gates.
+- Open: Rerun affected lint, typecheck, build, and full test targets after final edits. Run packed-install system tests and the full browser/desktop acceptance flows. Measure sustained long-conversation behavior and recoverability, including cursor paging after process restart. Automatic replacement of mounted server generations remains open.
+
+## Three-level scope checkpoint (2026-09-12)
+
+The evidence below supersedes older passing results in this file for the current uncommitted three-level change. Older results describe an earlier checkout and do not approve this change for release.
+
+- Verified: An isolated Doom home under a temporary directory completed `init`, `sync --global`, and repository `sync` using this checkout. Its headless server ran on port 7447, separate from the other cockpit. The global config and images APIs responded, the global provider API returned 40 providers, workspace admission succeeded, and `POST /api/sessions` created a root session in that workspace.
+- Verified: The browser on port 7445 displayed providers, repository defaults, and inherited planning settings. After the WebSocket summary correction, the session displayed its agents, runners, git, and workflows activity groups. The protocol summary now carries `workspaceId` and `webComposition` as the HTTP summary does.
+- Verified: The focused fresh-home sync test, full web lint, typecheck, build, and 621 web tests passed. Core lint, typecheck, build, and Vibe preflight passed after the latest source edits. The focused core and packed-install retests are recorded below when they finish.
+- Verified: The packed fresh-home scenario passed after repository sync was changed to skip an absent global mode. An explicitly configured global mode still syncs independently.
+- Open: The earlier full packed-install run had 5 failures among 383 tests. The four remaining failed cases and the full suite need a clean rerun before packed-install approval.
+- Open: A guard now preserves the installed static web registry when Vite re-evaluates `Providers.tsx`; web lint and typecheck pass. A clean browser hot-reload check remains pending because the concurrent packed fixture builds replaced local artifacts while Vite was running. Per-package generation watching and hot facet replacement are separate open work.
+- Open: Full affected-package tests, full browser Playwright, staged desktop E2E, and final packed-install approval have not passed for this change. Per-package generation watching and hot facet replacement are not implemented.
+
 ## Current implementation status
 
 The canonical three-surface implementation is present:
@@ -24,8 +54,8 @@ Normal release acceptance is still open. Do not infer release readiness from sou
 ### Core runtime
 
 - Uncached core lint, typecheck, build, and test targets passed.
-- Core test result: 109 files and 1,219 tests passed.
-- Coverage: 86.89 percent statements, 80.08 percent branches (5,556 of 6,938), 89.92 percent functions, and 90.30 percent lines.
+- Core test result: 108 files and 1,222 tests passed.
+- Coverage: 86.93 percent statements, 80.00 percent branches (5,611 of 7,013), 89.82 percent functions, and 90.27 percent lines.
 - Focused tests cover admission versus settlement, authentication, ownership gates, isolation, bounded replay, malformed controls, hydration, fork rollback, API failures, cleanup failures, and session-scoped native children.
 - Protected v3 and v4 history tests cover explicit offline import, byte preservation, leases, interrupted publication, export loss reports, and refusal to overwrite modified continuations.
 
@@ -42,6 +72,18 @@ Normal release acceptance is still open. Do not infer release readiness from sou
 - Native Team unit tests, typecheck, lint, and build passed.
 - Author, Voice, and computer-use focused tests and typechecks passed with injected typed services.
 - Unsupported native child configuration and unavailable typed hosts fail explicitly.
+- Native child requests now project standard direct-harness tools, exclusions, required and allowed tool ceilings, resolved skill prompts, and Team intercom without discarding the standard tools.
+
+### Latest checkout-scoped verification
+
+- `pnpm lint:vibe --preflight-only` passed across 3,131 package files after the final edits.
+- Sequential uncached affected typecheck and build targets passed.
+- The full uncached MCP target passed 23 files and 302 tests.
+- The full uncached core target passed 108 files and 1,222 tests with the coverage figures recorded above.
+- The uncached core packed-install system target passed 4 files and 382 tests, with 1 platform-specific test skipped.
+- The Team suite passed all 76 files and 1,395 assertions. Its aggregate target remains open because branch coverage is 78.20 percent against the 80 percent gate.
+- `node ./packages/core/doompi/dist/bin/cli.mjs init`, `node ./packages/core/doompi/dist/bin/cli.mjs sync`, and `node ./packages/core/doompi/dist/bin/cli.mjs sync --check` passed from this checkout in an isolated home. After the native child fix was rebuilt, `sync --check` again reported that the checkout is up to date.
+- The affected test sweep remains open. Runtime assertions passed in many packages, but stale package test harnesses still invoke Pi factories without the required composed Cordis host. Voice, Author, Workflow, and package-shape expectations also have isolated cutover mismatches that must be migrated before the repository test gate is accepted.
 
 ### Web and desktop
 
@@ -53,8 +95,7 @@ Normal release acceptance is still open. Do not infer release readiness from sou
 
 ### Repository checks
 
-- `pnpm lint:vibe --preflight-only` passed across 3,416 package files before the latest acceptance edits.
-- `git diff --check` passed before the latest acceptance edits.
+- Final Vibe preflight and `git diff --check` passed after the latest acceptance edits.
 - Server architecture guides and the `doom-web` scaffold describe the canonical ownership split.
 - The scaffold catalog parses and its include inventory has no missing files.
 
@@ -96,8 +137,7 @@ The earlier browser build blocker was traced to missing compiled server entries 
 
 ### Packed consumers and platforms
 
-- Run the complete packed-install system suite after the final manifest and build changes.
-- Confirm a clean consumer resolves every declared server, Pi, and web artifact without workspace source access.
+- The complete core packed-install system suite passes after the final manifest and build changes. A clean consumer resolves the declared server, Pi, and web artifacts without workspace source access.
 - Run native execution on `darwin-arm64`, `linux-x64`, and `linux-arm64`.
 - Record commit identity, command, platform, coverage, and artifact location for every approved target.
 

@@ -352,12 +352,14 @@
     "@agimon-ai/doompi-skill": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "@earendil-works/chord": "0.85.1",
     "@earendil-works/pi-agent-core": "0.85.1",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-protocol": "0.85.1",
     "@earendil-works/pi-server": "0.85.1",
+    "@earendil-works/pi-session-backend-sqlite-node": "0.85.1",
     "@hono/node-server": "2.1.1",
     "cross-spawn": "7.0.6",
     "gpt-tokenizer": "4.0.0",
@@ -396,6 +398,8 @@
     "entry": "./src/exports/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
+      "global",
+      "workspace",
       "session"
     ]
   },

@@ -41,6 +41,7 @@ function devPluginOverrides(command: 'build' | 'serve'): { plugins: Plugin[]; al
 
 export default defineConfig(({ command }) => {
   const dev = devPluginOverrides(command);
+  const proxyTarget = process.env.DOOMPI_WEB_PROXY_TARGET ?? 'http://127.0.0.1:7433';
   return {
     root: clientRoot,
     plugins: [...dev.plugins, react(), tailwindcss(), bundleAssetPolicyPlugin()],
@@ -72,7 +73,10 @@ export default defineConfig(({ command }) => {
     server: {
       port: 7434,
       proxy: {
-        '/api': { target: 'http://127.0.0.1:7433', ws: true },
+        '/api': { target: proxyTarget, changeOrigin: true, ws: true },
+        '/sw.js': { target: proxyTarget },
+        '/bundle-manifest.json': { target: proxyTarget },
+        '/bundle-assets': { target: proxyTarget },
       },
     },
   };

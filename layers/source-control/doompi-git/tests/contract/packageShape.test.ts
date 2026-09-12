@@ -103,7 +103,7 @@ describe('doompi-git package contract', () => {
     expect(manifest.doompiServer).toEqual({
       entry: './src/exports/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['hub', 'session'],
+      scopes: ['global', 'workspace', 'session'],
     });
   });
 

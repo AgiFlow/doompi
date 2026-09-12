@@ -29,7 +29,14 @@ import type {
   ThinkingLevel,
   QueueMode,
 } from '@earendil-works/pi-agent-core';
-import type { HistoryOwnership } from '../../adapters/serialization/historyImport.ts';
+import type { HistoryOwnership, HistoryOwnershipLease } from '../../adapters/serialization/historyImport.ts';
+
+export interface SqliteSessionStorage {
+  session: Session;
+  sessionFile: string;
+  repository: { close(context: Context): Promise<void> };
+  historyLease: HistoryOwnershipLease;
+}
 
 /** The opaque frame shape consumed by the existing server compatibility facade. */
 export type DirectHarnessFrame = Record<string, unknown>;
@@ -56,6 +63,8 @@ export interface DirectHarnessRuntimeOptions<TContext extends object | undefined
 
   /** Injecting a Session is supported for tests and hosts that already own storage. */
   session?: Session;
+  /** Server hosts select SQLite; terminal hosts retain JSONL. */
+  storage?: 'jsonl' | 'sqlite';
   /** Existing v4 JSONL session path. Requires historyOwnership for its lifetime. */
   sessionPath?: string;
   /** Existing v3 JSONL path. It is never opened for writing. */
@@ -163,7 +172,7 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
     usage: Usage,
     options?: { entryId?: string; details?: import('@earendil-works/pi-agent-core').JsonValue },
   ): Promise<string>;
-  submitPrompt(text: string, images?: ImageContent[]): Promise<{ settled: Promise<void> }>;
+  submitPrompt(text: string, images?: ImageContent[]): Promise<{ settled: Promise<void>; handledCommand?: boolean }>;
   prompt(text: string, images?: ImageContent[]): Promise<void>;
   steer(text: string, images?: ImageContent[]): Promise<void>;
   followUp(text: string, images?: ImageContent[]): Promise<void>;

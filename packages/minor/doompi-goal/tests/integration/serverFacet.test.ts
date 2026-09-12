@@ -46,7 +46,7 @@ function fixture() {
       setStatus: vi.fn(),
     },
     session: {
-      entries: () => [],
+      entries: async () => [],
       appendCustomEntry: async (...entry: unknown[]) => {
         appendedEntries.push(entry);
       },
@@ -59,8 +59,8 @@ function fixture() {
   } as unknown as DoomHeadlessExecutionContext;
   const host = {
     context: execution,
-    select: async (patch: Partial<DoomHeadlessSelection>) => {
-      selection = { ...selection, ...patch };
+    changeSelection: async (change: { axis: 'minorModes'; minorModes: string[] }) => {
+      selection = { ...selection, minorModes: change.minorModes };
     },
     registerMinorMode: (value: DoomHeadlessMinorMode) => {
       mode = value;
@@ -121,7 +121,7 @@ describe('goal server facet', () => {
     if (!command || !hook || !startHook || !shutdownHook || !resource)
       throw new Error('Goal command, hooks, or resource were not registered');
 
-    expect(startHook.handle({}, test.execution)).toBeUndefined();
+    await expect(startHook.handle({}, test.execution)).resolves.toBeUndefined();
     await command.execute('Ship the feature', test.execution);
 
     expect(test.selection().minorModes).toEqual(['goal']);

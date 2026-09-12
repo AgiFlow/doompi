@@ -12,6 +12,7 @@ import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import {
   JSONL_STORAGE_VERSION,
   JsonlSessionRepo,
+  laneState,
   type JsonlSessionMetadata,
   type Session,
 } from '@earendil-works/pi-agent-core/harness/session';
@@ -37,6 +38,7 @@ import type {
   DirectHarnessRuntimeOptions,
 } from '../../types/server/directHarnessRuntime.ts';
 import type { HistoryOwnershipLease } from '../serialization/historyImport.ts';
+import { openSqliteSessionStorage } from './sqliteSessionStorage.ts';
 
 const DEFAULT_LANE = 'main';
 const DEFAULT_SESSION_ROOT = '.pi/sessions';
@@ -80,7 +82,7 @@ type AnyModels = Models | MutableModels;
 type StorageHandle = {
   session: AnySession;
   sessionFile?: string;
-  repository?: JsonlSessionRepo;
+  repository?: { close(context: Context): Promise<void> };
   environment?: NodeExecutionEnv;
   historyLease?: HistoryOwnershipLease;
 };
@@ -175,7 +177,7 @@ async function acquireHistoryLease(
 async function closeStorage(
   storage: {
     session?: AnySession;
-    repository?: JsonlSessionRepo;
+    repository?: { close(context: Context): Promise<void> };
     environment?: NodeExecutionEnv;
     historyLease?: HistoryOwnershipLease;
   },
@@ -215,6 +217,8 @@ async function openStorage<TContext extends object | undefined>(
       session: options.session,
       ...(options.sessionPath === undefined ? {} : { sessionFile: path.resolve(options.sessionPath) }),
     };
+
+  if (options.storage === 'sqlite') return openSqliteSessionStorage(options, context);
 
   const sessionPath = options.sessionPath === undefined ? undefined : path.resolve(options.sessionPath);
   const legacyPath = options.legacySessionPath === undefined ? sessionPath : path.resolve(options.legacySessionPath);
@@ -362,7 +366,7 @@ function mapHarnessEvent(event: HarnessEvent): DirectHarnessFrame[] {
           status: value.status,
           ...(value.error === undefined ? {} : { error: value.error }),
         },
-        { type: 'agent_settled' },
+        { type: 'agent_settled', runId: value.runId, timestamp: value.endedAt },
       ];
     case 'fault':
       return [{ type: FRAME_ERROR, error: value.message, code: value.code }];
@@ -681,7 +685,24 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     );
   };
   let settledEvents = Promise.resolve();
+  let toolsThisRun = 0;
   const deliverHarnessEvent = async (event: HarnessEvent, eventContext: Context): Promise<void> => {
+    if (event.type === 'run_start') toolsThisRun = 0;
+    if (event.type === 'tool_start') toolsThisRun += 1;
+    if (event.type === 'run_end' && options.storage === 'sqlite') {
+      const record = event as unknown as AnyRecord;
+      const latest = await lane.findEntry(
+        { type: 'custom', customType: 'doompi.agent-settled', order: 'newestFirst' },
+        eventContext,
+      );
+      const data = latest?.type === 'custom' && isRecord(latest.data) ? latest.data : undefined;
+      if (data?.runId !== record.runId)
+        await lane.appendCustomEntry(
+          'doompi.agent-settled',
+          { runId: String(record.runId), timestamp: Number(record.endedAt), tools: toolsThisRun },
+          eventContext,
+        );
+    }
     await emitLifecycle(event, eventContext);
     if (event.type === 'fault') markStorageFailure(event);
     for (const frame of mapHarnessEvent(event)) emitFrame(frame);
@@ -880,10 +901,12 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     if (!result.ok) resultError(result);
     return result.value.usageId;
   };
-  const submitPrompt = async (text: string, images?: ImageContent[]): Promise<{ settled: Promise<void> }> => {
+  const submitPrompt = async (
+    text: string,
+    images?: ImageContent[],
+  ): Promise<{ settled: Promise<void>; handledCommand?: boolean }> => {
     if (await options.dispatchCommand?.(text)) {
-      emitFrame({ type: 'agent_settled' });
-      return { settled: Promise.resolve() };
+      return { settled: Promise.resolve(), handledCommand: true };
     }
     return admitPrompt(text, images);
   };
@@ -914,24 +937,27 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     if (!result.ok) resultError(result);
   };
   const readState = async (): Promise<Record<string, unknown>> => {
-    const watched = await lane.watch(context);
-    const execution = watched.snapshot;
-    watched.unsubscribe();
+    const [execution, persisted, stats, thinking] = await Promise.all([
+      lane.inspectExecution(context),
+      storage.session.getValue(laneState(laneName), context),
+      storage.session.getStats(context),
+      lane.getThinkingLevel(context),
+    ]);
     const configuredModel = await lane.getModel(context);
     const name = await harness.getName(context);
     return {
       model: configuredModel === undefined ? undefined : { provider: configuredModel.provider, id: configuredModel.id },
-      thinkingLevel: execution.configuration.thinkingLevel,
-      isStreaming: execution.operation?.kind === 'run',
-      isCompacting: execution.operation?.kind === 'compaction',
+      thinkingLevel: thinking,
+      isStreaming: execution.current?.kind === 'run',
+      isCompacting: execution.current?.kind === 'compaction',
       steeringMode: await harness.getSteeringMode(context),
       followUpMode: await harness.getFollowUpMode(context),
       sessionFile: storage.sessionFile,
       sessionId,
       ...(name === undefined ? {} : { sessionName: name }),
       autoCompactionEnabled: (await harness.getCompactionSettings(context)).enabled,
-      messageCount: execution.stats.messageCount,
-      pendingMessageCount: execution.queues.filter((entry) => entry.type === 'message').length,
+      messageCount: stats.messageCount,
+      pendingMessageCount: persisted?.value.inbox.length ?? 0,
     };
   };
   const readEntries = async () => ({
@@ -965,9 +991,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     };
   };
   const clearQueue = async () => {
-    const watched = await lane.watch(context);
-    const queued = watched.snapshot.queues;
-    watched.unsubscribe();
+    const queued = (await storage.session.getValue(laneState(laneName), context))?.value.inbox ?? [];
     for (const item of queued) {
       const result = await writable(() => lane.cancelQueued(item.entryId, context));
       if (!result.ok) resultError(result);

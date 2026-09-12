@@ -16,32 +16,39 @@ import { computerUseChannel } from './stores/computerUseStore.ts';
 
 export const webPlugin = defineWebPlugin({
   id: 'computer-use',
-  minorModes: [
-    {
-      name: 'computer use',
-      modeId: COMPUTER_USE_MODE_ID,
-      keys: 'c e',
-      statusKey: COMPUTER_USE_MODE_STATUS_KEY,
-      hideWhenMissing: true,
-      order: 70,
-    },
-  ],
-  activityGroups: [
-    {
-      name: 'computer-use',
-      keys: 'c e',
-      order: 70,
-      statusKey: COMPUTER_USE_STATUS_KEY,
-      hideWhenEmpty: true,
-      marksBackgroundWork: false,
-    },
-  ],
-  settingsSections: [computerUseSettingsSection],
-  activitySections: [{ id: 'computer-use', component: ComputerUsePanel }],
-  channels: [computerUseChannel],
-  toolRenderers: [
-    { tools: [computerStateToolName], message: ComputerStateToolCard },
-    { tools: [computerActionToolName], message: ComputerActionToolCard },
-    { tools: [computerExecToolName], message: ComputerExecToolCard },
-  ],
+  global: {
+    settingsSections: [computerUseSettingsSection],
+  },
+  workspace: {
+    settingsSections: [computerUseSettingsSection],
+  },
+  session: {
+    minorModes: [
+      {
+        name: 'computer use',
+        modeId: COMPUTER_USE_MODE_ID,
+        keys: 'c e',
+        statusKey: COMPUTER_USE_MODE_STATUS_KEY,
+        hideWhenMissing: true,
+        order: 70,
+      },
+    ],
+    activityGroups: [
+      {
+        name: 'computer-use',
+        keys: 'c e',
+        order: 70,
+        statusKey: COMPUTER_USE_STATUS_KEY,
+        hideWhenEmpty: true,
+        marksBackgroundWork: false,
+      },
+    ],
+    activitySections: [{ id: 'computer-use', component: ComputerUsePanel }],
+    channels: [computerUseChannel],
+    toolRenderers: [
+      { tools: [computerStateToolName], message: ComputerStateToolCard },
+      { tools: [computerActionToolName], message: ComputerActionToolCard },
+      { tools: [computerExecToolName], message: ComputerExecToolCard },
+    ],
+  },
 });

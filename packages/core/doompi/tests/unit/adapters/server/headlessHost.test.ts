@@ -114,6 +114,23 @@ async function setup(
 }
 
 describe('retained headless contributions', () => {
+  it('inherits changed defaults while preserving explicit session axes', async () => {
+    const fixture = await setup(() => undefined);
+    try {
+      await fixture.host.select({});
+      await fixture.host.inheritSelection({ profile: 'inherited', domains: ['default'] });
+      expect(fixture.host.context.selection).toMatchObject({ profile: 'inherited', domains: ['default'] });
+      await fixture.host.changeSelection({ axis: 'profile', profile: 'explicit' });
+      await fixture.host.inheritSelection({ profile: 'new-default', domains: ['updated'] });
+      expect(fixture.host.context.selection).toMatchObject({ profile: 'explicit', domains: ['updated'] });
+      await fixture.host.changeSelection({ axis: 'domains', domains: [] });
+      await fixture.host.inheritSelection({ profile: undefined, domains: ['another-default'] });
+      expect(fixture.host.context.selection).toMatchObject({ profile: 'explicit', domains: [] });
+    } finally {
+      await fixture.close();
+    }
+  });
+
   it('resolves queued mode layers before activation and fails closed on invalid selections', async () => {
     let tools: readonly DoomHeadlessTool[] = [];
     const resolveSelection = vi.fn(async (selection: DoomHeadlessSelection) => {
@@ -203,6 +220,23 @@ describe('retained headless contributions', () => {
       await fixture.close();
     }
   });
+
+  it('applies one profile axis change without rebuilding tools or activities', async () => {
+    const applyTools = vi.fn();
+    const fixture = await setup(applyTools);
+    try {
+      await fixture.host.select({});
+      const toolApplications = applyTools.mock.calls.length;
+      const activityStarts = fixture.start.mock.calls.length;
+      await fixture.host.changeSelection({ axis: 'profile', profile: 'reviewer' });
+      expect(fixture.host.context.selection.profile).toBe('reviewer');
+      expect(applyTools).toHaveBeenCalledTimes(toolApplications);
+      expect(fixture.start).toHaveBeenCalledTimes(activityStarts);
+    } finally {
+      await fixture.close();
+    }
+  });
+
   it('keeps dormant activity stopped and rejects stale disabled tool invocations', async () => {
     let tools: readonly DoomHeadlessTool[] = [];
     const fixture = await setup((next) => {

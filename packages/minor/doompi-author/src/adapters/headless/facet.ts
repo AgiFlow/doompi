@@ -70,7 +70,7 @@ export const authorHeadlessFacet: HeadlessFacet = {
     };
     const selectMode = async (enabled: boolean): Promise<void> => {
       const modes = host.context.selection.minorModes.filter((mode) => mode !== 'author');
-      await host.select({ minorModes: enabled ? [...modes, 'author'] : modes });
+      await host.changeSelection({ axis: 'minorModes', minorModes: enabled ? [...modes, 'author'] : modes });
       modeOwner?.publish(modeState());
     };
     modeOwner = host.registerMinorMode({

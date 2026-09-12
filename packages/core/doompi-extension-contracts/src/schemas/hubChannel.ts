@@ -25,6 +25,7 @@ export interface DoomDirectEventBus {
 
 export interface DoomHubSessionScope {
   sessionId: string;
+  workspaceId?: string;
   cwd: string;
   /** Environment admitted for this session, when supplied by the host. */
   environment?: Readonly<Record<string, string | undefined>>;
@@ -33,7 +34,7 @@ export interface DoomHubSessionScope {
 export interface DoomHubSessionCreateRequest {
   readonly cwd: string;
   readonly name: string;
-  readonly parentSessionId: string;
+  readonly parentSessionId?: string;
   readonly sessionProvenance?: string;
   readonly signal?: AbortSignal;
 }
@@ -51,6 +52,8 @@ export interface DoomHubSessionApiRequest {
   method: string;
   body?: string | Uint8Array<ArrayBuffer> | null;
   signal?: AbortSignal;
+  /** Forwarded by the authenticated host, including content type and trace context. */
+  headers?: RequestInit['headers'];
 }
 
 export type DoomComputerUseHostOperation = 'status' | 'targets' | 'activate' | 'observe' | 'act' | 'stop';

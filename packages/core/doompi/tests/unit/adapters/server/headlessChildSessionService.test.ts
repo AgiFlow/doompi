@@ -3,8 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import { JsonlSessionRepo, laneConfig, laneState } from '@earendil-works/pi-agent-core/harness/session';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import { laneConfig, laneState } from '@earendil-works/pi-agent-core/harness/session';
+import { SqliteSessionRepo, createNodeSqliteFactory } from '@earendil-works/pi-session-backend-sqlite-node';
 import type { DoomChildSessionRequest } from '@agimon-ai/doompi-extension-contracts/child-session';
 import type {
   DirectHarnessRuntime,
@@ -76,9 +76,8 @@ function runtimeFactory(runtime: DirectHarnessRuntime) {
 }
 
 async function createSource(root: string): Promise<string> {
-  const environment = new NodeExecutionEnv({ cwd: root });
-  const repository = new JsonlSessionRepo({ fileSystem: environment, sessionsRoot: root });
-  const session = await repository.create({ id: 'source', cwd: root }, BACKGROUND_CONTEXT);
+  const repository = new SqliteSessionRepo({ directory: root, databaseFactory: createNodeSqliteFactory() });
+  const session = await repository.create({ id: 'source' }, BACKGROUND_CONTEXT);
   const main = await session.createBranch('main', null, BACKGROUND_CONTEXT);
   const message = { role: 'user', content: [{ type: 'text', text: 'source' }] } as Parameters<
     typeof main.appendMessage
@@ -97,7 +96,6 @@ async function createSource(root: string): Promise<string> {
   const sourcePath = session.metadata.path;
   await session.close(BACKGROUND_CONTEXT);
   await repository.close(BACKGROUND_CONTEXT);
-  await environment.cleanup(BACKGROUND_CONTEXT);
   return sourcePath;
 }
 
@@ -128,14 +126,10 @@ describe('headless child session provider', () => {
     expect(runtime.dispose).toHaveBeenCalledOnce();
   });
 
-  it('accepts only v4 restore sources and rejects Pi v3 files before runtime creation', async () => {
+  it('accepts SQLite restore sources and rejects JSONL before runtime creation', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-child-restore-'));
-    const v4Path = path.join(root, 'restore.jsonl');
+    const v4Path = await createSource(root);
     const v3Path = path.join(root, 'legacy.jsonl');
-    fs.writeFileSync(
-      v4Path,
-      `${JSON.stringify({ kind: 'header', v: 4, id: 'restore', storageVersion: 1, createdAt: Date.now(), cwd: root })}\n`,
-    );
     fs.writeFileSync(v3Path, '{"type":"session","version":3}\n');
     const runtime = fakeRuntime('restored-child', v4Path);
     const factory = runtimeFactory(runtime);
@@ -146,12 +140,12 @@ describe('headless child session provider', () => {
     });
 
     const handle = await service.start(request({ kind: 'v4-restore', sessionFile: v4Path }, root));
-    expect(factory).toHaveBeenCalledWith(expect.objectContaining({ sessionPath: fs.realpathSync(v4Path) }));
+    expect(factory).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionPath: path.resolve(v4Path), storage: 'sqlite' }),
+    );
     await handle.dispose();
 
-    await expect(service.start(request({ kind: 'v4-restore', sessionFile: v3Path }))).rejects.toThrow(
-      'upstream v4 JSONL',
-    );
+    await expect(service.start(request({ kind: 'v4-restore', sessionFile: v3Path }))).rejects.toThrow('SQLite');
     expect(factory).toHaveBeenCalledOnce();
   });
 
@@ -182,24 +176,19 @@ describe('headless child session provider', () => {
     expect(destinationPath).toEqual(expect.any(String));
     expect(destinationPath).not.toBe(sourcePath);
     expect(fs.existsSync(destinationPath!)).toBe(true);
-    expect(JSON.parse(fs.readFileSync(destinationPath!, 'utf8').split('\n', 1)[0]!)).toMatchObject({
-      kind: 'header',
-      v: 4,
-      parentSessionId: 'source',
-    });
-    expect(ownership.acquire).toHaveBeenCalledTimes(2);
-    expect(ownership.acquire).toHaveBeenNthCalledWith(1, fs.realpathSync(sourcePath));
-    expect(ownership.acquire.mock.calls[1]?.[0]).not.toBe(fs.realpathSync(sourcePath));
-    expect(sourceLease.assertQuiescent).toHaveBeenCalledOnce();
+    expect(fs.readFileSync(destinationPath!).subarray(0, 16).toString()).toBe('SQLite format 3\u0000');
+    expect(ownership.acquire).toHaveBeenCalledOnce();
+    expect(ownership.acquire).not.toHaveBeenCalledWith(fs.realpathSync(sourcePath));
+    expect(sourceLease.assertQuiescent).not.toHaveBeenCalled();
     expect(destinationLease.assertQuiescent).toHaveBeenCalledOnce();
-    expect(sourceRelease).toHaveBeenCalledOnce();
+    expect(sourceRelease).not.toHaveBeenCalled();
     expect(destinationRelease).toHaveBeenCalledOnce();
     expect(factory.mock.calls[0]?.[0].historyOwnership).toBe(ownership);
 
     await handle.dispose();
     await service.close();
     expect(runtime.dispose).toHaveBeenCalledOnce();
-    expect(sourceRelease).toHaveBeenCalledOnce();
+    expect(sourceRelease).not.toHaveBeenCalled();
     expect(destinationRelease).toHaveBeenCalledOnce();
   });
 
@@ -219,8 +208,8 @@ describe('headless child session provider', () => {
 
     const handle = await service.start({ ...request({ kind: 'fresh' }), intercom });
     expect(intercom.bindRuntime).toHaveBeenCalledOnce();
-    expect(replaceTools).toHaveBeenCalledWith([expect.objectContaining({ name: 'intercom' })]);
-    const installed = replaceTools.mock.calls[0]?.[0][0];
+    expect(replaceTools).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ name: 'intercom' })]));
+    const installed = replaceTools.mock.calls[0]?.[0].find((tool) => tool.name === 'intercom');
     await (installed!.execute as (...args: unknown[]) => Promise<unknown>)(
       'operation',
       { action: 'members' },
@@ -291,19 +280,64 @@ describe('headless child session provider', () => {
     const configurations: Array<Partial<DoomChildSessionRequest>> = [
       { extensions: ['extension.ts'] },
       { subagentOnlyExtensions: ['child.ts'] },
-      { tools: ['read'] },
-      { excludeTools: ['bash'] },
-      { skills: ['testing'] },
       { mcpDirectTools: ['server/tool'] },
-      { capabilityCeiling: { allowedTools: ['read'] } },
-      { systemPrompt: 'extra', systemPromptMode: 'append' },
+      { capabilityCeiling: { allowedExternalProfiles: ['work'] } },
     ];
     for (const [index, configuration] of configurations.entries()) {
       await expect(
         service.start({ ...request({ kind: 'fresh' }), runId: `unsupported-${index}`, ...configuration }),
       ).rejects.toThrow('unsupported by the direct harness');
     }
+    await expect(
+      service.start({ ...request({ kind: 'fresh' }), runId: 'unknown-tool', tools: ['unknown'] }),
+    ).rejects.toThrow('unknown direct harness tools: unknown');
+    await expect(
+      service.start({
+        ...request({ kind: 'fresh' }),
+        runId: 'missing-required-tool',
+        tools: ['read'],
+        capabilityCeiling: { requiredTools: ['bash'] },
+      }),
+    ).rejects.toThrow('requires unavailable tools: bash');
     expect(factory).not.toHaveBeenCalled();
+  });
+  it('projects native tools, skills, prompt mode, exclusions, and capability ceilings', async () => {
+    const runtime = fakeRuntime('configured-tools');
+    const factory = runtimeFactory(runtime);
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent',
+      cwd: '/tmp',
+      runtimeFactory: factory,
+    });
+
+    const handle = await service.start({
+      ...request({ kind: 'fresh' }),
+      tools: ['read', 'grep', 'bash'],
+      excludeTools: ['bash'],
+      skills: ['testing'],
+      systemPrompt: 'extra',
+      systemPromptMode: 'append',
+      capabilityCeiling: { allowedTools: ['read', 'grep'], requiredTools: ['read'] },
+    });
+
+    expect(factory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        systemPrompt: 'extra',
+        activeToolNames: ['read', 'grep'],
+        tools: [expect.objectContaining({ name: 'read' }), expect.objectContaining({ name: 'grep' })],
+      }),
+    );
+    const readTool = factory.mock.calls[0]?.[0].tools?.find((tool) => tool.name === 'read');
+    const readResult = await readTool!.execute(
+      'read-call',
+      { path: import.meta.filename },
+      vi.fn(),
+      undefined,
+      {} as never,
+      {} as never,
+    );
+    expect(readResult.content).toBeDefined();
+    await handle.stop();
   });
   it('passes explicit child ceilings and default model policy to the direct runtime', async () => {
     const runtime = fakeRuntime('configured', '/tmp/configured.jsonl');
@@ -371,9 +405,9 @@ describe('headless child session provider', () => {
         service.start(request({ kind: 'v4-fork', sessionFile: sourcePath, branch: 'busy' }, root)),
       ).rejects.toThrow('destination is busy');
       expect(factory).not.toHaveBeenCalled();
-      expect(sourceLease.assertQuiescent).toHaveBeenCalledOnce();
+      expect(sourceLease.assertQuiescent).not.toHaveBeenCalled();
       expect(destinationAssert).toHaveBeenCalledOnce();
-      expect(sourceRelease).toHaveBeenCalledOnce();
+      expect(sourceRelease).not.toHaveBeenCalled();
       expect(destinationRelease).toHaveBeenCalledOnce();
     } finally {
       await service.close();
@@ -409,7 +443,7 @@ describe('headless child session provider', () => {
       const forkPath = factory.mock.calls[0]?.[0].sessionPath;
       expect(forkPath).toEqual(expect.any(String));
       expect(fs.existsSync(forkPath!)).toBe(false);
-      expect(sourceRelease).toHaveBeenCalledOnce();
+      expect(sourceRelease).not.toHaveBeenCalled();
       expect(destinationRelease).toHaveBeenCalledOnce();
     } finally {
       await service.close();

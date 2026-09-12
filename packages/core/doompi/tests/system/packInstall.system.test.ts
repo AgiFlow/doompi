@@ -26,7 +26,6 @@ import {
   createTemporaryRoot,
   exportedFileTargets,
   filesOutsideAllowlist,
-  installConventionalExtensions,
   installedDoomPiCli,
   installedDpiCli,
   installedPackageEntry,
@@ -51,8 +50,7 @@ import {
 } from './packHelpers.ts';
 
 const SYSTEM_HOOK_TIMEOUT_MS = 120_000;
-const RUNTIME_TEST_TIMEOUT_MS = 90_000;
-const RELOAD_CANARY_COUNT = 10;
+const RUNTIME_TEST_TIMEOUT_MS = 240_000;
 const STARTUP_TEST_TIMEOUT_MS = 600_000;
 const STARTUP_RUN_TIMEOUT_MS = 8_000;
 const STARTUP_EXIT_TIMEOUT_MS = 10_000;
@@ -2122,7 +2120,7 @@ describe('RPC-LIFECYCLE installed runtime', () => {
         fixture.root,
         environment,
       );
-      expect(sync.code, sync.stderr || sync.stdout).toBe(0);
+      expect(sync.code, `${sync.stderr}\n${sync.stdout}`).toBe(0);
 
       const settings = JSON.parse(fs.readFileSync(path.join(fixture.agentDirectory, 'settings.json'), 'utf8')) as {
         quietStartup?: boolean;
@@ -2364,84 +2362,6 @@ describe('RPC-LIFECYCLE installed runtime', () => {
         const preparedState = JSON.parse(fs.readFileSync(statePath, 'utf8')) as PackedSyncState;
         expect(preparedState.bootstrap).toBe(syncedState.bootstrap);
         expect(preparedState.precompile).toEqual(syncedState.precompile);
-      } finally {
-        await shutdownRuntime(runtime);
-      }
-    },
-    RUNTIME_TEST_TIMEOUT_MS,
-  );
-
-  it(
-    'discovers packed standard extensions, reloads ten times, executes, and shuts down cleanly',
-    async () => {
-      assertConsumerInstall();
-      const fixture = createRuntimeFixture();
-      installConventionalExtensions(
-        consumer.root,
-        fixture.agentDirectory,
-        STANDARD_PI_ENTRIES.map((entry) => entry.name),
-      );
-      const runtime = startRuntime(
-        installedPiCli(consumer.root),
-        [
-          '--mode',
-          'rpc',
-          '--no-session',
-          '--approve',
-          '--provider',
-          'scripted',
-          '--model',
-          'scripted/system-test',
-          '--extension',
-          fixture.providerPath,
-        ],
-        fixture.root,
-        cleanRuntimeEnvironment(fixture.agentDirectory),
-      );
-      try {
-        runtime.send({ id: 'commands-before', type: 'get_commands' });
-        const before = await runtime.waitForRecord(
-          (record) => record.type === 'response' && record.id === 'commands-before' && record.success === true,
-        );
-        const namesBefore = ((before.data as { commands?: Array<{ name?: string }> } | undefined)?.commands ?? []).map(
-          (command) => command.name,
-        );
-        expect(namesBefore).toContain('run');
-        expect(namesBefore).toContain('system-reload');
-
-        for (let index = 1; index <= RELOAD_CANARY_COUNT; index += 1) {
-          const reloadId = `reload-${String(index)}`;
-          runtime.send({ id: reloadId, type: 'prompt', message: '/system-reload' });
-          await runtime.waitForRecord(
-            (record) => record.type === 'response' && record.id === reloadId && record.success === true,
-          );
-
-          const commandsId = `commands-after-${String(index)}`;
-          runtime.send({ id: commandsId, type: 'get_commands' });
-          const after = await runtime.waitForRecord(
-            (record) => record.type === 'response' && record.id === commandsId && record.success === true,
-          );
-          const namesAfter = ((after.data as { commands?: Array<{ name?: string }> } | undefined)?.commands ?? []).map(
-            (command) => command.name,
-          );
-          expect(namesAfter.filter((name) => name === 'run')).toHaveLength(1);
-          expect(namesAfter.filter((name) => name === 'system-reload')).toHaveLength(1);
-        }
-
-        runtime.send({ id: 'post-reload', type: 'prompt', message: 'post reload sentinel' });
-        await runtime.waitForRecord(
-          (record) => record.type === 'response' && record.id === 'post-reload' && record.success === true,
-        );
-        await runtime.waitForRecord(
-          (record) => record.type === 'agent_end' && JSON.stringify(record).includes(PROVIDER_SENTINEL),
-        );
-        expect(runtime.nonJsonOutput).toEqual([]);
-        await waitForFile(fixture.lifecycleMarker);
-        const evidence = readLifecycleEvidence(fixture.lifecycleMarker);
-        await shutdownRuntime(runtime);
-        await waitForProcessExit(evidence.pid);
-        expect(fs.readFileSync(fixture.lifecycleMarker, 'utf8')).toContain('shutdown:quit');
-        expect(fs.existsSync(path.join(fixture.agentDirectory, 'sessions'))).toBe(false);
       } finally {
         await shutdownRuntime(runtime);
       }

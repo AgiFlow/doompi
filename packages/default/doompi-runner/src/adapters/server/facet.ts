@@ -44,7 +44,8 @@ export function createRunnerServerFacet(createContainer: RunnerContainerFactory)
       const server = requireDoomServerHost(context);
       const registrations = [] as Array<{ dispose(): void }>;
       if (server.scope === 'session') registrations.push(server.registerApi(api));
-      if (server.scope === 'hub') registrations.push(server.registerChannel(createRunnersChannel()));
+      if (server.scope === 'global' || server.scope === 'workspace')
+        registrations.push(server.registerChannel(createRunnersChannel()));
 
       const headless = readDoomHeadlessHost(context);
       if (!headless) {

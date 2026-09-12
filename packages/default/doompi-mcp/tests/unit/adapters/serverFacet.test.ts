@@ -37,7 +37,7 @@ describe('mcpServerFacet', () => {
   });
 
   it('registers the exact API on the hub scope', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
     const dispose = mcpServerFacet.apply(harness.context);
     expect(harness.registered).toHaveLength(1);
     expect(harness.registered[0]).toBe(mcpHubApi);
@@ -45,7 +45,7 @@ describe('mcpServerFacet', () => {
   });
 
   it('unregisters the API when disposed', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
     mcpServerFacet.apply(harness.context)?.();
     expect(harness.state.disposed).toBe(1);
   });

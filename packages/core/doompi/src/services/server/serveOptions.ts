@@ -1,4 +1,6 @@
 export interface ServeOptions {
+  /** Start global services without creating an initial session. */
+  noSession?: boolean;
   /** File holding the external protocol token, so it never appears in a process listing. */
   tokenFile: string;
   /** Arguments used to configure the direct harness session. */
@@ -19,7 +21,7 @@ const AGENT_SEPARATOR = '--';
 const DEFAULT_WEB_PORT = 7433;
 const DEFAULT_SESSION_NAME = 'untitled';
 
-export const SERVE_USAGE = `doompi-server ${TOKEN_FILE_OPTION} <file> [${NAME_OPTION} <name>] [${SESSION_ID_OPTION} <id>] [${WEB_OPTION} [port]] [${AGENT_SEPARATOR} <agent arguments>]`;
+export const SERVE_USAGE = `doompi-server ${TOKEN_FILE_OPTION} <file> [--no-session] [${NAME_OPTION} <name>] [${SESSION_ID_OPTION} <id>] [${WEB_OPTION} [port]] [${AGENT_SEPARATOR} <agent arguments>]`;
 
 export interface SessionIdentity {
   sessionId: string;
@@ -77,6 +79,7 @@ export function relaunchAgentArgs(args: readonly string[], majorMode: string): s
  * The token is read from a file rather than a flag because command arguments are visible to other local processes.
  */
 export function parseServeOptions(argv: readonly string[]): ServeOptions {
+  let noSession = false;
   let tokenFile: string | undefined;
   let webPort = DEFAULT_WEB_PORT;
   let sessionName: string | undefined;
@@ -85,6 +88,10 @@ export function parseServeOptions(argv: readonly string[]): ServeOptions {
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
+    if (argument === '--no-session') {
+      noSession = true;
+      continue;
+    }
     if (argument === AGENT_SEPARATOR) {
       agentArgs.push(...argv.slice(index + 1));
       break;
@@ -120,6 +127,7 @@ export function parseServeOptions(argv: readonly string[]): ServeOptions {
 
   if (!tokenFile) throw new Error(`${TOKEN_FILE_OPTION} is required. Usage: ${SERVE_USAGE}`);
   return {
+    ...(noSession ? { noSession: true } : {}),
     tokenFile,
     agentArgs,
     webPort,

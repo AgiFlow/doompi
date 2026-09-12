@@ -7,6 +7,12 @@ const mocks = vi.hoisted(() => ({
   activateWebPluginSession: vi.fn(),
   installSessionWebPlugins: vi.fn(),
   installedWebPlugins: vi.fn(),
+  activateWebPluginWorkspace: vi.fn(),
+  bindSessionWebWorkspace: vi.fn(),
+  installGlobalWebPlugins: vi.fn(),
+  installWorkspaceWebPlugins: vi.fn(),
+  removeWorkspaceWebPlugins: vi.fn(),
+  fetch: vi.fn(),
   removeSessionWebPlugins: vi.fn(),
   startPluginDefinitions: vi.fn(),
   startWebPlugins: vi.fn(),
@@ -16,17 +22,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../src/pwa/workerClient.ts', () => ({
   activateVerifiedPluginComposition: mocks.activateVerifiedPluginComposition,
 }));
-vi.mock('../../src/web/lib/pluginRegistry.ts', () => ({
-  activateWebPluginSession: mocks.activateWebPluginSession,
-  installSessionWebPlugins: mocks.installSessionWebPlugins,
-  installedWebPlugins: mocks.installedWebPlugins,
-  removeSessionWebPlugins: mocks.removeSessionWebPlugins,
-  startPluginDefinitions: mocks.startPluginDefinitions,
-  startWebPlugins: mocks.startWebPlugins,
-  webPluginDiagnostics: mocks.webPluginDiagnostics,
-}));
+vi.mock('../../src/web/lib/pluginRegistry.ts', () => mocks);
+vi.mock('../../src/web/lib/sealedSession.ts', () => ({ sealedHttpSession: { fetch: mocks.fetch } }));
 
 import {
+  refreshWebPluginCompositions,
   focusSessionWebPlugins,
   removeSessionWebPluginRuntime,
   startSessionWebPluginRuntime,
@@ -98,6 +98,15 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.activateVerifiedPluginComposition.mockResolvedValue({ ok: true, revision: 1 });
   mocks.installedWebPlugins.mockReturnValue([]);
+  mocks.fetch.mockImplementation(async () =>
+    Response.json({
+      global: composition('f', 1),
+      workspaces: [
+        { id: 'workspace-one', webComposition: composition('e', 1) },
+        { id: 'workspace-two', webComposition: composition('d', 1) },
+      ],
+    }),
+  );
   mocks.startPluginDefinitions.mockReturnValue(vi.fn());
   mocks.startWebPlugins.mockReturnValue(vi.fn());
   vi.stubGlobal('document', {
@@ -125,218 +134,99 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('the focused session plugin runtime', () => {
-  it('uses the captured builtin composition when a session has no synchronized plugins', async () => {
-    const builtin = [{} as WebPluginDefinition];
-    mocks.installedWebPlugins.mockReturnValue(builtin);
-    const stop = startSessionWebPluginRuntime({} as WebPluginRuntime);
+const stops: (() => void)[] = [];
+afterEach(() => {
+  for (const stop of stops.splice(0)) stop();
+});
+async function start() {
+  const stop = startSessionWebPluginRuntime({ onHubConnected: () => () => {} } as unknown as WebPluginRuntime);
+  stops.push(stop);
+  await refreshWebPluginCompositions();
+  vi.clearAllMocks();
+}
 
-    await focusSessionWebPlugins('session-one', undefined);
-
-    expect(mocks.activateVerifiedPluginComposition).not.toHaveBeenCalled();
-    expect(mocks.installSessionWebPlugins).toHaveBeenCalledWith('session-one', builtin);
-    expect(mocks.startPluginDefinitions).toHaveBeenCalledWith(builtin, expect.anything());
-    stop();
+describe('three-level web plugin mounts', () => {
+  it('mounts global and both workspaces without any live session', async () => {
+    scriptPlugins = [{ id: 'fixture', global: {}, workspace: {} }];
+    const stop = startSessionWebPluginRuntime({ onHubConnected: () => () => {} } as unknown as WebPluginRuntime);
+    stops.push(stop);
+    await refreshWebPluginCompositions();
+    expect(mocks.installGlobalWebPlugins).toHaveBeenCalledWith(scriptPlugins);
+    expect(mocks.installWorkspaceWebPlugins).toHaveBeenCalledWith('workspace-one', scriptPlugins);
+    expect(mocks.installWorkspaceWebPlugins).toHaveBeenCalledWith('workspace-two', scriptPlugins);
+    expect(mocks.installSessionWebPlugins).not.toHaveBeenCalled();
   });
 
-  it('loads verified styles before enabling and starting a synchronized composition', async () => {
-    const dynamic = [{} as WebPluginDefinition];
-    scriptPlugins = dynamic;
-    const stop = startSessionWebPluginRuntime({} as WebPluginRuntime);
-
-    await focusSessionWebPlugins('session-two', composition('a', 2, ['/assets/composition.css']));
-
-    const style = appended.find((element) => element.tag === 'link');
-    expect(style).toEqual(expect.objectContaining({ media: 'all', removed: false }));
-    expect(mocks.installSessionWebPlugins).toHaveBeenCalledWith('session-two', dynamic);
-    expect(mocks.startPluginDefinitions).toHaveBeenCalledWith(dynamic, expect.anything());
-    stop();
+  it('does not borrow the shell composition for a missing session descriptor', async () => {
+    await start();
+    await expect(focusSessionWebPlugins('one', undefined, 'workspace-one')).rejects.toThrow('No synchronized');
+    expect(mocks.installSessionWebPlugins).not.toHaveBeenCalled();
   });
 
-  it('keeps the running composition when its same-session replacement is refused', async () => {
-    const firstPlugins = [{} as WebPluginDefinition];
-    scriptPlugins = firstPlugins;
-    const stopActive = vi.fn();
-    mocks.startPluginDefinitions.mockReturnValue(stopActive);
-    const stop = startSessionWebPluginRuntime({} as WebPluginRuntime);
-    await focusSessionWebPlugins('session-three', composition('b', 1));
-    mocks.installSessionWebPlugins.mockClear();
-    mocks.startPluginDefinitions.mockClear();
-    mocks.activateVerifiedPluginComposition.mockResolvedValueOnce({
+  it('keeps independent session runtimes mounted across focus changes', async () => {
+    await start();
+    const stopPlugin = vi.fn();
+    mocks.startPluginDefinitions.mockReturnValue(stopPlugin);
+    scriptPlugins = [{ id: 'fixture', global: { paletteCommands: [] }, session: { tabs: [] } }];
+    await focusSessionWebPlugins('one', composition('a', 1, ['/style.css']), 'workspace-one');
+    await focusSessionWebPlugins('two', composition('b', 1), 'workspace-two');
+    await focusSessionWebPlugins('one', composition('a', 1, ['/style.css']), 'workspace-one');
+    expect(stopPlugin).not.toHaveBeenCalled();
+    expect(mocks.installSessionWebPlugins).toHaveBeenCalledTimes(2);
+    expect(mocks.installSessionWebPlugins).toHaveBeenCalledWith('one', [{ id: 'fixture', tabs: [] }]);
+    expect(mocks.bindSessionWebWorkspace).toHaveBeenCalledWith('two', 'workspace-two');
+    expect(mocks.startPluginDefinitions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ mount: { scope: 'session', sessionId: 'one', workspaceId: 'workspace-one' } }),
+    );
+    removeSessionWebPluginRuntime('one');
+    expect(stopPlugin).toHaveBeenCalledTimes(1);
+    expect(appended.filter((element) => element.tag === 'link').every((element) => element.removed)).toBe(true);
+  });
+
+  it('keeps a mounted generation when replacement verification fails', async () => {
+    await start();
+    const stopPlugin = vi.fn();
+    mocks.startPluginDefinitions.mockReturnValue(stopPlugin);
+    await focusSessionWebPlugins('one', composition('a', 1), 'workspace-one');
+    mocks.activateVerifiedPluginComposition.mockResolvedValue({
       ok: false,
-      code: 'manifest-fetch',
-      message: 'offline',
+      code: 'signature',
+      message: 'Invalid signature',
     });
-
-    await focusSessionWebPlugins('session-three', composition('c', 2));
-
-    expect(stopActive).not.toHaveBeenCalled();
-    expect(mocks.installSessionWebPlugins).not.toHaveBeenCalled();
-    expect(mocks.startPluginDefinitions).not.toHaveBeenCalled();
-    stop();
+    await expect(focusSessionWebPlugins('one', composition('b', 2), 'workspace-one')).rejects.toThrow('signature');
+    expect(stopPlugin).not.toHaveBeenCalled();
+    expect(mocks.installSessionWebPlugins).toHaveBeenCalledTimes(1);
   });
 
-  it('fails closed and removes prepared styles when a first composition style fails', async () => {
-    scriptPlugins = [{} as WebPluginDefinition];
+  it('removes prepared styles and refuses a broken composition', async () => {
+    await start();
     styleFailure = true;
-    const stop = startSessionWebPluginRuntime({} as WebPluginRuntime);
-
-    await focusSessionWebPlugins('session-four', composition('d', 1, ['/assets/broken.css']));
-
-    expect(appended.find((element) => element.tag === 'link')?.removed).toBe(true);
-    expect(mocks.installSessionWebPlugins).toHaveBeenCalledWith('session-four', []);
-    expect(mocks.startPluginDefinitions).not.toHaveBeenCalled();
-    stop();
-  });
-
-  it('fails closed when a verified script exports no plugin composition', async () => {
-    scriptPlugins = undefined;
-    const stop = startSessionWebPluginRuntime({} as WebPluginRuntime);
-
-    await focusSessionWebPlugins('session-five', composition('e', 1));
-
-    expect(mocks.installSessionWebPlugins).toHaveBeenCalledWith('session-five', []);
-    expect(mocks.startPluginDefinitions).not.toHaveBeenCalled();
-    stop();
-  });
-
-  it('atomically replaces an active composition and ignores its repeated key', async () => {
-    const firstPlugins = [{} as WebPluginDefinition];
-    const secondPlugins = [{ id: 'replacement' } as WebPluginDefinition];
-    const firstStop = vi.fn();
-    const secondStop = vi.fn();
-    mocks.startPluginDefinitions.mockReturnValueOnce(firstStop).mockReturnValueOnce(secondStop);
-    scriptPlugins = firstPlugins;
-    const stop = startSessionWebPluginRuntime({} as WebPluginRuntime);
-    await focusSessionWebPlugins('session-six', composition('f', 1));
-    scriptPlugins = secondPlugins;
-
-    const replacement = composition('g', 2, ['/assets/replacement.css']);
-    await focusSessionWebPlugins('session-six', replacement);
-    await focusSessionWebPlugins('session-six', replacement);
-
-    expect(firstStop).toHaveBeenCalledOnce();
-    expect(mocks.removeSessionWebPlugins).not.toHaveBeenCalled();
-    expect(mocks.installSessionWebPlugins).toHaveBeenLastCalledWith('session-six', secondPlugins);
-    expect(mocks.activateVerifiedPluginComposition).toHaveBeenCalledTimes(2);
-
-    removeSessionWebPluginRuntime('session-six');
-    expect(secondStop).toHaveBeenCalledOnce();
-    stop();
-  });
-
-  it('reuses a verified cached composition when focus returns to its session', async () => {
-    const cachedPlugins = [{ id: 'cached' } as WebPluginDefinition];
-    scriptPlugins = cachedPlugins;
-    const stop = startSessionWebPluginRuntime({} as WebPluginRuntime);
-    const cachedComposition = composition('i', 3);
-    await focusSessionWebPlugins('session-eight', cachedComposition);
-    await focusSessionWebPlugins('other-session', undefined);
-    const scriptCount = appended.filter((element) => element.tag === 'script').length;
-    mocks.installSessionWebPlugins.mockClear();
-
-    await focusSessionWebPlugins('session-eight', cachedComposition);
-
-    expect(appended.filter((element) => element.tag === 'script')).toHaveLength(scriptCount);
-    expect(mocks.installSessionWebPlugins).not.toHaveBeenCalledWith('session-eight', expect.anything());
-    expect(mocks.startPluginDefinitions).toHaveBeenLastCalledWith(cachedPlugins, expect.anything());
-    stop();
-  });
-
-  it('cancels stale composition work after script and style loading', async () => {
-    scriptPlugins = [{ id: 'stale-script' } as WebPluginDefinition];
-    automaticScriptLoad = false;
-    const stop = startSessionWebPluginRuntime({} as WebPluginRuntime);
-    const pendingScript = focusSessionWebPlugins('session-nine', composition('j', 1));
-    await vi.waitFor(() => expect(appended.some((element) => element.tag === 'script')).toBe(true));
-    await focusSessionWebPlugins('fallback-one', undefined);
-    const script = appended.find((element) => element.tag === 'script');
-    (globalThis as unknown as Record<string, unknown>).DoomPiWebPluginComposition = scriptPlugins;
-    script?.dispatch('load');
-    await pendingScript;
-    expect(mocks.installSessionWebPlugins).not.toHaveBeenCalledWith('session-nine', expect.anything());
-
-    appended = [];
-    automaticScriptLoad = true;
-    automaticStyleLoad = false;
-    scriptPlugins = [{ id: 'stale-style' } as WebPluginDefinition];
-    const pendingStyle = focusSessionWebPlugins('session-ten', composition('k', 1, ['/assets/stale.css']));
-    await vi.waitFor(() => expect(appended.some((element) => element.tag === 'link')).toBe(true));
-    await focusSessionWebPlugins('fallback-two', undefined);
-    const style = appended.find((element) => element.tag === 'link');
-    style?.dispatch('load');
-    await pendingStyle;
-
-    expect(style?.removed).toBe(true);
-    expect(mocks.installSessionWebPlugins).not.toHaveBeenCalledWith('session-ten', expect.anything());
-    stop();
-  });
-
-  it('reports non-Error verification failures as Error instances', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    mocks.activateVerifiedPluginComposition.mockRejectedValueOnce('offline');
-    const stop = startSessionWebPluginRuntime({} as WebPluginRuntime);
-
-    await focusSessionWebPlugins('session-eleven', composition('l', 1));
-
-    expect(error).toHaveBeenCalledWith(expect.objectContaining({ message: 'offline' }));
-    stop();
-  });
-
-  it('ignores a verification rejection after its session is removed', async () => {
-    let rejectVerification: ((reason: Error) => void) | undefined;
-    mocks.activateVerifiedPluginComposition.mockImplementationOnce(
-      async () =>
-        await new Promise<never>((_resolve, reject) => {
-          rejectVerification = reject;
-        }),
+    await expect(focusSessionWebPlugins('one', composition('a', 1, ['/style.css']), 'workspace-one')).rejects.toThrow(
+      'style',
     );
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const stop = startSessionWebPluginRuntime({} as WebPluginRuntime);
-    const pending = focusSessionWebPlugins('session-twelve', composition('m', 1));
-    await vi.waitFor(() => expect(rejectVerification).toBeTypeOf('function'));
-    removeSessionWebPluginRuntime('session-twelve');
-    rejectVerification?.(new Error('obsolete'));
-    await pending;
-
-    expect(error).not.toHaveBeenCalled();
-    stop();
-  });
-
-  it('cancels a pending composition when its session is removed', async () => {
-    let resolveVerification: ((result: { ok: true; revision: number }) => void) | undefined;
-    mocks.activateVerifiedPluginComposition.mockImplementationOnce(
-      async () =>
-        await new Promise<{ ok: true; revision: number }>((resolve) => {
-          resolveVerification = resolve;
-        }),
-    );
-    scriptPlugins = [{} as WebPluginDefinition];
-    const stop = startSessionWebPluginRuntime({} as WebPluginRuntime);
-
-    const pending = focusSessionWebPlugins('session-seven', composition('h', 1));
-    await vi.waitFor(() => expect(resolveVerification).toBeTypeOf('function'));
-    removeSessionWebPluginRuntime('session-seven');
-    resolveVerification?.({ ok: true, revision: 1 });
-    await pending;
-
-    expect(appended.filter((element) => element.tag === 'script')).toHaveLength(0);
     expect(mocks.installSessionWebPlugins).not.toHaveBeenCalled();
-    expect(mocks.removeSessionWebPlugins).toHaveBeenCalledWith('session-seven');
-
-    mocks.removeSessionWebPlugins.mockClear();
-    removeSessionWebPluginRuntime('unknown-session');
-    expect(mocks.removeSessionWebPlugins).toHaveBeenCalledWith('unknown-session');
-    stop();
+    expect(appended.filter((element) => element.tag === 'link').every((element) => element.removed)).toBe(true);
+    styleFailure = false;
+    scriptPlugins = undefined;
+    await expect(focusSessionWebPlugins('one', composition('b', 2), 'workspace-one')).rejects.toThrow(
+      'no plugin array',
+    );
   });
 
-  it('does not activate plugins without a focused session or host runtime', async () => {
-    await focusSessionWebPlugins(null, undefined);
-    await focusSessionWebPlugins('session-without-runtime', undefined);
-
-    expect(mocks.startPluginDefinitions).not.toHaveBeenCalled();
-    expect(mocks.activateWebPluginSession).toHaveBeenCalledWith(null);
-    expect(mocks.activateWebPluginSession).toHaveBeenCalledWith('session-without-runtime');
-    removeSessionWebPluginRuntime('session-without-runtime');
+  it('does not resurrect a session removed during verification', async () => {
+    await start();
+    let resolve!: (result: { ok: true }) => void;
+    mocks.activateVerifiedPluginComposition.mockReturnValue(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    const pending = focusSessionWebPlugins('one', composition('a', 1), 'workspace-one');
+    await vi.waitFor(() => expect(mocks.activateVerifiedPluginComposition).toHaveBeenCalled());
+    removeSessionWebPluginRuntime('one');
+    resolve({ ok: true });
+    await pending;
+    expect(mocks.installSessionWebPlugins).not.toHaveBeenCalled();
   });
 });

@@ -11,7 +11,7 @@ afterEach(() => {
 function generation(name = 'current') {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-bundle-source-'));
   roots.push(directory);
-  const descriptor = { version: 1, generation: name, fingerprint: 'a'.repeat(64), entries: [] };
+  const descriptor = { version: 2, generation: name, fingerprint: 'a'.repeat(64), entries: [] };
   const descriptorPath = path.join(directory, 'server.bundle.json');
   fs.writeFileSync(descriptorPath, JSON.stringify(descriptor));
   return {
@@ -38,7 +38,7 @@ describe('explicit server bundle source admission', () => {
     });
     expect(source.kind).toBe('descriptor');
     if (source.kind !== 'descriptor') throw new Error('Expected descriptor source');
-    expect((await loadServerBundle('hub', { ...source, majorMode: 'code', activeLayers: [] })).facets).toEqual([]);
+    expect((await loadServerBundle('global', { ...source, majorMode: 'code', activeLayers: [] })).facets).toEqual([]);
   });
   it('does not downgrade a missing selected descriptor even through an override', async () => {
     const fixture = generation();
@@ -49,7 +49,7 @@ describe('explicit server bundle source admission', () => {
     });
     expect(source.kind).toBe('descriptor');
     if (source.kind !== 'descriptor') throw new Error('Expected descriptor source');
-    await expect(loadServerBundle('hub', { ...source, majorMode: 'code', activeLayers: [] })).rejects.toThrow();
+    await expect(loadServerBundle('global', { ...source, majorMode: 'code', activeLayers: [] })).rejects.toThrow();
   });
   it('admits an explicitly selected previous generation with its own identity', () => {
     const current = generation();

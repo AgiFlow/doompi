@@ -103,7 +103,7 @@ export const workflowHeadlessFacet: HeadlessFacet = {
     };
     const selectMode = async (enabled: boolean): Promise<void> => {
       const modes = host.context.selection.minorModes.filter((mode) => mode !== WORKFLOW_MODE_ID);
-      await host.select({ minorModes: enabled ? [...modes, WORKFLOW_MODE_ID] : modes });
+      await host.changeSelection({ axis: 'minorModes', minorModes: enabled ? [...modes, WORKFLOW_MODE_ID] : modes });
       modeOwner?.publish(modeState());
     };
     modeOwner = host.registerMinorMode({

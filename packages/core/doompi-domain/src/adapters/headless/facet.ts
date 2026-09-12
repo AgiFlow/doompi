@@ -80,7 +80,7 @@ export const domainHeadlessFacet = {
         ) {
           return;
         }
-        await host.select({ domains: requested });
+        await host.changeSelection({ axis: 'domains', domains: requested });
       },
     };
     const registrations = [

@@ -18,7 +18,13 @@ import {
   OpenAuthoringFileToolCard,
   openAuthoringFileTab,
 } from '../../src/web/components/OpenAuthoringFileToolCard.tsx';
-import { webPlugin } from '../../src/web/index.ts';
+import { webPlugin as scopedWebPlugin } from '../../src/web/index.ts';
+const webPlugin = {
+  id: scopedWebPlugin.id,
+  ...scopedWebPlugin.global,
+  ...scopedWebPlugin.workspace,
+  ...scopedWebPlugin.session,
+};
 
 describe('the Author web plugin', () => {
   it('registers a dock face without registering a permanent workspace tab', () => {

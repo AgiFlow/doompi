@@ -513,6 +513,9 @@ importers:
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@tanstack/react-virtual':
+        specifier: 3.14.11
+        version: 3.14.11(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@tanstack/store':
         specifier: 0.11.1
         version: 0.11.1
@@ -613,6 +616,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../doompi-ui
+      '@agimon-ai/doompi-web-security':
+        specifier: workspace:*
+        version: link:../doompi-web-security
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -629,6 +635,9 @@ importers:
         specifier: 0.85.1
         version: 0.85.1
       '@earendil-works/pi-server':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+      '@earendil-works/pi-session-backend-sqlite-node':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
       '@hono/node-server':
@@ -3505,6 +3514,10 @@ packages:
     resolution: {integrity: sha512-3plYDUNFNBs5sRM590KGDAau5NvGIQbLquTruoDHAAAPLR9rUwwi6JG5eIy56bFHTbjlT9sn8rib0wjGaA0KJw==}
     engines: {node: '>=22.19.0'}
 
+  '@earendil-works/pi-session-backend-sqlite-node@0.85.1':
+    resolution: {integrity: sha512-L//vhkibKRWrw0m7bErAcN8Lh7FFumlIoCzWgUMGx2Bl3s9JEQPnwRyBvIDZNRcgdLXRq0IDpB1wLDY6xj4dMg==}
+    engines: {node: '>=22.19.0'}
+
   '@earendil-works/pi-telemetry@0.85.1':
     resolution: {integrity: sha512-Bg/YN6kA7Swja/NQxka8xFdecb4E/auIEGF2G5A25EaQXhRnPj300/7/KpgsDDMYUzHTDAv4RyUxaQPJKW81Rw==}
     engines: {node: '>=22.19.0'}
@@ -6084,6 +6097,12 @@ packages:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
+  '@tanstack/react-virtual@3.14.11':
+    resolution: {integrity: sha512-SStWf8bYdTgAquYqG4Pi2+d1XimQKoCIJ94H3jsm0D6UA0yqffvWuvUzrrQ4idewFWq8BSPpahnmLVosJIAs6g==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   '@tanstack/router-core@1.171.27':
     resolution: {integrity: sha512-wDwSLvoLwIaNcnx9UNcN9Mb7Y8QwCYq1U1RQZwyN186gnkIoIYI2SOxy8VqH1vFigbkHkk4FmwMAQlghPgDK2g==}
     engines: {node: '>=20.19'}
@@ -6093,6 +6112,9 @@ packages:
 
   '@tanstack/store@0.9.3':
     resolution: {integrity: sha512-8reSzl/qGWGGVKhBoxXPMWzATSbZLZFWhwBAFO9NAyp0TxzfBP0mIrGb8CP8KrQTmvzXlR/vFPPUrHTLBGyFyw==}
+
+  '@tanstack/virtual-core@3.17.9':
+    resolution: {integrity: sha512-M8Bzy7CCMvUjRiuoHVH9mRjyUVczRs8v8RcUEphLFGc445ZP4KQ15Y1sLqhQqJi/HgGJrxfCHnEnIX0x9mVrBg==}
 
   '@testing-library/dom@10.4.1':
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
@@ -12381,6 +12403,18 @@ snapshots:
       - ws
       - zod
 
+  '@earendil-works/pi-session-backend-sqlite-node@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)':
+    dependencies:
+      '@earendil-works/pi-agent-core': 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+      '@earendil-works/pi-ai': 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
   '@earendil-works/pi-telemetry@0.85.1': {}
 
   '@earendil-works/pi-tui@0.85.1':
@@ -14630,6 +14664,12 @@ snapshots:
       react-dom: 19.2.8(react@19.2.8)
       use-sync-external-store: 1.6.0(react@19.2.8)
 
+  '@tanstack/react-virtual@3.14.11(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+    dependencies:
+      '@tanstack/virtual-core': 3.17.9
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+
   '@tanstack/router-core@1.171.27':
     dependencies:
       '@tanstack/history': 1.162.1
@@ -14640,6 +14680,8 @@ snapshots:
   '@tanstack/store@0.11.1': {}
 
   '@tanstack/store@0.9.3': {}
+
+  '@tanstack/virtual-core@3.17.9': {}
 
   '@testing-library/dom@10.4.1':
     dependencies:

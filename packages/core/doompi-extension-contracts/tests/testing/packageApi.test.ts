@@ -41,7 +41,7 @@ describe('mounting a package API the way a host does', () => {
     // are right, and this is the translation that makes them agree.
     expect(mounted.mountPath).toBe('/api/plugin/demo');
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ scope: 'hub' });
+    expect(await response.json()).toMatchObject({ scope: 'global' });
   });
 
   it('answers 404 outside its mount, as the host does for an unclaimed prefix', async () => {
@@ -68,7 +68,7 @@ describe('mounting a package API the way a host does', () => {
 
   it('hands a session-scoped API its session and cwd, and a hub-scoped one neither', async () => {
     const session = mountPackageApi(demoApi(), { scope: 'session', sessionId: 's1', cwd: '/repo' });
-    const hub = mountPackageApi(demoApi(), { scope: 'hub' });
+    const hub = mountPackageApi(demoApi(), { scope: 'global' });
 
     expect(await (await session.fetch('/api/plugin/demo/items')).json()).toMatchObject({
       sessionId: 's1',

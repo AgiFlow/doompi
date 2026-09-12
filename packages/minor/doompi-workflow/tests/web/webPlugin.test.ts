@@ -6,7 +6,13 @@ import {
 } from '@agimon-ai/doompi-web-contracts/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 import { workflows } from '../../src/web/stores/workflowsStore.ts';
-import { webPlugin } from '../../src/web/index.ts';
+import { webPlugin as scopedWebPlugin } from '../../src/web/index.ts';
+const webPlugin = {
+  id: scopedWebPlugin.id,
+  ...scopedWebPlugin.global,
+  ...scopedWebPlugin.workspace,
+  ...scopedWebPlugin.session,
+};
 
 /**
  * Every surface this plugin declares, rendered at least once.

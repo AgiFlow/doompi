@@ -298,6 +298,25 @@ describe('reduceSession', () => {
     expect(state.dialog).toBeNull();
   });
 
+  it('restores a settlement divider at its chronological turn boundary', () => {
+    const state = reduceSession(
+      {
+        ...initialSessionState,
+        entries: [
+          { kind: 'user', id: 'u1', text: 'first', timestamp: 100 },
+          { kind: 'assistant', id: 'a1', text: 'one', thinking: '', streaming: false, timestamp: 200 },
+          { kind: 'user', id: 'u2', text: 'second', timestamp: 300 },
+          { kind: 'assistant', id: 'a2', text: 'two', thinking: '', streaming: false, timestamp: 400 },
+        ],
+        nextId: 5,
+      },
+      { type: 'agent_settled', timestamp: 250 },
+      { transcriptFromProtocol: true },
+    );
+
+    expect(state.entries.map((entry) => entry.kind)).toEqual(['user', 'assistant', 'settled', 'user', 'assistant']);
+  });
+
   it('unwraps replayed frames', () => {
     const state = reduceSession(initialSessionState, {
       type: 'replay',
@@ -833,7 +852,7 @@ describe('restoring a journalled transcript', () => {
 
     expect(state.entries[0]).toEqual({
       kind: 'user',
-      id: 'u1',
+      id: 'e1',
       text: 'review this',
       images: [{ data: 'cG5n', mimeType: 'image/png' }],
     });

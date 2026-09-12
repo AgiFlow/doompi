@@ -8,7 +8,13 @@ import {
   PLAN_REVIEW_TITLE,
 } from '../../src/types/planApi.ts';
 import { claimsPlanReviewPrompt, PlanReviewPrompt } from '../../src/web/components/PlanReviewPrompt.tsx';
-import { webPlugin } from '../../src/web/index.ts';
+import { webPlugin as scopedWebPlugin } from '../../src/web/index.ts';
+const webPlugin = {
+  id: scopedWebPlugin.id,
+  ...scopedWebPlugin.global,
+  ...scopedWebPlugin.workspace,
+  ...scopedWebPlugin.session,
+};
 
 function dialog(patch: Partial<ToolPromptDialog> = {}): ToolPromptDialog {
   return {

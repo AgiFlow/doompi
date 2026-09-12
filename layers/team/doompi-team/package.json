@@ -115,8 +115,9 @@
     "entry": "./src/exports/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
-      "hub",
-      "session"
+      "session",
+      "global",
+      "workspace"
     ]
   },
   "doompiWeb": {
@@ -125,7 +126,10 @@
       "subagent_runs",
       "subagent_catalog"
     ],
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/exports/webClient.ts",
+    "scopes": [
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

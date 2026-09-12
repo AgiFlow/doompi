@@ -361,15 +361,18 @@ describe('manual transcription client', () => {
     );
 
     expect(request).toHaveBeenCalledOnce();
-    expect(request).toHaveBeenCalledWith(`/api/plugin/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=session-1`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'audio/webm',
-        [MANUAL_TRANSCRIPTION_DURATION_HEADER]: '125',
+    expect(request).toHaveBeenCalledWith(
+      `/api/sessions/session-1/plugin/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=session-1`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'audio/webm',
+          [MANUAL_TRANSCRIPTION_DURATION_HEADER]: '125',
+        },
+        body: audio,
+        signal: controller.signal,
       },
-      body: audio,
-      signal: controller.signal,
-    });
+    );
   });
 
   it('rejects oversized audio and malformed or failed responses', async () => {

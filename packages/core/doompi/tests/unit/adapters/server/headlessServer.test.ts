@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createRemoteServiceBinding } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { Client, createClientServiceTransport, type ByteTransportFactory } from '@earendil-works/pi-client';
@@ -87,17 +90,41 @@ function websocketTransport(url: string): ByteTransportFactory {
 }
 
 const servers: HeadlessServer[] = [];
+const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.close()));
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => fs.promises.rm(directory, { recursive: true })));
 });
 
 describe('serveHeadlessServer', () => {
+  it('creates a root session through the global service without inventing a parent', async () => {
+    const createSession = vi.fn(async () => ({ sessionId: 'created', cwd: '/repo' }));
+    const hub = createHeadlessHub({ manager: {} as never, createSession });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
+    servers.push(server);
+    const request = (body: unknown, authenticated = true) =>
+      fetch(`${server.url}/api/sessions`, {
+        method: 'POST',
+        headers: authenticated ? { authorization: 'Bearer secret' } : {},
+        body: JSON.stringify(body),
+      });
+    expect((await request({ cwd: '/repo' }, false)).status).toBe(401);
+    expect((await request({ cwd: '' })).status).toBe(400);
+    expect(createSession).not.toHaveBeenCalled();
+    const response = await request({ cwd: '/repo', name: 'test', parentSessionId: 'forged' });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ sessionId: 'created' });
+    expect(createSession).toHaveBeenCalledWith({ cwd: '/repo', name: 'test' });
+    await hub.close();
+  });
+
   it('authenticates HTTP requests and keeps the retired frame route unavailable', async () => {
     const session = host();
     const requestSessionApi = vi.fn(async () => Response.json({ ok: true }));
+    const closeSession = vi.fn(async () => undefined);
     const hub = createHeadlessHub({
-      manager: { closeSession: vi.fn(async () => undefined) } as never,
+      manager: { closeSession } as never,
       requestSessionApi,
     });
     hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: '2025-01-01T00:00:00.000Z', host: session.host });
@@ -108,8 +135,26 @@ describe('serveHeadlessServer', () => {
     expect(unauthorized.status).toBe(401);
     const response = await fetch(`${server.url}/api/sessions`, { headers: { authorization: 'Bearer secret' } });
     expect(await response.json()).toEqual({
-      sessions: [{ id: 'one', name: 'One', cwd: '/repo', createdAt: '2025-01-01T00:00:00.000Z' }],
+      sessions: [
+        {
+          id: 'one',
+          name: 'One',
+          cwd: '/repo',
+          createdAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+          phase: 'idle',
+          phaseSince: '2025-01-01T00:00:00.000Z',
+          attach: 'attached',
+          pendingMessageCount: 0,
+          everPrompted: false,
+          awaitingInput: false,
+        },
+      ],
     });
+    const directories = await fetch(`${server.url}/api/directories?q=repo`, {
+      headers: { authorization: 'Bearer secret' },
+    });
+    expect(await directories.json()).toEqual({ directories: ['/repo'] });
 
     const retired = await fetch(`${server.url}/api/sessions/one/frame`, {
       method: 'POST',
@@ -118,7 +163,7 @@ describe('serveHeadlessServer', () => {
     });
     expect(retired.status).toBe(404);
 
-    const apiResponse = await fetch(`${server.url}/api/sessions/one/api/test-api/value?x=1`, {
+    const apiResponse = await fetch(`${server.url}/api/sessions/one/plugin/test-api/value?x=1`, {
       method: 'POST',
       headers: { authorization: 'Bearer secret' },
       body: 'payload',
@@ -126,8 +171,26 @@ describe('serveHeadlessServer', () => {
     expect(await apiResponse.json()).toEqual({ ok: true });
     expect(requestSessionApi).toHaveBeenCalledWith(
       { sessionId: 'one', cwd: '/repo' },
-      { basePath: 'test-api', path: '/value?x=1', method: 'POST', body: Buffer.from('payload') },
+      expect.objectContaining({
+        basePath: 'test-api',
+        path: '/value?x=1',
+        method: 'POST',
+        body: new Uint8Array(Buffer.from('payload')),
+      }),
     );
+
+    const plugin = await fetch(`${server.url}/api/plugin/test-api/value?session=one&x=2`, {
+      headers: { authorization: 'Bearer secret' },
+    });
+    expect(plugin.status).toBe(404);
+
+    const stopped = await fetch(`${server.url}/api/sessions/one`, {
+      method: 'DELETE',
+      headers: { authorization: 'Bearer secret' },
+    });
+    expect(await stopped.json()).toEqual({ ok: true });
+    expect(closeSession).toHaveBeenCalledWith('one');
+    expect(hub.session('one')).toBeUndefined();
     await hub.close();
   });
 
@@ -137,6 +200,21 @@ describe('serveHeadlessServer', () => {
     const third = host();
     const disconnected = vi.fn();
     const receive = vi.fn();
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-thread-'));
+    temporaryDirectories.push(directory);
+    const journal = path.join(directory, 'child.jsonl');
+    fs.writeFileSync(
+      journal,
+      `${JSON.stringify([
+        { kind: 'value', id: 'ignored', value: 'metadata' },
+        {
+          kind: 'entry',
+          type: 'message',
+          id: 'first',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'first' }] },
+        },
+      ])}\n`,
+    );
     let channelHost: Parameters<DoomHubChannel['start']>[0] | undefined;
     const channel: DoomHubChannel = {
       frameType: 'test_channel',
@@ -144,11 +222,33 @@ describe('serveHeadlessServer', () => {
       disconnected,
       start: (hostApi) => {
         channelHost = hostApi;
-        return { payloadFor: () => ({ ready: true }), close: () => undefined };
+        return {
+          payloadFor: () => ({ ready: true }),
+          threadJournal: (_scope, threadId) => (threadId === 'child' ? journal : undefined),
+          close: () => undefined,
+        };
       },
     };
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
-    hub.register({ id: 'one', name: 'One', cwd: '/one', createdAt: '2025-01-01T00:00:00.000Z', host: first.host });
+    hub.register({
+      id: 'one',
+      workspaceId: 'workspace-one',
+      webComposition: {
+        id: 'composition-one',
+        scope: 'session',
+        revision: 1,
+        manifestUrl: '/manifest',
+        rawAssetBaseUrl: '/raw',
+        verifiedAssetBaseUrl: '/verified',
+        entryPath: '/entry.js',
+        stylePaths: [],
+        channels: [],
+      },
+      name: 'One',
+      cwd: '/one',
+      createdAt: '2025-01-01T00:00:00.000Z',
+      host: first.host,
+    });
     hub.register({ id: 'two', name: 'Two', cwd: '/two', createdAt: 'invalid', host: second.host });
     hub.registerChannel(channel);
     const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
@@ -166,10 +266,86 @@ describe('serveHeadlessServer', () => {
     expect(hubService.state.value?.events[0]?.frame).toEqual({
       type: 'sessions_snapshot',
       sessions: [
-        { id: 'one', name: 'One', cwd: '/one', createdAt: '2025-01-01T00:00:00.000Z' },
-        { id: 'two', name: 'Two', cwd: '/two', createdAt: 'invalid' },
+        {
+          id: 'one',
+          workspaceId: 'workspace-one',
+          webComposition: {
+            id: 'composition-one',
+            scope: 'session',
+            revision: 1,
+            manifestUrl: '/manifest',
+            rawAssetBaseUrl: '/raw',
+            verifiedAssetBaseUrl: '/verified',
+            entryPath: '/entry.js',
+            stylePaths: [],
+            channels: [],
+          },
+          name: 'One',
+          cwd: '/one',
+          createdAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+          phase: 'idle',
+          phaseSince: '2025-01-01T00:00:00.000Z',
+          attach: 'attached',
+          pendingMessageCount: 0,
+          everPrompted: false,
+          awaitingInput: false,
+        },
+        {
+          id: 'two',
+          name: 'Two',
+          cwd: '/two',
+          createdAt: 'invalid',
+          updatedAt: 'invalid',
+          phase: 'idle',
+          phaseSince: 'invalid',
+          attach: 'attached',
+          pendingMessageCount: 0,
+          everPrompted: false,
+          awaitingInput: false,
+        },
       ],
     });
+
+    await hubService.send({ type: 'subscribe_thread', sessionId: 'one', threadId: 'child' }, BACKGROUND_CONTEXT);
+    await vi.waitFor(() =>
+      expect(
+        hubService.state.value?.events.some(
+          (event) =>
+            event.frame.type === 'thread_backlog' &&
+            Array.isArray(event.frame.frames) &&
+            event.frame.frames.length === 1,
+        ),
+      ).toBe(true),
+    );
+
+    first.emitFrame({ type: 'agent_start' });
+    await vi.waitFor(() =>
+      expect(
+        hubService.state.value?.events.some(
+          (event) =>
+            event.frame.type === 'session_upsert' &&
+            (event.frame.session as { phase?: string }).phase === 'turn' &&
+            (event.frame.session as { everPrompted?: boolean }).everPrompted === true,
+        ),
+      ).toBe(true),
+    );
+    fs.appendFileSync(
+      journal,
+      `${JSON.stringify({
+        kind: 'entry',
+        type: 'message',
+        id: 'second',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'second' }] },
+      })}\n`,
+    );
+    await vi.waitFor(() =>
+      expect(
+        hubService.state.value?.events.some(
+          (event) => event.frame.type === 'thread_frame' && event.frame.threadId === 'child',
+        ),
+      ).toBe(true),
+    );
 
     await hubService.send({ type: 'subscribe', sessionId: 'missing' }, BACKGROUND_CONTEXT);
     await hubService.send({ type: 'noop' }, BACKGROUND_CONTEXT);
@@ -179,7 +355,7 @@ describe('serveHeadlessServer', () => {
     );
     await hubService.send({ type: 'test_channel', sessionId: 'one', payload: { action: 'run' } }, BACKGROUND_CONTEXT);
     expect(receive).toHaveBeenCalledWith(
-      { sessionId: 'one', cwd: '/one' },
+      { sessionId: 'one', workspaceId: 'workspace-one', cwd: '/one' },
       { action: 'run' },
       expect.objectContaining({ connectionId: expect.any(String) }),
     );
@@ -302,14 +478,14 @@ describe('serveHeadlessServer', () => {
     );
     expect(
       (
-        await fetch(`${server.url}/api/sessions/one/api/INVALID/value`, {
+        await fetch(`${server.url}/api/sessions/one/plugin/INVALID/value`, {
           headers: { 'x-doompi-token': 'secret' },
         })
       ).status,
     ).toBe(400);
     expect(
       (
-        await fetch(`${server.url}/api/sessions/one/api/test/value`, {
+        await fetch(`${server.url}/api/sessions/one/plugin/test/value`, {
           method: 'HEAD',
           headers: { 'x-doompi-token': 'secret' },
         })
@@ -349,7 +525,7 @@ describe('serveHeadlessServer', () => {
     expect(malformed.status).toBe(500);
     expect(await malformed.json()).toEqual({ error: expect.any(String) });
 
-    const backendFailure = await fetch(`${server.url}/api/sessions/one/api/test/value`, {
+    const backendFailure = await fetch(`${server.url}/api/sessions/one/plugin/test/value`, {
       headers: { authorization: 'Bearer secret' },
     });
     expect(backendFailure.status).toBe(500);

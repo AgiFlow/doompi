@@ -464,6 +464,11 @@ function containsUnsafeProcessGlobal(sourceFile: ts.SourceFile): boolean {
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) && ['global', 'globalThis'].includes(node.text) && !isInTypePosition(node)) {
       const parent = node.parent;
+      const isPropertyName =
+        ((ts.isPropertyAssignment(parent) || ts.isPropertySignature(parent) || ts.isPropertyDeclaration(parent)) &&
+          parent.name === node) ||
+        (ts.isPropertyAccessExpression(parent) && parent.name === node);
+      if (isPropertyName) return;
       const isHostRuntime =
         ts.isPropertyAccessExpression(parent) &&
         parent.expression === node &&

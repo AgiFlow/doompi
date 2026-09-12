@@ -21,7 +21,8 @@ import {
 const PACKAGE_DIRECTORY_NAME = 'package';
 const PACK_FILE_SUFFIX = '.tgz';
 const MAX_COMMAND_OUTPUT = 2 * 1024 * 1024;
-const COMMAND_TIMEOUT_MS = 60_000;
+// A first repository sync also stages the independent global generation.
+const COMMAND_TIMEOUT_MS = 120_000;
 const PNPM_COMMAND = 'pnpm';
 const PACKAGE_JSON_FILE = 'package.json';
 const NON_SOURCE_FILE_SUFFIXES = ['.map', '.d.mts', '.d.cts'] as const;

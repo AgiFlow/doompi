@@ -81,6 +81,7 @@ export interface SessionWebComposition {
  * Everything the rail needs to render one session without subscribing to it.
  */
 export interface SessionSummary {
+  workspaceId?: string;
   id: string;
   name: string;
   cwd: string;

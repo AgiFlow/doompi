@@ -3,7 +3,13 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 import { LOOP_VIEW_STATUS_KEY } from '../../src/types/loopView.ts';
 import { LoopActivityItems } from '../../src/web/components/LoopsActivitySection.tsx';
-import { webPlugin } from '../../src/web/index.ts';
+import { webPlugin as scopedWebPlugin } from '../../src/web/index.ts';
+const webPlugin = {
+  id: scopedWebPlugin.id,
+  ...scopedWebPlugin.global,
+  ...scopedWebPlugin.workspace,
+  ...scopedWebPlugin.session,
+};
 
 const payload = JSON.stringify([
   { instanceId: 'starting-loop', label: 'Starting loop', detail: 'every 30s', state: 'starting' },

@@ -15,24 +15,26 @@ const LOOPS_ACTIVITY_SOURCE = {
 
 export const webPlugin = defineWebPlugin({
   id: 'loop',
-  minorModes: [{ name: 'loop', keys: 'l l', statusKey: 'doom-loop', activityGroup: 'loops', order: 30 }],
-  activityGroups: [
-    { name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, activeSource: LOOPS_ACTIVITY_SOURCE, order: 40 },
-  ],
-  activitySections: [{ id: 'loops', component: LoopsActivitySection }],
-  slots: [defineSlot({ slot: 'loop.registration' }), defineSlot({ slot: 'loop.items' })],
-  fills: [{ slot: 'loop.items', id: 'instances', component: LoopActivityItems }],
-  // The TUI's SPC l s and SPC l l: both are slash commands, so both carry over.
-  leaderBindings: [
-    {
-      id: 'loop.start',
-      path: [LOOPS_GROUP, { key: 's', label: 'start', detail: 'begin a recurring loop' }],
-      command: 'loop',
-    },
-    {
-      id: 'loop.list',
-      path: [LOOPS_GROUP, { key: 'l', label: 'list', detail: 'loops in this session' }],
-      command: 'loops',
-    },
-  ],
+  session: {
+    minorModes: [{ name: 'loop', keys: 'l l', statusKey: 'doom-loop', activityGroup: 'loops', order: 30 }],
+    activityGroups: [
+      { name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, activeSource: LOOPS_ACTIVITY_SOURCE, order: 40 },
+    ],
+    activitySections: [{ id: 'loops', component: LoopsActivitySection }],
+    slots: [defineSlot({ slot: 'loop.registration' }), defineSlot({ slot: 'loop.items' })],
+    fills: [{ slot: 'loop.items', id: 'instances', component: LoopActivityItems }],
+    // The TUI's SPC l s and SPC l l: both are slash commands, so both carry over.
+    leaderBindings: [
+      {
+        id: 'loop.start',
+        path: [LOOPS_GROUP, { key: 's', label: 'start', detail: 'begin a recurring loop' }],
+        command: 'loop',
+      },
+      {
+        id: 'loop.list',
+        path: [LOOPS_GROUP, { key: 'l', label: 'list', detail: 'loops in this session' }],
+        command: 'loops',
+      },
+    ],
+  },
 });

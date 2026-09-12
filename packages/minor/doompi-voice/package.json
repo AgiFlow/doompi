@@ -117,7 +117,8 @@
     "entry": "./src/exports/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
-      "hub",
+      "global",
+      "workspace",
       "session"
     ]
   },
@@ -127,7 +128,10 @@
       "voice_media_wake",
       "voice_ownership"
     ],
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/exports/webClient.ts",
+    "scopes": [
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

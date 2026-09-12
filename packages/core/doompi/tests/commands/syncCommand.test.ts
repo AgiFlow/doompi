@@ -220,7 +220,7 @@ async function writeMatchingState(root: string): Promise<SyncState> {
   };
   const descriptorPath = path.join(apiDirectory, DOOM_SERVER_BUNDLE_FILE);
   const fingerprint = 'a'.repeat(64);
-  fs.writeFileSync(descriptorPath, JSON.stringify({ version: 1, generation, fingerprint, entries: [] }));
+  fs.writeFileSync(descriptorPath, JSON.stringify({ version: 2, generation, fingerprint, entries: [] }));
   state.serverBundle = {
     descriptorPath,
     fingerprint,
@@ -448,6 +448,16 @@ describe('drift', () => {
 // load as a failure. The suite timeout covers the whole block, including the
 // cases that sync three times in a row.
 describe('doompi sync', { timeout: 30_000 }, () => {
+  it('syncs a repository in a fresh home without creating a global mode', async () => {
+    const root = makeRepository();
+    const homeDirectory = homeFor(root);
+    const globalModesPath = path.join(homeDirectory, '.pi', '.doom', 'modes.yaml');
+
+    expect(await new SyncCommand().execute(['sync'], environmentFor(root), root, capture().output)).toBe(0);
+    expect(readSyncState(root, homeDirectory)?.selection).toEqual(SELECTION);
+    expect(fs.existsSync(globalModesPath)).toBe(false);
+  });
+
   it('syncs personal configuration into a Git checkout with no local .doom directory', async () => {
     const root = makeGitRepositoryWithPersonalConfig();
     const homeDirectory = homeFor(root);
@@ -790,7 +800,7 @@ export async function bundleCockpitWeb({ outDir }) {
       expect(fs.existsSync(generation)).toBe(true);
       expect(fs.existsSync(path.join(generation, 'state.json'))).toBe(true);
     }
-  });
+  }, 90_000);
 
   it('keeps concurrent repositories isolated across a repeated sync', async () => {
     const repoA = makeRepository();

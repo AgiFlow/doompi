@@ -69,7 +69,10 @@ export const computerUseHeadlessFacet: HeadlessFacet = {
     };
     const selectMode = async (enabled: boolean): Promise<void> => {
       const modes = host.context.selection.minorModes.filter((mode) => mode !== COMPUTER_USE_MODE_ID);
-      await host.select({ minorModes: enabled ? [...modes, COMPUTER_USE_MODE_ID] : modes });
+      await host.changeSelection({
+        axis: 'minorModes',
+        minorModes: enabled ? [...modes, COMPUTER_USE_MODE_ID] : modes,
+      });
       publishMode();
     };
     const refresh = async (signal?: AbortSignal): Promise<void> => {
@@ -246,7 +249,8 @@ export const computerUseHeadlessFacet: HeadlessFacet = {
           await execution.client.notify({ body: result.message, level: result.level });
           if (args.trim() === 'deactivate' && client && state?.phase !== 'inactive' && state?.phase !== 'failed') {
             await client.stop();
-            await host.select({
+            await host.changeSelection({
+              axis: 'minorModes',
               minorModes: execution.selection.minorModes.filter((mode) => mode !== COMPUTER_USE_MODE_ID),
             });
             await refresh();

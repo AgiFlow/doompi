@@ -127,14 +127,17 @@ function normalizePath(packageDir: string, field: string, value: unknown): strin
 }
 
 function normalizeScopes(packageDir: string, value: unknown): readonly DoomApiScope[] {
-  if (value === undefined) return ['session', 'hub'];
+  if (value === undefined) throw new DoomServerFacetManifestError(packageDir, 'scopes must be declared explicitly.');
   if (!Array.isArray(value) || value.length === 0) {
-    throw new DoomServerFacetManifestError(packageDir, "scopes must be a non-empty array of 'session' or 'hub'.");
+    throw new DoomServerFacetManifestError(packageDir, "scopes must name 'global', 'workspace', or 'session'.");
   }
   const scopes: DoomApiScope[] = [];
   for (const scope of value) {
-    if (scope !== 'session' && scope !== 'hub') {
-      throw new DoomServerFacetManifestError(packageDir, `scope '${String(scope)}' must be 'session' or 'hub'.`);
+    if (scope !== 'session' && scope !== 'global' && scope !== 'workspace') {
+      throw new DoomServerFacetManifestError(
+        packageDir,
+        `Unknown scope '${String(scope)}'; resync for the three-level host.`,
+      );
     }
     if (!scopes.includes(scope)) scopes.push(scope);
   }

@@ -102,7 +102,7 @@ export const planHeadlessFacet: HeadlessFacet = {
     const publishMode = (): void => modeOwner?.publish(modeState());
     const selectPlan = async (enabled: boolean, nextFlavor = flavor): Promise<void> => {
       const modes = host.context.selection.minorModes.filter((mode) => mode !== PLAN_MODE_ID);
-      await host.select({ minorModes: enabled ? [...modes, PLAN_MODE_ID] : modes });
+      await host.changeSelection({ axis: 'minorModes', minorModes: enabled ? [...modes, PLAN_MODE_ID] : modes });
       flavor = nextFlavor;
       publishMode();
     };
@@ -232,7 +232,7 @@ export const planHeadlessFacet: HeadlessFacet = {
         async execute(_toolCallId, _parameters, signal) {
           try {
             signal?.throwIfAborted();
-            let content = latestMarkdown(host.context.session.entries());
+            let content = latestMarkdown(await host.context.session.entries());
             if (content === undefined) {
               const requested = await host.context.client.request(
                 {

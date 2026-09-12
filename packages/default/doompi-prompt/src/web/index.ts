@@ -20,15 +20,17 @@ import { requestMessagePromptDraft } from './lib/messagePromptDraft.ts';
 
 export const webPlugin = defineWebPlugin({
   id: 'prompts',
-  composerMenuItems: [{ id: 'template', component: PromptsComposerMenuItem }],
-  overlays: [{ id: 'dialog-host', component: PromptsDialogHost }],
-  userMessageActions: [
-    {
-      id: 'save',
-      label: 'Save as prompt',
-      icon: BookmarkPlusIcon,
-      order: 40,
-      run: requestMessagePromptDraft,
-    },
-  ],
+  session: {
+    composerMenuItems: [{ id: 'template', component: PromptsComposerMenuItem }],
+    overlays: [{ id: 'dialog-host', component: PromptsDialogHost }],
+    userMessageActions: [
+      {
+        id: 'save',
+        label: 'Save as prompt',
+        icon: BookmarkPlusIcon,
+        order: 40,
+        run: requestMessagePromptDraft,
+      },
+    ],
+  },
 });

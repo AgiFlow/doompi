@@ -46,7 +46,7 @@ describe('the author API', () => {
     expect(await fs.readFile(documentPath)).toEqual(before);
   });
   it('builds the hub proxy URL with one session query', () => {
-    expect(authorStateUrl('s/1')).toBe(`/api/plugin/${API_BASE_PATH}${AUTHOR_STATE_PATH}?session=s%2F1`);
+    expect(authorStateUrl('s/1')).toBe(`/api/sessions/s%2F1/plugin/${API_BASE_PATH}${AUTHOR_STATE_PATH}?session=s%2F1`);
   });
 
   it('serves the route through its declared package mount', async () => {

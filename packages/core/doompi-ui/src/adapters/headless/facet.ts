@@ -35,8 +35,8 @@ export const uiHeadlessFacet = {
     const inventory: DoomHeadlessResource = {
       name: 'doompi/tool-inventory',
       kind: 'context',
-      read: (execution) => {
-        const names = toolNames(execution.session.entries());
+      read: async (execution) => {
+        const names = toolNames(await execution.session.entries({ type: 'message' }));
         return names.length > 0 ? names.join('\n') : '(no tool calls recorded in this session)';
       },
     };
@@ -46,7 +46,9 @@ export const uiHeadlessFacet = {
       async execute(_args, execution) {
         await execution.client.notify({
           title: 'DoomPi tools',
-          body: toolNames(execution.session.entries()).join('\n') || '(no tool calls recorded in this session)',
+          body:
+            toolNames(await execution.session.entries({ type: 'message' })).join('\n') ||
+            '(no tool calls recorded in this session)',
           level: 'info',
         });
       },

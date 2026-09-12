@@ -115,7 +115,10 @@
   "doompiWeb": {
     "pluginId": "ask-user",
     "channels": [],
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/exports/webClient.ts",
+    "scopes": [
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

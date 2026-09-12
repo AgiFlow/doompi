@@ -1,6 +1,6 @@
 import { defineService, type Context, type ReplicatedState } from '@earendil-works/chord';
 
-export const DOOM_SESSION_SERVICE_ID = 'doompi.session.v1';
+export const DOOM_SESSION_SERVICE_ID = 'doompi.session.v2';
 export const DOOM_SESSION_MANAGEMENT_SERVICE_ID = 'doompi.session-management.v1';
 export const DOOM_COCKPIT_SERVER_ID = '646f6f6d-7069-4000-8000-000000000001';
 
@@ -114,11 +114,32 @@ export interface HubService {
 export const DoomHubService = defineService<HubService>('doompi.hub.v1');
 
 export interface SessionServiceState {
-  snapshot: SessionSnapshot;
+  snapshot: Omit<SessionSnapshot, 'transcript'>;
   progress: TranscriptProgress | null;
   presentation?: SessionPresentation;
   /** Current concurrent drafts/tools, so a fresh attachment does not depend on missed progress events. */
   inFlight?: TranscriptItem[];
+}
+
+export interface TranscriptPageRequest {
+  cursor?: string;
+  direction?: 'older' | 'newer';
+  limit?: number;
+  threadId?: string;
+}
+
+export interface TranscriptPage {
+  entries: JsonValue[];
+  startCursor: string | null;
+  endCursor: string | null;
+  olderCursor: string | null;
+  newerCursor: string | null;
+  generation: number;
+  revision: number;
+  /** Profile and other context preceding this page. */
+  context: JsonValue[];
+  /** Current drafts are separate from committed history. */
+  drafts: TranscriptItem[];
 }
 
 export interface SessionMessageArgs {
@@ -195,10 +216,6 @@ export interface SessionStateInfo {
 export interface SessionStats {
   sessionFile?: string;
   sessionId: string;
-  userMessages: number;
-  assistantMessages: number;
-  toolCalls: number;
-  toolResults: number;
   totalMessages: number;
   tokens: SessionUsage;
   cost: number;
@@ -226,6 +243,7 @@ export interface SessionCommand {
 
 export interface SessionService {
   readonly state: ReplicatedState<SessionServiceState>;
+  readTranscriptPage(args: TranscriptPageRequest, context: Context): Promise<TranscriptPage>;
   prompt(text: string, context: Context): Promise<void>;
   prompt(args: PromptArgs, context: Context): Promise<void>;
   steer(text: string, context: Context): Promise<void>;

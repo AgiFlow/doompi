@@ -74,7 +74,7 @@ export const majorModeHeadlessFacet = {
         // Reject invalid command input before requesting a capability transition.
         resolveLayers(config, requested);
         if (requested === execution.selection.majorMode) return;
-        await host.select({ majorMode: requested });
+        await host.changeSelection({ axis: 'majorMode', majorMode: requested });
       },
     };
     const registrations = [

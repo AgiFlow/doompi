@@ -106,7 +106,8 @@
     "entry": "./src/exports/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
-      "hub",
+      "global",
+      "workspace",
       "session"
     ]
   },
@@ -115,7 +116,12 @@
     "channels": [
       "computer_use_state"
     ],
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/exports/webClient.ts",
+    "scopes": [
+      "global",
+      "workspace",
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

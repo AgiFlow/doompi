@@ -22,7 +22,7 @@ export const gitServerFacet: DoomServerFacet = {
     const host = requireDoomServerHost(context);
     const headlessDisposer =
       host.scope === 'session' && readDoomHeadlessHost(context) ? gitHeadlessFacet.apply(context) : undefined;
-    if (host.scope !== 'hub') return headlessDisposer;
+    if (host.scope === 'session') return headlessDisposer;
     const registrations = [host.registerApi(api), host.registerChannel(createWorktreesChannel())];
     return () => {
       headlessDisposer?.();

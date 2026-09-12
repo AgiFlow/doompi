@@ -95,7 +95,12 @@ describe('doom-loop package boundary', () => {
     expect(project.sourceRoot).toBe('packages/minor/doompi-loop/src');
     expect(project.sourceTemplate).toBe('doom-extension');
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
-    expect(manifest.doompiWeb).toEqual({ pluginId: 'loop', channels: [], client: './src/exports/webClient.ts' });
+    expect(manifest.doompiWeb).toEqual({
+      scopes: ['session'],
+      pluginId: 'loop',
+      channels: [],
+      client: './src/exports/webClient.ts',
+    });
   });
 
   it('declares only closed ESM, CJS, and declaration targets for public entries', async () => {

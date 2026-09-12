@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   type DoomHeadlessCommand,
   type DoomHeadlessExecutionContext,
+  type DoomHeadlessHook,
   type DoomHeadlessHostService,
   type DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
@@ -48,8 +49,9 @@ function execution(repoRoot: string, profile: string): DoomHeadlessExecutionCont
 
 function profileSetup() {
   const commands: DoomHeadlessCommand[] = [];
+  const hooks: DoomHeadlessHook<'session_start'>[] = [];
   const resources: DoomHeadlessResource[] = [];
-  const select = vi.fn(async () => undefined);
+  const changeSelection = vi.fn(async () => undefined);
   const disposed = vi.fn();
   const host = {
     registerResource: (resource: DoomHeadlessResource) => {
@@ -60,10 +62,14 @@ function profileSetup() {
       commands.push(command);
       return { dispose: disposed };
     },
-    select,
+    registerHook: (hook: DoomHeadlessHook) => {
+      if (hook.event === 'session_start') hooks.push(hook as DoomHeadlessHook<'session_start'>);
+      return { dispose: disposed };
+    },
+    changeSelection,
   } as unknown as DoomHeadlessHostService;
   const dispose = profileHeadlessFacet.apply({ get: () => host } as unknown as Context);
-  return { command: commands[0]!, dispose, disposed, resources, select };
+  return { changeSelection, command: commands[0]!, dispose, disposed, hook: hooks[0]!, resources };
 }
 
 function profileResource(): DoomHeadlessResource {
@@ -124,7 +130,7 @@ describe('headless profile command', () => {
   }
 
   it('opens a typed picker and applies the selected configured profile', async () => {
-    const { command, select } = profileSetup();
+    const { changeSelection, command } = profileSetup();
     const context = configuredExecution();
     vi.mocked(context.client.request).mockResolvedValue('reviewer');
     await command.execute('', context);
@@ -136,29 +142,41 @@ describe('headless profile command', () => {
         { label: 'writer', value: 'writer', description: 'agents/writer/mara' },
       ],
     });
-    expect(select).toHaveBeenCalledExactlyOnceWith({ profile: 'reviewer' });
+    expect(changeSelection).toHaveBeenCalledExactlyOnceWith({ axis: 'profile', profile: 'reviewer' });
+    expect(context.session.appendCustomEntry).toHaveBeenCalledWith('doom-profile-identity', {
+      profile: 'reviewer',
+    });
+  });
+
+  it('publishes the selected identity when the headless session starts', async () => {
+    const { hook } = profileSetup();
+    const context = configuredExecution();
+    await hook.handle({}, context);
+    expect(context.session.appendCustomEntry).toHaveBeenCalledWith('doom-profile-identity', {
+      profile: 'writer',
+    });
   });
 
   it.each([undefined, false, '', 'writer'])(
     'does not transition for cancellation or the current profile: %s',
     async (answer) => {
-      const { command, select } = profileSetup();
+      const { changeSelection, command } = profileSetup();
       const context = configuredExecution();
       vi.mocked(context.client.request).mockResolvedValue(answer);
       await command.execute('', context);
-      expect(select).not.toHaveBeenCalled();
+      expect(changeSelection).not.toHaveBeenCalled();
     },
   );
 
   it('rejects unknown values and propagates selection failures', async () => {
-    const { command, select } = profileSetup();
+    const { changeSelection, command } = profileSetup();
     const context = configuredExecution();
     await expect(command.execute('missing', context)).rejects.toThrow('Unknown profile: missing');
     vi.mocked(context.client.request).mockResolvedValue('missing');
     await expect(command.execute('', context)).rejects.toThrow('Unknown profile: missing');
-    expect(select).not.toHaveBeenCalled();
+    expect(changeSelection).not.toHaveBeenCalled();
     vi.mocked(context.client.request).mockResolvedValue('reviewer');
-    select.mockRejectedValueOnce(new Error('Selection was not applied'));
+    changeSelection.mockRejectedValueOnce(new Error('Selection was not applied'));
     await expect(command.execute('', context)).rejects.toThrow('Selection was not applied');
   });
 });

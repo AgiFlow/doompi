@@ -51,7 +51,17 @@ async function skill(): Promise<string> {
 }
 
 function applyGoalHeadlessBehavior(host: DoomHeadlessHostService): () => void {
-  let goal = stateFromEntries(host.context.session.entries());
+  const readGoal = async () =>
+    stateFromEntries(
+      (
+        await Promise.all(
+          ['goal-state', 'goals-state'].map((customType) =>
+            Promise.resolve(host.context.session.entries({ type: 'custom', customType, limit: 1 })),
+          ),
+        )
+      ).flat(),
+    );
+  let goal: ActiveGoal | undefined;
   let modeOwner: { publish(state: MinorModeState): void; dispose(): void } | undefined;
   let toolRestriction: { dispose(): void } | undefined;
 
@@ -98,7 +108,7 @@ function applyGoalHeadlessBehavior(host: DoomHeadlessHostService): () => void {
   };
   const selectMode = async (enabled: boolean): Promise<void> => {
     const modes = host.context.selection.minorModes.filter((mode) => mode !== 'goal');
-    await host.select({ minorModes: enabled ? [...modes, 'goal'] : modes });
+    await host.changeSelection({ axis: 'minorModes', minorModes: enabled ? [...modes, 'goal'] : modes });
     updateToolRestriction();
     publishMode();
   };
@@ -276,8 +286,8 @@ function applyGoalHeadlessBehavior(host: DoomHeadlessHostService): () => void {
     }),
     host.registerHook({
       event: 'session_start',
-      handle: () => {
-        goal = stateFromEntries(host.context.session.entries());
+      handle: async () => {
+        goal = await readGoal();
         updateToolRestriction();
         publishMode();
         return undefined;

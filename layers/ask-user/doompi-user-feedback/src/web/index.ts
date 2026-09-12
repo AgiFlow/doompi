@@ -15,16 +15,18 @@ import { readPromptQuestions } from './lib/questionnaireDraft.ts';
  */
 export const webPlugin = defineWebPlugin({
   id: 'ask-user',
-  toolRenderers: [
-    {
-      tools: ['ask_user_question'],
-      message: AskUserQuestionToolMessage,
-      prompt: {
-        claims: (dialog, args) =>
-          dialog.method === 'select' &&
-          readPromptQuestions(args).some((question) => dialog.title.startsWith(question.question)),
-        component: QuestionnairePrompt,
+  session: {
+    toolRenderers: [
+      {
+        tools: ['ask_user_question'],
+        message: AskUserQuestionToolMessage,
+        prompt: {
+          claims: (dialog, args) =>
+            dialog.method === 'select' &&
+            readPromptQuestions(args).some((question) => dialog.title.startsWith(question.question)),
+          component: QuestionnairePrompt,
+        },
       },
-    },
-  ],
+    ],
+  },
 });

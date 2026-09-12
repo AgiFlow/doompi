@@ -37,7 +37,7 @@ describe('promptServerFacet', () => {
   });
 
   it('registers the exact API on the hub scope', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
     const dispose = promptServerFacet.apply(harness.context);
     expect(harness.registered).toHaveLength(1);
     expect(harness.registered[0]).toBe(api);
@@ -45,14 +45,14 @@ describe('promptServerFacet', () => {
   });
 
   it('unregisters the API when disposed', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
     promptServerFacet.apply(harness.context)?.();
     expect(harness.state.disposed).toBe(1);
   });
 
-  it('registers nothing on the session scope', () => {
+  it('registers the API independently on the session scope', () => {
     const harness = hostContext('session');
-    expect(promptServerFacet.apply(harness.context)).toBeUndefined();
-    expect(harness.registered).toEqual([]);
+    expect(typeof promptServerFacet.apply(harness.context)).toBe('function');
+    expect(harness.registered).toEqual([api]);
   });
 });

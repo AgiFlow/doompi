@@ -49,9 +49,12 @@ describe('runner log HTTP API', () => {
     await expect(fetchRunnerLog('session/a', 'run one', { grep: 'done' }, controller.signal)).resolves.toEqual({
       slice,
     });
-    expect(fetch).toHaveBeenCalledWith('/api/plugin/runner/runners/run%20one/log?session=session%2Fa&grep=done', {
-      signal: controller.signal,
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/sessions/session%2Fa/plugin/runner/runners/run%20one/log?session=session%2Fa&grep=done',
+      {
+        signal: controller.signal,
+      },
+    );
   });
 
   it('uses a structured hub error when one is returned', async () => {
@@ -138,11 +141,14 @@ describe('runner screen API', () => {
     fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
 
     await expect(sendRunnerInput('session/a', 'run one', 'x')).resolves.toBe(true);
-    expect(fetch).toHaveBeenCalledWith('/api/plugin/runner/runners/run%20one/screen/input?session=session%2Fa', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: 'x' }),
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/sessions/session%2Fa/plugin/runner/runners/run%20one/screen/input?session=session%2Fa',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: 'x' }),
+      },
+    );
 
     fetch.mockResolvedValueOnce(new Response(null, { status: 409 }));
     await expect(sendRunnerInput('s', 'r', 'x')).resolves.toBe(false);

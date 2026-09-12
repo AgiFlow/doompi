@@ -140,6 +140,7 @@ export interface EditorTextRequest {
 
 export interface SessionState {
   entries: TimelineEntry[];
+  hasNewerHistory: boolean;
   /** Running tool frames kept outside the protocol-owned transcript so prompt plugins can claim their dialogs. */
   activeTools: ToolEntry[];
   /**
@@ -213,6 +214,7 @@ export interface SessionState {
 }
 
 export const initialSessionState: SessionState = {
+  hasNewerHistory: false,
   entries: [],
   activeTools: [],
   statuses: {},
@@ -650,9 +652,14 @@ function reconcilePendingUser(state: SessionState, text: string, images: UserIma
  * message of its own. Mapping them here is what lets a transcript written
  * before this page existed read exactly like one it watched arrive.
  */
-function applyJournalMessage(state: SessionState, message: Frame): SessionState {
+function applyJournalMessage(state: SessionState, message: Frame, entryId?: string, timestamp?: number): SessionState {
   const role = asString(message.role);
-  const content = Array.isArray(message.content) ? message.content.filter(isRecord) : [];
+  const content =
+    typeof message.content === 'string'
+      ? [{ type: 'text', text: message.content }]
+      : Array.isArray(message.content)
+        ? message.content.filter(isRecord)
+        : [];
 
   if (role === 'user') {
     const text = textFromContent(content);
@@ -660,7 +667,13 @@ function applyJournalMessage(state: SessionState, message: Frame): SessionState 
     if (!text && images.length === 0) return state;
     return (
       reconcilePendingUser(state, text, images) ??
-      withEntry(state, { kind: 'user', id: `u${state.nextId}`, text, ...(images.length > 0 ? { images } : {}) })
+      withEntry(state, {
+        kind: 'user',
+        id: entryId ?? `u${state.nextId}`,
+        text,
+        ...(timestamp === undefined ? {} : { timestamp }),
+        ...(images.length > 0 ? { images } : {}),
+      })
     );
   }
 
@@ -668,10 +681,11 @@ function applyJournalMessage(state: SessionState, message: Frame): SessionState 
     const text = textFromContent(content);
     const thinking = thinkingFromContent(content);
     let next =
-      text || thinking
+      (text || thinking) && !state.entries.some((item) => item.id === entryId)
         ? withEntry(state, {
             kind: 'assistant',
-            id: `a${state.nextId}`,
+            id: entryId ?? `a${state.nextId}`,
+            ...(timestamp === undefined ? {} : { timestamp }),
             text,
             thinking,
             streaming: false,
@@ -680,11 +694,13 @@ function applyJournalMessage(state: SessionState, message: Frame): SessionState 
         : state;
     for (const block of content) {
       if (block.type !== 'toolCall') continue;
+      if (next.entries.some((item) => item.kind === 'tool' && item.toolCallId === asString(block.id))) continue;
       // The result is a later entry, so the card starts as running and the
       // result that follows settles it, exactly as a live run does.
       next = withEntry(next, {
         kind: 'tool',
-        id: `t${next.nextId}`,
+        id: entryId ? `tool:${asString(block.id)}` : `t${next.nextId}`,
+        ...(timestamp === undefined ? {} : { timestamp }),
         toolCallId: asString(block.id),
         name: asString(block.name, 'tool'),
         args: isRecord(block.arguments) ? block.arguments : {},
@@ -719,7 +735,7 @@ function applyJournalEntry(state: SessionState, entry: Frame): SessionState {
   if (entry.type !== 'message' || !isRecord(entry.message)) return state;
   const id = asString(entry.id);
   if (id === '' || state.restoredIds.includes(id)) return state;
-  const next = applyJournalMessage(state, entry.message);
+  const next = applyJournalMessage(state, entry.message, id, asNumber(entry.timestamp) ?? undefined);
   return { ...next, restoredIds: [...next.restoredIds, id] };
 }
 
@@ -828,8 +844,13 @@ function reduceFrame(state: SessionState, frame: Frame, options: ReduceSessionOp
     case 'message_update':
       return isRecord(frame.assistantMessageEvent) ? applyAssistantDelta(state, frame.assistantMessageEvent) : state;
 
-    case 'message_end':
-      return closeAssistant(state, frame.message);
+    case 'message_end': {
+      const id = asString(frame.entryId);
+      const draft = state.entries.findLast((item) => item.kind === 'assistant' && item.streaming);
+      const closed = closeAssistant(state, frame.message);
+      if (!id || !draft) return closed;
+      return { ...closed, entries: closed.entries.map((item) => (item.id === draft.id ? { ...item, id } : item)) };
+    }
 
     case 'tool_execution_start':
       return applyToolStart(state, frame);
@@ -850,7 +871,16 @@ function reduceFrame(state: SessionState, frame: Frame, options: ReduceSessionOp
 
     case 'agent_settled': {
       const closed = options.transcriptFromProtocol ? state : closeAssistant(state, undefined);
-      const marked = withEntry(closed, { kind: 'settled', id: `s${closed.nextId}`, tools: closed.toolsThisRun });
+      const timestamp = asNumber(frame.timestamp) ?? undefined;
+      const id = typeof frame.runId === 'string' ? `settled:${frame.runId}` : `s${closed.nextId}`;
+      const marked = closed.entries.some((entry) => entry.id === id)
+        ? closed
+        : withChronologicalEntry(closed, {
+            kind: 'settled',
+            id,
+            tools: closed.toolsThisRun,
+            ...(timestamp === undefined ? {} : { timestamp }),
+          });
       return { ...marked, activeTools: [], dialog: null, streaming: false, settled: true };
     }
 
@@ -953,6 +983,17 @@ function reduceFrame(state: SessionState, frame: Frame, options: ReduceSessionOp
             ...(icon === '' ? {} : { icon }),
           },
         };
+      }
+      if (entry.type === 'custom' && entry.customType === 'doompi.agent-settled') {
+        const data = isRecord(entry.data) ? entry.data : {};
+        const id = `settled:${asString(data.runId)}`;
+        if (state.entries.some((item) => item.id === id)) return state;
+        return withChronologicalEntry(state, {
+          kind: 'settled',
+          id,
+          tools: asNumber(data.tools) ?? 0,
+          timestamp: asNumber(data.timestamp) ?? asNumber(entry.timestamp) ?? undefined,
+        });
       }
       // A journalled user message is a transcript entry the protocol already
       // publishes; the catalog above is DoomPi's own and always applies.

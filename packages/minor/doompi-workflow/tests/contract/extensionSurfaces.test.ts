@@ -24,7 +24,7 @@ describe('the Pi surface', () => {
 
 describe('the API surface', () => {
   it('answers on the path a browser asks for, once the host strips the mount', async () => {
-    const mounted = mountPackageApi(api, { scope: 'hub' });
+    const mounted = mountPackageApi(api, { scope: 'global' });
 
     // A run that does not exist is the cheapest route that proves the mount:
     // the 404 is the package's own, not the harness refusing to route.
@@ -37,7 +37,7 @@ describe('the API surface', () => {
   });
 
   it('refuses a path outside its own mount', async () => {
-    const mounted = mountPackageApi(api, { scope: 'hub' });
+    const mounted = mountPackageApi(api, { scope: 'global' });
 
     expect((await mounted.fetch('/api/plugin/runner/runs')).status).toBe(404);
     mounted.close();

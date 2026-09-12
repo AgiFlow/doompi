@@ -142,7 +142,7 @@ export async function resumeSession(sessionId: string, targetSessionId: string):
 export async function searchSessionFiles(sessionId: string, query: string): Promise<string[]> {
   try {
     const response = await sealedHttpSession.fetch(
-      `/api/sessions/${encodeURIComponent(sessionId)}/files?q=${encodeURIComponent(query)}`,
+      `/api/sessions/${encodeURIComponent(sessionId)}/plugin/files/?q=${encodeURIComponent(query)}`,
     );
     if (!response.ok) return [];
     const body = (await response.json()) as { files?: unknown };

@@ -90,7 +90,7 @@ describe('@agimon-ai/doompi-workflow package shape', () => {
     expect(PACKAGE_MANIFEST.doompiServer).toEqual({
       entry: './src/exports/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['hub', 'session'],
+      scopes: ['global', 'workspace', 'session'],
     });
     expect(exports['./extensions/server']).toEqual({
       types: './dist/extensions/server.d.mts',

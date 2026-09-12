@@ -7,7 +7,7 @@ import { ThreadView } from '../features/session/ThreadView.tsx';
 import { onComposerSubmitted } from '../lib/composerSubmissions.ts';
 import { onCaptureStatus } from '../stores/captureStore.ts';
 import { acquireModelContext, disposeModelContextAdapter } from '../lib/modelContextAdapter.ts';
-import { installWebPlugins, webPluginDiagnostics } from '../lib/pluginRegistry.ts';
+import { installWebPlugins, webPluginDiagnostics, webPluginsInstalled } from '../lib/pluginRegistry.ts';
 import { startSessionWebPluginRuntime } from '../lib/pluginRuntime.ts';
 import { bindThreadRenderer } from '../lib/threadRenderer.ts';
 import { onHubConnected, sendFrame, sendHubFrame } from '../lib/transport.ts';
@@ -21,7 +21,9 @@ import { webPlugins } from './webPlugins.generated.ts';
 // Module scope: the registry is complete before the first render reads it.
 // A collision between two installed plugins never blanks the page; it is
 // resolved at install and reported here, once.
-installWebPlugins(webPlugins);
+// Vite re-evaluates this module during development without replacing the
+// registry module. Keep its live session and workspace mounts intact.
+if (!webPluginsInstalled()) installWebPlugins(webPlugins);
 for (const diagnostic of webPluginDiagnostics()) {
   console.warn(`web plugin '${diagnostic.pluginId}' ${diagnostic.kind}: ${diagnostic.message}`);
 }

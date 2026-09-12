@@ -25,6 +25,9 @@ export type {
   ModelContextToolDescriptor,
 } from '../types/modelContext.ts';
 export type {
+  WebPluginScope,
+  WebPluginContributions,
+  WebPluginMount,
   ActivityGroupContribution,
   ComposerCapture,
   ComposerSubmission,

@@ -56,7 +56,7 @@ describe('Doom package API rules', () => {
         doompiServer: {
           entry: './src/exports/extensions/server.ts',
           dist: './dist/extensions/server.mjs',
-          scopes: ['session', 'hub'],
+          scopes: ['global', 'workspace', 'session'],
         },
       });
       expect(packageApiManifest.check?.(manifest, root)).toBeNull();

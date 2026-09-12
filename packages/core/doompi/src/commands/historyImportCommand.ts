@@ -1,7 +1,9 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import { createHistoryOwnership } from '../adapters/serialization/historyOwnership.ts';
 import { protectAndImportHistory, type HistoryOwnership } from '../adapters/serialization/historyImport.ts';
 import { importV3WithPinnedUpstream } from '../adapters/serialization/jsonlSessionRepo.ts';
+import { importSqliteHistory, verifySqliteHistory } from '../adapters/serialization/sqliteHistoryImport.ts';
 import { historyImportHelp } from './cli/help.ts';
 import { wantsHelp } from './cli/router.ts';
 
@@ -10,6 +12,7 @@ const COMMAND = 'history-import';
 interface HistoryImportPaths {
   sourcePath: string;
   destinationPath: string;
+  format: 'jsonl' | 'sqlite';
 }
 
 export interface HistoryImportCommandOptions {
@@ -23,8 +26,17 @@ export interface HistoryImportOutput {
 function parsePaths(args: readonly string[], currentDirectory: string): HistoryImportPaths {
   const positional: string[] = [];
   let confirmed = false;
+  let format: 'jsonl' | 'sqlite' = 'jsonl';
 
-  for (const argument of args) {
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index]!;
+    if (argument === '--format') {
+      if (format === 'sqlite') throw new Error('--format was specified more than once');
+      const next = args[++index];
+      if (next !== 'sqlite') throw new Error('history-import --format supports sqlite');
+      format = next;
+      continue;
+    }
     if (argument === '--') throw new Error('doompi history-import does not accept passthrough arguments');
     if (argument === '--confirm-offline') {
       if (confirmed) throw new Error('--confirm-offline was specified more than once');
@@ -43,7 +55,7 @@ function parsePaths(args: readonly string[], currentDirectory: string): HistoryI
   const sourcePath = path.resolve(currentDirectory, positional[0]!);
   const destinationPath = path.resolve(currentDirectory, positional[1]!);
   if (sourcePath === destinationPath) throw new Error('Protected history destination must differ from source');
-  return { sourcePath, destinationPath };
+  return { sourcePath, destinationPath, format };
 }
 
 /** Imports one explicitly confirmed v3 journal without starting Pi or the harness. */
@@ -71,16 +83,21 @@ export class HistoryImportCommand {
     }
 
     const paths = parsePaths(args.slice(1), currentDirectory);
+    const header =
+      paths.format === 'sqlite'
+        ? (JSON.parse(fs.readFileSync(paths.sourcePath, 'utf8').split('\n', 1)[0]!) as { v?: number })
+        : undefined;
     const result = await protectAndImportHistory({
       sourcePath: paths.sourcePath,
       destinationPath: paths.destinationPath,
       owner:
         this.owner ??
         createHistoryOwnership({
-          sourceFormat: 'v3',
+          sourceFormat: header?.v === 4 ? 'v4' : 'v3',
           additionalPaths: [paths.destinationPath],
         }),
-      importStaging: importV3WithPinnedUpstream,
+      importStaging: paths.format === 'sqlite' ? importSqliteHistory : importV3WithPinnedUpstream,
+      ...(paths.format === 'sqlite' ? { verifyStaging: verifySqliteHistory } : {}),
     });
     output.write(
       `${JSON.stringify({

@@ -57,8 +57,8 @@ describe('doompiServerFacet', () => {
     expect(harness.state.disposed).toBe(1);
   });
 
-  it('does nothing in hub scope', () => {
-    const harness = hostContext('hub');
+  it('does nothing in workspace scope', () => {
+    const harness = hostContext('workspace');
     expect(doompiServerFacet.apply(harness.context)).toBeUndefined();
     expect(harness.registered).toEqual([]);
   });
@@ -109,7 +109,7 @@ describe('doompiServerFacet headless minor command', () => {
     let command: DoomHeadlessCommand | undefined;
     const headless: DoomHeadlessHostService = {
       context: {} as DoomHeadlessHostService['context'],
-      select: vi.fn(async () => undefined),
+      changeSelection: vi.fn(async () => undefined),
       registerMinorMode: vi.fn(),
       registerToolRestriction: vi.fn(),
       registerTool: vi.fn(),

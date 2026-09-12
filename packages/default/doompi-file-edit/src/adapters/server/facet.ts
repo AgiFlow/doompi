@@ -46,7 +46,8 @@ export const fileEditsServerFacet: DoomServerFacet = {
   apply(context: Context) {
     const host = requireDoomServerHost(context);
     const registrations = [] as Array<{ dispose(): void }>;
-    if (host.scope === 'hub') registrations.push(host.registerChannel(createFilesChannel()));
+    if (host.scope === 'global' || host.scope === 'workspace')
+      registrations.push(host.registerChannel(createFilesChannel()));
     if (host.scope !== 'session') {
       if (registrations.length === 0) return undefined;
       return () => {

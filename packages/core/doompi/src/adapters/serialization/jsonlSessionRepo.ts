@@ -40,7 +40,7 @@ function stableJson(value: unknown): string {
     .join(',')}}`;
 }
 
-function contentHash(record: Record<string, unknown>): string {
+export function contentHash(record: Record<string, unknown>): string {
   const { id: _id, parentId: _parentId, timestamp: _timestamp, kind: _kind, seq: _seq, ...content } = record;
   if (content.type === 'custom_message') {
     content.type = 'message';

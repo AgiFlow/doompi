@@ -5,22 +5,13 @@ import {
   DOOM_COCKPIT_SERVER_ID,
   DoomSessionManagementService,
   DoomSessionService,
-  type SessionServiceState,
 } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import { createProtocolTransport, protocolSocketUrl } from '../lib/piTransport.ts';
 import { recordBrowserPerformance } from '../lib/browserTelemetry.ts';
-import { createProtocolTimeline, toQueuedEntries } from '../lib/protocolTimeline.ts';
-import {
-  applyProtocolQueue,
-  applyProtocolTranscript,
-  releaseProtocolTranscript,
-  applySessionFrame,
-  beginSessionReplay,
-  endSessionReplay,
-  resetSessionStore,
-  refreshSessionFacts,
-} from '../stores/sessionStore.ts';
+import { createPagedTranscript } from '../stores/pagedTranscriptStore.ts';
+import { releaseProtocolTranscript, applySessionFrame, refreshSessionFacts } from '../stores/sessionStore.ts';
 import { bindSessionProtocol } from '../lib/sessionProtocolCommands.ts';
+import { bindThreadReader } from '../stores/threadStore.ts';
 
 /** How long to wait before dialling again after the protocol socket drops. */
 const RECONNECT_MS = 700;
@@ -45,6 +36,7 @@ export function startProtocolRuntime(
   let binding: RemoteServiceBinding | undefined;
   let unsubscribe: (() => void) | undefined;
   let releaseCommands: (() => void) | undefined;
+  let releaseTranscript: (() => void) | undefined;
   let boundSessionId: string | null = null;
   let focused: string | null = null;
   let retry: ReturnType<typeof setTimeout> | undefined;
@@ -64,6 +56,8 @@ export function startProtocolRuntime(
   const release = async (): Promise<void> => {
     cancelOpening?.(new Error('The session attachment was replaced.'));
     cancelOpening = undefined;
+    releaseTranscript?.();
+    releaseTranscript = undefined;
     releaseCommands?.();
     releaseCommands = undefined;
     unsubscribe?.();
@@ -102,46 +96,16 @@ export function startProtocolRuntime(
       next = undefined;
       boundSessionId = sessionId;
       releaseCommands = bindSessionProtocol(sessionId, service, (frame) => onFrame(sessionId, frame, false));
-      const timeline = createProtocolTimeline();
-      let initialized = false;
-      let revision = 0;
-      const publish = (state: SessionServiceState): void => {
-        const presentation = state.presentation;
-        if (!presentation) throw new Error('Session server does not support the unified presentation protocol.');
-        const first = presentation.events[0]?.sequence ?? presentation.revision + 1;
-        const frames = [
-          ...new Map(
-            [...presentation.projections, ...presentation.events].map((event) => [event.sequence, event]),
-          ).values(),
-        ].sort((a, b) => a.sequence - b.sequence);
-        const replay =
-          !initialized ||
-          revision < first - 1 ||
-          presentation.revision < revision ||
-          revision < (presentation.resetRevision ?? 0);
-        if (replay) {
-          beginSessionReplay(sessionId);
-          try {
-            // Reset first. Applying the snapshot before this reset loses it when
-            // a replay clears the store to remove the previous branch.
-            resetSessionStore(sessionId);
-            applyProtocolTranscript(sessionId, timeline(state), state.snapshot.phase !== 'idle');
-            applyProtocolQueue(sessionId, toQueuedEntries(state.snapshot.queuedSteer));
-            for (const event of frames) onFrame(sessionId, event.frame, true);
-          } finally {
-            endSessionReplay(sessionId);
-          }
-          initialized = true;
-        } else {
-          applyProtocolTranscript(sessionId, timeline(state), state.snapshot.phase !== 'idle');
-          applyProtocolQueue(sessionId, toQueuedEntries(state.snapshot.queuedSteer));
-          for (const event of frames) if (event.sequence > revision) onFrame(sessionId, event.frame, false);
-        }
-        revision = presentation.revision;
+      const transcript = createPagedTranscript(sessionId, service, onFrame, opening.context);
+      const releaseThreads = bindThreadReader(sessionId, service, opening.context);
+      releaseTranscript = () => {
+        transcript.dispose();
+        releaseThreads();
       };
-      const initial = service.state.value;
-      if (initial) publish(initial);
-      unsubscribe = service.state.subscribe(publish);
+      unsubscribe = service.state.subscribe((state) => transcript.publish(state));
+      if (service.state.value) transcript.publish(service.state.value);
+      await transcript.initialize();
+      if (stopped || mine !== generation) return;
       onFrame(sessionId, { type: 'bridge_status', state: 'attached' }, false);
       refreshSessionFacts(sessionId);
     } catch {

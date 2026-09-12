@@ -3,8 +3,10 @@ import {
   DOOM_HEADLESS_HOST_SERVICE,
   requireDoomHeadlessHost,
   type DoomHeadlessCommand,
+  type DoomHeadlessExecutionContext,
   type DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
+import { DOOM_PROFILE_IDENTITY_ENTRY_TYPE } from '@agimon-ai/doompi-extension-contracts/profile-identity';
 import type { Context } from '@deepseek-ai/cordis';
 import { buildPersonaPrompt, loadProfiles, resolveProfile } from '@agimon-ai/doompi-config/profiles';
 import { PROFILE_COMMAND, profileItems, profileTitle } from '../../services/profileText.ts';
@@ -29,6 +31,15 @@ async function readSelectedPersona(execution: {
   const prompt = buildPersonaPrompt(profile.personaRoot, profile.persona);
   if (!prompt) throw new Error(`Profile "${name}" has no readable persona text`);
   return prompt;
+}
+
+async function publishSelectedIdentity(execution: DoomHeadlessExecutionContext, profile: string): Promise<void> {
+  const identity = resolveProfile(execution.repoRoot, profile).identity;
+  await execution.session.appendCustomEntry(DOOM_PROFILE_IDENTITY_ENTRY_TYPE, {
+    profile,
+    ...(identity?.name === undefined ? {} : { name: identity.name }),
+    ...(identity?.icon === undefined ? {} : { icon: identity.icon }),
+  });
 }
 
 export const profileHeadlessFacet = {
@@ -68,12 +79,20 @@ export const profileHeadlessFacet = {
         }
         if (!profiles.some(({ name }) => name === requested)) throw new Error(`Unknown profile: ${requested}`);
         if (requested === execution.selection.profile) return;
-        await host.select({ profile: requested });
+        await host.changeSelection({ axis: 'profile', profile: requested });
+        await publishSelectedIdentity(execution, requested);
       },
     };
     const registrations = [
       ...resources.map((resource) => host.registerResource(resource)),
       host.registerCommand(command),
+      host.registerHook({
+        event: 'session_start',
+        async handle(_event, execution) {
+          const profile = execution.selection.profile;
+          if (profile !== undefined) await publishSelectedIdentity(execution, profile);
+        },
+      }),
     ];
     return () => {
       for (const registration of registrations) registration.dispose();

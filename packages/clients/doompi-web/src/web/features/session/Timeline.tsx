@@ -16,6 +16,7 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { Fragment, memo, type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Store } from '@tanstack/store';
 import { fileTabForPath, useActivityGroups, useFileLinks } from '../../lib/composition.ts';
 import { parseFileMentions } from '../../lib/fileMentions.ts';
@@ -32,6 +33,8 @@ import { groupSummary, groupTone, timelineUnits } from '../../lib/timelineGroups
 import { appendComposerQuote } from '../../stores/composerStore.ts';
 import {
   requestOlderHistory,
+  requestNewerHistory,
+  requestLatestHistory,
   rewindToMessage,
   sessionStoreFor,
   submitMessage,
@@ -65,7 +68,6 @@ const PAGE_BACK_THRESHOLD_PX = 400;
  * the part a reader is nearly always looking at, so there is nothing to skip
  * there; everything above it is what makes a long session slow.
  */
-const LIVE_TAIL_ENTRIES = 40;
 
 function noticeHref(line: string): string | null {
   if (/\s/u.test(line) || !/^https?:\/\//i.test(line)) return null;
@@ -474,6 +476,7 @@ function BackgroundWorkNotice() {
 export function Transcript({
   store,
   sessionId,
+  historyKey = sessionId,
   empty,
   testId = 'timeline',
   backgroundWorkActive = false,
@@ -482,13 +485,16 @@ export function Transcript({
 }: {
   store: Store<SessionState>;
   sessionId: string | null;
+  historyKey?: string | null;
   empty: ReactNode;
   testId?: string;
   backgroundWorkActive?: boolean;
   limit?: number;
   compact?: boolean;
 }) {
+  'use no memo';
   const entries = useStore(store, (state) => state.entries);
+  const hasNewerHistory = useStore(store, (state) => state.hasNewerHistory);
   // Pi's protocol transcript carries no persona, and a history window taken from
   // the middle of a session carries no identity entry either, so an entry from
   // those paths has no stamp of its own. The fold's current persona is the honest
@@ -531,6 +537,23 @@ export function Transcript({
     );
   }, [registryRevision, toolStatuses, visibleEntries]);
   const scroller = useRef<HTMLDivElement>(null);
+  const unitKey = useCallback(
+    (index: number): string => {
+      const unit = units[index]!;
+      return unit.kind === 'group' ? `group-${unit.entries[0]?.id ?? ''}` : unit.entry.id;
+    },
+    [units],
+  );
+  // This component opts out of compiler memoization because the virtualizer is mutable.
+  // oxlint-disable-next-line react/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: units.length,
+    getScrollElement: () => scroller.current,
+    estimateSize: () => 80,
+    overscan: 8,
+    getItemKey: unitKey,
+    initialRect: { width: 0, height: 800 },
+  });
   // The transcript's height as of the last entry. Whether to follow the newest
   // line is decided against this rather than against a scroll event, because
   // an event fires after the fact and a fast run can grow the transcript
@@ -543,7 +566,7 @@ export function Transcript({
   // Restoring against this is what keeps the reader's place: prepending grows
   // the scroll height above them, and the browser would otherwise leave the
   // viewport where it was and the content would appear to jump.
-  const anchor = useRef<{ height: number; top: number } | null>(null);
+  const anchor = useRef<{ key: string; offset: number } | null>(null);
   // The first entry's key. A window prepended above the reader changes it, and
   // nothing else does: an entry arriving at the bottom, or the streaming one
   // growing, leaves the top of the transcript alone. That is the difference
@@ -563,7 +586,7 @@ export function Transcript({
   const jumpToLatest = (): void => {
     following.current = true;
     setUnread(false);
-    followLatest();
+    if (!requestLatestHistory(historyKey)) followLatest();
   };
 
   /** Reaching the bottom by hand is the same as never having left it. */
@@ -575,8 +598,14 @@ export function Transcript({
     if (bottom) setUnread(false);
     // A compact fold shows a fixed tail of a live thread; asking for the
     // window above it would page history nobody can read there.
-    if (!compact && element.scrollTop <= PAGE_BACK_THRESHOLD_PX && requestOlderHistory(sessionId)) {
-      anchor.current = { height: element.scrollHeight, top: element.scrollTop };
+    if (
+      !compact &&
+      ((element.scrollTop <= PAGE_BACK_THRESHOLD_PX && requestOlderHistory(historyKey)) ||
+        (bottom && requestNewerHistory(historyKey)))
+    ) {
+      following.current = false;
+      const item = virtualizer.getVirtualItems().find((candidate) => candidate.end > element.scrollTop);
+      if (item) anchor.current = { key: String(item.key), offset: element.scrollTop - item.start };
     }
   };
 
@@ -616,9 +645,10 @@ export function Transcript({
     firstId.current = visibleEntries[0]?.id ?? null;
     if (held !== null && prepended) {
       anchor.current = null;
-      const grew = element.scrollHeight - held.height;
-      if (grew > 0) {
-        element.scrollTop = held.top + grew;
+      const index = units.findIndex((_unit, position) => unitKey(position) === held.key);
+      if (index >= 0) {
+        const offset = virtualizer.getOffsetForIndex(index, 'start')?.[0];
+        if (offset !== undefined) element.scrollTop = offset + held.offset;
         lastHeight.current = element.scrollHeight;
         return;
       }
@@ -641,7 +671,7 @@ export function Transcript({
       return;
     }
     setUnread(true);
-  }, [units, visibleEntries]);
+  }, [units, visibleEntries, virtualizer, unitKey]);
 
   if (visibleEntries.length === 0) {
     return (
@@ -660,46 +690,47 @@ export function Transcript({
         onWheel={onWheel}
         data-testid={testId}
         className={
-          compact
-            ? 'flex flex-1 flex-col gap-2 overflow-y-auto px-2.5 py-2'
-            : 'flex flex-1 flex-col gap-[18px] overflow-y-auto px-2 py-4 sm:px-[26px] sm:py-[22px]'
+          compact ? 'flex-1 overflow-y-auto px-2.5 py-2' : 'flex-1 overflow-y-auto px-2 py-4 sm:px-[26px] sm:py-[22px]'
         }
       >
-        {units.map((unit) => (
-          // Entries above the live tail are skipped for layout and paint until
-          // they are scrolled near. A long transcript is thousands of markdown
-          // blocks, diffs and tool cards, and laying all of them out on every
-          // scroll is what makes an old session crawl. The browser does this
-          // rather than a measured list in JS, because entry heights vary by an
-          // order of magnitude and a list that guesses them wrong moves the
-          // reader's place under them.
-          <div
-            key={unit.kind === 'group' ? `group-${unit.entries[0]?.id ?? ''}` : unit.entry.id}
-            className={
-              unit.index < visibleEntries.length - LIVE_TAIL_ENTRIES
-                ? '[contain-intrinsic-size:auto_64px] [content-visibility:auto]'
-                : undefined
-            }
-          >
-            {unit.kind === 'group' ? (
-              <ToolGroupRow name={unit.name} entries={unit.entries} slotProps={slotProps} statuses={toolStatuses} />
-            ) : (
-              <Entry
-                entry={unit.entry}
-                onFileLink={onFileLink}
-                pluginActions={pluginActions}
-                sessionId={sessionId}
-                sessionIdentity={sessionIdentity}
-                sessionStreaming={sessionStreaming}
-                slotProps={slotProps}
-                toolStatuses={toolStatuses}
-              />
-            )}
-          </div>
-        ))}
+        <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: '100%' }}>
+          {virtualizer.getVirtualItems().map((row) => {
+            const unit = units[row.index]!;
+            return (
+              <div
+                key={row.key}
+                data-index={row.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${row.start}px)`,
+                  paddingBottom: compact ? 8 : 18,
+                }}
+              >
+                {unit.kind === 'group' ? (
+                  <ToolGroupRow name={unit.name} entries={unit.entries} slotProps={slotProps} statuses={toolStatuses} />
+                ) : (
+                  <Entry
+                    entry={unit.entry}
+                    onFileLink={onFileLink}
+                    pluginActions={pluginActions}
+                    sessionId={sessionId}
+                    sessionIdentity={sessionIdentity}
+                    sessionStreaming={sessionStreaming}
+                    slotProps={slotProps}
+                    toolStatuses={toolStatuses}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
         {backgroundWorkActive ? <BackgroundWorkNotice /> : null}
       </div>
-      {unread && !compact ? (
+      {(unread || hasNewerHistory) && !compact ? (
         <Button
           variant="subtle"
           size="sm"

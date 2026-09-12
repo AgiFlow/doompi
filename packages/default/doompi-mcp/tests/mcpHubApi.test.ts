@@ -5,6 +5,7 @@ import { mcpHubApi } from '../src/adapters/web/mcpHubApi.ts';
 import type { McpAuthorizationFlow, McpRepositoryCatalog } from '../src/types/webMcp.ts';
 
 const REPOSITORY_ID = `repo-${'a'.repeat(24)}`;
+const WORKSPACE_ID = '4f4de908130477dba317d65a8f77f50a';
 const REPOSITORY_ROOT = '/admitted/repository';
 const FLOW_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const SYNC = { fresh: true, reasons: [] };
@@ -26,7 +27,7 @@ const FLOW: McpAuthorizationFlow = {
 function startApi(overrides: Partial<DoomApiContext> = {}) {
   vi.spyOn(McpSettingsManager.prototype, 'dispose').mockResolvedValue();
   return mcpHubApi.start({
-    scope: 'hub',
+    scope: 'global',
     onNotice: () => undefined,
     resolveRepository: () => REPOSITORY_ROOT,
     readRepositorySync: () => SYNC,
@@ -56,6 +57,17 @@ describe('mcpHubApi routes', () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual(CATALOG);
     expect(readCatalog).toHaveBeenCalledWith(REPOSITORY_ID, REPOSITORY_ROOT, SYNC);
+    handler.close();
+  });
+
+  it('accepts the workspace ID published by the three-level hub', async () => {
+    const readCatalog = vi.spyOn(McpSettingsManager.prototype, 'readCatalog').mockResolvedValue(CATALOG);
+    const handler = startApi();
+
+    const response = await handler.fetch(new Request(`http://doom.test/repository?repositoryId=${WORKSPACE_ID}`));
+
+    expect(response.status).toBe(200);
+    expect(readCatalog).toHaveBeenCalledWith(WORKSPACE_ID, REPOSITORY_ROOT, SYNC);
     handler.close();
   });
 

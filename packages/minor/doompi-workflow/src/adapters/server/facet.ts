@@ -28,7 +28,13 @@ export const workflowServerFacet: DoomServerFacet = {
     const host = requireDoomServerHost(context);
     const headlessDisposer =
       host.scope === 'session' && readDoomHeadlessHost(context) ? workflowHeadlessFacet.apply(context) : undefined;
-    if (host.scope !== 'hub') return headlessDisposer;
+    if (host.scope === 'session') {
+      const registration = host.registerApi(api);
+      return () => {
+        headlessDisposer?.();
+        registration.dispose();
+      };
+    }
     const registrations = [
       host.registerApi(api),
       host.registerChannel(createWorkflowsChannel()),

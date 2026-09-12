@@ -60,7 +60,7 @@ describe('the committed builtin web plugin registry', () => {
         path.join(dir, 'package.json'),
         JSON.stringify({
           name: `@scope/${path.basename(dir)}`,
-          doompiWeb: { pluginId: 'demo', client: `./${client}` },
+          doompiWeb: { scopes: ['session'], pluginId: 'demo', client: `./${client}` },
         }),
       );
       return dir;
@@ -95,6 +95,7 @@ describe('the committed builtin web plugin registry', () => {
       scratch.push(generated);
       const hostPlugin: DeclaredWebPlugin = {
         pluginId: 'host-fixture',
+        scopes: ['global'],
         registrationOrder: 0,
         packageDir: packageRoot,
         packageName: '@agimon-ai/doompi-web',

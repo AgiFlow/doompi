@@ -51,7 +51,11 @@ function resolveWebPackageRoot(repoRoot: string, environment: NodeJS.ProcessEnv)
   try {
     return path.dirname(createRequire(path.join(repoRoot, 'package.json')).resolve(`${WEB_PACKAGE}/package.json`));
   } catch {
-    return undefined; // Not installed for this repository; a normal composition.
+    try {
+      return path.dirname(createRequire(import.meta.url).resolve(`${WEB_PACKAGE}/package.json`));
+    } catch {
+      return undefined;
+    }
   }
 }
 
@@ -61,7 +65,7 @@ export async function syncWebBundle(input: WebBundleSyncInput): Promise<WebBundl
   const notice = input.onNotice ?? ((): void => {});
   const webRoot = (input.resolveWebRoot ?? resolveWebPackageRoot)(input.repoRoot, environment);
   if (webRoot === undefined) {
-    return { status: 'skipped', reason: `${WEB_PACKAGE} is not installed; the cockpit keeps its packaged bundle` };
+    return { status: 'skipped', reason: `${WEB_PACKAGE} is not installed; no web composition is published` };
   }
   const bundlerPath = path.join(webRoot, ...BUNDLER_ENTRY);
   if (!fs.existsSync(bundlerPath)) {

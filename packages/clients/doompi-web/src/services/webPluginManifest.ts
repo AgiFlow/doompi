@@ -29,6 +29,7 @@ export interface DeclaredWebPlugin {
   packageName: string;
   isHost: boolean;
   client: WebPluginEntryDeclaration;
+  scopes: readonly ('global' | 'workspace' | 'session')[];
 }
 
 export class WebPluginManifestError extends Error {
@@ -67,7 +68,17 @@ export function declaredPluginsOf(
   const plugins: DeclaredWebPlugin[] = [];
   for (const block of pluginBlocksOf(manifest)) {
     if (!isRecord(block)) throw new WebPluginManifestError(packageDir, 'each block must be an object.');
-    const { pluginId, registrationOrder = DEFAULT_REGISTRATION_ORDER, client } = block;
+    const { pluginId, registrationOrder = DEFAULT_REGISTRATION_ORDER, client, scopes } = block;
+    if (
+      !Array.isArray(scopes) ||
+      scopes.length === 0 ||
+      scopes.some((scope) => !['global', 'workspace', 'session'].includes(scope))
+    ) {
+      throw new WebPluginManifestError(
+        packageDir,
+        'scopes must explicitly name global, workspace, or session; resync the plugin.',
+      );
+    }
     if (typeof pluginId !== 'string' || !PLUGIN_ID_PATTERN.test(pluginId)) {
       throw new WebPluginManifestError(packageDir, `pluginId '${String(pluginId)}' must be kebab-case.`);
     }
@@ -81,6 +92,7 @@ export function declaredPluginsOf(
       packageName: typeof manifest.name === 'string' ? manifest.name : packageDir,
       isHost,
       client: normalizeEntry(packageDir, 'client', client),
+      scopes,
     });
   }
   return plugins;

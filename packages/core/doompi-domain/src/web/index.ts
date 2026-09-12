@@ -8,7 +8,16 @@ import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
  */
 export const webPlugin = defineWebPlugin({
   id: 'domain',
-  selectionAxes: [
-    { name: 'domains', command: 'domains', statusKey: 'doom-domain', emptyLabel: 'no domains', multi: true, order: 20 },
-  ],
+  session: {
+    selectionAxes: [
+      {
+        name: 'domains',
+        command: 'domains',
+        statusKey: 'doom-domain',
+        emptyLabel: 'no domains',
+        multi: true,
+        order: 20,
+      },
+    ],
+  },
 });

@@ -25,7 +25,7 @@ export const authorServerFacet: DoomServerFacet = {
   inject: [DOOM_SERVER_HOST_SERVICE],
   apply(context: Context) {
     const host = requireDoomServerHost(context);
-    if (host.scope === 'hub') {
+    if (host.scope === 'global' || host.scope === 'workspace') {
       const registration = host.registerChannel(createAuthorChannel());
       return () => registration.dispose();
     }

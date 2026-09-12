@@ -48,9 +48,9 @@ describe('authorServerFacet', () => {
     expect(harness.state.disposed).toBe(1);
   });
 
-  it('does nothing in hub scope', () => {
-    const harness = hostContext('hub');
-    expect(authorServerFacet.apply(harness.context)).toBeUndefined();
+  it('mounts its channel without the session document API globally', () => {
+    const harness = hostContext('global');
+    expect(typeof authorServerFacet.apply(harness.context)).toBe('function');
     expect(harness.registered).toEqual([]);
   });
 });

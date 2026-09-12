@@ -26,7 +26,7 @@ export const mcpServerFacet: DoomServerFacet = {
     const host = requireDoomServerHost(context);
     const headlessDisposer =
       host.scope === 'session' && readDoomHeadlessHost(context) ? mcpHeadlessFacet.apply(context) : undefined;
-    if (host.scope !== 'hub') return headlessDisposer;
+    if (host.scope !== 'global' && host.scope !== 'workspace') return headlessDisposer;
     const registration = host.registerApi(api);
     return () => {
       headlessDisposer?.();

@@ -1,6 +1,6 @@
 import type { DoomApiScope } from './packageApi.ts';
 
-export const DOOM_SERVER_BUNDLE_VERSION = 1;
+export const DOOM_SERVER_BUNDLE_VERSION = 2;
 export const DOOM_SERVER_BUNDLE_FILE = 'server.bundle.json';
 
 /** Every occurrence that can activate a package in this repository. */
@@ -73,7 +73,7 @@ export function parseDoomServerBundle(value: unknown): DoomServerBundle {
     if (
       !Array.isArray(candidate.scopes) ||
       candidate.scopes.length === 0 ||
-      candidate.scopes.some((scope) => scope !== 'session' && scope !== 'hub') ||
+      candidate.scopes.some((scope) => scope !== 'session' && scope !== 'global' && scope !== 'workspace') ||
       new Set(candidate.scopes).size !== candidate.scopes.length
     ) {
       throw new Error(`Invalid server bundle ${packageName} scopes`);

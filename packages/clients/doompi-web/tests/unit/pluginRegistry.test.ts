@@ -7,6 +7,9 @@ import {
   dispatchChannelFrame,
   dropPluginSessionData,
   HOST_SLOTS,
+  installGlobalWebPlugins,
+  installWorkspaceWebPlugins,
+  activateWebPluginWorkspace,
   installSessionWebPlugins,
   installWebPlugins,
   paletteCommands,
@@ -212,7 +215,7 @@ describe('the web plugin registry', () => {
   });
 
   it('orders repository management panels without sharing repository ownership with plugins', () => {
-    installWebPlugins([
+    const plugins = [
       defineWebPlugin({
         id: 'later',
         repositorySettingsPanel: { label: 'later', detail: 'later panel', order: 20, component: Other },
@@ -221,7 +224,13 @@ describe('the web plugin registry', () => {
         id: 'first',
         repositorySettingsPanel: { label: 'first', detail: 'first panel', order: 10, component: Panel },
       }),
-    ]);
+    ];
+    installGlobalWebPlugins(plugins.map(({ id, ...contributions }) => ({ id, global: contributions })));
+    installWorkspaceWebPlugins(
+      'repo',
+      plugins.map(({ id, ...contributions }) => ({ id, workspace: contributions })),
+    );
+    activateWebPluginWorkspace('repo');
 
     expect(pluginRepositorySettingsPanels()).toEqual([
       { pluginId: 'first', label: 'first', detail: 'first panel', order: 10, component: Panel },
@@ -230,7 +239,7 @@ describe('the web plugin registry', () => {
   });
 
   it('separates general sections from repository defaults and package panels', () => {
-    installWebPlugins([
+    const plugins = [
       defineWebPlugin({
         id: 'mcp',
         repositorySettingsPanel: { label: 'MCP servers', detail: 'servers and authorization', component: Panel },
@@ -239,7 +248,13 @@ describe('the web plugin registry', () => {
         id: 'planning',
         settingsSections: [{ id: 'planning', label: 'planning', detail: 'plan models', fields: [] }],
       }),
-    ]);
+    ];
+    installGlobalWebPlugins(plugins.map(({ id, ...contributions }) => ({ id, global: contributions })));
+    installWorkspaceWebPlugins(
+      'repo',
+      plugins.map(({ id, ...contributions }) => ({ id, workspace: contributions })),
+    );
+    activateWebPluginWorkspace('repo');
 
     expect(settingsSections('general').map((section) => section.id)).toEqual([
       'providers',
@@ -260,7 +275,7 @@ describe('the web plugin registry', () => {
   });
 
   it('places a self-drawn page in the general workspace only, in menu order', () => {
-    installWebPlugins([
+    const plugins = [
       defineWebPlugin({
         id: 'log',
         settingsPanels: [{ id: 'metrics', label: 'metrics', detail: 'tokens and cost', component: Panel }],
@@ -269,7 +284,12 @@ describe('the web plugin registry', () => {
         id: 'planning',
         settingsSections: [{ id: 'planning', label: 'planning', detail: 'plan models', fields: [] }],
       }),
+    ];
+    installGlobalWebPlugins(plugins.map(({ id, ...contributions }) => ({ id, global: contributions })));
+    installWorkspaceWebPlugins('repo', [
+      { id: 'planning', workspace: { settingsSections: plugins[1].settingsSections } },
     ]);
+    activateWebPluginWorkspace('repo');
 
     expect(settingsSections('general').map((section) => section.id)).toEqual([
       'providers',

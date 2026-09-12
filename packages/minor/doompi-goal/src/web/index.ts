@@ -15,40 +15,42 @@ const GOAL_GROUP = { key: 'g', label: 'goal', detail: 'session objective' };
  */
 export const webPlugin = defineWebPlugin({
   id: 'goal',
-  minorModes: [{ name: 'goal', keys: 'g e', statusKey: 'goal', order: 40 }],
-  // Keyed off its own status rather than the mode's, because the objective
-  // outlives the mode and the footer's terse 'goal' carries no objective to
-  // show. There is no `tab`: the goal is one line, so the row is the whole of
-  // it, and the chip stays the label for the TUI's SPC g e.
-  // A goal is durable session context, not work that continues after the agent
-  // settles, so it stays out of the running count and resume notice.
-  // hideWhenEmpty: the row is the goal, so with no goal there is nothing to
-  // put under the header, and the group waits until a session sets one.
-  activityGroups: [
-    {
-      name: 'goal',
-      keys: 'g e',
-      statusKey: GOAL_VIEW_STATUS_KEY,
-      marksBackgroundWork: false,
-      hideWhenEmpty: true,
-      order: 35,
-    },
-  ],
-  // Same name as the group: the dock renders this inside it, in place of the
-  // raw status line the session publishes.
-  activitySections: [{ id: 'goal', component: GoalActivitySection }],
-  // The goal tools' timeline cards; the TUI leaves these on Pi's default shell.
-  toolRenderers: [{ tools: [...GOAL_TOOL_NAMES], message: GoalToolMessage }],
-  leaderBindings: [
-    {
-      id: 'goal.toggle',
-      path: [GOAL_GROUP, { key: 'e', label: 'toggle', detail: 'start a session goal or end the current one' }],
-      command: 'minor goal',
-    },
-    {
-      id: 'goal.show',
-      path: [GOAL_GROUP, { key: 'g', label: 'current', detail: 'the goal being worked' }],
-      command: 'goal status',
-    },
-  ],
+  session: {
+    minorModes: [{ name: 'goal', keys: 'g e', statusKey: 'goal', order: 40 }],
+    // Keyed off its own status rather than the mode's, because the objective
+    // outlives the mode and the footer's terse 'goal' carries no objective to
+    // show. There is no `tab`: the goal is one line, so the row is the whole of
+    // it, and the chip stays the label for the TUI's SPC g e.
+    // A goal is durable session context, not work that continues after the agent
+    // settles, so it stays out of the running count and resume notice.
+    // hideWhenEmpty: the row is the goal, so with no goal there is nothing to
+    // put under the header, and the group waits until a session sets one.
+    activityGroups: [
+      {
+        name: 'goal',
+        keys: 'g e',
+        statusKey: GOAL_VIEW_STATUS_KEY,
+        marksBackgroundWork: false,
+        hideWhenEmpty: true,
+        order: 35,
+      },
+    ],
+    // Same name as the group: the dock renders this inside it, in place of the
+    // raw status line the session publishes.
+    activitySections: [{ id: 'goal', component: GoalActivitySection }],
+    // The goal tools' timeline cards; the TUI leaves these on Pi's default shell.
+    toolRenderers: [{ tools: [...GOAL_TOOL_NAMES], message: GoalToolMessage }],
+    leaderBindings: [
+      {
+        id: 'goal.toggle',
+        path: [GOAL_GROUP, { key: 'e', label: 'toggle', detail: 'start a session goal or end the current one' }],
+        command: 'minor goal',
+      },
+      {
+        id: 'goal.show',
+        path: [GOAL_GROUP, { key: 'g', label: 'current', detail: 'the goal being worked' }],
+        command: 'goal status',
+      },
+    ],
+  },
 });

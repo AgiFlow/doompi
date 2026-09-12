@@ -140,7 +140,12 @@
   "doompiWeb": {
     "pluginId": "plan",
     "channels": [],
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/exports/webClient.ts",
+    "scopes": [
+      "global",
+      "workspace",
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

@@ -13,7 +13,9 @@ declare const host: DoomHeadlessHostService;
 client.setStatus('fixture', 'ready');
 void client.request({ kind: 'input', title: 'Fixture question' });
 void execution.session.appendCustomEntry('fixture', { retained: true });
-void host.select({ majorMode: 'development', domains: [], minorModes: [] });
+void host.changeSelection({ axis: 'majorMode', majorMode: 'development' });
+// @ts-expect-error A server facet changes exactly one selection axis per operation.
+void host.changeSelection({ axis: 'domains', domains: [], profile: 'writer' });
 
 // @ts-expect-error Pi widgets are not part of the headless client.
 client.setWidget('fixture', []);

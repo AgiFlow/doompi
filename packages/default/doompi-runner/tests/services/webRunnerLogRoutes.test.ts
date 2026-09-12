@@ -17,7 +17,7 @@ import {
 describe('the runner log route contract', () => {
   it('builds a client URL that is the mount, the route, and the session to proxy to', () => {
     expect(runnerLogUrl('s1', 'r1')).toBe(
-      `/api/plugin/${RUNNER_API_BASE_PATH}${runnerLogPath('r1')}?${SESSION_QUERY_PARAM}=s1`,
+      `/api/sessions/s1/plugin/${RUNNER_API_BASE_PATH}${runnerLogPath('r1')}?${SESSION_QUERY_PARAM}=s1`,
     );
     expect(runnerLogPath('r1')).toBe('/runners/r1/log');
   });
@@ -42,12 +42,14 @@ describe('the runner log route contract', () => {
   });
 
   it('leaves an unset parameter out rather than sending an empty one', () => {
-    expect(runnerLogUrl('s1', 'r1', { grep: '' })).toBe(`/api/plugin/runner${runnerLogPath('r1')}?session=s1`);
+    expect(runnerLogUrl('s1', 'r1', { grep: '' })).toBe(
+      `/api/sessions/s1/plugin/runner${runnerLogPath('r1')}?session=s1`,
+    );
   });
 
   it('names the offset the stream resumes from, beside the session', () => {
     expect(runnerLogStreamUrl('s1', 'r1', 512)).toBe(
-      `/api/plugin/${RUNNER_API_BASE_PATH}/runners/r1/log/stream?${SESSION_QUERY_PARAM}=s1&from=512`,
+      `/api/sessions/s1/plugin/${RUNNER_API_BASE_PATH}/runners/r1/log/stream?${SESSION_QUERY_PARAM}=s1&from=512`,
     );
   });
 

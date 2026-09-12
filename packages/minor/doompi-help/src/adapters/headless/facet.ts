@@ -47,7 +47,7 @@ export const helpHeadlessFacet = {
     };
     const selectMode = async (enabled: boolean): Promise<void> => {
       const modes = host.context.selection.minorModes.filter((mode) => mode !== HELP_MODE_ID);
-      await host.select({ minorModes: enabled ? [...modes, HELP_MODE_ID] : modes });
+      await host.changeSelection({ axis: 'minorModes', minorModes: enabled ? [...modes, HELP_MODE_ID] : modes });
       modeOwner?.publish(modeState());
     };
     modeOwner = host.registerMinorMode({

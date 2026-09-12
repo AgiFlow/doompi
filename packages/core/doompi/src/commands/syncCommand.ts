@@ -61,6 +61,7 @@ import { loadDoomConfigLenient } from '../services/config/projectTrust';
 import { createLayerResolvers, PERSONA_ENTRY, resolveExtensionComposition } from '../services/extensionAssembler.ts';
 import type { HarnessOptions } from '../types/interfaces/harness';
 import { resolveDoomConfigurationRoot } from '../adapters/repository/repository';
+import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
 import { DOOMPI_DOMAINS_ENV, DOOMPI_MAJOR_MODE_ENV, DOOMPI_PROFILE_ENV } from './cli/matrixOptions.ts';
 import { parseHarnessArgs } from './cli/options.ts';
 import { SyncProgress, type SyncProgressOutput } from './syncPresenter.ts';
@@ -78,6 +79,7 @@ const SYNC_COMMAND = 'sync';
 const CHECK_OPTION = '--check';
 /** Republishes even when nothing drifted, for a generation suspected of being damaged. */
 const FORCE_OPTION = '--force';
+const GLOBAL_OPTION = '--global';
 const HARNESS_ROOT_ENV = 'DOOMPI_ROOT';
 const PERSONA_FILE_ENV = 'DOOMPI_PERSONA_FILE';
 const HOOK_EMITTER = path.join('tools', 'harness', 'emit-hooks.mjs');
@@ -172,8 +174,12 @@ function writeConfigDiagnostics(diagnostics: readonly ConfigDiagnostic[], output
  * the precedence the launcher already documents: an explicit flag wins, then an
  * exported variable, then the declared default.
  */
-export function selectionEnvironment(repoRoot: string, environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const { selection } = loadDoomConfigLenient(repoRoot).config;
+export function selectionEnvironment(
+  repoRoot: string,
+  environment: NodeJS.ProcessEnv,
+  homeDirectory?: string,
+): NodeJS.ProcessEnv {
+  const { selection } = loadDoomConfigLenient(repoRoot, homeDirectory).config;
   if (!selection) return environment;
   return {
     ...environment,
@@ -403,12 +409,41 @@ export class SyncCommand {
   ): Promise<number> {
     const check = args.includes(CHECK_OPTION);
     const force = args.includes(FORCE_OPTION);
-    const rest = args.slice(1).filter((argument) => argument !== CHECK_OPTION && argument !== FORCE_OPTION);
+    const globalOnly = args.includes(GLOBAL_OPTION);
+    const rest = args.slice(1).filter((argument) => ![CHECK_OPTION, FORCE_OPTION, GLOBAL_OPTION].includes(argument));
     const homeDirectory = this.homeDirectory ?? environment.HOME ?? os.homedir();
     const inheritedRoot = environment[HARNESS_ROOT_ENV];
-    const repoRoot = inheritedRoot
-      ? path.resolve(inheritedRoot)
-      : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
+    const globalRoot = globalDoomConfigDirectory(homeDirectory);
+    const repoRoot = globalOnly
+      ? globalRoot
+      : inheritedRoot
+        ? path.resolve(inheritedRoot)
+        : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
+    if (globalOnly && !check) fs.mkdirSync(globalRoot, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
+    // A fresh home has no global plugin selection until `doompi init` creates
+    // modes.yaml. Repository sync can still publish its own workspace bundle.
+    if (
+      !globalOnly &&
+      path.resolve(repoRoot) !== path.resolve(globalRoot) &&
+      fs.existsSync(path.join(globalRoot, 'modes.yaml'))
+    ) {
+      const globalEnvironment = { ...environment };
+      for (const key of [
+        HARNESS_ROOT_ENV,
+        HARNESS_STATE_POINTER,
+        DOOMPI_MAJOR_MODE_ENV,
+        DOOMPI_DOMAINS_ENV,
+        DOOMPI_PROFILE_ENV,
+      ])
+        delete globalEnvironment[key];
+      const globalStatus = await new SyncCommand({ settingsMode: 'embedded', homeDirectory }).execute(
+        [SYNC_COMMAND, GLOBAL_OPTION, ...(check ? [CHECK_OPTION] : []), ...(force ? [FORCE_OPTION] : [])],
+        globalEnvironment,
+        globalRoot,
+        output,
+      );
+      if (globalStatus !== 0) return globalStatus;
+    }
     // Sync tolerates keys it does not recognise so a config written against a
     // different version cannot break a build. `doompi doctor` reports them.
     const modes = loadMajorModesConfigLenient(repoRoot, homeDirectory);
@@ -417,8 +452,8 @@ export class SyncCommand {
     const defaultDomains = loadDomains(repoRoot, homeDirectory).defaultDomains;
     const parsed = parseHarnessArgs(
       rest,
-      selectionEnvironment(repoRoot, environment),
-      currentDirectory,
+      selectionEnvironment(repoRoot, environment, homeDirectory),
+      globalOnly ? globalRoot : currentDirectory,
       defaultMajorMode,
       defaultDomains,
     );

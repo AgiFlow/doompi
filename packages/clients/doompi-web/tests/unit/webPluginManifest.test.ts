@@ -24,7 +24,7 @@ function pluginPackage(manifest: Record<string, unknown>, entries: string[] = ['
 }
 
 function block(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return { pluginId: 'demo', registrationOrder: 1, client: './web/index.ts', ...overrides };
+  return { scopes: ['session'], pluginId: 'demo', registrationOrder: 1, client: './web/index.ts', ...overrides };
 }
 
 const declare = (overrides: Record<string, unknown>, dir = '/a'): ReturnType<typeof declaredPluginsOf> =>
@@ -53,7 +53,15 @@ describe('the doompiWeb manifest vocabulary', () => {
   it('defaults registrationOrder to 1000 and ignores keys it does not know', () => {
     const [plugin] = declaredPluginsOf(
       '/pkg',
-      { doompiWeb: { pluginId: 'demo', client: './web/index.ts', dependencies: ['ghost'], extra: true } },
+      {
+        doompiWeb: {
+          scopes: ['session'],
+          pluginId: 'demo',
+          client: './web/index.ts',
+          dependencies: ['ghost'],
+          extra: true,
+        },
+      },
       false,
     );
     expect(plugin?.registrationOrder).toBe(1000);
@@ -66,7 +74,11 @@ describe('the doompiWeb manifest vocabulary', () => {
       ...declare({ pluginId: 'alpha', registrationOrder: 5 }, '/a'),
       ...declare({ pluginId: 'late' }, '/l'),
       ...declare({ pluginId: 'first', registrationOrder: 1 }, '/f'),
-      ...declaredPluginsOf('/d', { doompiWeb: { pluginId: 'defaulted', client: './web/index.ts' } }, false),
+      ...declaredPluginsOf(
+        '/d',
+        { doompiWeb: { scopes: ['session'], pluginId: 'defaulted', client: './web/index.ts' } },
+        false,
+      ),
     ]);
     expect(ordered.map((plugin) => plugin.pluginId)).toEqual(['first', 'late', 'alpha', 'zeta', 'defaulted']);
   });

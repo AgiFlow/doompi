@@ -30,6 +30,12 @@ import { fetchWithStepUp } from './stepUp.ts';
 const UNREACHABLE = 'The hub is unreachable.';
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
+function workspaceRoute(route: string, workspaceId: string | undefined): string {
+  return workspaceId === undefined
+    ? route
+    : route.replace('/api/global/', `/api/workspaces/${encodeURIComponent(workspaceId)}/`);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -50,12 +56,19 @@ async function readBody(response: Response): Promise<unknown> {
 
 export type ReadConfigResult = { ok: true; config: SettingsConfigView } | { ok: false; error: string };
 
-export async function readSettingsConfig(repoRoot: string, keys: readonly string[]): Promise<ReadConfigResult> {
+export async function readSettingsConfig(
+  repoRoot: string,
+  keys: readonly string[],
+  workspaceId?: string,
+): Promise<ReadConfigResult> {
+  if (repoRoot !== '' && !workspaceId) return { ok: false, error: 'Choose an admitted workspace.' };
   const search = new URLSearchParams({ repoRoot });
   for (const key of keys) search.append('key', key);
   let response: Response;
   try {
-    response = await sealedHttpSession.fetch(`${SETTINGS_CONFIG_API_ROUTE}?${search.toString()}`);
+    response = await sealedHttpSession.fetch(
+      `${workspaceRoute(SETTINGS_CONFIG_API_ROUTE, workspaceId)}?${search.toString()}`,
+    );
   } catch {
     return { ok: false, error: UNREACHABLE };
   }
@@ -71,14 +84,22 @@ export type WriteConfigResult =
   | { ok: false; stale: true; error: string; hash?: string }
   | { ok: false; stale: false; error: string };
 
-export async function writeSettingsValue(request: SettingsWriteRequest): Promise<WriteConfigResult> {
+export async function writeSettingsValue(
+  request: SettingsWriteRequest,
+  workspaceId?: string,
+): Promise<WriteConfigResult> {
+  if (request.scope === 'repository' && !workspaceId)
+    return { ok: false, stale: false, error: 'Choose an admitted workspace.' };
   let response: Response;
   try {
-    response = await fetchWithStepUp(SETTINGS_VALUE_API_ROUTE, {
-      method: 'PUT',
-      headers: JSON_HEADERS,
-      body: JSON.stringify(request),
-    });
+    response = await fetchWithStepUp(
+      workspaceRoute(SETTINGS_VALUE_API_ROUTE, request.scope === 'repository' ? workspaceId : undefined),
+      {
+        method: 'PUT',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(request),
+      },
+    );
   } catch {
     return { ok: false, stale: false, error: UNREACHABLE };
   }
@@ -116,9 +137,8 @@ export type ReadRepositorySettingsResult =
   | { ok: false; error: string };
 
 export async function readRepositorySettings(repositoryId: string): Promise<ReadRepositorySettingsResult> {
-  const search = new URLSearchParams({ repository: repositoryId });
   try {
-    const response = await sealedHttpSession.fetch(`${SETTINGS_REPOSITORY_API_ROUTE}?${search.toString()}`);
+    const response = await sealedHttpSession.fetch(workspaceRoute(SETTINGS_REPOSITORY_API_ROUTE, repositoryId));
     const body = await readBody(response);
     if (!response.ok) return { ok: false, error: errorOf(body, `The hub answered ${String(response.status)}.`) };
     if (!isRecord(body)) return { ok: false, error: 'The hub answered with no repository settings.' };
@@ -132,11 +152,14 @@ export async function writeRepositorySelection(
   request: RepositorySelectionWriteRequest,
 ): Promise<ReadRepositorySettingsResult> {
   try {
-    const response = await fetchWithStepUp(SETTINGS_REPOSITORY_SELECTION_API_ROUTE, {
-      method: 'PUT',
-      headers: JSON_HEADERS,
-      body: JSON.stringify(request),
-    });
+    const response = await fetchWithStepUp(
+      workspaceRoute(SETTINGS_REPOSITORY_SELECTION_API_ROUTE, request.repositoryId),
+      {
+        method: 'PUT',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(request),
+      },
+    );
     const body = await readBody(response);
     if (!response.ok) return { ok: false, error: errorOf(body, `The hub answered ${String(response.status)}.`) };
     if (!isRecord(body)) return { ok: false, error: 'The hub answered with no repository settings.' };

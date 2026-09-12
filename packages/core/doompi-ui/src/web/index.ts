@@ -11,9 +11,11 @@ import { WriteToolMessage } from './components/WriteToolMessage.tsx';
  */
 export const webPlugin = defineWebPlugin({
   id: 'builtin-tools',
-  toolRenderers: [
-    { tools: ['write'], message: WriteToolMessage },
-    { tools: ['find'], message: FindToolMessage },
-    { tools: ['ls'], message: LsToolMessage },
-  ],
+  session: {
+    toolRenderers: [
+      { tools: ['write'], message: WriteToolMessage },
+      { tools: ['find'], message: FindToolMessage },
+      { tools: ['ls'], message: LsToolMessage },
+    ],
+  },
 });

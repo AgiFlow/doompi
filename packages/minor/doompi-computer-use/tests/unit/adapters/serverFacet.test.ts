@@ -52,7 +52,7 @@ describe('computerUseServerFacet', () => {
   });
 
   it('registers and disposes its live channel in hub scope', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
     const dispose = computerUseServerFacet.apply(harness.context);
     expect(typeof dispose).toBe('function');
     expect(harness.registered).toEqual([]);

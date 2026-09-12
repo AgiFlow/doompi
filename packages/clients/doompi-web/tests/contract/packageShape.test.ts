@@ -96,6 +96,7 @@ describe('doompi-web package contract', () => {
       '@tailwindcss/vite',
       '@tanstack/react-router',
       '@tanstack/react-store',
+      '@tanstack/react-virtual',
       '@tanstack/store',
       '@vitejs/plugin-react',
       '@zxing/browser',

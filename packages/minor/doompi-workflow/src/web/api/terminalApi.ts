@@ -1,6 +1,5 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import {
-  WORKFLOW_HUB_SESSION_QUERY_PARAM,
   WORKFLOW_SCREEN_EVENT,
   workflowRunPath,
   type WorkflowArtifactContentResponse,
@@ -21,8 +20,7 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
 
 function sessionUrl(path: string, sessionId?: string | null): string {
   if (sessionId === undefined || sessionId === null) return path;
-  const separator = path.includes('?') ? '&' : '?';
-  return `${path}${separator}${WORKFLOW_HUB_SESSION_QUERY_PARAM}=${encodeURIComponent(sessionId)}`;
+  return path.replace('/api/global/plugin/', `/api/sessions/${encodeURIComponent(sessionId)}/plugin/`);
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

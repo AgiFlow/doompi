@@ -49,7 +49,7 @@ describe('planServerFacet', () => {
   });
 
   it('does nothing in hub scope', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
     expect(planServerFacet.apply(harness.context)).toBeUndefined();
     expect(harness.registered).toEqual([]);
   });

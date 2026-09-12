@@ -7,6 +7,8 @@ import {
 import type { Context } from '@deepseek-ai/cordis';
 import { readFile } from 'node:fs/promises';
 
+import { settingsApi } from './settingsApi.ts';
+
 const PACKAGE_ROOT = new URL('../../../', import.meta.url);
 
 function selectionMetadata(execution: {
@@ -37,7 +39,10 @@ export const configServerFacet: DoomServerFacet = {
   inject: [DOOM_SERVER_HOST_SERVICE],
   apply(context: Context) {
     const server = requireDoomServerHost(context);
-    if (server.scope !== 'session') return undefined;
+    if (server.scope !== 'session') {
+      const registration = server.registerApi(settingsApi);
+      return () => registration.dispose();
+    }
     const host = readDoomHeadlessHost(context);
     if (!host) return undefined;
     const configResource: DoomHeadlessResource = {

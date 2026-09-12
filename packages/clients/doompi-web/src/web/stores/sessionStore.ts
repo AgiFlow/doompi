@@ -47,6 +47,13 @@ import { activeSessionId, sessionsStore } from './sessionsStore.ts';
  * subscribed to; the rail runs on hub summaries alone.
  */
 const stores = new Map<string, Store<SessionState>>();
+const MAX_CACHED_ENTRIES = 500;
+
+export function setHasNewerHistory(sessionId: string, value: boolean): void {
+  sessionStoreFor(sessionId).setState((state) =>
+    state.hasNewerHistory === value ? state : { ...state, hasNewerHistory: value },
+  );
+}
 /** Sessions whose visible transcript is currently supplied by Pi's protocol. */
 const protocolTranscripts = new Set<string>();
 /** Projection keys changed after a subscription snapshot was requested. */
@@ -102,7 +109,16 @@ export function applySessionFrame(
   // The presentation stream owns live and replay projection until the typed session
   // service publishes a snapshot. Once it does, only DoomPi-specific frames reduce here.
   const transcriptFromProtocol = protocolTranscripts.has(sessionId);
-  sessionStoreFor(sessionId).setState((state) => reduceSession(state, frame, { transcriptFromProtocol }));
+  sessionStoreFor(sessionId).setState((state) => {
+    const next = reduceSession(state, frame, { transcriptFromProtocol });
+    if (!historyReaders.has(sessionId)) return next;
+    return {
+      ...next,
+      entries: next.entries.length > MAX_CACHED_ENTRIES ? next.entries.slice(-MAX_CACHED_ENTRIES) : next.entries,
+      restoredIds:
+        next.restoredIds.length > MAX_CACHED_ENTRIES ? next.restoredIds.slice(-MAX_CACHED_ENTRIES) : next.restoredIds,
+    };
+  });
 }
 
 /** Lets the presentation stream resume transcript ownership after a typed service failure. */
@@ -129,6 +145,25 @@ interface HistoryState {
 }
 
 const history = new Map<string, HistoryState>();
+const historyReaders = new Map<string, (direction: 'older' | 'newer' | 'latest') => boolean>();
+
+export function bindHistoryReader(
+  sessionId: string,
+  reader: (direction: 'older' | 'newer' | 'latest') => boolean,
+): () => void {
+  historyReaders.set(sessionId, reader);
+  return () => {
+    if (historyReaders.get(sessionId) === reader) historyReaders.delete(sessionId);
+  };
+}
+
+export function requestNewerHistory(sessionId: string | null): boolean {
+  return sessionId !== null && (historyReaders.get(sessionId)?.('newer') ?? false);
+}
+
+export function requestLatestHistory(sessionId: string | null): boolean {
+  return sessionId !== null && (historyReaders.get(sessionId)?.('latest') ?? false);
+}
 const historyStore = new Store<Record<string, HistoryState>>({});
 const NO_HISTORY: HistoryState = { cursor: null, hasMore: true, loading: false, pages: 0 };
 
@@ -155,6 +190,8 @@ export function useHasOlderHistory(sessionId: string | null): boolean {
  */
 export function requestOlderHistory(sessionId: string | null): boolean {
   if (sessionId === null) return false;
+  const reader = historyReaders.get(sessionId);
+  if (reader) return reader('older');
   const current = historyFor(sessionId);
   if (current.loading || !current.hasMore) return false;
   setHistory(sessionId, { ...current, loading: true });
@@ -510,7 +547,6 @@ export function abortRun(sessionId: string | null = activeSessionId()): void {
 export function runCommand(name: string, sessionId: string | null = activeSessionId()): void {
   if (sessionId === null) return;
   const slashed = name.startsWith('/') ? name : `/${name}`;
-  sessionStoreFor(sessionId).setState((state) => appendUserPrompt(state, slashed));
   sendFrame(sessionId, builtinCommandFrame(slashed) ?? promptCommand(slashed));
 }
 

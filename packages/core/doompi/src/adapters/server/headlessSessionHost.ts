@@ -418,16 +418,17 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     cwd: options.cwd,
     sessionId: options.sessionId,
     ...(options.parentSessionId === undefined ? {} : { parentSessionId: options.parentSessionId }),
-    historyOwnership: createHistoryOwnership(),
+    storage: 'sqlite',
+    historyOwnership: createHistoryOwnership({ sourceFormat: 'sqlite' }),
     sessionName: parsed.name ?? options.sessionName,
     ...(parsed.session === undefined ? {} : { sessionPath: parsed.session }),
-    ...(parsed.sessionDir === undefined ? {} : { sessionsRoot: parsed.sessionDir }),
+    sessionsRoot: parsed.sessionDir ?? path.join(agentDir, 'server', 'sessions'),
     models: modelRuntime,
     model: resolved.model,
     ...(resolved.thinkingLevel === undefined ? {} : { thinkingLevel: resolved.thinkingLevel }),
     beforeModelRequest: async ({ phase }) => {
       if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
-      if (phase === 'turn') await headlessHost.select({});
+      if (phase === 'turn') await headlessHost.inheritSelection((await options.inheritedSelection?.()) ?? {});
     },
     transformContext: async (event) => {
       if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
@@ -617,10 +618,13 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   });
 
   let currentModel = await runtime.lane.getModel(BACKGROUND_CONTEXT);
-  let entries: readonly AnyRecord[] = (await runtime.lane.findEntries(
-    { order: 'oldestFirst' },
-    BACKGROUND_CONTEXT,
-  )) as unknown as AnyRecord[];
+  const entries = (
+    await Promise.all(
+      [DOOM_CONTEXT_ENTRY_TYPE, DOOM_MINOR_MODE_ENTRY_TYPE].map((customType) =>
+        runtime.lane.findEntries({ type: 'custom', customType, order: 'newestFirst', limit: 1 }, BACKGROUND_CONTEXT),
+      ),
+    )
+  ).flat() as unknown as AnyRecord[];
   const listeners = new Set<(frame: SessionFrame) => void>();
   const initialSelection = restoreHeadlessSelection(entries, options.selection);
   let headlessHost: HeadlessHost | undefined;
@@ -633,6 +637,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   const childSessionProvider = createHeadlessChildSessionServiceProvider({
     parentSessionId: runtime.sessionId,
     cwd: options.cwd,
+    sessionsRoot: parsed.sessionDir ?? path.join(agentDir, 'server', 'sessions'),
     models: modelRuntime,
     defaultModel: () => currentModel,
   });
@@ -646,13 +651,13 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     model: currentModel === undefined ? undefined : modelIdentity(currentModel),
     selection,
     session: {
-      entries: () => entries,
+      entries: async (query) =>
+        (await runtime.lane.findEntries(
+          { ...query, order: query?.limit === undefined ? 'oldestFirst' : 'newestFirst' },
+          BACKGROUND_CONTEXT,
+        )) as unknown as AnyRecord[],
       async appendCustomEntry(type, data) {
         await runtime.appendCustomEntry(type, data);
-        entries = (await runtime.lane.findEntries(
-          { order: 'oldestFirst' },
-          BACKGROUND_CONTEXT,
-        )) as unknown as AnyRecord[];
       },
       prompt: (text, delivery) =>
         delivery === 'steer'
@@ -663,13 +668,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       abort: () => runtime.abort(),
       compact: (instructions) => runtime.compact(instructions),
       async activity() {
-        const watch = await runtime.lane.watch(BACKGROUND_CONTEXT);
-        try {
-          const snapshot = await watch.resnapshot(BACKGROUND_CONTEXT);
-          return { hasPendingMessages: snapshot.queues.length > 0, isIdle: snapshot.operation === null };
-        } finally {
-          watch.unsubscribe();
-        }
+        const state = await runtime.readState();
+        return {
+          hasPendingMessages: Number(state.pendingMessageCount) > 0,
+          isIdle: !state.isStreaming && !state.isCompacting,
+        };
       },
     },
     shutdown: () => stop(),
@@ -678,10 +681,6 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   client = createHeadlessClient({
     appendCustomEntry: async (type, data) => {
       await runtime.appendCustomEntry(type, data);
-      entries = (await runtime.lane.findEntries(
-        { order: 'oldestFirst' },
-        BACKGROUND_CONTEXT,
-      )) as unknown as AnyRecord[];
     },
     emitFrame: (frame) => emitTo(listeners, frame),
   });
@@ -694,9 +693,6 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         await headlessHost.dispatchHook('model_select', { model: currentModel });
       }
     }
-    const eventRecord = event as unknown as AnyRecord;
-    if (event.type === 'entry_added' && eventRecord.entry !== undefined && typeof eventRecord.entry === 'object')
-      entries = [...entries, eventRecord.entry as AnyRecord];
     const hook = eventHook(event.type);
     if (headlessHost !== undefined && hook !== undefined && headlessHost.status.ready)
       await headlessHost.dispatchHook(hook, event as unknown as AnyRecord);
@@ -711,6 +707,14 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     headlessHost = new HeadlessHost(root, {
       candidates: options.candidates,
       selection: initialSelection,
+      selectionOverrides: [
+        ...new Set([
+          ...(options.selectionOverrides ?? []),
+          ...(['majorMode', 'domains', 'profile'] as const).filter(
+            (axis) => JSON.stringify(initialSelection[axis]) !== JSON.stringify(options.selection[axis]),
+          ),
+        ]),
+      ],
       context: executionContext,
       resolveSelection: options.resolveSelection,
       applyTools: async (tools) =>

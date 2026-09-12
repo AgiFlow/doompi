@@ -22,7 +22,10 @@ describe('skill headless facet', () => {
     temporaryDirectories.push(cwd);
     const skillDirectory = path.join(cwd, '.doom', 'skills', 'example');
     await mkdir(skillDirectory, { recursive: true });
-    await writeFile(path.join(skillDirectory, 'SKILL.md'), '# Example skill\n');
+    await writeFile(
+      path.join(skillDirectory, 'SKILL.md'),
+      '---\nname: example\ndescription: Example skill\n---\n# Example skill\n',
+    );
 
     const resources: DoomHeadlessResource[] = [];
     let command: DoomHeadlessCommand | undefined;
@@ -33,16 +36,17 @@ describe('skill headless facet', () => {
       return { dispose };
     };
     const host = {
+      context: { cwd, repoRoot: cwd, environment: {} },
       registerResource: (resource: DoomHeadlessResource) => {
         resources.push(resource);
         return registration();
       },
       registerCommand: (registered: DoomHeadlessCommand) => {
-        command = registered;
+        if (registered.name === 'skills') command = registered;
         return registration();
       },
     } as unknown as DoomHeadlessHostService;
-    const close = skillHeadlessFacet.apply({ get: () => host } as unknown as Context);
+    const close = await skillHeadlessFacet.apply({ get: () => host } as unknown as Context);
     if (!command) throw new Error('Skill command was not registered');
     const notify = vi.fn();
     const prompt = vi.fn();
@@ -50,14 +54,15 @@ describe('skill headless facet', () => {
 
     const catalog = resources.find(({ name }) => name === 'doompi/skills');
     if (!catalog) throw new Error('Skill catalog resource was not registered');
-    expect(await catalog.read(execution)).toContain('# Example skill');
+    expect(await catalog.read(execution)).toContain('Example skill');
 
     await command.execute('', execution);
     expect(notify).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'DoomPi skills', body: expect.stringContaining('# Example skill') }),
+      expect.objectContaining({ title: 'DoomPi skills', body: expect.stringContaining('Example skill') }),
     );
     await command.execute('example', execution);
-    expect(prompt).toHaveBeenCalledWith('/skill:example');
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('<skill name="example"'));
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('# Example skill'));
 
     close();
     expect(disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);

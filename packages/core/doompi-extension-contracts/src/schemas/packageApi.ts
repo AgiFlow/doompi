@@ -18,9 +18,35 @@ export interface DoomRepositorySyncView {
 }
 
 /** Where an API runs: inside one session's server, or in the machine-wide hub. */
-export type DoomApiScope = 'session' | 'hub';
+export type DoomApiScope = 'global' | 'workspace' | 'session';
 
-export const DOOM_API_SCOPES: readonly DoomApiScope[] = ['session', 'hub'];
+export const DOOM_API_SCOPES: readonly DoomApiScope[] = ['global', 'workspace', 'session'];
+
+/** Identity of an independently mounted plugin host. */
+export type DoomApiMount =
+  | { scope: 'global' }
+  | { scope: 'workspace'; workspaceId: string }
+  | { scope: 'session'; sessionId: string };
+
+/** Immutable browser contribution generation paired with a server mount. */
+export interface DoomWebComposition {
+  id: string;
+  scope: DoomApiScope;
+  revision: number;
+  manifestUrl: string;
+  rawAssetBaseUrl: string;
+  verifiedAssetBaseUrl: string;
+  entryPath: string;
+  stylePaths: string[];
+  channels: string[];
+}
+
+/** Canonical public prefix. Scope selection never falls through to a parent. */
+export function doomApiMountPath(mount: DoomApiMount): string {
+  if (mount.scope === 'global') return '/api/global/plugin';
+  if (mount.scope === 'workspace') return `/api/workspaces/${encodeURIComponent(mount.workspaceId)}/plugin`;
+  return `/api/sessions/${encodeURIComponent(mount.sessionId)}/plugin`;
+}
 
 /** The segment an API is mounted under, below this prefix. */
 export const DOOM_API_ROUTE_PREFIX = '/api/plugin';
@@ -86,6 +112,12 @@ export interface DoomOAuthRedirect {
 /** What the host tells an API about itself when it starts. */
 export interface DoomApiContext {
   scope: DoomApiScope;
+  /** Stable, opaque identity shared by sessions in one canonical worktree. */
+  workspaceId?: string;
+  /** Canonical admitted workspace root, absent from global mounts. */
+  workspaceRoot?: string;
+  /** Explicit host home, never selected by a remote request. */
+  homeDirectory?: string;
   /** The session this host serves; absent for a hub-scoped API. */
   sessionId?: string;
   /** The session's working directory; absent for a hub-scoped API. */
@@ -103,6 +135,10 @@ export interface DoomApiContext {
   resolveRepository?(repositoryId: string): string | undefined;
   /** Reads the admitted repository's sync projection without exposing its state path. */
   readRepositorySync?(repositoryId: string): DoomRepositorySyncView | undefined;
+  /** Admitted workspaces available to this mount. */
+  repositories?(): readonly { id: string; name: string; path: string; active: boolean }[];
+  /** Publish a successful config write to the owning mount's refresh lifecycle. */
+  configurationChanged?(): void;
   /**
    * Borrows the hub's OAuth redirect surface. Undefined when the hub cannot
    * currently serve one, in which case the package keeps its own behaviour.

@@ -44,7 +44,7 @@ import {
   resetSessionStore,
   seedHistoryCursor,
 } from '../stores/sessionStore.ts';
-import { dropThreads, resubscribeThreads, threadStoreKey } from '../stores/threadStore.ts';
+import { applyThreadTranscriptFrame, dropThreads, resubscribeThreads, threadStoreKey } from '../stores/threadStore.ts';
 import { dropTransientTabs } from '../stores/transientTabsStore.ts';
 import {
   applySessionBacklog,
@@ -176,7 +176,11 @@ export function startSessionRuntime(): () => void {
   const syncSubscription = (force = false): void => {
     const { activeId, byId } = sessionsStore.state;
     const target = activeId !== null && activeId in byId ? activeId : null;
-    const focused = focusSessionWebPlugins(target, target === null ? undefined : byId[target].summary.webComposition);
+    const focused = focusSessionWebPlugins(
+      target,
+      target === null ? undefined : byId[target].summary.webComposition,
+      target === null ? undefined : byId[target].summary.workspaceId,
+    );
     protocol.focus(target);
     if (deferredVoiceOwnershipFrame !== undefined && target !== null && pendingVoiceTransferTarget === target) {
       const deferred = deferredVoiceOwnershipFrame;
@@ -313,6 +317,10 @@ export function startSessionRuntime(): () => void {
           if (!Array.isArray(frame.frames)) return;
           const key = threadStoreKey(frame.sessionId, frame.threadId);
           const frames = frame.frames.filter(isRecord);
+          if (
+            frames.some((item) => applyThreadTranscriptFrame(frame.sessionId as string, frame.threadId as string, item))
+          )
+            return;
           batch(() => {
             resetSessionStore(key);
             for (const replayed of frames) applyThreadFrame(key, replayed);
@@ -322,6 +330,7 @@ export function startSessionRuntime(): () => void {
         case THREAD_FRAME_TYPE: {
           if (typeof frame.sessionId !== 'string' || typeof frame.threadId !== 'string') return;
           if (!isRecord(frame.frame)) return;
+          if (applyThreadTranscriptFrame(frame.sessionId, frame.threadId, frame.frame)) return;
           applyThreadFrame(threadStoreKey(frame.sessionId, frame.threadId), frame.frame);
           return;
         }

@@ -828,6 +828,12 @@ worker.addEventListener('fetch', (event) => {
     return;
   }
   if (trustedNetworkPath(url.pathname)) return;
+  // The development shell stays on Vite; plugin assets above still require verification.
+  if (
+    new URLSearchParams(worker.location.search).get('development') === '1' &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(worker.location.hostname)
+  )
+    return;
   // A navigation is the one moment a returning device is reliably online and
   // between pages, so it is where the pin gets questioned. Scheduled here, while
   // the event is certainly still extendable, and kept off the response path: a

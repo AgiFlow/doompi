@@ -877,6 +877,7 @@ describe('session actions', () => {
     runCommand('domains');
     runCommand('/mode');
     expect(sent.map((frame) => (frame.frame as Frame).message)).toEqual(['/domains', '/mode']);
+    expect(sessionStoreFor('s1').state.entries).toEqual([]);
   });
 
   it('send a built-in as its own frame rather than as prompt text', () => {
@@ -895,9 +896,9 @@ describe('session actions', () => {
       { type: 'prompt', message: '/mode' },
       { type: 'prompt', message: 'read @src/a.ts and summarise it' },
     ]);
-    // The command is still echoed into the timeline, so the run has a cause.
+    // UI-triggered commands stay out of the transcript. Commands typed in the
+    // composer still appear with the rest of the user's prompts.
     expect(sessionStoreFor('s1').state.entries).toEqual([
-      expect.objectContaining({ kind: 'user', text: '/compact' }),
       expect.objectContaining({ kind: 'user', text: '/compact keep the API decisions' }),
       expect.objectContaining({ kind: 'user', text: '/compact\n\nfolded attachment text' }),
       expect.objectContaining({ kind: 'user', text: '/compaction is a word' }),

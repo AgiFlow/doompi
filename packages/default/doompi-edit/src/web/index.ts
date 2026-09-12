@@ -7,5 +7,7 @@ import { EditToolMessage } from './components/EditToolMessage.tsx';
  */
 export const webPlugin = defineWebPlugin({
   id: 'edit',
-  toolRenderers: [{ tools: ['edit'], message: EditToolMessage }],
+  session: {
+    toolRenderers: [{ tools: ['edit'], message: EditToolMessage }],
+  },
 });

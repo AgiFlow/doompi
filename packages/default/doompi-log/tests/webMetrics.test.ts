@@ -29,15 +29,15 @@ describe('the metrics wire vocabulary', () => {
   });
 
   it('builds a metrics url, adding focus only when there is one', () => {
-    expect(metricsUrl('model', 'week')).toBe('/api/plugin/log/metrics?dimension=model&period=week');
-    expect(metricsUrl('model', 'week', '')).toBe('/api/plugin/log/metrics?dimension=model&period=week');
+    expect(metricsUrl('model', 'week')).toBe('/api/global/plugin/log/metrics?dimension=model&period=week');
+    expect(metricsUrl('model', 'week', '')).toBe('/api/global/plugin/log/metrics?dimension=model&period=week');
     expect(metricsUrl('model', 'week', 'a b')).toContain('focus=a+b');
   });
 
   it('builds an issues url with no query when unfocused', () => {
-    expect(issuesUrl()).toBe('/api/plugin/log/issues');
-    expect(issuesUrl('')).toBe('/api/plugin/log/issues');
-    expect(issuesUrl('id_abc')).toBe('/api/plugin/log/issues?focus=id_abc');
+    expect(issuesUrl()).toBe('/api/global/plugin/log/issues');
+    expect(issuesUrl('')).toBe('/api/global/plugin/log/issues');
+    expect(issuesUrl('id_abc')).toBe('/api/global/plugin/log/issues?focus=id_abc');
   });
 
   it('tells an unavailable body from a report', () => {

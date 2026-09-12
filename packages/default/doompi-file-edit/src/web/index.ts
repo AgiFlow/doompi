@@ -21,31 +21,33 @@ const EXTENSION_GROUP = { key: 'e', label: 'extension', detail: 'tools, skills a
 /** The named export the generated plugin registry imports. */
 export const webPlugin = defineWebPlugin({
   id: 'files',
-  channels: [filesChannel],
-  // hideWhenEmpty: a session that has changed nothing has no files to list,
-  // and the group returns as soon as it changes one. Changed files are session
-  // history, not background work, so their presence never marks the session busy.
-  activityGroups: [
-    {
-      name: 'files',
-      keys: 'e f',
-      statusKey: filesStatusKey,
-      hideWhenEmpty: true,
-      marksBackgroundWork: false,
-      order: 15,
-    },
-  ],
-  // Same name as the group: the dock renders this inside it, in place of the
-  // session's one-line summary.
-  activitySections: [{ id: 'files', component: FilesActivitySection }],
-  // The same files, where a message names one: the dock is not the only place
-  // a reader meets a path.
-  fileLinks,
-  leaderBindings: [
-    {
-      id: 'file-edit.files',
-      path: [EXTENSION_GROUP, { key: 'f', label: 'files', detail: 'files this session changed' }],
-      command: 'file-edits',
-    },
-  ],
+  session: {
+    channels: [filesChannel],
+    // hideWhenEmpty: a session that has changed nothing has no files to list,
+    // and the group returns as soon as it changes one. Changed files are session
+    // history, not background work, so their presence never marks the session busy.
+    activityGroups: [
+      {
+        name: 'files',
+        keys: 'e f',
+        statusKey: filesStatusKey,
+        hideWhenEmpty: true,
+        marksBackgroundWork: false,
+        order: 15,
+      },
+    ],
+    // Same name as the group: the dock renders this inside it, in place of the
+    // session's one-line summary.
+    activitySections: [{ id: 'files', component: FilesActivitySection }],
+    // The same files, where a message names one: the dock is not the only place
+    // a reader meets a path.
+    fileLinks,
+    leaderBindings: [
+      {
+        id: 'file-edit.files',
+        path: [EXTENSION_GROUP, { key: 'f', label: 'files', detail: 'files this session changed' }],
+        command: 'file-edits',
+      },
+    ],
+  },
 });

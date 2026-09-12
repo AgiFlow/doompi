@@ -19,6 +19,8 @@ import {
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub.ts';
 import { createAgentServerService, type DoomSessionMetadata } from './piSessionRuntime.ts';
 import { createPiWebSocketListener, type PiListenerSocket } from './piWebSocketListener.ts';
+import type { ServerTelemetry } from './serverTelemetry.ts';
+import { createThreadJournals, type ThreadJournals } from './threadJournals.ts';
 
 const MAX_HUB_EVENTS = 1_024;
 
@@ -28,9 +30,19 @@ type HubFrame = { type: string; [key: string]: JsonValue };
 function sessionView(session: HeadlessHubSession): Record<string, JsonValue> {
   return {
     id: session.id,
+    ...(session.workspaceId === undefined ? {} : { workspaceId: session.workspaceId }),
+    ...(session.webComposition === undefined ? {} : { webComposition: { ...session.webComposition } }),
     name: session.name,
     cwd: session.cwd,
     createdAt: session.createdAt,
+    updatedAt: session.updatedAt ?? session.createdAt,
+    phase: session.phase ?? 'idle',
+    phaseSince: session.phaseSince ?? session.createdAt,
+    attach: 'attached',
+    pendingMessageCount: session.pendingMessageCount ?? 0,
+    everPrompted: session.everPrompted ?? false,
+    awaitingInput: session.awaitingInput ?? false,
+    ...(session.lastSettledAt === undefined ? {} : { lastSettledAt: session.lastSettledAt }),
     ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
     ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
   };
@@ -68,17 +80,19 @@ function frameOf(event: HeadlessHubEvent): HubFrame {
   }
 }
 
-function managementHost(hub: HeadlessHub): RoutedServerServiceHost {
+function managementHost(hub: HeadlessHub, threads: ThreadJournals): RoutedServerServiceHost {
   return {
     attachClient(presentation) {
       const connectionId = randomUUID();
       const subscriptions = new Set<string>();
+      const threadSubscriptions = new Set<string>();
       const state = replicatedState<{ events: ProtocolEvent[] }>({ events: [] });
       let sequence = 0;
       let released = false;
       const publish = (frame: HubFrame): void => {
         sequence += 1;
-        state.state.events = [...state.state.events, { sequence, frame }].slice(-MAX_HUB_EVENTS);
+        state.state.events.push({ sequence, frame });
+        if (state.state.events.length > MAX_HUB_EVENTS) state.state.events.shift();
         state.publish(BACKGROUND_CONTEXT);
       };
       publish({ type: 'sessions_snapshot', sessions: hub.snapshot().map(sessionView) });
@@ -88,6 +102,15 @@ function managementHost(hub: HeadlessHub): RoutedServerServiceHost {
           if (event.connectionId !== undefined && event.connectionId !== connectionId) return;
         }
         publish(frameOf(event));
+      });
+      const stopThreadFrames = threads.onFrame((event) => {
+        if (!threadSubscriptions.has(`${event.sessionId}\n${event.threadId}`)) return;
+        publish({
+          type: 'thread_frame',
+          sessionId: event.sessionId,
+          threadId: event.threadId,
+          frame: event.frame as JsonValue,
+        });
       });
       const service: HubService = {
         state,
@@ -101,6 +124,24 @@ function managementHost(hub: HeadlessHub): RoutedServerServiceHost {
           }
           if (frame.type === 'unsubscribe' && sessionId !== undefined) {
             subscriptions.delete(sessionId);
+            return;
+          }
+          const threadId = typeof frame.threadId === 'string' ? frame.threadId : undefined;
+          if ((frame.type === 'subscribe_thread' || frame.type === 'unsubscribe_thread') && threadId !== undefined) {
+            const key = `${sessionId ?? ''}\n${threadId}`;
+            if (sessionId === undefined) return;
+            if (frame.type === 'unsubscribe_thread') {
+              if (threadSubscriptions.delete(key)) threads.unsubscribe(sessionId, threadId);
+              return;
+            }
+            if (threadSubscriptions.has(key)) return;
+            threadSubscriptions.add(key);
+            publish({
+              type: 'thread_backlog',
+              sessionId,
+              threadId,
+              frames: threads.subscribe(sessionId, threadId) as JsonValue,
+            });
             return;
           }
           if (sessionId !== undefined) hub.receiveChannel(sessionId, frame.type, frame.payload, connectionId);
@@ -123,6 +164,12 @@ function managementHost(hub: HeadlessHub): RoutedServerServiceHost {
           if (released) return;
           released = true;
           stopEvents();
+          stopThreadFrames();
+          for (const key of threadSubscriptions) {
+            const [sessionId, threadId] = key.split('\n');
+            if (sessionId !== undefined && threadId !== undefined) threads.unsubscribe(sessionId, threadId);
+          }
+          threadSubscriptions.clear();
           subscriptions.clear();
           hub.disconnectChannels(connectionId);
           provider.dispose();
@@ -133,7 +180,11 @@ function managementHost(hub: HeadlessHub): RoutedServerServiceHost {
   };
 }
 
-function protocolHost(hub: HeadlessHub): ServerHost<DoomSessionMetadata> {
+function protocolHost(
+  hub: HeadlessHub,
+  threads: ThreadJournals,
+  telemetry?: ServerTelemetry,
+): ServerHost<DoomSessionMetadata> {
   const serviceHosts = new Map<string, ReturnType<typeof createAgentServerService>>();
   const serviceHost = (session: HeadlessHubSession): ReturnType<typeof createAgentServerService> => {
     const current = serviceHosts.get(session.id);
@@ -142,16 +193,18 @@ function protocolHost(hub: HeadlessHub): ServerHost<DoomSessionMetadata> {
       runtime: session.host.runtime,
       onPresentationFrame: (listener) => session.host.onPresentationFrame(listener),
       respondToExtensionUi: (frame) => session.host.respondToExtensionUi(frame),
+      readThreadTranscript: (threadId, request, context) => threads.readPage(session.id, threadId, request, context),
       sessionId: session.id,
       sessionName: session.name,
       cwd: session.cwd,
       createdAt: metadataOf(session).createdAt,
+      telemetry,
     });
     serviceHosts.set(session.id, created);
     return created;
   };
   return {
-    serverServices: managementHost(hub),
+    serverServices: managementHost(hub, threads),
     async resolveSession(sessionId) {
       const session = hub.session(sessionId);
       if (!session) throw new SessionNotFoundError(`No session ${sessionId}`);
@@ -173,16 +226,23 @@ export interface HeadlessProtocol {
 /** Hosts the browser's Pi 0.85 connection directly over the process-local hub. */
 export async function createHeadlessProtocol(options: {
   hub: HeadlessHub;
+  telemetry?: ServerTelemetry;
   onNotice?: (message: string) => void;
 }): Promise<HeadlessProtocol> {
   const listener = createPiWebSocketListener({ onError: (error) => options.onNotice?.(error.message) });
-  const server = await new Server(protocolHost(options.hub), {
+  const threads = createThreadJournals({
+    resolve: (sessionId, threadId) => options.hub.threadJournal(sessionId, threadId),
+  });
+  const server = await new Server(protocolHost(options.hub, threads, options.telemetry), {
     listeners: [listener],
     serverId: DOOM_COCKPIT_SERVER_ID,
     onError: (error) => options.onNotice?.(`headless protocol error (${error.message})`),
   }).start();
   return {
     accept: (socket) => listener.accept(socket),
-    close: () => server.close(),
+    async close() {
+      threads.close();
+      await server.close();
+    },
   };
 }

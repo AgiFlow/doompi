@@ -218,9 +218,10 @@ interface ContributedSettingsProps {
   scope: SettingsScope;
   /** The repository whose config is being edited; empty at global scope. */
   repoRoot?: string;
+  workspaceId?: string;
 }
 
-export function ContributedSettings({ section, scope, repoRoot = '' }: ContributedSettingsProps) {
+export function ContributedSettings({ section, scope, repoRoot = '', workspaceId }: ContributedSettingsProps) {
   const [models, setModels] = useState<readonly SettingsModel[]>([]);
   const [config, setConfig] = useState<SettingsConfigView | undefined>(undefined);
   const [drafts, setDrafts] = useState<Record<string, string | null>>({});
@@ -250,7 +251,7 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
   // The global file stands on its own, so this runs with or without a
   // repository; only the repository half of the answer depends on one.
   const reload = useCallback(async (): Promise<void> => {
-    const result = await readSettingsConfig(repoRoot, keys);
+    const result = await readSettingsConfig(repoRoot, keys, workspaceId);
     if (result.ok) {
       setConfig(result.config);
       setError('');
@@ -258,7 +259,7 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
     }
     setConfig(undefined);
     setError(result.error);
-  }, [keys, repoRoot]);
+  }, [keys, repoRoot, workspaceId]);
 
   useEffect(() => {
     // eslint-disable-next-line react/set-state-in-effect -- reads the hub's settings config file over HTTP; the state is the response.
@@ -292,7 +293,7 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
     let hash = config.hashes[scope];
     let saved = 0;
     for (const [index, write] of planned.entries()) {
-      const result = await writeSettingsValue({ ...write, expectedHash: hash });
+      const result = await writeSettingsValue({ ...write, expectedHash: hash }, workspaceId);
       if (!result.ok) {
         setError(`${dirtyFields[index]?.label ?? 'setting'}: ${result.error}`);
         break;
@@ -310,7 +311,7 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
       for (const sessionId of Object.keys(sessionsStore.state.byId)) refreshSessionFacts(sessionId);
     }
     await reload();
-  }, [config, dirtyFields, drafts, reload, repoRoot, scope, section.fields]);
+  }, [config, dirtyFields, drafts, reload, repoRoot, scope, section.fields, workspaceId]);
 
   const discard = useCallback((): void => {
     setDrafts({});

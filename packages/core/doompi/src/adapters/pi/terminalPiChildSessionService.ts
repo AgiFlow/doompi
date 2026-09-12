@@ -70,6 +70,7 @@ type DirectHarnessTool = Parameters<DirectHarnessRuntime['replaceTools']>[0][num
 async function installIntercom(
   runtime: DirectHarnessRuntime,
   intercom: DoomChildSessionIntercom | undefined,
+  tools: DirectHarnessTool[],
 ): Promise<void> {
   if (!intercom) return;
   const tool = intercom.bindRuntime(childRuntime(runtime));
@@ -79,7 +80,7 @@ async function installIntercom(
     execute: (operationId: string, params: unknown, signal: AbortSignal, onUpdate: unknown) =>
       tool.execute(operationId, params, signal, onUpdate as never),
   } as unknown as DirectHarnessTool;
-  await runtime.replaceTools([adapted]);
+  await runtime.replaceTools([...tools, adapted]);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -274,7 +275,7 @@ export function createTerminalPiChildSessionService(
       let runtime: DirectHarnessRuntime | undefined;
       try {
         runtime = await runtimeFactory(runtimeOptions);
-        await installIntercom(runtime, request.intercom);
+        await installIntercom(runtime, request.intercom, (runtimeOptions.tools ?? []) as DirectHarnessTool[]);
         return childRuntime(runtime, request.intercom);
       } catch (error) {
         let failure: unknown = error;

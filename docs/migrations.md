@@ -12,6 +12,38 @@ DoomPi has exactly three extension surfaces:
 
 The headless process owns the hub, session runtimes, native child services, package APIs, authentication, authorization, history, bounded replay, and event projection. Web and desktop are clients of that process. Explicit Claude and Codex runtimes remain external subprocesses and never fall back automatically to a native runtime.
 
+## Global, workspace, and session mounts
+
+Both server facets and browser contributions declare their supported scopes. Scope is independent of the three extension surfaces above.
+
+| Mount     | Configuration and ownership                                                                      | API prefix                                        |
+| --------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| Global    | Home `~/.pi/.doom`; one server lifetime, available without sessions                              | `/api/global/plugin/:basePath/*`                  |
+| Workspace | Canonical repository or worktree; repository config overlays home config; shared by its sessions | `/api/workspaces/:workspaceId/plugin/:basePath/*` |
+| Session   | Workspace defaults plus explicit session overrides; live session UI and APIs                     | `/api/sessions/:sessionId/plugin/:basePath/*`     |
+
+A route resolves only in its named mount. A missing workspace or session handler never falls back to a parent handler. Workspace admission canonicalizes the root and uses its worktree identity. Workspace mounts remain available after their last session closes. Explicit removal rejects workspaces with live sessions, then disposes their APIs, channels, and published browser composition.
+
+Server descriptor version 2 declares `global`, `workspace`, and `session` scopes. Browser manifests declare `doompiWeb.scopes`, and their exported definition has corresponding `global`, `workspace`, and `session` contribution groups. Each group starts and stops with its mount. Session focus changes visibility without stopping other mounted sessions. Visible contributions combine parent and child groups, with matching child contribution keys taking precedence.
+
+The global provider/model API is owned by core. Config settings mount globally for home writes and in workspaces for repository writes. Repository settings writes require the admitted workspace ID and a current file hash. Session file completion and live controls mount on the owning session. Explicit session selection changes override only the selected axis; inherited defaults are re-read at turn admission.
+
+`GET /api/compositions` advertises the global and admitted workspace browser compositions. Session summaries advertise their workspace ID and session composition. Each composition uses a signed, immutable asset snapshot and has its own disposal lifetime. Development verification requires an operator-supplied `VITE_DOOMPI_PLUGIN_PUBLIC_KEY`; production uses the trusted service-worker verification path.
+
+Use checkout-scoped commands:
+
+```sh
+node ./packages/core/doompi/dist/bin/cli.mjs sync --global
+node ./packages/core/doompi/dist/bin/cli.mjs sync
+node ./packages/core/doompi/dist/bin/serve.mjs --auth-token-file /path/to/token --no-session --web 7447
+```
+
+Normal repository sync also prepares the global composition. `--no-session` starts global services without admitting a workspace. `POST /api/workspaces` with `{ "root": "/path/to/repository" }` admits a synchronized workspace; `DELETE /api/workspaces/:workspaceId` explicitly removes an unused mount.
+
+When local package code changes without a config or package-version change, use `sync --force` before restarting the headless process. A plain sync may report the package set as current while an older compiled facet remains in the active generation. Keep test runs in a separate Doom home and on separate server and web ports when another cockpit is active.
+
+Automatic replacement of already mounted server generations after a new sync remains an acceptance item. Scope declarations and browser replacement support alone do not establish end-to-end hot reload.
+
 ## Server declaration and loading
 
 A package publishes one server facet through its manifest:
@@ -59,11 +91,13 @@ Prompt admission and model settlement are separate. A caller may wait only for a
 
 The browser-facing Pi endpoint is `/api/pi`. It implements the authenticated Pi 0.85 client protocol and isolates every connection to its admitted session and grants. The old command channel and its response-correlation framing are not part of the architecture. Deprecated command endpoints stay unavailable.
 
+Server root sessions and native server children persist their canonical transcript in SQLite. Terminal sessions and terminal-native children keep their Pi-compatible JSONL history. The server reads ordered, cursor-based transcript pages from SQLite and sends only a bounded live tail through the protocol. The browser retains a bounded page window, loads older and newer pages as needed, and virtualizes the timeline. A refresh reconstructs the visible page from SQLite without loading the full conversation. Session usage and context summaries use stored aggregates rather than scanning every transcript entry after each streamed update. Transcript-page and browser render durations are emitted to Log Sink telemetry.
+
 ## Native Team children
 
-The Pi terminal and headless session host inject typed child-session services. Native Team children run in process, inherit the allowed composition, and publish lifecycle and presentation events directly. Every child has a separate journal and an explicit capability ceiling.
+The Pi terminal and headless session host inject typed child-session services. Native Team children run in process, inherit the allowed composition, and publish lifecycle and presentation events directly. Every child has a separate journal and an explicit capability ceiling. The direct harness projects the standard `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls` tools from the child request, then applies exclusions and the allowed and required tool ceiling. Resolved skill metadata is already part of the child system prompt. Installing Team intercom preserves those projected tools.
 
-Unsupported native child configuration fails with a specific error. It does not spawn Pi as a fallback. Explicit Claude and Codex backends continue to use their declared external process adapters.
+Unsupported native child extensions, MCP direct tools, unknown tools, and external profiles fail with a specific error. They do not spawn Pi as a fallback. Explicit Claude and Codex backends continue to use their declared external process adapters.
 
 Child removal is bounded and idempotent. It cancels active work, disposes subscriptions, withdraws projections, and preserves the child's journal according to history policy.
 
@@ -103,6 +137,14 @@ doompi history-import <v3-source> <v4-destination> --confirm-offline
 ```
 
 Import preserves a byte-exact original and publishes a distinct v4 journal while holding cooperative source and destination leases. A recorded process identifier does not prove that an unmanaged writer stopped. Ambiguous locks are never reclaimed automatically.
+
+For a server-owned SQLite destination, choose the format explicitly while all writers are stopped:
+
+```sh
+node ./packages/core/doompi/dist/bin/cli.mjs history-import <v3-or-v4-source> <sqlite-destination> --format sqlite --confirm-offline
+```
+
+This is an offline import. Opening a server session does not silently convert a JSONL history file.
 
 If import or export reports an ambiguous lock, preserve the history, lock, and migration-state files. Independently prove that every writer stopped before explicitly archiving or removing a stale lock. If provenance or quiescence cannot be proved, leave the files untouched for manual investigation.
 

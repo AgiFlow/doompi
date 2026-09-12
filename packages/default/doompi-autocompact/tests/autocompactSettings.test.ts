@@ -6,7 +6,13 @@ import {
   AUTOCOMPACT_THINKING_LEVELS,
 } from '../src/types/autocompactSettings.ts';
 import { autocompactSettingsSection } from '../src/web/lib/autocompactSettings.ts';
-import { webPlugin } from '../src/web/index.ts';
+import { webPlugin as scopedWebPlugin } from '../src/web/index.ts';
+const webPlugin = {
+  id: scopedWebPlugin.id,
+  ...scopedWebPlugin.global,
+  ...scopedWebPlugin.workspace,
+  ...scopedWebPlugin.session,
+};
 
 /** The value a settings field of this shape would send, in the string form the page writes. */
 function sampleValue(id: string): string {

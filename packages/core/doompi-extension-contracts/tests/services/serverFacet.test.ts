@@ -133,8 +133,8 @@ describe('createDoomServerHost', () => {
     const notices: string[] = [];
     const close = vi.fn();
     const host = createDoomServerHost({
-      scope: 'hub',
-      context: { scope: 'hub', cwd: '/repo', onNotice: (message) => notices.push(message) },
+      scope: 'global',
+      context: { scope: 'global', cwd: '/repo', onNotice: (message) => notices.push(message) },
       channelHost: channelHost(),
     });
     const channel = { frameType: 'tasks', start: () => ({ payloadFor: () => undefined, close }) };
@@ -155,30 +155,24 @@ describe('declaredServerFacetsOf', () => {
     expect(declaredServerFacetsOf('/pkg', { name: '@scope/pkg' })).toEqual([]);
   });
 
-  it('defaults to both scopes', () => {
-    expect(
+  it('requires explicit mount ownership', () => {
+    expect(() =>
       declaredServerFacetsOf('/pkg', manifest({ entry: './src/extensions/server.ts', dist: './dist/server.mjs' })),
-    ).toEqual([
-      {
-        packageName: '@scope/pkg',
-        packageDir: '/pkg',
-        entry: './src/extensions/server.ts',
-        dist: './dist/server.mjs',
-        scopes: ['session', 'hub'],
-      },
-    ]);
+    ).toThrow('scopes must be declared explicitly');
   });
 
   it('keeps a declared scope list and drops repeats', () => {
     const [facet] = declaredServerFacetsOf(
       '/pkg',
-      manifest({ entry: './src/e.ts', dist: './dist/e.mjs', scopes: ['hub', 'hub'] }),
+      manifest({ entry: './src/e.ts', dist: './dist/e.mjs', scopes: ['workspace', 'workspace'] }),
     );
-    expect(facet?.scopes).toEqual(['hub']);
+    expect(facet?.scopes).toEqual(['workspace']);
   });
 
   it('falls back to the directory when the manifest has no name', () => {
-    const [facet] = declaredServerFacetsOf('/pkg', { doompiServer: { entry: './src/e.ts', dist: './dist/e.mjs' } });
+    const [facet] = declaredServerFacetsOf('/pkg', {
+      doompiServer: { entry: './src/e.ts', dist: './dist/e.mjs', scopes: ['session'] },
+    });
     expect(facet?.packageName).toBe('/pkg');
   });
 
@@ -192,12 +186,8 @@ describe('declaredServerFacetsOf', () => {
     ],
     ['a missing dist', { entry: './src/e.ts' }, 'dist is required'],
     ['a bare dist', { entry: './src/e.ts', dist: 'dist/e.mjs' }, 'dist must be a package-relative'],
-    [
-      'an empty scope list',
-      { entry: './src/e.ts', dist: './dist/e.mjs', scopes: [] },
-      'scopes must be a non-empty array',
-    ],
-    ['an unknown scope', { entry: './src/e.ts', dist: './dist/e.mjs', scopes: ['tui'] }, "scope 'tui' must be"],
+    ['an empty scope list', { entry: './src/e.ts', dist: './dist/e.mjs', scopes: [] }, 'scopes must name'],
+    ['an unknown scope', { entry: './src/e.ts', dist: './dist/e.mjs', scopes: ['tui'] }, "Unknown scope 'tui'"],
   ])('rejects %s', (_name, block, message) => {
     expect(() => declaredServerFacetsOf('/pkg', manifest(block))).toThrow(DoomServerFacetManifestError);
     expect(() => declaredServerFacetsOf('/pkg', manifest(block))).toThrow(message as string);

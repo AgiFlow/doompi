@@ -74,7 +74,7 @@ describe('@agimon-ai/doompi-log package shape', () => {
     expect(PACKAGE_MANIFEST.doompiServer).toEqual({
       entry: './src/exports/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['hub', 'session'],
+      scopes: ['global', 'workspace', 'session'],
     });
     expect(objectValue(exports)['./extensions/server']).toEqual({
       types: './dist/extensions/server.d.mts',

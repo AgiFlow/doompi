@@ -224,6 +224,8 @@ describe('direct AgentHarness runtime', () => {
       listCommands: () => [{ name: 'known', description: 'Known command' }],
       dispatchCommand,
     });
+    const frames: Record<string, unknown>[] = [];
+    runtime.onPresentationFrame((frame) => frames.push(frame));
     try {
       expect(runtime.listCommands()).toEqual([{ name: 'known', description: 'Known command' }]);
       await expect(runtime.availableModels()).resolves.toEqual([model]);
@@ -249,8 +251,10 @@ describe('direct AgentHarness runtime', () => {
       await expect(runtime.clearQueue()).resolves.toEqual({ steering: [], followUp: [] });
       await runtime.prompt('normal prompt');
       expect(streamSimple).toHaveBeenCalledOnce();
+      frames.length = 0;
       await runtime.prompt('/known argument');
       expect(dispatchCommand).toHaveBeenCalledWith('/known argument');
+      expect(frames).not.toContainEqual(expect.objectContaining({ type: 'agent_settled' }));
     } finally {
       await runtime.dispose();
       await repository.close(BACKGROUND_CONTEXT);

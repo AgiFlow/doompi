@@ -59,6 +59,7 @@ function deferred(): Deferred {
 interface FixtureOptions {
   applyTools?: (tools: readonly DoomHeadlessTool[]) => void | Promise<void>;
   applyResources?: (resources: readonly ResolvedHeadlessResource[]) => void | Promise<void>;
+  onApplied?: HeadlessHostOptions['onApplied'];
   featureHookGate?: { entered: () => void; release: Promise<void> };
   featureHookEvent?: 'before_agent_start' | 'context' | 'tool_call';
   featureToolGate?: { entered: () => void; release: Promise<void> };
@@ -141,6 +142,7 @@ async function createFixture(options: FixtureOptions = {}): Promise<Fixture> {
     context,
     applyTools: options.applyTools ?? defaultApplyTools,
     applyResources: options.applyResources ?? defaultApplyResources,
+    ...(options.onApplied === undefined ? {} : { onApplied: options.onApplied }),
     onError,
   };
   await root
@@ -481,21 +483,21 @@ describe('HeadlessHost selection lifecycle (host-unit evidence)', () => {
 
   it('recovers readiness after an application failure without losing retained state', async () => {
     let fail = false;
-    const applyTools = vi.fn((_tools: readonly DoomHeadlessTool[]) => {
-      if (fail) throw new Error('tool sink unavailable');
+    const applyResources = vi.fn((_resources: readonly ResolvedHeadlessResource[]) => {
+      if (fail) throw new Error('resource sink unavailable');
       return undefined;
     });
-    const fixture = await createFixture({ applyTools });
+    const fixture = await createFixture({ applyResources });
     try {
       await fixture.host.select({});
       const previousContext = fixture.host.context;
       fail = true;
-      await expect(fixture.host.select({ profile: 'failed' })).rejects.toThrow('tool sink unavailable');
+      await expect(fixture.host.select({ profile: 'failed' })).rejects.toThrow('resource sink unavailable');
       expect(fixture.host.status).toMatchObject({
         ready: false,
         appliedRevision: 1,
         requestedRevision: 2,
-        error: 'Kernel slots failed to apply: tools: tool sink unavailable',
+        error: 'Kernel slots failed to apply: resources: resource sink unavailable',
       });
       expect(() => fixture.host.listCommands()).toThrow('blocked');
       expect(fixture.host.context.selection).toEqual(previousContext.selection);
@@ -509,6 +511,19 @@ describe('HeadlessHost selection lifecycle (host-unit evidence)', () => {
         'recovered',
         expect.objectContaining({ selection: expect.objectContaining({ profile: 'recovered' }) }),
       );
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('does not republish unchanged composition during turn admission', async () => {
+    const onApplied = vi.fn();
+    const fixture = await createFixture({ onApplied });
+    try {
+      await fixture.host.select({});
+      expect(onApplied).toHaveBeenCalledOnce();
+      await fixture.host.select({});
+      expect(onApplied).toHaveBeenCalledOnce();
     } finally {
       await fixture.close();
     }

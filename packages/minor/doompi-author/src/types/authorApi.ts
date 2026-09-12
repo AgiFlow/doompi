@@ -16,7 +16,7 @@ export const AUTHOR_BRIDGE_ROUTES = {
 
 export function authorStateUrl(sessionId: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `/api/plugin/${API_BASE_PATH}${AUTHOR_STATE_PATH}?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${AUTHOR_STATE_PATH}?${search.toString()}`;
 }
 
 export interface AuthorSessionView {

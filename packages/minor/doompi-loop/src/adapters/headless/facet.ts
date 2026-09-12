@@ -180,7 +180,7 @@ export const loopHeadlessFacet: HeadlessFacet = {
         execution.signal.throwIfAborted();
         if (actionId === 'start' && !launchers) {
           const modes = host.context.selection.minorModes.filter((mode) => mode !== MODE_ID);
-          await host.select({ minorModes: [...modes, MODE_ID] });
+          await host.changeSelection({ axis: 'minorModes', minorModes: [...modes, MODE_ID] });
         }
         if (!launchers) throw new Error('Loop activity is not active.');
         if (actionId === 'start') {
@@ -198,7 +198,7 @@ export const loopHeadlessFacet: HeadlessFacet = {
           );
           if (stopped && launchers.listInstances().length === 0) {
             const modes = host.context.selection.minorModes.filter((mode) => mode !== MODE_ID);
-            await host.select({ minorModes: modes });
+            await host.changeSelection({ axis: 'minorModes', minorModes: modes });
           }
           publishMode();
           return { message: stopped ? 'Loop stopped.' : 'Loop instance was not active.' };

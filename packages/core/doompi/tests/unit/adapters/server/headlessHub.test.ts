@@ -1,11 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DoomHubChannel } from '@agimon-ai/doompi-extension-contracts/hub-channel';
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import {
+  DOOM_SERVER_HOST_SERVICE,
+  requireDoomServerHost,
+  type DoomServerFacet,
+} from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { HeadlessSessionHost } from '../../../../src/types/server/headlessSessionHost.ts';
+import type { DirectHarnessFrame } from '../../../../src/types/server/directHarnessRuntime.ts';
 import { createHeadlessHub } from '../../../../src/adapters/server/headlessHub.ts';
 
 function host() {
   let resolveExit: ((code: number) => void) | undefined;
+  let presentationListener: ((frame: DirectHarnessFrame) => void) | undefined;
   const runtime = {
     exited: new Promise<number>((resolve) => {
       resolveExit = resolve;
@@ -18,17 +24,111 @@ function host() {
       prepareFacets: () => undefined,
       activateFacets: async () => undefined,
       canDispatch: () => true,
-      onPresentationFrame: () => () => undefined,
+      onPresentationFrame: (listener) => {
+        presentationListener = listener;
+        return () => {
+          if (presentationListener === listener) presentationListener = undefined;
+        };
+      },
       respondToExtensionUi: () => false,
       dispose: vi.fn(async () => undefined),
     } satisfies HeadlessSessionHost,
     exit(code = 0) {
       resolveExit?.(code);
     },
+    emitFrame(frame: DirectHarnessFrame) {
+      presentationListener?.(frame);
+    },
   };
 }
 
 describe('createHeadlessHub', () => {
+  it('publishes session summaries at state changes rather than every streamed token', () => {
+    const session = host();
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    const events: string[] = [];
+    hub.onEvent((event) => events.push(event.kind));
+    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: session.host });
+    session.emitFrame({ type: 'agent_start' });
+    for (let index = 0; index < 100; index += 1)
+      session.emitFrame({ type: 'message_update', message: { role: 'assistant' } });
+    session.emitFrame({ type: 'message_end', message: { role: 'assistant' } });
+    session.emitFrame({ type: 'agent_settled' });
+
+    expect(events).toEqual(['upsert', 'upsert', 'upsert', 'upsert']);
+    expect(hub.snapshot()[0]?.phase).toBe('idle');
+  });
+
+  it('keeps workspace APIs alive without sessions and isolates equal package paths', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn() } as never });
+    const closed: string[] = [];
+    const facet: DoomServerFacet = {
+      inject: [DOOM_SERVER_HOST_SERVICE],
+      apply(context) {
+        const server = requireDoomServerHost(context);
+        const registration = server.registerApi({
+          basePath: 'example',
+          start: (apiContext) => ({
+            fetch: () => Response.json({ owner: apiContext.workspaceId ?? apiContext.scope }),
+            close: () => {
+              closed.push(apiContext.workspaceId ?? apiContext.scope);
+            },
+          }),
+        });
+        return () => registration.dispose();
+      },
+    };
+    await hub.mountFacets([facet]);
+    for (const id of ['one', 'two'])
+      await hub.mountFacets([facet], {
+        scope: 'workspace',
+        workspaceId: id,
+        workspaceRoot: `/${id}`,
+        onNotice: vi.fn(),
+      });
+    const request = new Request('http://test/');
+    expect(await (await hub.requestApi({ scope: 'global' }, 'example', request)).json()).toEqual({ owner: 'global' });
+    expect(await (await hub.requestApi({ scope: 'workspace', workspaceId: 'two' }, 'example', request)).json()).toEqual(
+      { owner: 'two' },
+    );
+    expect((await hub.requestApi({ scope: 'workspace', workspaceId: 'missing' }, 'example', request)).status).toBe(404);
+    const session = host();
+    hub.register({ id: 'session', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: session.host });
+    await expect(hub.removeWorkspace('one')).rejects.toThrow('live sessions');
+    await hub.closeSession('session');
+    expect(hub.workspaces()).toHaveLength(2);
+    await hub.removeWorkspace('one');
+    expect(closed).toEqual(['one']);
+    await hub.close();
+    expect(closed.sort()).toEqual(['global', 'one', 'two']);
+  });
+
+  it('isolates identical workspace channels and chooses the nearest mounted scope', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn() } as never });
+    for (const id of ['one', 'two'])
+      hub.register({ id, workspaceId: id, name: id, cwd: `/${id}`, createdAt: 'now', host: host().host });
+    const received: string[] = [];
+    const channel = (owner: string): DoomHubChannel => ({
+      frameType: 'shared',
+      receive: (scope) => {
+        received.push(`${owner}:${scope.sessionId}`);
+      },
+      start: (channelHost) => ({
+        payloadFor: () => ({ owner, sessions: channelHost.sessions().map((session) => session.sessionId) }),
+        close: vi.fn(),
+      }),
+    });
+    hub.registerChannel(channel('global'));
+    hub.registerChannel(channel('workspace-one'), { scope: 'workspace', workspaceId: 'one' });
+    hub.registerChannel(channel('workspace-two'), { scope: 'workspace', workspaceId: 'two' });
+    expect(hub.channelFrames('one')[0]?.payload).toEqual({ owner: 'workspace-one', sessions: ['one'] });
+    hub.receiveChannel('two', 'shared', {}, 'client');
+    expect(received).toEqual(['workspace-two:two']);
+    hub.registerChannel(channel('session-one'), { scope: 'session', sessionId: 'one' });
+    expect(hub.channelFrames('one')[0]?.payload).toEqual({ owner: 'session-one', sessions: ['one'] });
+    await hub.close();
+  });
+
   it('registers isolated direct runtimes without a command-frame channel', () => {
     const first = host();
     const second = host();

@@ -314,7 +314,7 @@ describe('headless startup', () => {
           host.registerCommand({
             name: 'mode',
             description: 'Change mode',
-            execute: (args) => host.select({ majorMode: args.trim() }),
+            execute: (args) => host.changeSelection({ axis: 'majorMode', majorMode: args.trim() }),
           });
         },
       },

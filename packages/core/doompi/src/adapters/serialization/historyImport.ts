@@ -62,6 +62,7 @@ export interface HistoryImportOptions {
   destinationPath: string;
   owner: HistoryOwnership;
   importStaging?: (input: HistoryStagingImportInput) => HistoryImportVerification | Promise<HistoryImportVerification>;
+  verifyStaging?: (stagingPath: string, proof: HistoryImportVerification) => Promise<HistoryImportVerification>;
   originalPath?: string;
   statePath?: string;
 }
@@ -745,7 +746,9 @@ export async function protectAndImportHistory(options: HistoryImportOptions): Pr
       state = {
         ...state,
         phase: 'verified',
-        verification: verifyImport(source.content, fs.readFileSync(state.stagingPath), verification),
+        verification: options.verifyStaging
+          ? await options.verifyStaging(state.stagingPath, verification)
+          : verifyImport(source.content, fs.readFileSync(state.stagingPath), verification),
       };
       writeState(statePath, state);
     }

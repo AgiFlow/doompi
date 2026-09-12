@@ -47,7 +47,10 @@ export const voiceHeadlessFacet: HeadlessFacet = {
     };
     const selectMode = async (enabled: boolean): Promise<void> => {
       const modes = host.context.selection.minorModes.filter((mode) => mode !== DOOM_VOICE_AUTO_MODE_ID);
-      await host.select({ minorModes: enabled ? [...modes, DOOM_VOICE_AUTO_MODE_ID] : modes });
+      await host.changeSelection({
+        axis: 'minorModes',
+        minorModes: enabled ? [...modes, DOOM_VOICE_AUTO_MODE_ID] : modes,
+      });
       modeOwner?.publish(modeState());
     };
     modeOwner = host.registerMinorMode({

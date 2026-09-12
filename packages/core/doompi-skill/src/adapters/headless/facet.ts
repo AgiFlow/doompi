@@ -1,4 +1,7 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
+import { formatSkillsForPrompt } from '@earendil-works/pi-coding-agent';
+import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
+import { DeferredSkillLoader, expandDeferredSkillCommand } from '../deferredSkills.ts';
 import path from 'node:path';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
@@ -19,37 +22,22 @@ async function readOrFallback(filePath: string, fallback: string): Promise<strin
   }
 }
 
-async function skillCatalog(cwd: string, environment: Readonly<Record<string, string | undefined>>): Promise<string> {
-  const roots = [
-    path.join(cwd, '.doom', 'skills'),
-    ...(environment.PI_SUBAGENT_EXTRA_SKILL_DIRS?.split(path.delimiter) ?? []),
-  ].filter(Boolean);
-  const paths: string[] = [];
-  for (const root of roots) {
-    try {
-      const entries = await readdir(root, { recursive: true, withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isFile() && entry.name === 'SKILL.md') paths.push(path.join(entry.parentPath, entry.name));
-      }
-    } catch {
-      // A missing optional skill root is an empty catalog, not a session failure.
-    }
-  }
-  const documents = await Promise.all(
-    paths.sort().map(async (filePath) => `## ${filePath}\n${await readFile(filePath, 'utf8')}`),
-  );
-  return documents.join('\n\n') || '(no discovered skills)';
-}
-
 export const skillHeadlessFacet = {
   inject: [DOOM_HEADLESS_HOST_SERVICE],
-  apply(context: Context) {
+  async apply(context: Context) {
     const host = requireDoomHeadlessHost(context);
+    const execution = host.context;
+    const state = readHarnessState(execution.environment);
+    const inventory = await new DeferredSkillLoader({
+      cwd: execution.cwd,
+      skillPaths: [...(state.skillDirectories ?? []), path.join(execution.repoRoot, '.doom', 'skills')],
+    }).ready();
+    const catalog = formatSkillsForPrompt(inventory.skills) || '(no discovered skills)';
     const resources: DoomHeadlessResource[] = [
       {
         name: 'doompi/skills',
         kind: 'skill',
-        read: (execution) => skillCatalog(execution.cwd, execution.environment),
+        read: () => catalog,
       },
       {
         name: 'doompi-author-skill',
@@ -76,12 +64,12 @@ export const skillHeadlessFacet = {
       async execute(args, execution) {
         const requested = args.trim();
         if (requested) {
-          await execution.session.prompt(`/skill:${requested}`);
+          await execution.session.prompt(expandDeferredSkillCommand(`/skill:${requested}`, inventory.skills));
           return;
         }
         await execution.client.notify({
           title: 'DoomPi skills',
-          body: await skillCatalog(execution.cwd, execution.environment),
+          body: catalog,
           level: 'info',
         });
       },
@@ -89,6 +77,18 @@ export const skillHeadlessFacet = {
     const registrations = [
       ...resources.map((resource) => host.registerResource(resource)),
       host.registerCommand(command),
+      ...inventory.skills.map((skill) =>
+        host.registerCommand({
+          name: `skill:${skill.name}`,
+          description: skill.description,
+          execute: async (args, execution) => {
+            const text = `/skill:${skill.name}${args ? ` ${args}` : ''}`;
+            const expanded = expandDeferredSkillCommand(text, inventory.skills);
+            if (expanded === text) throw new Error(`Skill '${skill.name}' is no longer readable.`);
+            await execution.session.prompt(expanded);
+          },
+        }),
+      ),
     ];
     return () => {
       for (const registration of registrations) registration.dispose();

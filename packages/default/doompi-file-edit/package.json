@@ -117,7 +117,8 @@
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session",
-      "hub"
+      "global",
+      "workspace"
     ]
   },
   "doompiWeb": {
@@ -125,7 +126,10 @@
     "channels": [
       "file_edits"
     ],
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/exports/webClient.ts",
+    "scopes": [
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

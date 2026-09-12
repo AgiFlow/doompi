@@ -7,5 +7,7 @@ import { ReadToolMessage } from './components/ReadToolMessage.tsx';
  */
 export const webPlugin = defineWebPlugin({
   id: 'read',
-  toolRenderers: [{ tools: ['read'], message: ReadToolMessage }],
+  session: {
+    toolRenderers: [{ tools: ['read'], message: ReadToolMessage }],
+  },
 });

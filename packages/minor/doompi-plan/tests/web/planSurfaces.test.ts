@@ -1,7 +1,13 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { describe, expect, it } from 'vitest';
 import { formatPlanStatus, PLAN_STATUS_KEY } from '../../src/types/planApi.ts';
-import { webPlugin } from '../../src/web/index.ts';
+import { webPlugin as scopedWebPlugin } from '../../src/web/index.ts';
+const webPlugin = {
+  id: scopedWebPlugin.id,
+  ...scopedWebPlugin.global,
+  ...scopedWebPlugin.workspace,
+  ...scopedWebPlugin.session,
+};
 import { PlanActivitySection } from '../../src/web/components/PlanActivitySection.tsx';
 import { PLAN_TAB_ID, PlanPanel, planTab } from '../../src/web/components/PlanPanel.tsx';
 

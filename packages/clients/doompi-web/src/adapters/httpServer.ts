@@ -132,8 +132,10 @@ async function proxyHttp(
 
 function writeStatic(request: IncomingMessage, response: ServerResponse, assetsDir: string, pwaDir: string): void {
   const url = requestUrl(request);
-  const fromPwa = url.pathname.startsWith(PWA_ASSET_PREFIX);
-  const relativePath = fromPwa ? url.pathname.slice(PWA_ASSET_PREFIX.length) : url.pathname;
+  const fromPwa = url.pathname.startsWith(PWA_ASSET_PREFIX) || url.pathname === '/sw.js';
+  const relativePath = url.pathname.startsWith(PWA_ASSET_PREFIX)
+    ? url.pathname.slice(PWA_ASSET_PREFIX.length)
+    : url.pathname;
   const root = fromPwa ? pwaDir : assetsDir;
   let file = resolveAssetPath(root, relativePath === '' ? '/' : `/${relativePath}`);
   let body = file === undefined ? undefined : readAsset(file);
@@ -183,7 +185,11 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const headlessUrl = new URL(options.headlessUrl ?? DEFAULT_HEADLESS_URL);
   const server = createServer((request, response) => {
     const url = requestUrl(request);
-    if (url.pathname.startsWith('/api/')) {
+    if (
+      url.pathname.startsWith('/api/') ||
+      url.pathname === '/bundle-manifest.json' ||
+      url.pathname.startsWith('/bundle-assets/')
+    ) {
       void proxyHttp(request, response, headlessUrl, options.headlessToken, notice);
       return;
     }

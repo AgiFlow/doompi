@@ -178,7 +178,7 @@ describe('syncServerBundle', () => {
 
   it('orders candidates and keeps hub facets out of session loading', async () => {
     const { root, input } = fixture();
-    const zeta = installedPackage(root, 'zeta', ['hub']);
+    const zeta = installedPackage(root, 'zeta', ['global']);
     const alpha = installedPackage(root, 'alpha');
     const { descriptor } = await syncServerBundle({
       ...input,

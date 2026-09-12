@@ -234,8 +234,8 @@ describe('the plan status line', () => {
  */
 describe('the plans API as a host mounts it', () => {
   it('builds one query carrying the session the hub should proxy to', () => {
-    expect(currentUrl('s1')).toBe(`/api/plugin/${API_BASE_PATH}${currentPath()}?${SESSION_QUERY_PARAM}=s1`);
-    expect(contentUrl('s1')).toBe(`/api/plugin/${API_BASE_PATH}${contentPath()}?${SESSION_QUERY_PARAM}=s1`);
+    expect(currentUrl('s1')).toBe(`/api/sessions/s1/plugin/${API_BASE_PATH}${currentPath()}?${SESSION_QUERY_PARAM}=s1`);
+    expect(contentUrl('s1')).toBe(`/api/sessions/s1/plugin/${API_BASE_PATH}${contentPath()}?${SESSION_QUERY_PARAM}=s1`);
     expect(currentUrl('s1').match(/\?/gu)).toHaveLength(1);
   });
 

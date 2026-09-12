@@ -2,6 +2,12 @@
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { HARNESS_STATE_KEYS, HARNESS_STATE_POINTER } from '../adapters/config/harnessState.ts';
+import { createWebCompositions } from '../adapters/server/webCompositions.ts';
+import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
+import { resolveSyncLocation } from '../adapters/syncLocation.ts';
 import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type {
   DoomHubSessionApiRequest,
@@ -13,7 +19,7 @@ import { buildHarnessContext } from '../adapters/harnessContext.ts';
 import { filterHookDisabledLayers, loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { createHarnessTelemetry } from '../adapters/telemetry/logSinkTelemetry';
 import { findRepositoryRoot } from '../adapters/repository/repository';
-import { readSyncRegistration, type SyncRegistration } from '../adapters/syncRegistration';
+import { readSyncRegistration } from '../adapters/syncRegistration';
 import { createHeadlessHub, type HeadlessHub } from '../adapters/server/headlessHub.ts';
 import { createHeadlessSessionManager } from '../adapters/server/headlessSessionManager.ts';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../types/server/headlessSessionHost.ts';
@@ -38,16 +44,6 @@ async function bounded(operation: Promise<unknown>, label: string, notice: (mess
   } finally {
     if (timeout) clearTimeout(timeout);
   }
-}
-
-function registeredSync(from: string): SyncRegistration | undefined {
-  let repositoryRoot: string;
-  try {
-    repositoryRoot = findRepositoryRoot(from);
-  } catch {
-    return undefined;
-  }
-  return readSyncRegistration(repositoryRoot);
 }
 
 function currentServerBundleSelection(
@@ -75,6 +71,17 @@ async function main(): Promise<number> {
   const baseEnvironment = Object.freeze({ ...process.env });
   const notice = (message: string): void => void process.stderr.write(`[doompi-server] ${message}\n`);
   const telemetry = createServerTelemetry({ cwd: baseCwd, env: baseEnvironment, warn: notice });
+  let nextEventLoopTick = performance.now() + 1_000;
+  const eventLoopMonitor = setInterval(() => {
+    const now = performance.now();
+    const delay = Math.max(0, now - nextEventLoopTick);
+    nextEventLoopTick = now + 1_000;
+    if (delay >= 100)
+      void telemetry
+        .recordEvent('doompi_server.event_loop_delay', { duration_ms: Math.round(delay) })
+        .catch((error: unknown) => notice(`event loop telemetry failed: ${String(error)}`));
+  }, 1_000);
+  eventLoopMonitor.unref();
   const harnessTelemetry = createHarnessTelemetry({
     cwd: baseCwd,
     env: baseEnvironment,
@@ -82,7 +89,7 @@ async function main(): Promise<number> {
     deferSpans: true,
   });
   const baseSessionManager = createHeadlessSessionManager();
-  type SessionSetup = { cleanup: () => Promise<void> };
+  type SessionSetup = { cleanup: () => Promise<void>; bundle: Awaited<ReturnType<typeof loadServerBundle>> };
   type SessionArtifacts = SessionSetup & { apis: PackageApiServer };
   const pendingSessions = new Map<string, SessionSetup>();
   const sessionArtifacts = new Map<string, SessionArtifacts>();
@@ -93,6 +100,7 @@ async function main(): Promise<number> {
   const closeManagedSession = async (sessionId: string): Promise<void> => {
     const artifacts = sessionArtifacts.get(sessionId);
     sessionArtifacts.delete(sessionId);
+    webCompositions?.remove({ scope: 'session', sessionId });
     const failures: unknown[] = [];
     try {
       await artifacts?.apis.close();
@@ -158,9 +166,14 @@ async function main(): Promise<number> {
   let createSession: (request: DoomHubSessionCreateRequest) => Promise<DoomHubSessionScope> = async () => {
     throw new Error('The cockpit session service is not ready.');
   };
+  let admitWorkspace: (root: string) => Promise<{ id: string; root: string }> = async () => {
+    throw new Error('Workspace admission is not ready.');
+  };
   let hub!: HeadlessHub;
   hub = createHeadlessHub({
     manager: sessionManager,
+    admitWorkspace: (root) => admitWorkspace(root),
+    onWorkspaceRemoved: (workspaceId) => webCompositions?.remove({ scope: 'workspace', workspaceId }),
     createSession: (request) => createSession(request),
     onNotice: notice,
     requestSessionApi: (scope, request) => requestSessionApi(scope, request),
@@ -168,6 +181,7 @@ async function main(): Promise<number> {
   let harnessContext: Awaited<ReturnType<typeof buildHarnessContext>> | undefined;
   let cockpit: Awaited<ReturnType<typeof serveHeadlessServer>> | undefined;
   let attachToken: string | undefined;
+  let webCompositions: ReturnType<typeof createWebCompositions> | undefined;
 
   try {
     await telemetry.runInSpan('doompi_server.startup', {}, async () => {
@@ -180,36 +194,92 @@ async function main(): Promise<number> {
         sessionName: options.sessionName,
       });
 
-      const selectedRegistration = registeredSync(baseCwd);
-      const source = resolveServerBundleSource({ registration: selectedRegistration });
-      const selection =
-        source.kind === 'descriptor'
-          ? currentServerBundleSelection(resolved.agentArgs, baseCwd, baseEnvironment)
-          : undefined;
-      const loadedBundle =
-        source.kind === 'descriptor' && selection !== undefined
-          ? await loadServerBundle('session', {
-              ...source,
-              ...selection,
-              retainCandidates: true,
-              onNotice: notice,
-            })
-          : undefined;
-      const loadedHubBundle =
-        source.kind === 'descriptor' && selection !== undefined
-          ? await loadServerBundle('hub', { ...source, ...selection, onNotice: notice })
-          : undefined;
-      if (
-        source.kind !== 'descriptor' ||
-        selection === undefined ||
-        loadedBundle === undefined ||
-        loadedHubBundle === undefined
-      )
-        throw new Error('The headless server requires an admitted descriptor server bundle.');
-      await hub.mountFacets(loadedHubBundle.facets);
+      const homeDirectory = baseEnvironment.HOME ?? os.homedir();
+      const globalRoot = globalDoomConfigDirectory(homeDirectory);
+      webCompositions = createWebCompositions(path.join(globalRoot, 'server'), notice);
+      const loadComposition = async (
+        root: string,
+        scope: 'global' | 'workspace' | 'session',
+        selection?: ReturnType<typeof currentServerBundleSelection>,
+      ) => {
+        const registration = readSyncRegistration(root, homeDirectory);
+        const source = resolveServerBundleSource({ registration });
+        if (source.kind !== 'descriptor')
+          throw new Error(`Run the scoped DoomPi sync for '${root}' before opening it.`);
+        const selected =
+          selection ??
+          (() => {
+            const config = loadMajorModesConfig(root, homeDirectory);
+            const majorMode = config.defaultMajorMode;
+            return { root, majorMode, activeLayers: resolveLayers(config, majorMode) };
+          })();
+        return loadServerBundle(scope, {
+          ...source,
+          ...selected,
+          retainCandidates: scope === 'session',
+          onNotice: notice,
+        });
+      };
+      const sharedApiContext = {
+        homeDirectory,
+        environment: baseEnvironment,
+        hubToken: token,
+        sessionService: hub.sessionService,
+        directEvents: hub.directEvents,
+        repositories: () =>
+          hub.workspaces().map((workspace) => ({
+            id: workspace.id,
+            path: workspace.root,
+            name: workspace.root.split('/').at(-1) ?? workspace.id,
+            active: hub.snapshot().some((session) => session.workspaceId === workspace.id),
+          })),
+        resolveRepository: (id: string) => hub.workspaces().find((workspace) => workspace.id === id)?.root,
+        onNotice: notice,
+      };
+      const globalBundle = await loadComposition(globalRoot, 'global');
+      webCompositions.publishShell(readSyncRegistration(globalRoot, homeDirectory)!);
+      await hub.mountFacets(globalBundle.facets, { ...sharedApiContext, scope: 'global' });
+      webCompositions.publish(
+        { scope: 'global' },
+        readSyncRegistration(globalRoot, homeDirectory)!,
+        hub.channelTypes(),
+      );
+      const admissions = new Map<string, Promise<{ id: string; root: string }>>();
+      admitWorkspace = async (from) => {
+        const root = fs.realpathSync(findRepositoryRoot(from));
+        const id = resolveSyncLocation(root, homeDirectory).identity.worktreeId;
+        const existing = hub.workspaces().find((workspace) => workspace.id === id);
+        if (existing) return existing;
+        const pending = admissions.get(id);
+        if (pending) return pending;
+        const admission = (async () => {
+          const bundle = await loadComposition(root, 'workspace');
+          await hub.mountFacets(bundle.facets, {
+            ...sharedApiContext,
+            scope: 'workspace',
+            workspaceId: id,
+            workspaceRoot: root,
+            cwd: root,
+            resolveRepository: (requestedId) => (requestedId === id ? root : undefined),
+          });
+          webCompositions?.publish(
+            { scope: 'workspace', workspaceId: id },
+            readSyncRegistration(root, homeDirectory)!,
+            hub.channelTypes(),
+          );
+          return { id, root };
+        })();
+        admissions.set(id, admission);
+        try {
+          return await admission;
+        } finally {
+          admissions.delete(id);
+        }
+      };
 
       const sessionHostOptions = (
         context: Awaited<ReturnType<typeof buildHarnessContext>>,
+        bundle: Awaited<ReturnType<typeof loadServerBundle>>,
         identity: {
           sessionId: string;
           sessionName: string;
@@ -219,7 +289,8 @@ async function main(): Promise<number> {
       ): HeadlessSessionHostOptions => {
         const policyOptions = context.options;
         const sessionSelection = {
-          ...selection,
+          root: policyOptions.repoRoot,
+          majorMode: policyOptions.majorMode,
           activeLayers: context.selectedLayers,
           domains: policyOptions.domains,
           profile: context.profile,
@@ -229,13 +300,36 @@ async function main(): Promise<number> {
           cwd: policyOptions.cwd,
           repoRoot: policyOptions.repoRoot,
           sessionId: identity.sessionId,
+          workspaceId: resolveSyncLocation(policyOptions.repoRoot, homeDirectory).identity.worktreeId,
           sessionName: identity.sessionName,
+          webComposition: webCompositions?.publish(
+            { scope: 'session', sessionId: identity.sessionId },
+            readSyncRegistration(policyOptions.repoRoot, homeDirectory)!,
+            hub.channelTypes(),
+          ),
           ...(identity.parentSessionId === undefined ? {} : { parentSessionId: identity.parentSessionId }),
           ...(identity.sessionProvenance === undefined ? {} : { sessionProvenance: identity.sessionProvenance }),
           agentArgs: policyOptions.piArgs,
           environment: Object.freeze({ ...context.environment }),
           selection: sessionSelection,
-          candidates: loadedBundle.descriptor.entries,
+          selectionOverrides: (['majorMode', 'domains', 'profile'] as const).filter((axis) => {
+            const flag = axis === 'majorMode' ? '--major-mode' : `--${axis}`;
+            return (
+              identity.sessionId === resolved.identity.sessionId &&
+              resolved.agentArgs.some((arg) => arg === flag || arg.startsWith(`${flag}=`))
+            );
+          }),
+          inheritedSelection: () => {
+            const environment = { ...baseEnvironment };
+            for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete environment[key];
+            const defaults = resolveHarnessOptions({
+              args: ['--cwd', policyOptions.cwd],
+              cwd: policyOptions.cwd,
+              environment,
+            });
+            return { majorMode: defaults.majorMode, domains: defaults.domains, profile: defaults.profile };
+          },
+          candidates: bundle.descriptor.entries,
           resolveSelection: (requested) => {
             const config = loadMajorModesConfig(policyOptions.repoRoot, policyOptions.homeDirectory);
             return {
@@ -260,18 +354,20 @@ async function main(): Promise<number> {
           hubToken: token,
           sessionService: hub.sessionService,
           apis: [],
-          facets: loadedBundle.facets,
+          facets: pendingSessions.get(sessionOptions.sessionId)?.bundle.facets ?? [],
+          workspaceId: sessionOptions.workspaceId,
+          workspaceRoot: sessionOptions.repoRoot,
+          homeDirectory,
+          mountChannel: (channel) => {
+            const dispose = hub.registerChannel(channel, { scope: 'session', sessionId: sessionOptions.sessionId });
+            return { mounted: true, dispose };
+          },
           prepareFacets: host.prepareFacets,
           activateFacets: host.activateFacets,
           canDispatch: host.canDispatch,
           telemetry,
           onNotice: notice,
         });
-
-      harnessContext = await buildHarnessContext(
-        resolveHarnessOptions({ args: resolved.agentArgs, cwd: baseCwd, environment: baseEnvironment }),
-        harnessTelemetry,
-      );
 
       requestSessionApi = async (scope, request) => {
         const session = hub.session(scope.sessionId);
@@ -286,16 +382,38 @@ async function main(): Promise<number> {
         return artifacts.apis.request(
           new Request(`http://doompi.local/api/plugin/${request.basePath}${request.path}`, {
             method: request.method,
+            headers: request.headers,
             ...(body === undefined ? {} : { body }),
             ...(request.signal === undefined ? {} : { signal: request.signal }),
           }),
         );
       };
 
-      const activeHarnessContext = harnessContext;
-      pendingSessions.set(resolved.identity.sessionId, { cleanup: () => activeHarnessContext.cleanup() });
-      await hub.create(sessionHostOptions(harnessContext, resolved.identity));
-      await bounded(harnessTelemetry.flush(), 'initial composition telemetry flush', notice);
+      if (!options.noSession) {
+        harnessContext = await buildHarnessContext(
+          resolveHarnessOptions({ args: resolved.agentArgs, cwd: baseCwd, environment: baseEnvironment }),
+          harnessTelemetry,
+        );
+        const activeHarnessContext = harnessContext;
+        try {
+          await admitWorkspace(harnessContext.options.repoRoot);
+          const initialBundle = await loadComposition(harnessContext.options.repoRoot, 'session', {
+            root: harnessContext.options.repoRoot,
+            majorMode: harnessContext.options.majorMode,
+            activeLayers: harnessContext.selectedLayers,
+          });
+          pendingSessions.set(resolved.identity.sessionId, {
+            cleanup: () => activeHarnessContext.cleanup(),
+            bundle: initialBundle,
+          });
+          await hub.create(sessionHostOptions(harnessContext, initialBundle, resolved.identity));
+        } catch (error) {
+          pendingSessions.delete(resolved.identity.sessionId);
+          await activeHarnessContext.cleanup().catch((cleanupError: unknown) => notice(String(cleanupError)));
+          throw error;
+        }
+        await bounded(harnessTelemetry.flush(), 'initial composition telemetry flush', notice);
+      }
 
       createSession = async (request) => {
         const identity = {
@@ -304,18 +422,30 @@ async function main(): Promise<number> {
           parentSessionId: request.parentSessionId,
           sessionProvenance: request.sessionProvenance,
         };
-        const childIdentity = resolveSessionIdentity(options.agentArgs, identity);
+        const childIdentity = resolveSessionIdentity([], identity);
+        const childEnvironment = { ...baseEnvironment };
+        for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete childEnvironment[key];
         const childContext = await buildHarnessContext(
-          resolveHarnessOptions({ args: childIdentity.agentArgs, cwd: request.cwd, environment: baseEnvironment }),
+          resolveHarnessOptions({
+            args: ['--cwd', request.cwd, ...childIdentity.agentArgs],
+            cwd: request.cwd,
+            environment: childEnvironment,
+          }),
           harnessTelemetry,
         );
-        pendingSessions.set(identity.sessionId, { cleanup: () => childContext.cleanup() });
         try {
-          await hub.create(sessionHostOptions(childContext, identity));
+          await admitWorkspace(childContext.options.repoRoot);
+          const bundle = await loadComposition(childContext.options.repoRoot, 'session', {
+            root: childContext.options.repoRoot,
+            majorMode: childContext.options.majorMode,
+            activeLayers: childContext.selectedLayers,
+          });
+          pendingSessions.set(identity.sessionId, { cleanup: () => childContext.cleanup(), bundle });
+          await hub.create(sessionHostOptions(childContext, bundle, identity));
           return { sessionId: identity.sessionId, cwd: childContext.options.cwd };
         } catch (error) {
-          if (pendingSessions.delete(identity.sessionId))
-            await childContext.cleanup().catch((cleanupError: unknown) => notice(String(cleanupError)));
+          pendingSessions.delete(identity.sessionId);
+          await childContext.cleanup().catch((cleanupError: unknown) => notice(String(cleanupError)));
           throw error;
         }
       };
@@ -325,6 +455,17 @@ async function main(): Promise<number> {
       port: options.webPort,
       headlessHub: hub,
       token: attachToken,
+      requestAsset: (request) => webCompositions?.request(request) ?? Promise.resolve(undefined),
+      compositions: () => ({
+        global: webCompositions?.get({ scope: 'global' }),
+        publicKey: webCompositions?.publicKey(),
+        shell: webCompositions?.shellTrust(),
+        workspaces: hub.workspaces().map((workspace) => ({
+          ...workspace,
+          webComposition: webCompositions?.get({ scope: 'workspace', workspaceId: workspace.id }),
+        })),
+      }),
+      telemetry,
       onNotice: (message) => process.stderr.write(`[doompi-server] ${message}\n`),
     });
     process.stderr.write(`[doompi-server] protocol on ${cockpit.url}/api/pi\n`);
@@ -342,6 +483,7 @@ async function main(): Promise<number> {
       process.off('SIGTERM', stop);
     }
   } finally {
+    clearInterval(eventLoopMonitor);
     await bounded(telemetry.recordEvent('doompi_server.shutdown'), 'shutdown telemetry', notice);
     await Promise.allSettled([cockpit?.close()]);
     try {
@@ -354,6 +496,7 @@ async function main(): Promise<number> {
     } catch (error) {
       notice(error instanceof Error ? error.message : String(error));
     }
+    webCompositions?.close();
     const pendingCleanups = [...pendingSessions.values()].map((setup) => setup.cleanup());
     pendingSessions.clear();
     await Promise.allSettled(pendingCleanups);

@@ -377,7 +377,8 @@
     "entry": "./src/exports/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
-      "hub",
+      "global",
+      "workspace",
       "session"
     ]
   },
@@ -386,7 +387,10 @@
     "channels": [
       "runner_runs"
     ],
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/exports/webClient.ts",
+    "scopes": [
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

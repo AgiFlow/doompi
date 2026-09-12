@@ -23,6 +23,13 @@ export interface DoomHeadlessSelection {
   readonly minorModes: readonly string[];
 }
 
+/** One package-owned selection transition. Server facets change exactly one axis per operation. */
+export type DoomHeadlessSelectionChange =
+  | { readonly axis: 'majorMode'; readonly majorMode: string }
+  | { readonly axis: 'domains'; readonly domains: readonly string[] }
+  | { readonly axis: 'profile'; readonly profile?: string }
+  | { readonly axis: 'minorModes'; readonly minorModes: readonly string[] };
+
 export function readDoomHeadlessOwner(context: Context): DoomServerBundleEntry | undefined {
   return (context as Context & { [DOOM_HEADLESS_OWNER]?: DoomServerBundleEntry })[DOOM_HEADLESS_OWNER];
 }
@@ -55,7 +62,12 @@ export interface DoomHeadlessClient {
 }
 
 export interface DoomHeadlessSession {
-  entries(): readonly Record<string, unknown>[];
+  /** Query durable history on demand; hosts do not retain the entire transcript. */
+  entries(query?: {
+    type?: 'custom' | 'message';
+    customType?: string;
+    limit?: number;
+  }): readonly Record<string, unknown>[] | Promise<readonly Record<string, unknown>[]>;
   appendCustomEntry(type: string, data: unknown): Promise<void>;
   prompt(text: string, delivery?: 'prompt' | 'steer' | 'followUp'): Promise<void>;
   abort(): Promise<void>;
@@ -216,7 +228,7 @@ export interface DoomHeadlessActivity {
 /** Registrations inherit package ownership from the caller's Cordis facet. */
 export interface DoomHeadlessHostService {
   readonly context: DoomHeadlessExecutionContext;
-  select(selection: Partial<DoomHeadlessSelection>): Promise<void>;
+  changeSelection(change: DoomHeadlessSelectionChange): Promise<void>;
   registerMinorMode(mode: DoomHeadlessMinorMode): MinorModeOwnerHandle;
   registerToolRestriction(restriction: DoomHeadlessToolRestriction): DoomHeadlessRegistration;
   registerTool<TParameters extends TSchema>(tool: DoomHeadlessTool<TParameters>): DoomHeadlessRegistration;

@@ -304,6 +304,8 @@ export interface RpcTranscriptOptions {
   id: string;
   cwd: string;
   name?: string;
+  /** Server streaming projections do not retain committed history. */
+  retainEntries?: number;
   /**
    * Supplies every timestamp this projection stamps.
    *
@@ -350,6 +352,8 @@ export function createRpcTranscript(options: RpcTranscriptOptions): RpcTranscrip
 
   const commit = (updates: Partial<SessionSnapshot>): SessionSnapshot => {
     snapshot = { ...snapshot, ...updates, revision: snapshot.revision + 1, updatedAt: now() };
+    if (options.retainEntries !== undefined)
+      snapshot.transcript = options.retainEntries === 0 ? [] : snapshot.transcript.slice(-options.retainEntries);
     return snapshot;
   };
 

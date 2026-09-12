@@ -177,7 +177,7 @@ describe('runnerServerFacet', () => {
   });
 
   it('registers nothing on the other scope', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
 
     const dispose = runnerServerFacet.apply(harness.context);
 

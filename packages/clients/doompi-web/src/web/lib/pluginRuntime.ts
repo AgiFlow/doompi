@@ -3,7 +3,7 @@ import * as TanstackStore from '@tanstack/store';
 import * as WebComponents from '@agimon-ai/doompi-web-components';
 import * as WebContracts from '@agimon-ai/doompi-web-contracts';
 import * as WebSecurityBrowser from '@agimon-ai/doompi-web-security/browser';
-import type { WebPluginDefinition, WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginDefinition, WebPluginRuntime, WebPluginMount } from '@agimon-ai/doompi-web-contracts';
 import * as CodeMirrorState from '@codemirror/state';
 import * as CodeMirrorView from '@codemirror/view';
 import * as React from 'react';
@@ -16,12 +16,19 @@ import type { SessionWebComposition } from '../../types/hub.ts';
 import {
   activateWebPluginSession,
   installSessionWebPlugins,
-  installedWebPlugins,
+  activateWebPluginWorkspace,
+  bindSessionWebWorkspace,
+  installGlobalWebPlugins,
+  installWorkspaceWebPlugins,
+  removeWorkspaceWebPlugins,
   removeSessionWebPlugins,
   startPluginDefinitions,
-  startWebPlugins,
   webPluginDiagnostics,
 } from './pluginRegistry.ts';
+
+import { verifiedDevComposition } from './verifiedDevComposition.ts';
+import { pluginsAtScope } from './pluginScopes.ts';
+import { sealedHttpSession } from './sealedSession.ts';
 
 export const WEB_PLUGIN_RUNTIME_GLOBAL = 'DoomPiWebPluginRuntime';
 export const WEB_PLUGIN_COMPOSITION_GLOBAL = 'DoomPiWebPluginComposition';
@@ -64,21 +71,32 @@ Object.defineProperty(globalThis, WEB_PLUGIN_RUNTIME_GLOBAL, {
   value: modules,
 });
 
-interface LoadedSessionComposition {
+interface LoadedComposition {
   key: string;
-  plugins: readonly WebPluginDefinition[];
+  stop: () => void;
+  styles: HTMLLinkElement[];
+  releaseAssets: () => void;
+}
+interface CompositionsResponse {
+  global?: SessionWebComposition;
+  workspaces: { id: string; webComposition?: SessionWebComposition }[];
 }
 
-const loadedSessions = new Map<string, LoadedSessionComposition>();
-let builtinPlugins: readonly WebPluginDefinition[] = [];
+const loadedMounts = new Map<string, LoadedComposition>();
+const mountEpochs = new Map<string, number>();
+const pendingMounts = new Map<string, Promise<void>>();
 let runtime: WebPluginRuntime | undefined;
-let activeSession: string | null = null;
-let requestedSession: string | null | undefined;
-let requestedKey: string | undefined;
-let stopActivePlugins: (() => void) | undefined;
-let activeStyles: HTMLLinkElement[] = [];
-let activationEpoch = 0;
+let runtimeEpoch = 0;
+let focusEpoch = 0;
 let scriptQueue: Promise<unknown> = Promise.resolve();
+
+function mountKey(mount: WebPluginMount): string {
+  return mount.scope === 'global'
+    ? 'global'
+    : mount.scope === 'workspace'
+      ? `workspace:${mount.workspaceId}`
+      : `session:${mount.sessionId}`;
+}
 
 function compositionKey(composition: SessionWebComposition): string {
   return `${composition.id}:${String(composition.revision)}`;
@@ -113,20 +131,28 @@ async function executeCompositionScript(url: string): Promise<readonly WebPlugin
   return await queued;
 }
 
-function disposeActivePlugins(): void {
-  stopActivePlugins?.();
-  stopActivePlugins = undefined;
-  for (const style of activeStyles) style.remove();
-  activeStyles = [];
-  activeSession = null;
+function disposeMount(key: string): void {
+  mountEpochs.set(key, (mountEpochs.get(key) ?? 0) + 1);
+  const loaded = loadedMounts.get(key);
+  if (!loaded) return;
+  loadedMounts.delete(key);
+  try {
+    loaded.stop();
+  } finally {
+    for (const style of loaded.styles) style.remove();
+    loaded.releaseAssets();
+  }
 }
 
-async function prepareStyles(composition: SessionWebComposition): Promise<HTMLLinkElement[]> {
+async function prepareStyles(
+  composition: SessionWebComposition,
+  assetUrl = (assetPath: string) => `${composition.verifiedAssetBaseUrl}${assetPath}`,
+): Promise<HTMLLinkElement[]> {
   const links = composition.stylePaths.map((stylePath) => {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.media = 'not all';
-    link.href = `${composition.verifiedAssetBaseUrl}${stylePath}`;
+    link.href = assetUrl(stylePath);
     link.dataset.doompiPluginComposition = composition.id;
     document.head.append(link);
     return link;
@@ -160,91 +186,153 @@ function reportDiagnostics(): void {
   }
 }
 
-/** Focuses, verifies and activates exactly one session's client plugin composition. */
+/** Replace only the requested mount after its new assets have been verified. */
+async function mountComposition(mount: WebPluginMount, composition: SessionWebComposition | undefined): Promise<void> {
+  if (!runtime) return;
+  if (!composition) throw new Error(`No synchronized web composition exists for ${mountKey(mount)}.`);
+  const owner = mountKey(mount);
+  const key = compositionKey(composition);
+  const epoch = runtimeEpoch;
+  const ownerEpoch = mountEpochs.get(owner) ?? 0;
+  const stale = () => epoch !== runtimeEpoch || ownerEpoch !== (mountEpochs.get(owner) ?? 0);
+  const replace = async () => {
+    if (stale() || loadedMounts.get(owner)?.key === key) return;
+    let releaseAssets = () => {};
+    let assetUrl = (assetPath: string) => `${composition.verifiedAssetBaseUrl}${assetPath}`;
+    let styles: HTMLLinkElement[] = [];
+    let definitions: readonly WebPluginDefinition[];
+    try {
+      const devKey: unknown = import.meta.env.VITE_DOOMPI_PLUGIN_PUBLIC_KEY;
+      if (
+        import.meta.env.DEV &&
+        typeof devKey === 'string' &&
+        devKey &&
+        ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)
+      ) {
+        const assets = await verifiedDevComposition(composition, devKey);
+        releaseAssets = assets.close;
+        assetUrl = assets.url;
+      } else {
+        const verified = await activateVerifiedPluginComposition(composition);
+        if (!verified.ok) throw new Error(`The plugin composition was refused (${verified.code}): ${verified.message}`);
+      }
+      if (stale()) {
+        releaseAssets();
+        return;
+      }
+      definitions = await executeCompositionScript(assetUrl(composition.entryPath));
+      if (stale()) {
+        releaseAssets();
+        return;
+      }
+      styles = await prepareStyles(composition, assetUrl);
+      if (stale() || !runtime) {
+        for (const style of styles) style.remove();
+        releaseAssets();
+        return;
+      }
+    } catch (error) {
+      releaseAssets();
+      throw error;
+    }
+    const plugins = pluginsAtScope(definitions, mount.scope);
+    const previous = loadedMounts.get(owner);
+    previous?.stop();
+    previous?.releaseAssets();
+    for (const style of previous?.styles ?? []) style.remove();
+    loadedMounts.delete(owner);
+    try {
+      if (mount.scope === 'global') installGlobalWebPlugins(definitions);
+      else if (mount.scope === 'workspace') installWorkspaceWebPlugins(mount.workspaceId, definitions);
+      else {
+        bindSessionWebWorkspace(mount.sessionId, mount.workspaceId);
+        installSessionWebPlugins(mount.sessionId, plugins);
+      }
+      const stop = startPluginDefinitions(plugins, { ...runtime, mount });
+      for (const style of styles) style.media = 'all';
+      loadedMounts.set(owner, { key, stop, styles, releaseAssets });
+      reportDiagnostics();
+    } catch (error) {
+      for (const style of styles) style.remove();
+      releaseAssets();
+      throw error;
+    }
+  };
+  const pending = (pendingMounts.get(owner) ?? Promise.resolve()).then(replace, replace);
+  pendingMounts.set(owner, pending);
+  try {
+    await pending;
+  } finally {
+    if (pendingMounts.get(owner) === pending) pendingMounts.delete(owner);
+  }
+}
+
+async function readCompositions(): Promise<CompositionsResponse> {
+  const response = await sealedHttpSession.fetch('/api/compositions', { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Could not load web compositions (${response.status}).`);
+  return (await response.json()) as CompositionsResponse;
+}
+
+export async function refreshWebPluginCompositions(): Promise<void> {
+  const metadata = await readCompositions();
+  await mountComposition({ scope: 'global' }, metadata.global);
+  for (const workspace of metadata.workspaces) {
+    await mountComposition({ scope: 'workspace', workspaceId: workspace.id }, workspace.webComposition);
+  }
+  const admitted = new Set(metadata.workspaces.map((workspace) => `workspace:${workspace.id}`));
+  for (const key of loadedMounts.keys())
+    if (key.startsWith('workspace:') && !admitted.has(key)) {
+      disposeMount(key);
+      removeWorkspaceWebPlugins(key.slice('workspace:'.length));
+    }
+}
+
+export async function focusWorkspaceWebPlugins(workspaceId: string | null): Promise<void> {
+  activateWebPluginWorkspace(workspaceId);
+  if (workspaceId && !loadedMounts.has(`workspace:${workspaceId}`)) await refreshWebPluginCompositions();
+}
+
+/** Session focus changes visibility; it does not destroy other mounts. */
 export async function focusSessionWebPlugins(
   sessionId: string | null,
   composition: SessionWebComposition | undefined,
+  workspaceId?: string,
 ): Promise<void> {
-  const key = composition === undefined ? 'empty' : compositionKey(composition);
-  if (sessionId === requestedSession && key === requestedKey) return;
-  requestedSession = sessionId;
-  requestedKey = key;
-  const epoch = ++activationEpoch;
-  const replacingActiveSession = sessionId !== null && activeSession === sessionId;
-  if (!replacingActiveSession) {
-    disposeActivePlugins();
-    activateWebPluginSession(sessionId);
-  }
-  if (sessionId === null || runtime === undefined) return;
-
-  const previous = loadedSessions.get(sessionId);
-  let plugins = previous?.key === key ? previous.plugins : undefined;
-  let preparedStyles: HTMLLinkElement[] = [];
-  try {
-    if (composition === undefined) {
-      plugins ??= builtinPlugins;
-    } else {
-      const verified = await activateVerifiedPluginComposition(composition);
-      if (!verified.ok) throw new Error(`The plugin composition was refused (${verified.code}): ${verified.message}`);
-      if (epoch !== activationEpoch) return;
-      plugins ??= await executeCompositionScript(`${composition.verifiedAssetBaseUrl}${composition.entryPath}`);
-      if (epoch !== activationEpoch) return;
-      preparedStyles = await prepareStyles(composition);
-    }
-  } catch (error) {
-    for (const style of preparedStyles) style.remove();
-    if (epoch === activationEpoch) {
-      console.error(error instanceof Error ? error : new Error(String(error)));
-      if (previous === undefined) installSessionWebPlugins(sessionId, []);
-      requestedSession = undefined;
-      requestedKey = undefined;
-    }
-    return;
-  }
-  if (epoch !== activationEpoch || plugins === undefined) {
-    for (const style of preparedStyles) style.remove();
-    return;
-  }
-
-  if (replacingActiveSession) disposeActivePlugins();
-  if (previous === undefined || previous.key !== key) {
-    loadedSessions.set(sessionId, { key, plugins });
-    installSessionWebPlugins(sessionId, plugins);
-  }
+  const epoch = ++focusEpoch;
   activateWebPluginSession(sessionId);
-  reportDiagnostics();
-  for (const style of preparedStyles) style.media = 'all';
-  activeStyles = preparedStyles;
-  stopActivePlugins = startPluginDefinitions(plugins, runtime);
-  activeSession = sessionId;
+  if (!sessionId || !runtime) return;
+  if (!workspaceId) throw new Error(`Session '${sessionId}' has no workspace identity.`);
+  await focusWorkspaceWebPlugins(workspaceId);
+  await mountComposition({ scope: 'session', sessionId, workspaceId }, composition);
+  if (epoch === focusEpoch) activateWebPluginSession(sessionId);
 }
 
-/** Drops one removed session's runtime resources and registry references. */
 export function removeSessionWebPluginRuntime(sessionId: string): void {
-  if (sessionId === activeSession || sessionId === requestedSession) {
-    activationEpoch += 1;
-    disposeActivePlugins();
-    requestedSession = undefined;
-    requestedKey = undefined;
-  }
-  loadedSessions.delete(sessionId);
+  focusEpoch += 1;
+  disposeMount(`session:${sessionId}`);
   removeSessionWebPlugins(sessionId);
 }
 
-/** Supplies the shell transport and owns all plugin runtime disposal. */
+/** Owns the three scope lifecycles for this transport connection. */
 export function startSessionWebPluginRuntime(hostRuntime: WebPluginRuntime): () => void {
   runtime = hostRuntime;
-  builtinPlugins = installedWebPlugins();
-  stopActivePlugins = startWebPlugins(hostRuntime);
+  const refresh = () => {
+    void refreshWebPluginCompositions().catch((error: unknown) => console.error(error));
+  };
+  const unsubscribe = hostRuntime.onHubConnected(refresh);
+  refresh();
   return () => {
-    activationEpoch += 1;
-    disposeActivePlugins();
-    requestedSession = undefined;
-    requestedKey = undefined;
-    for (const sessionId of loadedSessions.keys()) removeSessionWebPlugins(sessionId);
-    loadedSessions.clear();
-    builtinPlugins = [];
+    runtimeEpoch += 1;
+    focusEpoch += 1;
+    unsubscribe();
+    for (const key of loadedMounts.keys()) {
+      disposeMount(key);
+      if (key.startsWith('session:')) removeSessionWebPlugins(key.slice('session:'.length));
+      if (key.startsWith('workspace:')) removeWorkspaceWebPlugins(key.slice('workspace:'.length));
+    }
+    installGlobalWebPlugins([]);
     runtime = undefined;
     activateWebPluginSession(null);
+    activateWebPluginWorkspace(null);
   };
 }

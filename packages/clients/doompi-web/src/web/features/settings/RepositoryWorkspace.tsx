@@ -10,6 +10,7 @@ import {
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useMemo, useState } from 'react';
 import type { SettingsRepository } from '../../../types/settings.ts';
+import { focusWorkspaceWebPlugins } from '../../lib/pluginRuntime.ts';
 import { listSettingsRepositories } from '../../lib/settingsApi.ts';
 import type { SettingsSection } from '../../lib/settingsSections.ts';
 import { sealedHttpSession } from '../../lib/sealedSession.ts';
@@ -71,6 +72,10 @@ export function RepositoryWorkspace({ current }: { current: SettingsSection }) {
       currentRequest = false;
     };
   }, [sessionFingerprint]);
+
+  useEffect(() => {
+    void focusWorkspaceWebPlugins(repositoryId || null).catch((error: unknown) => console.error(error));
+  }, [repositoryId]);
 
   const selectRepository = (next: string): void => {
     setRepositoryId(next);
@@ -138,6 +143,7 @@ export function RepositoryWorkspace({ current }: { current: SettingsSection }) {
                 section={current.contribution}
                 scope="repository"
                 repoRoot={repository?.path ?? ''}
+                workspaceId={repository?.id}
               />
             )}
             {panel === undefined || Panel === undefined ? null : (

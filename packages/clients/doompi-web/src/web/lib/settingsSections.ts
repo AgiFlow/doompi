@@ -114,7 +114,7 @@ export function settingsSections(workspace?: SettingsWorkspace): readonly Settin
     workspace: 'general' as const,
     contribution,
   }));
-  const contributedForRepository = contributions.map((contribution) => ({
+  const contributedForRepository = [...pluginSettingsSections('workspace')].sort(byMenuOrder).map((contribution) => ({
     id: `${REPOSITORY_SECTION_PREFIX}${contribution.id}`,
     label: contribution.label,
     detail: contribution.detail,

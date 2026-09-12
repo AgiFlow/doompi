@@ -7,5 +7,7 @@ import { GrepToolMessage } from './components/GrepToolMessage.tsx';
  */
 export const webPlugin = defineWebPlugin({
   id: 'grep',
-  toolRenderers: [{ tools: ['grep'], message: GrepToolMessage }],
+  session: {
+    toolRenderers: [{ tools: ['grep'], message: GrepToolMessage }],
+  },
 });

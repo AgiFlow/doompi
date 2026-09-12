@@ -22,6 +22,7 @@ export interface HeadlessContextInventory {
 export interface HeadlessHostOptions {
   candidates: readonly DoomServerBundleEntry[];
   selection: DoomHeadlessSelection;
+  selectionOverrides?: readonly ('majorMode' | 'domains' | 'profile')[];
   context(selection: DoomHeadlessSelection): DoomHeadlessExecutionContext;
   applyTools(tools: readonly DoomHeadlessTool[]): void | Promise<void>;
   applyResources(resources: readonly ResolvedHeadlessResource[]): void | Promise<void>;

@@ -1,4 +1,7 @@
 import path from 'node:path';
+import os from 'node:os';
+import { loadDoomConfig } from '@agimon-ai/doompi-config/config';
+import { HARNESS_STATE_KEYS } from '@agimon-ai/doompi-config/harnessState';
 import { loadDomains } from '@agimon-ai/doompi-config/domains';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { loadProfileCatalog } from '@agimon-ai/doompi-config/profiles';
@@ -41,16 +44,24 @@ export function resolveHarnessOptions(input: ResolveHarnessOptionsInput): Harnes
   const cwd = input.cwd ?? process.cwd();
   const args = [...input.args];
 
-  const initial = parseHarnessArgs(args);
+  const initial = parseHarnessArgs(args, environment, cwd);
   const inheritedRoot = readHarnessState(environment, input.report).root;
   const repoRoot = inheritedRoot ? path.resolve(inheritedRoot) : resolveConfigurationRoot(initial.options.cwd);
+  const homeDirectory = initial.options.homeDirectory ?? environment.HOME ?? os.homedir();
+  const defaults = loadDoomConfig(repoRoot, homeDirectory).selection;
+  const selectedEnvironment = { ...environment };
+  for (const axis of ['majorMode', 'domains', 'profile'] as const) {
+    const value = defaults?.[axis];
+    if (value !== undefined && selectedEnvironment[HARNESS_STATE_KEYS[axis]] === undefined)
+      selectedEnvironment[HARNESS_STATE_KEYS[axis]] = Array.isArray(value) ? value.join(',') : value;
+  }
   const parsed = parseHarnessArgs(
     args,
-    environment,
+    selectedEnvironment,
     cwd,
-    loadMajorModesConfig(repoRoot).defaultMajorMode,
-    loadDomains(repoRoot).defaultDomains,
-    loadProfileCatalog(repoRoot).defaultProfile,
+    loadMajorModesConfig(repoRoot, homeDirectory).defaultMajorMode,
+    loadDomains(repoRoot, homeDirectory).defaultDomains,
+    loadProfileCatalog(repoRoot, homeDirectory).defaultProfile,
   );
-  return { repoRoot, ...parsed.options };
+  return { repoRoot, ...parsed.options, homeDirectory };
 }

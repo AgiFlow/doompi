@@ -80,5 +80,5 @@ export function itemDetailUrl(sessionId: string, itemKind: ContextItemKind, name
     [KIND_QUERY_PARAM]: itemKind,
     [NAME_QUERY_PARAM]: name,
   });
-  return `/api/plugin/${API_BASE_PATH}${ITEM_ROUTE}?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${ITEM_ROUTE}?${search.toString()}`;
 }

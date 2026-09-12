@@ -50,7 +50,7 @@ describe('doompi-author package contract', () => {
     expect(value.doompiServer).toEqual({
       entry: './src/exports/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['hub', 'session'],
+      scopes: ['global', 'workspace', 'session'],
     });
     expect(value.doompiWeb).toMatchObject({
       pluginId: 'author',

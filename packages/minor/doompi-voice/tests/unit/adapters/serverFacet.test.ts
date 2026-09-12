@@ -67,7 +67,7 @@ describe('voiceServerFacet', () => {
   });
 
   it('registers voice wake and ownership channels on the hub scope', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
 
     const dispose = voiceServerFacet.apply(harness.context);
 

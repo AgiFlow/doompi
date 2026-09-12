@@ -52,7 +52,7 @@ describe('teamServerFacet', () => {
   });
 
   it('registers and disposes Team channels in hub scope', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
     teamServerFacet.apply(harness.context)?.();
     expect(harness.channels.map((channel) => channel.frameType)).toEqual(['subagent_runs', 'subagent_catalog']);
     expect(harness.registered).toEqual([]);

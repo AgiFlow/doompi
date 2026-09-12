@@ -1,8 +1,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub.ts';
 import { createHeadlessProtocol } from './headlessProtocol.ts';
+import { observe, type ServerTelemetry } from './serverTelemetry.ts';
+import { DOOM_API_CALLER_HEADERS, type DoomApiMount } from '@agimon-ai/doompi-extension-contracts/package-api';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 const HEALTH_ROLE = 'hub';
 const PROTOCOL_VERSION = 1;
@@ -14,7 +20,10 @@ export interface HeadlessServerOptions {
   host?: string;
   /** Requests other than health require this bearer token when set. */
   token?: string;
+  telemetry?: ServerTelemetry;
   onNotice?: (message: string) => void;
+  compositions?: () => unknown;
+  requestAsset?: (request: Request) => Promise<Response | undefined>;
 }
 
 export interface HeadlessServer {
@@ -28,9 +37,19 @@ type Client = { socket: WebSocket; handler: ProtocolHandler };
 function sessionView(session: HeadlessHubSession): Record<string, unknown> {
   return {
     id: session.id,
+    workspaceId: session.workspaceId,
+    webComposition: session.webComposition,
     name: session.name,
     cwd: session.cwd,
     createdAt: session.createdAt,
+    updatedAt: session.updatedAt ?? session.createdAt,
+    phase: session.phase ?? 'idle',
+    phaseSince: session.phaseSince ?? session.createdAt,
+    attach: 'attached',
+    pendingMessageCount: session.pendingMessageCount ?? 0,
+    everPrompted: session.everPrompted ?? false,
+    awaitingInput: session.awaitingInput ?? false,
+    ...(session.lastSettledAt === undefined ? {} : { lastSettledAt: session.lastSettledAt }),
     ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
     ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
   };
@@ -66,6 +85,26 @@ function requestPath(request: IncomingMessage): URL {
   return new URL(request.url ?? '/', 'http://doompi.local');
 }
 
+async function directorySuggestions(query: string, sessions: readonly HeadlessHubSession[]): Promise<string[]> {
+  const typed = query.trim();
+  if (typed === '') return [];
+  const matches = (value: string): boolean => value.toLowerCase().includes(typed.toLowerCase());
+  const known = [...new Set([process.cwd(), ...sessions.map((session) => session.cwd)])].filter(matches);
+  if (!path.isAbsolute(typed)) return known.slice(0, 12);
+  const parent = path.dirname(typed);
+  const partial = path.basename(typed).toLowerCase();
+  try {
+    const entries = await fs.promises.readdir(parent, { withFileTypes: true });
+    const completed = entries
+      .filter((entry) => entry.isDirectory() && entry.name.toLowerCase().includes(partial))
+      .map((entry) => path.join(parent, entry.name))
+      .sort((left, right) => left.localeCompare(right));
+    return [...new Set([...known, ...completed])].slice(0, 12);
+  } catch {
+    return known.slice(0, 12);
+  }
+}
+
 async function readBody(request: IncomingMessage): Promise<Uint8Array> {
   const chunks: Buffer[] = [];
   let size = 0;
@@ -83,11 +122,13 @@ function parseJson(body: Uint8Array): unknown {
   return JSON.parse(Buffer.from(body).toString('utf8')) as unknown;
 }
 
-function writeResponse(response: ServerResponse, result: Response): Promise<void> {
+async function writeResponse(response: ServerResponse, result: Response): Promise<void> {
   response.writeHead(result.status, Object.fromEntries(result.headers.entries()));
-  return result.arrayBuffer().then((body) => {
-    response.end(Buffer.from(body));
-  });
+  if (result.body === null) {
+    response.end();
+    return;
+  }
+  await pipeline(Readable.fromWeb(result.body as import('node:stream/web').ReadableStream), response);
 }
 
 function eventFrame(event: HeadlessHubEvent): Record<string, unknown> {
@@ -121,7 +162,11 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
   const sse = new Set<ServerResponse>();
   let closed = false;
   const webSockets = new WebSocketServer({ noServer: true });
-  const protocol = await createHeadlessProtocol({ hub: options.headlessHub, onNotice: options.onNotice });
+  const protocol = await createHeadlessProtocol({
+    hub: options.headlessHub,
+    telemetry: options.telemetry,
+    onNotice: options.onNotice,
+  });
   const server = createServer((request, response) => {
     void handleRequest(request, response).catch((error: unknown) => {
       if (response.headersSent) {
@@ -152,6 +197,77 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       json(response, 401, { error: 'Unauthorized.' });
       return;
     }
+    if (url.pathname === '/api/telemetry/browser' && request.method === 'POST') {
+      const body = JSON.parse(new TextDecoder().decode(await readBody(request))) as { v?: unknown; events?: unknown };
+      if (body.v !== 1 || !Array.isArray(body.events) || body.events.length > 10) {
+        json(response, 400, { error: 'Invalid browser telemetry batch.' });
+        return;
+      }
+      for (const event of body.events) {
+        if (
+          !event ||
+          typeof event !== 'object' ||
+          typeof event.name !== 'string' ||
+          !/^web\.browser\.[a-z_]{1,40}$/u.test(event.name)
+        )
+          continue;
+        if (options.telemetry)
+          observe(
+            options.telemetry.recordEvent(event.name, {
+              ...(typeof event.duration_ms === 'number' && Number.isFinite(event.duration_ms) && event.duration_ms >= 0
+                ? { duration_ms: event.duration_ms }
+                : {}),
+              ...(typeof event.count === 'number' && Number.isFinite(event.count) && event.count >= 0
+                ? { count: event.count }
+                : {}),
+            }),
+          );
+      }
+      json(response, 200, { ok: true });
+      return;
+    }
+    if (url.pathname === '/api/compositions' && request.method === 'GET') {
+      json(response, 200, options.compositions?.() ?? { workspaces: [] });
+      return;
+    }
+    if (
+      (url.pathname.startsWith('/api/web-plugins/') ||
+        url.pathname === '/bundle-manifest.json' ||
+        url.pathname.startsWith('/bundle-assets/')) &&
+      options.requestAsset
+    ) {
+      const result = await options.requestAsset(new Request(url, { method: request.method }));
+      if (result) {
+        await writeResponse(response, result);
+        return;
+      }
+    }
+    if (url.pathname === '/api/directories' && request.method === 'GET') {
+      json(response, 200, {
+        directories: await directorySuggestions(url.searchParams.get('q') ?? '', options.headlessHub.snapshot()),
+      });
+      return;
+    }
+    if (url.pathname === '/api/sessions' && request.method === 'POST') {
+      const body: unknown = JSON.parse(new TextDecoder().decode(await readBody(request)));
+      if (
+        !body ||
+        typeof body !== 'object' ||
+        !('cwd' in body) ||
+        typeof body.cwd !== 'string' ||
+        !body.cwd.trim() ||
+        ('name' in body && typeof body.name !== 'string')
+      ) {
+        json(response, 400, { error: 'A session needs a working directory and an optional name.' });
+        return;
+      }
+      const created = await options.headlessHub.sessionService.create({
+        cwd: body.cwd,
+        name: 'name' in body ? String(body.name) : path.basename(body.cwd),
+      });
+      json(response, 201, { sessionId: created.sessionId });
+      return;
+    }
     if (url.pathname === '/api/sessions' && request.method === 'GET') {
       json(response, 200, { sessions: options.headlessHub.snapshot().map(sessionView) });
       return;
@@ -170,6 +286,105 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       });
       return;
     }
+    if (url.pathname === '/api/workspaces') {
+      if (request.method === 'GET') {
+        json(response, 200, { workspaces: options.headlessHub.workspaces() });
+        return;
+      }
+      if (request.method === 'POST') {
+        const body = parseJson(await readBody(request));
+        if (typeof body !== 'object' || body === null || !('root' in body) || typeof body.root !== 'string') {
+          json(response, 400, { error: 'A workspace root is required.' });
+          return;
+        }
+        const workspace = await options.headlessHub.admitWorkspace(body.root);
+        json(response, 201, { workspace });
+        return;
+      }
+    }
+    const workspaceMatch = /^\/api\/workspaces\/([^/]+)$/u.exec(url.pathname);
+    if (workspaceMatch && request.method === 'DELETE') {
+      const id = decodeURIComponent(workspaceMatch[1]);
+      if (!options.headlessHub.workspaces().some((workspace) => workspace.id === id)) {
+        json(response, 404, { error: 'Workspace not found.' });
+        return;
+      }
+      if (options.headlessHub.snapshot().some((session) => session.workspaceId === id)) {
+        json(response, 409, { error: 'Workspace still has live sessions.' });
+        return;
+      }
+      await options.headlessHub.removeWorkspace(id);
+      json(response, 200, { ok: true });
+      return;
+    }
+    const pluginMatch = /^\/api\/(global|workspaces\/([^/]+)|sessions\/([^/]+))\/plugin\/([^/]+)(?:\/(.*))?$/u.exec(
+      url.pathname,
+    );
+    if (pluginMatch !== null && request.method !== 'CONNECT') {
+      const mount: DoomApiMount =
+        pluginMatch[2] !== undefined
+          ? { scope: 'workspace', workspaceId: decodeURIComponent(pluginMatch[2]) }
+          : pluginMatch[3] !== undefined
+            ? { scope: 'session', sessionId: decodeURIComponent(pluginMatch[3]) }
+            : { scope: 'global' };
+      const basePath = decodeURIComponent(pluginMatch[4]);
+      if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u.test(basePath)) {
+        json(response, 400, { error: 'Invalid package API base path.' });
+        return;
+      }
+      const headers = new Headers();
+      for (const [name, value] of Object.entries(request.headers)) {
+        if (
+          value !== undefined &&
+          !['host', 'authorization', 'x-doompi-token', ...DOOM_API_CALLER_HEADERS].includes(name)
+        )
+          headers.set(name, Array.isArray(value) ? value.join(', ') : value);
+      }
+      const abort = new AbortController();
+      const disconnected = (): void => {
+        if (!response.writableEnded) abort.abort();
+      };
+      response.once('close', disconnected);
+      try {
+        const started = performance.now();
+        const attributes = {
+          scope: mount.scope,
+          'plugin.name': basePath,
+          'http.operation': request.method,
+          ...(mount.scope === 'workspace' ? { 'workspace.id': mount.workspaceId } : {}),
+          ...(mount.scope === 'session' ? { 'session.id': mount.sessionId } : {}),
+        };
+        const dispatch = async () =>
+          options.headlessHub.requestApi(
+            mount,
+            basePath,
+            new Request(`http://doompi.local/${pluginMatch[5] ?? ''}${url.search}`, {
+              method: request.method,
+              headers,
+              signal: abort.signal,
+              ...(request.method === 'GET' || request.method === 'HEAD'
+                ? {}
+                : { body: Buffer.from(await readBody(request)) }),
+            }),
+          );
+        const result = options.telemetry
+          ? await options.telemetry.runInSpan('doompi_server.plugin.request', attributes, dispatch)
+          : await dispatch();
+        if (options.telemetry)
+          observe(
+            options.telemetry.recordEvent('doompi_server.plugin.response', {
+              ...attributes,
+              status: result.status,
+              durationMs: performance.now() - started,
+            }),
+            options.onNotice,
+          );
+        await writeResponse(response, result);
+      } finally {
+        response.off('close', disconnected);
+      }
+      return;
+    }
     const sessionMatch = /^\/api\/sessions\/([^/]+)(?:\/(.*))?$/u.exec(url.pathname);
     if (sessionMatch === null) {
       json(response, 404, { error: 'Not found.' });
@@ -184,6 +399,11 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     const suffix = sessionMatch[2] === undefined ? '' : `/${sessionMatch[2]}`;
     if (suffix === '' && request.method === 'GET') {
       json(response, 200, sessionView(session));
+      return;
+    }
+    if (suffix === '' && request.method === 'DELETE') {
+      await options.headlessHub.closeSession(sessionId);
+      json(response, 200, { ok: true });
       return;
     }
     if (suffix === '/channels' && request.method === 'GET') {
@@ -201,32 +421,6 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
         typeof connectionId === 'string' ? connectionId : 'http',
       );
       json(response, 202, { ok: true });
-      return;
-    }
-    const apiMatch = /^\/api\/sessions\/([^/]+)\/api\/([^/]+)(?:\/(.*))?$/u.exec(url.pathname);
-    if (apiMatch !== null && request.method !== 'CONNECT') {
-      const apiSessionId = decodeURIComponent(apiMatch[1]);
-      if (apiSessionId !== sessionId) {
-        json(response, 404, { error: 'Session not found.' });
-        return;
-      }
-      const basePath = apiMatch[2];
-      const apiPath = `/${apiMatch[3] ?? ''}${url.search}`;
-      if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u.test(basePath)) {
-        json(response, 400, { error: 'Invalid package API base path.' });
-        return;
-      }
-      const result = await options.headlessHub.requestSessionApi(
-        { sessionId, cwd: session.cwd },
-        {
-          basePath,
-          path: apiPath,
-          method: request.method ?? 'GET',
-          body:
-            request.method === 'GET' || request.method === 'HEAD' ? undefined : Buffer.from(await readBody(request)),
-        },
-      );
-      await writeResponse(response, result);
       return;
     }
     json(response, 404, { error: 'Not found.' });

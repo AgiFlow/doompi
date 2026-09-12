@@ -201,26 +201,27 @@ function missingConsumerPackage(name: string, consumerRoot: string): Error {
  */
 export function createLayerResolvers(consumerRoot?: string): ExtensionLayerResolvers {
   if (!consumerRoot) return LAYER_RESOLVERS;
+  // Fixed host packages must match the executable, even when home contains an older installation.
   const fallbackEntry = (name: string): string | undefined =>
     FIXED_CORE_PACKAGES.has(packageName(name)) ? resolveOptionalPackageEntry(name) : undefined;
   const fallbackEntries = (name: string): string[] | undefined =>
     FIXED_CORE_PACKAGES.has(packageName(name)) ? resolveOptionalPackageEntries(name) : undefined;
   const requiredEntry = (name: string): string => {
-    const entry = consumerPackageEntry(name, consumerRoot) ?? fallbackEntry(name);
+    const entry = fallbackEntry(name) ?? consumerPackageEntry(name, consumerRoot);
     if (!entry) throw missingConsumerPackage(name, consumerRoot);
     return entry;
   };
   const requiredEntries = (name: string): string[] => {
-    const entries = consumerPackageEntries(name, consumerRoot) ?? fallbackEntries(name);
+    const entries = fallbackEntries(name) ?? consumerPackageEntries(name, consumerRoot);
     if (!entries) throw missingConsumerPackage(name, consumerRoot);
     return entries;
   };
   return {
     ownEntry,
     packageEntry: requiredEntry,
-    optionalPackageEntry: (name) => consumerPackageEntry(name, consumerRoot) ?? fallbackEntry(name),
+    optionalPackageEntry: (name) => fallbackEntry(name) ?? consumerPackageEntry(name, consumerRoot),
     packageEntries: requiredEntries,
-    optionalPackageEntries: (name) => consumerPackageEntries(name, consumerRoot) ?? fallbackEntries(name),
+    optionalPackageEntries: (name) => fallbackEntries(name) ?? consumerPackageEntries(name, consumerRoot),
     localEntry,
     localEntries,
     localPackageEntries,

@@ -21,6 +21,8 @@ import {
   type SessionServiceState,
   type SessionSnapshot,
   type TranscriptItem,
+  type TranscriptPage,
+  type TranscriptPageRequest,
   type RewindResult,
   type SessionStateInfo,
   type SessionStats,
@@ -29,8 +31,66 @@ import {
   type ThinkingLevel,
 } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import { observe, type ServerTelemetry } from './serverTelemetry.ts';
+import { readTranscriptPage, transcriptCursor } from './transcriptPages.ts';
 
 const SETTLED = 'agent_settled';
+const PROMPT_LATENCY_EVENT = 'doompi_server.prompt_latency';
+
+type PromptLatency = {
+  readonly startedAt: number;
+  lastStageAt: number;
+  readonly reported: Set<string>;
+};
+
+async function sessionStats(runtime: DirectHarnessRuntime, sessionId: string): Promise<SessionStats> {
+  const [stored, state, models] = await Promise.all([
+    runtime.getSessionStats(),
+    runtime.readState(),
+    runtime.availableModels(),
+  ]);
+  // Cost and token totals are maintained by Pi at commit time. Only recent
+  // assistant usage is needed to display context occupancy.
+  const recent = await runtime.lane.findEntries(
+    { type: 'message', order: 'newestFirst', limit: 100 },
+    BACKGROUND_CONTEXT,
+  );
+  const latestAssistant = recent.find((entry) => entry.type === 'message' && entry.message.role === 'assistant');
+  const latestUsage =
+    latestAssistant?.type === 'message' && latestAssistant.message.role === 'assistant'
+      ? latestAssistant.message.usage
+      : undefined;
+  const contextTokens =
+    latestUsage === undefined ? null : latestUsage.input + latestUsage.cacheRead + latestUsage.cacheWrite;
+  const selected =
+    typeof state.model === 'object' && state.model !== null
+      ? (state.model as { provider?: unknown; id?: unknown })
+      : undefined;
+  const model = models.find((candidate) => candidate.provider === selected?.provider && candidate.id === selected?.id);
+  const contextWindow = model?.contextWindow;
+  const sessionFile = typeof state.sessionFile === 'string' ? state.sessionFile : undefined;
+  return {
+    sessionId,
+    ...(sessionFile === undefined ? {} : { sessionFile }),
+    totalMessages: stored.messageCount,
+    tokens: {
+      input: stored.usage.input,
+      output: stored.usage.output,
+      cacheRead: stored.usage.cacheRead,
+      cacheWrite: stored.usage.cacheWrite,
+      total: stored.usage.totalTokens,
+    },
+    cost: stored.usage.cost.total,
+    ...(contextWindow === undefined
+      ? {}
+      : {
+          contextUsage: {
+            tokens: contextTokens,
+            contextWindow,
+            percent: contextTokens === null ? null : Math.round((contextTokens / contextWindow) * 100),
+          },
+        }),
+  };
+}
 
 export interface AgentSessionRuntimeOptions {
   runtime: DirectHarnessRuntime;
@@ -44,6 +104,11 @@ export interface AgentSessionRuntimeOptions {
   respondToExtensionUi?: (frame: DirectHarnessFrame) => boolean;
   /** Test seam for the projection. */
   transcript?: RpcTranscript;
+  readThreadTranscript?: (
+    threadId: string,
+    request: TranscriptPageRequest,
+    context: Context,
+  ) => Promise<TranscriptPage>;
 }
 
 export interface AgentSessionRuntime extends SessionService {
@@ -56,22 +121,56 @@ export interface AgentSessionRuntime extends SessionService {
 export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): AgentSessionRuntime {
   const transcript =
     options.transcript ??
-    createRpcTranscript({ id: options.sessionId, cwd: options.cwd, name: options.sessionName, now: Date.now });
+    createRpcTranscript({
+      id: options.sessionId,
+      cwd: options.cwd,
+      name: options.sessionName,
+      now: Date.now,
+      retainEntries: 0,
+    });
   const presentation = createSessionPresentation();
   const inFlight = new Map<string, TranscriptItem>();
+  let historyGeneration = 0;
+  const summary = (snapshot: SessionSnapshot): Omit<SessionSnapshot, 'transcript'> => {
+    const { transcript: _history, ...value } = snapshot;
+    return value;
+  };
   const state = replicatedState<SessionServiceState>({
-    snapshot: transcript.snapshot(),
+    snapshot: summary(transcript.snapshot()),
     progress: null,
-    inFlight: [],
     presentation: { revision: 0, dropped: 0, events: [], projections: [] },
   });
   const present = (frame: Record<string, unknown>): boolean => {
+    const entry = frame.entry as { seq?: number } | undefined;
+    if (frame.type === 'entry_appended' && typeof entry?.seq === 'number')
+      frame = {
+        ...frame,
+        transcriptCursor: transcriptCursor(options.sessionId, options.runtime.laneName, historyGeneration, entry.seq),
+      };
     const next = presentation.record(frame);
     if (next) state.state.presentation = next;
     return next !== undefined;
   };
   const settlers = new Set<{ resolve(): void; reject(error: Error): void }>();
+  let promptLatency: PromptLatency | undefined;
+  let lastToolResultAt: number | undefined;
+  let assistantMessageStartedAt: number | undefined;
   let disposed = false;
+  const reportPromptLatency = (phase: string): void => {
+    const active = promptLatency;
+    if (active === undefined || active.reported.has(phase) || options.telemetry === undefined) return;
+    const now = Date.now();
+    active.reported.add(phase);
+    observe(
+      options.telemetry.recordEvent(PROMPT_LATENCY_EVENT, {
+        session_id: options.sessionId,
+        phase,
+        duration_ms: now - active.startedAt,
+        stage_duration_ms: now - active.lastStageAt,
+      }),
+    );
+    active.lastStageAt = now;
+  };
   const rejectSettlers = (error: Error): void => {
     for (const waiter of settlers) waiter.reject(error);
     settlers.clear();
@@ -93,7 +192,39 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     ((listener: (frame: DirectHarnessFrame) => void) => options.runtime.onPresentationFrame(listener));
   const unsubscribePresentation = subscribePresentation((frame) => {
     if (disposed) return;
+    const message =
+      typeof frame.message === 'object' && frame.message !== null ? (frame.message as { role?: unknown }) : undefined;
+    if (frame.type === 'message_end' && message?.role === 'toolResult') lastToolResultAt = Date.now();
+    if (frame.type === 'message_start' && message?.role === 'assistant') {
+      const now = Date.now();
+      assistantMessageStartedAt = now;
+      if (lastToolResultAt !== undefined && options.telemetry) {
+        observe(
+          options.telemetry.recordEvent('doompi_server.tool_result_to_response', {
+            session_id: options.sessionId,
+            duration_ms: now - lastToolResultAt,
+          }),
+        );
+      }
+      lastToolResultAt = undefined;
+    }
+    if (frame.type === 'message_end' && message?.role === 'assistant') {
+      if (assistantMessageStartedAt !== undefined && options.telemetry)
+        observe(
+          options.telemetry.recordEvent('doompi_server.assistant_message', {
+            session_id: options.sessionId,
+            duration_ms: Date.now() - assistantMessageStartedAt,
+          }),
+        );
+      assistantMessageStartedAt = undefined;
+    }
+    if (frame.type === 'agent_start') reportPromptLatency('agent_started');
+    else if (frame.type === 'message_start' && message?.role === 'assistant') reportPromptLatency('response_started');
+    else if (frame.type === 'message_update' && message?.role === 'assistant') reportPromptLatency('first_response');
+    else if (frame.type === 'message_end' && message?.role === 'assistant') reportPromptLatency('response_completed');
+    const reductionStartedAt = performance.now();
     const reduction = transcript.apply(frame);
+    const reductionDurationMs = performance.now() - reductionStartedAt;
     if (reduction.aggregate && options.telemetry) {
       observe(
         options.telemetry.recordEvent('doompi_server.transcript.aggregate', {
@@ -102,18 +233,32 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
         }),
       );
     }
-    if (reduction.snapshot) state.state.snapshot = reduction.snapshot;
-    state.state.progress = reduction.progress ?? null;
+    if (reduction.snapshot) state.state.snapshot = summary(reduction.snapshot);
     if (reduction.progress) {
       const progress = reduction.progress;
       if (progress.type === 'item_finished') inFlight.delete(progress.item.id);
       else inFlight.set(progress.item.id, progress.item);
     }
     if (state.state.snapshot.phase === 'idle') inFlight.clear();
-    state.state.inFlight = [...inFlight.values()];
+    if (frame.type === 'navigation_end') historyGeneration += 1;
     const changed = present(frame);
+    const publishStartedAt = performance.now();
     if (reduction.snapshot || reduction.progress || changed) state.publish(BACKGROUND_CONTEXT);
+    const publishDurationMs = performance.now() - publishStartedAt;
+    if (options.telemetry && (reductionDurationMs >= 50 || publishDurationMs >= 50 || frame.type === SETTLED))
+      observe(
+        options.telemetry.recordEvent('doompi_server.presentation_frame', {
+          session_id: options.sessionId,
+          'frame.type': frame.type,
+          phase: 'reduce_and_publish',
+          duration_ms: reductionDurationMs + publishDurationMs,
+        }),
+      );
     if (frame.type === SETTLED) {
+      lastToolResultAt = undefined;
+      assistantMessageStartedAt = undefined;
+      reportPromptLatency('settled');
+      promptLatency = undefined;
       const waiting = [...settlers];
       settlers.clear();
       for (const settle of waiting) settle.resolve();
@@ -127,8 +272,9 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     requireLive();
     context.abortSignal?.throwIfAborted();
   };
-  const awaitSettled = (context: Context): { promise: Promise<void>; reject(error: Error): void } => {
+  const awaitSettled = (context: Context): { promise: Promise<void>; resolve(): void; reject(error: Error): void } => {
     let fail!: (error: Error) => void;
+    let finish!: () => void;
     const promise = new Promise<void>((resolve, reject) => {
       const cleanup = (): void => {
         settlers.delete(waiter);
@@ -149,10 +295,11 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
         void options.runtime.abort().catch(() => undefined);
       };
       fail = waiter.reject;
+      finish = waiter.resolve;
       settlers.add(waiter);
       context.abortSignal?.addEventListener('abort', cancel, { once: true });
     });
-    return { promise, reject: fail };
+    return { promise, resolve: finish, reject: fail };
   };
   const messageArgs = (
     input: string | SessionMessageArgs,
@@ -170,15 +317,36 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     return { message: args.text, ...(args.images === undefined ? {} : { images: args.images }) };
   };
   const hydrate = async (): Promise<void> => {
-    const { entries } = await options.runtime.readEntries();
     state.state.presentation = presentation.resetCustomEntries();
-    for (const entry of entries) if (entry.type === 'custom') present({ type: 'entry_appended', entry });
     state.publish(BACKGROUND_CONTEXT);
   };
   let initializing: Promise<void> | undefined;
 
   return {
     state,
+    async readTranscriptPage(args, context) {
+      guardContext(context);
+      if (args.threadId !== undefined) {
+        if (!options.readThreadTranscript) throw new Error('Child transcript reader is unavailable');
+        return options.readThreadTranscript(args.threadId, args, context);
+      }
+      const generation = historyGeneration;
+      const revision = state.state.presentation?.revision ?? 0;
+      const drafts = [...inFlight.values()];
+      const started = performance.now();
+      const page = await readTranscriptPage(options.runtime, args, generation, context);
+      if (options.telemetry)
+        observe(
+          options.telemetry.recordEvent('doompi_server.transcript_page', {
+            session_id: options.sessionId,
+            phase: args.direction ?? 'latest',
+            duration_ms: performance.now() - started,
+            count: page.entries.length,
+          }),
+        );
+      if (generation !== historyGeneration) throw new Error('STALE_TRANSCRIPT_CURSOR');
+      return { ...page, revision, drafts };
+    },
     initialize() {
       initializing ??= hydrate().catch((error: unknown) => {
         initializing = undefined;
@@ -193,18 +361,97 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
       if (waitFor !== 'accepted' && waitFor !== 'settled') throw new Error('Invalid prompt acknowledgement mode');
       if (transcript.phase() !== 'idle' || settlers.size > 0) throw new Error('A turn is already running');
       if (waitFor === 'accepted') {
-        await options.runtime.submitPrompt(args.message, args.images);
+        if (!options.telemetry) {
+          await options.runtime.submitPrompt(args.message, args.images);
+          return;
+        }
+        const telemetry = options.telemetry;
+        const startedAt = Date.now();
+        promptLatency = { startedAt, lastStageAt: startedAt, reported: new Set() };
+        const settled = awaitSettled(BACKGROUND_CONTEXT);
+        let resolveAdmission!: () => void;
+        let rejectAdmission!: (error: Error) => void;
+        const admitted = new Promise<void>((resolve, reject) => {
+          resolveAdmission = resolve;
+          rejectAdmission = reject;
+        });
+        observe(
+          telemetry.runInSpan('doompi_server.prompt_to_settled', { session_id: options.sessionId }, async () => {
+            let accepted = false;
+            try {
+              const submission = await telemetry.runInSpan(
+                'doompi_server.prompt_admission',
+                { session_id: options.sessionId },
+                () => options.runtime.submitPrompt(args.message, args.images),
+              );
+              if (submission.handledCommand) settled.resolve();
+              reportPromptLatency('accepted');
+              accepted = true;
+              resolveAdmission();
+              await Promise.all([
+                telemetry.runInSpan(
+                  'doompi_server.prompt_engine_settlement',
+                  { session_id: options.sessionId },
+                  () => submission.settled,
+                ),
+                telemetry.runInSpan(
+                  'doompi_server.prompt_projection_settlement',
+                  { session_id: options.sessionId },
+                  () => settled.promise,
+                ),
+              ]);
+            } catch (error) {
+              reportPromptLatency('failed');
+              promptLatency = undefined;
+              const failure = error instanceof Error ? error : new Error(String(error));
+              settled.reject(failure);
+              if (!accepted) {
+                await settled.promise.catch(() => undefined);
+                rejectAdmission(failure);
+              }
+              throw failure;
+            }
+          }),
+        );
+        await admitted;
         return;
       }
+      const startedAt = Date.now();
+      promptLatency = { startedAt, lastStageAt: startedAt, reported: new Set() };
       const settled = awaitSettled(context);
       const run = async (): Promise<void> => {
         try {
-          const submission = await options.runtime.submitPrompt(args.message, args.images);
-          await submission.settled;
+          const submit = () => options.runtime.submitPrompt(args.message, args.images);
+          const submission = options.telemetry
+            ? await options.telemetry.runInSpan(
+                'doompi_server.prompt_admission',
+                { session_id: options.sessionId },
+                submit,
+              )
+            : await submit();
+          if (submission.handledCommand) settled.resolve();
+          reportPromptLatency('accepted');
+          const engineSettlement = options.telemetry
+            ? options.telemetry.runInSpan(
+                'doompi_server.prompt_engine_settlement',
+                { session_id: options.sessionId },
+                () => submission.settled,
+              )
+            : submission.settled;
+          const projectionSettlement = options.telemetry
+            ? options.telemetry.runInSpan(
+                'doompi_server.prompt_projection_settlement',
+                { session_id: options.sessionId },
+                () => settled.promise,
+              )
+            : settled.promise;
+          await Promise.all([engineSettlement, projectionSettlement]);
         } catch (error) {
+          reportPromptLatency('failed');
+          promptLatency = undefined;
           settled.reject(error instanceof Error ? error : new Error(String(error)));
+          await settled.promise;
         }
-        await settled.promise;
       };
       if (options.telemetry)
         await options.telemetry.runInSpan('doompi_server.prompt_to_settled', { session_id: options.sessionId }, run);
@@ -291,7 +538,7 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
     },
     async getSessionStats(context) {
       guardContext(context);
-      return (await options.runtime.getSessionStats()) as unknown as SessionStats;
+      return sessionStats(options.runtime, options.sessionId);
     },
     async getCommands(context) {
       guardContext(context);

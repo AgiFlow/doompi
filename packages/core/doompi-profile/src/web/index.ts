@@ -8,7 +8,9 @@ import { defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
  */
 export const webPlugin = defineWebPlugin({
   id: 'profile',
-  selectionAxes: [
-    { name: 'profile', command: 'profile', statusKey: 'doom-profile', emptyLabel: 'no profile', order: 10 },
-  ],
+  session: {
+    selectionAxes: [
+      { name: 'profile', command: 'profile', statusKey: 'doom-profile', emptyLabel: 'no profile', order: 10 },
+    ],
+  },
 });

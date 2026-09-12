@@ -46,7 +46,7 @@ describe('gitServerFacet', () => {
   });
 
   it('registers the package API on the hub scope', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
 
     const dispose = gitServerFacet.apply(harness.context);
 
@@ -55,7 +55,7 @@ describe('gitServerFacet', () => {
   });
 
   it('unregisters the API when the host disposes the facet', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
 
     gitServerFacet.apply(harness.context)?.();
 

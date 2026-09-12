@@ -107,11 +107,11 @@ describe('the sync-time cockpit bundler', () => {
     // and the bundle still builds from the rest.
     const malformed = brokenPackage({
       name: 'malformed',
-      doompiWeb: { pluginId: 'Bad Case', client: './web/index.ts' },
+      doompiWeb: { scopes: ['session'], pluginId: 'Bad Case', client: './web/index.ts' },
     });
     const entryless = brokenPackage({
       name: 'entryless',
-      doompiWeb: { pluginId: 'entryless', client: './web/index.ts' },
+      doompiWeb: { scopes: ['session'], pluginId: 'entryless', client: './web/index.ts' },
     });
 
     // The real thing: Vite compiles the host shell plus doompi-workflow's

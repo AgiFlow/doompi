@@ -1,9 +1,10 @@
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context';
 import { describe, expect, it, vi } from 'vitest';
 import { createAgentSessionRuntime } from '../../../../src/adapters/server/piSessionRuntime.ts';
+import type { ServerTelemetry } from '../../../../src/adapters/server/serverTelemetry.ts';
 import type { DirectHarnessFrame, DirectHarnessRuntime } from '../../../../src/types/server/directHarnessRuntime.ts';
 
-function fixture() {
+function fixture(telemetry?: ServerTelemetry) {
   const listeners = new Set<(frame: DirectHarnessFrame) => void>();
   const direct = {
     exited: new Promise<number>(() => undefined),
@@ -29,8 +30,26 @@ function fixture() {
     abort: vi.fn(async () => undefined),
     compact: vi.fn(async () => undefined),
     setName: vi.fn(async () => undefined),
-    getSessionStats: vi.fn(async () => ({ messages: 0 })),
+    getSessionStats: vi.fn(async () => ({
+      messageCount: 2,
+      usage: {
+        input: 100,
+        output: 20,
+        cacheRead: 30,
+        cacheWrite: 10,
+        totalTokens: 160,
+        cost: { input: 0.1, output: 0.2, cacheRead: 0.03, cacheWrite: 0.01, total: 0.34 },
+      },
+    })),
   } as unknown as DirectHarnessRuntime;
+  Object.assign(direct, {
+    sessionId: 's1',
+    laneName: 'main',
+    lane: {
+      findEntries: vi.fn(async () => (await direct.readEntries()).entries.toReversed()),
+      getTipId: vi.fn(async () => null),
+    },
+  });
   const respondToExtensionUi = vi.fn(() => true);
   const runtime = createAgentSessionRuntime({
     runtime: direct,
@@ -38,6 +57,7 @@ function fixture() {
     sessionName: 'test',
     cwd: '/test',
     respondToExtensionUi,
+    telemetry,
   });
   return {
     direct,
@@ -62,6 +82,48 @@ describe('typed session runtime controls', () => {
 
     expect(direct.setModel).toHaveBeenCalledWith({ provider: 'test', id: 'm' });
     expect(direct.setThinkingLevel).toHaveBeenCalledWith('high');
+    await runtime.dispose();
+  });
+
+  it('projects v4 storage usage into the client session stats contract', async () => {
+    const { direct, runtime } = fixture();
+    vi.mocked(direct.readState).mockResolvedValue({
+      sessionId: 's1',
+      sessionFile: '/tmp/s1.jsonl',
+      model: { provider: 'test', id: 'm' },
+    });
+    vi.mocked(direct.availableModels).mockResolvedValue([{ provider: 'test', id: 'm', contextWindow: 1_000 } as never]);
+    vi.mocked(direct.readEntries).mockResolvedValue({
+      leafId: 'assistant',
+      entries: [
+        { type: 'message', id: 'user', message: { role: 'user', content: 'hello' } },
+        {
+          type: 'message',
+          id: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'hi' }],
+            usage: {
+              input: 100,
+              output: 20,
+              cacheRead: 30,
+              cacheWrite: 10,
+              totalTokens: 160,
+              cost: { input: 0.1, output: 0.2, cacheRead: 0.03, cacheWrite: 0.01, total: 0.34 },
+            },
+          },
+        },
+      ] as never,
+    });
+
+    await expect(runtime.getSessionStats(BACKGROUND_CONTEXT)).resolves.toEqual({
+      sessionId: 's1',
+      sessionFile: '/tmp/s1.jsonl',
+      totalMessages: 2,
+      tokens: { input: 100, output: 20, cacheRead: 30, cacheWrite: 10, total: 160 },
+      cost: 0.34,
+      contextUsage: { tokens: 140, contextWindow: 1_000, percent: 14 },
+    });
     await runtime.dispose();
   });
 
@@ -119,6 +181,176 @@ describe('typed session runtime controls', () => {
     await runtime.prompt({ text: 'accepted', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
     expect(direct.submitPrompt).toHaveBeenLastCalledWith('accepted', undefined);
     await runtime.dispose();
+  });
+
+  it('releases command prompts without an agent settlement frame', async () => {
+    const { direct, runtime } = fixture();
+    vi.mocked(direct.submitPrompt).mockResolvedValue({ settled: Promise.resolve(), handledCommand: true });
+    try {
+      await runtime.prompt('/minor plan', BACKGROUND_CONTEXT);
+      await runtime.prompt('/profile', BACKGROUND_CONTEXT);
+      expect(direct.submitPrompt).toHaveBeenCalledTimes(2);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it('releases accepted command prompts with telemetry enabled', async () => {
+    const telemetry = {
+      recordEvent: vi.fn(async () => undefined),
+      recordWarning: vi.fn(async () => undefined),
+      recordError: vi.fn(async () => undefined),
+      runInSpan: vi.fn(async (_name, _attributes, callback) => callback()),
+      flush: vi.fn(async () => undefined),
+      shutdown: vi.fn(async () => undefined),
+    } as ServerTelemetry;
+    const { direct, runtime } = fixture(telemetry);
+    vi.mocked(direct.submitPrompt).mockResolvedValue({ settled: Promise.resolve(), handledCommand: true });
+    try {
+      await runtime.prompt({ text: '/minor plan', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
+      await runtime.prompt({ text: '/profile', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
+      expect(direct.submitPrompt).toHaveBeenCalledTimes(2);
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it('records prompt latency stages and spans without delaying presentation', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const telemetry = {
+      recordEvent: vi.fn(async () => undefined),
+      recordWarning: vi.fn(async () => undefined),
+      recordError: vi.fn(async () => undefined),
+      runInSpan: vi.fn(async (_name, _attributes, callback) => callback()),
+      flush: vi.fn(async () => undefined),
+      shutdown: vi.fn(async () => undefined),
+    } as ServerTelemetry;
+    const { runtime, emit } = fixture(telemetry);
+    try {
+      const pending = runtime.prompt('trace me', BACKGROUND_CONTEXT);
+      await vi.advanceTimersByTimeAsync(10);
+      emit({ type: 'agent_start' });
+      await vi.advanceTimersByTimeAsync(20);
+      emit({ type: 'message_start', message: { role: 'assistant' } });
+      await vi.advanceTimersByTimeAsync(30);
+      emit({ type: 'message_update', message: { role: 'assistant' } });
+      await vi.advanceTimersByTimeAsync(40);
+      emit({ type: 'message_end', message: { role: 'assistant' } });
+      await vi.advanceTimersByTimeAsync(50);
+      emit({ type: 'agent_settled' });
+      await pending;
+
+      expect(telemetry.runInSpan).toHaveBeenCalledWith(
+        'doompi_server.prompt_to_settled',
+        { session_id: 's1' },
+        expect.any(Function),
+      );
+      expect(telemetry.runInSpan).toHaveBeenCalledWith(
+        'doompi_server.prompt_admission',
+        { session_id: 's1' },
+        expect.any(Function),
+      );
+      expect(telemetry.runInSpan).toHaveBeenCalledWith(
+        'doompi_server.prompt_engine_settlement',
+        { session_id: 's1' },
+        expect.any(Function),
+      );
+      expect(telemetry.runInSpan).toHaveBeenCalledWith(
+        'doompi_server.prompt_projection_settlement',
+        { session_id: 's1' },
+        expect.any(Function),
+      );
+      expect(telemetry.recordEvent).toHaveBeenCalledWith(
+        'doompi_server.prompt_latency',
+        expect.objectContaining({ phase: 'first_response', duration_ms: 60 }),
+      );
+      expect(telemetry.recordEvent).toHaveBeenCalledWith(
+        'doompi_server.prompt_latency',
+        expect.objectContaining({ phase: 'settled', duration_ms: 150, stage_duration_ms: 50 }),
+      );
+    } finally {
+      await runtime.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('records accepted prompt latency through background settlement', async () => {
+    const telemetry = {
+      recordEvent: vi.fn(async () => undefined),
+      recordWarning: vi.fn(async () => undefined),
+      recordError: vi.fn(async () => undefined),
+      runInSpan: vi.fn(async (_name, _attributes, callback) => callback()),
+      flush: vi.fn(async () => undefined),
+      shutdown: vi.fn(async () => undefined),
+    } as ServerTelemetry;
+    const { runtime, emit } = fixture(telemetry);
+    try {
+      await runtime.prompt({ text: 'accepted trace', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
+      expect(telemetry.recordEvent).toHaveBeenCalledWith(
+        'doompi_server.prompt_latency',
+        expect.objectContaining({ phase: 'accepted' }),
+      );
+
+      emit({ type: 'agent_settled' });
+      await vi.waitFor(() => {
+        expect(telemetry.runInSpan).toHaveBeenCalledWith(
+          'doompi_server.prompt_to_settled',
+          { session_id: 's1' },
+          expect.any(Function),
+        );
+        expect(telemetry.recordEvent).toHaveBeenCalledWith(
+          'doompi_server.prompt_latency',
+          expect.objectContaining({ phase: 'settled' }),
+        );
+      });
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
+  it('times assistant messages and the gap after a tool result', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const telemetry = {
+      recordEvent: vi.fn(async () => undefined),
+      recordWarning: vi.fn(async () => undefined),
+      recordError: vi.fn(async () => undefined),
+      runInSpan: vi.fn(async (_name, _attributes, callback) => callback()),
+      flush: vi.fn(async () => undefined),
+      shutdown: vi.fn(async () => undefined),
+    } as ServerTelemetry;
+    const { runtime, emit } = fixture(telemetry);
+    try {
+      const pending = runtime.prompt('trace a tool', BACKGROUND_CONTEXT);
+      await vi.advanceTimersByTimeAsync(10);
+      emit({ type: 'message_start', message: { role: 'assistant' } });
+      await vi.advanceTimersByTimeAsync(20);
+      emit({ type: 'message_end', message: { role: 'assistant' } });
+      emit({ type: 'message_end', message: { role: 'toolResult' } });
+      await vi.advanceTimersByTimeAsync(50);
+      emit({ type: 'message_start', message: { role: 'assistant' } });
+      await vi.advanceTimersByTimeAsync(30);
+      emit({ type: 'message_end', message: { role: 'assistant' } });
+      emit({ type: 'agent_settled' });
+      await pending;
+
+      expect(telemetry.recordEvent).toHaveBeenCalledWith('doompi_server.tool_result_to_response', {
+        session_id: 's1',
+        duration_ms: 50,
+      });
+      expect(telemetry.recordEvent).toHaveBeenCalledWith('doompi_server.assistant_message', {
+        session_id: 's1',
+        duration_ms: 20,
+      });
+      expect(telemetry.recordEvent).toHaveBeenCalledWith('doompi_server.assistant_message', {
+        session_id: 's1',
+        duration_ms: 30,
+      });
+    } finally {
+      await runtime.dispose();
+      vi.useRealTimers();
+    }
   });
 
   it('aborts the active direct turn when the caller cancels', async () => {
@@ -187,7 +419,7 @@ describe('typed session runtime controls', () => {
       await runtime.dispose();
     }
   });
-  it('hydrates persisted custom entries once and propagates prompt admission failures', async () => {
+  it('initializes without loading history and propagates prompt admission failures', async () => {
     const { direct, runtime } = fixture();
     vi.mocked(direct.readEntries).mockResolvedValue({
       leafId: null,
@@ -197,7 +429,7 @@ describe('typed session runtime controls', () => {
     try {
       await runtime.initialize();
       await runtime.initialize();
-      expect(direct.readEntries).toHaveBeenCalledOnce();
+      expect(direct.readEntries).not.toHaveBeenCalled();
       await expect(runtime.prompt('will fail', BACKGROUND_CONTEXT)).rejects.toThrow('prompt admission failed');
     } finally {
       await runtime.dispose();

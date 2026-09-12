@@ -2537,7 +2537,6 @@
       "./commands": "tir",
       "./config": "tir",
       "./delegation/manager": "tir",
-      "./extension": "tir",
       "./extensions/pi": "tir",
       "./extensions/server": "tir",
       "./logSinkTelemetry": "tir",
@@ -2579,11 +2578,6 @@
         "types": "./dist/delegation/manager.d.mts",
         "import": "./dist/delegation/manager.mjs",
         "require": "./dist/delegation/manager.cjs"
-      },
-      "./extension": {
-        "types": "./dist/extension.d.mts",
-        "import": "./dist/extension.mjs",
-        "require": "./dist/extension.cjs"
       },
       "./extensions/pi": {
         "types": "./dist/extensions/pi.d.mts",
@@ -2779,7 +2773,6 @@
       "./components/matrixPicker": "tir",
       "./components/toolsOverlay": "tir",
       "./config": "tir",
-      "./extension": "tir",
       "./extensionName": "tir",
       "./extensions/pi": "tir",
       "./extensions/server": "tir",
@@ -2848,11 +2841,6 @@
         "types": "./dist/config.d.mts",
         "import": "./dist/config.mjs",
         "require": "./dist/config.cjs"
-      },
-      "./extension": {
-        "types": "./dist/extension.d.mts",
-        "import": "./dist/extension.mjs",
-        "require": "./dist/extension.cjs"
       },
       "./extensionName": {
         "types": "./dist/extensionName.d.mts",

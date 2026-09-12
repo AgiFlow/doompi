@@ -33,7 +33,7 @@ function fixture() {
   } as DoomHeadlessExecutionContext;
   const host = {
     context: execution,
-    select: async (patch: Partial<DoomHeadlessSelection>) => {
+    changeSelection: async (patch: Partial<DoomHeadlessSelection>) => {
       selection = { ...selection, ...patch };
     },
     registerMinorMode: (value: DoomHeadlessMinorMode) => {

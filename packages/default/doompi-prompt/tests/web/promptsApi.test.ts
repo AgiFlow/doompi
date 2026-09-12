@@ -21,7 +21,7 @@ describe('reading the library', () => {
     await expect(fetchSavedPrompts()).resolves.toEqual({
       prompts: [{ name: 'review', description: 'r', text: 'r' }],
     });
-    expect(transport).toHaveBeenCalledWith('/api/plugin/prompts/prompts', {});
+    expect(transport).toHaveBeenCalledWith('/api/global/plugin/prompts/prompts', {});
   });
 
   it('routes a focused session through its selected hub bundle', async () => {
@@ -29,7 +29,7 @@ describe('reading the library', () => {
 
     await fetchSavedPrompts(undefined, 'session/a');
 
-    expect(transport).toHaveBeenCalledWith('/api/plugin/prompts/prompts?hubSession=session%2Fa', {});
+    expect(transport).toHaveBeenCalledWith('/api/sessions/session%2Fa/plugin/prompts/prompts', {});
   });
 
   it('passes the abort signal through', async () => {
@@ -38,7 +38,7 @@ describe('reading the library', () => {
 
     await fetchSavedPrompts(controller.signal);
 
-    expect(transport).toHaveBeenCalledWith('/api/plugin/prompts/prompts', { signal: controller.signal });
+    expect(transport).toHaveBeenCalledWith('/api/global/plugin/prompts/prompts', { signal: controller.signal });
   });
 
   it('treats an abort as no answer rather than a failure to show', async () => {
@@ -83,7 +83,7 @@ describe('writing the library', () => {
     transport.mockResolvedValue(jsonResponse({ prompt: {}, replaced: false }));
 
     await expect(saveSavedPrompt('review', 'body')).resolves.toBeUndefined();
-    expect(transport).toHaveBeenCalledWith('/api/plugin/prompts/prompts/review', {
+    expect(transport).toHaveBeenCalledWith('/api/global/plugin/prompts/prompts/review', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text: 'body' }),
@@ -97,8 +97,8 @@ describe('writing the library', () => {
     await deleteSavedPrompt('review', 'session-a');
 
     expect(transport.mock.calls.map(([url]) => url)).toEqual([
-      '/api/plugin/prompts/prompts/review?hubSession=session-a',
-      '/api/plugin/prompts/prompts/review?hubSession=session-a',
+      '/api/sessions/session-a/plugin/prompts/prompts/review',
+      '/api/sessions/session-a/plugin/prompts/prompts/review',
     ]);
   });
 
@@ -118,7 +118,7 @@ describe('writing the library', () => {
     transport.mockResolvedValue(jsonResponse({ name: 'review' }));
 
     await expect(deleteSavedPrompt('review')).resolves.toBeUndefined();
-    expect(transport).toHaveBeenCalledWith('/api/plugin/prompts/prompts/review', { method: 'DELETE' });
+    expect(transport).toHaveBeenCalledWith('/api/global/plugin/prompts/prompts/review', { method: 'DELETE' });
   });
 
   it('reports a refused delete', async () => {
@@ -138,6 +138,6 @@ describe('writing the library', () => {
 
     await deleteSavedPrompt('a/b');
 
-    expect(transport).toHaveBeenCalledWith('/api/plugin/prompts/prompts/a%2Fb', { method: 'DELETE' });
+    expect(transport).toHaveBeenCalledWith('/api/global/plugin/prompts/prompts/a%2Fb', { method: 'DELETE' });
   });
 });

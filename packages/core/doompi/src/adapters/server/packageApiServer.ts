@@ -4,7 +4,11 @@ import {
   type DoomApiContext,
 } from '@agimon-ai/doompi-extension-contracts/package-api';
 import type { DoomDirectEventBus, DoomHubSessionService } from '@agimon-ai/doompi-extension-contracts/hub-channel';
-import { createDoomServerHost, type DoomServerFacet } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import {
+  createDoomServerHost,
+  type CreateDoomServerHostOptions,
+  type DoomServerFacet,
+} from '@agimon-ai/doompi-extension-contracts/server-facet';
 import {
   installServerFacets,
   type LoadedServerFacet,
@@ -24,6 +28,10 @@ export const COMPLETION_SPAN_MIN_DURATION_MS = 1000;
 
 export interface PackageApiServerOptions {
   sessionId: string;
+  workspaceId?: string;
+  workspaceRoot?: string;
+  homeDirectory?: string;
+  mountChannel?: CreateDoomServerHostOptions['mountChannel'];
   cwd: string;
   /** Admitted environment for APIs serving this session. */
   readonly environment: Readonly<Record<string, string | undefined>>;
@@ -101,6 +109,9 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
   const context: DoomApiContext = {
     scope: 'session',
     sessionId: options.sessionId,
+    workspaceId: options.workspaceId,
+    workspaceRoot: options.workspaceRoot,
+    homeDirectory: options.homeDirectory,
     cwd: options.cwd,
     environment: options.environment,
     directEvents: options.directEvents,
@@ -109,7 +120,7 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     ...(options.sessionService === undefined ? {} : { sessionService: options.sessionService }),
     onNotice: options.onNotice,
   };
-  const host = createDoomServerHost({ scope: 'session', context });
+  const host = createDoomServerHost({ scope: 'session', context, mountChannel: options.mountChannel });
   for (const api of options.apis) host.registerApi(api);
   let installed: InstalledServerFacets;
   try {

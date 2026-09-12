@@ -3,7 +3,7 @@ import { MCP_AUTHORIZATION_API_PATH, MCP_DISCOVERY_API_PATH, MCP_REPOSITORY_API_
 import { McpSettingsManager } from '../node/mcpSettingsManager.ts';
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
-const REPOSITORY_ID = /^repo-[A-Za-z0-9_-]{24}$/u;
+const REPOSITORY_ID = /^(?:[a-f0-9]{32}|repo-[A-Za-z0-9_-]{24})$/u;
 const FLOW_ID = /^[a-f0-9-]{36}$/u;
 const MAX_BODY_BYTES = 8 * 1024;
 const MAX_SERVER_NAME = 160;

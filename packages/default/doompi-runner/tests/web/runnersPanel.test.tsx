@@ -4,7 +4,13 @@ import { LaunchRunnerDialog } from '../../src/web/components/LaunchRunnerDialog.
 import { RunnersActivitySection } from '../../src/web/components/RunnersActivitySection.tsx';
 import { RunnersPanel } from '../../src/web/components/RunnersPanel.tsx';
 import { RunnerShellPanel, runnerShellTab } from '../../src/web/components/RunnerShellPanel.tsx';
-import { webPlugin } from '../../src/web/index.ts';
+import { webPlugin as scopedWebPlugin } from '../../src/web/index.ts';
+const webPlugin = {
+  id: scopedWebPlugin.id,
+  ...scopedWebPlugin.global,
+  ...scopedWebPlugin.workspace,
+  ...scopedWebPlugin.session,
+};
 import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore.ts';
 import type { RunnerRunView } from '../../src/types/webRunners.ts';
 

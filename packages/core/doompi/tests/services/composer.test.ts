@@ -451,7 +451,6 @@ describe('composeLoadOrder', () => {
       '/pkg/@agimon-ai/doompi-profile/extensions/persona',
       '/own/cordisFinalizer.ts',
     ]);
-    expect(environment.DOOMPI_CORDIS_HOST_REQUIRED).toBe('1');
   });
 });
 

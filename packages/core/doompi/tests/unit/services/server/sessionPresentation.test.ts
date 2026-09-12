@@ -16,7 +16,7 @@ describe('session presentation replay', () => {
       lines: ['running'],
     });
     expect(state?.dropped).toBeGreaterThan(0);
-    expect(state?.events).toHaveLength(1024);
+    expect(state?.events).toHaveLength(64);
     expect(state?.projections.map((event) => event.frame)).toEqual([
       expect.objectContaining({ statusKey: 'mode' }),
       expect.objectContaining({ id: 'kept' }),

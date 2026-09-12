@@ -415,7 +415,7 @@ describe('serving a session package APIs', () => {
           inject: [DOOM_SERVER_HOST_SERVICE],
           apply(context) {
             const host = context.get(DOOM_SERVER_HOST_SERVICE);
-            return host?.scope === 'hub' ? () => undefined : undefined;
+            return host?.scope === 'global' ? () => undefined : undefined;
           },
         },
       ],

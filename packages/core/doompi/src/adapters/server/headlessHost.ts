@@ -14,6 +14,7 @@ import {
   type DoomHeadlessRegistration,
   type DoomHeadlessResource,
   type DoomHeadlessSelection,
+  type DoomHeadlessSelectionChange,
   type DoomHeadlessTool,
   type DoomHeadlessCondition,
   type DoomHeadlessToolRestriction,
@@ -43,6 +44,24 @@ import type {
 type Owned<T> = { source: string; value: T };
 type StopActivity = () => void | Promise<void>;
 
+function sameStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function sameValues(left: readonly unknown[], right: readonly unknown[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function sameSelection(left: DoomHeadlessSelection, right: DoomHeadlessSelection): boolean {
+  return (
+    left.majorMode === right.majorMode &&
+    left.profile === right.profile &&
+    sameStrings(left.activeLayers, right.activeLayers) &&
+    sameStrings(left.domains, right.domains) &&
+    sameStrings(left.minorModes, right.minorModes)
+  );
+}
+
 /** Maps one typed headless resource to the exact skill shape installed in AgentHarness. */
 export function headlessHarnessSkill(resource: ResolvedHeadlessResource) {
   return {
@@ -59,9 +78,11 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
   readonly catalog: MinorModeCatalogService;
   private restrictions: readonly DoomHeadlessToolRestriction[] = [];
   private readonly options: HeadlessHostOptions;
+  private readonly selectionOverrides: Set<string>;
   private applied: DoomHeadlessSelection;
   private requested: DoomHeadlessSelection;
   private applying: DoomHeadlessSelection;
+  private refreshing = false;
   private requestedRevision = 0;
   private appliedRevision = 0;
   private ready = false;
@@ -80,6 +101,7 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
   constructor(context: Context, options: HeadlessHostOptions) {
     super(context, DOOM_HEADLESS_HOST_SERVICE);
     this.options = options;
+    this.selectionOverrides = new Set(options.selectionOverrides);
     this.applied = structuredClone(options.selection);
     this.requested = this.applied;
     this.applying = this.applied;
@@ -306,6 +328,56 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     );
   }
 
+  changeSelection(change: DoomHeadlessSelectionChange): Promise<void> {
+    this.selectionOverrides.add(change.axis);
+    if (change.axis === 'majorMode') return this.select({ majorMode: change.majorMode });
+    if (change.axis === 'domains') return this.select({ domains: change.domains });
+    if (change.axis === 'profile') return this.select({ profile: change.profile });
+    return this.select({ minorModes: change.minorModes });
+  }
+
+  private async refreshChangedSelection(
+    previous: DoomHeadlessSelection,
+    selection: DoomHeadlessSelection,
+    previousValues: ReadonlyMap<string, readonly unknown[]>,
+  ): Promise<void> {
+    const majorChanged =
+      previous.majorMode !== selection.majorMode || !sameStrings(previous.activeLayers, selection.activeLayers);
+    const domainsChanged = !sameStrings(previous.domains, selection.domains);
+    const profileChanged = previous.profile !== selection.profile;
+    const minorModesChanged = !sameStrings(previous.minorModes, selection.minorModes);
+    if (this.appliedRevision === 0) return;
+
+    const refresh = async (slot: string): Promise<void> => {
+      const before = previousValues.get(slot) ?? [];
+      if (sameValues(before, this.kernel.activeValues(slot))) await this.kernel.refresh(slot);
+    };
+    if (minorModesChanged) await refresh('restrictions');
+    if (majorChanged || domainsChanged || minorModesChanged) await refresh('tools');
+    if (majorChanged || domainsChanged || profileChanged || minorModesChanged) await refresh('resources');
+    if (domainsChanged || minorModesChanged) {
+      await refresh('commands');
+      await refresh('hooks');
+      await refresh('activities');
+    }
+  }
+
+  /** Refresh inherited defaults only at turn admission, keeping explicit session axes. */
+  async inheritSelection(selection: Partial<DoomHeadlessSelection>): Promise<void> {
+    const patch: Partial<DoomHeadlessSelection> = {
+      ...(!this.selectionOverrides.has('majorMode') && selection.majorMode !== undefined
+        ? { majorMode: selection.majorMode }
+        : {}),
+      ...(!this.selectionOverrides.has('domains') && selection.domains !== undefined
+        ? { domains: selection.domains }
+        : {}),
+      ...(!this.selectionOverrides.has('profile') && Object.hasOwn(selection, 'profile')
+        ? { profile: selection.profile }
+        : {}),
+    };
+    await this.select(patch);
+  }
+
   async select(patch: Partial<DoomHeadlessSelection>): Promise<void> {
     if (this.disposed) throw new Error('The headless host is disposed');
     const requested = structuredClone({ ...this.requested, ...patch });
@@ -323,10 +395,23 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       // The kernel's layer key here is the precomputed package eligibility key.
       // Minor tool restrictions run in the tools sink only after this owner gate.
       this.applying = selection;
-      await this.kernel.setActiveLayers(eligible.map((entry) => entry.packageName));
-      await this.kernel.refresh();
+      this.refreshing = true;
+      try {
+        const previousValues = new Map(
+          this.kernel.slots.map((slot) => [slot, this.kernel.activeValues(slot)] as const),
+        );
+        await this.kernel.setActiveLayers(eligible.map((entry) => entry.packageName));
+        await this.refreshChangedSelection(this.applied, selection, previousValues);
+        const compositionChanged =
+          this.appliedRevision === 0 ||
+          !sameSelection(this.applied, selection) ||
+          !sameValues(previousValues.get('tools') ?? [], this.kernel.activeValues('tools')) ||
+          !sameValues(previousValues.get('resources') ?? [], this.kernel.activeValues('resources'));
+        if (compositionChanged) await this.options.onApplied?.(selection, revision);
+      } finally {
+        this.refreshing = false;
+      }
       if (this.disposed) throw new Error('The headless host is disposed');
-      await this.options.onApplied?.(selection, revision);
       this.activeSources = new Set(eligible.map((entry) => entry.packageName));
       this.applied = selection;
       this.appliedRevision = revision;
@@ -362,11 +447,11 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       disposed = true;
       this.ready = false;
       registration.dispose();
-      if (!this.disposed) void this.select({}).catch(() => undefined);
+      if (!this.disposed && !this.refreshing) void this.select({}).catch(() => undefined);
     };
     this.ctx.effect(() => dispose, `headless ${slot} contribution`);
     // Initial registration is reconciled once the caller has installed all facets.
-    if (this.appliedRevision > 0) void this.select({}).catch(() => undefined);
+    if (this.appliedRevision > 0 && !this.refreshing) void this.select({}).catch(() => undefined);
     return { dispose };
   }
 
@@ -465,11 +550,19 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     const context = this.options.context(selection);
     const result: ResolvedHeadlessResource[] = [];
     for (const resource of this.resources) {
+      let value: string;
+      try {
+        value = await resource.value.read(context);
+      } catch (error) {
+        throw new Error(`Could not read headless resource '${resource.source}/${resource.value.name}'`, {
+          cause: error,
+        });
+      }
       result.push({
         source: resource.source,
         name: resource.value.name,
         kind: resource.value.kind,
-        text: await resource.value.read(context),
+        text: value,
       });
     }
     return result;

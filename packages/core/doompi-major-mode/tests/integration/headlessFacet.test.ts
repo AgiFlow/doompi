@@ -38,7 +38,7 @@ function setup() {
   const commands: DoomHeadlessCommand[] = [];
   const resources: DoomHeadlessResource[] = [];
   const disposed = vi.fn();
-  const select = vi.fn(async () => undefined);
+  const changeSelection = vi.fn(async () => undefined);
   const host = {
     registerResource: (resource: DoomHeadlessResource) => {
       resources.push(resource);
@@ -48,7 +48,7 @@ function setup() {
       commands.push(command);
       return { dispose: disposed };
     },
-    select,
+    changeSelection,
   } as unknown as DoomHeadlessHostService;
   const dispose = majorModeHeadlessFacet.apply({ get: () => host } as unknown as Context);
   const execution: DoomHeadlessExecutionContext = {
@@ -68,7 +68,7 @@ function setup() {
     },
     shutdown: vi.fn(),
   };
-  return { command: commands[0]!, execution, select, resources, dispose, disposed };
+  return { changeSelection, command: commands[0]!, execution, resources, dispose, disposed };
 }
 
 describe('headless major-mode command validation', () => {
@@ -90,15 +90,15 @@ describe('headless major-mode command validation', () => {
   });
 
   it('rejects unknown modes from the admitted repository before requesting a transition', async () => {
-    const { command, execution, select } = setup();
+    const { changeSelection, command, execution } = setup();
     await expect(command.execute('foreign', execution)).rejects.toThrow('Unknown major mode');
-    expect(select).not.toHaveBeenCalled();
+    expect(changeSelection).not.toHaveBeenCalled();
     await command.execute(' review ', execution);
-    expect(select).toHaveBeenCalledExactlyOnceWith({ majorMode: 'review' });
+    expect(changeSelection).toHaveBeenCalledExactlyOnceWith({ axis: 'majorMode', majorMode: 'review' });
   });
 
   it('opens a typed picker using the admitted repository and applies the selected value', async () => {
-    const { command, execution, select } = setup();
+    const { changeSelection, command, execution } = setup();
     vi.mocked(execution.client.request).mockResolvedValue('review');
     await command.execute(' ', execution);
     expect(execution.client.request).toHaveBeenCalledExactlyOnceWith({
@@ -109,26 +109,26 @@ describe('headless major-mode command validation', () => {
         { label: '[ ] review: core only', value: 'review' },
       ],
     });
-    expect(select).toHaveBeenCalledExactlyOnceWith({ majorMode: 'review' });
+    expect(changeSelection).toHaveBeenCalledExactlyOnceWith({ axis: 'majorMode', majorMode: 'review' });
   });
 
   it.each([undefined, false, '', 'development'])(
     'does not transition for cancellation or the current mode: %s',
     async (answer) => {
-      const { command, execution, select } = setup();
+      const { changeSelection, command, execution } = setup();
       vi.mocked(execution.client.request).mockResolvedValue(answer);
       await command.execute('', execution);
-      expect(select).not.toHaveBeenCalled();
+      expect(changeSelection).not.toHaveBeenCalled();
     },
   );
 
   it('validates picker responses and propagates transition failures', async () => {
-    const { command, execution, select } = setup();
+    const { changeSelection, command, execution } = setup();
     vi.mocked(execution.client.request).mockResolvedValue('foreign');
     await expect(command.execute('', execution)).rejects.toThrow('Unknown major mode');
-    expect(select).not.toHaveBeenCalled();
+    expect(changeSelection).not.toHaveBeenCalled();
     vi.mocked(execution.client.request).mockResolvedValue('review');
-    select.mockRejectedValueOnce(new Error('Selection was not applied'));
+    changeSelection.mockRejectedValueOnce(new Error('Selection was not applied'));
     await expect(command.execute('', execution)).rejects.toThrow('Selection was not applied');
   });
 });

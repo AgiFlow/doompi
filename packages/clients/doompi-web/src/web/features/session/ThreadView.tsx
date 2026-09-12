@@ -34,6 +34,7 @@ export function ThreadView({
     <Transcript
       store={sessionStoreFor(threadStoreKey(sessionId, threadId))}
       sessionId={sessionId}
+      historyKey={threadStoreKey(sessionId, threadId)}
       testId={THREAD_TEST_ID}
       limit={options?.limit}
       compact={options?.compact}

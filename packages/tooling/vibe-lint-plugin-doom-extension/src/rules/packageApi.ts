@@ -7,7 +7,7 @@ import { normalizeEntry, pluginBlocks, readManifest } from './webPlugin.js';
 const PACKAGE_MANIFEST_NAME = 'package.json';
 const SERVER_ENTRY = './src/exports/extensions/server.ts';
 const SERVER_DIST = './dist/extensions/server.mjs';
-const SERVER_SCOPES = new Set(['session', 'hub']);
+const SERVER_SCOPES = new Set(['global', 'workspace', 'session']);
 const LEGACY_EXPORT_KEYS = new Set([
   './extensions/headless',
   './package-api-loader',

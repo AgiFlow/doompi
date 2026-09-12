@@ -13,18 +13,22 @@ import { matchMcpTool } from './lib/mcpToolMatch.ts';
  */
 export const webPlugin = defineWebPlugin({
   id: 'mcp',
-  repositorySettingsPanel: {
-    label: 'MCP servers',
-    detail: 'inspect cached capabilities, discover live servers, and complete OAuth authorization.',
-    order: 100,
-    component: McpRepositorySettingsPanel,
-  },
-  contextSections: [{ id: 'session-auth', component: McpSessionAuthSection }],
-  toolRenderers: [
-    {
-      tools: [],
-      matches: (toolName, statuses) => matchMcpTool(toolName, statuses) !== null,
-      message: McpToolMessage,
+  workspace: {
+    repositorySettingsPanel: {
+      label: 'MCP servers',
+      detail: 'inspect cached capabilities, discover live servers, and complete OAuth authorization.',
+      order: 100,
+      component: McpRepositorySettingsPanel,
     },
-  ],
+  },
+  session: {
+    contextSections: [{ id: 'session-auth', component: McpSessionAuthSection }],
+    toolRenderers: [
+      {
+        tools: [],
+        matches: (toolName, statuses) => matchMcpTool(toolName, statuses) !== null,
+        message: McpToolMessage,
+      },
+    ],
+  },
 });

@@ -84,7 +84,7 @@ function fixture() {
   const modeDispose = vi.fn();
   const host = {
     context: execution,
-    select: vi.fn(async ({ minorModes: selected }: { minorModes?: string[] }) => {
+    changeSelection: vi.fn(async ({ minorModes: selected }: { minorModes?: string[] }) => {
       if (selected) minorModes = selected;
     }),
     registerMinorMode: (mode: DoomHeadlessMinorMode) => {

@@ -28,7 +28,7 @@ describe('the metrics browser client', () => {
 
     // A plugin calling fetch directly would send plaintext to the tunnel relay.
     expect(sealedFetch).toHaveBeenCalledTimes(1);
-    expect(sealedFetch.mock.calls[0]?.[0]).toContain('/api/plugin/log/metrics');
+    expect(sealedFetch.mock.calls[0]?.[0]).toContain('/api/global/plugin/log/metrics');
   });
 
   it('passes the dimension, period and focus as query parameters', async () => {
@@ -107,7 +107,7 @@ describe('the issues browser client', () => {
 
     const result = await fetchIssues();
 
-    expect(String(sealedFetch.mock.calls[0]?.[0])).toBe('/api/plugin/log/issues');
+    expect(String(sealedFetch.mock.calls[0]?.[0])).toBe('/api/global/plugin/log/issues');
     expect(result).toEqual({ issues: { totalIssues: 69, byTool: { bash: 25 } } });
   });
 
@@ -116,7 +116,7 @@ describe('the issues browser client', () => {
 
     await fetchIssues('id_abc');
 
-    expect(String(sealedFetch.mock.calls[0]?.[0])).toBe('/api/plugin/log/issues?focus=id_abc');
+    expect(String(sealedFetch.mock.calls[0]?.[0])).toBe('/api/global/plugin/log/issues?focus=id_abc');
   });
 
   it('passes an unavailable body through rather than flattening it', async () => {

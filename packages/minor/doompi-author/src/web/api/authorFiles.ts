@@ -39,7 +39,7 @@ export function authorSessionFileUrl(sessionId: string, path: string): string {
 }
 
 function authorDocumentApiUrl(sessionId: string, operation: 'open' | 'preflight' | 'serialize'): string {
-  return `/api/plugin/author/documents/${operation}?session=${encodeURIComponent(sessionId)}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/author/documents/${operation}?session=${encodeURIComponent(sessionId)}`;
 }
 
 async function jsonRequest<T>(url: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {

@@ -63,7 +63,7 @@ describe('McpSettingsManager', () => {
 describe('mcpHubApi', () => {
   it('accepts host-issued repository ids and rejects repositories the hub has not admitted', async () => {
     const handler = mcpHubApi.start({
-      scope: 'hub',
+      scope: 'global',
       resolveRepository: () => undefined,
       onNotice: () => undefined,
     });
@@ -80,7 +80,7 @@ describe('mcpHubApi', () => {
   it('rejects malformed repository ids before resolution', async () => {
     let resolved = false;
     const handler = mcpHubApi.start({
-      scope: 'hub',
+      scope: 'global',
       resolveRepository: () => {
         resolved = true;
         return '/private/path';

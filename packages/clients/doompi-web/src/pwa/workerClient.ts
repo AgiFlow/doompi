@@ -63,7 +63,14 @@ function isWorkerResult(value: unknown): value is WorkerResult {
 }
 
 async function activeWorker(): Promise<ServiceWorker> {
-  const registration = await navigator.serviceWorker.ready;
+  if (!('serviceWorker' in navigator)) throw new Error('The trusted service worker is unavailable.');
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const registration = await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => reject(new Error('The trusted service worker is not ready.')), 10_000);
+    }),
+  ]).finally(() => clearTimeout(timeout));
   const serviceWorker = registration.active ?? registration.waiting ?? registration.installing;
   if (serviceWorker === null) throw new Error('The trusted service worker is unavailable.');
   return serviceWorker;

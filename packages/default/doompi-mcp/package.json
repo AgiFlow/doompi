@@ -121,14 +121,19 @@
     "entry": "./src/exports/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
-      "hub",
+      "global",
+      "workspace",
       "session"
     ]
   },
   "doompiWeb": {
     "pluginId": "mcp",
     "channels": [],
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/exports/webClient.ts",
+    "scopes": [
+      "workspace",
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

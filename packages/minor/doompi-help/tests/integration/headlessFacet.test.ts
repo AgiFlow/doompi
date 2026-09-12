@@ -20,7 +20,7 @@ describe('help headless facet', () => {
     const publish = vi.fn();
     const host = {
       context: { selection: { minorModes } },
-      select: vi.fn(async ({ minorModes: selected }: { minorModes?: readonly string[] }) => {
+      changeSelection: vi.fn(async ({ minorModes: selected }: { minorModes?: readonly string[] }) => {
         minorModes.splice(0, minorModes.length, ...(selected ?? []));
       }),
       registerMinorMode: (registered: DoomHeadlessMinorMode) => {

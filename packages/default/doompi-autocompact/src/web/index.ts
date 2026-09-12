@@ -11,5 +11,10 @@ import { autocompactSettingsSection } from './lib/autocompactSettings.ts';
  */
 export const webPlugin = defineWebPlugin({
   id: 'autocompact',
-  settingsSections: [autocompactSettingsSection],
+  global: {
+    settingsSections: [autocompactSettingsSection],
+  },
+  workspace: {
+    settingsSections: [autocompactSettingsSection],
+  },
 });

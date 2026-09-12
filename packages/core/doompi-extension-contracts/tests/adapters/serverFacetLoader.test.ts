@@ -17,7 +17,7 @@ afterEach(() => {
   for (const directory of directories.splice(0)) fs.rmSync(directory, { recursive: true, force: true });
 });
 
-function hostFor(scope: 'session' | 'hub' = 'session', onNotice: (message: string) => void = vi.fn()) {
+function hostFor(scope: 'session' | 'global' = 'session', onNotice: (message: string) => void = vi.fn()) {
   const context: DoomApiContext = { scope, sessionId: 'session-1', cwd: '/repo', onNotice };
   return createDoomServerHost({ scope, context });
 }
@@ -250,7 +250,7 @@ describe('loadServerBundle', () => {
   });
   function bundle(entries: readonly DoomServerBundleEntry[]) {
     const directory = temporaryDirectory();
-    const descriptor = { version: 1, generation: 'generation-1', fingerprint, entries };
+    const descriptor = { version: 2, generation: 'generation-1', fingerprint, entries };
     const descriptorFile = path.join(directory, DOOM_SERVER_BUNDLE_FILE);
     fs.writeFileSync(descriptorFile, JSON.stringify(descriptor));
     return {
@@ -261,14 +261,14 @@ describe('loadServerBundle', () => {
     };
   }
 
-  it.each(['session', 'hub'] as const)(
+  it.each(['session', 'global'] as const)(
     'admits default packages for %s without named layers, but retains mode and scope gates',
     async (scope) => {
       const fixture = bundle([
         entry('base', { scopes: [scope], owners: [{ majorMode: 'coding', layer: 'default' }], required: true }),
         entry('foreign', { scopes: [scope], owners: [{ majorMode: 'review', layer: 'default' }], required: true }),
         entry('wrong-scope', {
-          scopes: [scope === 'session' ? 'hub' : 'session'],
+          scopes: [scope === 'session' ? 'global' : 'session'],
           owners: [{ majorMode: 'coding', layer: 'default' }],
           required: true,
         }),
@@ -292,12 +292,12 @@ describe('loadServerBundle', () => {
 
   it('accepts an empty composition', async () => {
     const fixture = bundle([]);
-    expect((await loadServerBundle('hub', fixture.options)).facets).toEqual([]);
+    expect((await loadServerBundle('global', fixture.options)).facets).toEqual([]);
   });
 
   it('filters scope, mode and layer before importing even required candidates', async () => {
     const fixture = bundle([
-      entry('hub', { scopes: ['hub'], required: true }),
+      entry('global', { scopes: ['global'], required: true }),
       entry('mode', { owners: [{ majorMode: 'review', layer: 'tools' }], required: true }),
       entry('layer', { owners: [{ majorMode: 'coding', layer: 'disabled' }], required: true }),
     ]);
@@ -390,11 +390,11 @@ describe('loadServerBundle', () => {
   });
 
   it.each([
-    { version: 2 },
+    { version: 1 },
     { fingerprint: 'bad' },
     { entries: null },
     { entries: [entry('invalid', { scopes: [] })] },
-    { entries: [entry('invalid', { scopes: ['hub', 'hub'] })] },
+    { entries: [entry('invalid', { scopes: ['global', 'global'] })] },
     { entries: [entry('invalid', { owners: [] })] },
     { entries: [entry('invalid', { owners: [{ majorMode: 'coding', layer: '' }] })] },
     {

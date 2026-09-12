@@ -6,9 +6,9 @@ import { api, createPromptHubApi } from '../../../src/adapters/hubApi.ts';
 import type { SavedPrompt, SavedPromptStore } from '../../../src/types/prompt.ts';
 import { promptsUrl, promptUrl } from '../../../src/types/webPrompts.ts';
 
-/** The hub mounts the app under /api/plugin/prompts and strips that prefix. */
+/** The hub mounts the app under /api/global/plugin/prompts and strips that prefix. */
 function mounted(path: string): string {
-  return `http://hub${path.replace('/api/plugin/prompts', '')}`;
+  return `http://hub${path.replace('/api/global/plugin/prompts', '')}`;
 }
 
 function memoryStore(initial: SavedPrompt[] = []): SavedPromptStore & { entries: SavedPrompt[] } {

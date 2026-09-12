@@ -37,7 +37,7 @@ describe('logServerFacet', () => {
   });
 
   it('registers the exact API on the hub scope', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
     const dispose = logServerFacet.apply(harness.context);
     expect(harness.registered).toHaveLength(1);
     expect(harness.registered[0]).toBe(api);
@@ -45,7 +45,7 @@ describe('logServerFacet', () => {
   });
 
   it('unregisters the API when disposed', () => {
-    const harness = hostContext('hub');
+    const harness = hostContext('global');
     logServerFacet.apply(harness.context)?.();
     expect(harness.state.disposed).toBe(1);
   });

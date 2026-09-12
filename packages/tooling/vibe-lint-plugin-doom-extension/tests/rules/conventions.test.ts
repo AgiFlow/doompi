@@ -334,6 +334,13 @@ describe('Doom package convention rules', () => {
     expect(noLiveGlobalRegistry.check?.(registry, root, boundaryContext())).toContain('process-global registry');
     expect(noLiveGlobalRegistry.check?.(hostGlobal, root, boundaryContext())).toBeNull();
 
+    const scopes = write(
+      'src/services/scopes.ts',
+      `interface Mounts { global?: object }
+const mounts = { global: {} }; export const selected = mounts.global;`,
+    );
+    expect(noLiveGlobalRegistry.check?.(scopes, root, boundaryContext())).toBeNull();
+
     const nodeGlobal = write('src/services/nodeGlobal.ts', `const root = global; root[Symbol.for('doom/live')] = {};`);
     expect(noLiveGlobalRegistry.check?.(nodeGlobal, root, boundaryContext())).toContain('process-global registry');
 

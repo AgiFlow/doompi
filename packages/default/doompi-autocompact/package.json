@@ -100,7 +100,11 @@
   "doompiWeb": {
     "pluginId": "autocompact",
     "channels": [],
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/exports/webClient.ts",
+    "scopes": [
+      "global",
+      "workspace"
+    ]
   },
   "pi": {
     "extensions": [

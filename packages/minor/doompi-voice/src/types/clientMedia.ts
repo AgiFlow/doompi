@@ -193,5 +193,5 @@ export interface VoiceMediaDevice {
 
 export function voiceMediaClientUrl(sessionId: string, route: string, params: Record<string, string> = {}): string {
   const search = new URLSearchParams({ session: sessionId, ...params });
-  return `/api/plugin/${VOICE_MEDIA_API_BASE_PATH}${route}?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${VOICE_MEDIA_API_BASE_PATH}${route}?${search.toString()}`;
 }

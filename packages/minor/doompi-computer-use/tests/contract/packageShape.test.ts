@@ -91,7 +91,7 @@ describe('doompi-computer-use package contract', () => {
     expect(manifest.doompiServer).toEqual({
       entry: './src/exports/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['hub', 'session'],
+      scopes: ['global', 'workspace', 'session'],
     });
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });

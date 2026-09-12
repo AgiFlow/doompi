@@ -1,5 +1,8 @@
 export {
   doomApiCallerFrom,
+  doomApiMountPath,
+  type DoomApiMount,
+  type DoomWebComposition,
   DOOM_API_CALLER_DEVICE_ID_HEADER,
   DOOM_API_CALLER_HEADERS,
   DOOM_API_CALLER_LOCALITY_HEADER,

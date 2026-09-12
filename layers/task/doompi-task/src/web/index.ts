@@ -9,7 +9,9 @@ import { tasksChannel } from './stores/tasksStore.ts';
  */
 export const webPlugin = defineWebPlugin({
   id: 'task',
-  channels: [tasksChannel],
-  activitySections: [{ id: 'tasks', component: TasksActivitySection }],
-  toolRenderers: [{ tools: ['task'], message: TaskToolMessage }],
+  session: {
+    channels: [tasksChannel],
+    activitySections: [{ id: 'tasks', component: TasksActivitySection }],
+    toolRenderers: [{ tools: ['task'], message: TaskToolMessage }],
+  },
 });

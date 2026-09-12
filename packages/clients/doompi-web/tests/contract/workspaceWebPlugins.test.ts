@@ -13,6 +13,7 @@ import {
   resetWebPlugins,
   webPluginDiagnostics,
 } from '../../src/web/lib/pluginRegistry.ts';
+import { pluginsAtScope } from '../../src/web/lib/pluginScopes.ts';
 import { HOST_ROOT, pluginPackageRoots } from '../support/pluginRoots.ts';
 
 /**
@@ -37,7 +38,7 @@ async function loadDefinitions(): Promise<WebPluginDefinition[]> {
       const module = (await import(pathToFileURL(entry).href)) as { webPlugin?: WebPluginDefinition };
       if (module.webPlugin) definitions.push(module.webPlugin);
     }
-    return definitions;
+    return pluginsAtScope(definitions, 'session');
   })();
   return loaded;
 }

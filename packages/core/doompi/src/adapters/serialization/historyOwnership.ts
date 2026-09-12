@@ -25,7 +25,7 @@ export interface HistoryOwnershipOptions {
   /** Checks managed writers; this cannot account for an unmanaged Pi process. */
   assertQuiescent?: (sourcePath: string) => void | Promise<void>;
   /** The source format admitted by this owner. Defaults to canonical v4. */
-  sourceFormat?: 'v3' | 'v4';
+  sourceFormat?: 'v3' | 'v4' | 'sqlite';
   /** Additional paths to lock for the lifetime of each acquired source lease. */
   additionalPaths?: readonly string[];
 }
@@ -91,6 +91,22 @@ function assertV3Source(sourcePath: string): void {
     throw new Error(`Offline history import only supports v3 sources: ${sourcePath}`);
 }
 
+function assertSqliteSource(sourcePath: string): void {
+  if (!fs.existsSync(sourcePath)) return;
+  assertIndependentRegularFile(sourcePath, 'SQLite history');
+  const descriptor = fs.openSync(sourcePath, 'r');
+  try {
+    const header = Buffer.alloc(16);
+    if (
+      fs.readSync(descriptor, header, 0, header.length, 0) !== header.length ||
+      header.toString('utf8') !== 'SQLite format 3\u0000'
+    )
+      throw new Error(`History ownership source is not SQLite: ${sourcePath}`);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+}
+
 function isFileSystemError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && typeof (error as NodeJS.ErrnoException).code === 'string';
 }
@@ -153,7 +169,12 @@ function createLease(
  */
 export function createHistoryOwnership(options: HistoryOwnershipOptions = {}): HistoryOwnership {
   const assertQuiescent = options.assertQuiescent ?? (() => undefined);
-  const assertSource = options.sourceFormat === 'v3' ? assertV3Source : assertV4Source;
+  const assertSource =
+    options.sourceFormat === 'sqlite'
+      ? assertSqliteSource
+      : options.sourceFormat === 'v3'
+        ? assertV3Source
+        : assertV4Source;
   return {
     async acquire(sourcePath: string): Promise<HistoryOwnershipLease> {
       const absoluteSourcePath = canonicalSourcePath(sourcePath);

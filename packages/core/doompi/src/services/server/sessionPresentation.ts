@@ -1,6 +1,7 @@
 import type { ProtocolEvent, SessionPresentation } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 
 const MAX_EVENTS = 1024;
+const LIVE_EVENTS = 64;
 const MAX_BYTES = 8 * 1024 * 1024;
 
 /** Retain current UI projections independently of the bounded live-event history. */
@@ -35,12 +36,25 @@ export function createSessionPresentation() {
     record(raw: Record<string, unknown>): SessionPresentation | undefined {
       if (
         typeof raw.type !== 'string' ||
-        raw.type === 'message_update' ||
         // Queries have typed replies. Do not replay raw history or model configuration.
         (raw.type === 'response' &&
           ['get_entries', 'get_messages', 'get_available_models'].includes(String(raw.command)))
       )
         return undefined;
+      if (raw.type === 'message_update') {
+        const event = raw.assistantMessageEvent as Record<string, unknown> | undefined;
+        if (!event) return undefined;
+        const { partial: _partial, ...delta } = event;
+        if (delta.type === 'toolcall_start') {
+          const message = raw.message as { content?: Array<{ id?: string; name?: string }> } | undefined;
+          const tool = message?.content?.[Number(delta.contentIndex)];
+          if (tool) {
+            delta.id = tool.id;
+            delta.toolName = tool.name;
+          }
+        }
+        raw = { type: 'message_update', assistantMessageEvent: delta };
+      }
       const encoded = JSON.stringify(raw);
       const frame: ProtocolEvent['frame'] = JSON.parse(encoded);
       const event = { sequence: ++revision, frame };
@@ -64,7 +78,8 @@ export function createSessionPresentation() {
         typeof entry === 'object' &&
         !Array.isArray(entry) &&
         entry.type === 'custom' &&
-        typeof entry.customType === 'string'
+        typeof entry.customType === 'string' &&
+        !['doom-profile-identity', 'doompi.agent-settled'].includes(entry.customType)
       )
         key = `custom:${entry.customType}`;
       const size = Buffer.byteLength(encoded);
@@ -81,7 +96,7 @@ export function createSessionPresentation() {
       }
       events.push({ event, size });
       bytes += size;
-      while (events.length > MAX_EVENTS || bytes > MAX_BYTES) {
+      while (events.length > LIVE_EVENTS || bytes > MAX_BYTES) {
         const removed = events.shift();
         if (removed) {
           bytes -= removed.size;
