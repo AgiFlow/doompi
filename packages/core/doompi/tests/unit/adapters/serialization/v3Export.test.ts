@@ -312,6 +312,42 @@ describe('protected v4 to v3 export', () => {
   });
 
   it.each([
+    ['fractional entry sequence', entryWrite('root', { seq: 1.5 }), /Invalid v4 entry sequence/],
+    ['text usage sequence', { kind: 'usage', seq: '2', entryId: 'root', usage: {} }, /Invalid v4 usage sequence/],
+    [
+      'missing value namespace',
+      { kind: 'value', op: 'set', key: 'key', value: true, seq: 1 },
+      /Invalid v4 value namespace/,
+    ],
+    [
+      'non-string value key',
+      { kind: 'value', op: 'set', namespace: 'pi.test', key: null, value: true, seq: 1 },
+      /Invalid v4 value key/,
+    ],
+    [
+      'missing list namespace',
+      { kind: 'list', op: 'append', key: 'key', value: true, seq: 1 },
+      /Invalid v4 list namespace/,
+    ],
+    [
+      'non-string list key',
+      { kind: 'list', op: 'delete', namespace: 'pi.test', key: 42, seq: 1 },
+      /Invalid v4 list key/,
+    ],
+    ['missing entry type', entryWrite('root', { type: undefined }), /Invalid v4 entry type/],
+    ['invalid entry timestamp', entryWrite('root', { timestamp: -1 }), /Invalid v4 entry timestamp/],
+    ['invalid custom type', entryWrite('root', { type: 'custom', customType: '' }), /Invalid v4 custom entry type/],
+  ])('rejects %s without publishing an export', async (name, write, expectedError) => {
+    const sourcePath = path.join(root, `${name}.jsonl`);
+    const destinationPath = path.join(root, `${name}.export.jsonl`);
+    fs.writeFileSync(sourcePath, v4Source([write]));
+
+    await expect(exportV4ToV3({ sourcePath, destinationPath, owner: owner() })).rejects.toThrow(expectedError);
+    expect(fs.existsSync(destinationPath)).toBe(false);
+    expect(fs.existsSync(`${destinationPath}.loss.json`)).toBe(false);
+  });
+
+  it.each([
     ['duplicate entry ids', [entryWrite('same'), entryWrite('same', { seq: 2 })], /Duplicate v4 entry id/],
     ['missing entry parent', [entryWrite('child', { parentId: 'missing' })], /Missing v4 entry parent/],
     [
@@ -412,6 +448,137 @@ describe('protected v4 to v3 export', () => {
     expect(fs.readFileSync(sourcePath, 'utf8')).toBe(source);
     expect(records(destinationPath).filter((record) => record.type === 'message')).toHaveLength(
       _case === 'missing' ? 1 : 2,
+    );
+  });
+
+  it('retains the latest usage for a message and reports invalid or lossy usage rows', async () => {
+    const sourcePath = path.join(root, 'usage.jsonl');
+    const destinationPath = path.join(root, 'usage.export.jsonl');
+    fs.writeFileSync(
+      sourcePath,
+      v4Source([
+        entryWrite('root'),
+        { kind: 'usage', seq: 2, entryId: 'missing', usage: { tokens: 1 } },
+        { kind: 'usage', seq: 3, entryId: 'root' },
+        { kind: 'usage', seq: 4, entryId: 'root', usage: { tokens: 2 }, adjustment: false },
+        { kind: 'usage', seq: 5, entryId: 'root', usage: { tokens: 3 }, adjustment: true, details: { source: 'test' } },
+      ]),
+    );
+
+    const result = await exportV4ToV3({ sourcePath, destinationPath, owner: owner() });
+
+    expect(records(destinationPath).find((record) => record.id === 'root')).toMatchObject({
+      message: { usage: { tokens: 3 } },
+    });
+    expect(result.losses.map((loss) => loss.code)).toEqual(
+      expect.arrayContaining(['usage-not-representable', 'usage-multiple-rows', 'usage-metadata']),
+    );
+  });
+
+  it('maps representable compaction and custom entries while reporting an unmappable retained tail', async () => {
+    const sourcePath = path.join(root, 'special-entries.jsonl');
+    const destinationPath = path.join(root, 'special-entries.export.jsonl');
+    fs.writeFileSync(
+      sourcePath,
+      v4Source([
+        entryWrite('root'),
+        entryWrite('kept', { parentId: 'root', seq: 2 }),
+        entryWrite('mapped', {
+          parentId: 'kept',
+          seq: 3,
+          type: 'compaction',
+          retainedTail: [entryWrite('kept').message],
+        }),
+        entryWrite('fallback', { parentId: 'mapped', seq: 4, type: 'compaction', retainedTail: ['not present'] }),
+        entryWrite('custom', { parentId: 'fallback', seq: 5, type: 'custom', customType: 'checkpoint' }),
+        { kind: 'usage', seq: 6, entryId: 'fallback', usage: { tokens: 4 }, adjustment: false },
+      ]),
+    );
+
+    const result = await exportV4ToV3({ sourcePath, destinationPath, owner: owner() });
+    const output = records(destinationPath);
+
+    expect(output.find((record) => record.id === 'mapped')).toMatchObject({ firstKeptEntryId: 'kept' });
+    expect(output.find((record) => record.id === 'fallback')).toMatchObject({
+      firstKeptEntryId: 'mapped',
+      usage: { tokens: 4 },
+    });
+    expect(output.find((record) => record.id === 'custom')).toMatchObject({ customType: 'checkpoint' });
+    expect(result.losses).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'compaction-retained-tail' })]),
+    );
+  });
+
+  it('omits a root compaction with no recoverable first kept entry', async () => {
+    const sourcePath = path.join(root, 'root-compaction.jsonl');
+    const destinationPath = path.join(root, 'root-compaction.export.jsonl');
+    fs.writeFileSync(
+      sourcePath,
+      v4Source([entryWrite('compaction', { type: 'compaction', retainedTail: [] })], { futureHeaderField: true }),
+    );
+
+    const result = await exportV4ToV3({ sourcePath, destinationPath, owner: owner() });
+
+    expect(records(destinationPath)).toHaveLength(1);
+    expect(result.losses.map((loss) => loss.code)).toEqual(
+      expect.arrayContaining(['unknown-header-field', 'compaction-retained-tail']),
+    );
+  });
+
+  it('reports list writes and parent identity without inventing v3 records', async () => {
+    const sourcePath = path.join(root, 'lists.jsonl');
+    const destinationPath = path.join(root, 'lists.export.jsonl');
+    fs.writeFileSync(
+      sourcePath,
+      v4Source(
+        [
+          { kind: 'list', op: 'append', namespace: 'pi.test', key: 'items', value: 'one', seq: 1 },
+          { kind: 'list', op: 'delete', namespace: 'pi.test', key: 'items', seq: 2 },
+          { kind: 'value', op: 'set', namespace: 'pi.test', key: 'flag', value: true, seq: 3 },
+          { kind: 'value', op: 'delete', namespace: 'pi.session.name', key: '', seq: 4 },
+          { kind: 'value', op: 'delete', namespace: 'pi.branch.tip', key: 'main', seq: 5 },
+        ],
+        { parentSessionId: 'parent', legacyParentSessionPath: '/history/parent.jsonl' },
+      ),
+    );
+
+    const result = await exportV4ToV3({ sourcePath, destinationPath, owner: owner() });
+
+    expect(records(destinationPath)).toEqual([
+      expect.objectContaining({ type: 'session', parentSession: '/history/parent.jsonl' }),
+    ]);
+    expect(result.losses.map((loss) => loss.code)).toEqual(
+      expect.arrayContaining(['list-not-representable', 'parent-session-id', 'value-not-representable']),
+    );
+  });
+
+  it('recognizes an already published export and rejects a changed loss report', async () => {
+    const sourcePath = path.join(root, 'published.jsonl');
+    const destinationPath = path.join(root, 'published.export.jsonl');
+    fs.writeFileSync(sourcePath, v4Source([entryWrite('root')]));
+
+    const first = await exportV4ToV3({ sourcePath, destinationPath, owner: owner() });
+    const second = await exportV4ToV3({ sourcePath, destinationPath, owner: owner() });
+
+    expect(first.status).toBe('published');
+    expect(second.status).toBe('already-published');
+    fs.appendFileSync(first.reportPath, 'changed');
+    await expect(exportV4ToV3({ sourcePath, destinationPath, owner: owner() })).rejects.toThrow(
+      'Published v3 loss report was modified',
+    );
+  });
+
+  it('rejects a derived path that aliases its source through a hard link', async () => {
+    const sourcePath = path.join(root, 'source.jsonl');
+    const destinationPath = path.join(root, 'alias.jsonl');
+    fs.writeFileSync(sourcePath, v4Source([]));
+    fs.linkSync(sourcePath, destinationPath);
+
+    await expect(exportV4ToV3({ sourcePath, destinationPath, owner: owner() })).rejects.toThrow(
+      'v3 export path aliases its source',
+    );
+    await expect(exportV4ToV3({ sourcePath, destinationPath: sourcePath, owner: owner() })).rejects.toThrow(
+      'v3 export paths must be distinct',
     );
   });
 });

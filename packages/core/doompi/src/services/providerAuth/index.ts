@@ -1,6 +1,4 @@
 import crypto from 'node:crypto';
-import path from 'node:path';
-import { piAgentDirectory } from '../piSettings';
 import { createLoginFlow, type LoginFlow } from '../loginFlow';
 import type {
   AuthMethodType,
@@ -53,33 +51,12 @@ export interface ProviderAuth {
 }
 
 export interface ProviderAuthOptions {
-  /** Test seam over Pi's ModelRuntime; the default loads the real one over auth.json. */
-  runtime?: () => Promise<AuthRuntime>;
-  homeDirectory?: string;
-  environment?: Readonly<Record<string, string | undefined>>;
+  runtime: () => Promise<AuthRuntime>;
   onNotice?: (message: string) => void;
 }
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/**
- * Pi's runtime, imported on first use: the hub should come up without paying
- * for the provider catalog, and a machine without Pi installed still serves
- * sessions, just not the providers page.
- */
-async function loadPiRuntime(options: ProviderAuthOptions): Promise<AuthRuntime> {
-  const { ModelRuntime } = await importPiRuntime('@earendil-works/pi-coding-agent');
-  const directory = piAgentDirectory(options.environment, options.homeDirectory);
-  return ModelRuntime.create({
-    authPath: path.join(directory, 'auth.json'),
-    modelsPath: path.join(directory, 'models.json'),
-  });
-}
-
-function importPiRuntime(specifier: string) {
-  return import(specifier) as Promise<typeof import('@earendil-works/pi-coding-agent')>;
 }
 
 /** The methods a page can start, in the order the TUI's selector lists them. */
@@ -104,9 +81,9 @@ function summarize(runtime: AuthRuntime, provider: AuthRuntimeProvider): Provide
   return summary;
 }
 
-export function createProviderAuth(options: ProviderAuthOptions = {}): ProviderAuth {
+export function createProviderAuth(options: ProviderAuthOptions): ProviderAuth {
   const notice = options.onNotice ?? ((): void => {});
-  const load = options.runtime ?? (() => loadPiRuntime(options));
+  const load = options.runtime;
   const flows = new Map<string, LoginFlow>();
   let loading: Promise<AuthRuntime> | undefined;
 

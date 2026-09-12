@@ -1356,7 +1356,7 @@ describe('plan mode entry', () => {
     expect(fixture.latestSubagentPolicy()).toEqual({
       owner: '@agimon-ai/doompi-plan',
       allowedTools: ['read', 'bash', 'grep', 'find', 'ls', 'mcp'],
-      requiredTools: ['bash', 'mcp'],
+      requiredTools: ['bash'],
       allowMcpTools: true,
       allowedExternalProfiles: [],
       denyExtensions: false,

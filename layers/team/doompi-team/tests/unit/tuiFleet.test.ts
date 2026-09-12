@@ -366,15 +366,59 @@ describe('SubagentFleetComponent render and interaction', () => {
     expect(rendered).toContain('No tracked runs');
   });
 
-  it('renders an artifacts-disabled empty state without reading a guessed transcript path', () => {
+  it('renders a source-unavailable empty state without reading a guessed transcript path', () => {
     tracker.jobs = [job('run-a', { status: 'failed', error: 'Interrupted before completion.' })];
     const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
 
     const rendered = component.render(100).join('\n');
 
     expect(rendered).toContain('Transcript unavailable');
-    expect(rendered).toContain('Artifacts were disabled');
+    expect(rendered).toContain('did not publish');
     expect(rendered).not.toContain('ENOENT');
+    expect(readFleetTranscriptTail).not.toHaveBeenCalled();
+  });
+
+  it('renders a native session page instead of treating it as a Team artifact', async () => {
+    tracker.jobs = [job('run-a', { sessionFile: '/sessions/run-a.sqlite' })];
+    const readTranscriptPage = vi.fn(async () => ({
+      entries: [
+        {
+          type: 'message',
+          id: 'one',
+          parentId: null,
+          seq: 1,
+          message: { role: 'user', content: 'native question', timestamp: 1 },
+        },
+        {
+          type: 'message',
+          id: 'two',
+          parentId: 'one',
+          seq: 2,
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'native answer' }],
+            model: { provider: 'test', id: 'model' },
+            status: 'complete',
+            timestamp: 2,
+          },
+        },
+      ],
+      startCursor: null,
+      endCursor: null,
+      olderCursor: null,
+      newerCursor: null,
+      generation: 0,
+      revision: 0,
+      context: [],
+      drafts: [],
+    }));
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {}, {
+      readTranscriptPage,
+    });
+
+    await vi.waitFor(() => expect(readTranscriptPage).toHaveBeenCalledWith('run-a', { limit: 100 }));
+    await vi.waitFor(() => expect(component.render(100).join('\n')).toContain('native answer'));
+    expect(component.render(100).join('\n')).toContain('native question');
     expect(readFleetTranscriptTail).not.toHaveBeenCalled();
   });
 

@@ -31,7 +31,7 @@ vi.mock('@agimon-ai/doompi-telemetry', () => ({
     shutdown: runtimeMocks.shutdownTelemetry,
   }),
 }));
-vi.mock('../../../core/doompi-extension-contracts/src/adapters/pi/cordisHost', () => ({
+vi.mock('../../../core/doompi-extension-contracts/src/controllers/cordisHost', () => ({
   connectDoomCordisHost: async () => {
     const root = runtimeMocks.createCordisRoot() as Context;
     await runtimeMocks.prepareCordisRoot(root);

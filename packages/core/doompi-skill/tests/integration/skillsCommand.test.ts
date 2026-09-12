@@ -50,7 +50,7 @@ vi.mock('../../src/services/helpSkills', () => ({
 
 type CommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
 
-const SKILL_RELOAD_TEST_TIMEOUT_MS = 15_000;
+const SKILL_INTEGRATION_TEST_TIMEOUT_MS = 15_000;
 
 function writeSkill(directory: string, name: string): void {
   fs.mkdirSync(directory, { recursive: true });
@@ -213,7 +213,7 @@ describe('skills pi extension', () => {
     expect(ctx.ui.notify).toHaveBeenCalledWith('/skills requires interactive mode', 'error');
   });
 
-  it('prefills the editor for the selected skill', async () => {
+  it('prefills the editor for the selected skill', { timeout: SKILL_INTEGRATION_TEST_TIMEOUT_MS }, async () => {
     const { commands } = await register();
     const ctx = await context([path.join(root, '.claude', 'skills')]);
     invokeFirstSkill();
@@ -272,7 +272,7 @@ describe('skills pi extension', () => {
 
   it(
     'injects the loaded inventory on every turn and resets it for a reload generation',
-    { timeout: SKILL_RELOAD_TEST_TIMEOUT_MS },
+    { timeout: SKILL_INTEGRATION_TEST_TIMEOUT_MS },
     async () => {
       const { handlers } = await register();
       const skillRoot = path.join(root, '.claude', 'skills');

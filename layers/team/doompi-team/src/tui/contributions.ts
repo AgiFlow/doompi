@@ -7,6 +7,7 @@
  */
 
 import type { DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { resolveRootSessionId } from '@agimon-ai/doompi-extension-contracts/child-process';
 import type { ManagementActionsContract } from '../services/managementActions';
@@ -118,6 +119,11 @@ export interface RegisterFleetCommandDeps {
   dispatchAction?: FleetActionDispatcher;
   /** Builds context-scoped controls when a static test dispatcher is not supplied. */
   management?: ManagementActionsContract;
+  readTranscriptPage?: (
+    runId: string,
+    request: Omit<TranscriptPageRequest, 'threadId'>,
+    signal?: AbortSignal,
+  ) => Promise<TranscriptPage>;
   environment: Readonly<Record<string, string | undefined>>;
 }
 
@@ -254,7 +260,10 @@ export function createFleetCommand(
           const jobs = deps.tracker.forSession(ctx.sessionManager.getSessionId(), scope);
           const dispatchAction =
             deps.dispatchAction ?? (deps.management ? createFleetActionDispatcher(deps.management, jobs) : undefined);
-          await openSubagentFleet(ctx, deps.scheduler, jobs, scope, { dispatchAction });
+          await openSubagentFleet(ctx, deps.scheduler, jobs, scope, {
+            dispatchAction,
+            readTranscriptPage: deps.readTranscriptPage,
+          });
         },
       },
     ],

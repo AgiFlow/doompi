@@ -93,4 +93,75 @@ describe('minor-mode catalog service', () => {
       ),
     ).rejects.toThrow(/timed out/u);
   });
+
+  it('rejects unavailable actions and stale registrations before invoking an owner', async () => {
+    const host = setup();
+    const action = vi.fn(async () => undefined);
+    const owner = host.registerOwner({ descriptor, initialState: state, handleAction: action });
+    const mode = reference(host);
+    const request = { operationId: 'operation', mode, actionId: 'activate', arguments: {} };
+
+    await expect(host.invoke({ ...request, actionId: 'missing' }, SOURCE)).rejects.toThrow(/was not found/u);
+    owner.publish({ ...state, actions: [{ id: 'activate', enabled: false, disabledReason: 'Not ready' }] });
+    await expect(host.invoke(request, SOURCE)).rejects.toThrow('Not ready');
+    owner.publish(state);
+    owner.dispose();
+    await expect(host.invoke(request, SOURCE)).rejects.toThrow(/unavailable/u);
+    expect(action).not.toHaveBeenCalled();
+    host.dispose();
+    await expect(host.invoke(request, SOURCE)).rejects.toThrow(/disposed/u);
+  });
+
+  it('deduplicates an operation, fences conflicting requests, and aborts when its owner leaves', async () => {
+    const host = setup();
+    const owner = host.registerOwner({
+      descriptor,
+      initialState: state,
+      handleAction: () => new Promise(() => undefined),
+    });
+    const request = { operationId: 'shared', mode: reference(host), actionId: 'activate', arguments: {} };
+    const first = host.invoke(request, SOURCE);
+
+    expect(host.invoke(request, SOURCE)).toBe(first);
+    await expect(host.invoke(request, '@agimon-ai/other')).rejects.toThrow(/reused/u);
+    await expect(host.invoke({ ...request, operationId: 'other' }, SOURCE)).rejects.toThrow(/active action/u);
+    owner.dispose();
+    await expect(first).rejects.toThrow(/aborted/u);
+    host.dispose();
+  });
+
+  it('reports an owner failure and rejects actions outside the session context', async () => {
+    const onError = vi.fn();
+    const host = setup();
+    host.registerOwner({
+      descriptor: {
+        ...descriptor,
+        actions: [{ ...descriptor.actions[0]!, contexts: ['tui'] }],
+      },
+      initialState: state,
+      handleAction: vi.fn(),
+    });
+    await expect(
+      host.invoke({ operationId: 'unsupported', mode: reference(host), actionId: 'activate', arguments: {} }, SOURCE),
+    ).rejects.toThrow(/unavailable in headless/u);
+    host.dispose();
+
+    const failingHost = setup();
+    failingHost.registerOwner({
+      descriptor,
+      initialState: state,
+      handleAction: () => {
+        throw new Error('owner crashed');
+      },
+      onError,
+    });
+    await expect(
+      failingHost.invoke(
+        { operationId: 'failure', mode: reference(failingHost), actionId: 'activate', arguments: {} },
+        SOURCE,
+      ),
+    ).rejects.toThrow('owner crashed');
+    expect(onError).toHaveBeenCalledOnce();
+    failingHost.dispose();
+  });
 });

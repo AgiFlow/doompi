@@ -20,6 +20,7 @@ import { describe, expect, it, vi, type MockInstance } from 'vitest';
 import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../src/services/historyOwnership';
 import {
   createDirectHarnessRuntime,
+  promptForAssistantText,
   readDirectHarnessSessionMetadata,
 } from '../../../../src/controllers/directHarnessRuntime';
 
@@ -43,6 +44,89 @@ const models = {
 } as unknown as Models;
 
 describe('direct AgentHarness runtime', () => {
+  it('returns only new assistant text from the prompt it just ran', async () => {
+    const prior = { id: 'prior', type: 'message', message: { role: 'assistant', content: [{ type: 'text', text: 'old' }] } };
+    const user = { id: 'user', type: 'message', message: { role: 'user', content: [{ type: 'text', text: 'question' }] } };
+    const assistant = {
+      id: 'answer',
+      type: 'message',
+      message: { role: 'assistant', content: [{ type: 'text', text: '  first ' }, { type: 'image' }, { type: 'text', text: 'second  ' }] },
+    };
+    const readEntries = vi.fn().mockResolvedValueOnce({ entries: [prior] }).mockResolvedValueOnce({ entries: [prior, assistant, user] });
+    const prompt = vi.fn(async () => undefined);
+    expect(await promptForAssistantText({ readEntries, prompt } as never, 'ask')).toBe('first \nsecond');
+    expect(prompt).toHaveBeenCalledWith('ask');
+    readEntries.mockResolvedValueOnce({ entries: [prior] }).mockResolvedValueOnce({ entries: [prior, user] });
+    expect(await promptForAssistantText({ readEntries, prompt } as never, 'again')).toBeUndefined();
+    readEntries.mockResolvedValueOnce({ entries: [] }).mockResolvedValueOnce({ entries: [{ ...assistant, message: { ...assistant.message, content: [{ type: 'text', text: '   ' }] } }] });
+    expect(await promptForAssistantText({ readEntries, prompt } as never, 'blank')).toBeUndefined();
+  });
+
+  it('maps harness lifecycle, configuration, and queue events to presentation frames', async () => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'event-frames-test' }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+    const frames: Record<string, unknown>[] = [];
+    runtime.onPresentationFrame((frame) => frames.push(frame));
+    const events = runtime.harness.events as unknown as {
+      emit(event: Record<string, unknown>, context: typeof BACKGROUND_CONTEXT): Promise<void>;
+    };
+    try {
+      for (const event of [
+        { type: 'run_resume', runId: 'run' },
+        { type: 'run_suspend', runId: 'run', reason: 'input', deferred: true },
+        { type: 'operation_abort', operationId: 'operation', steer: 1, followUp: 2 },
+        { type: 'retry_scheduled', runId: 'run', attempt: 2, maxAttempts: 3, errorMessage: 'retry' },
+        { type: 'retry_start', runId: 'run', attempt: 2 },
+        { type: 'retry_end', runId: 'run', attempt: 2, success: false, finalError: 'failed' },
+        { type: 'tool_start', runId: 'run', turnId: 'turn', toolCallId: 'call', toolName: 'read', args: {} },
+        { type: 'tool_update', runId: 'run', turnId: 'turn', toolCallId: 'call', toolName: 'read', partialResult: {} },
+        { type: 'tool_end', runId: 'run', turnId: 'turn', toolCallId: 'call', toolName: 'read', result: {}, isError: false },
+        { type: 'value_update', value: 'session_name', name: 'Renamed' },
+        { type: 'value_update', value: 'label', targetId: 'entry', label: 'Reviewed' },
+        { type: 'config_update', property: 'thinkingLevel', value: 'high' },
+        { type: 'config_update', property: 'model', value: { provider: 'test', modelId: 'model' } },
+        { type: 'config_update', property: 'model', value: null },
+        { type: 'config_update', property: 'retry', value: true, previous: false },
+        { type: 'compaction_start', runId: 'run', reason: 'manual' },
+        { type: 'compaction_end', runId: 'run', reason: 'manual', status: 'completed' },
+        { type: 'navigation_start', runId: 'run', targetId: 'entry' },
+        { type: 'navigation_end', runId: 'run', status: 'completed' },
+        { type: 'usage', lane: 'main', row: {}, totals: {} },
+        { type: 'turn_start', runId: 'run', turnId: 'turn' },
+        { type: 'turn_end', runId: 'run', turnId: 'turn', message: {}, toolResults: [] },
+        { type: 'message_start', runId: 'run', message: {} },
+        { type: 'message_update', runId: 'run', message: {}, event: {}, frame: { text: 'partial' } },
+        { type: 'message_end', runId: 'run', message: {}, entryId: 'entry' },
+        { type: 'entry_added', entry: { id: 'entry' } },
+        { type: 'lane_created', at: 1 },
+        { type: 'handler_error', kind: 'event', hook: 'before_run', event: 'run_start', error: 'broken' },
+        { type: 'queue_update', queues: [
+          null,
+          { kind: 'steer', type: 'message', message: { content: 'steer' } },
+          { kind: 'followUp', type: 'message', message: { content: [{ type: 'text', text: 'later' }] } },
+          { kind: 'nextRun', type: 'message', message: { content: [{ type: 'text', text: 'next' }] } },
+          { kind: 'unknown', type: 'message', message: { content: 'ignored' } },
+        ] },
+      ])
+        await events.emit(event, BACKGROUND_CONTEXT);
+      expect(frames.map((frame) => frame.type)).toEqual([
+        'agent_start', 'run_suspend', 'operation_abort', 'auto_retry_start', 'auto_retry_start', 'auto_retry_end',
+        'tool_execution_start', 'tool_execution_update', 'tool_execution_end', 'session_info_changed',
+        'entry_label_changed', 'thinking_level_changed', 'response', 'config_update', 'compaction_start',
+        'compaction_end', 'navigation_start', 'navigation_end', 'usage', 'turn_start', 'turn_end',
+        'message_start', 'message_update', 'message_end', 'entry_appended', 'lane_created', 'handler_error',
+        'queue_update',
+      ]);
+      expect(frames).toContainEqual({ type: 'response', command: 'get_state', success: true, data: { model: { provider: 'test', id: 'model' } } });
+      expect(frames).toContainEqual(expect.objectContaining({ type: 'tool_execution_end', toolCallId: 'call', isError: false }));
+      expect(frames).toContainEqual(expect.objectContaining({ type: 'queue_update', steering: ['steer'], followUp: ['later', 'next'] }));
+    } finally {
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   it.each(['sessionPath', 'legacySessionPath'] as const)(
     'rejects implicit v3 migration through %s without changing history',
     async (input) => {

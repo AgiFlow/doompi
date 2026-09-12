@@ -11,7 +11,7 @@ const hostMocks = vi.hoisted(() => ({
   plugin: vi.fn(),
 }));
 
-vi.mock('../../../core/doompi-extension-contracts/src/adapters/pi/cordisHost', () => ({
+vi.mock('../../../core/doompi-extension-contracts/src/controllers/cordisHost', () => ({
   connectDoomCordisHost: hostMocks.connect,
 }));
 

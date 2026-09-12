@@ -23,6 +23,7 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/child-session';
 import { createHistoryOwnership } from '../services/historyOwnership';
 import type { HistoryOwnership } from '../services/historyImport';
+import { readNativeChildTranscript } from './nativeChildTranscriptReader';
 import {
   createDirectHarnessRuntime,
   promptForAssistantText,
@@ -69,6 +70,7 @@ function childRuntime(
   return {
     sessionId: runtime.sessionId,
     ...(file === undefined ? {} : { sessionFile: file }),
+    ...(file === undefined ? {} : { readTranscriptPage: (request, signal) => readNativeChildTranscript(file, request, signal) }),
     prompt: (task) => promptForAssistantText(runtime, task),
     steer: (message) => runtime.steer(message),
     followUp: (message) => runtime.followUp(message),

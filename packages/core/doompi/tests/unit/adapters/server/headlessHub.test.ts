@@ -43,6 +43,124 @@ function host() {
 }
 
 describe('createHeadlessHub', () => {
+  it('tracks prompt and extension input phases without changing phase on ordinary messages', async () => {
+    const session = host();
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({
+      id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', updatedAt: 'later', phase: 'retry', phaseSince: 'earlier',
+      pendingMessageCount: 2, everPrompted: true, awaitingInput: false, host: session.host,
+    });
+    expect(hub.snapshot()[0]).toMatchObject({ phase: 'retry', phaseSince: 'earlier', pendingMessageCount: 2 });
+    expect(() => hub.register({ id: 'one', name: 'Again', cwd: '/repo', createdAt: 'now', host: host().host })).toThrow(
+      'already registered',
+    );
+    session.emitFrame({ type: 'extension_ui_request', method: 'notify' });
+    expect(hub.session('one')?.awaitingInput).toBe(false);
+    session.emitFrame({ type: 'extension_ui_request', method: 'select' });
+    expect(hub.session('one')?.awaitingInput).toBe(true);
+    session.emitFrame({ type: 'message_end', message: { role: 'assistant' } });
+    expect(hub.session('one')?.phase).toBe('retry');
+    expect(hub.session('one')?.awaitingInput).toBe(true);
+    session.emitFrame({ type: 'extension_ui_answered' });
+    expect(hub.session('one')?.awaitingInput).toBe(false);
+    session.emitFrame({ type: 'agent_start' });
+    expect(hub.session('one')).toMatchObject({ phase: 'turn', everPrompted: true });
+    session.emitFrame({ type: 'extension_ui_request', method: 'editor' });
+    session.emitFrame({ type: 'agent_settled' });
+    expect(hub.session('one')).toMatchObject({ phase: 'idle', awaitingInput: false, lastSettledAt: expect.any(String) });
+    await hub.close();
+    expect(() => hub.register({ id: 'later', name: 'Later', cwd: '/repo', createdAt: 'now', host: host().host })).toThrow(
+      'closed',
+    );
+  });
+
+  it('reports failed exit cleanup and rejects invalid mount and workspace operations', async () => {
+    const notices: string[] = [];
+    const session = host();
+    const hub = createHeadlessHub({
+      manager: { closeSession: vi.fn(async () => { throw new Error('cleanup unavailable'); }) } as never,
+      onNotice: (notice) => notices.push(notice),
+    });
+    await expect(hub.admitWorkspace('/repo')).rejects.toThrow('unavailable');
+    await expect(hub.mountFacets([], { scope: 'session', sessionId: 'one', onNotice: vi.fn() })).rejects.toThrow(
+      'Session facets belong',
+    );
+    await expect(hub.mountFacets([], { scope: 'workspace', onNotice: vi.fn() })).rejects.toThrow(
+      'admitted identity and root',
+    );
+    await hub.removeWorkspace('missing');
+    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: session.host });
+    session.exit(1);
+    await vi.waitFor(() => expect(notices).toContain('session one cleanup failed (cleanup unavailable)'));
+    expect(hub.session('one')).toBeUndefined();
+    await hub.close();
+    expect((await hub.requestApi({ scope: 'global' }, 'example', new Request('http://localhost/'))).status).toBe(503);
+  });
+
+
+  it('confines channel lifecycle, events, and APIs to the mounted workspace', async () => {
+    const createSession = vi.fn(async () => ({ sessionId: 'created', cwd: '/one' }));
+    const requestSessionApi = vi.fn(async () => Response.json({ ok: true }));
+    const closeSession = vi.fn(async () => undefined);
+    const hub = createHeadlessHub({ manager: { closeSession } as never, createSession, requestSessionApi });
+    hub.register({ id: 'one', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: host().host });
+    hub.register({ id: 'two', workspaceId: 'two', name: 'Two', cwd: '/two', createdAt: 'now', host: host().host });
+    let channelHost: Parameters<DoomHubChannel['start']>[0] | undefined;
+    const receive = vi.fn();
+    const events: unknown[] = [];
+    hub.onEvent((event) => events.push(event));
+    hub.registerChannel(
+      {
+        frameType: 'workspace-only',
+        receive,
+        start(api) {
+          channelHost = api;
+          return { payloadFor: () => ({ ready: true }), close: vi.fn() };
+        },
+      },
+      { scope: 'workspace', workspaceId: 'one' },
+    );
+    expect(channelHost?.sessions()).toEqual([{ sessionId: 'one', workspaceId: 'one', cwd: '/one' }]);
+    const scopedSessions = channelHost?.sessionService;
+    expect(scopedSessions).toBeDefined();
+    expect(scopedSessions?.isLive('one')).toBe(true);
+    expect(scopedSessions?.isLive('two')).toBe(false);
+    await expect(scopedSessions?.create({ cwd: '/one', name: 'child' })).rejects.toThrow('Parent session');
+    await expect(
+      scopedSessions?.create({ cwd: '/one', name: 'child', parentSessionId: 'two' }),
+    ).rejects.toThrow('Parent session');
+    await expect(
+      scopedSessions?.create({ cwd: '/one', name: 'child', parentSessionId: 'one' }),
+    ).resolves.toEqual({ sessionId: 'created', cwd: '/one' });
+    expect(createSession).toHaveBeenCalledOnce();
+    await expect(scopedSessions?.close('two')).rejects.toThrow('outside this mount');
+    expect((await channelHost?.requestSessionApi({ sessionId: 'two', cwd: '/two' }, {} as never))?.status).toBe(404);
+    expect((await channelHost?.requestSessionApi({ sessionId: 'one', cwd: '/one' }, {} as never))?.status).toBe(200);
+    expect(requestSessionApi).toHaveBeenCalledOnce();
+
+    const seen = vi.fn();
+    channelHost?.directEvents.publish('notice', 'two', 'hidden');
+    channelHost?.directEvents.publish('notice', 'one', 'visible');
+    channelHost?.directEvents.subscribe('notice', 'two', seen, { replayLatest: true });
+    expect(seen).not.toHaveBeenCalled();
+    const release = channelHost?.directEvents.subscribe('notice', 'one', seen, { replayLatest: true });
+    expect(seen).toHaveBeenCalledWith('visible');
+    channelHost?.directEvents.publish('notice', 'one', 'next');
+    expect(seen).toHaveBeenCalledWith('next');
+    release?.();
+
+    channelHost?.publish('two', 'hidden');
+    expect(channelHost?.publishToConnection?.('client', 'two', 'hidden')).toBe(false);
+    expect(channelHost?.publishToConnection?.('client', 'one', 'visible')).toBe(true);
+    expect(events).toContainEqual({
+      kind: 'channel', frameType: 'workspace-only', sessionId: 'one', payload: 'visible', connectionId: 'client',
+    });
+    hub.receiveChannel('two', 'workspace-only', {}, 'client');
+    hub.receiveChannel('one', 'workspace-only', {}, 'client');
+    expect(receive).toHaveBeenCalledOnce();
+    await hub.close();
+  });
+
   it('publishes session summaries at state changes rather than every streamed token', () => {
     const session = host();
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });

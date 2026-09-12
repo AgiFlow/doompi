@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis';
+import type { TranscriptPage, TranscriptPageRequest } from './sessionProtocol';
 
 export const DOOM_CHILD_SESSION_SERVICE = 'doom/child-session';
 
@@ -118,6 +119,8 @@ export interface DoomChildSessionRuntime {
   steer(message: string): Promise<void>;
   followUp?(message: string): Promise<void>;
   abort(): Promise<void>;
+  /** Reads only this runtime's owned journal. The callback may remain valid after runtime disposal. */
+  readTranscriptPage?(request: Omit<TranscriptPageRequest, 'threadId'>, signal?: AbortSignal): Promise<TranscriptPage>;
   dispose(): Promise<void>;
 }
 
@@ -139,6 +142,12 @@ export interface DoomChildSessionHandle {
 export interface DoomChildSessionService {
   start(request: DoomChildSessionRequest, signal?: AbortSignal): Promise<DoomChildSessionHandle>;
   get(runId: string): DoomChildSessionHandle | undefined;
+  /** Resolves an owned run ID inside this session service. Callers never provide journal paths. */
+  readTranscriptPage?(
+    runId: string,
+    request: Omit<TranscriptPageRequest, 'threadId'>,
+    signal?: AbortSignal,
+  ): Promise<TranscriptPage>;
   close(): Promise<void>;
 }
 

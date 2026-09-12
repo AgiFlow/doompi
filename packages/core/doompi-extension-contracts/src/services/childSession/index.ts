@@ -1,7 +1,9 @@
+import type { TranscriptPage, TranscriptPageRequest } from '../../schemas/sessionProtocol';
 import type {
   DoomChildSessionEvent,
   DoomChildSessionHandle,
   DoomChildSessionRequest,
+  DoomChildSessionRuntime,
   DoomChildSessionRuntimeFactory,
   DoomChildSessionService,
   DoomChildSessionState,
@@ -22,6 +24,10 @@ export function createDoomChildSessionService(
   dependencies: DoomChildSessionServiceDependencies,
 ): DoomChildSessionService {
   const handles = new Map<string, DoomChildSessionHandle>();
+  const transcriptReaders = new Map<
+    string,
+    (request: Omit<TranscriptPageRequest, 'threadId'>, signal?: AbortSignal) => Promise<TranscriptPage>
+  >();
   const claimedRunIds = new Set<string>();
   const starting = new Set<Promise<DoomChildSessionHandle>>();
   const cleanupFailures: unknown[] = [];
@@ -30,7 +36,7 @@ export function createDoomChildSessionService(
 
   const release = (runId: string): void => {
     handles.delete(runId);
-    claimedRunIds.delete(runId);
+    if (!transcriptReaders.has(runId)) claimedRunIds.delete(runId);
   };
   const recordCleanupFailure = (error: unknown): void => {
     cleanupFailures.push(error);
@@ -47,7 +53,11 @@ export function createDoomChildSessionService(
         try {
           signal?.throwIfAborted();
           const handle = await createHandle(
-            factory,
+            async (ownedRequest, ownedSignal) => {
+              const runtime = await factory(ownedRequest, ownedSignal);
+              if (runtime.readTranscriptPage) transcriptReaders.set(request.runId, runtime.readTranscriptPage);
+              return runtime;
+            },
             dependencies,
             request,
             signal,
@@ -61,6 +71,7 @@ export function createDoomChildSessionService(
           if (!isTerminal(handle.state())) handles.set(request.runId, handle);
           return handle;
         } catch (error) {
+          transcriptReaders.delete(request.runId);
           release(request.runId);
           throw error;
         }
@@ -73,6 +84,15 @@ export function createDoomChildSessionService(
       return pending;
     },
     get: (runId) => handles.get(runId),
+    async readTranscriptPage(runId, request, signal) {
+      if (closed) throw new Error('The Doom child-session service is closed.');
+      signal?.throwIfAborted();
+      const reader = transcriptReaders.get(runId);
+      if (!reader) throw new Error(`Child run '${runId}' has no readable transcript.`);
+      const page = await reader(request, signal);
+      signal?.throwIfAborted();
+      return page;
+    },
     close() {
       closePromise ??= (async () => {
         if (closed) return;
@@ -82,6 +102,7 @@ export function createDoomChildSessionService(
         await Promise.allSettled(active.map((handle) => handle.dispose()));
         const failures = [...cleanupFailures];
         handles.clear();
+        transcriptReaders.clear();
         claimedRunIds.clear();
         if (failures.length) throw new AggregateError(failures, 'Doom child-session shutdown failed.');
       })();

@@ -133,7 +133,8 @@ async function proxyHttp(
 
 function writeStatic(request: IncomingMessage, response: ServerResponse, assetsDir: string, pwaDir: string): void {
   const url = requestUrl(request);
-  const fromPwa = url.pathname.startsWith(PWA_ASSET_PREFIX) || url.pathname === '/sw.js';
+  const fromPwa =
+    url.pathname.startsWith(PWA_ASSET_PREFIX) || url.pathname === '/sw.js' || url.pathname === '/manifest.webmanifest';
   const relativePath = url.pathname.startsWith(PWA_ASSET_PREFIX)
     ? url.pathname.slice(PWA_ASSET_PREFIX.length)
     : url.pathname;

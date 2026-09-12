@@ -24,6 +24,7 @@ import {
   type DoomOverlayTui,
 } from '@agimon-ai/doompi-ui/doom-overlay';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import { type ExtensionContext, getMarkdownTheme } from '@earendil-works/pi-coding-agent';
 import {
   Key,
@@ -41,6 +42,7 @@ import type { PollSchedulerContract } from '../services/pollScheduler';
 import { agentSystemPromptFingerprint, fieldRow, readAgentSystemPrompt, renderAgentView } from './fleetAgentView';
 import { type FleetTranscriptRender, type FleetTranscriptVerbosity, renderFleetTranscript } from './fleetTranscript';
 import { type FleetTranscriptTail, readFleetTranscriptTail } from '../services/fleetTranscript';
+import { nativeTranscriptTail } from '../services/nativeFleetTranscript';
 
 const DEFAULT_REFRESH_INTERVAL_MS = 750;
 const MIN_DETAIL_BODY_LINES = 15;
@@ -90,6 +92,11 @@ export interface FleetViewOptions {
   markdownTheme?: MarkdownTheme;
   /** Injected so the overlay can be asserted on its emitted payload in tests. */
   dispatchAction?: FleetActionDispatcher;
+  readTranscriptPage?: (
+    runId: string,
+    request: Omit<TranscriptPageRequest, 'threadId'>,
+    signal?: AbortSignal,
+  ) => Promise<TranscriptPage>;
 }
 
 const CONTROL_ORDER: readonly FleetActionName[] = ['interrupt', 'stop', 'resume', 'steer'];
@@ -317,6 +324,12 @@ export class SubagentFleetComponent extends DoomOverlay {
   private verbosity: FleetTranscriptVerbosity = 'compact';
   private transcriptTail: FleetTranscriptTail | undefined;
   private transcriptRender: FleetTranscriptRender | undefined;
+  private nativeTranscriptState: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
+  private nativeTranscriptError: string | undefined;
+  private transcriptRequest = 0;
+  private transcriptInFlight = false;
+  private transcriptPending = false;
+  private lastTranscriptState: string | undefined;
   private agentCache: FleetAgentCache | undefined;
   private disposed = false;
   private readonly unregister: () => void;
@@ -343,6 +356,7 @@ export class SubagentFleetComponent extends DoomOverlay {
     this.options = options;
     this.selectedKey = options.initialKey;
     this.refresh();
+    this.queueNativeTranscript();
     this.lastRenderKey = this.pollRenderKey();
     this.unregister = this.scheduler.register({
       id: POLL_SUBSCRIBER_ID,
@@ -351,10 +365,14 @@ export class SubagentFleetComponent extends DoomOverlay {
     });
   }
 
-  /** One scheduler tick over in-memory projections only. */
+  /** One scheduler tick over tracker projections plus the selected live transcript. */
   private onTick(): boolean {
     if (this.disposed) return false;
     this.refresh();
+    const selected = this.snapshot.items[this.selected];
+    if (selected?.job.sessionFile && (LIVE_STATES.has(selected.state) || selected.state !== this.lastTranscriptState))
+      this.queueNativeTranscript();
+    this.lastTranscriptState = selected?.state;
     const renderKey = this.pollRenderKey();
     if (renderKey === this.lastRenderKey) return false;
     this.lastRenderKey = renderKey;
@@ -384,6 +402,8 @@ export class SubagentFleetComponent extends DoomOverlay {
     this.selectedKey = this.snapshot.items[this.selected]?.key;
     this.lastRenderKey = this.pollRenderKey();
     this.detailAutoFollow = true;
+    this.clearTranscriptCache();
+    this.queueNativeTranscript();
     this.tui.requestRender();
   }
 
@@ -409,10 +429,10 @@ export class SubagentFleetComponent extends DoomOverlay {
     if (matchesKey(data, 'p')) return this.toggleTab();
     if (matchesKey(data, 'o')) return this.toggleVerbosity();
     if (matchesKey(data, 'ctrl+r')) {
-      // Manual refresh: the one deliberate cache-clearing path. Distinct from
-      // every scheduler tick, which must not do this - see the module header.
+      // Manual refresh invalidates both rendering and any stale asynchronous read.
       this.clearCaches();
       this.refresh();
+      this.queueNativeTranscript();
       this.tui.requestRender();
       return;
     }
@@ -420,9 +440,16 @@ export class SubagentFleetComponent extends DoomOverlay {
     if (action) this.triggerControl(action);
   }
 
-  private clearCaches(): void {
+  private clearTranscriptCache(): void {
+    this.transcriptRequest += 1;
     this.transcriptTail = undefined;
     this.transcriptRender = undefined;
+    this.nativeTranscriptState = 'idle';
+    this.nativeTranscriptError = undefined;
+  }
+
+  private clearCaches(): void {
+    this.clearTranscriptCache();
     this.agentCache = undefined;
   }
 
@@ -432,6 +459,7 @@ export class SubagentFleetComponent extends DoomOverlay {
     // each tab lands where its own content starts being useful.
     this.detailScroll = 0;
     this.detailAutoFollow = this.detailTab === 'transcript';
+    if (this.detailTab === 'transcript') this.queueNativeTranscript();
     this.tui.requestRender();
   }
 
@@ -538,31 +566,63 @@ export class SubagentFleetComponent extends DoomOverlay {
     return Math.max(1, Math.floor(this.bodyHeight / ROSTER_ROWS_PER_ITEM));
   }
 
-  /**
-   * Reads and formats the selected run's transcript, cached by content
-   * fingerprint. Only invoked from `render()`, never from a poll tick - so a
-   * disk read only happens when the pane is actually about to be painted with
-   * new content, not on a fixed clock.
-   */
+  private queueNativeTranscript(): void {
+    const item = this.snapshot.items[this.selected];
+    const read = this.options.readTranscriptPage;
+    if (!item?.job.sessionFile || !read || this.detailTab !== 'transcript') return;
+    if (this.transcriptInFlight) {
+      this.transcriptPending = true;
+      return;
+    }
+    const runId = item.runId;
+    const requestId = ++this.transcriptRequest;
+    this.transcriptInFlight = true;
+    this.nativeTranscriptState = 'loading';
+    void read(runId, { limit: 100 })
+      .then((page) => {
+        if (this.disposed || requestId !== this.transcriptRequest || this.selectedKey !== item.key) return;
+        this.transcriptTail = nativeTranscriptTail(runId, page);
+        this.transcriptRender = undefined;
+        this.nativeTranscriptState = 'ready';
+        this.nativeTranscriptError = undefined;
+        this.tui.requestRender();
+      })
+      .catch((cause) => {
+        if (this.disposed || requestId !== this.transcriptRequest || this.selectedKey !== item.key) return;
+        this.nativeTranscriptState = 'error';
+        this.nativeTranscriptError = cause instanceof Error ? cause.message : String(cause);
+        this.tui.requestRender();
+      })
+      .finally(() => {
+        this.transcriptInFlight = false;
+        if (this.transcriptPending && !this.disposed) {
+          this.transcriptPending = false;
+          this.queueNativeTranscript();
+        }
+      });
+  }
+
   private renderedTranscript(status: AsyncRunStatus | undefined, width: number): { events: number; body: string[] } {
-    const target = status?.transcriptPath;
-    if (!target) {
+    const native = Boolean(status?.sessionFile && this.options.readTranscriptPage);
+    const target = native ? undefined : status?.transcriptPath;
+    if (!native && !target) {
       this.transcriptTail = undefined;
       this.transcriptRender = undefined;
       return { events: 0, body: [] };
     }
-    // Resuming is what keeps this proportional to what arrived rather than to
-    // what the file holds; the returned tail supersedes the one passed in.
-    const previous = this.transcriptTail?.path === target ? this.transcriptTail : undefined;
-    const tail = readFleetTranscriptTail(target, previous);
-    this.transcriptTail = tail;
+    if (!native) {
+      const previous = this.transcriptTail?.path === target ? this.transcriptTail : undefined;
+      this.transcriptTail = readFleetTranscriptTail(target!, previous);
+    }
+    const tail = this.transcriptTail;
+    if (!tail) return { events: 0, body: [] };
     const render = renderFleetTranscript(
       tail,
       width,
       this.theme,
       this.markdownTheme,
       { cwd: status?.cwd, verbosity: this.verbosity },
-      previous ? this.transcriptRender : undefined,
+      this.transcriptRender,
     );
     this.transcriptRender = render;
     return { events: tail.events.length, body: render.lines };
@@ -607,12 +667,20 @@ export class SubagentFleetComponent extends DoomOverlay {
     const { events, body } = this.renderedTranscript(status, width);
     if (events > 0) return body;
     const transcriptState = !status
-      ? 'Transcript unavailable. No run status was found, so there is no transcript path to read.'
-      : !status.transcriptPath
-        ? 'Transcript unavailable. Artifacts were disabled for this run, so nothing was recorded.'
-        : this.transcriptTail?.warning
-          ? 'Transcript unavailable. The transcript artifact is missing or unreadable.'
-          : 'No transcript yet.';
+      ? 'Transcript unavailable. No run status was found.'
+      : status.sessionFile && this.options.readTranscriptPage
+        ? this.nativeTranscriptState === 'loading'
+          ? 'Loading transcript…'
+          : this.nativeTranscriptState === 'error'
+            ? `Transcript unavailable. ${this.nativeTranscriptError ?? 'The native journal could not be read.'}`
+            : 'No transcript yet.'
+        : !status.transcriptPath
+          ? status.sessionFile
+            ? 'Transcript unavailable. The native transcript reader is not attached.'
+            : 'Transcript unavailable. This run did not publish a transcript source.'
+          : this.transcriptTail?.warning
+            ? 'Transcript unavailable. The transcript artifact is missing or unreadable.'
+            : 'No transcript yet.';
     const lines: string[] = [];
     for (const line of wrapTextWithAnsi(transcriptState, Math.max(1, width))) lines.push(line);
     return lines;
@@ -720,10 +788,13 @@ export class SubagentFleetComponent extends DoomOverlay {
   invalidate(): void {
     this.clearCaches();
     this.refresh();
+    this.queueNativeTranscript();
   }
 
   dispose(): void {
     this.disposed = true;
+    this.transcriptRequest += 1;
+    this.transcriptPending = false;
     this.unregister();
   }
 }

@@ -1024,7 +1024,7 @@ export function createPlanModeRuntime(
     const policy = {
       owner: PLAN_LEADER_SOURCE,
       allowedTools,
-      requiredTools: [BASH_TOOL, MCP_TOOL],
+      requiredTools: [BASH_TOOL],
       allowMcpTools: true,
       allowedExternalProfiles,
       denyExtensions: false,

@@ -1,8 +1,24 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { DoomApi } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { createProviderAuth } from '../services/providerAuth';
+import { piAgentDirectory } from '../services/piSettings';
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+async function loadHostPiRuntime() {
+  const hostEntry = process.argv[1];
+  if (!hostEntry) throw new Error('The DoomPi server entry is unavailable.');
+  const hostPackage = path.resolve(path.dirname(hostEntry), '../..');
+  const piPackage = path.join(hostPackage, 'node_modules/@earendil-works/pi-coding-agent');
+  const manifest = JSON.parse(fs.readFileSync(path.join(piPackage, 'package.json'), 'utf8')) as {
+    exports: { '.': { import: string } };
+  };
+  const entry = path.resolve(piPackage, manifest.exports['.'].import);
+  return (await import(pathToFileURL(entry).href)) as typeof import('@earendil-works/pi-coding-agent');
 }
 
 /** Machine-owned provider credentials and model catalog, available without a session. */
@@ -10,7 +26,17 @@ export const machineApi: DoomApi = {
   basePath: 'doompi',
   start(context) {
     if (context.scope !== 'global') throw new Error('Provider authentication requires the global mount.');
-    const auth = createProviderAuth(context);
+    const auth = createProviderAuth({
+      onNotice: context.onNotice,
+      runtime: async () => {
+        const { ModelRuntime } = await loadHostPiRuntime();
+        const directory = piAgentDirectory(context.environment, context.homeDirectory);
+        return ModelRuntime.create({
+          authPath: path.join(directory, 'auth.json'),
+          modelsPath: path.join(directory, 'models.json'),
+        });
+      },
+    });
     let closed = false;
     return {
       async fetch(request) {

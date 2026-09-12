@@ -94,6 +94,11 @@ describe('the web presentation server', () => {
     expect(asset.status).toBe(200);
     expect(await asset.text()).toContain('globalThis.cockpit');
 
+    const manifest = await fetch(`${presentation.url}/manifest.webmanifest`);
+    expect(manifest.status).toBe(200);
+    expect(manifest.headers.get('content-type')).toBe('application/manifest+json; charset=utf-8');
+    expect(await manifest.json()).toMatchObject({ name: 'DoomPi Cockpit' });
+
     const health = await fetch(`${presentation.url}/api/health`, {
       headers: { 'x-doompi-web-registration': 'browser-forgery' },
     });

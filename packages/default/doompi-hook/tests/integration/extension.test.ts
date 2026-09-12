@@ -1,5 +1,5 @@
 vi.mock('@agimon-ai/doompi-extension-contracts/pi-extension', () =>
-  vi.importActual('../../../../core/doompi-extension-contracts/src/adapters/pi/definePiExtension.ts'),
+  vi.importActual('../../../../core/doompi-extension-contracts/src/controllers/piExtension'),
 );
 import fs from 'node:fs';
 import os from 'node:os';
@@ -21,7 +21,7 @@ import { type PiHarness, piHarness, SESSION_ID, stubRunner, TEST_CORDIS_ROOT } f
 const cordisHost = vi.hoisted(() => ({ resolveRoot: (_pi: unknown): unknown => undefined }));
 const cordisRoots: Context[] = [];
 
-vi.mock('../../../../core/doompi-extension-contracts/src/adapters/pi/cordisHost.ts', () => ({
+vi.mock('../../../../core/doompi-extension-contracts/src/controllers/cordisHost', () => ({
   connectDoomCordisHost: async (pi: unknown) => ({
     root: cordisHost.resolveRoot(pi),
     runtime: { abiVersion: 1, generation: 'hook-test', hostId: 'hook-test', mode: 'composed' },

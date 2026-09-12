@@ -7,10 +7,18 @@ import {
   restoreProtectedHistory,
   type HistoryStagingImportInput,
   type HistoryOwnership,
+  type HistoryEntryProof,
+  type HistoryBranchProof,
 } from '../../../../src/services/historyImport';
 import { exportV4ToV3 } from '../../../../src/services/v3Export';
 
 import { importV3WithPinnedUpstream } from '../../../../src/services/jsonlSessionRepo';
+
+type MutableHistoryProof = {
+  entries: HistoryEntryProof[];
+  branches: HistoryBranchProof[];
+  projectedSourceIds?: string[];
+};
 
 function owner(): HistoryOwnership {
   let held = false;
@@ -434,6 +442,410 @@ describe('protected history import', () => {
       }),
     ).rejects.toThrow('overwrite derived history');
     expect(fs.readFileSync(destinationPath, 'utf8')).toBe('unrelated');
+  });
+
+  it.each([
+    [
+      'version',
+      (state: Record<string, unknown>) => {
+        state.version = 2;
+      },
+    ],
+    [
+      'operation',
+      (state: Record<string, unknown>) => {
+        state.operation = 'other';
+      },
+    ],
+    [
+      'phase',
+      (state: Record<string, unknown>) => {
+        state.phase = 'other';
+      },
+    ],
+    [
+      'source path',
+      (state: Record<string, unknown>) => {
+        state.sourcePath = '';
+      },
+    ],
+    [
+      'destination path',
+      (state: Record<string, unknown>) => {
+        state.destinationPath = null;
+      },
+    ],
+    [
+      'original path',
+      (state: Record<string, unknown>) => {
+        state.originalPath = 1;
+      },
+    ],
+    [
+      'staging path',
+      (state: Record<string, unknown>) => {
+        state.stagingPath = '';
+      },
+    ],
+    [
+      'source identity',
+      (state: Record<string, unknown>) => {
+        state.sourceIdentity = null;
+      },
+    ],
+    [
+      'source device',
+      (state: Record<string, unknown>) => {
+        (state.sourceIdentity as Record<string, unknown>).device = -1;
+      },
+    ],
+    [
+      'source inode',
+      (state: Record<string, unknown>) => {
+        (state.sourceIdentity as Record<string, unknown>).inode = 1.5;
+      },
+    ],
+    [
+      'source size',
+      (state: Record<string, unknown>) => {
+        (state.sourceIdentity as Record<string, unknown>).size = '1';
+      },
+    ],
+    [
+      'source timestamp',
+      (state: Record<string, unknown>) => {
+        (state.sourceIdentity as Record<string, unknown>).mtimeMs = Infinity;
+      },
+    ],
+    [
+      'source checksum',
+      (state: Record<string, unknown>) => {
+        (state.sourceIdentity as Record<string, unknown>).sha256 = 'bad';
+      },
+    ],
+    [
+      'staged checksum',
+      (state: Record<string, unknown>) => {
+        state.stagedSha256 = 'bad';
+      },
+    ],
+    [
+      'proof envelope',
+      (state: Record<string, unknown>) => {
+        state.verification = { entries: null, branches: [] };
+      },
+    ],
+    [
+      'entry envelope',
+      (state: Record<string, unknown>) => {
+        (state.verification as { entries: unknown[] }).entries[0] = null;
+      },
+    ],
+    [
+      'entry source id',
+      (state: Record<string, unknown>) => {
+        (state.verification as { entries: Record<string, unknown>[] }).entries[0]!.sourceId = '';
+      },
+    ],
+    [
+      'entry parent id',
+      (state: Record<string, unknown>) => {
+        (state.verification as { entries: Record<string, unknown>[] }).entries[0]!.sourceParentId = 123;
+      },
+    ],
+    [
+      'entry hash',
+      (state: Record<string, unknown>) => {
+        (state.verification as { entries: Record<string, unknown>[] }).entries[0]!.importedContentHash = 'not-sha256';
+      },
+    ],
+    [
+      'branch envelope',
+      (state: Record<string, unknown>) => {
+        (state.verification as { branches: unknown[] }).branches[0] = null;
+      },
+    ],
+    [
+      'branch name',
+      (state: Record<string, unknown>) => {
+        (state.verification as { branches: Record<string, unknown>[] }).branches[0]!.branch = '';
+      },
+    ],
+    [
+      'branch tip',
+      (state: Record<string, unknown>) => {
+        (state.verification as { branches: Record<string, unknown>[] }).branches[0]!.importedTipId = 123;
+      },
+    ],
+    [
+      'projected source ids',
+      (state: Record<string, unknown>) => {
+        (state.verification as Record<string, unknown>).projectedSourceIds = [null];
+      },
+    ],
+    [
+      'duplicate projected source ids',
+      (state: Record<string, unknown>) => {
+        (state.verification as Record<string, unknown>).projectedSourceIds = ['x', 'x'];
+      },
+    ],
+  ] as const)('rejects malformed persisted %s', async (_field, mutate) => {
+    const sourcePath = path.join(root, 'source.jsonl');
+    const destinationPath = path.join(root, 'imported.jsonl');
+    fs.writeFileSync(sourcePath, v3Source());
+    const options = { sourcePath, destinationPath, owner: owner() };
+    await protectAndImportHistory(options);
+    const statePath = `${destinationPath}.import-state.json`;
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8')) as Record<string, unknown>;
+    mutate(state);
+    fs.writeFileSync(statePath, `${JSON.stringify(state)}\n`);
+    await expect(protectAndImportHistory(options)).rejects.toThrow(/Invalid|Duplicate/);
+    expect(fs.readFileSync(sourcePath, 'utf8')).toBe(v3Source());
+  });
+
+  it.each([
+    ['truncated source', `${v3Source().slice(0, -1)}`, v4Source(), /truncated/],
+    ['invalid source header', `{}\n`, v4Source(), /not v3/],
+    ['empty source line', `${v3Source()}\n`, v4Source(), /JSONL/],
+    ['invalid source JSON', `${v3Source()}{bad}\n`, v4Source(), /JSONL/],
+    ['duplicate source entry', `${v3Source()}${v3Source().split('\n')[1]}\n`, v4Source(), /Duplicate/],
+    ['truncated staging', v3Source(), v4Source().slice(0, -1), /truncated/],
+    ['invalid staging header', v3Source(), `{}\n`, /not v4/],
+    ['invalid staging record', v3Source(), `${v4Source()}{bad}\n`, /JSONL/],
+    ['non-record staging value', v3Source(), `${v4Source()}7\n`, /record/],
+  ] as const)('rejects %s before publishing', async (_case, source, staged, error) => {
+    const sourcePath = path.join(root, 'source.jsonl');
+    const destinationPath = path.join(root, 'imported.jsonl');
+    fs.writeFileSync(sourcePath, source);
+    await expect(
+      protectAndImportHistory({
+        sourcePath,
+        destinationPath,
+        owner: owner(),
+        importStaging: ({ stagingPath }) => {
+          fs.writeFileSync(stagingPath, staged);
+          return { entries: [], branches: [] };
+        },
+      }),
+    ).rejects.toThrow(error);
+    expect(fs.existsSync(destinationPath)).toBe(false);
+    expect(fs.readFileSync(sourcePath, 'utf8')).toBe(source);
+  });
+
+  it.each([
+    [
+      'unknown source',
+      (proof: MutableHistoryProof) => {
+        proof.entries[0]!.sourceId = 'missing';
+      },
+      /unknown source entry/,
+    ],
+    [
+      'duplicate source',
+      (proof: MutableHistoryProof) => {
+        proof.entries.push({ ...proof.entries[0]! });
+      },
+      /Duplicate imported source/,
+    ],
+    [
+      'unknown imported entry',
+      (proof: MutableHistoryProof) => {
+        proof.entries[0]!.importedId = 'missing';
+      },
+      /unknown imported entry/,
+    ],
+    [
+      'unequal entry hashes',
+      (proof: MutableHistoryProof) => {
+        proof.entries[0]!.sourceContentHash = '0'.repeat(64);
+      },
+      /content mismatch/,
+    ],
+    [
+      'false content proof',
+      (proof: MutableHistoryProof) => {
+        proof.entries[0]!.sourceContentHash = '0'.repeat(64);
+        proof.entries[0]!.importedContentHash = '0'.repeat(64);
+      },
+      /source content proof mismatch/,
+    ],
+    [
+      'unknown projected entry',
+      (proof: MutableHistoryProof) => {
+        proof.projectedSourceIds = [...(proof.projectedSourceIds ?? []), 'missing'];
+      },
+      /unknown projected source/,
+    ],
+    [
+      'mapped and projected entry',
+      (proof: MutableHistoryProof) => {
+        proof.projectedSourceIds = [...(proof.projectedSourceIds ?? []), 'root'];
+      },
+      /maps and projects/,
+    ],
+    [
+      'nonprojectable entry',
+      (proof: MutableHistoryProof) => {
+        proof.entries = proof.entries.filter((entry) => entry.sourceId !== 'root');
+        proof.projectedSourceIds = [...(proof.projectedSourceIds ?? []), 'root'];
+      },
+      /cannot project/,
+    ],
+    [
+      'source parent',
+      (proof: MutableHistoryProof) => {
+        proof.entries.find((entry) => entry.sourceId === 'child')!.sourceParentId = null;
+      },
+      /source parent proof mismatch/,
+    ],
+    [
+      'imported parent',
+      (proof: MutableHistoryProof) => {
+        proof.entries.find((entry) => entry.sourceId === 'child')!.importedParentId = null;
+      },
+      /parent mismatch/,
+    ],
+    [
+      'duplicate branch',
+      (proof: MutableHistoryProof) => {
+        proof.branches.push({ ...proof.branches[0]! });
+      },
+      /Duplicate imported history branch/,
+    ],
+    [
+      'branch root mismatch',
+      (proof: MutableHistoryProof) => {
+        proof.branches[0]!.sourceTipId = null;
+      },
+      /branch root mismatch/,
+    ],
+    [
+      'branch mapping mismatch',
+      (proof: MutableHistoryProof) => {
+        proof.branches[0]!.importedTipId = 'root';
+      },
+      /branch mismatch/,
+    ],
+    [
+      'missing branch',
+      (proof: MutableHistoryProof) => {
+        proof.branches = [];
+      },
+      /omits branch/,
+    ],
+  ] as const)('rejects a %s proof', async (_case, mutate, error) => {
+    const sourcePath = path.join(root, 'source.jsonl');
+    const destinationPath = path.join(root, 'imported.jsonl');
+    fs.writeFileSync(sourcePath, v3Source());
+    await expect(
+      protectAndImportHistory({
+        sourcePath,
+        destinationPath,
+        owner: owner(),
+        importStaging: async (input) => {
+          const proof = structuredClone(await importV3WithPinnedUpstream(input)) as MutableHistoryProof;
+          mutate(proof);
+          return proof;
+        },
+      }),
+    ).rejects.toThrow(error);
+    expect(fs.existsSync(destinationPath)).toBe(false);
+  });
+
+  it.each([
+    [
+      'destination',
+      (_state: Record<string, unknown>, destinationPath: string) => fs.rmSync(destinationPath),
+      /missing its destination/,
+    ],
+    [
+      'checksum',
+      (state: Record<string, unknown>) => {
+        delete state.stagedSha256;
+      },
+      /no destination checksum/,
+    ],
+    [
+      'verification',
+      (state: Record<string, unknown>) => {
+        delete state.verification;
+      },
+      /no verification proof/,
+    ],
+  ] as const)('rejects a published import missing its %s', async (_case, damage, error) => {
+    const sourcePath = path.join(root, 'source.jsonl');
+    const destinationPath = path.join(root, 'imported.jsonl');
+    fs.writeFileSync(sourcePath, v3Source());
+    const options = { sourcePath, destinationPath, owner: owner() };
+    await protectAndImportHistory(options);
+    const statePath = `${destinationPath}.import-state.json`;
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8')) as Record<string, unknown>;
+    damage(state, destinationPath);
+    fs.writeFileSync(statePath, `${JSON.stringify(state)}\n`);
+    await expect(protectAndImportHistory(options)).rejects.toThrow(error);
+  });
+
+  it.each([
+    [
+      'proof',
+      (state: Record<string, unknown>) => {
+        delete state.verification;
+      },
+      /no verification proof/,
+    ],
+    [
+      'staging file',
+      (state: Record<string, unknown>) => {
+        state.phase = 'verified';
+        fs.rmSync(state.stagingPath as string);
+      },
+      /staging copy is missing/,
+    ],
+    [
+      'staging checksum',
+      (state: Record<string, unknown>) => {
+        state.phase = 'verified';
+        fs.appendFileSync(state.stagingPath as string, 'outside edit');
+      },
+      /staging copy changed/,
+    ],
+  ] as const)('rejects an interrupted import with a missing or changed %s', async (_case, damage, error) => {
+    const sourcePath = path.join(root, 'source.jsonl');
+    const destinationPath = path.join(root, 'imported.jsonl');
+    fs.writeFileSync(sourcePath, v3Source());
+    const options = { sourcePath, destinationPath, owner: owner() };
+    await expect(
+      protectAndImportHistory({
+        ...options,
+        verifyStaging: async () => {
+          throw new Error('verification interrupted');
+        },
+      }),
+    ).rejects.toThrow('verification interrupted');
+    const statePath = `${destinationPath}.import-state.json`;
+    const state = JSON.parse(fs.readFileSync(statePath, 'utf8')) as Record<string, unknown>;
+    damage(state);
+    fs.writeFileSync(statePath, `${JSON.stringify(state)}\n`);
+    await expect(protectAndImportHistory(options)).rejects.toThrow(error);
+    expect(fs.existsSync(destinationPath)).toBe(false);
+  });
+
+  it.each(['source', 'original', 'state'] as const)('refuses path overlap with %s', async (overlap) => {
+    const sourcePath = path.join(root, 'source.jsonl');
+    const destinationPath = overlap === 'source' ? sourcePath : path.join(root, 'imported.jsonl');
+    const originalPath = overlap === 'original' ? destinationPath : path.join(root, 'source.original');
+    const statePath = overlap === 'state' ? destinationPath : path.join(root, 'import.state.json');
+    fs.writeFileSync(sourcePath, v3Source());
+    await expect(
+      protectAndImportHistory({
+        sourcePath,
+        destinationPath,
+        originalPath,
+        statePath,
+        owner: owner(),
+      }),
+    ).rejects.toThrow(/must differ/);
+    expect(fs.readFileSync(sourcePath, 'utf8')).toBe(v3Source());
   });
 });
 

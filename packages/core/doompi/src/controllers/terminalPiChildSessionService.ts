@@ -16,6 +16,8 @@ import {
 import { importV3WithPinnedUpstream } from '../services/jsonlSessionRepo';
 import type { HistoryOwnership, HistoryOwnershipLease } from '../services/historyImport';
 import { createHistoryOwnership } from '../services/historyOwnership';
+import { readNativeChildTranscript } from './nativeChildTranscriptReader';
+import { registerNativeChild } from './nativeChildRuntimes';
 import {
   createDirectHarnessRuntime,
   promptForAssistantText,
@@ -47,11 +49,18 @@ export interface TerminalPiForkSourceManager {
   getBranch(fromId?: string): readonly Record<string, unknown>[];
 }
 
-function childRuntime(runtime: DirectHarnessRuntime, intercom?: DoomChildSessionIntercom): DoomChildSessionRuntime {
+function childRuntime(
+  runtime: DirectHarnessRuntime,
+  intercom?: DoomChildSessionIntercom,
+  release?: () => void,
+): DoomChildSessionRuntime {
   const file = (runtime.session.metadata as unknown as { path?: unknown }).path;
   return {
     sessionId: runtime.sessionId,
     ...(typeof file === 'string' ? { sessionFile: file } : {}),
+    ...(typeof file === 'string'
+      ? { readTranscriptPage: (request, signal) => readNativeChildTranscript(file, request, signal) }
+      : {}),
     prompt: (task) => promptForAssistantText(runtime, task),
     steer: (message) => runtime.steer(message),
     followUp: (message) => runtime.followUp(message),
@@ -60,6 +69,7 @@ function childRuntime(runtime: DirectHarnessRuntime, intercom?: DoomChildSession
       try {
         await runtime.dispose();
       } finally {
+        release?.();
         intercom?.dispose?.();
       }
     },
@@ -277,7 +287,8 @@ export function createTerminalPiChildSessionService(
       try {
         runtime = await runtimeFactory(runtimeOptions);
         await installIntercom(runtime, request.intercom, (runtimeOptions.tools ?? []) as DirectHarnessTool[]);
-        return childRuntime(runtime, request.intercom);
+        const file = (runtime.session.metadata as unknown as { path?: unknown }).path;
+        return childRuntime(runtime, request.intercom, typeof file === 'string' ? registerNativeChild(file, runtime) : undefined);
       } catch (error) {
         let failure: unknown = error;
         try {
@@ -293,12 +304,23 @@ export function createTerminalPiChildSessionService(
     },
     { now: options.now ?? Date.now },
   );
+  const owners = new Map<string, DoomChildSessionService>();
   const service: DoomChildSessionService = {
-    start: (request, signal) =>
-      request.source.kind === 'terminal-pi-fork' ? terminal.start(request, signal) : headless.start(request, signal),
-    get: (runId) => terminal.get(runId) ?? headless.get(runId),
+    async start(request, signal) {
+      const owner = request.source.kind === 'terminal-pi-fork' ? terminal : headless;
+      const handle = await owner.start(request, signal);
+      owners.set(request.runId, owner);
+      return handle;
+    },
+    get: (runId) => owners.get(runId)?.get(runId) ?? terminal.get(runId) ?? headless.get(runId),
+    readTranscriptPage(runId, request, signal) {
+      const reader = owners.get(runId)?.readTranscriptPage;
+      if (!reader) return Promise.reject(new Error(`Child run '${runId}' has no readable transcript.`));
+      return reader.call(owners.get(runId), runId, request, signal);
+    },
     close: async () => {
       const failures = await Promise.allSettled([terminal.close(), headless.close()]);
+      owners.clear();
       const rejected = failures.flatMap((result) => (result.status === 'rejected' ? [result.reason] : []));
       if (rejected.length) throw new AggregateError(rejected, 'Terminal Pi child-session shutdown failed.');
     },

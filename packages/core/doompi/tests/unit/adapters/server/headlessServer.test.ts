@@ -98,6 +98,122 @@ afterEach(async () => {
 });
 
 describe('serveHeadlessServer', () => {
+  it('serves compositions, assets, remote requests, and directory suggestions', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-directories-'));
+    temporaryDirectories.push(directory);
+    fs.mkdirSync(path.join(directory, 'Alpha'));
+    fs.mkdirSync(path.join(directory, 'alpine'));
+    fs.writeFileSync(path.join(directory, 'also-file'), 'not a directory');
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn() } as never });
+    const requestApi = vi.spyOn(hub, 'requestApi').mockImplementation(async (_mount, _basePath, request) =>
+      Response.json({ path: new URL(request.url).pathname, body: await request.text(), header: request.headers.get('x-extra') }),
+    );
+    const requestAsset = vi.fn(async (request: Request) =>
+      new URL(request.url).pathname.endsWith('/found') ? new Response('asset') : undefined,
+    );
+    const server = await serveHeadlessServer({
+      headlessHub: hub,
+      port: 0,
+      token: 'secret',
+      compositions: () => ({ workspaces: ['one'] }),
+      requestAsset,
+    });
+    servers.push(server);
+    const headers = { authorization: 'Bearer secret' };
+    expect(await (await fetch(`${server.url}/api/compositions`, { headers })).json()).toEqual({ workspaces: ['one'] });
+    expect(await (await fetch(`${server.url}/api/web-plugins/found`, { headers })).text()).toBe('asset');
+    expect((await fetch(`${server.url}/api/web-plugins/missing`, { headers })).status).toBe(404);
+    expect(requestAsset).toHaveBeenCalledTimes(2);
+    const remote = await fetch(`${server.url}/api/remote/rpc?value=1`, {
+      method: 'POST',
+      headers: { ...headers, 'x-extra': 'present' },
+      body: 'payload',
+    });
+    expect(await remote.json()).toEqual({ path: '/rpc', body: 'payload', header: 'present' });
+    expect(requestApi).toHaveBeenCalledWith({ scope: 'global' }, 'remote', expect.any(Request));
+    expect(await (await fetch(`${server.url}/api/directories?q=`, { headers })).json()).toEqual({ directories: [] });
+    expect(
+      await (await fetch(`${server.url}/api/directories?q=${encodeURIComponent(path.join(directory, 'al'))}`, { headers })).json(),
+    ).toEqual({ directories: [path.join(directory, 'Alpha'), path.join(directory, 'alpine')] });
+    expect(
+      await (await fetch(`${server.url}/api/directories?q=${encodeURIComponent(path.join(directory, 'absent', 'x'))}`, { headers })).json(),
+    ).toEqual({ directories: [] });
+    await hub.close();
+  });
+
+  it('validates workspace requests and reports deletion conflicts', async () => {
+    const admitWorkspace = vi.fn(async (root: string) => ({ id: 'one', root }));
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never, admitWorkspace });
+    await hub.mountFacets([], { scope: 'workspace', workspaceId: 'one', workspaceRoot: '/one', onNotice: vi.fn() });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0 });
+    servers.push(server);
+    const post = (body: string) => fetch(`${server.url}/api/workspaces`, { method: 'POST', body });
+    expect(await (await fetch(`${server.url}/api/workspaces`)).json()).toEqual({ workspaces: [{ id: 'one', root: '/one' }] });
+    for (const body of ['', 'null', '[]', '{}', '{"root":1}']) {
+      const result = await post(body);
+      expect(result.status).toBe(400);
+    }
+    expect(admitWorkspace).not.toHaveBeenCalled();
+    const created = await post('{"root":"/new"}');
+    expect(created.status).toBe(201);
+    expect(await created.json()).toEqual({ workspace: { id: 'one', root: '/new' } });
+    expect((await fetch(`${server.url}/api/workspaces/missing`, { method: 'DELETE' })).status).toBe(404);
+    hub.register({ id: 'session', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: host().host });
+    expect((await fetch(`${server.url}/api/workspaces/one`, { method: 'DELETE' })).status).toBe(409);
+    await hub.closeSession('session');
+    expect((await fetch(`${server.url}/api/workspaces/one`, { method: 'DELETE' })).status).toBe(200);
+    expect(hub.workspaces()).toEqual([]);
+    await hub.close();
+  });
+
+  it('accepts only bounded browser telemetry events and records scoped API responses', async () => {
+    const recordEvent = vi.fn(async () => undefined);
+    const runInSpan = vi.fn(async (_name, _attributes, dispatch: () => Promise<Response>) => dispatch());
+    const telemetry = { recordEvent, runInSpan } as never;
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn() } as never });
+    const requestApi = vi.spyOn(hub, 'requestApi').mockResolvedValue(Response.json({ ok: true }));
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, telemetry });
+    servers.push(server);
+    const post = (value: unknown) =>
+      fetch(`${server.url}/api/telemetry/browser`, { method: 'POST', body: JSON.stringify(value) });
+    for (const invalid of [{ v: 2, events: [] }, { v: 1, events: null }, { v: 1, events: Array(11).fill({}) }])
+      expect((await post(invalid)).status).toBe(400);
+    expect(recordEvent).not.toHaveBeenCalled();
+    expect(
+      (await post({
+        v: 1,
+        events: [
+          null,
+          { name: 'bad' },
+          { name: 'web.browser.open', duration_ms: 12, count: 2 },
+          { name: 'web.browser.close', duration_ms: -1, count: Number.NaN },
+        ],
+      })).status,
+    ).toBe(200);
+    expect(recordEvent).toHaveBeenCalledWith('web.browser.open', { duration_ms: 12, count: 2 });
+    expect(recordEvent).toHaveBeenCalledWith('web.browser.close', {});
+    const plugin = await fetch(`${server.url}/api/global/plugin/test/path?query=yes`, {
+      method: 'POST',
+      headers: { 'x-doompi-api-caller-locality': 'forged', 'x-extra': 'allowed' },
+      body: 'content',
+    });
+    expect(await plugin.json()).toEqual({ ok: true });
+    expect(runInSpan).toHaveBeenCalledWith(
+      'doompi_server.plugin.request',
+      expect.objectContaining({ scope: 'global', 'plugin.name': 'test', 'http.operation': 'POST' }),
+      expect.any(Function),
+    );
+    expect(requestApi).toHaveBeenCalledWith({ scope: 'global' }, 'test', expect.any(Request));
+    const forwarded = requestApi.mock.calls.at(-1)?.[2];
+    expect(forwarded?.headers.get('x-doompi-api-caller-locality')).toBeNull();
+    expect(forwarded?.headers.get('x-extra')).toBe('allowed');
+    expect(recordEvent).toHaveBeenCalledWith(
+      'doompi_server.plugin.response',
+      expect.objectContaining({ scope: 'global', status: 200 }),
+    );
+    await hub.close();
+  });
+
   it('creates a root session through the global service without inventing a parent', async () => {
     const createSession = vi.fn(async () => ({ sessionId: 'created', cwd: '/repo' }));
     const hub = createHeadlessHub({ manager: {} as never, createSession });

@@ -1,12 +1,12 @@
 vi.mock('@agimon-ai/doompi-extension-contracts/pi-extension', () =>
-  vi.importActual('../../../core/doompi-extension-contracts/src/adapters/pi/definePiExtension'),
+  vi.importActual('../../../core/doompi-extension-contracts/src/controllers/piExtension'),
 );
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const cordisRoots: Context[] = [];
 
-vi.mock('../../../core/doompi-extension-contracts/src/adapters/pi/cordisHost', () => ({
+vi.mock('../../../core/doompi-extension-contracts/src/controllers/cordisHost', () => ({
   connectDoomCordisHost: async () => {
     const root = new Context();
     cordisRoots.push(root);

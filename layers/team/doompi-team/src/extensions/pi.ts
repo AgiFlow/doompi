@@ -301,6 +301,12 @@ export const activateTeamExtension = definePiExtension(
         scheduler: pollScheduler,
         tracker: asyncJobTracker,
         management,
+        readTranscriptPage: (runId, request, signal) => {
+          const service = readDoomChildSessionService(activeCordisSession?.cordis ?? cordis);
+          if (!service?.readTranscriptPage)
+            return Promise.reject(new Error('The Doom child-session transcript reader is unavailable.'));
+          return service.readTranscriptPage(runId, request, signal);
+        },
         environment,
       }),
     ];

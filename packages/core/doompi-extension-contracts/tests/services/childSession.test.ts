@@ -83,6 +83,31 @@ describe('createDoomChildSessionService', () => {
     expect(child.dispose).toHaveBeenCalledOnce();
   });
 
+  it('keeps an owned transcript reader after the active handle completes', async () => {
+    const readTranscriptPage = vi.fn(async () => ({
+      entries: [],
+      startCursor: null,
+      endCursor: null,
+      olderCursor: null,
+      newerCursor: null,
+      generation: 0,
+      revision: 0,
+      context: [],
+      drafts: [],
+    }));
+    const child = runtime({ prompt: vi.fn(async () => 'done'), readTranscriptPage });
+    const sessions = service(async () => child);
+    const handle = await sessions.start(request());
+    await vi.waitFor(() => expect(handle.state()).toBe('completed'));
+
+    await expect(sessions.readTranscriptPage?.('run-1', { limit: 10 })).resolves.toMatchObject({ entries: [] });
+    expect(readTranscriptPage).toHaveBeenCalledWith({ limit: 10 }, undefined);
+    await expect(sessions.start(request())).rejects.toThrow("Child run 'run-1' already exists.");
+
+    await sessions.close();
+    await expect(sessions.readTranscriptPage?.('run-1', {})).rejects.toThrow('closed');
+  });
+
   it('publishes prompt failure and disposes the runtime', async () => {
     const prompt = deferred();
     const child = runtime({ prompt: vi.fn(() => prompt.promise) });
@@ -160,6 +185,31 @@ describe('createDoomChildSessionService', () => {
     expect(child.dispose).toHaveBeenCalledOnce();
     await expect(sessions.start(request('run-2'))).rejects.toThrow('The Doom child-session service is closed.');
     await expect(sessions.close()).resolves.toBeUndefined();
+  });
+
+  it('retains an owned transcript reader after completion and clears it on close', async () => {
+    const readTranscriptPage = vi.fn(async () => ({
+      entries: [],
+      context: [],
+      startCursor: null,
+      endCursor: null,
+      olderCursor: null,
+      newerCursor: null,
+      generation: 0,
+      revision: 0,
+      drafts: [],
+    }));
+    const child = runtime({ prompt: vi.fn(async () => undefined), readTranscriptPage });
+    const sessions = service(async () => child);
+    const handle = await sessions.start(request());
+    await vi.waitFor(() => expect(handle.state()).toBe('completed'));
+
+    await expect(sessions.readTranscriptPage('run-1', { limit: 10 })).resolves.toMatchObject({ entries: [] });
+    expect(readTranscriptPage).toHaveBeenCalledWith({ limit: 10 }, undefined);
+    await expect(sessions.start(request())).rejects.toThrow("Child run 'run-1' already exists.");
+
+    await sessions.close();
+    await expect(sessions.readTranscriptPage('run-1', {})).rejects.toThrow('service is closed');
   });
 
   it('publishes cleanup failure and reports it during service shutdown', async () => {
