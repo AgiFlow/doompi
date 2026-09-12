@@ -27,17 +27,13 @@ const mocks = vi.hoisted(() => ({
       sources: [],
     } as DoomMcpProjection | undefined,
   },
-  helpDispose: vi.fn(),
   createConfigContext: vi.fn(),
   notify: vi.fn(),
   recordEvent: vi.fn(),
   shutdownTelemetry: vi.fn(),
 }));
 
-vi.mock('../src/adapters/pi/helpContribution.ts', () => ({
-  registerDoomConfigHelp: () => ({ dispose: mocks.helpDispose }),
-}));
-vi.mock('../src/adapters/pi/piContext.ts', () => ({
+vi.mock('../src/services/sessionConfig', () => ({
   acknowledgeDoomConfigTransition: vi.fn(),
   createDoomConfigContextAsync: mocks.createConfigContext,
   provideDoomConfigContext: vi.fn(() => vi.fn()),
@@ -49,7 +45,7 @@ vi.mock('@agimon-ai/doompi-telemetry', () => ({
   }),
 }));
 
-import { registerConfigExtension } from '../src/adapters/pi/configExtension.ts';
+import { registerConfigExtension } from '../src/extensions/pi';
 
 type Handler = (...argumentsValue: unknown[]) => unknown;
 

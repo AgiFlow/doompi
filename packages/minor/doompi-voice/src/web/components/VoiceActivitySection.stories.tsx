@@ -9,8 +9,8 @@
  * by session id, so only that variant's session sees it.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { VoiceActivitySection } from './VoiceActivitySection.tsx';
-import { voiceMediaBrowserState } from '../stores/voiceMediaWakeStore.ts';
+import { VoiceActivitySection } from './VoiceActivitySection';
+import { voiceMediaBrowserState } from '../stores/voiceMediaWakeStore';
 
 const CONFLICT_SESSION = 'voice-conflict';
 voiceMediaBrowserState.update(() => ({ sessionId: CONFLICT_SESSION, phase: 'conflict' }));

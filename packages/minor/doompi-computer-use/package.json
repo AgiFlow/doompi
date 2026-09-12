@@ -30,7 +30,7 @@
     "src/web",
     "src/types/computerUse.ts",
     "src/types/computerUseApi.ts",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "src/prompts",
     "llms.txt",
     "README.md",
@@ -103,7 +103,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "global",
@@ -116,7 +116,7 @@
     "channels": [
       "computer_use_state"
     ],
-    "client": "./src/exports/webClient.ts",
+    "client": "./src/extensions/web.ts",
     "scopes": [
       "global",
       "workspace",

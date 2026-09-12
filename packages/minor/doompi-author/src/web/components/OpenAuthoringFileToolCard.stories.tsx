@@ -4,7 +4,7 @@
  * `result.details.path`, so the "ready" state needs details, not just text.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { OpenAuthoringFileToolCard } from './OpenAuthoringFileToolCard.tsx';
+import { OpenAuthoringFileToolCard } from './OpenAuthoringFileToolCard';
 
 const props = (overrides: Omit<Parameters<typeof toolMessagePropsFixture>[0], 'toolName'>) =>
   toolMessagePropsFixture({ toolName: 'open_authoring_file', ...overrides }).props;

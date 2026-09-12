@@ -1,6 +1,6 @@
 import type { DoomDirectEventBus } from '@agimon-ai/doompi-extension-contracts/hub-channel';
-import { createVoiceMediaApi, type VoiceMediaApiOptions } from '../src/adapters/clientMediaApi.ts';
-import { createVoiceSessionApi, type VoiceSessionApiOptions } from '../src/adapters/voiceSessionApi.ts';
+import { createVoiceMediaApi, type VoiceMediaApiOptions } from '../src/controllers/clientMediaApi';
+import { createVoiceSessionApi, type VoiceSessionApiOptions } from '../src/controllers/voiceSessionApi';
 
 export const testDirectEvents: DoomDirectEventBus = {
   publish: () => undefined,

@@ -4,7 +4,7 @@ import {
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from '@agimon-ai/doompi-ui/components/doomOverlay';
+} from '@agimon-ai/doompi-ui/doom-overlay';
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import type { FileDiff, FileEditEntry, FileEditState, ResolvedEditor } from '../types/domain';

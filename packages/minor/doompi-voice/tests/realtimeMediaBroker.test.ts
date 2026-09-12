@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createVoiceMediaApi } from '../src/adapters/clientMediaApi.ts';
-import { RealtimeMediaBroker } from '../src/adapters/realtime/realtimeMediaBroker.ts';
-import { REALTIME_ROUTES as routes } from '../src/types/realtime.ts';
-import { VOICE_MEDIA_PROTOCOL_VERSION, VOICE_MEDIA_ROUTES } from '../src/types/clientMedia.ts';
-import { VOICE_OWNERSHIP_ROUTES } from '../src/types/voiceOwnership.ts';
+import { createVoiceMediaApi } from '../src/controllers/clientMediaApi';
+import { RealtimeMediaBroker } from '../src/services/realtimeMediaBroker';
+import { REALTIME_ROUTES as routes } from '../src/types/realtime';
+import { VOICE_MEDIA_PROTOCOL_VERSION, VOICE_MEDIA_ROUTES } from '../src/types/clientMedia';
+import { VOICE_OWNERSHIP_ROUTES } from '../src/types/voiceOwnership';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {

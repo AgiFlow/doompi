@@ -16,8 +16,8 @@ import {
   type ConfigField,
   type ConfigSection,
 } from '@agimon-ai/doompi-extension-contracts/config';
-import type { PlanningModeConfig } from './config.ts';
-import { PLAN_CONFIG_SECTION_ID, PLAN_SETTING_SHAPES, type PlanSettingShape } from '../../types/planSettings.ts';
+import type { PlanningModeConfig } from './config';
+import { PLAN_CONFIG_SECTION_ID, PLAN_SETTING_SHAPES, type PlanSettingShape } from '../../types/planSettings';
 
 export { PLAN_CONFIG_SECTION_ID };
 const SECTION_ORDER = 30;

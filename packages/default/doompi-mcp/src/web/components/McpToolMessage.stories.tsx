@@ -6,9 +6,9 @@
  * the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { McpToolDetails } from '../../types/webMcp.ts';
-import { McpToolMessage } from './McpToolMessage.tsx';
-import { MCP_STATUS_KEY } from '../lib/mcpToolMatch.ts';
+import type { McpToolDetails } from '../../types/webMcp';
+import { McpToolMessage } from './McpToolMessage';
+import { MCP_STATUS_KEY } from '../lib/mcpToolMatch';
 
 /** The server names the session publishes, which is how a call is recognised without details. */
 const statuses = { [MCP_STATUS_KEY]: 'linear,github' };

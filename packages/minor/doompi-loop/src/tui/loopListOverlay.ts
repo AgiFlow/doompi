@@ -5,11 +5,8 @@ import {
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from '@agimon-ai/doompi-ui/components/doomOverlay';
-import type {
-  DoomLoopLaunchersService,
-  LoopInstanceSnapshot,
-} from '@agimon-ai/doompi-extension-contracts/loop-launchers';
+} from '@agimon-ai/doompi-ui/doom-overlay';
+import type { DoomLoopLaunchersService, LoopInstanceSnapshot } from '../schemas/loopLaunchers';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
 

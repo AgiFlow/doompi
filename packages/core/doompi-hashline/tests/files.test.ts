@@ -10,7 +10,7 @@ import {
   isWritableFile,
   resolveInputPath,
   resolveReadInputPath,
-} from '../src/adapters/node/files.ts';
+} from '../src/services/files';
 
 const temporaryDirectories: string[] = [];
 

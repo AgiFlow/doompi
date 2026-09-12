@@ -4,14 +4,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { applyTaskMutation, type Op } from '../src/exports/store/reducer';
-import { emptyDocument, type TaskDocument, type TaskItemMutation } from '../src/exports/store/types';
+import { applyTaskMutation, type Op } from '../src/exports/storeReducer';
+import { emptyDocument, type TaskDocument, type TaskItemMutation } from '../src/exports/storeTypes';
 import {
   formatAssignmentResults,
   formatContent,
   formatUpsertFailureText,
   MSG_UPSERT_PARTIAL,
-} from '../src/exports/tool/responseEnvelope';
+} from '../src/exports/toolResponseEnvelope';
 
 const NOW = '2026-07-31T00:00:00.000Z';
 

@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DoomHubChannelHost } from '../../src/schemas/hubChannel.ts';
-import type { DoomApi, DoomApiContext } from '../../src/schemas/packageApi.ts';
+import type { DoomHubChannelHost } from '../../src/schemas/hubChannel';
+import type { DoomApi, DoomApiContext } from '../../src/schemas/packageApi';
 import {
   DoomServerFacetManifestError,
   declaredServerFacetsOf,
   isDoomServerFacet,
   orderServerFacets,
-} from '../../src/schemas/serverFacet.ts';
-import { createDoomServerHost } from '../../src/services/serverFacet.ts';
+} from '../../src/schemas/serverFacet';
+import { createDoomServerHost } from '../../src/services/serverFacet';
+import { createDoomPluginRegistry, defineDoomPluginMethod } from '../../src/schemas/pluginProtocol';
+import { Type } from 'typebox';
 
 function contextWith(onNotice: (message: string) => void): DoomApiContext {
   return { scope: 'session', sessionId: 'session-1', cwd: '/repo', onNotice };
@@ -34,6 +36,46 @@ function channelHost(): DoomHubChannelHost {
   };
 }
 describe('createDoomServerHost', () => {
+  it('mounts typed methods only at its own scope and releases them with the host', async () => {
+    const registry = createDoomPluginRegistry();
+    const host = createDoomServerHost({
+      scope: 'workspace',
+      context: { scope: 'workspace', workspaceId: 'work-1', workspaceRoot: '/repo', onNotice: vi.fn() },
+      pluginRegistry: registry,
+    });
+    const method = defineDoomPluginMethod({
+      service: 'example',
+      method: 'read',
+      scope: 'workspace',
+      direction: 'client-to-server',
+      input: Type.Object({ id: Type.String() }),
+      output: Type.Object({ name: Type.String() }),
+    });
+    expect(host.registerMethod(method, ({ id }) => ({ name: id })).mounted).toBe(true);
+    await expect(
+      registry.invoke(
+        {
+          mount: { scope: 'workspace', workspaceId: 'work-1' },
+          service: 'example',
+          method: 'read',
+          input: { id: 'a' },
+        },
+        'client-to-server',
+      ),
+    ).resolves.toEqual({ name: 'a' });
+    host.dispose();
+    await expect(
+      registry.invoke(
+        {
+          mount: { scope: 'workspace', workspaceId: 'work-1' },
+          service: 'example',
+          method: 'read',
+          input: { id: 'a' },
+        },
+        'client-to-server',
+      ),
+    ).rejects.toMatchObject({ code: 'METHOD_NOT_FOUND' });
+  });
   it('mounts an api and hands its handler to the router', async () => {
     const host = createDoomServerHost({ scope: 'session', context: contextWith(vi.fn()) });
 

@@ -26,7 +26,7 @@ import {
   STORE_PATH_ENV,
   sweepStoreFiles,
   sweepStoreFilesAsync,
-} from '../src/exports/store/paths';
+} from '../src/exports/storePaths';
 
 const AGENT_DIR_ENV = 'PI_CODING_AGENT_DIR';
 

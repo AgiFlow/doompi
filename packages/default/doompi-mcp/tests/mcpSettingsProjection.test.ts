@@ -5,8 +5,8 @@ import path from 'node:path';
 import type { DoomRepositorySyncView } from '@agimon-ai/doompi-extension-contracts/package-api';
 import type { TokenStore } from '@agimon-ai/mcp-proxy';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { McpSettingsManager } from '../src/adapters/node/mcpSettingsManager.ts';
-import { McpRuntimeOwner } from '../src/adapters/node/mcpRuntime.ts';
+import { McpSettingsManager } from '../src/services/mcpSettingsManager';
+import { McpRuntimeOwner } from '../src/services/mcpRuntime';
 
 const REPOSITORY_ID = `repo-${'b'.repeat(24)}`;
 const temporaryDirectories: string[] = [];

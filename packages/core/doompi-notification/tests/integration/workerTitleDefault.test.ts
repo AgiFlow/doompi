@@ -23,8 +23,8 @@ vi.mock('node:worker_threads', () => ({
   },
 }));
 
-const { notificationExtension } = await import('../../src/adapters/pi/extension.ts');
-const { createPiHarness } = await import('../helpers/piHarness.ts');
+const { notificationExtension } = await import('../../src/extensions/pi');
+const { createPiHarness } = await import('../helpers/piHarness');
 
 describe('notification extension without an injected title controller', () => {
   beforeEach(() => {

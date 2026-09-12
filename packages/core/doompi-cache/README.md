@@ -90,3 +90,9 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+## Extension lifecycle and source layout
+
+`src/extensions/pi.ts` awaits the upstream optimizer before mounting Cache so its provider hook runs after the optimizer. The named declaration contributes the telemetry service, optional mode-catalog subscription, events, and Help resource. `onDispose` restores owned environment values and resets telemetry after registrations are removed.
+
+`src/extensions/server.ts` declares session hooks and resources from `controllers/cacheHooks.ts`. Shared policy and runtime logic live in `services/<name>/`, telemetry state lives in `models/`, and environment keys live in `constants/`. Flat `src/exports/` files publish reusable capabilities. The server plugin is exported only through `extensions/server`.

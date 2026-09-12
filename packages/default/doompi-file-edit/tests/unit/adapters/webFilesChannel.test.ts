@@ -3,8 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import type { DoomHubChannelHost } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FileEditPaths } from '../../../src/adapters/FileEditPaths/FileEditPaths.ts';
-import { createFilesChannel, readSessionFiles } from '../../../src/adapters/webFilesChannel.ts';
+import { FileEditPaths } from '../../../src/services/fileEditPaths';
+import { createFilesChannel, readSessionFiles } from '../../../src/controllers/webFilesChannel';
 
 let root: string;
 let timelinePath: string;

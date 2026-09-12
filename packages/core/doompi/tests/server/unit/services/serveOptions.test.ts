@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  parseServeOptions,
-  relaunchAgentArgs,
-  resolveSessionIdentity,
-} from '../../../../src/services/server/serveOptions.ts';
+import { parseServeOptions, relaunchAgentArgs, resolveSessionIdentity } from '../../../../src/services/serveOptions';
 
 describe('parseServeOptions', () => {
   it('reads the token file, protocol port, and direct harness arguments', () => {

@@ -10,7 +10,7 @@ import {
   type MajorModesConfig,
   resolveLayers,
   resolvePackageConfigurations,
-} from '../src/exports/majorModes.ts';
+} from '../src/exports/majorModes';
 
 describe('major mode configuration', () => {
   let root: string;

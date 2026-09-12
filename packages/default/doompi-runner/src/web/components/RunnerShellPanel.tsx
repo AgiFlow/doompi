@@ -2,9 +2,9 @@ import { Button, StatusBadge, type TerminalHandle, TerminalView } from '@agimon-
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
-import type { RunnerRunView } from '../../types/webRunners.ts';
-import { decodeChunk, sendRunnerInput, watchRunnerScreen } from '../api/screenApi.ts';
-import { runners } from '../stores/runnersStore.ts';
+import type { RunnerRunView } from '../../types/webRunners';
+import { decodeChunk, sendRunnerInput, watchRunnerScreen } from '../api/screenApi';
+import { runners } from '../stores/runnersStore';
 
 const TAB_ID_PREFIX = 'runner-shell-';
 /** Keystrokes are gathered for this long and sent as one request. */

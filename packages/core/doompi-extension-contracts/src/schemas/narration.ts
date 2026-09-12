@@ -2,12 +2,8 @@ import type { Context } from '@deepseek-ai/cordis';
 import { type Static, Type } from 'typebox';
 import { Check } from 'typebox/value';
 
-/** Voice-owned Cordis service for caller-authored narration requests. */
+/** Provider-owned Cordis service for caller-authored narration requests. */
 export const DOOM_NARRATION_SERVICE = 'doom/narration';
-/** Stable provider identity used when consumers pair narration with the mode catalog. */
-export const DOOM_VOICE_SOURCE = '@agimon-ai/doompi-voice';
-/** Stable mode identity for autonomous narration. */
-export const DOOM_VOICE_AUTO_MODE_ID = 'voice-auto';
 export const MAX_NARRATION_TEXT_CHARACTERS = 4_096;
 
 export const NarrationRequestSchema = Type.Object(
@@ -67,6 +63,6 @@ export function readDoomNarrationService(context: Context): DoomNarrationService
 
 export function requireDoomNarrationService(context: Context): DoomNarrationService {
   const service = readDoomNarrationService(context);
-  if (!service) throw new Error('Doom narration is unavailable. Load @agimon-ai/doompi-voice.');
+  if (!service) throw new Error('Doom narration is unavailable. No narration provider is active.');
   return service;
 }

@@ -7,7 +7,7 @@ import {
   DEFAULT_COLLAPSE_KEY,
   loadUserFeedbackConfig,
   resolveCollapseKey,
-} from '../../src/adapters/config/configAdapter.js';
+} from '../../src/services/config';
 
 const temporaryDirectories: string[] = [];
 

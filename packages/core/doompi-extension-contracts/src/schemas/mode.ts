@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { type Static, Type } from 'typebox';
-import type { DoomExtensionContext } from './config.ts';
+import type { DoomExtensionContext } from './config';
 
 export const MINOR_MODE_CATALOG_SOURCE = '@agimon-ai/doompi/mode-catalog';
 export const DOOM_MINOR_MODE_CATALOG_SERVICE = 'doom/minor-mode-catalog';

@@ -4,9 +4,9 @@ import {
   AUTOCOMPACT_CONFIG_SECTION_ID,
   AUTOCOMPACT_SETTING_SHAPES,
   AUTOCOMPACT_THINKING_LEVELS,
-} from '../src/types/autocompactSettings.ts';
-import { autocompactSettingsSection } from '../src/web/lib/autocompactSettings.ts';
-import { webPlugin as scopedWebPlugin } from '../src/web/index.ts';
+} from '../src/types/autocompactSettings';
+import { autocompactSettingsSection } from '../src/web/lib/autocompactSettings';
+import { webPlugin as scopedWebPlugin } from '../src/extensions/web';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

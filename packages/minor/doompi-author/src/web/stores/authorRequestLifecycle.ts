@@ -1,12 +1,12 @@
 import type { CaptureStatusEvent, ComposerSubmission } from '@agimon-ai/doompi-web-contracts';
-import type { AuthorCapturePacket } from './authorCapture.ts';
-import type { AuthorRegionDraft } from '../lib/authorViewportTypes.ts';
+import type { AuthorCapturePacket } from './authorCapture';
+import type { AuthorRegionDraft } from '../lib/authorViewportTypes';
 import {
   authorSessionWorkspace,
   putAuthorRequest,
   removeAuthorRegion,
   updateAuthorRequest,
-} from './authorWorkspaceStore.ts';
+} from './authorWorkspaceStore';
 
 function capturePacket(content: string): AuthorCapturePacket | undefined {
   try {

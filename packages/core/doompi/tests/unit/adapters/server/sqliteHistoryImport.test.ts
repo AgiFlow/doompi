@@ -2,9 +2,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { expect, it } from 'vitest';
-import { HistoryImportCommand } from '../../../../src/commands/historyImportCommand.ts';
-import { openSqliteSessionStorage } from '../../../../src/adapters/server/sqliteSessionStorage.ts';
-import { createHistoryOwnership } from '../../../../src/adapters/serialization/historyOwnership.ts';
+import { HistoryImportCommand } from '../../../../src/controllers/historyImportCommand';
+import { openSqliteSessionStorage } from '../../../../src/services/sqliteSessionStorage';
+import { createHistoryOwnership } from '../../../../src/services/historyOwnership';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 
 it('imports v4 history without modifying the source and verifies a repeated offline import', async () => {

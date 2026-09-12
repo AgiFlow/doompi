@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { applyModelGuidance, guidanceForModel, mergeModelGuidance } from '../../../src/services/modelGuidance.ts';
-import type { ModelGuidanceDocument } from '../../../src/types/modelGuidance.ts';
+import { applyModelGuidance, guidanceForModel, mergeModelGuidance } from '../../../src/services/modelGuidance';
+import type { ModelGuidanceDocument } from '../../../src/types/modelGuidance';
 
 const global: ModelGuidanceDocument = {
   modelGuidance: { 'claude-opus-5': 'Stay focused.', 'gpt-6-astra': 'Batch tools.' },

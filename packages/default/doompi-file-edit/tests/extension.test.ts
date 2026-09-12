@@ -1,7 +1,7 @@
 import { copyToClipboard, type ExtensionContext, type Theme } from '@earendil-works/pi-coding-agent';
 import { DoomLeaderRegistry } from '@agimon-ai/doompi-ui/leaderRegistry';
 import { describe, expect, it, vi } from 'vitest';
-import { FILE_EDIT_LEADER_CONTRIBUTION } from '../src/adapters/pi/extension.ts';
+import { FILE_EDIT_LEADER_CONTRIBUTION } from '../src/controllers/fileEditRuntime';
 import { FileEditWorkflow } from '../src/tui/fileEditWorkflow';
 
 vi.mock('@earendil-works/pi-coding-agent', async (importOriginal) => {

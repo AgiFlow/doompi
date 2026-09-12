@@ -1,3 +1,4 @@
+import { hasPluginHelperCall } from './pluginWiring.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { RuleDefinition, RuleOptions } from '@agimon-ai/vibe-lint';
@@ -11,23 +12,27 @@ import {
 } from './manifestEntries.js';
 
 const CANONICAL_ROOTS = new Set([
-  'adapters',
-  'commands',
-  'container',
+  'bin',
+  'constants',
+  'controllers',
   'exports',
-  'providers',
+  'extensions',
+  'models',
   'schemas',
   'services',
+  'tools',
   'tui',
   'types',
-  // The cockpit plugin's browser half. It is canonical so src/exports may
-  // publish its entry, and so the folder rules recognize it instead of
-  // reporting src/web as a noncanonical root.
   'web',
 ]);
 const RESOURCE_ROOTS = new Set(['prompts']);
-const TRANSITIONAL_ROOTS = new Set(['bin', 'extensions']);
+const TRANSITIONAL_ROOTS = new Set<string>();
 const FORBIDDEN_ROOTS = new Set([
+  'adapters',
+  'commands',
+  'container',
+  'containers',
+  'providers',
   'agents',
   'api',
   'common',
@@ -48,54 +53,56 @@ const FORBIDDEN_ROOTS = new Set([
   'workflow',
 ]);
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
-const HOST_PACKAGES = ['@earendil-works/pi-', '@deepseek-ai/cordis', 'inversify'];
-/**
- * Node builtins that are pure computation: no I/O, no ambient state, no
- * nondeterminism. They leave a service just as testable as a local helper
- * would, so the host-independence boundary has no reason to reject them.
- * node:crypto is deliberately absent because randomUUID and friends are exactly the
- * nondeterminism a service should take as a dependency.
- */
-const PURE_NODE_BUILTINS = new Set([
-  'node:assert',
-  'node:buffer',
-  'node:path',
-  'node:punycode',
-  'node:querystring',
-  'node:string_decoder',
-  'node:url',
-  'node:util',
-]);
-const EXTERNAL_IMPLEMENTATION_ROOTS = ['adapters', 'bin', 'commands', 'container', 'exports', 'extensions', 'tui'];
+const HOST_PACKAGES = ['@earendil-works/pi-', 'inversify'];
+const EXTERNAL_IMPLEMENTATION_ROOTS = [
+  'adapters',
+  'bin',
+  'commands',
+  'container',
+  'containers',
+  'providers',
+  'controllers',
+  'exports',
+  'extensions',
+  'tools',
+  'tui',
+];
 const ALLOWED_ROOT_DEPENDENCIES: Readonly<Record<string, ReadonlySet<string>>> = {
-  adapters: new Set(['adapters', 'schemas', 'services', 'types']),
-  commands: new Set(['commands', 'schemas', 'services', 'types']),
-  container: new Set(['adapters', 'commands', 'container', 'providers', 'schemas', 'services', 'tui', 'types']),
-  providers: new Set(['providers', 'schemas', 'services', 'types']),
-  exports: new Set([...CANONICAL_ROOTS, ...TRANSITIONAL_ROOTS]),
-  schemas: new Set(['schemas', 'types']),
-  services: new Set(['schemas', 'services', 'types']),
-  tui: new Set(['schemas', 'services', 'tui', 'types']),
-  types: new Set(['types']),
-  // A panel composes its sibling components and view modules, so web reaches
-  // itself like every other root. Beyond that the browser half shares only the
-  // wire-JSON view types with the server half, which is what the web-plugin
-  // boundary glob already asserts.
-  web: new Set(['types', 'web']),
-  bin: new Set(['adapters', 'bin', 'commands', 'container', 'providers', 'schemas', 'services', 'tui', 'types']),
+  constants: new Set(['constants']),
+  controllers: new Set(['constants', 'controllers', 'models', 'schemas', 'services', 'types']),
+  models: new Set(['constants', 'models', 'schemas', 'types']),
+  exports: new Set(['constants', 'controllers', 'models', 'schemas', 'services', 'tools', 'tui', 'types']),
+  extensions: new Set([
+    'extensions',
+    'constants',
+    'controllers',
+    'models',
+    'schemas',
+    'services',
+    'tools',
+    'tui',
+    'types',
+    'web',
+  ]),
+  schemas: new Set(['constants', 'schemas', 'types']),
+  services: new Set(['constants', 'models', 'schemas', 'services', 'types']),
+  tools: new Set(['constants', 'models', 'schemas', 'services', 'tools', 'types']),
+  tui: new Set(['constants', 'models', 'schemas', 'services', 'tui', 'types']),
+  types: new Set(['constants', 'types']),
+  web: new Set(['constants', 'types', 'web']),
+  bin: new Set(['bin', 'constants', 'controllers', 'models', 'schemas', 'services', 'tools', 'tui', 'types', 'web']),
 };
 
-const DEFAULT_COMPOSITION_ADAPTER_ROOTS = ['src/adapters/pi'];
 const DEFAULT_COMPOSITION_PACKAGES = ['@agimon-ai/doompi'];
 const DEFAULT_COMPOSITION_PATHS = [
-  'src/adapters/composer.ts',
-  'src/adapters/extensionCompiler.ts',
-  'src/adapters/runtimeBundle.ts',
-  'src/adapters/syncState.ts',
-  'src/adapters/syncedRuntimeBuilder.ts',
-  'src/services/extensionAssembler.ts',
-  'src/services/transitionClassifier.ts',
-  'src/services/transitionCoordinator.ts',
+  'src/controllers/composer.ts',
+  'src/services/extensionCompiler/index.ts',
+  'src/services/runtimeBundle/index.ts',
+  'src/services/syncState/index.ts',
+  'src/services/syncedRuntimeBuilder/index.ts',
+  'src/services/extensionAssembler/index.ts',
+  'src/services/transitionClassifier/index.ts',
+  'src/services/transitionCoordinator/index.ts',
 ];
 const DEFAULT_FIXED_CORE_PACKAGES = [
   '@agimon-ai/doompi',
@@ -191,22 +198,23 @@ const CORDIS_CONTRACTS_PACKAGE = '@agimon-ai/doompi-extension-contracts';
  * for that word only, so the ban still holds for every other package.
  */
 const ABI_VOCABULARY_OWNERS = new Map<string, RegExp>([['@agimon-ai/doompi-kernel', /kernel/i]]);
-const CORDIS_HOST_ADAPTER_PATH = 'src/adapters/pi/cordisHost.ts';
+const CORDIS_HOST_ADAPTER_PATH = 'src/controllers/cordisHost.ts';
 const NATIVE_HOST_PACKAGE = '@agimon-ai/doompi';
-const NATIVE_HEADLESS_HOST_PATH = 'src/adapters/server/headlessHost.ts';
+const NATIVE_HEADLESS_HOST_PATH = 'src/controllers/headlessHost.ts';
 /** The server's own host runner: one Context per headless server process. */
-const SERVER_FACET_LOADER_PATH = 'src/adapters/serverFacetLoader.ts';
+const SERVER_FACET_LOADER_PATH = 'src/controllers/serverFacetLoader.ts';
 const CORDIS_HOST_ADAPTER_PATHS = [CORDIS_HOST_ADAPTER_PATH, SERVER_FACET_LOADER_PATH];
 const CORDIS_HOST_EXPORT = '@agimon-ai/doompi-extension-contracts/cordis-host';
 const LEGACY_SESSION_CONTEXT_EXPORT = '@agimon-ai/doompi-extension-contracts/session-context';
 const LEGACY_SESSION_CONTEXT_PATHS = new Set(['src/exports/sessionContext.ts', 'src/schemas/sessionContext.ts']);
 const DOOM_HOST_CORDIS_FEATURE_PATHS = [
-  'src/extensions/entries/modeCatalog.ts',
-  'src/extensions/entries/styleSystem.ts',
-  'src/extensions/entries/transitionCoordinator.ts',
+  'src/extensions/modeCatalog.ts',
+  'src/extensions/styleSystem.ts',
+  'src/extensions/transitionCoordinator.ts',
 ] as const;
-const DOOM_EXTENSION_ASSEMBLER_PATH = 'src/services/extensionAssembler.ts';
+const DOOM_EXTENSION_ASSEMBLER_PATH = 'src/services/extensionAssembler/index.ts';
 const REQUIRED_CORDIS_HELPERS = new Map<string, string>([
+  ['requireDoomCordisSession', 'DOOM_CORDIS_SESSION_SERVICE'],
   ['requireDoomConfigContext', 'DOOM_CONFIG_SERVICE'],
   ['requireDoomConfigService', 'DOOM_CONFIG_SERVICE'],
   ['requireDoomMcpProjectionService', 'DOOM_MCP_PROJECTION_SERVICE'],
@@ -1251,13 +1259,52 @@ function ownedCordisScopes(units: readonly CordisSourceUnit[]): OwnedCordisScope
   };
   const isOwned = (expression: ts.Expression, use: ts.Node): boolean => {
     const unwrapped = expression;
-    if (!ts.isIdentifier(unwrapped)) return false;
-    return functionAncestors(use).some((scope) => owned.get(scope)?.has(unwrapped.text) === true);
+    if (!ts.isIdentifier(unwrapped) && !ts.isPropertyAccessExpression(unwrapped)) return false;
+    return functionAncestors(use).some((scope) => owned.get(scope)?.has(unwrapped.getText()) === true);
   };
   const targetRecords = (filePath: string, expression: ts.Expression): readonly CordisFunctionRecord[] => {
-    if (!ts.isIdentifier(expression)) return [];
-    const imported = aliasesByFile.get(filePath)?.get(expression.text) ?? expression.text;
-    return recordsByName.get(imported) ?? [];
+    if (ts.isIdentifier(expression)) {
+      const imported = aliasesByFile.get(filePath)?.get(expression.text) ?? expression.text;
+      return recordsByName.get(imported) ?? [];
+    }
+    if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)) {
+      const receiver = expression.expression.text;
+      const unit = units.find((candidate) => candidate.filePath === filePath);
+      const factories: CordisFunctionRecord[] = [];
+      const findFactory = (node: ts.Node): void => {
+        if (
+          ts.isVariableDeclaration(node) &&
+          ts.isIdentifier(node.name) &&
+          node.name.text === receiver &&
+          node.initializer &&
+          ts.isCallExpression(node.initializer)
+        ) {
+          factories.push(...targetRecords(filePath, node.initializer.expression));
+        }
+        ts.forEachChild(node, findFactory);
+      };
+      if (unit) findFactory(unit.sourceFile);
+      const members: CordisFunctionRecord[] = [];
+      for (const factory of factories) {
+        const findMember = (node: ts.Node): void => {
+          if (ts.isReturnStatement(node) && node.expression && ts.isObjectLiteralExpression(node.expression)) {
+            for (const property of node.expression.properties) {
+              if (property.name?.getText() !== expression.name.text) continue;
+              if (ts.isMethodDeclaration(property)) members.push({ name: expression.name.text, node: property });
+              if (
+                ts.isPropertyAssignment(property) &&
+                (ts.isArrowFunction(property.initializer) || ts.isFunctionExpression(property.initializer))
+              )
+                members.push({ name: expression.name.text, node: property.initializer });
+            }
+          }
+          ts.forEachChild(node, findMember);
+        };
+        findMember(factory.node);
+      }
+      return members;
+    }
+    return [];
   };
 
   // A callback passed to Context.plugin owns the context Cordis gives it.
@@ -1272,6 +1319,82 @@ function ownedCordisScopes(units: readonly CordisSourceUnit[]): OwnedCordisScope
         if (callback && (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))) markParameter(callback, 0);
         else if (callback && ts.isExpression(callback)) {
           for (const { node: target } of targetRecords(filePath, callback)) markParameter(target, 0);
+        }
+      }
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+        const helper = aliasesByFile.get(filePath)?.get(node.expression.text) ?? node.expression.text;
+        if (helper === 'definePiExtension' || helper === 'defineServerPlugin') {
+          const markHookContext = (callback: ts.FunctionLikeDeclaration): void => {
+            const parameter = callback.parameters[0];
+            if (!parameter) return;
+            const names = owned.get(callback) ?? new Set<string>();
+            if (ts.isIdentifier(parameter.name)) names.add(`${parameter.name.text}.context`);
+            if (ts.isObjectBindingPattern(parameter.name)) {
+              for (const element of parameter.name.elements) {
+                const key = element.propertyName?.getText() ?? element.name.getText();
+                if (key === 'context' && ts.isIdentifier(element.name)) names.add(element.name.text);
+              }
+            }
+            owned.set(callback, names);
+          };
+          const markService = (expression: ts.Expression): void => {
+            if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) markParameter(expression, 0);
+            else if (ts.isObjectLiteralExpression(expression)) {
+              for (const property of expression.properties) {
+                if (ts.isMethodDeclaration(property) && property.name.getText() === 'apply') markParameter(property, 0);
+              }
+            } else {
+              for (const { node: target } of targetRecords(filePath, expression)) markParameter(target, 0);
+            }
+          };
+          const inspectedFactories = new Set<ts.Node>();
+          const inspectContributions = (entry: ts.Node): void => {
+            if (ts.isCallExpression(entry)) {
+              for (const { node: target } of targetRecords(filePath, entry.expression)) {
+                if (!inspectedFactories.has(target)) {
+                  inspectedFactories.add(target);
+                  inspectContributions(target);
+                }
+              }
+            }
+            if (
+              ts.isPropertyAssignment(entry) &&
+              entry.name.getText() === 'services' &&
+              ts.isArrayLiteralExpression(entry.initializer)
+            ) {
+              for (const service of entry.initializer.elements) if (ts.isExpression(service)) markService(service);
+            }
+            if (ts.isMethodDeclaration(entry) && ['onStart', 'onStop', 'onDispose'].includes(entry.name.getText()))
+              markHookContext(entry);
+            if (
+              ts.isPropertyAssignment(entry) &&
+              ['onStart', 'onStop', 'onDispose'].includes(entry.name.getText()) &&
+              (ts.isArrowFunction(entry.initializer) || ts.isFunctionExpression(entry.initializer))
+            )
+              markHookContext(entry.initializer);
+            ts.forEachChild(entry, inspectContributions);
+          };
+          const inspectScope = (expression: ts.Expression): void => {
+            if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) markHookContext(expression);
+            for (const { node: target } of targetRecords(filePath, expression)) {
+              markHookContext(target);
+              inspectContributions(target);
+            }
+            inspectContributions(expression);
+          };
+          const declaration = node.arguments[0];
+          if (helper === 'definePiExtension') {
+            const scope = node.arguments[1] ?? declaration;
+            if (scope) inspectScope(scope);
+          } else if (declaration && ts.isObjectLiteralExpression(declaration)) {
+            for (const property of declaration.properties) {
+              if (
+                ts.isPropertyAssignment(property) &&
+                ['global', 'workspace', 'session'].includes(property.name.getText())
+              )
+                inspectScope(property.initializer);
+            }
+          }
         }
       }
       ts.forEachChild(node, visit);
@@ -1343,9 +1466,9 @@ function ownedCordisScopes(units: readonly CordisSourceUnit[]): OwnedCordisScope
 }
 
 function isOwnedCordisExpression(expression: ts.Expression, use: ts.Node, owned: OwnedCordisScopes): boolean {
-  if (!ts.isIdentifier(expression)) return false;
+  if (!ts.isIdentifier(expression) && !ts.isPropertyAccessExpression(expression)) return false;
   for (let current = use.parent; current; current = current.parent) {
-    if (isFunctionWithBody(current) && owned.get(current)?.has(expression.text)) {
+    if (isFunctionWithBody(current) && owned.get(current)?.has(expression.getText())) {
       return true;
     }
   }
@@ -1481,6 +1604,43 @@ function cordisServiceFacts(
         }
       }
     }
+    // defineServerPlugin supplies injection and lifecycle around each scoped hook.
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'defineServerPlugin'
+    ) {
+      const declaration = node.arguments[0];
+      if (declaration && ts.isObjectLiteralExpression(declaration)) {
+        const inject = declaration.properties.find(
+          (property): property is ts.PropertyAssignment =>
+            ts.isPropertyAssignment(property) && property.name?.getText(sourceFile) === 'inject',
+        );
+        const services =
+          inject && ts.isArrayLiteralExpression(inject.initializer)
+            ? servicesOf(inject.initializer.elements)
+            : new Set<string>();
+        const visitScope = (child: ts.Node, ownedServices: Set<string>): void => {
+          if (ts.isMethodDeclaration(child) || ts.isFunctionExpression(child) || ts.isArrowFunction(child)) {
+            injections.push({
+              callback: child,
+              services: ownedServices,
+              ownsLifecycle: true,
+              ownsStableBinding: false,
+            });
+          }
+          ts.forEachChild(child, (nested) => visitScope(nested, ownedServices));
+        };
+        for (const property of declaration.properties) {
+          const name = property.name?.getText(sourceFile);
+          if (name === 'global' || name === 'workspace') visitScope(property, services);
+          if (name === 'session') {
+            // A session host owns its co-mounted headless service for the same lifetime.
+            visitScope(property, new Set([...services, 'DOOM_HEADLESS_HOST_SERVICE']));
+          }
+        }
+      }
+    }
     // A Cordis object plugin carries its dependencies on itself, so its `apply`
     // owns the injected services exactly as an `ctx.inject` callback does.
     if (ts.isObjectLiteralExpression(node)) {
@@ -1565,10 +1725,18 @@ function cordisServiceFacts(
 }
 
 function cordisServiceInjectionViolations(configRoot: string): string[] {
-  const units = productionSourceFiles(configRoot).flatMap((filePath) => {
-    const sourceFile = readSource(filePath);
-    return sourceFile ? [{ filePath, sourceFile }] : [];
-  });
+  const units = productionSourceFiles(configRoot)
+    .filter((filePath) => {
+      const helper = projectPath(filePath, configRoot);
+      return !(
+        readPackageManifest(configRoot)?.name === '@agimon-ai/doompi-extension-contracts' &&
+        (helper === 'src/controllers/piExtension.ts' || helper === 'src/controllers/serverPlugin.ts')
+      );
+    })
+    .flatMap((filePath) => {
+      const sourceFile = readSource(filePath);
+      return sourceFile ? [{ filePath, sourceFile }] : [];
+    });
   const owned = ownedCordisScopes(units);
   const facts = units.map(({ filePath, sourceFile }) => cordisServiceFacts(filePath, sourceFile, configRoot, owned));
   const injections = facts.flatMap((fact) => fact.injections);
@@ -1657,22 +1825,28 @@ function defaultFactorySpecifiers(sourceFile: ts.SourceFile): string[] {
   return [...specifiers];
 }
 
-function publicFeatureAdapterPaths(configRoot: string, manifest: DoomPackageManifest): string[] {
+function publicFeatureAdapterPaths(configRoot: string): string[] {
   const facadeStems = new Set(piDiscoveryEntryStems(configRoot));
-  if (manifest.exports && typeof manifest.exports === 'object' && !Array.isArray(manifest.exports)) {
-    for (const subpath of Object.keys(manifest.exports)) {
-      if (subpath.startsWith('./extensions/')) facadeStems.add(subpath.slice(2));
-    }
-  }
 
   const adapters = new Set<string>();
   for (const facadeStem of facadeStems) {
-    const facadePath = sourcePathForStem(path.join(configRoot, 'src', 'exports', facadeStem));
+    const facadePath =
+      sourcePathForStem(path.join(configRoot, 'src', facadeStem)) ??
+      sourcePathForStem(path.join(configRoot, 'src', 'exports', facadeStem));
     if (!facadePath) continue;
     const facade = readSource(facadePath);
     if (!facade) continue;
+    if (projectPath(facadePath, configRoot)?.startsWith('src/extensions/')) {
+      adapters.add(facadePath);
+      continue;
+    }
     const facadeMount = cordisFeatureMount(facade);
-    if (facadeMount.connectionCount > 0 || facadeMount.rootPluginCount > 0) adapters.add(facadePath);
+    if (
+      facadeMount.connectionCount > 0 ||
+      facadeMount.rootPluginCount > 0 ||
+      hasPluginHelperCall(facade, 'definePiExtension')
+    )
+      adapters.add(facadePath);
 
     for (const specifier of defaultFactorySpecifiers(facade)) {
       if (!specifier.startsWith('.')) continue;
@@ -2296,22 +2470,10 @@ function relativeImportRoot(filePath: string, specifier: string): string | undef
   return sourceRoot(path.resolve(path.dirname(filePath), specifier));
 }
 
-/**
- * The Pi adapter subtree is the package's composition root: the host hands it a
- * single registration call, so it is the one place under adapters that
- * legitimately reaches across commands and TUI to wire them together. Without
- * this exemption every package restates the same per-file override.
- */
-function isCompositionAdapter(
-  filePath: string,
-  configRoot: string,
-  options: Readonly<RuleOptions> | undefined,
-): boolean {
+/** Host entry modules compose the package's inward-facing declarations. */
+function isCompositionAdapter(filePath: string, configRoot: string): boolean {
   const relativePath = projectPath(filePath, configRoot);
-  if (!relativePath) return false;
-  return stringListOption(options, 'compositionAdapterRoots', DEFAULT_COMPOSITION_ADAPTER_ROOTS).some(
-    (root) => relativePath === root || relativePath.startsWith(`${root}/`),
-  );
+  return relativePath === 'src/extensions/pi.ts' || relativePath === 'src/extensions/server.ts';
 }
 
 export const doomFolderLayout: RuleDefinition = {
@@ -2319,6 +2481,7 @@ export const doomFolderLayout: RuleDefinition = {
   rule: 'Doom source modules use the canonical root vocabulary, with src/exports as the public boundary',
   rationale: 'One predictable folder vocabulary makes package boundaries navigable and mechanically enforceable.',
   check(filePath) {
+    if (!fs.existsSync(filePath)) return null;
     const root = sourceRoot(filePath);
     if (
       !root ||
@@ -2330,11 +2493,11 @@ export const doomFolderLayout: RuleDefinition = {
       return null;
     }
     const sourceFile = readSource(filePath);
-    if (sourceFile && isPureReExportModule(sourceFile)) return null;
+    if (sourceFile && isPureReExportModule(sourceFile) && !FORBIDDEN_ROOTS.has(root)) return null;
     const detail = FORBIDDEN_ROOTS.has(root)
-      ? `Legacy root "${root}" must be a forwarding wrapper during migration.`
+      ? `Legacy root "${root}" is forbidden.`
       : `Unknown root "${root}" is not canonical.`;
-    return `${detail} Move implementation under exports, types, schemas, services, adapters, commands, container, or tui. Put Help resources under prompts.`;
+    return `${detail} Move implementation under extensions, controllers, services, models, tools, constants, schemas, types, web, tui, or bin. Keep public re-exports under flat exports. Put Help resources under prompts.`;
   },
 };
 
@@ -2397,13 +2560,16 @@ export const noInternalPublicImport: RuleDefinition = {
 
 export const doomLayerBoundary: RuleDefinition = {
   preflight: true,
-  rule: 'Canonical Doom layers point inward through types, schemas, services, adapters, and composition roots',
+  rule: 'Extensions compose controllers, tools, services, and models through explicit inward dependencies',
   rationale: 'A small universal dependency direction prevents host and presentation concerns from leaking into policy.',
-  check(filePath, configRoot, context) {
+  check(filePath, configRoot) {
     const root = sourceRoot(filePath);
-    const allowedRoots = root ? ALLOWED_ROOT_DEPENDENCIES[root] : undefined;
+    const allowedRoots = isCompositionAdapter(filePath, configRoot)
+      ? ALLOWED_ROOT_DEPENDENCIES.extensions
+      : root
+        ? ALLOWED_ROOT_DEPENDENCIES[root]
+        : undefined;
     if (!root || !allowedRoots) return null;
-    if (isCompositionAdapter(filePath, configRoot, context?.options)) return null;
     const sourceFile = readSource(filePath);
     if (!sourceFile || isPureReExportModule(sourceFile)) return null;
     const blocked = collectRuntimeSpecifiers(sourceFile).filter((specifier) => {
@@ -2438,97 +2604,91 @@ export const cleanImportPath: RuleDefinition = {
 
 const PORT_NAME_PATTERN = /^I[A-Z]/;
 
-/** Strip the scope and the distribution prefix: @agimon-ai/doompi-voice -> voice. */
-function packageTopic(packageName: string | undefined): string | undefined {
-  if (!packageName) return undefined;
-  const bare = packageName.split('/').pop();
-  return bare?.replace(/^doompi-?/, '') || undefined;
-}
-
-function normalizedName(value: string): string {
-  return value.replace(/[^a-z0-9]/gi, '').toLowerCase();
-}
-
-/**
- * Ambient reads a service cannot be given by its caller. Each is reachable
- * without an import, so no import-based rule can see them.
- */
-const AMBIENT_MEMBER_READS: Readonly<Record<string, readonly string[]>> = {
-  Date: ['now'],
-  Math: ['random'],
-  performance: ['now'],
-  process: ['argv', 'cwd', 'env', 'hrtime', 'pid', 'platform', 'uptime'],
-};
-const AMBIENT_CALLS = new Set(['setTimeout', 'setInterval', 'setImmediate', 'queueMicrotask']);
-
 export const noAmbientHostAccess: RuleDefinition = {
   preflight: true,
-  rule: 'Services take time, randomness, and process state as dependencies rather than reading them ambiently',
+  rule: 'Services do not bootstrap plugin hosts or wire the Pi event bus',
   rationale:
-    'Date.now(), Math.random(), the timer functions and process.* need no import, so the import-based boundaries cannot see them. A service that reads one is no longer a function of its arguments: the same call gives a different answer on a different day or machine, and a test can only pin it by patching a global. Take a clock, an id factory, or the environment as a parameter, and the impurity moves to the adapter that already owns it.',
+    'Services own application logic, including Node capabilities. Host registration and lifecycle ownership belong to extension helpers.',
   check(filePath) {
     if (sourceRoot(filePath) !== 'services') return null;
     const sourceFile = readSource(filePath);
     if (!sourceFile || isPureReExportModule(sourceFile)) return null;
-
     const found = new Set<string>();
+    if (cordisContextConstructionCount(sourceFile)) found.add('new Cordis Context');
+    const connectors = cordisHostConnectorNames(sourceFile);
+    const piReceivers = new Set<string>();
+    const discover = (node: ts.Node): void => {
+      if (
+        ts.isParameter(node) &&
+        ts.isIdentifier(node.name) &&
+        node.type &&
+        /\bExtensionAPI\b/.test(node.type.getText(sourceFile))
+      )
+        piReceivers.add(node.name.text);
+      ts.forEachChild(node, discover);
+    };
+    discover(sourceFile);
     const visit = (node: ts.Node): void => {
-      if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
-        const members = AMBIENT_MEMBER_READS[node.expression.text];
-        if (members?.includes(node.name.text)) found.add(`${node.expression.text}.${node.name.text}`);
-      }
-      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && AMBIENT_CALLS.has(node.expression.text)) {
-        found.add(`${node.expression.text}()`);
-      }
-      if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Date') {
-        if ((node.arguments?.length ?? 0) === 0) found.add('new Date()');
-      }
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && connectors.has(node.expression.text))
+        found.add('connectDoomCordisHost');
+      if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        piReceivers.has(node.expression.expression.text) &&
+        /^(?:on|register[A-Z])/.test(node.expression.name.text)
+      )
+        found.add(`Pi.${node.expression.name.text}`);
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'globalThis' &&
+        /doom|cordis|piHost/i.test(node.name.text)
+      )
+        found.add(`globalThis.${node.name.text}`);
       ts.forEachChild(node, visit);
     };
     visit(sourceFile);
-
-    return found.size > 0
-      ? `Service reads ambient host state: ${[...found].sort().join(', ')}. Take it as a dependency instead.`
+    return found.size
+      ? `Service accesses plugin host wiring: ${[...found].sort().join(', ')}. Declare contributions in the extension helper.`
       : null;
   },
 };
 
 export const flatServiceLayout: RuleDefinition = {
   preflight: true,
-  rule: 'src/services is flat unless it holds several genuinely separate domains',
-  rationale:
-    'A package already names its subject, so src/services/<subject> restates it and every import pays for a level that separates nothing. A lone subdirectory is the same thing in a different shape: with no sibling to distinguish it from, the folder is not grouping, it is indirection. Group under services only where two or more domains actually need telling apart.',
+  rule: 'Services live under src/services/<serviceName> with an index.ts entry and local type.ts contracts',
+  rationale: 'Each service owns its implementation and local contracts in one predictable folder.',
   check(filePath, configRoot) {
     if (projectPath(filePath, configRoot) !== PACKAGE_MANIFEST_PATH) return null;
-    const servicesDirectory = path.join(configRoot, 'src', 'services');
-    if (!fs.existsSync(servicesDirectory)) return null;
-
-    const entries = fs.readdirSync(servicesDirectory, { withFileTypes: true });
-    const directories = entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-    const files = entries.filter((entry) => entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name)));
-    if (directories.length === 0) return null;
-
-    const topic = packageTopic(readPackageManifest(configRoot)?.name);
-    const restating = topic
-      ? directories.filter((directory) => normalizedName(directory) === normalizedName(topic))
-      : [];
-    if (restating.length > 0) {
-      return `src/services/${restating[0]} restates the package subject. Move its modules up into src/services.`;
-    }
-    if (directories.length === 1 && files.length === 0) {
-      return `src/services/${directories[0]} is the only thing under src/services, so the folder groups nothing. Move its modules up into src/services.`;
-    }
-    return null;
+    const directory = path.join(configRoot, 'src/services');
+    if (!fs.existsSync(directory)) return null;
+    const entries = fs.readdirSync(directory, { withFileTypes: true });
+    const flat = entries.filter((entry) => entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name)));
+    if (flat.length)
+      return `Move flat service files into src/services/<serviceName>/index.ts: ${flat
+        .map((entry) => entry.name)
+        .sort()
+        .join(', ')}.`;
+    const missing = entries.filter(
+      (entry) => entry.isDirectory() && !fs.existsSync(path.join(directory, entry.name, 'index.ts')),
+    );
+    return missing.length
+      ? `Service folders require an index.ts entry: ${missing
+          .map((entry) => entry.name)
+          .sort()
+          .join(', ')}.`
+      : null;
   },
 };
 
 export const portsDeclaredInTypes: RuleDefinition = {
   preflight: true,
-  rule: 'Ports are declared in src/types; src/adapters holds only their implementations',
-  rationale:
-    'A port is the interface the core needs, expressed in the core vocabulary; an adapter is one technology that satisfies it. That is what makes the dependency point inward. Declaring the port inside the adapter folder inverts it back: services may not import adapters, so a service can no longer depend on the capability at all, and the only way to use it becomes moving the caller out to the adapter layer too. The folder keeps the name without the property that earns it.',
+  rule: 'Service ports live in local type.ts or shared src/types contracts',
+  rationale: 'Local contracts belong with their service; shared contracts have a distinct public type boundary.',
   check(filePath) {
-    if (sourceRoot(filePath) !== 'adapters') return null;
+    const root = sourceRoot(filePath);
+    if (!root || root === 'types' || (root === 'services' && path.basename(filePath) === 'type.ts')) return null;
     const sourceFile = readSource(filePath);
     if (!sourceFile) return null;
 
@@ -2542,7 +2702,7 @@ export const portsDeclaredInTypes: RuleDefinition = {
       .map((statement) => (statement as ts.InterfaceDeclaration).name.text);
 
     return ports.length > 0
-      ? `Move ${ports.sort().join(', ')} to src/types and have this module implement the port from there.`
+      ? `Move ${ports.sort().join(', ')} to the owning services/<serviceName>/type.ts or shared src/types and import it from there.`
       : null;
   },
 };
@@ -2597,7 +2757,7 @@ export const cordisContextInPiAdapter: RuleDefinition = {
     }
 
     return count > 0
-      ? 'Do not construct a package-local Cordis root. Connect to @agimon-ai/doompi-extension-contracts/cordis-host and mount a plugin on the shared root.'
+      ? 'Do not construct a package-local Cordis root. Declare contributions with definePiExtension or defineServerPlugin; the helper owns the host connection.'
       : null;
   },
 };
@@ -2621,7 +2781,7 @@ export const cordisHostOrder: RuleDefinition = {
 
 export const cordisFeaturePlugin: RuleDefinition = {
   preflight: true,
-  rule: 'Every Doom feature Pi adapter owns exactly one host lease and one root plugin fiber',
+  rule: 'Feature Pi entries use definePiExtension; only the runtime engine owns host leases',
   rationale:
     'The host connection joins the one runner-owned service registry, while root.plugin gives each package a provider-owned fiber whose registrations and effects unload together. Cardinality and ordered teardown prevent split ownership, duplicate providers, and a released host outliving its package fiber.',
   check(filePath, configRoot) {
@@ -2637,13 +2797,17 @@ export const cordisFeaturePlugin: RuleDefinition = {
     if (relativePath === PACKAGE_MANIFEST_PATH) {
       const adapterPaths = isDoomHost
         ? DOOM_HOST_CORDIS_FEATURE_PATHS.map((entryPath) => path.join(configRoot, entryPath))
-        : publicFeatureAdapterPaths(configRoot, manifest);
+        : publicFeatureAdapterPaths(configRoot);
       if (adapterPaths.length === 0) {
-        return 'A Doom Pi feature package must expose at least one adapter under src/adapters/pi through its ./extensions/* facade.';
+        return 'A Doom Pi feature package must expose a Pi entry through ./extensions/*.';
       }
       const invalid = adapterPaths.flatMap((adapterPath) => {
         const sourceFile = readSource(adapterPath);
         if (!sourceFile) return [`${projectPath(adapterPath, configRoot) ?? adapterPath} (missing)`];
+        if (!isDoomHost)
+          return hasPluginHelperCall(sourceFile, 'definePiExtension')
+            ? []
+            : [`${projectPath(adapterPath, configRoot)} (must use definePiExtension)`];
         const mount = cordisFeatureMount(sourceFile);
         const violations = cordisFeatureMountViolations(mount);
         return violations.length === 0
@@ -2656,9 +2820,18 @@ export const cordisFeaturePlugin: RuleDefinition = {
     const isDoomHostFeature =
       isDoomHost &&
       DOOM_HOST_CORDIS_FEATURE_PATHS.includes(relativePath as (typeof DOOM_HOST_CORDIS_FEATURE_PATHS)[number]);
-    if (!relativePath.startsWith('src/adapters/pi/') && !isDoomHostFeature) return null;
+    if (
+      relativePath !== 'src/extensions/pi.ts' &&
+      !(manifest && publicFeatureAdapterPaths(configRoot).includes(filePath)) &&
+      !isDoomHostFeature
+    )
+      return null;
     const sourceFile = readSource(filePath);
     if (!sourceFile) return null;
+    if (!isDoomHost)
+      return hasPluginHelperCall(sourceFile, 'definePiExtension')
+        ? null
+        : 'Feature Pi entries must use definePiExtension. The helper owns the host lease and plugin fiber.';
     const mount = cordisFeatureMount(sourceFile);
     const participates = mount.connectionCount > 0 || mount.rootPluginCount > 0 || isDoomHostFeature;
     if (!participates) return null;
@@ -2721,18 +2894,117 @@ export const cordisServiceInjection: RuleDefinition = {
   },
 };
 
+const PI_SERVICE_UTILITIES = new Set([
+  'CONFIG_DIR_NAME',
+  'loadSkillsFromDir',
+  'formatSkillsForPrompt',
+  'createSyntheticSourceInfo',
+  'getAgentDir',
+  'loadSkills',
+  'stripFrontmatter',
+  'buildSessionContext',
+  'DEFAULT_COMPACTION_SETTINGS',
+  'generateSummary',
+  'sessionEntryToContextMessages',
+  'serializeConversation',
+  'isAssistantMessageWithUsage',
+  'generateDiffString',
+  'generateUnifiedPatch',
+  'withFileMutationQueue',
+  'DEFAULT_MAX_BYTES',
+  'DEFAULT_MAX_LINES',
+  'formatSize',
+  'truncateHead',
+  'truncateTail',
+  'truncateLine',
+  'formatDimensionNote',
+  'resizeImage',
+]);
+
+function isNamedServiceImport(source: ts.SourceFile, specifier: string, allowed: ReadonlySet<string>): boolean {
+  let imports = 0;
+  let unsafe = false;
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteralLike(node.moduleSpecifier) &&
+      node.moduleSpecifier.text === specifier
+    ) {
+      imports += 1;
+      const clause = node.importClause;
+      const bindings = clause?.namedBindings;
+      if (clause?.isTypeOnly) return;
+      if (
+        clause?.name ||
+        !bindings ||
+        !ts.isNamedImports(bindings) ||
+        bindings.elements.some((entry) => !entry.isTypeOnly && !allowed.has((entry.propertyName ?? entry.name).text))
+      )
+        unsafe = true;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      node.arguments.some((argument) => ts.isStringLiteralLike(argument) && argument.text === specifier)
+    )
+      unsafe = true;
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return imports > 0 && !unsafe;
+}
+
+const NATIVE_PERSISTENCE_IMPORTS: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
+  'src/services/historyCreationFileSystem/index.ts': { '@earendil-works/pi-agent-core': ['FileError'] },
+  'src/services/jsonlSessionRepo/index.ts': {
+    '@earendil-works/pi-agent-core/node': ['NodeExecutionEnv'],
+    '@earendil-works/pi-agent-core/harness/context': ['BACKGROUND_CONTEXT'],
+    '@earendil-works/pi-agent-core/harness/session': ['JSONL_STORAGE_VERSION', 'JsonlSessionRepo'],
+  },
+  'src/services/sqliteHistoryImport/index.ts': {
+    '@earendil-works/pi-agent-core/harness/context': ['BACKGROUND_CONTEXT'],
+    '@earendil-works/pi-agent-core/harness/session': ['branchTip', 'value'],
+    '@earendil-works/pi-session-backend-sqlite-node': ['SqliteSessionRepo', 'SqliteStorage', 'createNodeSqliteFactory'],
+  },
+  'src/services/sqliteSessionStorage/index.ts': {
+    '@earendil-works/pi-session-backend-sqlite-node': ['SqliteSessionRepo', 'createNodeSqliteFactory'],
+  },
+  'src/services/sqliteTranscriptReader/index.ts': {
+    '@earendil-works/pi-agent-core/harness/session': ['branchTip'],
+    '@earendil-works/pi-session-backend-sqlite-node': ['SqliteSessionRepo', 'SqliteStorage', 'createNodeSqliteFactory'],
+  },
+  'src/services/layerPackageInstaller/index.ts': {
+    '@earendil-works/pi-coding-agent': ['DefaultPackageManager', 'SettingsManager'],
+  },
+};
+
+function allowedHostServiceImport(
+  source: ts.SourceFile,
+  specifier: string,
+  filePath: string,
+  configRoot: string,
+): boolean {
+  if (specifier === '@earendil-works/pi-coding-agent' && isNamedServiceImport(source, specifier, PI_SERVICE_UTILITIES))
+    return true;
+  if (readPackageManifest(configRoot)?.name !== NATIVE_HOST_PACKAGE) return false;
+  const allowed = NATIVE_PERSISTENCE_IMPORTS[projectPath(filePath, configRoot) ?? '']?.[specifier];
+  return allowed !== undefined && isNamedServiceImport(source, specifier, new Set(allowed));
+}
+
 export const serviceBoundary: RuleDefinition = {
   preflight: true,
-  rule: 'Services depend only on services, types, and schemas and never on hosts, containers, concrete adapters, or node:*',
+  rule: 'Services do not depend on host entries, controllers, tools, or obsolete adapter and container layers',
   rationale:
-    'Host-neutral services remain independently testable and reusable when infrastructure points inward through contracts.',
-  check(filePath) {
+    'Services own package logic and may use Node APIs, while host registration and request handling stay in outer layers.',
+  check(filePath, configRoot) {
     if (sourceRoot(filePath) !== 'services') return null;
     const sourceFile = readSource(filePath);
     if (!sourceFile || isPureReExportModule(sourceFile)) return null;
     const blocked = collectRuntimeSpecifiers(sourceFile).filter((specifier) => {
-      if (specifier.startsWith('node:') && !PURE_NODE_BUILTINS.has(specifier)) return true;
-      if (HOST_PACKAGES.some((packageName) => specifier.startsWith(packageName))) return true;
+      if (
+        HOST_PACKAGES.some((packageName) => specifier.startsWith(packageName)) &&
+        !allowedHostServiceImport(sourceFile, specifier, filePath, configRoot)
+      )
+        return true;
       const targetRoot = relativeImportRoot(filePath, specifier);
       return targetRoot ? EXTERNAL_IMPLEMENTATION_ROOTS.includes(targetRoot) : false;
     });
@@ -2851,72 +3123,57 @@ export const doomCleanArchitectureBoundary: RuleDefinition = {
   },
 };
 
-const SERVER_FACET_TYPE = 'DoomServerFacet';
-const SERVER_FACET_HOST_CONSTANT = 'DOOM_SERVER_HOST_SERVICE';
-const SERVER_FACET_DIRECTORY = 'src/adapters/server/';
-
-/** Declarations annotated `: DoomServerFacet`, the only shape a host will install. */
-function serverFacetDeclarations(sourceFile: ts.SourceFile): ts.VariableDeclaration[] {
-  const declarations: ts.VariableDeclaration[] = [];
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      node.type !== undefined &&
-      ts.isTypeReferenceNode(node.type) &&
-      node.type.typeName.getText(sourceFile) === SERVER_FACET_TYPE
-    ) {
-      declarations.push(node);
-    }
-    ts.forEachChild(node, visit);
-  };
-  ts.forEachChild(sourceFile, visit);
-  return declarations;
-}
-
-function serverFacetViolations(declaration: ts.VariableDeclaration, sourceFile: ts.SourceFile): string[] {
-  const name = declaration.name.getText(sourceFile);
-  const initializer = declaration.initializer;
-  if (!initializer || !ts.isObjectLiteralExpression(initializer)) {
-    return [`${name} is not an object literal; a host cannot read inject off a function facet`];
-  }
-  const plugin = cordisObjectPlugin(initializer);
-  if (!plugin) return [`${name} needs both an inject array and an apply body`];
-  const violations: string[] = [];
-  const injected = plugin.inject.elements.map((element) => element.getText(sourceFile));
-  if (!injected.includes(SERVER_FACET_HOST_CONSTANT)) {
-    violations.push(`${name} does not inject ${SERVER_FACET_HOST_CONSTANT}`);
-  }
-  const nested: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === 'inject'
-    ) {
-      nested.push(node.expression.getText(sourceFile));
-    }
-    ts.forEachChild(node, visit);
-  };
-  if (plugin.apply.body) ts.forEachChild(plugin.apply.body, visit);
-  if (nested.length > 0) {
-    violations.push(`${name} calls ${[...new Set(nested)].join(', ')} inside apply`);
-  }
-  return violations;
-}
+const SERVER_PLUGIN_ENTRY = 'src/extensions/server.ts';
 
 export const doomServerFacetShape: RuleDefinition = {
   preflight: true,
-  rule: 'A server facet is a Cordis object plugin that declares its own inject',
+  rule: 'Server facets use defineServerPlugin with explicit global, workspace, and session contributions',
   rationale:
-    'A host mounts one fiber per facet and reads the mount table the moment it settles, so it can decide whether to open a listener at all. Only the object form declares inject where the host can see it; a facet that injects from inside apply spawns a child fiber the host holds no handle on, and the host then reads a mount table that is still filling.',
+    'The shared helper owns host injection, scope selection, rollback, and disposal. Package apply functions duplicate this lifecycle and allow contributions to leak between scopes.',
   check(filePath, configRoot) {
     const relativePath = projectPath(filePath, configRoot);
-    if (!relativePath?.startsWith(SERVER_FACET_DIRECTORY)) return null;
-    const sourceFile = readSource(filePath);
-    if (!sourceFile) return null;
-    const declarations = serverFacetDeclarations(sourceFile);
-    if (declarations.length === 0) return null;
-    const violations = declarations.flatMap((declaration) => serverFacetViolations(declaration, sourceFile));
-    return violations.length > 0 ? `Server facet shape violations: ${violations.join('; ')}` : null;
+    if (!fs.existsSync(filePath)) return null;
+    if (relativePath === 'src/adapters/headless/facet.ts')
+      return 'Remove the separate headless facet; declare contributions in defineServerPlugin.';
+    if (relativePath !== SERVER_PLUGIN_ENTRY && relativePath !== 'src/adapters/server/facet.ts') return null;
+    const source = readSource(filePath);
+    if (!source) return null;
+    const violations: string[] = [];
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        node.expression.name.text === 'apply'
+      ) {
+        violations.push('Do not nest facet.apply lifecycles; declare contributions and onStart/onStop hooks.');
+      }
+      if (
+        ts.isVariableDeclaration(node) &&
+        (node.name.getText(source).endsWith('ServerFacet') || node.type?.getText(source) === 'DoomServerFacet')
+      ) {
+        const value = node.initializer;
+        if (!value || !ts.isCallExpression(value) || value.expression.getText(source) !== 'defineServerPlugin') {
+          violations.push(`${node.name.getText(source)} must use defineServerPlugin`);
+        }
+      }
+      if (ts.isCallExpression(node) && node.expression.getText(source) === 'defineServerPlugin') {
+        const config = node.arguments[0];
+        if (!config || !ts.isObjectLiteralExpression(config)) {
+          violations.push('defineServerPlugin requires an explicit scope object');
+        } else {
+          for (const property of config.properties) {
+            const name = property.name?.getText(source).replace(/['"]/gu, '');
+            if (!name || !['name', 'inject', 'global', 'workspace', 'session'].includes(name)) {
+              violations.push(
+                'Only name, inject, global, workspace, and session belong at the plugin root; remove legacy apply and spread properties',
+              );
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    return violations.length ? [...new Set(violations)].join('; ') : null;
   },
 };

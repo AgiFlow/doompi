@@ -11,7 +11,7 @@ import {
   renderBashCall,
   renderBashResult,
   truncateMiddle,
-} from '../../src/tui/bashRender.ts';
+} from '../../src/tui/bashRender';
 
 /** Themes only decorate, so an identity theme keeps assertions about text. */
 const theme = {

@@ -1,8 +1,9 @@
+import { EMPTY_STATE_GUIDANCE } from '../constants/header';
 import path from 'node:path';
 import { type ExtensionContext, type Theme, type ThemeColor } from '@earendil-works/pi-coding-agent';
 import { type Component, visibleWidth } from '@earendil-works/pi-tui';
-import { type DoomHarnessMetadata, readDoomHarnessMetadata } from '../types/harnessMetadata.ts';
-import { alignLine, fitLine, padLine } from './rendering.ts';
+import { type DoomHarnessMetadata, readDoomHarnessMetadata } from '../types/harnessMetadata';
+import { alignLine, fitLine, padLine } from './rendering';
 
 const WIDE_HEADER_WIDTH = 90;
 const FULL_STARTUP_MIN_ROWS = 24;
@@ -29,7 +30,7 @@ const BOOT_LABEL = 'BOOT / 01';
 const READY_STATUS = '● READY';
 const ACTIVE_STATUS = '● ACTIVE';
 const EMPTY_STATE_LABEL = 'NO TRANSCRIPT YET';
-const EMPTY_STATE_GUIDANCE = 'Describe the work below. Pi keeps your existing config and session history.';
+
 const PRODUCT_DESCRIPTOR = 'Pi, configured for focus.';
 const SEGMENT_SEPARATOR = ' · ';
 const DISPLAY_SEPARATOR = ' / ';

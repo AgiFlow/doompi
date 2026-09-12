@@ -5,7 +5,8 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { createNarrationRequest, readDoomNarrationService } from '@agimon-ai/doompi-extension-contracts/narration';
 import { createDoomToolSurface } from '@agimon-ai/doompi-extension-contracts/tool-surface';
-import { createDoomVoiceToolsService, VOICE_MODE_TOOL_NAMES } from '@agimon-ai/doompi-extension-contracts/voice-tools';
+import { createDoomVoiceToolsService } from '../src/services/voiceTools';
+import { VOICE_MODE_TOOL_NAMES } from '../src/constants/voiceTools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
@@ -15,12 +16,12 @@ import {
   extractTerminalAssistantText,
   registerAutoCaptureCordisEventHandlers,
   registerSessionVoiceNarrationService,
-  registerVoiceTurnFallback,
+  createVoiceTurnFallback,
   type VoiceTurnFallbackRuntime,
   voiceToolRestriction,
-} from '../src/exports';
-import type { NarrationToolRuntime } from '../src/adapters/pi/narrationTool.ts';
-import { deliverAutoCaptureInput } from '../src/adapters/pi/voice.ts';
+} from '../src/controllers/voice';
+import type { NarrationToolRuntime } from '../src/controllers/narrationTool';
+import { deliverAutoCaptureInput } from '../src/controllers/voice';
 describe('autonomous prompt delivery', () => {
   it('queues composed prompts as follow-ups without changing ordinary idle or steer delivery', () => {
     const sendUserMessage = vi.fn();
@@ -292,14 +293,9 @@ describe('turn-end narration fallback', () => {
       activeGeneration: vi.fn(() => generation),
       narrate: vi.fn(async () => 'completed' as const),
     };
-    const dispose = registerVoiceTurnFallback(
-      {
-        on: ((name: string, handler: LifecycleHandler) => {
-          handlers.set(name, handler);
-        }) as ExtensionAPI['on'],
-      },
-      runtime,
-    );
+    const fallback = createVoiceTurnFallback(runtime);
+    for (const [name, handler] of Object.entries(fallback.events)) handlers.set(name, handler as LifecycleHandler);
+    const dispose = () => fallback.dispose();
     return {
       runtime,
       dispose,

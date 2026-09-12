@@ -10,8 +10,8 @@
  * is recorded rather than sent.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { WebTask } from '../../types/webTasks.ts';
-import { TaskDetailDialog } from './TaskDetailDialog.tsx';
+import type { WebTask } from '../../types/webTasks';
+import { TaskDetailDialog } from './TaskDetailDialog';
 
 const TASK: WebTask = {
   id: 12,

@@ -27,6 +27,10 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: '@agimon-ai/doompi-extension-contracts/pi-extension',
+        replacement: `${doomExtensionContractsExports}piExtension.ts`,
+      },
+      {
         find: '@agimon-ai/doompi-extension-contracts/cordis-host',
         replacement: `${doomExtensionContractsExports}cordisHost.ts`,
       },
@@ -50,6 +54,7 @@ export default defineConfig({
         find: /^@agimon-ai\/doompi-extension-contracts\/(.*)$/,
         replacement: `${doomExtensionContractsExports}$1.ts`,
       },
+      { find: '@agimon-ai/doompi-ui/doom-overlay', replacement: `${doomUiExports}doomOverlay.ts` },
       { find: /^@agimon-ai\/doompi-ui\/(.*)$/, replacement: `${doomUiExports}$1.ts` },
     ],
   },

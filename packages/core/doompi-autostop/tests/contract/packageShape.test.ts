@@ -63,21 +63,17 @@ describe('doompi-autostop package contract', () => {
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
     expect(manifest.doompiServer).toMatchObject({
-      entry: './src/exports/extensions/server.ts',
+      entry: './src/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['session'],
     });
   });
 
   it('routes the Pi entry through a default-exported factory', async () => {
-    const entry = await readFile(path.join(packageDirectory, 'src/exports/extensions/pi.ts'), 'utf8');
-    const factory = await readFile(path.join(packageDirectory, 'src/adapters/pi/extension.ts'), 'utf8');
-
-    expect(entry).toContain("from '../../adapters/pi/extension.ts'");
-    expect(entry).toContain('as default');
-    expect(factory).toContain('registerIdleShutdown');
-    expect(factory).toContain('connectDoomCordisHost');
-    expect(factory).toContain('connection.root.plugin');
+    const factory = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
+    expect(factory).toContain('export default autoStopExtension');
+    expect(factory).toContain('definePiExtension');
+    expect(factory).toContain('events:');
     expect(factory).not.toContain('new Context()');
   });
 

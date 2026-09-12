@@ -8,9 +8,9 @@ import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-exte
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { profileExtension } from '../../src/adapters/pi/extension.ts';
-import type { ProfileTelemetry } from '../../src/types/telemetry.ts';
-import { bindStubCoordinator } from '../helpers/coordinator.ts';
+import { profileExtension } from '../../src/extensions/pi';
+import type { ProfileTelemetry } from '../../src/types/telemetry';
+import { bindStubCoordinator } from '../helpers/coordinator';
 
 const telemetry: ProfileTelemetry = {
   recordError: async () => undefined,
@@ -123,7 +123,7 @@ describe('profile Pi factory', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-profile',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-author-profile',

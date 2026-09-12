@@ -6,9 +6,9 @@
  * seeded at module scope, which is the only input this component reads.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { SubagentRun } from '../../types/webSubagents.ts';
-import { subagents } from '../stores/subagentsStore.ts';
-import { AgentsActivitySection } from './AgentsActivitySection.tsx';
+import type { SubagentRun } from '../../types/webSubagents';
+import { subagents } from '../stores/subagentsStore';
+import { AgentsActivitySection } from './AgentsActivitySection';
 
 const NOW = Date.now();
 const MINUTE = 60_000;

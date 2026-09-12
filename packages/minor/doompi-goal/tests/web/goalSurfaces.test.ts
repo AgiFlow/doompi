@@ -1,16 +1,16 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { describe, expect, it } from 'vitest';
-import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../src/types/goalView.ts';
-import { EditGoalDialog } from '../../src/web/components/EditGoalDialog.tsx';
-import { GoalActivitySection } from '../../src/web/components/GoalActivitySection.tsx';
-import { webPlugin as scopedWebPlugin } from '../../src/web/index.ts';
+import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../src/types/goalView';
+import { EditGoalDialog } from '../../src/web/components/EditGoalDialog';
+import { GoalActivitySection } from '../../src/web/components/GoalActivitySection';
+import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,
   ...scopedWebPlugin.workspace,
   ...scopedWebPlugin.session,
 };
-import { RemoveGoalDialog } from '../../src/web/components/RemoveGoalDialog.tsx';
+import { RemoveGoalDialog } from '../../src/web/components/RemoveGoalDialog';
 
 /**
  * The surface this package adds to the cockpit, mounted.

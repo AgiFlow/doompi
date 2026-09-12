@@ -1,0 +1,10 @@
+import { describe, expect, it } from 'vitest';
+import { {{ implementationName | pascalCase }}{{ capabilityName | pascalCase }}Service } from '../../../src/services/{{ capabilityName | camelCase }}';
+
+describe('{{ implementationName | pascalCase }}{{ capabilityName | pascalCase }}Service', () => {
+  it('satisfies the {{ capabilityName | pascalCase }}Port contract', async () => {
+    const implementation = new {{ implementationName | pascalCase }}{{ capabilityName | pascalCase }}Service();
+
+    await expect(implementation.read()).resolves.toBeUndefined();
+  });
+});

@@ -7,7 +7,7 @@ import {
   buildPromptWithDeferredSkills,
   DeferredSkillLoader,
   expandDeferredSkillCommand,
-} from '../../src/adapters/deferredSkills';
+} from '../../src/services/deferredSkills';
 
 function writeSkill(root: string, name = 'demo'): string {
   const directory = path.join(root, name);

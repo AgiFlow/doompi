@@ -5,7 +5,7 @@ import type { MinorModeCatalogHost } from '@agimon-ai/doompi-extension-contracts
 import {
   createDoomTransitionCoordinator,
   type TransitionCoordinatorOptions,
-} from '../../src/services/transitionCoordinator.ts';
+} from '../../src/services/transitionCoordinator';
 import type { DoomTransitionRequest, TransitionTarget } from '@agimon-ai/doompi-extension-contracts/transition';
 
 const fingerprints = { copilot: 'a'.repeat(64), team: 'b'.repeat(64) } as const;

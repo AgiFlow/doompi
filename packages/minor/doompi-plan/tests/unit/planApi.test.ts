@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createPlanApi, api, MAX_PLAN_BYTES } from '../../src/adapters/planApi.ts';
+import { createPlanApi, api, MAX_PLAN_BYTES } from '../../src/controllers/planApi';
 import {
   API_BASE_PATH,
   contentPath,
@@ -16,8 +16,8 @@ import {
   type PlanDetailView,
   type PlanPointerRecord,
   SESSION_QUERY_PARAM,
-} from '../../src/types/planApi.ts';
-import type { PlanPointerPort } from '../../src/types/planPointer.ts';
+} from '../../src/types/planApi';
+import type { PlanPointerPort } from '../../src/types/planPointer';
 
 /**
  * The routes over a real plan file, because what they promise is about a file:

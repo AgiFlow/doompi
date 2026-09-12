@@ -1,4 +1,4 @@
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import type {
   DoomHeadlessCommand,
   DoomHeadlessExecutionContext,
@@ -6,7 +6,7 @@ import type {
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { describe, expect, it, vi } from 'vitest';
-import { uiHeadlessFacet } from '../../src/adapters/headless/facet.ts';
+import { uiServerFacet } from '../../src/extensions/server';
 
 describe('UI headless inventory', () => {
   it('reports sorted unique tool names through the resource and command', async () => {
@@ -28,7 +28,10 @@ describe('UI headless inventory', () => {
         return registration();
       },
     } as unknown as DoomHeadlessHostService;
-    const close = uiHeadlessFacet.apply({ get: () => host } as unknown as Context);
+    const context = new Context();
+    context.provide('doom/server-host', { scope: 'session' });
+    context.provide('doom/headless-host', host);
+    const close = await uiServerFacet.apply(context);
     if (!resource || !command) throw new Error('UI headless registrations were not created');
     const notify = vi.fn();
     const entries = vi.fn(() => [
@@ -49,7 +52,7 @@ describe('UI headless inventory', () => {
     await command.execute('', execution);
     expect(notify).toHaveBeenCalledWith({ title: 'DoomPi tools', body: 'read\nwrite', level: 'info' });
 
-    close();
+    await close?.();
     expect(disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
   });
 });

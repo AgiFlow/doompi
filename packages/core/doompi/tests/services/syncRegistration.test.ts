@@ -8,8 +8,8 @@ import {
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
   type SyncRegistration,
-} from '../../src/adapters/syncRegistration';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
+} from '../../src/services/syncRegistration';
+import { resolveSyncLocation, syncGenerationDirectory } from '../../src/services/syncLocation';
 
 const temporaryDirectories: string[] = [];
 

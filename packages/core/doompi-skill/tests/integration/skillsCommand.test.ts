@@ -16,10 +16,10 @@ import type {
 } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getHarnessState, HARNESS_STATE_POINTER, resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
-import skillsExtension from '../../src/adapters/pi/extension.ts';
-import { skillInvocation } from '../../src/services/skillText.ts';
-import { SKILLS_LEADER_CONTRIBUTION } from '../../src/types/skills.ts';
-import type { SkillsOverlayOptions, SkillsOverlayResult } from '../../src/tui/skillsOverlay.ts';
+import skillsExtension from '../../src/extensions/pi';
+import { skillInvocation } from '../../src/services/skillText';
+import { SKILLS_LEADER_CONTRIBUTION } from '../../src/types/skills';
+import type { SkillsOverlayOptions, SkillsOverlayResult } from '../../src/tui/skillsOverlay';
 
 const { registerLeaderContribution, openOverlay, helpState, mergeHelp, disposeHelp } = vi.hoisted(() => {
   const state = { skills: [] as Skill[], diagnostics: [] as string[], revision: 0 };
@@ -43,8 +43,8 @@ const { registerLeaderContribution, openOverlay, helpState, mergeHelp, disposeHe
 
 // Token pricing has dedicated catalog coverage. Avoid loading its vocabulary in this command integration suite.
 vi.mock('gpt-tokenizer', () => ({ countTokens: (text: string) => text.length }));
-vi.mock('../../src/tui/skillsOverlay.ts', () => ({ openSkillsOverlay: openOverlay }));
-vi.mock('../../src/adapters/helpSkills.ts', () => ({
+vi.mock('../../src/tui/skillsOverlay', () => ({ openSkillsOverlay: openOverlay }));
+vi.mock('../../src/services/helpSkills', () => ({
   createActiveHelpSkillView: () => ({ bind: vi.fn(() => vi.fn()), merge: mergeHelp, dispose: disposeHelp }),
 }));
 

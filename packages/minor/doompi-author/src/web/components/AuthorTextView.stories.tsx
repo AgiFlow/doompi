@@ -3,9 +3,9 @@
  * looking for a bare `const meta`. The view has exactly two shapes: the
  * markdown preview and the editor, which is where marked ranges show up.
  */
-import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes.ts';
-import type { AuthorWorkspaceDocument } from '../stores/authorWorkspaceStore.ts';
-import { AuthorTextView } from './AuthorTextView.tsx';
+import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes';
+import type { AuthorWorkspaceDocument } from '../stores/authorWorkspaceStore';
+import { AuthorTextView } from './AuthorTextView';
 
 const CONTENT = [
   '# Gateway retries',

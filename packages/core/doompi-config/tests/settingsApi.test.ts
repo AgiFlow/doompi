@@ -3,8 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
-import type { SettingsConfigView } from '../src/types/settings.ts';
-import { settingsApi } from '../src/adapters/server/settingsApi.ts';
+import type { SettingsConfigView } from '../src/types/settings';
+import { settingsApi } from '../src/controllers/settingsApi';
 
 let directory: string;
 let home: string;

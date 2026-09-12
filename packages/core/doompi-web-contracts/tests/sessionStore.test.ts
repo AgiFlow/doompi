@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defineSessionStore } from '../src/services/sessionStore.ts';
+import { defineSessionStore } from '../src/models/sessionStore';
 
 interface DemoSession {
   items: string[];

@@ -3,8 +3,8 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { api } from '../src/adapters/voiceSessionApi.ts';
-import { MANUAL_TRANSCRIPTION_DURATION_HEADER, MANUAL_TRANSCRIPTION_ROUTE } from '../src/types/manualTranscription.ts';
+import { api } from '../src/controllers/voiceSessionApi';
+import { MANUAL_TRANSCRIPTION_DURATION_HEADER, MANUAL_TRANSCRIPTION_ROUTE } from '../src/types/manualTranscription';
 
 interface PackageManifest {
   name: string;
@@ -100,7 +100,7 @@ describe('doom voice package boundary', () => {
       require: './dist/extensions/server.cjs',
     });
     expect(manifest.doompiServer).toEqual({
-      entry: './src/exports/extensions/server.ts',
+      entry: './src/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
     });
@@ -136,7 +136,16 @@ describe('doom voice package boundary', () => {
     const publicEntries = Object.entries(exportsMap).filter(([subpath]) => subpath !== './package.json');
 
     expect(publicEntries.length).toBeGreaterThan(0);
-    expect(exportsMap['./voice-tools']).toBeUndefined();
+    expect(exportsMap['./voice-tools']).toEqual({
+      types: './dist/voiceTools.d.mts',
+      import: './dist/voiceTools.mjs',
+      require: './dist/voiceTools.cjs',
+    });
+    expect(exportsMap['./voice-reload-handoff']).toEqual({
+      types: './dist/voiceReloadHandoff.d.mts',
+      import: './dist/voiceReloadHandoff.mjs',
+      require: './dist/voiceReloadHandoff.cjs',
+    });
     expect(Object.keys(exportsMap)).not.toContain('./*');
 
     for (const [subpath, target] of publicEntries) {
@@ -151,9 +160,9 @@ describe('doom voice package boundary', () => {
   it('builds the voice worker as a private artifact', async () => {
     const manifest = await readManifest();
     const buildConfig = await readFile(path.join(packageDirectory, 'tsdown.config.ts'), 'utf8');
-    const client = await readFile(path.join(packageDirectory, 'src/adapters/process/voiceWorkerClient.ts'), 'utf8');
+    const client = await readFile(path.join(packageDirectory, 'src/services/voiceWorkerClient/index.ts'), 'utf8');
 
-    expect(buildConfig).toContain('src/adapters/process/voiceWorker.ts');
+    expect(buildConfig).toContain('src/services/voiceWorker/index.ts');
     expect(client).toContain('findVoiceWorkerUrl(import.meta.url)');
     expect(client).not.toMatch(/new URL\(['"]\.\.\//u);
     expect(Object.keys(manifest.exports ?? {}).some((subpath) => subpath.includes('voiceWorker'))).toBe(false);
@@ -197,7 +206,7 @@ describe('doom voice package boundary', () => {
       expect(await readFile(path.join(packageDirectory, file), 'utf8'), file).not.toMatch(forbidden);
     }
 
-    const webEntry = await readFile(path.join(packageDirectory, 'src/web/index.ts'), 'utf8');
+    const webEntry = await readFile(path.join(packageDirectory, 'src/extensions/web.ts'), 'utf8');
     expect(webEntry).not.toContain("id: 'voice.capture'");
     expect(webEntry).not.toContain("command: 'voice'");
   });

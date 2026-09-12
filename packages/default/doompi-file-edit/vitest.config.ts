@@ -17,7 +17,7 @@ export default defineConfig({
         'node_modules/',
         'dist/',
         'tests/',
-        'src/adapters/pi/extension.ts',
+        'src/controllers/fileEditRuntime.ts',
         '**/*.d.ts',
         '**/*.config.*',
         '**/coverage/**',
@@ -40,8 +40,12 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: '@agimon-ai/doompi-ui/doom-overlay',
+        replacement: source('../../core/doompi-ui/src/exports/doomOverlay.ts'),
+      },
+      {
         find: '@agimon-ai/doompi-extension-contracts/child-process',
-        replacement: source('../../core/doompi-extension-contracts/src/exports/childProcess.ts'),
+        replacement: source('../../core/doompi-extension-contracts/src/exports/childProcess'),
       },
       {
         find: /^@agimon-ai\/doompi-config\/(.*)$/,
@@ -49,7 +53,7 @@ export default defineConfig({
       },
       {
         find: '@agimon-ai/doompi-config',
-        replacement: source('../../core/doompi-config/src/exports/index.ts'),
+        replacement: source('../../core/doompi-config/src/exports'),
       },
       {
         find: /^@agimon-ai\/doompi-ui\/(.*)$/,

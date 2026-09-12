@@ -6,7 +6,7 @@
  * the slot contract breaks this story at the type level.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { IntercomToolMessage } from './IntercomToolMessage.tsx';
+import { IntercomToolMessage } from './IntercomToolMessage';
 
 const props = (overrides: Omit<Parameters<typeof toolMessagePropsFixture>[0], 'toolName'>) =>
   toolMessagePropsFixture({ toolName: 'intercom', ...overrides }).props;

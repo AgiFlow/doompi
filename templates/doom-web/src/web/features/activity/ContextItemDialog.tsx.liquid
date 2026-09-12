@@ -1,4 +1,4 @@
-import type { ContextItemDetail, ContextItemKind } from '@agimon-ai/doompi/contextApi';
+import type { ContextItemDetail, ContextItemKind } from '@agimon-ai/doompi/context-api';
 import {
   Dialog,
   DialogBody,

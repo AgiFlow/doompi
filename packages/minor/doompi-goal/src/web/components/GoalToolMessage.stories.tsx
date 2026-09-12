@@ -4,7 +4,7 @@
  * default export is a bare `const meta`.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { GoalToolMessage } from './GoalToolMessage.tsx';
+import { GoalToolMessage } from './GoalToolMessage';
 
 const props = (overrides: Parameters<typeof toolMessagePropsFixture>[0]) => toolMessagePropsFixture(overrides).props;
 

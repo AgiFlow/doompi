@@ -1,4 +1,4 @@
-import { MAX_OBJECTIVE_LENGTH } from '../../types/goal.ts';
+import { MAX_OBJECTIVE_LENGTH } from '../../types/goal';
 
 /**
  * The slash commands the goal group sends, built in one place.

@@ -5,8 +5,8 @@ import {
   isBlocked,
   isTaskListComplete,
   unresolvedBlockers,
-} from '../src/exports/store/taskGraph';
-import type { Task } from '../src/exports/store/types';
+} from '../src/exports/storeTaskGraph';
+import type { Task } from '../src/exports/storeTypes';
 
 function task(id: number, status: Task['status'], blockedBy?: number[]): Task {
   return { id, subject: `task-${id}`, status, ...(blockedBy ? { blockedBy } : {}) };

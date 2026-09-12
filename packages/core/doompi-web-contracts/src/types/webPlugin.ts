@@ -1,5 +1,5 @@
 import type { Store } from '@tanstack/store';
-import type { ModelContextBinding } from './modelContext.ts';
+import type { ModelContextBinding } from './modelContext';
 import type { ComponentType, ReactNode } from 'react';
 
 /**
@@ -715,6 +715,12 @@ export interface WebPluginRuntime {
   mount?: WebPluginMount;
   sendSessionFrame: SessionFrameSender;
   sendHubFrame(frame: Record<string, unknown>): void;
+  invokeServerMethod(call: {
+    mount: { scope: 'global' } | { scope: 'workspace'; workspaceId: string } | { scope: 'session'; sessionId: string };
+    service: string;
+    method: string;
+    input: unknown;
+  }): Promise<unknown>;
   onHubConnected(listener: () => void): () => void;
   /** Acquires the browser's WebMCP surface, or the page-lifetime simulator when unavailable. */
   acquireModelContext?(): Promise<ModelContextBinding>;

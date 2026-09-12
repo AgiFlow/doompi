@@ -29,7 +29,7 @@ import type {
   ThinkingLevel,
   QueueMode,
 } from '@earendil-works/pi-agent-core';
-import type { HistoryOwnership, HistoryOwnershipLease } from '../../adapters/serialization/historyImport.ts';
+import type { HistoryOwnership, HistoryOwnershipLease } from '../../services/historyImport';
 
 export interface SqliteSessionStorage {
   session: Session;

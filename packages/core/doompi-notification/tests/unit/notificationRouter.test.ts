@@ -1,8 +1,8 @@
 import { DOOM_NOTIFICATION_ENTRY_TYPE } from '@agimon-ai/doompi-extension-contracts/notification';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { createDoomNotificationRouter } from '../../src/adapters/notificationRouter.ts';
-import { execResult } from '../helpers/piHarness.ts';
+import { createDoomNotificationRouter } from '../../src/controllers/notificationRouter';
+import { execResult } from '../helpers/piHarness';
 
 function fixture(mode: ExtensionContext['mode'] = 'tui') {
   const appendEntry = vi.fn();

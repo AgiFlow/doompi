@@ -4,8 +4,8 @@ import type {
   DoomHubSessionScope,
 } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { describe, expect, it } from 'vitest';
-import { createSubagentsChannel } from '../../src/adapters/webSubagentsChannel.ts';
-import type { SubagentRun } from '../../src/types/webSubagents.ts';
+import { createSubagentsChannel } from '../../src/controllers/webSubagentsChannel';
+import type { SubagentRun } from '../../src/types/webSubagents';
 
 interface FakeHost extends DoomHubChannelHost {
   published: Array<{ sessionId: string; payload: unknown }>;

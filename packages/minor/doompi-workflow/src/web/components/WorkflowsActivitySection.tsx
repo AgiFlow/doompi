@@ -8,10 +8,10 @@ import {
   type WorkflowActivityTone,
   workflowActivityGroups,
   workflowActivityRows,
-} from '../lib/workflowActivity.ts';
-import { openCatalog } from '../stores/catalogStore.ts';
-import { workflowsTab } from './WorkflowsPanel.tsx';
-import { focusRun, workflows } from '../stores/workflowsStore.ts';
+} from '../lib/workflowActivity';
+import { openCatalog } from '../stores/catalogStore';
+import { workflowsTab } from './WorkflowsPanel';
+import { focusRun, workflows } from '../stores/workflowsStore';
 
 const TICK_MS = 10_000;
 

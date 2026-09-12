@@ -2,9 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CliApp } from '../../src/exports/cli/cliApp';
-import { InitCommand } from '../../src/commands/initCommand.ts';
-import { SyncPipeline } from '../../src/commands/syncPipeline.ts';
+import { CliApp } from '../../src/exports/cliApp';
+import { InitCommand } from '../../src/controllers/initCommand';
+import { SyncPipeline } from '../../src/controllers/syncPipeline';
 
 const findRepositoryRoot = vi.hoisted(() =>
   vi.fn(() => {
@@ -12,8 +12,8 @@ const findRepositoryRoot = vi.hoisted(() =>
   }),
 );
 
-vi.mock('../../src/exports/utils/repository', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/exports/utils/repository')>()),
+vi.mock('../../src/exports/repository', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/exports/repository.ts')>()),
   findRepositoryRoot,
 }));
 

@@ -18,4 +18,4 @@ export {
   type DoomOAuthRedirect,
   type DoomRepositorySyncView,
   type DoomApiScope,
-} from '../schemas/packageApi.ts';
+} from '../schemas/packageApi';

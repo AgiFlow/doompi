@@ -12,7 +12,7 @@ import {
   describeAuthorToolsCallSummary,
   describeAuthorToolsCollapsedLines,
   describeAuthorToolsResultLines,
-} from '../lib/describeAuthorToolsToolRender.ts';
+} from '../lib/describeAuthorToolsToolRender';
 
 /**
  * The describe_author_tools tool's timeline item: Describe the current Author viewport capabilities. The shell owns

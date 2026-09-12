@@ -5,18 +5,18 @@ import {
   type PdfPreviewController,
 } from '@agimon-ai/doompi-web-components';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { AuthorVideoControls } from './AuthorVideoControls.tsx';
-import { loadAuthorMedia } from '../api/authorMedia.ts';
-import { registerAuthorGridResolver } from '../lib/authorGrid.ts';
-import { normalizedAuthorRectangle } from '../lib/authorRegions.ts';
-import type { AuthorDisplayedRegion, AuthorNativeAnchor, AuthorToolMode } from '../lib/authorViewportTypes.ts';
+import { AuthorVideoControls } from './AuthorVideoControls';
+import { loadAuthorMedia } from '../api/authorMedia';
+import { registerAuthorGridResolver } from '../lib/authorGrid';
+import { normalizedAuthorRectangle } from '../lib/authorRegions';
+import type { AuthorDisplayedRegion, AuthorNativeAnchor, AuthorToolMode } from '../lib/authorViewportTypes';
 import {
   authorSessionWorkspace,
   setAuthorRegionCandidate,
   setAuthorToolMode,
   type AuthorSessionWorkspace,
   type AuthorWorkspaceDocument,
-} from '../stores/authorWorkspaceStore.ts';
+} from '../stores/authorWorkspaceStore';
 
 /** Marks source media. Native playback and page controls remain usable in select mode. */
 export function AuthorMediaView({

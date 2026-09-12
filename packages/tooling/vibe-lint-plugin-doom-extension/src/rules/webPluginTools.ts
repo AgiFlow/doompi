@@ -261,6 +261,12 @@ function toolDefinitions(configRoot: string): { tools: ToolDefinition[]; ignored
   const coreHost = readManifest(configRoot)?.name === '@agimon-ai/doompi';
   for (const filePath of walkSources(path.join(configRoot, SRC_ROOT))) {
     if (isTestPath(filePath)) continue;
+    const helperPath = projectPath(filePath, configRoot);
+    if (
+      readManifest(configRoot)?.name === '@agimon-ai/doompi-extension-contracts' &&
+      (helperPath === 'src/controllers/piExtension.ts' || helperPath === 'src/controllers/serverPlugin.ts')
+    )
+      continue;
     const sourceFile = readSource(filePath);
     if (sourceFile === null) continue;
     const text = sourceFile.getFullText();
@@ -272,7 +278,7 @@ function toolDefinitions(configRoot: string): { tools: ToolDefinition[]; ignored
     const visit = (node: ts.Node): void => {
       const nativeProjection =
         coreHost &&
-        relative === 'src/adapters/server/headlessSessionHost.ts' &&
+        relative === 'src/controllers/headlessSessionHost.ts' &&
         ts.isObjectLiteralExpression(node) &&
         isHarnessToolProjection(node);
       if (ts.isObjectLiteralExpression(node) && isToolDefinition(node) && !nativeProjection) {
@@ -287,7 +293,7 @@ function toolDefinitions(configRoot: string): { tools: ToolDefinition[]; ignored
 
 /** The tool names web/** claims in `tools: [...]` entries, and whether any renderer carries `matches`. */
 function webClaims(configRoot: string): { claimed: Set<string>; hasMatcher: boolean } {
-  const sources = walkSources(path.join(configRoot, WEB_ROOT))
+  const sources = [...walkSources(path.join(configRoot, WEB_ROOT)), path.join(configRoot, 'src/extensions/web.ts')]
     .map((filePath) => readSource(filePath))
     .filter((source): source is ts.SourceFile => source !== null);
   const strings = new Map<string, string>();

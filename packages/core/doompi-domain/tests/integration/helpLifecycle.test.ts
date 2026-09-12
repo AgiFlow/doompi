@@ -6,8 +6,8 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/help';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { domainsExtension } from '../../src/adapters/pi/extension.ts';
-import type { DomainTelemetry } from '../../src/types/telemetry.ts';
+import { domainsExtension } from '../../src/extensions/pi';
+import type { DomainTelemetry } from '../../src/types/telemetry';
 
 const EXPECTED_DESCRIPTION =
   'Configure DoomPi plugin catalogs and domain resource selections in domains.yaml. Use when creating or editing .doom/domains.yaml or ~/.pi/.doom/domains.yaml, choosing local, Git, or npm plugins, filtering plugin resources, setting aliases or defaults, or verifying resolved domain composition.';
@@ -68,7 +68,7 @@ describe('Domain Help contribution lifecycle', () => {
 
     expect(contributions[0]).toEqual({
       source: '@agimon-ai/doompi-domain',
-      moduleUrl: expect.stringMatching(/extension\.ts$/u),
+      moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
       skills: [{ name: 'doompi-author-domain', description: EXPECTED_DESCRIPTION }],
     });
 

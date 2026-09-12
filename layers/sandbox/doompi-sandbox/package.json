@@ -99,7 +99,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"

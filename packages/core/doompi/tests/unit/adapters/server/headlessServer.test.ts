@@ -13,9 +13,9 @@ import {
 import type { DoomHubChannel } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket from 'ws';
-import { createHeadlessHub } from '../../../../src/adapters/server/headlessHub.ts';
-import { serveHeadlessServer, type HeadlessServer } from '../../../../src/adapters/server/headlessServer.ts';
-import type { HeadlessSessionHost } from '../../../../src/types/server/headlessSessionHost.ts';
+import { createHeadlessHub } from '../../../../src/controllers/headlessHub';
+import { serveHeadlessServer, type HeadlessServer } from '../../../../src/controllers/headlessServer';
+import type { HeadlessSessionHost } from '../../../../src/types/server/headlessSessionHost';
 
 function host() {
   const listeners = new Set<(frame: Record<string, unknown>) => void>();

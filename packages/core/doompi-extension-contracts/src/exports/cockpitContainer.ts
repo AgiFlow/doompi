@@ -4,5 +4,5 @@ export type {
   CockpitContainerRequest,
   CockpitContainerStart,
   CockpitWorkspace,
-} from '../schemas/cockpitContainer.ts';
-export { COCKPIT_HARNESS_EXPORT_SUBPATH, isCockpitContainerHarnessModule } from '../schemas/cockpitContainer.ts';
+} from '../schemas/cockpitContainer';
+export { COCKPIT_HARNESS_EXPORT_SUBPATH, isCockpitContainerHarnessModule } from '../schemas/cockpitContainer';

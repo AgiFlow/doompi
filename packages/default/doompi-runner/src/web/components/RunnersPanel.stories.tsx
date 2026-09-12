@@ -6,9 +6,9 @@
  * story at the type level instead of silently drifting.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { RunnerRunView } from '../../types/webRunners.ts';
-import { runners } from '../stores/runnersStore.ts';
-import { RunnersPanel } from './RunnersPanel.tsx';
+import type { RunnerRunView } from '../../types/webRunners';
+import { runners } from '../stores/runnersStore';
+import { RunnersPanel } from './RunnersPanel';
 
 /** Its own session id, so a story that seeds this store cannot disturb another's. */
 const SESSION_ID = 'runners-panel';

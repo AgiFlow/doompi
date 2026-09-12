@@ -65,7 +65,7 @@ describe('doompi-git package contract', () => {
         'dist',
         'src/prompts',
         'src/web',
-        'src/exports/webClient.ts',
+        'src/extensions/web.ts',
         'llms.txt',
         'README.md',
         'package.json',
@@ -101,7 +101,7 @@ describe('doompi-git package contract', () => {
     expect(conditions(exportsMap['./extensions/server'])).toEqual(['types', 'import', 'require']);
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
     expect(manifest.doompiServer).toEqual({
-      entry: './src/exports/extensions/server.ts',
+      entry: './src/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['session', 'global', 'workspace'],
     });

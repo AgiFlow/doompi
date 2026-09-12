@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DoomChildSessionRuntime } from '@agimon-ai/doompi-extension-contracts/child-session';
-import { NativeTeamChannelService } from '../../src/adapters/intercom/nativeTeamChannel';
+import { NativeTeamChannelService } from '../../src/services/nativeTeamChannel';
 
 interface FakeTool {
   execute: (id: string, params: Record<string, unknown>) => Promise<unknown>;

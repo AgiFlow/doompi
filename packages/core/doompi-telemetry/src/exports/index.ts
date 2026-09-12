@@ -3,7 +3,7 @@ export {
   createTelemetryHeaders,
   sanitizeTelemetryAttributes,
   subscribeTelemetryRecords,
-} from '../adapters/logSinkTelemetry.js';
+} from '../services/logSinkTelemetry';
 export type {
   DoomTelemetry,
   DoomTelemetryAttributes,
@@ -13,4 +13,4 @@ export type {
   DoomTelemetryRecord,
   DoomTelemetryStatus,
   DoomTraceContext,
-} from '../types/telemetry.js';
+} from '../types/telemetry';

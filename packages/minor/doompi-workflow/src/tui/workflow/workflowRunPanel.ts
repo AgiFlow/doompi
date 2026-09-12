@@ -20,7 +20,7 @@ import {
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from './doomOverlay.ts';
+} from './doomOverlay';
 import { fit, fitTerminalLine } from './overlayText';
 import { DoubleEscapeDetector } from './workflowOverlay';
 

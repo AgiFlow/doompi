@@ -7,7 +7,7 @@ import {
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { authorFileTab } from './AuthorDocumentPanel.tsx';
+import { authorFileTab } from './AuthorDocumentPanel';
 
 export function openAuthoringFileTab(
   path: string,

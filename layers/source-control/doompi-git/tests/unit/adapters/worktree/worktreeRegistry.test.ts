@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createWorktreeRegistry } from '../../../../src/adapters/worktree/worktreeRegistry.ts';
-import { WORKTREE_RECORD_VERSION, type WorktreeRecord } from '../../../../src/types/worktreeRegistry.ts';
+import { createWorktreeRegistry } from '../../../../src/services/worktreeRegistry';
+import { WORKTREE_RECORD_VERSION, type WorktreeRecord } from '../../../../src/types/worktreeRegistry';
 
 let directory: string;
 let file: string;

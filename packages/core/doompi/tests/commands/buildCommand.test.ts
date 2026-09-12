@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HarnessContext } from '../../src/exports/services/harnessContext';
+import type { HarnessContext } from '../../src/exports/harnessContext';
 
 const mocks = vi.hoisted(() => ({
   buildHarnessContext: vi.fn(),
@@ -20,36 +20,36 @@ const mocks = vi.hoisted(() => ({
   projectRegistersDoom: vi.fn(),
 }));
 
-vi.mock('../../src/commands/cli/options.ts', () => ({ parseHarnessArgs: mocks.parseHarnessArgs }));
+vi.mock('../../src/controllers/options', () => ({ parseHarnessArgs: mocks.parseHarnessArgs }));
 vi.mock('@agimon-ai/doompi-config/domains', () => ({ loadDomains: mocks.loadDomains }));
 vi.mock('@agimon-ai/doompi-config/majorModes', () => ({ loadMajorModesConfig: mocks.loadMajorModesConfig }));
-vi.mock('../../src/adapters/harnessContext.ts', () => ({ buildHarnessContext: mocks.buildHarnessContext }));
-vi.mock('../../src/adapters/layerPackageInstaller.ts', () => ({
+vi.mock('../../src/services/harnessContext', () => ({ buildHarnessContext: mocks.buildHarnessContext }));
+vi.mock('../../src/services/layerPackageInstaller', () => ({
   ensureLayerPackages: mocks.ensureLayerPackages,
 }));
-vi.mock('../../src/adapters/runtimeBundle.ts', () => ({ buildRuntimeBundle: mocks.buildRuntimeBundle }));
-vi.mock('../../src/adapters/syncedRuntimeBuilder.ts', () => ({
+vi.mock('../../src/services/runtimeBundle', () => ({ buildRuntimeBundle: mocks.buildRuntimeBundle }));
+vi.mock('../../src/services/syncedRuntimeBuilder', () => ({
   buildSyncedRuntime: mocks.buildSyncedRuntime,
 }));
-vi.mock('../../src/adapters/syncState.ts', () => ({
+vi.mock('../../src/services/syncState', () => ({
   computeInputsHash: mocks.computeInputsHash,
   readSyncState: mocks.readSyncState,
   recordResolvedEntries: mocks.recordResolvedEntries,
   syncStateRootMatches: mocks.syncStateRootMatches,
 }));
-vi.mock('../../src/services/extensionAssembler.ts', () => ({
+vi.mock('../../src/services/extensionAssembler', () => ({
   createLayerResolvers: mocks.createLayerResolvers,
 }));
-vi.mock('../../src/adapters/repository/repository.ts', () => ({
+vi.mock('../../src/services/repository', () => ({
   resolveDoomConfigurationRoot: mocks.findRepositoryRoot,
 }));
-vi.mock('../../src/commands/syncCommand.ts', () => ({ selectionEnvironment: mocks.selectionEnvironment }));
-vi.mock('../../src/adapters/projectPiSettings.ts', () => ({
+vi.mock('../../src/controllers/syncCommand', () => ({ selectionEnvironment: mocks.selectionEnvironment }));
+vi.mock('../../src/services/projectPiSettings', () => ({
   DUPLICATE_REGISTRATION_DRIFT: 'duplicate DoomPi registration in .pi/settings.json',
   projectRegistersDoom: mocks.projectRegistersDoom,
 }));
 
-import { BuildCommand, formatBuildResult } from '../../src/commands/buildCommand';
+import { BuildCommand, formatBuildResult } from '../../src/controllers/buildCommand';
 
 function capture(): { output: { write(chunk: string): boolean }; text(): string } {
   const chunks: string[] = [];

@@ -1,18 +1,12 @@
-export { computerUseHeadlessFacet } from '../adapters/headless/facet.ts';
-export {
-  activateComputerUseExtension,
-  COMPUTER_USE_GUIDANCE,
-  COMPUTER_USE_MODE_ID,
-  COMPUTER_USE_TOOL_NAMES,
-} from '../adapters/pi/extension.ts';
-export { createComputerUseSessionClient } from '../adapters/pi/sessionApiClient.ts';
-export type { ComputerUseSessionClient } from '../adapters/pi/sessionApiClient.ts';
-export { COMPUTER_USE_SCRIPT_PATHS_ENV, createComputerUseContainer } from '../container/index.ts';
-export { ComputerScriptRunner } from '../adapters/pi/computerScriptRunner.ts';
-export { DefaultComputerUseExtensionService } from '../services/extensionService.ts';
-export { initialComputerUseState, reduceComputerUseState } from '../services/sessionController.ts';
-export { redactComputerUseTrace } from '../services/traceRedaction.ts';
-export type * from '../types/computerScript.ts';
-export type * from '../types/computerUse.ts';
-export type * from '../types/computerUseApi.ts';
-export type * from '../types/extension.ts';
+export { COMPUTER_USE_GUIDANCE, COMPUTER_USE_TOOL_NAMES } from '../constants/computerUse';
+export { createComputerUseSessionClient } from '../services/sessionApiClient';
+export type { ComputerUseSessionClient } from '../services/sessionApiClient';
+export { COMPUTER_USE_SCRIPT_PATHS_ENV, createComputerUseDependencies } from '../services/dependencies';
+export { ComputerScriptRunner } from '../services/computerScriptRunner';
+export { DefaultComputerUseExtensionService } from '../services/extensionService';
+export { initialComputerUseState, reduceComputerUseState } from '../models/computerUseState';
+export { redactComputerUseTrace } from '../services/traceRedaction';
+export type * from '../types/computerScript';
+export type * from '../types/computerUse';
+export type * from '../types/computerUseApi';
+export type * from '../types/extension';

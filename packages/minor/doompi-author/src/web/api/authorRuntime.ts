@@ -4,7 +4,7 @@ import type {
   ModelContextToolDescriptor,
   WebPluginRuntime,
 } from '@agimon-ai/doompi-web-contracts';
-import type { AuthorTrustedProfile, AuthorTrustedTool } from '../lib/authorViewportTypes.ts';
+import type { AuthorTrustedProfile, AuthorTrustedTool } from '../lib/authorViewportTypes';
 
 export const AUTHOR_RUNTIME_BINDING_IDS = {
   text: 'author.viewport.text',

@@ -4,7 +4,7 @@ import {
   supportsShellTitle,
   warrantsAttentionNotification,
   warrantsSettledNotification,
-} from '../../src/services/notificationPolicy.ts';
+} from '../../src/services/notificationPolicy';
 
 describe('warrantsAttentionNotification', () => {
   it('announces a dialog the agent opened mid-run', () => {

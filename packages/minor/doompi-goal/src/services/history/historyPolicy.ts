@@ -3,7 +3,7 @@ import type {
   GoalHistoryEntry,
   GoalHistoryTombstone,
   RepositoryIdentity,
-} from '../../types/history.ts';
+} from '../../types/history';
 
 export const GOAL_HISTORY_MAX_ENTRIES = 100;
 export const GOAL_HISTORY_MAX_TOMBSTONES = 100;

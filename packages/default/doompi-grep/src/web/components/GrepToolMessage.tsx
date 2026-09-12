@@ -9,7 +9,7 @@ import {
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { grepCallView } from '../lib/grepToolView.ts';
+import { grepCallView } from '../lib/grepToolView';
 
 /**
  * The grep tool's timeline item, the web half of its renderCall and

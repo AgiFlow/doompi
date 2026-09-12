@@ -65,15 +65,16 @@ describe('doompi-help package contract', () => {
   });
 
   it('routes Pi discovery through the sole command and typed-mode factory', async () => {
-    const entrySource = await readFile(path.join(packageDirectory, 'src/exports/extensions/pi.ts'), 'utf8');
-    const factorySource = await readFile(path.join(packageDirectory, 'src/adapters/pi/extension.ts'), 'utf8');
+    const entrySource = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
+    const factorySource = await readFile(path.join(packageDirectory, 'src/controllers/helpPiRuntime.ts'), 'utf8');
 
-    expect(entrySource).toContain("from '../../adapters/pi/extension'");
+    expect(entrySource).toContain('definePiExtension');
     expect(entrySource).not.toContain('doom.ts');
-    expect(factorySource).toContain('registerHelpCommand');
+    expect(factorySource).toContain('createHelpCommand');
     expect(factorySource).toContain('registerHelpModeIntegration');
-    expect(factorySource).toContain('connectDoomCordisHost');
-    expect(factorySource).toContain('connection.root.plugin');
+    expect(factorySource).toContain('services:');
+    expect(factorySource).not.toContain('connectDoomCordisHost');
+    expect(factorySource).toContain('commands:');
     expect(factorySource).not.toContain('new Context()');
   });
 

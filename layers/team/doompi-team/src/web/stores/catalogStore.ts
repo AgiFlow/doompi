@@ -3,7 +3,7 @@ import {
   SUBAGENT_CATALOG_TYPE,
   type SubagentCatalogAgent,
   type SubagentCatalogPayload,
-} from '../../types/webSubagents.ts';
+} from '../../types/webSubagents';
 
 /** One session's catalog: what the hub last reported plus what the drawer is doing with it. */
 export interface CatalogSession {

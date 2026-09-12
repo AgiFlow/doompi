@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { QuestionnaireCoordinator, type QuestionnaireRunContext } from '../../src/services/questionnaireCoordinator.js';
-import type { QuestionnaireResult } from '../../src/types/questionnaire.js';
+import { QuestionnaireCoordinator, type QuestionnaireRunContext } from '../../src/services/questionnaireCoordinator';
+import type { QuestionnaireResult } from '../../src/types/questionnaire';
 
 function deferred<T>(): {
   promise: Promise<T>;

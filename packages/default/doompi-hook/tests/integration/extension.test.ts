@@ -1,3 +1,6 @@
+vi.mock('@agimon-ai/doompi-extension-contracts/pi-extension', () =>
+  vi.importActual('../../../../core/doompi-extension-contracts/src/adapters/pi/definePiExtension.ts'),
+);
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,15 +13,15 @@ import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-exte
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHookDocumentReader } from '../../src/adapters/hookDocuments.ts';
-import { hookExtension } from '../../src/adapters/pi/extension.ts';
-import type { HookDocumentReader, HookOutcome } from '../../src/types/hooks.ts';
-import { type PiHarness, piHarness, SESSION_ID, stubRunner, TEST_CORDIS_ROOT } from '../helpers/piSession.ts';
+import { createHookDocumentReader } from '../../src/services/hookDocuments';
+import { hookExtension } from '../../src/extensions/pi';
+import type { HookDocumentReader, HookOutcome } from '../../src/types/hooks';
+import { type PiHarness, piHarness, SESSION_ID, stubRunner, TEST_CORDIS_ROOT } from '../helpers/piSession';
 
 const cordisHost = vi.hoisted(() => ({ resolveRoot: (_pi: unknown): unknown => undefined }));
 const cordisRoots: Context[] = [];
 
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
+vi.mock('../../../../core/doompi-extension-contracts/src/adapters/pi/cordisHost.ts', () => ({
   connectDoomCordisHost: async (pi: unknown) => ({
     root: cordisHost.resolveRoot(pi),
     runtime: { abiVersion: 1, generation: 'hook-test', hostId: 'hook-test', mode: 'composed' },
@@ -137,7 +140,7 @@ describe('repository hook Pi lifecycle', () => {
     expect(first.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-hook',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-author-hook',

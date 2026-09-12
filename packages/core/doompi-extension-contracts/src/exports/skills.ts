@@ -3,7 +3,7 @@ export type {
   ResourceCatalogProjection,
   SkillSourceContribution,
   SkillSourceContributionHandle,
-} from '../schemas/skills.ts';
+} from '../schemas/skills';
 export {
   createDoomSkillSourcesService,
   DOOM_RESOURCE_CATALOG_ENTRY_TYPE,
@@ -12,4 +12,4 @@ export {
   requireDoomSkillSourcesService,
   SkillSourceContributionSchema,
   SkillSourceNameSchema,
-} from '../schemas/skills.ts';
+} from '../schemas/skills';

@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isValidElement, type ReactNode, type ReactElement } from 'react';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
-import { AuthorDocumentPanel, authorFileLinks, authorFileTab } from '../../src/web/components/AuthorDocumentPanel.tsx';
-import { AuthorTextView } from '../../src/web/components/AuthorTextView.tsx';
-import { AuthorMediaView } from '../../src/web/components/AuthorMediaView.tsx';
-import { AuthorStructuredView } from '../../src/web/components/AuthorStructuredView.tsx';
-import * as workspace from '../../src/web/stores/authorWorkspaceStore.ts';
-import { loadAuthorDocument, saveAuthorDocument } from '../../src/web/api/authorFiles.ts';
-import { focusAuthorViewport } from '../../src/web/api/authorBrowserBridge.ts';
+import { AuthorDocumentPanel, authorFileLinks, authorFileTab } from '../../src/web/components/AuthorDocumentPanel';
+import { AuthorTextView } from '../../src/web/components/AuthorTextView';
+import { AuthorMediaView } from '../../src/web/components/AuthorMediaView';
+import { AuthorStructuredView } from '../../src/web/components/AuthorStructuredView';
+import * as workspace from '../../src/web/stores/authorWorkspaceStore';
+import { loadAuthorDocument, saveAuthorDocument } from '../../src/web/api/authorFiles';
+import { focusAuthorViewport } from '../../src/web/api/authorBrowserBridge';
 const hooks = vi.hoisted(() => ({
   values: [] as unknown[],
   setters: [] as ReturnType<typeof vi.fn>[],

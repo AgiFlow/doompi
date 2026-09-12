@@ -1,2 +1,2 @@
-export { createSandboxLauncher, launchSandbox } from '../adapters/harness.ts';
-export type { SandboxLauncherDependencies } from '../adapters/harness.ts';
+export { createSandboxLauncher, launchSandbox } from '../services/harness';
+export type { SandboxLauncherDependencies } from '../services/harness';

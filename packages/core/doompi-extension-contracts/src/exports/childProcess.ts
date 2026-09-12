@@ -1,4 +1,4 @@
-export type { ChildProcessContext } from '../schemas/childProcess.ts';
+export type { ChildProcessContext } from '../schemas/childProcess';
 export {
   alreadyComposed,
   ChildProcessContextSchema,
@@ -13,4 +13,4 @@ export {
   SUBAGENT_CHILD_ENV,
   SUBAGENT_PARENT_SESSION_ENV,
   SUBAGENT_ROOT_SESSION_ENV,
-} from '../schemas/childProcess.ts';
+} from '../schemas/childProcess';

@@ -11,7 +11,7 @@ import {
   discoverSkillsAsync,
   mergeMcpConfigs,
   mergeMcpConfigsAsync,
-} from '../../src/adapters/resourceCollector.ts';
+} from '../../src/services/resourceCollector';
 
 describe('agent definition adaptation', () => {
   it('adapts Claude tools and preserves the agent prompt', () => {

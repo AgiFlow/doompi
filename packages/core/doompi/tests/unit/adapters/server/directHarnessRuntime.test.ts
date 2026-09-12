@@ -17,14 +17,11 @@ import {
 } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it, vi, type MockInstance } from 'vitest';
-import {
-  createHistoryOwnership,
-  historyOwnershipLockPath,
-} from '../../../../src/adapters/serialization/historyOwnership.ts';
+import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../src/services/historyOwnership';
 import {
   createDirectHarnessRuntime,
   readDirectHarnessSessionMetadata,
-} from '../../../../src/adapters/server/directHarnessRuntime.ts';
+} from '../../../../src/controllers/directHarnessRuntime';
 
 const model: Model<Api> = {
   id: 'test-model',

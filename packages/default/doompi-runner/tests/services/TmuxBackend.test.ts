@@ -4,10 +4,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TmuxBackend } from '../../src/adapters/TmuxBackend/TmuxBackend.ts';
+import { TmuxBackend } from '../../src/services/tmuxBackend';
 import type { RunHandle } from '../../src/types/launcher';
 import type { PtyRun } from '../../src/types/ptyHost';
-import type { IRunnerPaths } from '../../src/services/RunnerPaths/types';
+import type { IRunnerPaths } from '../../src/services/runnerPaths/type';
 import type { ITmuxClient } from '../../src/types/tmuxClient';
 
 const TEST_TIMEOUT_MS = 20_000;

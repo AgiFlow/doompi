@@ -37,7 +37,7 @@ vi.mock('node:worker_threads', () => ({
 }));
 
 const { createMainThreadTitleController, createWorkerTitleController } =
-  await import('../../src/adapters/shellTitleController.ts');
+  await import('../../src/controllers/shellTitleController');
 
 describe('shell title controller', () => {
   beforeEach(() => {

@@ -2,7 +2,12 @@
 import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-  entry: { '*': 'src/exports/**/*.ts' },
+  entry: {
+    index: 'src/exports/index.ts',
+    catalog: 'src/exports/catalog.ts',
+    'extensions/pi': 'src/extensions/pi.ts',
+    'extensions/server': 'src/extensions/server.ts',
+  },
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },
   exports: false,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { optimizerAllowsPromptCacheKey } from '../../../src/services/optimizerPolicy.ts';
+import { optimizerAllowsPromptCacheKey } from '../../../src/services/optimizerPolicy';
 
 describe('optimizer runtime policy', () => {
   it('reads the pinned optimizer runtime helpers from its exported internals object', () => {

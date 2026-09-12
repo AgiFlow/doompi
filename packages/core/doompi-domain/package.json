@@ -30,7 +30,7 @@
   "files": [
     "dist",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "llms.txt",
     "src/prompts",
     "README.md",
@@ -94,6 +94,7 @@
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/doompi-voice": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "typebox": "1.3.25",
     "yaml": "2.9.0"
@@ -130,7 +131,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
@@ -139,7 +140,7 @@
   "doompiWeb": {
     "pluginId": "domain",
     "channels": [],
-    "client": "./src/exports/webClient.ts",
+    "client": "./src/extensions/web.ts",
     "scopes": [
       "session"
     ]

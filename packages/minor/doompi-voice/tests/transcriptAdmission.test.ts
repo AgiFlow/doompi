@@ -4,7 +4,7 @@ import {
   VoiceTranscriptAdjudicator,
   type IVoiceTranscriptAdmissionModelClient,
   type VoiceTranscriptSignalEvidence,
-} from '../src/services/transcriptAdmission.ts';
+} from '../src/services/transcriptAdmission';
 
 const strongEvidence: VoiceTranscriptSignalEvidence = {
   durationMs: 1_200,

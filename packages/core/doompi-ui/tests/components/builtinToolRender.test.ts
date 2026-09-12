@@ -13,7 +13,7 @@ import {
   renderReadCall,
   renderReadResult,
   renderWriteCall,
-} from '../../src/tui/builtinToolRender.ts';
+} from '../../src/tui/builtinToolRender';
 
 function plainTheme(): Theme {
   const identity = (text: string): string => text;

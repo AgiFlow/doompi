@@ -33,6 +33,10 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: '@agimon-ai/doompi-extension-contracts/pi-extension',
+        replacement: source('../../core/doompi-extension-contracts/src/exports/piExtension.ts'),
+      },
+      {
         find: /^@agimon-ai\/doompi-config\/(.*)$/,
         replacement: `${source('../../core/doompi-config/src/exports/')}$1.ts`,
       },
@@ -62,12 +66,12 @@ export default defineConfig({
         replacement: source('../../core/doompi-extension-contracts/src/exports/leader.ts'),
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/voice-tools',
-        replacement: source('../../core/doompi-extension-contracts/src/exports/voiceTools.ts'),
+        find: '@agimon-ai/doompi-voice/voice-tools',
+        replacement: source('src/exports/voiceTools.ts'),
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/voice-reload-handoff',
-        replacement: source('../../core/doompi-extension-contracts/src/exports/voiceReloadHandoff.ts'),
+        find: '@agimon-ai/doompi-voice/voice-reload-handoff',
+        replacement: source('src/exports/voiceReloadHandoff.ts'),
       },
       {
         find: '@agimon-ai/doompi-extension-contracts/server-facet',

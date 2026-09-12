@@ -15,8 +15,8 @@ import {
 } from '@earendil-works/pi-ai';
 import { DOOM_HEADLESS_HOST_SERVICE, requireDoomHeadlessHost } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { LoadedServerFacet } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import { createHeadlessSessionHost } from '../../../../src/adapters/server/headlessSessionHost';
-import { serveSessionApis } from '../../../../src/adapters/server/packageApiServer';
+import { createHeadlessSessionHost } from '../../../../src/controllers/headlessSessionHost';
+import { serveSessionApis } from '../../../../src/controllers/packageApiServer';
 
 const model: Model<Api> = {
   id: 'test',

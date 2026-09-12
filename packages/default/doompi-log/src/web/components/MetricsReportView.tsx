@@ -1,9 +1,9 @@
 import { Badge } from '@agimon-ai/doompi-web-components';
-import type { MetricsDimension, MetricsReport } from '../../types/webMetrics.ts';
-import { IssuesSection } from './IssuesSection.tsx';
-import { GroupBars } from './charts/GroupBars.tsx';
-import { TimelineChart } from './charts/TimelineChart.tsx';
-import { formatTokens } from '../lib/chartScale.ts';
+import type { MetricsDimension, MetricsReport } from '../../types/webMetrics';
+import { IssuesSection } from './IssuesSection';
+import { GroupBars } from './charts/GroupBars';
+import { TimelineChart } from './charts/TimelineChart';
+import { formatTokens } from '../lib/chartScale';
 
 /**
  * One report, drawn.

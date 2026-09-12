@@ -3,8 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { shutdownRuntime, startRuntime, writeMinimalDoomRepository } from './packHelpers.ts';
-import { type ScriptedModel, startScriptedModel } from './support/scriptedModel.ts';
+import { shutdownRuntime, startRuntime, writeMinimalDoomRepository } from './packHelpers';
+import { type ScriptedModel, startScriptedModel } from './support/scriptedModel';
 
 /**
  * The whole stack, driven by a model that answers from a script.

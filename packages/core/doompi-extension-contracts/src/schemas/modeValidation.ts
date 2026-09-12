@@ -6,8 +6,8 @@ import {
   type MinorModeRecord,
   type MinorModeRegistrationRef,
   type MinorModeState,
-} from './mode.ts';
-import { DoomProtocolError } from './protocol.ts';
+} from './mode';
+import { DoomProtocolError } from './protocol';
 
 export function minorModeKey(identity: Pick<MinorModeDescriptor, 'source' | 'id'>): string {
   return `${identity.source}\u0000${identity.id}`;

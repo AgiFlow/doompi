@@ -3,9 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { hashLine } from '@agimon-ai/doompi-hashline';
 import { computeFileTag } from '@agimon-ai/doompi-hashline/files';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { executeHashlineEdit, registerHashlineEditTool } from '../src/adapters/pi/editTool.ts';
+import { executeHashlineEdit, createHashlineEditTool } from '../src/tools/piEdit';
 
 let directory: string;
 
@@ -30,11 +29,7 @@ describe('hashline edit execution', () => {
           renderCall?(args: Record<string, unknown>, theme: unknown): { render(width: number): string[] };
         }
       | undefined;
-    registerHashlineEditTool({
-      registerTool(definition) {
-        tool = definition as unknown as typeof tool;
-      },
-    } as Pick<ExtensionAPI, 'registerTool'>);
+    tool = createHashlineEditTool() as unknown as typeof tool;
     const identity = (value: string): string => value;
     const theme = {
       fg: (_color: string, value: string) => value,

@@ -5,7 +5,7 @@ import {
   type AutonomousVoiceEffect,
   autonomousVoiceMachine,
   autonomousVoiceState,
-} from '../src/services/autonomousVoiceMachine.ts';
+} from '../src/models/autonomousVoiceMachine';
 
 const firstTurn: AutonomousTurnIdentity = {
   sessionId: 'session-1',

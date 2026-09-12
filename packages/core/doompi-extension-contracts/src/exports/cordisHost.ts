@@ -12,4 +12,5 @@ export {
   finalizeDoomCordisHost,
   type InstallDoomCordisHostOptions,
   installDoomCordisHost,
-} from '../adapters/pi/cordisHost.ts';
+  requireDoomCordisSession,
+} from '../controllers/cordisHost';

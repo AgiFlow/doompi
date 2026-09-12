@@ -1,0 +1,9 @@
+export const BYTES_PER_KB = 1024;
+export const BYTES_PER_MB = 1_048_576;
+export const MAX_VARIANTS_TRACKED = 12;
+export const MIN_SHARED_AFFIX = 8;
+export const ERROR_WINDOW_CHARS = 60;
+export const PRAGMA_PATTERN = /^\s*(?:#|\/\/)\s*@doom:\s*(\{.*\})\s*$/u;
+export const PRAGMA_BYTES_CEILING = 262_144;
+export const PRAGMA_LINES_CEILING = 5_000;
+export const PRAGMA_TOKENS_CEILING = 100_000;

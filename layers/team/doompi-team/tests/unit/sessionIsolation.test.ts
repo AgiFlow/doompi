@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { AsyncJobTracker } from '../../src/adapters/asyncJobTracker';
-import { createSessionScope } from '../../src/adapters/filesystem/paths';
+import { AsyncJobTracker } from '../../src/services/asyncJobTracker';
+import { createSessionScope } from '../../src/services/sessionPaths';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 function runProjection(runId: string) {

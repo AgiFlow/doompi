@@ -12,8 +12,8 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import type { SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
 import { useState } from 'react';
-import { launchProblems, type RunnerLaunchRequest, runnerLaunchLine } from '../lib/launchLine.ts';
-import { requestRunnerStart } from '../stores/runnersStore.ts';
+import { launchProblems, type RunnerLaunchRequest, runnerLaunchLine } from '../lib/launchLine';
+import { requestRunnerStart } from '../stores/runnersStore';
 
 const COMMAND_ROWS = 3;
 const INTERACTIVE_FIELD_ID = 'runner-launch-interactive-field';

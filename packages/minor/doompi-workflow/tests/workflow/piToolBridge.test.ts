@@ -12,7 +12,7 @@ import {
   toAgentToolResult,
   toolResultText,
   withOptions,
-} from '../../src/adapters/pi/workflow/piToolBridge';
+} from '../../src/services/piToolBridge';
 import type { WorkflowRunRecord } from '@agimon-ai/workflow-mcp';
 
 function runRecord(overrides: Partial<WorkflowRunRecord> = {}): WorkflowRunRecord {

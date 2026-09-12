@@ -1,6 +1,6 @@
 import type { DoomDirectEventBus } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { describe, expect, it } from 'vitest';
-import { createTestVoiceMediaApi as createVoiceMediaApi } from './support.ts';
+import { createTestVoiceMediaApi as createVoiceMediaApi } from './support';
 import {
   VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
@@ -15,7 +15,7 @@ import {
   type VoiceMediaWake,
   VOICE_MEDIA_PROTOCOL_VERSION,
   VOICE_MEDIA_ROUTES,
-} from '../src/types/clientMedia.ts';
+} from '../src/types/clientMedia';
 
 const INTERNAL_TOKEN = 'internal-test-token';
 const CLIENT_ID = 'browser-client';

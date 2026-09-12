@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type MajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { afterEach, describe, expect, it } from 'vitest';
-import { assembleExtensions, createLayerResolvers } from '../../src/services/extensionAssembler.ts';
+import { assembleExtensions, createLayerResolvers } from '../../src/services/extensionAssembler';
 
 const WORKSPACE_ROOT = fileURLToPath(new URL('../../../../../', import.meta.url));
 const PACKAGE_MANIFEST = fileURLToPath(new URL('../../package.json', import.meta.url));

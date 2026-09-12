@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RealtimeSession, type RealtimeSessionIdentity } from '../src/services/realtimeSession.ts';
-import type { IClock } from '../src/types/index.ts';
-import type { RealtimeActionRequest, RealtimeProvider } from '../src/types/realtime.ts';
+import { RealtimeSession, type RealtimeSessionIdentity } from '../src/services/realtimeSession';
+import type { IClock } from '../src/types';
+import type { RealtimeActionRequest, RealtimeProvider } from '../src/types/realtime';
 
 const identity: RealtimeSessionIdentity = {
   sessionId: 'session',

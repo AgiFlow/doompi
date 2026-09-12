@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sessionHookPayload, toolHookPayload } from '../../src/services/hookPayload.ts';
+import { sessionHookPayload, toolHookPayload } from '../../src/services/hookPayload';
 
 describe('hook payloads', () => {
   it('names the tool the way a Claude Code hook expects to read it', () => {

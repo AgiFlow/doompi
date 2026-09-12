@@ -10,7 +10,7 @@ import type {
   SessionStateInfo,
   SessionStats,
   SteerArgs,
-} from '../../src/exports/sessionProtocol.ts';
+} from '../../src/exports/sessionProtocol';
 
 // Compile-only fixture for the typed control surface. It is included by the
 // native typecheck target and never imported at runtime.

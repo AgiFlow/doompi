@@ -14,12 +14,12 @@ import {
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
-import type { FileEditsVersionView } from '../../types/fileEditsApi.ts';
-import { SessionMediaPreview as MediaPreview } from './SessionMediaPreview.tsx';
-import { CommentDraft } from './CommentDraft.tsx';
-import { DeleteFileDialog } from './DeleteFileDialog.tsx';
-import { DiffView } from './DiffView.tsx';
-import { deleteFile, fetchFileDetail, saveFileContent, sessionFileUrl } from '../api/filesApi.ts';
+import type { FileEditsVersionView } from '../../types/fileEditsApi';
+import { SessionMediaPreview as MediaPreview } from './SessionMediaPreview';
+import { CommentDraft } from './CommentDraft';
+import { DeleteFileDialog } from './DeleteFileDialog';
+import { DiffView } from './DiffView';
+import { deleteFile, fetchFileDetail, saveFileContent, sessionFileUrl } from '../api/filesApi';
 import {
   addComment,
   clearComments,
@@ -28,8 +28,8 @@ import {
   removeComment,
   storeDetail,
   storeError,
-} from '../stores/filesStore.ts';
-import { buildReviewPrompt, commentAnchor, fileTabId, previewModeOf, TOOL_LABEL } from '../lib/fileView.ts';
+} from '../stores/filesStore';
+import { buildReviewPrompt, commentAnchor, fileTabId, previewModeOf, TOOL_LABEL } from '../lib/fileView';
 
 /**
  * One file's tab: what this session did to it, and what the reader wants done

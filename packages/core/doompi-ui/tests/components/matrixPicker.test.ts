@@ -1,6 +1,6 @@
 import type { SelectItem } from '@earendil-works/pi-tui';
 import { describe, expect, it } from 'vitest';
-import { markItems, toggleValue, visibleValues } from '../../src/exports/components/matrixPicker.ts';
+import { markItems, toggleValue, visibleValues } from '../../src/exports/matrixPicker';
 
 const items: SelectItem[] = [
   { value: 'development', label: 'development' },

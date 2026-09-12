@@ -28,7 +28,7 @@
   "files": [
     "dist",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "llms.txt",
     "src/prompts",
     "src/types/clientMedia.ts",
@@ -68,7 +68,17 @@
       "import": "./dist/clientMedia.mjs",
       "require": "./dist/clientMedia.cjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./voice-tools": {
+      "types": "./dist/voiceTools.d.mts",
+      "import": "./dist/voiceTools.mjs",
+      "require": "./dist/voiceTools.cjs"
+    },
+    "./voice-reload-handoff": {
+      "types": "./dist/voiceReloadHandoff.d.mts",
+      "import": "./dist/voiceReloadHandoff.mjs",
+      "require": "./dist/voiceReloadHandoff.cjs"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -92,6 +102,7 @@
     "@deepseek-ai/cordis": "4.0.2",
     "onnxruntime-web": "1.29.0",
     "sherpa-onnx-node": "1.13.7",
+    "typebox": "1.3.25",
     "xstate": "5.32.6"
   },
   "devDependencies": {
@@ -114,7 +125,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "global",
@@ -128,7 +139,7 @@
       "voice_media_wake",
       "voice_ownership"
     ],
-    "client": "./src/exports/webClient.ts",
+    "client": "./src/extensions/web.ts",
     "scopes": [
       "session"
     ]

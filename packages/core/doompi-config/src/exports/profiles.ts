@@ -1,14 +1,14 @@
-export type { AgentProfile, PersonaIdentity } from '../adapters/profiles.ts';
-export type { PersonaFrontMatter, PersonaVoiceOverride } from '../services/personaFrontMatter.ts';
-export { parsePersonaFrontMatter } from '../services/personaFrontMatter.ts';
-export { readPersonaIcon } from '../adapters/personaIcon.ts';
+export { parsePersonaFrontMatter } from '../services/personaFrontMatter';
+export { readPersonaIcon } from '../services/personaIcon';
 export {
+  PERSONA_FILES,
   applyProfileEnvironment,
   buildPersonaPrompt,
   listProfileNames,
   loadProfileCatalog,
   loadProfiles,
-  PERSONA_FILES,
   replaceProfileEnvironment,
   resolveProfile,
-} from '../adapters/profiles.ts';
+} from '../services/profiles';
+export type { AgentProfile } from '../services/profiles';
+export type { PersonaFrontMatter, PersonaIdentity, PersonaVoiceOverride } from '../types/profiles';

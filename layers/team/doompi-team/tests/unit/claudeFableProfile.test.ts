@@ -9,7 +9,7 @@ import {
   cleanupStaleClaudeFableSandboxes,
   parseClaudeFableOutput,
   prepareClaudeFableLaunch,
-} from '../../src/adapters/runs/shared/claudeFableProfile';
+} from '../../src/services/claudeFableProfile';
 
 const cleanup: string[] = [];
 

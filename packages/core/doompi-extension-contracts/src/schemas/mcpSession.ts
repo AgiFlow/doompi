@@ -1,6 +1,6 @@
 import { type Static, Type } from 'typebox';
 import { Check, Errors } from 'typebox/value';
-import { type DoomMcpProjectionSource, DoomMcpProjectionSourceSchema } from './mcpProjection.ts';
+import { type DoomMcpProjectionSource, DoomMcpProjectionSourceSchema } from './mcpProjection';
 
 /** Environment variable carrying the neutral MCP session wire document. */
 export const DOOM_MCP_SESSION_ENV_VAR = 'DOOM_MCP_SESSION';

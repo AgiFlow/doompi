@@ -1,6 +1,6 @@
 import type { MinorModeCatalogSnapshot } from '@agimon-ai/doompi-extension-contracts/mode';
 import { describe, expect, it } from 'vitest';
-import { projectMinorModes } from '../../src/services/minorModeProjection.ts';
+import { projectMinorModes } from '../../src/services/minorModeProjection';
 
 const SNAPSHOT: MinorModeCatalogSnapshot = {
   hostGeneration: 'host-1',

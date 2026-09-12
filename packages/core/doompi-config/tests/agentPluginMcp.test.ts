@@ -7,7 +7,7 @@ import {
   type DoomMcpAgentPluginProjectionSource,
 } from '@agimon-ai/doompi-extension-contracts/mcp-projection';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { normalizeAgentPluginMcpSource } from '../src/adapters/agentPluginMcp.ts';
+import { normalizeAgentPluginMcpSource } from '../src/services/agentPluginMcp';
 
 let temporaryDirectory: string;
 let pluginRoot: string;

@@ -1,6 +1,6 @@
 import { Button, Textarea } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
-import { trimSnippet } from '../lib/fileView.ts';
+import { trimSnippet } from '../lib/fileView';
 
 /**
  * The box a selection raises: what was highlighted, and a note about it.

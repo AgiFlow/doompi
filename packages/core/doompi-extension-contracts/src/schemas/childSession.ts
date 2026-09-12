@@ -114,7 +114,7 @@ export interface DoomChildSessionIntercom {
 export interface DoomChildSessionRuntime {
   readonly sessionId: string;
   readonly sessionFile?: string;
-  prompt(task: string): Promise<void>;
+  prompt(task: string): Promise<string | void>;
   steer(message: string): Promise<void>;
   followUp?(message: string): Promise<void>;
   abort(): Promise<void>;

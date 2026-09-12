@@ -3,7 +3,7 @@ import {
   computerExecCallSummary,
   computerExecResultLines,
   computerExecToolName,
-} from '../../src/web/lib/computerExecToolRender.ts';
+} from '../../src/web/lib/computerExecToolRender';
 
 describe('the computer_exec tool view', () => {
   it('names and summarises the registered tool', () => {

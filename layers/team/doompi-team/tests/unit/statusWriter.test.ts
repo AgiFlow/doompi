@@ -2,8 +2,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CoalescedStatusWriter, type StatusWithRecentEntries } from '../../src/adapters/runs/background/statusWriter';
-import { scopeRunsDir } from '../../src/adapters/filesystem/paths';
+import { CoalescedStatusWriter, type StatusWithRecentEntries } from '../../src/services/statusWriter';
+import { scopeRunsDir } from '../../src/services/sessionPaths';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 interface FakeRunStatus extends StatusWithRecentEntries {

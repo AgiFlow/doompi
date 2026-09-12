@@ -6,7 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { ReadToolMessage } from './ReadToolMessage.tsx';
+import { ReadToolMessage } from './ReadToolMessage';
 
 const OUTPUT = [
   '@file src/lib/cn.ts#a1b2c3d4',

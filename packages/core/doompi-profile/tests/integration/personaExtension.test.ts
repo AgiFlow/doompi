@@ -6,8 +6,8 @@ import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
-import { personaExtension } from '../../src/adapters/pi/persona.ts';
-import type { ProfileTelemetry } from '../../src/types/telemetry.ts';
+import { personaExtension } from '../../src/extensions/persona';
+import type { ProfileTelemetry } from '../../src/types/telemetry';
 
 type Handler = (event?: unknown, context?: ExtensionContext) => unknown;
 

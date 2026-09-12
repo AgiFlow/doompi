@@ -2,8 +2,8 @@
  * Plain CSF objects; the style-system renderer resolves the default export by
  * finding a bare `const meta`, so it is not named at the point of definition.
  */
-import type { SavedPromptView } from '../../types/webPrompts.ts';
-import { PromptPickerList } from './PromptPickerList.tsx';
+import type { SavedPromptView } from '../../types/webPrompts';
+import { PromptPickerList } from './PromptPickerList';
 
 const prompts: readonly SavedPromptView[] = [
   {

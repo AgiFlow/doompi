@@ -6,7 +6,7 @@ import {
   issuesUrl,
   METRICS_DIMENSIONS,
   metricsUrl,
-} from '../src/types/webMetrics.ts';
+} from '../src/types/webMetrics';
 
 /**
  * The vocabulary both halves share. These guards are the gate the route uses

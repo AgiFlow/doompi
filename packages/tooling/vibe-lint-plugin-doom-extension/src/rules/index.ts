@@ -1,3 +1,4 @@
+export { doomConstants } from './constants.js';
 export {
   compatibilityWrapperOnly,
   cordisContextInPiAdapter,
@@ -30,5 +31,15 @@ export { piExtensionDefaultFactory } from './piExtensionContract.js';
 export { doomPromptShape } from './prompts.js';
 export { rules } from './registry.js';
 export { packageApiManifest } from './packageApi.js';
-export { webPluginEntry, webPluginImportAllowlist, webPluginManifest, webPluginNoModuleState } from './webPlugin.js';
+export {
+  webPluginEntry,
+  webPluginImportAllowlist,
+  webPluginManifest,
+  webPluginNoModuleState,
+  webPluginProtocolLayout,
+  webPluginTypedCalls,
+} from './webPlugin.js';
 export { webPluginToolRenderers } from './webPluginTools.js';
+
+export { neutralExtensionContracts } from './neutralContracts.js';
+export { pluginCompositionWiring } from './pluginWiring.js';

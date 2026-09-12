@@ -12,7 +12,7 @@ import {
   Textarea,
 } from '@agimon-ai/doompi-web-components';
 import { type ChangeEvent, useState } from 'react';
-import { editGoalCommand } from '../lib/goalCommands.ts';
+import { editGoalCommand } from '../lib/goalCommands';
 
 /**
  * Correcting the objective the agent is working to.

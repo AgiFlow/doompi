@@ -7,8 +7,8 @@
  * launchers (pi.sh, claude.sh, codex.sh) invoke directly from source.
  */
 
-import { HARNESS_VERSION, printHelp } from '../commands/cli/help.ts';
-import { informationalRequest, routeCommand } from '../commands/cli/router.ts';
+import { HARNESS_VERSION, printHelp } from '../controllers/help';
+import { informationalRequest, routeCommand } from '../controllers/router';
 
 const args = process.argv.slice(2);
 // A named subcommand parses its own arguments, including its own --help, so the
@@ -34,7 +34,7 @@ const informationalExit =
 
 const run =
   informationalExit === undefined
-    ? import('../commands/cli/cliApp.ts').then(({ runCli }) => runCli(args))
+    ? import('../controllers/cliApp').then(({ runCli }) => runCli(args))
     : Promise.resolve(informationalExit);
 
 run.then(

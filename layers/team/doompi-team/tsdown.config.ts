@@ -2,9 +2,14 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: {
-    '*': ['src/exports/**/*.ts', '!src/exports/webClient.ts'],
-    // External child-process entry: private artifact the runtime spawns, not an export.
-    'runs/background/cliRunnerEntry': 'src/adapters/runs/background/cliRunnerEntry.ts',
+    delegation: 'src/exports/delegation.ts',
+    capabilityCeiling: 'src/exports/capabilityCeiling.ts',
+    index: 'src/exports/index.ts',
+    env: 'src/exports/env.ts',
+    teamSnapshot: 'src/exports/teamSnapshot.ts',
+    'extensions/pi': 'src/extensions/pi.ts',
+    'extensions/server': 'src/extensions/server.ts',
+    'runs/background/cliRunnerEntry': 'src/bin/cliRunner.ts',
   },
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },

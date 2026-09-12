@@ -8,7 +8,7 @@ import {
   majorModeSummary,
   optionName,
   voiceSwitchToken,
-} from '../../src/services/majorModeText.ts';
+} from '../../src/services/majorModeText';
 
 const config: MajorModesConfig = {
   defaultMajorMode: 'copilot',

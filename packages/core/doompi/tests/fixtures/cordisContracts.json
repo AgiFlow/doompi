@@ -1,5 +1,6 @@
 [
   {
+    "packageName": "@agimon-ai/doompi-extension-contracts",
     "subpath": "./ask-user",
     "values": {
       "DOOM_ASK_USER_PROMPT_EVENT": "doom/ask-user/prompt",
@@ -7,6 +8,7 @@
     }
   },
   {
+    "packageName": "@agimon-ai/doompi-extension-contracts",
     "subpath": "./cordis-host",
     "values": {
       "DOOM_CORDIS_HOST_ABI_VERSION": 1,
@@ -17,41 +19,55 @@
     "functions": ["connectDoomCordisHost", "finalizeDoomCordisHost", "installDoomCordisHost"]
   },
   {
+    "packageName": "@agimon-ai/doompi-extension-contracts",
     "subpath": "./help",
-    "values": { "DOOM_HELP_SERVICE": "doom/help" },
+    "values": {
+      "DOOM_HELP_SERVICE": "doom/help"
+    },
     "functions": ["createDoomHelpService", "readDoomHelpService", "requireDoomHelpService"]
   },
   {
-    "subpath": "./loop-launchers",
-    "values": { "DOOM_LOOP_LAUNCHERS_SERVICE": "doom/loop-launchers" },
-    "functions": ["readDoomLoopLaunchers", "requireDoomLoopLaunchers"]
-  },
-  {
+    "packageName": "@agimon-ai/doompi-extension-contracts",
     "subpath": "./narration",
-    "values": { "DOOM_NARRATION_SERVICE": "doom/narration" },
+    "values": {
+      "DOOM_NARRATION_SERVICE": "doom/narration"
+    },
     "functions": ["createNarrationRequest", "readDoomNarrationService", "requireDoomNarrationService"]
   },
   {
+    "packageName": "@agimon-ai/doompi-extension-contracts",
     "subpath": "./skills",
-    "values": { "DOOM_SKILL_SOURCES_SERVICE": "doom/skill-sources" },
+    "values": {
+      "DOOM_SKILL_SOURCES_SERVICE": "doom/skill-sources"
+    },
     "functions": ["createDoomSkillSourcesService", "readDoomSkillSourcesService", "requireDoomSkillSourcesService"]
   },
   {
+    "packageName": "@agimon-ai/doompi-extension-contracts",
     "subpath": "./tool-overrides",
-    "values": { "DOOM_TOOL_OVERRIDES_SERVICE": "doom/tool-overrides" },
+    "values": {
+      "DOOM_TOOL_OVERRIDES_SERVICE": "doom/tool-overrides"
+    },
     "functions": ["createDoomToolOverridesService", "readDoomToolOverrides", "requireDoomToolOverrides"]
   },
   {
+    "packageName": "@agimon-ai/doompi-extension-contracts",
     "subpath": "./ui-hub",
-    "values": { "DOOM_UI_HUB_SERVICE": "doom/ui-hub" },
+    "values": {
+      "DOOM_UI_HUB_SERVICE": "doom/ui-hub"
+    },
     "functions": ["readDoomUiHub", "requireDoomUiHub"]
   },
   {
+    "packageName": "@agimon-ai/doompi-voice",
     "subpath": "./voice-tools",
-    "values": { "DOOM_VOICE_TOOLS_SERVICE": "doom/voice-tools" },
+    "values": {
+      "DOOM_VOICE_TOOLS_SERVICE": "doom/voice-tools"
+    },
     "functions": ["createDoomVoiceToolsService", "readDoomVoiceToolsService", "requireDoomVoiceToolsService"]
   },
   {
+    "packageName": "@agimon-ai/doompi-voice",
     "subpath": "./voice-reload-handoff",
     "values": {
       "VOICE_RELOAD_HANDOFF_REGISTRY_KEY": "@agimon-ai/doompi-extension-contracts.voice-reload-handoff.v1",
@@ -60,6 +76,7 @@
     "functions": ["createVoiceReloadHandoffStore"]
   },
   {
+    "packageName": "@agimon-ai/doompi-extension-contracts",
     "subpath": "./background-work",
     "values": {
       "DOOM_BACKGROUND_WORK_SERVICE": "doom/background-work",
@@ -68,6 +85,7 @@
     "functions": ["readDoomBackgroundWorkService"]
   },
   {
+    "packageName": "@agimon-ai/doompi-extension-contracts",
     "subpath": "./delegation",
     "values": {
       "DOOM_DELEGATION_SERVICE": "doom/delegation",
@@ -81,16 +99,23 @@
     "functions": ["readDoomDelegationService"]
   },
   {
+    "packageName": "@agimon-ai/doompi-extension-contracts",
     "subpath": "./subagent-policy",
-    "values": { "DOOM_SUBAGENT_POLICY_SERVICE": "doom/subagent-policy" },
+    "values": {
+      "DOOM_SUBAGENT_POLICY_SERVICE": "doom/subagent-policy"
+    },
     "functions": ["readDoomSubagentPolicyService"]
   },
   {
+    "packageName": "@agimon-ai/doompi-extension-contracts",
     "subpath": "./fable-plan",
-    "values": { "DOOM_FABLE_PLAN_SERVICE": "doom/fable-plan" },
+    "values": {
+      "DOOM_FABLE_PLAN_SERVICE": "doom/fable-plan"
+    },
     "functions": ["readDoomFablePlanService"]
   },
   {
+    "packageName": "@agimon-ai/doompi-extension-contracts",
     "subpath": "./protocol",
     "functions": ["createProtocolRuntime", "defineJob", "defineNotification", "defineRequestReply"]
   }

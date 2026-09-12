@@ -6,7 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { RunWorktreeToolMessage } from './RunWorktreeToolMessage.tsx';
+import { RunWorktreeToolMessage } from './RunWorktreeToolMessage';
 
 const LISTING = [
   'wt/fix-auth  ~/.pi/.doom/git/worktrees/fix-auth  session s7',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildSandboxForwardArgs } from '../../src/commands/cli/sandboxArgs';
-import { parseHarnessArgs } from '../../src/exports/cli/options';
+import { buildSandboxForwardArgs } from '../../src/controllers/sandboxArgs';
+import { parseHarnessArgs } from '../../src/exports/options';
 import type { HarnessOptions } from '../../src/types/interfaces/harness';
 
 function parsedOptions(args: string[]): HarnessOptions {

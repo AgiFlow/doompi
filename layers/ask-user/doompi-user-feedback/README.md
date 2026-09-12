@@ -119,3 +119,5 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+The named Pi and server factories live in `src/extensions`. Tools return typed declarations using questionnaire services. TUI renderers are supplied by the Pi entry. Each Pi mount owns optional Voice service subscriptions, a live tool restriction, and awaited questionnaire shutdown through `onDispose`. Public types are exposed through flat `src/exports`.

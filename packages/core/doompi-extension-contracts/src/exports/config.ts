@@ -15,8 +15,7 @@ export type {
   DoomConfigInvocation,
   DoomConfigSectionView,
   DoomExtensionContext,
-  IDoomConfigService,
-} from '../schemas/config.ts';
+} from '../schemas/config';
 export {
   CONFIG_ACTION,
   ConfigActionSchema,
@@ -29,4 +28,5 @@ export {
   ConfigStatusSchema,
   ConfigStepSchema,
   DOOM_CONFIG_SERVICE,
-} from '../schemas/config.ts';
+} from '../schemas/config';
+export type { IDoomConfigService } from '../types/config';

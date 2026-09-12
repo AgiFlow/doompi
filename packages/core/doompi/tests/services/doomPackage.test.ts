@@ -7,7 +7,7 @@ import {
   enclosingPackageName,
   isDoomPackagePath,
   manifestName,
-} from '../../src/adapters/doomPackage.ts';
+} from '../../src/services/doomPackage';
 
 const temporaryRoots: string[] = [];
 

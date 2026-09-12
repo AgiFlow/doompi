@@ -30,7 +30,7 @@
     "src/types/author.ts",
     "src/types/webAuthor.ts",
     "src/types/structuredDocuments.ts",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "src/prompts",
     "llms.txt",
     "README.md",
@@ -58,7 +58,12 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./author-facade": {
+      "types": "./dist/authorFacade.d.mts",
+      "import": "./dist/authorFacade.mjs",
+      "require": "./dist/authorFacade.cjs"
+    }
   },
   "publishConfig": {
     "access": "public"
@@ -79,6 +84,7 @@
     "csv-parse": "7.0.2",
     "hono": "4.13.5",
     "saxes": "6.0.0",
+    "typebox": "1.3.25",
     "yauzl": "3.4.0",
     "yazl": "3.3.1"
   },
@@ -111,7 +117,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "global",
@@ -124,7 +130,7 @@
     "channels": [
       "author_webmcp"
     ],
-    "client": "./src/exports/webClient.ts",
+    "client": "./src/extensions/web.ts",
     "scopes": [
       "session"
     ]

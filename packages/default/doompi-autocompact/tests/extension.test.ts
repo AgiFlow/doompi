@@ -21,19 +21,19 @@ const loadDoomConfig = vi.hoisted(() => vi.fn(() => ({ modes: {} }) as unknown))
 const getHarnessState = vi.hoisted(() => vi.fn(() => ({}) as unknown));
 vi.mock('@agimon-ai/doompi-config', () => ({ loadDoomConfig, getHarnessState }));
 
-import { installAutocompactRuntime } from '../src/adapters/pi/extension.ts';
+import { autocompactExtension } from '../src/extensions/pi';
 import {
   AUTOCOMPACT_EVENT,
   type AutocompactEventAttributes,
   type AutocompactTelemetry,
-} from '../src/adapters/telemetry/logSinkTelemetry.ts';
-import { createInitialState } from '../src/adapters/compaction/policy';
+} from '../src/services/autocompactTelemetry';
+import { createInitialState } from '../src/services/compactionPolicy';
 import {
   CHECKPOINT_MESSAGE_TYPE,
   CONTEXT_MESSAGE_TYPE,
   RUNTIME_STATE_MESSAGE_TYPE,
   STATE_CUSTOM_TYPE,
-} from '../src/types/constants.ts';
+} from '../src/constants/autocompact';
 
 const STRUCTURED_CHECKPOINT = `## Goal
 Retain important context.
@@ -102,7 +102,7 @@ function fixedContextService(
   };
 }
 
-function createHarness(
+async function createHarness(
   initialContextContributions: DoomContextContributionsSnapshot = contextSnapshot(),
   options: { provideContextService?: boolean } = {},
 ) {
@@ -211,7 +211,7 @@ function createHarness(
     };
     cordis.provide(DOOM_CONTEXT_CONTRIBUTIONS_SERVICE, contextContributionsService);
   }
-  installAutocompactRuntime(cordis, pi, {
+  await autocompactExtension.install(cordis, pi, {
     generateCheckpoint: (input) => {
       generationRequests.push({
         messages: input.messages as Array<{ role: string; content?: unknown }>,
@@ -320,7 +320,7 @@ function createHarness(
 }
 
 function beforeCompactEvent(
-  harness: ReturnType<typeof createHarness>,
+  harness: Awaited<ReturnType<typeof createHarness>>,
   reason: 'manual' | 'threshold' | 'overflow',
   customInstructions?: string,
 ): SessionBeforeCompactEvent {
@@ -368,7 +368,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('stages pass 1 with an asynchronous LLM summary without entering the agent context', async () => {
-    const harness = createHarness(
+    const harness = await createHarness(
       contextSnapshot([
         {
           source: '@agimon-ai/doompi-task',
@@ -428,7 +428,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('surfaces isolated contribution failures and preserves them in the steering evidence', async () => {
-    const harness = createHarness(
+    const harness = await createHarness(
       contextSnapshot(
         [],
         [
@@ -483,7 +483,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('drops a removed contribution broker and reads from its replacement', async () => {
-    const harness = createHarness(contextSnapshot(), { provideContextService: false });
+    const harness = await createHarness(contextSnapshot(), { provideContextService: false });
     await harness.emit('session_start', { reason: 'startup' });
     const firstService = fixedContextService(
       'context-first',
@@ -562,7 +562,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('chains each staged summary with only the parent messages added after its snapshot', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Before stage 1.');
     await harness.emit('session_start', { reason: 'startup' });
     harness.setUsage(100_000);
@@ -596,7 +596,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('commits a hidden logical checkpoint while preserving renderable history and newer parent messages', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendPlan('# Exact plan body that is injected elsewhere.', '/repo/plans/runtime.md');
     const snapshotLeafId = harness.appendAssistant('Parent transcript before summarization.');
     const state = createInitialState();
@@ -704,7 +704,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('drains crossed checkpoint thresholds in FIFO order before the hard compaction', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Large parent transcript.');
     await harness.emit('session_start', { reason: 'startup' });
     harness.setUsage(190_000);
@@ -745,7 +745,7 @@ describe('doom autocompact extension', () => {
         },
       },
     });
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.setModel({ id: 'claude-opus-4-6', provider: 'anthropic' });
     harness.appendAssistant('Large parent transcript.');
     await harness.emit('session_start', { reason: 'startup' });
@@ -765,7 +765,7 @@ describe('doom autocompact extension', () => {
         },
       },
     });
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.setModel({ id: 'gpt-5', provider: 'openai' });
     harness.appendAssistant('Large parent transcript.');
     await harness.emit('session_start', { reason: 'startup' });
@@ -775,7 +775,7 @@ describe('doom autocompact extension', () => {
     expect(harness.generationRequests).toHaveLength(0);
   });
   it('stages a declined pass 2 checkpoint and advances without compacting', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     const state = createInitialState();
     state.pass = 2;
     harness.appendState(state);
@@ -797,7 +797,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('uses the compacted token count as the baseline for future thresholds', async () => {
-    const harness = createHarness(
+    const harness = await createHarness(
       contextSnapshot([
         {
           source: '@agimon-ai/doompi-task',
@@ -867,7 +867,7 @@ describe('doom autocompact extension', () => {
     loadDoomConfig.mockReturnValue({
       modes: { autocompact: { overrides: [{ model: '*', tokens: { pass1: 75_000 } }] } },
     });
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.setModel({ id: 'claude-opus-4-6', provider: 'anthropic' });
     await harness.emit('session_start', { reason: 'startup' });
     harness.setUsage(null, 1_000_000);
@@ -896,7 +896,7 @@ describe('doom autocompact extension', () => {
     expect(harness.generationRequests).toHaveLength(1);
   });
   it('records delegation failures and retries only after the parent branch advances', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Large parent transcript.');
     await harness.emit('session_start', { reason: 'startup' });
     harness.setUsage(190_000);
@@ -921,7 +921,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('uses the projected logical context when the next compaction cycle starts', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Archived parent transcript.');
     const state = createInitialState();
     state.pass = 2;
@@ -944,7 +944,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('records a successful pass 2 logical commit and leaves native compaction unused', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Parent transcript.');
     const state = createInitialState();
     state.pass = 2;
@@ -966,7 +966,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('rejects incomplete summarizer output and resumes a persisted ready checkpoint', async () => {
-    const invalidHarness = createHarness();
+    const invalidHarness = await createHarness();
     const invalidState = createInitialState();
     invalidState.pass = 2;
     invalidHarness.appendState(invalidState);
@@ -985,7 +985,7 @@ describe('doom autocompact extension', () => {
       expect.objectContaining({ 'autocompact.pass': 2 }),
     );
 
-    const restoredHarness = createHarness();
+    const restoredHarness = await createHarness();
     const snapshotLeafId = restoredHarness.appendAssistant('Snapshot.');
     const restoredState = createInitialState();
     restoredState.phase = 'checkpoint_ready';
@@ -1004,7 +1004,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('abandons a pass whose summarizer keeps returning an incomplete checkpoint', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Large parent transcript.');
     await harness.emit('session_start', { reason: 'startup' });
     harness.setUsage(190_000);
@@ -1037,7 +1037,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('abandons a pass whose summarizer keeps throwing and caps the failure telemetry', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Large parent transcript.');
     await harness.emit('session_start', { reason: 'startup' });
     harness.setUsage(190_000);
@@ -1073,7 +1073,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('reports a configuration load failure to telemetry exactly once', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Large parent transcript.');
     await harness.emit('session_start', { reason: 'startup' });
     loadDoomConfig.mockImplementation(() => {
@@ -1093,7 +1093,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('clears abandoned passes once the context is compacted', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Large parent transcript.');
     const state = createInitialState();
     state.pass = 2;
@@ -1111,7 +1111,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('restores logical context after reload and tree navigation without hiding branch entries', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     const archivedId = harness.appendAssistant('Visible archived message.');
     harness.appendCustomMessage(CONTEXT_MESSAGE_TYPE, STRUCTURED_CHECKPOINT, {
       readFiles: [],
@@ -1147,7 +1147,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('fails open and records one error for a malformed logical context marker', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Visible message.');
     harness.appendCustomMessage(CONTEXT_MESSAGE_TYPE, STRUCTURED_CHECKPOINT, {});
 
@@ -1165,7 +1165,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('starts summarization during an active parent turn', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.emit('session_start', { reason: 'startup' });
     harness.setUsage(100_000);
     harness.setPendingMessages(true);
@@ -1179,7 +1179,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('commits a ready checkpoint at the next turn boundary during an active run', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Parent transcript before summarization.');
     const state = createInitialState();
     state.pass = 2;
@@ -1211,7 +1211,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('defers the mid-run apply when the turn is final or user messages are pending', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Parent transcript before summarization.');
     const state = createInitialState();
     state.pass = 2;
@@ -1248,7 +1248,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('stages a mid-run pass 1 checkpoint without steering the agent and defers escalation', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Parent transcript.');
     await harness.emit('session_start', { reason: 'startup' });
     harness.setUsage(100_000);
@@ -1278,7 +1278,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('defers the baseline capture until an assistant responds after the committed marker', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Parent transcript.');
     const state = createInitialState();
     state.pass = 2;
@@ -1304,7 +1304,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('recovers the baseline from real usage when the committed marker is lost', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Parent transcript that was never compacted.');
     const state = createInitialState();
     state.baselinePending = true;
@@ -1318,7 +1318,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('aborts in-flight summarization whenever the session generation is replaced', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Parent transcript.');
     await harness.emit('session_start', { reason: 'startup' });
     harness.setUsage(190_000);
@@ -1335,7 +1335,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('reports compaction progress in the status bar from start to finish', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     harness.appendAssistant('Parent transcript.');
     const state = createInitialState();
     state.pass = 2;
@@ -1352,7 +1352,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('cancels Pi threshold compaction only while the checkpoint machinery is active', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.emit('session_start', { reason: 'startup' });
 
     expect(
@@ -1387,7 +1387,7 @@ describe('doom autocompact extension', () => {
   });
 
   it.each(NATIVE_COMPACTION_REASONS)('preserves one runtime snapshot after %s native compaction', async (reason) => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.emit('session_start', { reason: 'startup' });
     const entry = compactionEntry(`${reason}-compact`);
     harness.appendCompaction(entry.id);
@@ -1416,7 +1416,7 @@ describe('doom autocompact extension', () => {
   });
 
   it('aborts an in-flight summarization on shutdown', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.emit('session_start', { reason: 'startup' });
     harness.setUsage(190_000);
     await harness.emit('agent_settled');

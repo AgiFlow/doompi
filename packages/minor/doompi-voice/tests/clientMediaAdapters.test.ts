@@ -1,9 +1,9 @@
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { describe, expect, it, vi } from 'vitest';
-import { ClientPcmAudioRecorder, ClientTtsAdapter } from '../src/adapters/audio/clientMedia.ts';
-import { PCM_FRAME_BYTES } from '../src/services/pcm.ts';
-import type { IClock, IVoiceMediaHostConnection, TimerHandle, VoiceMediaAudioPoll } from '../src/types/index.ts';
-import type { VoiceMediaPlaybackResult } from '../src/types/clientMedia.ts';
+import { ClientPcmAudioRecorder, ClientTtsAdapter } from '../src/services/clientMedia';
+import { PCM_FRAME_BYTES } from '../src/services/pcm';
+import type { IClock, IVoiceMediaHostConnection, TimerHandle, VoiceMediaAudioPoll } from '../src/types';
+import type { VoiceMediaPlaybackResult } from '../src/types/clientMedia';
 
 const config: ResolvedVoiceConfig = {
   mode: 'legacy',

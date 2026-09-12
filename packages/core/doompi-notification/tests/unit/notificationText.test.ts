@@ -5,7 +5,7 @@ import {
   promptTitle,
   settledNotification,
   shellTabTitle,
-} from '../../src/services/notificationText.ts';
+} from '../../src/services/notificationText';
 
 const MAX_PROMPT_TITLE_LENGTH = 36;
 const MAX_BODY_LENGTH = 240;

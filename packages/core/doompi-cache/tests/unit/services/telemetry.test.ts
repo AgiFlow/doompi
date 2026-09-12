@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PromptCacheTelemetry } from '../../../src/services/telemetry.ts';
+import { PromptCacheTelemetry } from '../../../src/models/promptCacheTelemetry';
 
 describe('provider-observed cache telemetry', () => {
   it('records bounded provider usage for the pending namespace and model', () => {

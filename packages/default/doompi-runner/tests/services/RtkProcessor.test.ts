@@ -2,13 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  classifyRtkFilter,
-  RTK_STDIN_MAX_BYTES,
-  RtkProcessor,
-  rtkPackageForTarget,
-} from '../../src/adapters/RtkProcessor/RtkProcessor';
-import { RESULT_MAX_BYTES_ENV } from '../../src/types/config';
+import { RTK_STDIN_MAX_BYTES } from '../../src/constants/rtkProcessor';
+import { classifyRtkFilter, RtkProcessor, rtkPackageForTarget } from '../../src/services/rtkProcessor';
+import { RESULT_MAX_BYTES_ENV } from '../../src/constants/runnerConfig';
 
 let directory: string;
 let previousResultMaxBytes: string | undefined;

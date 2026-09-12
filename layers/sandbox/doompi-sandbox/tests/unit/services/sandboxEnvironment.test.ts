@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterSandboxEnvironment } from '../../../src/services/sandboxEnvironment.ts';
+import { filterSandboxEnvironment } from '../../../src/services/sandboxEnvironment';
 
 describe('filterSandboxEnvironment', () => {
   it('passes terminal, locale, proxy, and credential variables through', () => {

@@ -1,5 +1,5 @@
-import type { ComputerScriptExecutor } from './computerScript.ts';
-import type { ComputerUseSessionClient } from '../adapters/pi/sessionApiClient.ts';
+import type { ComputerScriptExecutor } from './computerScript';
+import type { ComputerUseSessionClient } from '../services/sessionApiClient';
 
 export type ComputerUseNotificationLevel = 'info' | 'error';
 

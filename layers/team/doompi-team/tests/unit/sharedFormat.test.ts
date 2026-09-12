@@ -8,7 +8,7 @@ import {
   formatToolCall,
   formatUsage,
   shortenPath,
-} from '../../src/adapters/pi/tui/formatters';
+} from '../../src/services/displayFormat';
 import {
   findModelInfo,
   getSupportedThinkingLevels,
@@ -17,7 +17,7 @@ import {
   splitKnownThinkingSuffix,
   THINKING_LEVELS,
   toModelInfo,
-} from '../../src/services/models/modelInfo';
+} from '../../src/services/modelInfo';
 import type { Usage } from '../../src/types';
 
 const temporaryDirs: string[] = [];

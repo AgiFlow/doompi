@@ -1,9 +1,9 @@
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
-import { defineSlot } from '../../src/services/define.ts';
-import { renderPlugin } from '../../src/services/testing/render.ts';
-import { slotPropsFixture, toolMessagePropsFixture } from '../../src/services/testing/slotProps.ts';
-import type { WebPluginSlotProps } from '../../src/types/webPlugin.ts';
+import { defineSlot } from '../../src/schemas/webPlugin';
+import { renderPlugin } from '../../src/services/testing';
+import { slotPropsFixture, toolMessagePropsFixture } from '../../src/services/testing/slotProps';
+import type { WebPluginSlotProps } from '../../src/types/webPlugin';
 
 describe('the slot props a component receives', () => {
   it('records what a component did through every action it was handed', () => {

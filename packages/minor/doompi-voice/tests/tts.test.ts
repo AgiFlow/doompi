@@ -12,8 +12,8 @@ import {
   type TtsPlayback,
   type TtsSpeakRequest,
 } from '../src/exports';
-import { MacOsSayPcmSynthesizer } from '../src/adapters/audio/infrastructure.ts';
-import { encodePcm16Wav } from '../src/services/pcm.ts';
+import { MacOsSayPcmSynthesizer } from '../src/services/infrastructure';
+import { encodePcm16Wav } from '../src/services/pcm';
 class DeferredBinaryProcess implements BinaryRunningProcess {
   readonly signals: NodeJS.Signals[] = [];
   readonly writes: (string | Buffer)[] = [];

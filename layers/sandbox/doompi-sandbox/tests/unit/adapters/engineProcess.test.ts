@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SpawnEngineProcessRunner } from '../../../src/adapters/engineProcess.ts';
+import { SpawnEngineProcessRunner } from '../../../src/services/engineProcess';
 
 const runner = new SpawnEngineProcessRunner();
 const node = process.execPath;

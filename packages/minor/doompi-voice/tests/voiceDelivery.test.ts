@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { applyTranscriptPolicy } from '../src/services/transcriptPolicy.ts';
-import { VoiceDelivery, type VoiceDeliveryResult } from '../src/services/voiceDelivery.ts';
+import { applyTranscriptPolicy } from '../src/services/transcriptPolicy';
+import { VoiceDelivery, type VoiceDeliveryResult } from '../src/services/voiceDelivery';
 
 const request = {
   sessionId: 'session-1',

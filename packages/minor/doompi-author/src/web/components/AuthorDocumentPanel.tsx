@@ -1,14 +1,14 @@
 import { Button } from '@agimon-ai/doompi-web-components';
-import { AuthorGridOverlay, autonomousVoiceGridVisible } from './AuthorGridOverlay.tsx';
-import { AuthorMediaView } from './AuthorMediaView.tsx';
-import { AuthorTextView } from './AuthorTextView.tsx';
+import { AuthorGridOverlay, autonomousVoiceGridVisible } from './AuthorGridOverlay';
+import { AuthorMediaView } from './AuthorMediaView';
+import { AuthorTextView } from './AuthorTextView';
 import type { FileLinkSource, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
-import { focusAuthorViewport } from '../api/authorBrowserBridge.ts';
-import { loadAuthorDocument, saveAuthorDocument } from '../api/authorFiles.ts';
-import { authorProfilesForDocument } from '../stores/authorProfiles.ts';
-import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes.ts';
+import { focusAuthorViewport } from '../api/authorBrowserBridge';
+import { loadAuthorDocument, saveAuthorDocument } from '../api/authorFiles';
+import { authorProfilesForDocument } from '../stores/authorProfiles';
+import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes';
 import {
   authorDocumentKey,
   authorWorkspace,
@@ -21,8 +21,8 @@ import {
   requestAuthorSave,
   syncAuthorDocumentFocus,
   type AuthorSessionWorkspace,
-} from '../stores/authorWorkspaceStore.ts';
-import { AuthorStructuredView } from './AuthorStructuredView.tsx';
+} from '../stores/authorWorkspaceStore';
+import { AuthorStructuredView } from './AuthorStructuredView';
 interface AuthorDocumentPanelProps extends WebPluginSlotProps {
   path: string;
 }

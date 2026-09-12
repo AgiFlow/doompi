@@ -45,3 +45,5 @@ it. It is not selectable from `.doom/modes.yaml`.
 ## License
 
 MIT
+
+Plugin entries live in `src/extensions`, host event and command controllers in `src/controllers`, and catalog and discovery logic in named `src/services` folders. `src/exports` contains public helpers and types. Pi declares owned service bindings and native events. Its `onStop` invalidates pending discovery generations; final disposal releases the Help view. The server awaits its async declaration factory to discover named skill commands before registration and startup.

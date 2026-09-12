@@ -3,20 +3,20 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import { computeServerSourcesHash } from '../../src/adapters/syncState.ts';
+import { computeServerSourcesHash } from '../../src/services/syncState';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { piExtensionAliasPath, writePiExtensionAlias } from '../../src/adapters/piExtensionAlias';
-import { PI_DISPATCHER_VERSION } from '../../src/adapters/piExtensionDispatcher';
-import { DUPLICATE_REGISTRATION_DRIFT } from '../../src/adapters/projectPiSettings';
-import * as projectPiSettings from '../../src/adapters/projectPiSettings';
-import * as serverBundleSync from '../../src/adapters/serverBundleSync.ts';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
+import { piExtensionAliasPath, writePiExtensionAlias } from '../../src/services/piExtensionAlias';
+import { PI_DISPATCHER_VERSION } from '../../src/services/piExtensionDispatcher';
+import { DUPLICATE_REGISTRATION_DRIFT } from '../../src/services/projectPiSettings';
+import * as projectPiSettings from '../../src/services/projectPiSettings';
+import * as serverBundleSync from '../../src/services/serverBundleSync';
+import { resolveSyncLocation, syncGenerationDirectory } from '../../src/services/syncLocation';
 import {
   publishSyncRegistration,
   readSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '../../src/adapters/syncRegistration.ts';
+} from '../../src/services/syncRegistration';
 import {
   collectDrift,
   formatSyncResult,
@@ -25,9 +25,9 @@ import {
   selectionCompositionFingerprint,
   selectionEnvironment,
   toSelection,
-} from '../../src/commands/syncCommand';
+} from '../../src/controllers/syncCommand';
 import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
-import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '../../src/exports/services/piSettings';
+import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '../../src/exports/piSettings';
 import {
   computeInputsHash,
   readSyncState,
@@ -36,9 +36,9 @@ import {
   type SyncSelection,
   type SyncState,
   writeSyncState,
-} from '../../src/exports/services/syncState';
-import { createLayerResolvers } from '../../src/services/extensionAssembler.ts';
-import { testMcpProjection } from '../helpers/mcpProjection.ts';
+} from '../../src/exports/syncState';
+import { createLayerResolvers } from '../../src/services/extensionAssembler';
+import { testMcpProjection } from '../helpers/mcpProjection';
 
 const mocks = vi.hoisted(() => ({
   readBootstrapStatus: vi.fn(() => ({ bootstrap: '/generated/bootstrap.mjs', fresh: true })),
@@ -60,13 +60,13 @@ const mocks = vi.hoisted(() => ({
   missingLayerPackageSpecifiers: vi.fn(() => [] as string[]),
 }));
 
-vi.mock('../../src/adapters/bootstrapLocator.ts', () => ({
+vi.mock('../../src/services/bootstrapLocator', () => ({
   readBootstrapStatus: mocks.readBootstrapStatus,
 }));
-vi.mock('../../src/adapters/syncedRuntimeBuilder.ts', () => ({
+vi.mock('../../src/services/syncedRuntimeBuilder', () => ({
   buildSyncedRuntime: mocks.buildSyncedRuntime,
 }));
-vi.mock('../../src/adapters/layerPackageInstaller.ts', () => ({
+vi.mock('../../src/services/layerPackageInstaller', () => ({
   ensureLayerPackages: mocks.ensureLayerPackages,
   missingLayerPackageSpecifiers: mocks.missingLayerPackageSpecifiers,
 }));
@@ -484,6 +484,28 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(readSyncState(fixture.root, fixture.homeDirectory)?.root).toBe(fixture.root);
     expect(readSyncRegistration(fixture.root, fixture.homeDirectory)?.root).toBe(fixture.root);
     expect(text()).toContain('mode:     copilot');
+  });
+
+  it('checks the requested scope when a different package owns the global bootstrap', async () => {
+    const root = makeGitRepositoryWithPersonalConfig();
+    vi.stubEnv('HOME', homeFor(root));
+    const environment = environmentFor(root);
+    const globalRoot = path.join(homeFor(root), '.pi', '.doom');
+    const command = new SyncCommand();
+    expect(await command.execute(['sync'], environment, root, capture().output)).toBe(0);
+    mocks.readBootstrapStatus.mockImplementation((...args: unknown[]) => ({
+      bootstrap: '/generated/bootstrap.mjs',
+      fresh: args[0] !== globalRoot,
+    }));
+    const state = readSyncState(root, homeFor(root));
+    expect(collectDrift(root, SELECTION, state, environment)).toEqual([]);
+    const checked = capture();
+    expect(await command.execute(['sync', '--check'], environment, root, checked.output)).toBe(0);
+    expect(checked.text()).toBe('doompi sync is up to date\n');
+    const globalChecked = capture();
+    expect(await command.execute(['sync', '--global', '--check'], environment, root, globalChecked.output)).toBe(1);
+    expect(globalChecked.text()).toContain('precompiled runtime is missing or stale');
+    mocks.readBootstrapStatus.mockReturnValue({ bootstrap: '/generated/bootstrap.mjs', fresh: true });
   });
 
   it('stages and precompiles the matrix before registering DoomPi in Pi user settings', async () => {

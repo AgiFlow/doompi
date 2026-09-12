@@ -1,7 +1,7 @@
 import type { MinorModeDescriptor, MinorModeState } from '@agimon-ai/doompi-extension-contracts/mode';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { createMinorModeCatalogHost } from '../../src/services/modeCatalog.ts';
+import { createMinorModeCatalogHost } from '../../src/services/modeCatalog';
 
 const SOURCE = '@agimon-ai/test-mode';
 const descriptor: MinorModeDescriptor = {

@@ -1,18 +1,18 @@
 import { type Static, Type } from 'typebox';
 
-export const MAX_QUESTIONS = 4;
-export const MIN_OPTIONS = 2;
-export const MAX_OPTIONS = 4;
-export const MAX_HEADER_LENGTH = 16;
-export const MAX_LABEL_LENGTH = 60;
-
-export const RESERVED_LABELS = ['Other', 'Type something.', 'Next'] as const;
+import {
+  MAX_QUESTIONS,
+  MIN_OPTIONS,
+  MAX_OPTIONS,
+  MAX_HEADER_LENGTH,
+  MAX_LABEL_LENGTH,
+} from '../constants/questionnaire';
 
 export const OptionSchema = Type.Object(
   {
     label: Type.String({
       maxLength: MAX_LABEL_LENGTH,
-      description: 'MAX 60 CHARACTERS — hard limit. Concise option label shown to the user, ideally 1-5 words.',
+      description: 'MAX 60 CHARACTERS, hard limit. Concise option label shown to the user, ideally 1-5 words.',
     }),
     description: Type.String({
       description: 'Explanation of what the option means and its important trade-offs.',
@@ -29,7 +29,7 @@ export const QuestionSchema = Type.Object(
     question: Type.String({ description: 'The complete, clear question to ask the user.' }),
     header: Type.String({
       maxLength: MAX_HEADER_LENGTH,
-      description: 'MAX 16 CHARACTERS — short label used when navigating several questions.',
+      description: 'MAX 16 CHARACTERS, short label used when navigating several questions.',
     }),
     options: Type.Array(OptionSchema, {
       minItems: MIN_OPTIONS,

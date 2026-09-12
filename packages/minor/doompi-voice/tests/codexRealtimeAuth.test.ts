@@ -9,7 +9,7 @@ import {
   createCodexRealtimeAuth,
   type CodexAuthTransaction,
   type CodexOwnedAuthStorage,
-} from '../src/adapters/realtime/codexAuth.ts';
+} from '../src/services/codexAuth';
 
 const signal = new AbortController().signal;
 const idToken = 'e30.eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJhY2NvdW50LTEifQ.signature';

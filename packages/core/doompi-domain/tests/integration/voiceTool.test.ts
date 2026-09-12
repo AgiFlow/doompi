@@ -1,16 +1,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createDoomVoiceToolsService } from '@agimon-ai/doompi-extension-contracts/voice-tools';
-import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-extension-contracts/voice-reload-handoff';
+import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
+import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDomainSwitchHandoffStore } from '../../src/adapters/domainSwitchHandoff.ts';
-import { registerDomainVoiceCapabilities } from '../../src/adapters/pi/voiceTool.ts';
-import type { DomainCatalogPort } from '../../src/commands/domainsCommand.ts';
-import { bindStubCoordinator } from '../helpers/coordinator.ts';
-import { bindConfig } from '../helpers/session.ts';
+import { createDomainSwitchHandoffStore } from '../../src/models/domainSwitchHandoff';
+import { registerDomainVoiceCapabilities } from '../../src/controllers/voiceTool';
+import type { DomainCatalogPort } from '../../src/controllers/domainsCommand';
+import { bindStubCoordinator } from '../helpers/coordinator';
+import { bindConfig } from '../helpers/session';
 
 const SESSION_ID = 'domain-voice-session';
 

@@ -8,7 +8,7 @@ import {
   extensionPackageName,
   extensionToolSource,
   withExtensionSource,
-} from '../src/exports/extensionName.ts';
+} from '../src/exports/extensionName';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-extension-name-'));
 

@@ -9,15 +9,15 @@ const mocks = vi.hoisted(() => ({
   acquireBootstrapClaim: vi.fn(),
 }));
 
-vi.mock('../../src/adapters/bootstrapLocator.ts', () => ({
+vi.mock('../../src/services/bootstrapLocator', () => ({
   findSyncedRoot: mocks.findSyncedRoot,
   readStartupBootstrapStatus: mocks.readStartupBootstrapStatus,
 }));
-vi.mock('../../src/adapters/bootstrapClaim.ts', () => ({
+vi.mock('../../src/models/bootstrapClaim', () => ({
   acquireBootstrapClaim: mocks.acquireBootstrapClaim,
 }));
 
-import { packageBootstrap } from '../../src/adapters/packageBootstrap.ts';
+import { packageBootstrap } from '../../src/extensions/pi';
 
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-package-runtime-')));
 let sequence = 0;

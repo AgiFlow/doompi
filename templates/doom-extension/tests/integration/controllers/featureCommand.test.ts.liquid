@@ -1,0 +1,16 @@
+import { createPiTestHost } from '@agimon-ai/doompi-extension-contracts/testing';
+import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { expect, it, vi } from 'vitest';
+import { {{ commandName | snakeCase | upper }}_COMMAND_NAME } from '../../../src/constants/{{ commandName | camelCase }}';
+import { create{{ commandName | pascalCase }}Command } from '../../../src/controllers/{{ commandName | camelCase }}Command';
+
+it('maps the service result to a host notification', async () => {
+  const host = createPiTestHost();
+  await host.cordis();
+  const execute = vi.fn().mockResolvedValue('ready');
+  await definePiExtension({ name: 'command-test', commands: [create{{ commandName | pascalCase }}Command(execute)] })(host.pi);
+  await host.runCommand({{ commandName | snakeCase | upper }}_COMMAND_NAME);
+  expect(execute).toHaveBeenCalledOnce();
+  expect(host.notifications).toContainEqual(expect.objectContaining({ message: 'ready' }));
+  await host.dispose();
+});

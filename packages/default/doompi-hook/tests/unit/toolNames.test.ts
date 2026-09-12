@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchesTool, toClaudeToolName } from '../../src/services/toolNames.ts';
+import { matchesTool, toClaudeToolName } from '../../src/services/toolNames';
 
 describe('tool name translation', () => {
   it('renames every Pi tool a matcher can be written against', () => {

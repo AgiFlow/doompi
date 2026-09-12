@@ -8,7 +8,7 @@ import {
   repositoryId,
   repositoryLabel,
   shortId,
-} from '../../../../src/adapters/worktree/repositoryIdentity.ts';
+} from '../../../../src/services/repositoryIdentity';
 
 let root: string;
 

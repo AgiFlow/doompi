@@ -15,9 +15,9 @@ import {
   type DoomServerHostService,
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { describe, expect, it, vi } from 'vitest';
-import { goalServerFacet } from '../../src/adapters/server/facet.ts';
+import { goalServerFacet } from '../../src/extensions/server';
 
-function fixture() {
+async function fixture() {
   let selection: DoomHeadlessSelection = {
     majorMode: 'copilot',
     activeLayers: [],
@@ -85,7 +85,8 @@ function fixture() {
     },
   } as unknown as DoomHeadlessHostService;
   const serverHost = { scope: 'session' } as DoomServerHostService;
-  const close = goalServerFacet.apply({
+  const close = await goalServerFacet.apply({
+    effect() {},
     get: (service: string) =>
       service === DOOM_SERVER_HOST_SERVICE ? serverHost : service === DOOM_HEADLESS_HOST_SERVICE ? host : undefined,
   } as unknown as Context);
@@ -106,7 +107,7 @@ function fixture() {
 
 describe('goal server facet', () => {
   it('starts a goal through the command and adds it to the agent-start prompt', async () => {
-    const test = fixture();
+    const test = await fixture();
     const command = test.commands.find(({ name }) => name === 'goal');
     const hook = test.hooks.find(({ event }) => event === 'before_agent_start') as
       | DoomHeadlessHook<'before_agent_start'>
@@ -157,7 +158,7 @@ describe('goal server facet', () => {
     expect(result).toMatchObject({ details: { completed: true } });
     expect(test.selection().minorModes).toEqual([]);
 
-    test.close?.();
+    await test.close?.();
     expect(test.dispose).toHaveBeenCalled();
   });
 });

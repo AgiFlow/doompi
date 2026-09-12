@@ -1,8 +1,8 @@
-export type { RunnerDependencies } from '../container/types';
+export type { RunnerDependencies } from '../services/runnerDependencies/type';
 export type {
   IRtkProcessor,
   RtkFilter,
-  RtkProcessedOutput,
   RtkProcessRequest,
   RtkProcessResult,
+  RtkProcessedOutput,
 } from '../types/rtkProcessor';

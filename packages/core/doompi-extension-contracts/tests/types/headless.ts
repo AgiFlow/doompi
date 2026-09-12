@@ -2,7 +2,7 @@ import type {
   DoomHeadlessClient,
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
-} from '../../src/exports/headless.ts';
+} from '../../src/exports/headless';
 
 // Compile-only fixture included by the native typecheck target, never imported at runtime.
 // Removing a boundary makes its @ts-expect-error unused and fails that target.

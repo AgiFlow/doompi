@@ -6,12 +6,12 @@ import type { DoomChildSessionRequest } from '@agimon-ai/doompi-extension-contra
 import type {
   DirectHarnessRuntime,
   DirectHarnessRuntimeOptions,
-} from '../../../../src/adapters/server/directHarnessRuntime.ts';
+} from '../../../../src/controllers/directHarnessRuntime';
 import {
   captureTerminalPiForkSource,
   createTerminalPiChildSessionService,
   type TerminalPiForkSourceManager,
-} from '../../../../src/adapters/pi/terminalPiChildSessionService.ts';
+} from '../../../../src/controllers/terminalPiChildSessionService';
 
 const tempRoots: string[] = [];
 

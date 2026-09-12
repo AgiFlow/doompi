@@ -17,11 +17,11 @@ import {
   type MetricsPeriod,
   type MetricsReport,
   type MetricsResponse,
-} from '../../types/webMetrics.ts';
-import { EmptyForReason, FocusNotice } from './MetricsNotice.tsx';
-import { DIMENSION_LABELS } from './MetricsReportView.tsx';
-import { MetricsReportView } from './MetricsReportView.tsx';
-import { fetchMetrics } from '../api/metricsApi.ts';
+} from '../../types/webMetrics';
+import { EmptyForReason, FocusNotice } from './MetricsNotice';
+import { DIMENSION_LABELS } from './MetricsReportView';
+import { MetricsReportView } from './MetricsReportView';
+import { fetchMetrics } from '../api/metricsApi';
 
 /**
  * The metrics settings page.

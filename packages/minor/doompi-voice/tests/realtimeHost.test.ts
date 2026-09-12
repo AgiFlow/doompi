@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { realtimeHostConnection, type RealtimeHost } from '../src/adapters/realtime/realtimeHost.ts';
+import { realtimeHostConnection, type RealtimeHost } from '../src/services/realtimeHost';
 
 const host: RealtimeHost = {
   start: vi.fn(async () => undefined),

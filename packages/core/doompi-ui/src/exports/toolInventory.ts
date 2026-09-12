@@ -5,5 +5,5 @@ export {
   type ToolInventoryInput,
   type ToolSource,
   type ToolSourceKind,
-} from '../services/tools/toolInventory.ts';
-export { type CountTokens, type ToolCost, tokensForSource, tokensForTool } from '../services/tools/toolCost.ts';
+} from '../services/toolInventory';
+export { type CountTokens, type ToolCost, tokensForSource, tokensForTool } from '../services/toolCost';

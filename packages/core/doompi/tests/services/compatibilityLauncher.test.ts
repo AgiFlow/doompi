@@ -11,8 +11,8 @@ import {
   launchCompatibility,
   signalExitCode,
   supportsCodexManagedProfile,
-} from '../../src/adapters/compatibility';
-import type { CompatibilityContext } from '../../src/adapters/compatibilityContext';
+} from '../../src/services/compatibility';
+import type { CompatibilityContext } from '../../src/services/compatibilityContext';
 
 function baseOptions(overrides: Partial<CompatibilityOptions> = {}): CompatibilityOptions {
   return {

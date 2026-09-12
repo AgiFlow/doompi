@@ -6,8 +6,8 @@ import {
   findDevcontainerConfig,
   resolveDevcontainerCli,
   runDevcontainerSession,
-} from '../../../src/adapters/devcontainer.ts';
-import type { EngineProcessRunner } from '../../../src/types/sandboxHarness.ts';
+} from '../../../src/services/devcontainer/runtime';
+import type { EngineProcessRunner } from '../../../src/types/sandboxHarness';
 
 const directories: string[] = [];
 

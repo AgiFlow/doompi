@@ -1,3 +1,4 @@
+import type { DoomToolRestrictionDefinition } from './toolSurface';
 /**
  * The server facet a package installs into a headless host.
  *
@@ -11,9 +12,15 @@
  * owner and disposer.
  */
 
+import type { DoomHeadlessHostService, DoomHeadlessMinorMode, DoomHeadlessToolRestriction } from './headless';
 import type { Context } from '@deepseek-ai/cordis';
-import type { DoomHubChannel } from './hubChannel.ts';
-import type { DoomApi, DoomApiContext, DoomApiScope } from './packageApi.ts';
+import type { DoomHubChannel } from './hubChannel';
+import type { DoomApi, DoomApiContext, DoomApiScope } from './packageApi';
+import type { Static, TSchema } from 'typebox';
+import type { DoomPluginTool, DoomPluginCommand } from './pluginContributions';
+import type { MinorModeOwner } from './minorModeFactory';
+import type { DoomHeadlessTool, DoomHeadlessCommand } from './headless';
+import type { DoomPluginCaller, DoomPluginMethod } from './pluginProtocol';
 
 /** The host a server facet contributes to. */
 export const DOOM_SERVER_HOST_SERVICE = 'doom/server-host';
@@ -44,6 +51,11 @@ export interface DoomServerHostService {
   registerApi(api: DoomApi): DoomServerRegistration;
   /** Register a live event source under this host's lifecycle. */
   registerChannel(channel: DoomHubChannel): DoomServerRegistration;
+  /** Mount a typed call at this host's exact scope. */
+  registerMethod<TInput extends TSchema, TOutput extends TSchema>(
+    definition: DoomPluginMethod<TInput, TOutput>,
+    handler: (input: Static<TInput>, caller: DoomPluginCaller) => Static<TOutput> | Promise<Static<TOutput>>,
+  ): DoomServerRegistration;
   /** Base paths currently mounted, in mount order. */
   mounted(): readonly string[];
   /** Channel frame types currently mounted, in mount order. */
@@ -86,7 +98,66 @@ export const DOOM_SERVER_FACET_EXPORT = 'default';
  */
 export interface DoomServerFacet {
   readonly inject?: readonly string[];
-  apply(context: Context): void | (() => void);
+  apply(context: Context): void | (() => void | Promise<void>) | Promise<void | (() => void | Promise<void>)>;
+}
+
+/** One instance belongs to one mounted server scope. */
+export interface DoomServerPluginContext {
+  readonly context: Context;
+  readonly host: DoomServerHostService;
+  readonly agent?: DoomHeadlessHostService;
+  readonly signal: AbortSignal;
+}
+
+export interface DoomServerMethod {
+  register(host: DoomServerHostService): DoomServerRegistration;
+}
+
+/** Capture schema inference before heterogeneous methods enter a contribution array. */
+export function defineServerMethod<TInput extends TSchema, TOutput extends TSchema>(
+  definition: DoomPluginMethod<TInput, TOutput>,
+  handler: (input: Static<TInput>, caller: DoomPluginCaller) => Static<TOutput> | Promise<Static<TOutput>>,
+): DoomServerMethod {
+  return { register: (host) => host.registerMethod(definition, handler) };
+}
+
+export interface DoomServerPluginScope {
+  readonly services?: readonly Parameters<Context['plugin']>[0][];
+  readonly channels?: readonly (() => DoomHubChannel)[];
+  readonly api?: readonly DoomApi[];
+  readonly methods?: readonly DoomServerMethod[];
+  readonly onStart?: (context: DoomServerPluginContext) => void | Promise<void>;
+  readonly onStop?: (context: DoomServerPluginContext) => void | Promise<void>;
+  readonly onDispose?: (context: DoomServerPluginContext) => void | Promise<void>;
+}
+
+export interface DoomServerSessionPlugin extends DoomServerPluginScope {
+  readonly tools?: readonly (DoomHeadlessTool | DoomPluginTool)[];
+  readonly commands?: readonly (DoomHeadlessCommand | DoomPluginCommand)[];
+  readonly resources?: readonly Parameters<DoomHeadlessHostService['registerResource']>[0][];
+  readonly hooks?: readonly Parameters<DoomHeadlessHostService['registerHook']>[0][];
+  readonly minorModes?: readonly (
+    | Parameters<DoomHeadlessHostService['registerMinorMode']>[0]
+    | MinorModeOwner<Parameters<DoomHeadlessMinorMode['handleAction']>[2]>
+  )[];
+  readonly toolRestrictions?: readonly (
+    | DoomHeadlessToolRestriction
+    | DoomToolRestrictionDefinition<() => DoomHeadlessToolRestriction>
+  )[];
+  readonly activities?: readonly Parameters<DoomHeadlessHostService['registerActivity']>[0][];
+}
+
+type ScopeDeclaration<TScope> = TScope | ((context: DoomServerPluginContext) => TScope | Promise<TScope>);
+// Explicitly forbid session contributions even when a factory returns an inferred object.
+type NonSessionScope = DoomServerPluginScope & {
+  readonly [K in Exclude<keyof DoomServerSessionPlugin, keyof DoomServerPluginScope>]?: never;
+};
+export interface DoomServerPluginDefinition {
+  readonly name: string;
+  readonly inject?: readonly string[];
+  readonly global?: ScopeDeclaration<NonSessionScope>;
+  readonly workspace?: ScopeDeclaration<NonSessionScope>;
+  readonly session?: ScopeDeclaration<DoomServerSessionPlugin>;
 }
 
 /** One package's validated declaration. */

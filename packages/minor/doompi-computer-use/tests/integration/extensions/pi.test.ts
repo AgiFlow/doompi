@@ -1,14 +1,15 @@
 import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-extension-contracts/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { activateComputerUseExtension, COMPUTER_USE_TOOL_NAMES } from '../../../src/adapters/pi/extension.ts';
-import { COMMAND_NAME } from '../../../src/commands/computerUseCommand.ts';
-import type { ComputerUseSessionClient } from '../../../src/adapters/pi/sessionApiClient.ts';
+import { computerUseExtension as activateComputerUseExtension } from '../../../src/extensions/pi';
+import { COMPUTER_USE_TOOL_NAMES } from '../../../src/constants/computerUse';
+import { COMMAND_NAME } from '../../../src/controllers/computerUseCommand';
+import type { ComputerUseSessionClient } from '../../../src/services/sessionApiClient';
 import {
   COMPUTER_USE_MODE_STATUS_KEY,
   COMPUTER_USE_STATUS_KEY,
   type ComputerUseSessionView,
-} from '../../../src/types/computerUseApi.ts';
-import type { ComputerUseExtensionDependencies, ComputerUseExtensionService } from '../../../src/types/extension.ts';
+} from '../../../src/types/computerUseApi';
+import type { ComputerUseExtensionDependencies, ComputerUseExtensionService } from '../../../src/types/extension';
 
 describe('the standard Pi entry contract', () => {
   for (const scenario of standardExtensionScenarios({

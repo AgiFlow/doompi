@@ -6,9 +6,9 @@
  * session id, which is exactly where the hub channel puts them.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { WebTask } from '../../types/webTasks.ts';
-import { tasks } from '../stores/tasksStore.ts';
-import { TasksActivitySection } from './TasksActivitySection.tsx';
+import type { WebTask } from '../../types/webTasks';
+import { tasks } from '../stores/tasksStore';
+import { TasksActivitySection } from './TasksActivitySection';
 
 const ACTIVE: WebTask[] = [
   {

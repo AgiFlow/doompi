@@ -16,14 +16,14 @@ import { readDoomMcpStatus } from '@agimon-ai/doompi-extension-contracts/mcp-sta
 import { readDoomMcpToolResolver } from '@agimon-ai/doompi-extension-contracts/mcp-tool-resolver';
 import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protocol';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
-import type { Context, Fiber } from '@deepseek-ai/cordis';
+import { Context, type Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { McpServerStateChange } from '@agimon-ai/mcp-proxy';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerMcpExtension } from '../src/adapters/pi/extension.ts';
-import { LEADER_GROUP, LEADER_KEY, PACKAGE_SOURCE } from '../src/adapters/pi/mcpConstants.ts';
-import { COMMAND_NAME } from '../src/schemas/mcpCommands.ts';
-import { SESSION_ENV_VAR } from '../src/schemas/sessionConfig.ts';
+import { mcpExtension } from '../src/extensions/pi';
+import { LEADER_GROUP, LEADER_KEY, PACKAGE_SOURCE } from '../src/constants/piMcp';
+import { COMMAND_NAME } from '../src/constants/mcp';
+import { SESSION_ENV_VAR } from '../src/schemas/sessionConfig';
 
 const SESSION_ID = 'session-1';
 const DEFERRED_RUNTIME_TIMEOUT_MS = 5_000;
@@ -152,7 +152,7 @@ function registerExtension(options: RegisterExtensionOptions | TestBus = {}): Re
         await uiFiber.await();
       }
     }
-    await registerMcpExtension(pi);
+    await mcpExtension(pi);
   })();
   let shutdown: Promise<void> | undefined;
 
@@ -264,6 +264,17 @@ afterEach(async () => {
 });
 
 describe('doom mcp extension', () => {
+  it('rejects installation without the Cordis runtime mode before creating a session', async () => {
+    const root = new Context();
+    try {
+      await expect(mcpExtension.install(root, {} as ExtensionAPI)).rejects.toThrow(
+        'MCP requires the Cordis runtime mode.',
+      );
+    } finally {
+      await root.fiber.dispose();
+    }
+  });
+
   it('registers its command and lifecycle handlers', async () => {
     const { pi, ready } = registerExtension();
     await ready;

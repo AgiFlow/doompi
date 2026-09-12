@@ -7,8 +7,8 @@
  * lines in the shape `formatGoalStatusView` writes, not hand-built view models.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { GoalActivitySection } from './GoalActivitySection.tsx';
-import { GOAL_VIEW_STATUS_KEY, formatGoalStatusView } from '../../types/goalView.ts';
+import { GoalActivitySection } from './GoalActivitySection';
+import { GOAL_VIEW_STATUS_KEY, formatGoalStatusView } from '../../types/goalView';
 
 const slot = (status?: string, sessionId: string | null = 's1') =>
   slotPropsFixture({

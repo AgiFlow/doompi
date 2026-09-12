@@ -2,10 +2,10 @@ import {
   DOOM_SERVER_HOST_SERVICE,
   type DoomServerHostService,
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
-import { workflowServerFacet } from '../../../src/adapters/server/facet.ts';
-import { api } from '../../../src/adapters/workflowHubApi.ts';
+import { workflowServerFacet } from '../../../src/extensions/server';
+import { api } from '../../../src/controllers/workflowHubApi';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
@@ -22,12 +22,14 @@ function hostContext(scope: DoomServerHostService['scope']) {
     registerChannel() {
       return { dispose: () => undefined };
     },
+    registerMethod() {
+      return { dispose: () => undefined };
+    },
     mounted: () => registered.map((candidate) => candidate.basePath),
     mountedChannels: () => [],
   };
-  const context = {
-    get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? host : undefined),
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, host);
   return { context, registered, state };
 }
 
@@ -36,23 +38,25 @@ describe('workflowServerFacet', () => {
     expect(workflowServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
   });
 
-  it('registers the exact API on the hub scope', () => {
+  it('registers the exact API on the hub scope', async () => {
     const harness = hostContext('global');
-    const dispose = workflowServerFacet.apply(harness.context);
+    const dispose = await workflowServerFacet.apply(harness.context);
     expect(harness.registered).toHaveLength(1);
     expect(harness.registered[0]).toBe(api);
     expect(typeof dispose).toBe('function');
   });
 
-  it('unregisters the API when disposed', () => {
+  it('unregisters the API when disposed', async () => {
     const harness = hostContext('global');
-    workflowServerFacet.apply(harness.context)?.();
+    await (
+      await workflowServerFacet.apply(harness.context)
+    )?.();
     expect(harness.state.disposed).toBe(1);
   });
 
-  it('registers the API independently on the session scope', () => {
+  it('registers the API independently on the session scope', async () => {
     const harness = hostContext('session');
-    expect(typeof workflowServerFacet.apply(harness.context)).toBe('function');
+    expect(typeof (await workflowServerFacet.apply(harness.context))).toBe('function');
     expect(harness.registered).toEqual([api]);
   });
 });

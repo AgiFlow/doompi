@@ -42,7 +42,7 @@ describe('doompi-profile package contract', () => {
       expect.arrayContaining([
         'dist',
         'src/web',
-        'src/exports/webClient.ts',
+        'src/extensions/web.ts',
         'llms.txt',
         'README.md',
         'src/prompts',
@@ -91,12 +91,12 @@ describe('doompi-profile package contract', () => {
     expect(manifest.doompiWeb).toEqual({
       pluginId: 'profile',
       channels: [],
-      client: './src/exports/webClient.ts',
+      client: './src/extensions/web.ts',
       scopes: ['session'],
     });
-    const client = await readFile(path.join(packageDirectory, 'src/exports/webClient.ts'), 'utf8');
-    expect(client).toContain("export { webPlugin } from '../web/index.ts';");
-    const entry = await readFile(path.join(packageDirectory, 'src/web/index.ts'), 'utf8');
+    const client = await readFile(path.join(packageDirectory, 'src/extensions/web.ts'), 'utf8');
+    expect(client).toContain('defineWebPlugin');
+    const entry = client;
     expect(entry).toContain('defineWebPlugin');
     expect(entry).toContain("statusKey: 'doom-profile'");
   });
@@ -111,24 +111,18 @@ describe('doompi-profile package contract', () => {
   });
 
   it('routes both Pi entries through a default-exported factory', async () => {
-    const commandEntry = await readFile(path.join(packageDirectory, 'src/exports/extensions/pi.ts'), 'utf8');
-    const personaEntry = await readFile(path.join(packageDirectory, 'src/exports/extensions/persona.ts'), 'utf8');
-    const factory = await readFile(path.join(packageDirectory, 'src/adapters/pi/extension.ts'), 'utf8');
+    const commandEntry = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
+    const personaEntry = await readFile(path.join(packageDirectory, 'src/extensions/persona.ts'), 'utf8');
+    const factory = await readFile(path.join(packageDirectory, 'src/controllers/profileRuntime.ts'), 'utf8');
 
-    expect(commandEntry).toContain("from '../../adapters/pi/extension.ts'");
-    expect(commandEntry).toContain('as default');
-    expect(personaEntry).toContain("from '../../adapters/pi/persona.ts'");
-    expect(personaEntry).toContain('as default');
-    expect(commandEntry).not.toContain('doom.ts');
-    expect(factory).toContain('registerProfileCommand');
-    expect(factory).toContain('connectDoomCordisHost');
-    expect(factory).toContain('.root.plugin(');
-    expect(factory).toContain('DOOM_CONFIG_SERVICE');
-    expect(factory).toContain('DOOM_HELP_SERVICE');
-    expect(factory).toContain('DOOM_TRANSITION_SERVICE');
-    expect(factory).toContain("name: 'doompi-author-profile'");
-    expect(factory).toMatch(/cordis\.inject\(\[DOOM_HELP_SERVICE\]/u);
-    expect(factory).toMatch(/cordis\.inject\(\s*\[\s*DOOM_CONFIG_SERVICE\s*,\s*DOOM_TRANSITION_SERVICE\s*\]\s*,/u);
+    expect(commandEntry).toContain('definePiExtension');
+    expect(commandEntry).toContain('export default profileExtension');
+    expect(personaEntry).toContain('export default personaExtension');
+    expect(factory).toContain('createProfileCommand');
+    expect(factory).toContain('services: [bindRuntime, bindVoice]');
+    expect(factory).toContain('events:');
+    expect(commandEntry).toContain("name: 'doompi-author-profile'");
+    expect(commandEntry).toContain('moduleUrl: import.meta.url');
     expect(factory).not.toContain('new Context()');
   });
 

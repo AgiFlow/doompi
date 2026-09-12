@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { sessionFilesApi } from '../../../../src/adapters/server/sessionFilesApi.ts';
+import { sessionFilesApi } from '../../../../src/controllers/sessionFilesApi';
 
 const roots: string[] = [];
 afterEach(() => {

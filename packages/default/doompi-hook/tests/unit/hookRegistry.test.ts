@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { registryCacheKey, registryEntries, selectRegistryHooks } from '../../src/services/hookRegistry.ts';
-import type { ParsedRegistrySource, RegistryEntry } from '../../src/types/hooks.ts';
+import { registryCacheKey, registryEntries, selectRegistryHooks } from '../../src/services/hookRegistry';
+import type { ParsedRegistrySource, RegistryEntry } from '../../src/types/hooks';
 
 function source(baseDirectory: string, document: ParsedRegistrySource['document']): ParsedRegistrySource {
   return { baseDirectory, document };

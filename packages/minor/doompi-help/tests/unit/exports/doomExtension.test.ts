@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   runtimeService: undefined as DoomHelpService | undefined,
 }));
 
-vi.mock('../../../src/container/index.ts', () => ({
+vi.mock('../../../src/services/helpRuntime', () => ({
   createHelpRuntime: (service: DoomHelpService, options: Record<string, unknown>) => {
     mocks.runtimeService = service;
     mocks.runtimeOptions = options;
@@ -33,7 +33,7 @@ vi.mock('../../../src/container/index.ts', () => ({
   },
 }));
 
-vi.mock('../../../src/adapters/pi/helpMode.ts', () => ({
+vi.mock('../../../src/controllers/helpMode', () => ({
   registerHelpModeIntegration: (...argumentsValue: unknown[]) => mocks.modeRegister(...argumentsValue),
   registerHelpUiIntegration: (...argumentsValue: unknown[]) => {
     mocks.uiRegister(...argumentsValue);
@@ -41,8 +41,8 @@ vi.mock('../../../src/adapters/pi/helpMode.ts', () => ({
   },
 }));
 
-import { helpExtension } from '../../../src/adapters/pi/extension';
-import piExtension from '../../../src/exports/extensions/pi.ts';
+import { helpExtension } from '../../../src/extensions/pi';
+import piExtension from '../../../src/extensions/pi';
 
 type LifecycleHandler = (...argumentsValue: unknown[]) => unknown;
 
@@ -146,7 +146,7 @@ describe('standard Help extension', () => {
     await dispatch(handlers, 'session_shutdown');
     expect(readDoomHelpService(connection.root)).toBeUndefined();
     await expect(commands.get('doom-help')?.handler('', { hasUI: false, ui: { notify: vi.fn() } })).rejects.toThrow(
-      'waiting for the active session service',
+      'aborted',
     );
     expect(mocks.runtimeDispose).toHaveBeenCalledOnce();
     expect(mocks.modeDispose).toHaveBeenCalledOnce();

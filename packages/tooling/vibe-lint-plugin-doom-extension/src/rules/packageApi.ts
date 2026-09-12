@@ -5,7 +5,7 @@ import ts from 'typescript';
 import { normalizeEntry, pluginBlocks, readManifest } from './webPlugin.js';
 
 const PACKAGE_MANIFEST_NAME = 'package.json';
-const SERVER_ENTRY = './src/exports/extensions/server.ts';
+const SERVER_ENTRY = './src/extensions/server.ts';
 const SERVER_DIST = './dist/extensions/server.mjs';
 const SERVER_SCOPES = new Set(['global', 'workspace', 'session']);
 const LEGACY_EXPORT_KEYS = new Set([
@@ -68,7 +68,9 @@ function canonicalSurfaceViolations(manifest: ServerCompositionManifest, configR
   }
 
   const entries = new Set<string>();
-  if ('./extensions/pi' in exportsMap) entries.add('./src/exports/extensions/pi.ts');
+  if ('./extensions/pi' in exportsMap) {
+    entries.add('./src/extensions/pi.ts');
+  }
   const server = isRecord(manifest.doompiServer) ? manifest.doompiServer.entry : undefined;
   if (typeof server === 'string') entries.add(server);
   for (const block of pluginBlocks(manifest)) {
@@ -76,13 +78,28 @@ function canonicalSurfaceViolations(manifest: ServerCompositionManifest, configR
     if (client) entries.add(client);
   }
   for (const entry of entries) {
-    if (!isPureExportFacade(configRoot, entry)) {
+    if (entry.startsWith('./src/exports/') && !isPureExportFacade(configRoot, entry)) {
       violations.push(
-        `Canonical surface entry ${entry} must contain forwarding exports only; move executable composition into an adapter or container.`,
+        `Canonical surface entry ${entry} must contain forwarding exports only; move executable composition into src/extensions.`,
       );
     }
   }
   return violations;
+}
+
+function hasDefaultServerExport(configRoot: string, entry: string): boolean {
+  const filename = path.join(configRoot, entry);
+  const source = ts.createSourceFile(filename, fs.readFileSync(filename, 'utf8'), ts.ScriptTarget.Latest, true);
+  return source.statements.some(
+    (statement) =>
+      (ts.isExportAssignment(statement) && !statement.isExportEquals) ||
+      (ts.isExportDeclaration(statement) &&
+        statement.exportClause &&
+        ts.isNamedExports(statement.exportClause) &&
+        statement.exportClause.elements.some((element) => element.name.text === 'default')) ||
+      (ts.canHaveModifiers(statement) &&
+        ts.getModifiers(statement)?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)),
+  );
 }
 
 function serverCompositionViolations(manifest: ServerCompositionManifest, configRoot: string): string[] {
@@ -91,7 +108,7 @@ function serverCompositionViolations(manifest: ServerCompositionManifest, config
   if (block === undefined) {
     if (hasServerImplementation(configRoot)) {
       violations.push(
-        'server composition implementation requires package.json doompiServer and a canonical src/exports/extensions entry',
+        'server composition implementation requires package.json doompiServer and a canonical src/extensions/server.ts entry',
       );
     }
     return violations;
@@ -103,6 +120,8 @@ function serverCompositionViolations(manifest: ServerCompositionManifest, config
     violations.push(`doompiServer.entry must be ${SERVER_ENTRY}`);
   } else if (!hasFile(configRoot, entry.slice(2))) {
     violations.push(`doompiServer.entry has no source file: ${entry}`);
+  } else if (!hasDefaultServerExport(configRoot, entry)) {
+    violations.push('doompiServer.entry must export its defineServerPlugin value as default for the server loader');
   }
 
   const dist = block.dist;

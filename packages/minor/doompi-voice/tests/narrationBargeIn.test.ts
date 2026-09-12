@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  analyzeNarrationBargeIn,
-  NarrationBargeInMonitor,
-  narrationBargeInIsActionable,
-  rankNarrationBargeInEvidence,
-} from '../src/services/narrationBargeIn.ts';
-import { PCM_FRAME_BYTES } from '../src/services/pcm.ts';
+import { analyzeNarrationBargeIn, NarrationBargeInMonitor } from '../src/services/narrationBargeIn';
+import { narrationBargeInIsActionable, rankNarrationBargeInEvidence } from '../src/models/narrationBargeIn';
+import { PCM_FRAME_BYTES } from '../src/services/pcm';
 
 function pcmFrame(sample: number): Buffer {
   const frame = Buffer.alloc(PCM_FRAME_BYTES);

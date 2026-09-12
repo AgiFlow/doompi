@@ -6,7 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { AskUserQuestionToolMessage } from './AskUserQuestionToolMessage.tsx';
+import { AskUserQuestionToolMessage } from './AskUserQuestionToolMessage';
 
 const ARGS = {
   questions: [

@@ -3,7 +3,7 @@ import {
   buildDelegationResultMessages,
   buildSessionContextMessages,
   parseRealtimeEvent,
-} from '../src/services/realtimeProtocol.ts';
+} from '../src/services/realtimeProtocol';
 
 describe('V3 realtime event parsing', () => {
   it('parses ready, transcript delta and completed turn events', () => {

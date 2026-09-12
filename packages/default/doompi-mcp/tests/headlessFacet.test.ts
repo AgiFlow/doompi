@@ -1,4 +1,5 @@
-import type { Context } from '@deepseek-ai/cordis';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
@@ -9,7 +10,7 @@ import {
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { describe, expect, it, vi } from 'vitest';
-import { sessionConfigEnvironment } from '../src/adapters/process/sessionConfig.ts';
+import { sessionConfigEnvironment } from '../src/services/sessionConfig';
 
 const runtimeState = vi.hoisted(() => ({
   startError: undefined as unknown,
@@ -22,7 +23,7 @@ const runtimeState = vi.hoisted(() => ({
     | undefined,
 }));
 
-vi.mock('../src/adapters/node/mcpRuntime.ts', () => ({
+vi.mock('../src/services/mcpRuntime', () => ({
   McpRuntimeOwner: class {
     async start(options: {
       onAuthorizationUrl: (url: URL, serverName: string) => void;
@@ -39,14 +40,13 @@ vi.mock('../src/adapters/node/mcpRuntime.ts', () => ({
   },
 }));
 
-import { mcpHeadlessFacet } from '../src/adapters/headless/facet.ts';
+import { mcpServerFacet as mcpHeadlessFacet } from '../src/extensions/server';
 
 function contextFor(host: DoomHeadlessHostService): Context {
-  return {
-    get(name: string) {
-      return name === DOOM_HEADLESS_HOST_SERVICE ? host : undefined;
-    },
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session' });
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  return context;
 }
 
 function execution(environment: Readonly<Record<string, string | undefined>> = {}): DoomHeadlessExecutionContext {
@@ -93,7 +93,7 @@ describe('MCP headless facet', () => {
         return register();
       },
     } as unknown as DoomHeadlessHostService;
-    const close = mcpHeadlessFacet.apply(contextFor(host));
+    const close = await mcpHeadlessFacet.apply(contextFor(host));
     const resource = resources[0];
     const activity = activities[0];
     const command = commands[0];
@@ -184,7 +184,7 @@ describe('MCP headless facet', () => {
     await stopFailedRuntime();
     runtimeState.startError = undefined;
 
-    close();
+    await close?.();
     expect(disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
   });
 
@@ -200,7 +200,7 @@ describe('MCP headless facet', () => {
       registerCommand: vi.fn(() => register()),
       registerTool: vi.fn(() => register()),
     } as unknown as DoomHeadlessHostService;
-    const close = mcpHeadlessFacet.apply(contextFor(host));
+    const close = await mcpHeadlessFacet.apply(contextFor(host));
     const resource = resources[0];
     if (!resource) throw new Error('MCP config resource was not registered');
 
@@ -211,6 +211,6 @@ describe('MCP headless facet', () => {
 
     expect(JSON.parse(await resource.read(first))).toMatchObject({ repoRoot: '/first-repo' });
     expect(JSON.parse(await resource.read(second))).toMatchObject({ repoRoot: '/second-repo' });
-    close?.();
+    await close?.();
   });
 });

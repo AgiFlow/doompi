@@ -8,7 +8,7 @@ import {
   resolveRegistryDir,
   SESSION_LINEAGE_RECORD_VERSION,
   sessionLineagePath,
-} from '../src/services/sessionRegistry.ts';
+} from '../src/services/sessionRegistry';
 
 describe('resolveRegistryDir', () => {
   it('prefers the flag, then the env, then the home default', () => {

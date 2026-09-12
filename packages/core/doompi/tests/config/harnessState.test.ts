@@ -9,7 +9,7 @@ import {
   refreshHarnessState,
   requireHarnessPaths,
   updateHarnessState,
-} from '../../src/exports/config/harnessState';
+} from '../../src/exports/harnessState';
 
 const OWNED_KEYS = Object.values(HARNESS_STATE_KEYS);
 

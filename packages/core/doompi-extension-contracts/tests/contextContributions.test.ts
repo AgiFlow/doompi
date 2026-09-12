@@ -5,7 +5,7 @@ import {
   createDoomContextContributionsService,
   readDoomContextContributions,
   requireDoomContextContributions,
-} from '../src/exports/contextContributions.ts';
+} from '../src/exports/contextContributions';
 
 describe('Doom context contributions', () => {
   it('orders snapshots and isolates omitted and failed contributors', () => {

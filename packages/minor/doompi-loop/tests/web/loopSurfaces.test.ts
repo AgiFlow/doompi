@@ -1,9 +1,9 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
-import { LOOP_VIEW_STATUS_KEY } from '../../src/types/loopView.ts';
-import { LoopActivityItems } from '../../src/web/components/LoopsActivitySection.tsx';
-import { webPlugin as scopedWebPlugin } from '../../src/web/index.ts';
+import { LOOP_VIEW_STATUS_KEY } from '../../src/types/loopView';
+import { LoopActivityItems } from '../../src/web/components/LoopsActivitySection';
+import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

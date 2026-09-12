@@ -6,13 +6,13 @@ import {
   type DoomMcpStatusService,
   McpStatusSnapshotSchema,
   readDoomMcpStatus,
-} from '../src/exports/mcpStatus.ts';
+} from '../src/exports/mcpStatus';
 import {
   DOOM_MCP_TOOL_RESOLVER_SERVICE,
   type DoomMcpToolResolverService,
   readDoomMcpToolResolver,
   requireDoomMcpToolResolver,
-} from '../src/exports/mcpToolResolver.ts';
+} from '../src/exports/mcpToolResolver';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   type MinorModeActionRequest,
@@ -23,8 +23,8 @@ import {
   readMinorModeCatalog,
   registerMinorModeOwner,
   requireMinorModeCatalog,
-} from '../src/exports/mode.ts';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService, readDoomUiHub, requireDoomUiHub } from '../src/exports/uiHub.ts';
+} from '../src/exports/mode';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService, readDoomUiHub, requireDoomUiHub } from '../src/exports/uiHub';
 
 const emptySnapshot: MinorModeCatalogSnapshot = { hostGeneration: 'mode-generation', revision: 0, modes: [] };
 

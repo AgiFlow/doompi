@@ -11,7 +11,7 @@ export type {
   DoomReadinessTask,
   DoomReadinessTaskResult,
   DoomReadinessWaitOptions,
-} from '../schemas/readiness.ts';
+} from '../schemas/readiness';
 export {
   createDoomReadinessCoordinator,
   DOOM_READINESS_ERROR_CODE,
@@ -19,4 +19,4 @@ export {
   DoomReadinessError,
   readDoomReadinessCoordinator,
   requireDoomReadinessCoordinator,
-} from '../schemas/readiness.ts';
+} from '../schemas/readiness';

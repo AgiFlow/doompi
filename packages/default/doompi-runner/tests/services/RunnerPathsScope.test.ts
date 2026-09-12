@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { RunnerPaths } from '../../src/adapters/RunnerPaths';
+import { RunnerPaths } from '../../src/services/runnerPaths';
 import { MAX_COMPLETED_RUNNERS_ENV } from '../../src/exports/config';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;

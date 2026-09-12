@@ -2,9 +2,9 @@ import {
   DOOM_SERVER_HOST_SERVICE,
   type DoomServerHostService,
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
-import { gitServerFacet } from '../../../src/adapters/server/facet.ts';
+import { gitServerFacet } from '../../../src/extensions/server';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
@@ -14,6 +14,9 @@ function hostContext(scope: DoomServerHostService['scope']) {
   const host: DoomServerHostService = {
     scope,
     context: { locality: 'local' } as unknown as DoomServerHostService['context'],
+    registerMethod() {
+      return { dispose: () => undefined };
+    },
     registerApi(api) {
       registered.push(api);
       return {
@@ -32,11 +35,8 @@ function hostContext(scope: DoomServerHostService['scope']) {
       return [];
     },
   };
-  const context = {
-    get(name: string) {
-      return name === DOOM_SERVER_HOST_SERVICE ? host : undefined;
-    },
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, host);
   return { context, registered, state };
 }
 
@@ -45,29 +45,28 @@ describe('gitServerFacet', () => {
     expect(gitServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
   });
 
-  it('registers the package API on the hub scope', () => {
+  it('registers the package API on the hub scope', async () => {
     const harness = hostContext('global');
 
-    const dispose = gitServerFacet.apply(harness.context);
+    const dispose = await gitServerFacet.apply(harness.context);
 
     expect(harness.registered).toHaveLength(1);
     expect(typeof dispose).toBe('function');
   });
 
-  it('unregisters the API when the host disposes the facet', () => {
+  it('unregisters the API when the host disposes the facet', async () => {
     const harness = hostContext('global');
 
-    gitServerFacet.apply(harness.context)?.();
+    await (
+      await gitServerFacet.apply(harness.context)
+    )?.();
 
     expect(harness.state.disposed).toBe(1);
   });
 
-  it('registers nothing on the other scope', () => {
+  it('requires the direct event bus in session scope', async () => {
     const harness = hostContext('session');
-
-    const dispose = gitServerFacet.apply(harness.context);
-
+    await expect(gitServerFacet.apply(harness.context)).rejects.toThrow('requires the session direct event bus');
     expect(harness.registered).toEqual([]);
-    expect(dispose).toBeUndefined();
   });
 });

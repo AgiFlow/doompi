@@ -3,11 +3,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import { openSqliteSessionStorage } from '../../../../src/adapters/server/sqliteSessionStorage.ts';
-import { createHistoryOwnership } from '../../../../src/adapters/serialization/historyOwnership.ts';
-import { createDirectHarnessRuntime } from '../../../../src/adapters/server/directHarnessRuntime.ts';
-import { registerNativeChild } from '../../../../src/adapters/server/nativeChildRuntimes.ts';
-import { createThreadJournals } from '../../../../src/adapters/server/threadJournals.ts';
+import { openSqliteSessionStorage } from '../../../../src/services/sqliteSessionStorage';
+import { createHistoryOwnership } from '../../../../src/services/historyOwnership';
+import { createDirectHarnessRuntime } from '../../../../src/controllers/directHarnessRuntime';
+import { registerNativeChild } from '../../../../src/controllers/nativeChildRuntimes';
+import { createThreadJournals } from '../../../../src/controllers/threadJournals';
 import {
   createAssistantMessageEventStream,
   type AssistantMessage,

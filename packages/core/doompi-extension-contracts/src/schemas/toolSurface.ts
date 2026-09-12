@@ -12,12 +12,13 @@ export const DOOM_TOOL_SURFACE_SERVICE = 'doom/tool-surface';
  */
 export type DoomToolRestriction = (incoming: readonly string[], available: readonly string[]) => readonly string[];
 
-export interface DoomToolRestrictionDefinition {
+export interface DoomToolRestrictionDefinition<TRestriction = DoomToolRestriction> {
   /** Package-unique owner label, used for diagnostics and ordering ties. */
   readonly source: string;
   /** Layer that owns this restriction, gated by the kernel when set. */
   readonly layer?: string;
-  readonly restrict: DoomToolRestriction;
+  readonly restrict: TRestriction;
+  subscribe?(listener: () => void): () => void;
 }
 
 export interface DoomToolRestrictionHandle {

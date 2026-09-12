@@ -1,12 +1,13 @@
+import { WORKFLOW_PI_TOOL_NAMES } from '../../src/constants/workflow';
 import type { ExtensionAPI, Theme } from '@earendil-works/pi-coding-agent';
 import { type Component, visibleWidth } from '@earendil-works/pi-tui';
 import { describe, expect, it } from 'vitest';
-import { registerWorkflowPiTools, WORKFLOW_PI_TOOL_NAMES } from '../../src/adapters/pi/workflow/piTools.ts';
+import { createWorkflowTools } from '../../src/tools/workflowTools';
 import {
   renderWorkflowToolCall,
   renderWorkflowToolResult,
   type WorkflowToolName,
-} from '../../src/tui/workflow/workflowToolRender.ts';
+} from '../../src/tui/workflow/workflowToolRender';
 const TEST_ENVIRONMENT = Object.freeze({});
 function plainTheme(): Theme {
   return {
@@ -84,7 +85,18 @@ describe('workflow tool registration', () => {
       registerTool: (tool: RegisteredTool) => tools.set(tool.name, tool),
     } as unknown as ExtensionAPI;
 
-    registerWorkflowPiTools(pi, { environment: TEST_ENVIRONMENT });
+    for (const tool of createWorkflowTools({ environment: TEST_ENVIRONMENT }, (name) => ({
+      renderCall: (args, theme) => renderWorkflowToolCall(name, args as Record<string, unknown>, theme),
+      renderResult: (result, options, theme, context) =>
+        renderWorkflowToolResult(
+          name,
+          context.args as Record<string, unknown>,
+          result,
+          { ...options, isError: context.isError },
+          theme,
+        ),
+    })))
+      pi.registerTool(tool);
 
     for (const name of WORKFLOW_PI_TOOL_NAMES) {
       expect(tools.get(name)).toMatchObject({

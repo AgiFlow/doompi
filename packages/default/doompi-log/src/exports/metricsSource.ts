@@ -1,9 +1,9 @@
-export type { MetricsSourceOptions } from '../adapters/node/metricsSource.ts';
-export { createMetricsSource } from '../adapters/node/metricsSource.ts';
+export type { MetricsSourceOptions } from '../services/metricsSource';
+export { createMetricsSource } from '../services/metricsSource';
 export type {
   MetricsInstance,
   MetricsQuery,
   MetricsQueryParams,
   MetricsSource,
   MetricsTransport,
-} from '../types/metricsSource.ts';
+} from '../types/metricsSource';

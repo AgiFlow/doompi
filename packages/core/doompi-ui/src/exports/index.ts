@@ -1,4 +1,3 @@
-export { uiHeadlessFacet } from '../adapters/headless/facet.ts';
 export {
   type ConfigChoice,
   type ConfigField,
@@ -33,20 +32,20 @@ export {
   type UiEventName,
   type UiTelemetry,
   type UiTelemetryOptions,
-} from '../adapters/telemetry/logSinkTelemetry.ts';
-export { DoomUiState, type LeaderOption, type LeaderSnapshot } from '../services/state/uiState.ts';
-export { DoomEditor } from '../tui/doomEditor.ts';
-export { DoomFooter } from '../tui/doomFooter.ts';
-export { DoomHeader } from '../tui/doomHeader.ts';
+} from '../services/telemetry';
+export { DoomUiState, type LeaderOption, type LeaderSnapshot } from '../models/uiState';
+export { DoomEditor } from '../tui/doomEditor';
+export { DoomFooter } from '../tui/doomFooter';
+export { DoomHeader } from '../tui/doomHeader';
 export {
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_NAVIGATION_KEYS,
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from '../tui/doomOverlay.ts';
-export { LeaderHints } from '../tui/leaderHints.ts';
-export { DEFAULT_THEME, DEFAULT_THEME_NAME, writeDefaultTheme } from '../tui/theme.ts';
+} from '../tui/doomOverlay';
+export { LeaderHints } from '../tui/leaderHints';
+export { DEFAULT_THEME, DEFAULT_THEME_NAME, writeDefaultTheme } from '../tui/theme';
 export {
   DoomToolCall,
   DoomToolResult,
@@ -56,5 +55,5 @@ export {
   previousDoomToolResult,
   renderToolBadge,
   renderToolHeading,
-} from '../tui/toolChrome.ts';
-export { type DoomHarnessMetadata, readDoomHarnessMetadata } from '../types/harnessMetadata.ts';
+} from '../tui/toolChrome';
+export { type DoomHarnessMetadata, readDoomHarnessMetadata } from '../types/harnessMetadata';

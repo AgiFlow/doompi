@@ -7,8 +7,8 @@ import {
   hookFailureMessage,
   isDenied,
   toolResultMessages,
-} from '../../src/services/hookDecisions.ts';
-import type { HookOutcome } from '../../src/types/hooks.ts';
+} from '../../src/services/hookDecisions';
+import type { HookOutcome } from '../../src/types/hooks';
 
 const outcomes: HookOutcome[] = [
   { decision: { decision: 'block', reason: 'approval required' } },

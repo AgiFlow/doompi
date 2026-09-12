@@ -1,8 +1,8 @@
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
-import { renderPlugin } from '../../src/services/testing/render.ts';
-import { slotPropsFixture, toolMessagePropsFixture } from '../../src/services/testing/slotProps.ts';
-import type { ToolMessageRenderProps, WebPluginSlotProps } from '../../src/types/webPlugin.ts';
+import { renderPlugin } from '../../src/services/testing';
+import { slotPropsFixture, toolMessagePropsFixture } from '../../src/services/testing/slotProps';
+import type { ToolMessageRenderProps, WebPluginSlotProps } from '../../src/types/webPlugin';
 
 function Panel({ sessionId, statuses }: WebPluginSlotProps) {
   return createElement('div', { className: 'panel' }, `session ${sessionId ?? 'none'}: ${statuses.mood ?? 'quiet'}`);

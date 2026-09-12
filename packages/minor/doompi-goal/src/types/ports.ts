@@ -1,4 +1,4 @@
-import type { GoalStateData } from './goal.ts';
+import type { GoalStateData } from './goal';
 export interface GoalClock {
   now(): number;
 }

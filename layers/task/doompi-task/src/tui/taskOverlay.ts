@@ -1,11 +1,11 @@
 import { allocateAgentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import type { ExtensionUIContext, Theme } from '@earendil-works/pi-coding-agent';
 import { type TUI, truncateToWidth } from '@earendil-works/pi-tui';
-import type { DelegationManager } from '../services/delegation/manager.ts';
-import type { Task } from '../services/store/types.ts';
-import { COLLAPSE_KEY_OFF, getMaxWidgetLines, resolveCollapseKey } from '../types/config.ts';
-import { formatOverlayTaskLine } from './format.ts';
-import { deriveTaskProjection, selectOverlayLayoutFromProjection, visibleTasks } from './selectors.ts';
+import type { DelegationManager } from '../services/delegation';
+import type { Task } from '../models/task';
+import { COLLAPSE_KEY_OFF, getMaxWidgetLines, resolveCollapseKey } from '../services/config';
+import { formatOverlayTaskLine } from './format';
+import { deriveTaskProjection, selectOverlayLayoutFromProjection, visibleTasks } from './selectors';
 
 const WIDGET_KEY = 'doom-tasks';
 const OVERLAY_HEADING = 'Tasks';

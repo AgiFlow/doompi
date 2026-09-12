@@ -1,10 +1,10 @@
 import * as fs from 'node:fs';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
-import { hostEntryStems, projectPath, sourceStem } from './manifestEntries.js';
+import { piDiscoveryEntryStems, projectPath, sourceStem } from './manifestEntries.js';
 
 const PI_CODING_AGENT_PACKAGE = '@earendil-works/pi-coding-agent';
-const SOURCE_ENTRY_PATTERN = /^src\/exports\/(?:[^/]+\/)*[^/]+\.(?:cts|mts|ts|tsx)$/;
+const SOURCE_ENTRY_PATTERN = /^src\/extensions\/(?:[^/]+\/)*[^/]+\.(?:cts|mts|ts|tsx)$/;
 const SOURCE_EXTENSION_PATTERN = /\.(?:cts|mts|ts|tsx)$/;
 
 interface FactoryBindings {
@@ -129,7 +129,11 @@ export const piExtensionDefaultFactory: RuleDefinition = {
   check(filePath, configRoot) {
     const relativePath = projectPath(filePath, configRoot);
     const sourceFile = readSource(filePath);
-    if (!relativePath || !sourceFile || !isHostLoadedEntry(relativePath, sourceFile, hostEntryStems(configRoot))) {
+    if (
+      !relativePath ||
+      !sourceFile ||
+      !isHostLoadedEntry(relativePath, sourceFile, piDiscoveryEntryStems(configRoot))
+    ) {
       return null;
     }
     return hasDefaultFactory(sourceFile)

@@ -6,19 +6,16 @@ import {
   AuthorDocumentPanel,
   authorFileTab,
   displayedAuthorRegions,
-} from '../../src/web/components/AuthorDocumentPanel.tsx';
-import { AuthorRequestLog } from '../../src/web/components/AuthorRequestLog.tsx';
-import type { AuthorRequestRecord } from '../../src/web/lib/authorViewportTypes.ts';
+} from '../../src/web/components/AuthorDocumentPanel';
+import { AuthorRequestLog } from '../../src/web/components/AuthorRequestLog';
+import type { AuthorRequestRecord } from '../../src/web/lib/authorViewportTypes';
 import {
   focusAuthorDocument,
   releaseAuthorDocumentFocus,
   dropAuthorSession,
-} from '../../src/web/stores/authorWorkspaceStore.ts';
-import {
-  OpenAuthoringFileToolCard,
-  openAuthoringFileTab,
-} from '../../src/web/components/OpenAuthoringFileToolCard.tsx';
-import { webPlugin as scopedWebPlugin } from '../../src/web/index.ts';
+} from '../../src/web/stores/authorWorkspaceStore';
+import { OpenAuthoringFileToolCard, openAuthoringFileTab } from '../../src/web/components/OpenAuthoringFileToolCard';
+import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

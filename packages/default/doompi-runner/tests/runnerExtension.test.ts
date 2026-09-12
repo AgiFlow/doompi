@@ -1,3 +1,6 @@
+vi.mock('@agimon-ai/doompi-extension-contracts/pi-extension', () =>
+  vi.importActual('../../../core/doompi-extension-contracts/src/controllers/piExtension'),
+);
 import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProvider,
@@ -8,18 +11,22 @@ import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-ex
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { runnerExtension } from '../src/adapters/pi/extension.ts';
+import { runnerExtension } from '../src/extensions/pi';
 import type { BashRunResult } from '../src/types/bashRunService';
 import type { RunnerRecord } from '../src/types/runnerRegistry';
-import type { RunnerCompactionDependencies } from '../src/services/runs/compaction.ts';
-import type { BashToolDependencies } from '../src/exports/tool/bashTool';
-import type { RunnerSpaceOptions } from '../src/tui/runnerSpace.ts';
+import type { RunnerCompactionDependencies } from '../src/services/compaction';
+import type { BashToolDependencies } from '../src/exports/bashTool';
+import type { RunnerSpaceOptions } from '../src/tui/runnerSpace';
 
 const extensionMocks = vi.hoisted(() => {
   const leaderDispose = vi.fn();
   return {
     container: vi.fn(),
-    registerBashTool: vi.fn(),
+    createBashTool: vi.fn((_dependencies: BashToolDependencies) => ({
+      kind: 'pi-tool',
+      name: 'bash',
+      register: vi.fn(),
+    })),
     registerCompaction: vi.fn(),
     openRunnerSpace: vi.fn(async (_context: unknown, _options: unknown) => undefined),
     footerUpdate: vi.fn(),
@@ -40,7 +47,7 @@ const extensionMocks = vi.hoisted(() => {
 
 const cordisRoots: Context[] = [];
 
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
+vi.mock('../../../core/doompi-extension-contracts/src/controllers/cordisHost', () => ({
   connectDoomCordisHost: async () => {
     const root = extensionMocks.createCordisRoot();
     await extensionMocks.prepareCordisRoot(root);
@@ -57,17 +64,17 @@ vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
   },
 }));
 
-vi.mock('../src/container/index.ts', () => ({
-  createRunnerContainer: () => extensionMocks.container(),
+vi.mock('../src/services/runnerDependencies', () => ({
+  createRunnerDependencies: () => extensionMocks.container(),
 }));
-vi.mock('../src/commands/bash/bashTool.ts', () => ({
-  registerBashTool: extensionMocks.registerBashTool,
+vi.mock('../src/tools/bashTool', () => ({
+  createBashTool: extensionMocks.createBashTool,
 }));
-vi.mock('../src/services/runs/compaction.ts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/services/runs/compaction.ts')>()),
-  registerRunnerCompactionRecovery: extensionMocks.registerCompaction,
+vi.mock('../src/services/compaction', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/services/compaction')>()),
+  createRunnerCompactionRecovery: extensionMocks.registerCompaction,
 }));
-vi.mock('../src/tui/runnerSpace.ts', () => ({
+vi.mock('../src/tui/runnerSpace', () => ({
   openRunnerSpace: extensionMocks.openRunnerSpace,
 }));
 vi.mock('@agimon-ai/doompi-telemetry', () => ({
@@ -164,6 +171,7 @@ async function createHarness(options: { activate?: boolean } = {}) {
 
   const pi = {
     events: {},
+    registerTool: vi.fn(),
     on: (event: string, handler: PiHandler) => {
       handlers.set(event, handler);
     },
@@ -205,7 +213,7 @@ async function createHarness(options: { activate?: boolean } = {}) {
     },
     command: () => commandHandler,
     registryListener: () => registryListener?.(),
-    bashDependencies: () => extensionMocks.registerBashTool.mock.calls.at(-1)?.[1] as BashToolDependencies,
+    bashDependencies: () => extensionMocks.createBashTool.mock.calls.at(-1)?.[0] as BashToolDependencies,
     compactionDependencies: () =>
       extensionMocks.registerCompaction.mock.calls.at(-1)?.[1] as RunnerCompactionDependencies,
     setPersisted: (record: RunnerRecord | undefined) => {
@@ -341,7 +349,7 @@ describe('runnerExtension refresh', () => {
     const harness = await createHarness();
     await startSession(harness);
     const startupHistoryCalls = harness.registry.listAll.mock.calls.length;
-    const bashDependencies = extensionMocks.registerBashTool.mock.calls[0]?.[1] as BashToolDependencies;
+    const bashDependencies = extensionMocks.createBashTool.mock.calls[0]?.[0] as BashToolDependencies;
 
     expect(startupHistoryCalls).toBe(1);
     expect(extensionMocks.footerUpdate).toHaveBeenCalledOnce();
@@ -424,7 +432,7 @@ describe('runnerExtension refresh', () => {
   it('coalesces concurrent triggers and preserves a queued reconciliation pass', async () => {
     const harness = await createHarness();
     await startSession(harness);
-    const bashDependencies = extensionMocks.registerBashTool.mock.calls[0]?.[1] as BashToolDependencies;
+    const bashDependencies = extensionMocks.createBashTool.mock.calls[0]?.[0] as BashToolDependencies;
     const callsBefore = harness.registry.list.mock.calls.length;
     let resolveList: (() => void) | undefined;
     let concurrent = 0;
@@ -457,7 +465,7 @@ describe('runnerExtension refresh', () => {
   it('settles an in-flight refresh before closing the registry during shutdown', async () => {
     const harness = await createHarness();
     await startSession(harness);
-    const bashDependencies = extensionMocks.registerBashTool.mock.calls[0]?.[1] as BashToolDependencies;
+    const bashDependencies = extensionMocks.createBashTool.mock.calls[0]?.[0] as BashToolDependencies;
     let resolveList: (() => void) | undefined;
     harness.registry.list.mockImplementationOnce(
       () =>
@@ -626,7 +634,7 @@ describe('runnerExtension refresh', () => {
     await second.activation;
     await startSession(second);
 
-    expect(extensionMocks.registerBashTool).toHaveBeenCalledTimes(2);
+    expect(extensionMocks.createBashTool).toHaveBeenCalledTimes(2);
     expect(second.lifeline.arm).toHaveBeenCalledWith('session-a');
     expect(first.registry.close).toHaveBeenCalledOnce();
     expect(second.registry.close).not.toHaveBeenCalled();

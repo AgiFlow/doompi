@@ -7,8 +7,8 @@ import {
   worktreeActivity,
   worktreeActivitySource,
   worktreesChannel,
-} from '../../../../src/web/stores/worktreesActivityStore.ts';
-import type { WorktreeView } from '../../../../src/types/webWorktrees.ts';
+} from '../../../../src/web/stores/worktreesActivityStore';
+import type { WorktreeView } from '../../../../src/types/webWorktrees';
 
 function runtime(): { host: WebPluginRuntime; sent: Record<string, unknown>[] } {
   const sent: Record<string, unknown>[] = [];

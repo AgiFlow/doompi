@@ -23,11 +23,11 @@ Choose the package tier from the capability, not convenience:
 ## Workflow
 
 1. Inspect a nearby package with the same host surfaces and reuse its structure.
-2. Keep domain contracts in `types`, validation in `schemas`, host-neutral behavior in `services`, infrastructure in `adapters`, and public forwarding files in `src/exports`.
-3. Expose one standard Pi factory through `pi.extensions`. Connect it with `connectDoomCordisHost()`, mount one package plugin with `root.plugin()`, and dispose the plugin before releasing the host connection.
-4. Consume required cross-package services only inside `cordis.inject(...)`. Return every registration disposer from the injection so provider replacement retracts stale handles.
-5. Keep package exports closed and explicit. Add only the dependencies, entries, resources, and folders the capability uses.
-6. If the extension contributes Help, put each guide at `src/prompts/<skill-name>/SKILL.md`, publish `src/prompts`, link it from `llms.txt`, and register its exact package name plus `import.meta.url`.
-7. Run the repository checks or the equivalent standalone package checks before publishing.
+2. Put logic in `services/<serviceName>/index.ts`, service ports in `type.ts`, mutable state in `models`, request handlers in `controllers`, and tools in `tools`. Keep reusable types, schemas, and constant data in their named folders. Do not create `adapters`, `container`, `commands`, or `providers` roots.
+3. Implement direct host entries in `src/extensions/pi.ts`, `server.ts`, or `web.ts` with `definePiExtension`, `defineServerPlugin`, or `defineWebPlugin`. Entries compose controllers, tools, and services. Build entries directly with tsdown, separately from flat public forwarding files in `src/exports`.
+4. Return typed contributions from a named declaration or per-mount factory. Factories may be async. Use optional `onStart`, `onStop`, and `onDispose` hooks for lifecycle work; helpers own Cordis initialization, registration, readiness, and cleanup.
+5. Put provider plugins in services and include them in the `services` contribution array. Consume required providers inside an owning injection with the corresponding `require...` accessor. The helper handles optional providers for native contributions such as resources and minor modes.
+6. Keep package exports explicit and flat, with only reusable APIs. If the extension contributes Help, publish `src/prompts/<skill-name>/SKILL.md`, link it from `llms.txt`, and declare its descriptor in `resources` with the exact package name and `import.meta.url`.
+7. Run the repository checks or equivalent standalone package checks before publishing.
 
 Read [references/extension-contract.md](references/extension-contract.md) for the concrete package, lifecycle, and verification contract.

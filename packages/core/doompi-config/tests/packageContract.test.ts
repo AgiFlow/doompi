@@ -89,6 +89,10 @@ describe('doom config package boundary', () => {
 
     expect(publicEntries.length).toBeGreaterThan(0);
     expect(Object.keys(exportsMap)).not.toContain('./*');
+    expect(exportsMap['./pi-config']).toBeDefined();
+    expect(exportsMap['./config-schema']).toBeDefined();
+    expect(exportsMap['./config/piConfig']).toBeUndefined();
+    expect(exportsMap['./config/schema']).toBeUndefined();
 
     for (const [subpath, target] of publicEntries) {
       expect(conditionPaths(target, 'import'), subpath).toHaveLength(1);

@@ -1,5 +1,5 @@
 import { DOOM_MCP_STATUS_SERVICE } from '@agimon-ai/doompi-extension-contracts/mcp-status';
-import * as contextCatalog from '../../src/services/contextCatalog.ts';
+import * as contextCatalog from '../../src/services/contextCatalog';
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
 import { DOOM_MINOR_MODE_ENTRY_TYPE, readMinorModeCatalog } from '@agimon-ai/doompi-extension-contracts/mode';
@@ -11,9 +11,9 @@ import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protoco
 import { prepareMinorModeReloadHandoff } from '@agimon-ai/doompi-extension-contracts/transition';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import cordisHostExtension from '../../src/extensions/entries/cordisHost.ts';
-import modeCatalogExtension from '../../src/extensions/entries/modeCatalog.ts';
-import { bindTestTransitionCoordinator } from '../helpers/transitionCoordinator.ts';
+import cordisHostExtension from '../../src/extensions/cordisHost';
+import modeCatalogExtension from '../../src/extensions/modeCatalog';
+import { bindTestTransitionCoordinator } from '../helpers/transitionCoordinator';
 
 class TestBus implements EventBusLike {
   private readonly handlers = new Map<string, Set<(data: unknown) => void>>();

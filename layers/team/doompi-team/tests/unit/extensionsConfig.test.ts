@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { getConfigPath, loadConfig, saveConfig, updateConfig } from '../../src/adapters/pi/extensions/config';
+import { getConfigPath, loadConfig, saveConfig, updateConfig } from '../../src/services/config';
 
 const temporaryDirs: string[] = [];
 

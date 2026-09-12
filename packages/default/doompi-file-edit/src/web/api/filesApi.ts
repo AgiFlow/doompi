@@ -6,7 +6,7 @@ import {
   type FileEditsPreviewView,
   type FileEditsSaveView,
   previewUrl,
-} from '../../types/fileEditsApi.ts';
+} from '../../types/fileEditsApi';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
 /**

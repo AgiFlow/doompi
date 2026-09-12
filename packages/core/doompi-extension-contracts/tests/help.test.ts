@@ -8,7 +8,7 @@ import {
   type DoomHelpContribution,
   readDoomHelpService,
   requireDoomHelpService,
-} from '../src/schemas/help.ts';
+} from '../src/schemas/help';
 
 function contribution(source = '@agimon-ai/example-help', moduleUrl = 'file:///packages/example/dist/extension.mjs') {
   return {

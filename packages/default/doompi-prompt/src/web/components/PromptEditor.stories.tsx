@@ -5,8 +5,8 @@
  * The drafts are typed as DraftState, so the save button's enabled state here
  * is the component's own rule rather than a claim this file makes.
  */
-import type { DraftState } from '../lib/promptsActions.ts';
-import { PromptEditor } from './PromptEditor.tsx';
+import type { DraftState } from '../lib/promptsActions';
+import { PromptEditor } from './PromptEditor';
 
 const empty: DraftState = { name: '', text: '', original: '' };
 

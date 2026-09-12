@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { NodeSnapshotStoreAdapter } from '../../src/adapters/node/snapshotStore.ts';
-import { TimelineStore } from '../../src/adapters/TimelineStore/TimelineStore.ts';
-import { createFileEditsApi } from '../../src/adapters/fileEditsApi.ts';
-import type { FileEditsDetailView, FileEditsErrorView, FileEditsPreviewView } from '../../src/types/fileEditsApi.ts';
-import { contentUrl, deleteUrl, detailUrl, previewUrl } from '../../src/types/fileEditsApi.ts';
+import { NodeSnapshotStoreAdapter } from '../../src/services/snapshotStore';
+import { TimelineStore } from '../../src/services/timelineStore';
+import { createFileEditsApi } from '../../src/controllers/fileEditsApi';
+import type { FileEditsDetailView, FileEditsErrorView, FileEditsPreviewView } from '../../src/types/fileEditsApi';
+import { contentUrl, deleteUrl, detailUrl, previewUrl } from '../../src/types/fileEditsApi';
 
 let cwd: string;
 let timeline: TimelineStore;

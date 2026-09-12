@@ -1,6 +1,6 @@
 import { isValidElement, type ReactNode, type ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AuthorVideoControls, videoTimeLabel } from '../../src/web/components/AuthorVideoControls.tsx';
+import { AuthorVideoControls, videoTimeLabel } from '../../src/web/components/AuthorVideoControls';
 import {
   authorSessionWorkspace,
   authorWorkspace,
@@ -8,7 +8,7 @@ import {
   putAuthorDocument,
   seekAuthorVideo,
   setAuthorRegionCandidate,
-} from '../../src/web/stores/authorWorkspaceStore.ts';
+} from '../../src/web/stores/authorWorkspaceStore';
 
 const hooks = vi.hoisted(() => ({ seconds: '', set: vi.fn() }));
 vi.mock('react', async (original) => ({

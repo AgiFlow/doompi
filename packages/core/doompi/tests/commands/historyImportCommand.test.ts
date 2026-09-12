@@ -4,10 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHistoryOwnership, historyOwnershipLockPath } from '../../src/adapters/serialization/historyOwnership.ts';
-import { CliApp } from '../../src/commands/cli/cliApp.ts';
-import { HistoryImportCommand } from '../../src/commands/historyImportCommand.ts';
-import { routeCommand } from '../../src/commands/cli/router.ts';
+import { createHistoryOwnership, historyOwnershipLockPath } from '../../src/services/historyOwnership';
+import { CliApp } from '../../src/controllers/cliApp';
+import { HistoryImportCommand } from '../../src/controllers/historyImportCommand';
+import { routeCommand } from '../../src/controllers/router';
 
 function v3Source(): string {
   return [

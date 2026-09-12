@@ -1,10 +1,6 @@
-import type { DoomMcpProjection } from '@agimon-ai/doompi-extension-contracts/mcp-projection';
 import type { IDoomConfigService as DoomConfigServiceContract } from '@agimon-ai/doompi-extension-contracts/config';
-import type { PersonaIdentity } from '../adapters/profiles.ts';
-import type { PersonaVoiceOverride } from '../services/personaFrontMatter.ts';
-
-export type { PersonaIdentity } from '../adapters/profiles.ts';
-export type { PersonaFrontMatter, PersonaVoiceOverride } from '../services/personaFrontMatter.ts';
+import type { DoomMcpProjection } from '@agimon-ai/doompi-extension-contracts/mcp-projection';
+import type { PersonaIdentity, PersonaVoiceOverride } from './profiles';
 
 export { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-extension-contracts/config';
 

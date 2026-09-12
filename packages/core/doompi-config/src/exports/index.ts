@@ -1,22 +1,38 @@
-export { writePrivateAtomicJson } from '../adapters/atomicJson.ts';
+export { writePrivateAtomicJson } from '../services/atomicJson';
 export {
   globalDoomConfigDirectory,
   globalDoomConfigPath,
   loadDoomConfig,
   loadDoomConfigAsync,
-  loadDoomConfigLenient,
   loadDoomConfigLayers,
+  loadDoomConfigLenient,
   repositoryDoomConfigPath,
   resolvePlanningPlansDirectory,
-} from '../adapters/config.ts';
+} from '../services/config';
 export {
-  type DoomConfigEdit,
-  type DoomConfigScope,
+  DOOM_PLANNING_THINKING_LEVELS,
+  DOOM_VOICE_ENGINES,
+  DOOM_VOICE_MODES,
+  DOOM_VOICE_TTS_ENGINES,
+  configLeafKeys,
+  configRootKeys,
+  configScopeOf,
+  mergeDoomConfigs,
+  parseAutocompactModeConfig,
+  parseDoomConfig,
+  parsePlanningModeConfig,
+  resolveVoiceConfig,
+  valueAtKeyPath,
+  type ConfigKeyScope,
+} from '../services/configPolicy';
+export {
   setDoomConfigValue,
   unsetDoomConfigValue,
-  type WriteDoomConfigOptions,
   writeDoomConfigValues,
-} from '../adapters/configWriter.ts';
+  type DoomConfigEdit,
+  type DoomConfigScope,
+  type WriteDoomConfigOptions,
+} from '../services/configWriter';
 export {
   DOOM_DIR,
   listDomainNames,
@@ -24,23 +40,21 @@ export {
   resolvePluginDirectories,
   resolvePluginEntries,
   resolveSharedSkills,
-} from '../adapters/domains.ts';
+} from '../services/domains';
+export { domainCompletionItems, domainCompletionPrefix, expandDomainNames } from '../services/domains/completion';
 export {
   FILE_ONLY_STATE_FIELDS,
   HARNESS_STATE_KEYS,
-  type HarnessStateParseReporter,
   projectHarnessEnvironment,
   readHarnessState,
-} from '../adapters/harnessState.ts';
+  type HarnessStateParseReporter,
+} from '../services/harnessState';
 export {
+  HARNESS_STATE_POINTER,
   createHarnessSession,
   disposeHarnessState,
   getHarnessState,
-  HARNESS_STATE_POINTER,
-  type HarnessStateFile,
-  type HarnessStateTransactionSnapshot,
   harnessRoot,
-  type LoadedHarnessState,
   loadHarnessState,
   requireHarnessPaths,
   requireHarnessRoot,
@@ -48,17 +62,36 @@ export {
   restoreHarnessStateSnapshot,
   snapshotHarnessState,
   updateHarnessState,
-} from '../adapters/harnessStore.ts';
+  type HarnessStateFile,
+  type HarnessStateTransactionSnapshot,
+} from '../services/harnessStore';
+export {
+  DEFAULT_IMAGE_MAX_DIMENSION,
+  MIN_IMAGE_MAX_DIMENSION,
+  clampImageMaxDimension,
+  parsePiImageSettings,
+  type PiImageSettings,
+  type PiImageSettingsUpdate,
+} from '../services/imageSettings';
 export {
   DOOM_CONFIG_TEMPLATES,
   GLOBAL_DOOM_SEED_FILES,
-  type GlobalDoomInitResult,
+  REPOSITORY_DOOM_CONFIG_TEMPLATES,
   initializeGlobalDoomConfig,
   initializeRepositoryDoomConfig,
-  REPOSITORY_DOOM_CONFIG_TEMPLATES,
+  type GlobalDoomInitResult,
   type RepositoryDoomInitOptions,
   type RepositoryDoomInitResult,
-} from '../adapters/init.ts';
+} from '../services/init';
+export {
+  isLocalPackageSpecifier,
+  layerEntries,
+  layerHookGroups,
+  loadMajorModesConfig,
+  loadMajorModesConfigLenient,
+  resolveLayers,
+  resolvePackageConfigurations,
+} from '../services/majorModes';
 export type {
   LayerDefinition,
   LayerPackage,
@@ -68,25 +101,39 @@ export type {
   MajorModesConfig,
   ResolvedLayerDefinition,
   ResolvedPackageConfiguration,
-} from '../adapters/majorModes.ts';
+} from '../services/majorModes';
 export {
-  isLocalPackageSpecifier,
-  layerEntries,
-  layerHookGroups,
-  loadMajorModesConfig,
-  loadMajorModesConfigLenient,
-  resolveLayers,
-  resolvePackageConfigurations,
-} from '../adapters/majorModes.ts';
+  loadPiConfig,
+  loadPiConfigAsync,
+  loadPiImageSettings,
+  piConfigPaths,
+  piImageSettingsPath,
+  savePiImageSettings,
+} from '../services/piConfig';
 export {
+  MARKETPLACE_MANIFEST_RELATIVE_PATHS,
+  findPluginManifestPath,
+  isRemotePluginSource,
+  pluginDirectoryForSource,
+} from '../services/pluginCatalog';
+export {
+  PERSONA_FILES,
+  applyProfileEnvironment,
+  buildPersonaPrompt,
+  listProfileNames,
+  loadProfiles,
+  replaceProfileEnvironment,
+  resolveProfile,
+} from '../services/profiles';
+export type { AgentProfile } from '../services/profiles';
+export {
+  DOOM_CONFIG_ENTRY_TYPE,
+  DOOM_CONFIG_TRANSITION_ENTRY_TYPE,
   acknowledgeDoomConfigTransition,
   appendDoomConfigSelection,
   appendDoomConfigTransition,
   createDoomConfigContext,
   createDoomConfigContextAsync,
-  DOOM_CONFIG_ENTRY_TYPE,
-  DOOM_CONFIG_TRANSITION_ENTRY_TYPE,
-  type DoomConfigSelection,
   freezeDoomConfigContext,
   provideDoomConfigContext,
   readDoomConfigContextGeneration,
@@ -95,78 +142,15 @@ export {
   replaceDoomConfigContext,
   requireDoomConfigContext,
   supersedeDoomConfigTransition,
-} from '../adapters/pi/piContext.ts';
+  type DoomConfigSelection,
+} from '../services/sessionConfig';
 export {
-  loadPiConfig,
-  loadPiConfigAsync,
-  loadPiImageSettings,
-  piConfigPaths,
-  piImageSettingsPath,
-  savePiImageSettings,
-} from '../adapters/piConfig.ts';
-export {
-  clampImageMaxDimension,
-  DEFAULT_IMAGE_MAX_DIMENSION,
-  MIN_IMAGE_MAX_DIMENSION,
-  parsePiImageSettings,
-  type PiImageSettings,
-  type PiImageSettingsUpdate,
-} from '../services/imageSettings.ts';
-export {
-  findPluginManifestPath,
-  isRemotePluginSource,
-  MARKETPLACE_MANIFEST_RELATIVE_PATHS,
-  pluginDirectoryForSource,
-} from '../adapters/pluginCatalog.ts';
-export type { AgentProfile } from '../adapters/profiles.ts';
-export {
-  applyProfileEnvironment,
-  buildPersonaPrompt,
-  listProfileNames,
-  loadProfiles,
-  PERSONA_FILES,
-  replaceProfileEnvironment,
-  resolveProfile,
-} from '../adapters/profiles.ts';
-export type {
-  ConfigAdapterRegistrationOptions,
-  PiConfig,
-  PiConfigLoadOptions,
-  PiConfigPaths,
-} from '../schemas/config/schema.ts';
-export {
-  type ConfigKeyScope,
-  configLeafKeys,
-  configRootKeys,
-  configScopeOf,
-  DOOM_PLANNING_THINKING_LEVELS,
-  DOOM_VOICE_ENGINES,
-  DOOM_VOICE_MODES,
-  DOOM_VOICE_TTS_ENGINES,
-  mergeDoomConfigs,
-  parseAutocompactModeConfig,
-  parseDoomConfig,
-  parsePlanningModeConfig,
-  resolveVoiceConfig,
-  valueAtKeyPath,
-} from '../services/configPolicy.ts';
-export { domainCompletionItems, domainCompletionPrefix, expandDomainNames } from '../services/domains.ts';
-export type {
-  ConfigValueOrigin,
-  DoomConfigLayer,
-  DoomConfigLayers,
-  DoomConfigPendingSelection,
-  DoomConfigTransitionPhase,
-  DoomConfigTransitionRecord,
-  DoomConfigTransitionStrategy,
-} from '../types/config.ts';
-export {
+  DOOM_CONFIG_SERVICE,
   type AutocompactModeConfig,
   type AutocompactOverrideConfig,
   type AutocompactThresholdConfig,
   type AutocompactTokenConfig,
   type DeepReadonly,
-  DOOM_CONFIG_SERVICE,
   type DoomConfig,
   type DoomConfigContext,
   type DoomHarnessContext,
@@ -191,7 +175,16 @@ export {
   type VoiceModelConfig,
   type VoiceTtsConfig,
   type VoiceTtsEngine,
-} from '../types/config.ts';
+} from '../types/config';
+export type {
+  ConfigValueOrigin,
+  DoomConfigLayer,
+  DoomConfigLayers,
+  DoomConfigPendingSelection,
+  DoomConfigTransitionPhase,
+  DoomConfigTransitionRecord,
+  DoomConfigTransitionStrategy,
+} from '../types/config';
 export type {
   DomainDefinition,
   DomainManifest,
@@ -207,4 +200,7 @@ export type {
   PluginSkillDiscovery,
   PluginSource,
   ResolvedDomain,
-} from '../types/domains.ts';
+} from '../types/domains';
+export type { ConfigAdapterRegistrationOptions, PiConfig, PiConfigLoadOptions, PiConfigPaths } from '../types/piConfig';
+
+export type { LoadedHarnessState } from '../models/harnessCache';

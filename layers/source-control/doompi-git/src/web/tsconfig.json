@@ -18,5 +18,5 @@
     "allowImportingTsExtensions": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": [".", "../types/worktreeRegistry.ts", "../types/webWorktrees.ts", "../exports/webClient.ts"]
+  "include": [".", "../types/worktreeRegistry.ts", "../types/webWorktrees.ts", "../extensions/web.ts"]
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
-import { completeOperation, startOperation } from '../../src/adapters/pi/extensions/operationJournal';
+import { completeOperation, startOperation } from '../../src/services/operationJournal';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 describe('operation journal', () => {
   it('replays a completed operation without allocating different runs', () => {

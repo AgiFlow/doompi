@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PollScheduler } from '../../src/adapters/pollScheduler';
+import { PollScheduler } from '../../src/services/pollScheduler';
 
 /**
  * Exposes the protected seams so a test can pin the backoff curve.

@@ -1,12 +1,12 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
-import { voiceMediaClientUrl } from '../../types/clientMedia.ts';
+import { voiceMediaClientUrl } from '../../types/clientMedia';
 import {
   MANUAL_TRANSCRIPTION_DURATION_HEADER,
   MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,
   MANUAL_TRANSCRIPTION_MAX_DURATION_MS,
   MANUAL_TRANSCRIPTION_ROUTE,
   type ManualTranscriptionResult,
-} from '../../types/manualTranscription.ts';
+} from '../../types/manualTranscription';
 
 type RequestAudio = (input: string, init?: RequestInit) => Promise<Response>;
 

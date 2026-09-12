@@ -99,7 +99,7 @@ describe('doom-mcp package boundary', () => {
 
     expect((manifest as unknown as Record<string, unknown>).doompiApi).toBeUndefined();
     expect(manifest.doompiServer).toEqual({
-      entry: './src/exports/extensions/server.ts',
+      entry: './src/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
     });

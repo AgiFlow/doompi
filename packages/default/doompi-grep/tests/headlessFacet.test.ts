@@ -10,9 +10,9 @@ import {
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { grepServerFacet } from '../src/adapters/server/facet.ts';
+import { grepServerFacet } from '../src/extensions/server';
 
 const originalPath = process.env.PATH;
 let directory: string;
@@ -29,13 +29,10 @@ afterEach(async () => {
 });
 
 function contextFor(host: DoomHeadlessHostService): Context {
-  return {
-    get(name: string) {
-      if (name === DOOM_SERVER_HOST_SERVICE) return {};
-      if (name === DOOM_HEADLESS_HOST_SERVICE) return host;
-      return undefined;
-    },
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session' });
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  return context;
 }
 
 function execution(): DoomHeadlessExecutionContext {
@@ -51,7 +48,7 @@ describe('grep server facet', () => {
       return { dispose };
     });
     const host = { registerTool } as unknown as DoomHeadlessHostService;
-    const cleanup = grepServerFacet.apply(contextFor(host));
+    const cleanup = await grepServerFacet.apply(contextFor(host));
 
     expect(registerTool).toHaveBeenCalledOnce();
     expect(tool?.name).toBe('grep');
@@ -69,7 +66,7 @@ describe('grep server facet', () => {
 
     const text = result.content[0]?.type === 'text' ? result.content[0].text : '';
     expect(text).toBe('sample.txt:2:needle here');
-    cleanup?.();
+    await cleanup?.();
     expect(dispose).toHaveBeenCalledOnce();
   });
 
@@ -80,7 +77,7 @@ describe('grep server facet', () => {
       tool = registered;
       return { dispose };
     });
-    const cleanup = grepServerFacet.apply(contextFor({ registerTool } as unknown as DoomHeadlessHostService));
+    const cleanup = await grepServerFacet.apply(contextFor({ registerTool } as unknown as DoomHeadlessHostService));
     if (!tool) throw new Error('Grep headless tool was not registered');
 
     await writeFile(join(directory, 'sample.txt'), 'present\n');
@@ -94,7 +91,7 @@ describe('grep server facet', () => {
 
     const text = result.content[0]?.type === 'text' ? result.content[0].text : '';
     expect(text).toBe('No matches found');
-    cleanup?.();
+    await cleanup?.();
     expect(dispose).toHaveBeenCalledOnce();
   });
 
@@ -105,7 +102,7 @@ describe('grep server facet', () => {
       tool = registered;
       return { dispose };
     });
-    const cleanup = grepServerFacet.apply(contextFor({ registerTool } as unknown as DoomHeadlessHostService));
+    const cleanup = await grepServerFacet.apply(contextFor({ registerTool } as unknown as DoomHeadlessHostService));
     if (!tool) throw new Error('Grep headless tool was not registered');
 
     await writeFile(join(directory, 'sample.txt'), 'needle one\nother\nneedle two\n');
@@ -129,7 +126,7 @@ describe('grep server facet', () => {
     expect(text).toContain('sample.txt:1:needle one');
     expect(text).toContain('sample.txt-2-other');
     expect(text).not.toContain('sample.txt:3:needle two');
-    cleanup?.();
+    await cleanup?.();
     expect(dispose).toHaveBeenCalledOnce();
   });
 });

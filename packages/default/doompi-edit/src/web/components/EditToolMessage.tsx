@@ -10,7 +10,7 @@ import {
   useSyntaxLines,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { type DiffRow, editCallView, editResultView, resultTextLines } from '../lib/editToolView.ts';
+import { type DiffRow, editCallView, editResultView, resultTextLines } from '../lib/editToolView';
 
 /** Diff rows shown until the item expands; about what the old scroll box held. */
 const COLLAPSED_ROWS = 24;

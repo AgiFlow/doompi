@@ -51,17 +51,25 @@ const runtimeMocks = vi.hoisted(() => ({
 }));
 const cordisRoots: Context[] = [];
 
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
+vi.mock('../../../../packages/core/doompi-extension-contracts/src/controllers/cordisHost', () => ({
   connectDoomCordisHost: async () => ({
     root: runtimeMocks.createCordisRoot(),
     runtime: { abiVersion: 1, generation: 'task-test', hostId: 'task-test', mode: 'composed' },
     dispose: async () => undefined,
   }),
 }));
-vi.mock('../src/commands/index.ts', () => ({ registerTasksCommand: vi.fn() }));
-vi.mock('../src/commands/task/taskTool.ts', () => ({ registerTaskTool: vi.fn() }));
-vi.mock('../src/services/delegation/manager.ts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/services/delegation/manager.ts')>()),
+vi.mock('../src/controllers/tasksCommand', () => ({
+  createTasksCommand: vi.fn(() => ['tasks', { handler: async () => undefined }]),
+}));
+vi.mock('../src/tools/task', () => ({
+  createTaskTool: vi.fn(() => ({
+    name: 'task',
+    parameters: { type: 'object', properties: {} },
+    execute: async () => ({ content: [] }),
+  })),
+}));
+vi.mock('../src/services/delegation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/services/delegation')>()),
   DelegationManager: class {
     constructor() {
       runtimeMocks.createDelegation();
@@ -73,14 +81,14 @@ vi.mock('../src/services/delegation/manager.ts', async (importOriginal) => ({
     reset = runtimeMocks.delegationReset;
   },
 }));
-vi.mock('../src/services/narration/taskNarration.ts', () => ({ narrateTaskCommit: runtimeMocks.narrateTaskCommit }));
-vi.mock('../src/adapters/store/paths', () => ({
+vi.mock('../src/services/taskNarration', () => ({ narrateTaskCommit: runtimeMocks.narrateTaskCommit }));
+vi.mock('../src/services/paths', () => ({
   hasStorePathOverride: () => false,
   removeLegacyStoreDirectoryAsync: runtimeMocks.removeLegacyStore,
   resolveSessionKey: (sessionId: string) => sessionId,
   sweepStoreFilesAsync: runtimeMocks.sweepStore,
 }));
-vi.mock('../src/adapters/store/taskStore', () => ({
+vi.mock('../src/services/taskStore', () => ({
   TaskStore: class {
     readonly snapshot = { tasks: [] };
     readonly storePath = '/tmp/doom-task/tasks.json';
@@ -94,7 +102,7 @@ vi.mock('../src/adapters/store/taskStore', () => ({
     readAsync = runtimeMocks.readStore;
   },
 }));
-vi.mock('../src/tui/taskOverlay.ts', () => ({
+vi.mock('../src/tui/taskOverlay', () => ({
   TaskOverlay: class {
     constructor() {
       runtimeMocks.createOverlay();
@@ -106,14 +114,14 @@ vi.mock('../src/tui/taskOverlay.ts', () => ({
     update = runtimeMocks.overlayUpdate;
   },
 }));
-vi.mock('../src/types/config.ts', () => ({
+vi.mock('../src/services/config', () => ({
   COLLAPSE_KEY_OFF: 'off',
   getDelegationTimeoutMs: () => 1_000,
   getMaxTasks: () => 20,
   getStoreTtlMs: () => 60_000,
   resolveCollapseKey: () => 'off',
 }));
-vi.mock('../src/adapters/telemetry/logSinkTelemetry.ts', () => ({
+vi.mock('../src/services/logSinkTelemetry', () => ({
   TASK_EVENT: {
     sessionStartFailed: 'session-start-failed',
     sessionStartDegraded: 'session-start-degraded',
@@ -131,7 +139,7 @@ vi.mock('../src/adapters/telemetry/logSinkTelemetry.ts', () => ({
   }),
 }));
 
-const { taskExtension } = await import('../src/adapters/pi/extension.ts');
+const { taskExtension } = await import('../src/extensions/pi');
 
 interface TestPi {
   pi: ExtensionAPI;
@@ -143,6 +151,9 @@ function createPi(): TestPi {
   return {
     pi: {
       events: {},
+      registerTool: vi.fn(),
+      registerCommand: vi.fn(),
+      registerShortcut: vi.fn(),
       on: (name: string, handler: (...args: unknown[]) => unknown) => handlers.set(name, handler),
       registerMessageRenderer: vi.fn(),
       sendMessage: vi.fn(),

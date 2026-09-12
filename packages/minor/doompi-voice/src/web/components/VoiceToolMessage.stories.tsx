@@ -4,13 +4,8 @@
  * default export is a bare `const meta`.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { VoiceToolMessage } from './VoiceToolMessage.tsx';
-import {
-  VOICE_DESCRIBE_TOOL,
-  VOICE_NARRATE_TOOL,
-  VOICE_TRANSFER_TOOL,
-  VOICE_USE_TOOL,
-} from '../lib/voiceToolRender.ts';
+import { VoiceToolMessage } from './VoiceToolMessage';
+import { VOICE_DESCRIBE_TOOL, VOICE_NARRATE_TOOL, VOICE_TRANSFER_TOOL, VOICE_USE_TOOL } from '../lib/voiceToolRender';
 
 const props = (overrides: Parameters<typeof toolMessagePropsFixture>[0]) => toolMessagePropsFixture(overrides).props;
 

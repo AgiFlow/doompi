@@ -1,8 +1,8 @@
 import { AlertIcon, Button, LoaderIcon, MicIcon, StopIcon } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useEffect, useRef, useState } from 'react';
-import { ManualComposerRecorder, type ManualComposerRecorderState } from '../api/manualComposerRecorder.ts';
-import { voiceActivityView } from '../lib/voiceActivityView.ts';
+import { ManualComposerRecorder, type ManualComposerRecorderState } from '../api/manualComposerRecorder';
+import { voiceActivityView } from '../lib/voiceActivityView';
 
 const MANUAL_UNAVAILABLE_LABEL = 'manual voice is unavailable while autonomous voice is active';
 

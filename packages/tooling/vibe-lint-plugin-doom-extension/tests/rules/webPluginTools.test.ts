@@ -38,7 +38,19 @@ describe('web-plugin-tool-renderers', () => {
   const entry = (tools: string, extra = '') =>
     `import { defineWebPlugin } from '${CONTRACTS}';\nexport const webPlugin = defineWebPlugin({ id: 'demo', toolRenderers: [{ tools: ${tools}, ${extra}message: X }] });`;
 
-  const nativePath = 'src/adapters/server/headlessSessionHost.ts';
+  it('exempts generic contract helper registration only at its owned controller paths', () => {
+    const file = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-extension-contracts' }));
+    write('src/controllers/piExtension.ts', tool('item.name'));
+    write('src/controllers/serverPlugin.ts', tool('item.name'));
+    expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
+    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
+    expect(webPluginToolRenderers.check?.(file, root)).toContain('ships no doompiWeb');
+    write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-extension-contracts' }));
+    write('src/controllers/unowned.ts', tool("'other'"));
+    expect(webPluginToolRenderers.check?.(file, root)).toContain('ships no doompiWeb');
+  });
+
+  const nativePath = 'src/controllers/headlessSessionHost.ts';
   const projection = `function adapt(tool: HeadlessTool): AgentHarnessTool<object> {
     return { name: tool.name, parameters: tool.parameters, async execute() { return tool.execute(); } };
   }`;
@@ -47,13 +59,13 @@ describe('web-plugin-tool-renderers', () => {
     const file = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi' }));
     write(nativePath, projection);
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
-    write('src/adapters/pi/owned.ts', tool("'owned'"));
+    write('src/tools/owned.ts', tool("'owned'"));
     expect(webPluginToolRenderers.check?.(file, root)).toContain('owned');
   });
 
   it.each([
     ['another package', 'p', nativePath, projection],
-    ['another core module', '@agimon-ai/doompi', 'src/adapters/pi/tool.ts', projection],
+    ['another core module', '@agimon-ai/doompi', 'src/tools/tool.ts', projection],
     [
       'a newly named core tool',
       '@agimon-ai/doompi',
@@ -85,10 +97,10 @@ describe('web-plugin-tool-renderers', () => {
   });
 
   it('is silent off the manifest and for a package that registers no tool', () => {
-    write('src/adapters/pi/tool.ts', tool("'read'"));
+    write('src/tools/tool.ts', tool("'read'"));
     expect(webPluginToolRenderers.check?.(write('src/web/index.ts', entry("['read']")), root)).toBeNull();
     const clean = manifest();
-    write('src/adapters/pi/tool.ts', "voiceTools.register({ name: 'x', inputSchema: {}, execute() {} });");
+    write('src/tools/tool.ts', "voiceTools.register({ name: 'x', inputSchema: {}, execute() {} });");
     write(
       'src/services/modes.ts',
       "catalog.registerOwner({ descriptor: { id: 'plan', actions: [{ id: 'go', parameters: [] }] } });",
@@ -98,7 +110,7 @@ describe('web-plugin-tool-renderers', () => {
 
   it('accepts a literal name claimed by a literal tools entry', () => {
     const file = manifest();
-    write('src/adapters/pi/tool.ts', tool("'read'"));
+    write('src/tools/tool.ts', tool("'read'"));
     write('src/web/index.ts', entry("['read']"));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
   });
@@ -125,30 +137,30 @@ describe('web-plugin-tool-renderers', () => {
       "export const WORKFLOW_PI_TOOL_NAMES = ['list_workflows', 'launch_workflow'] as const;",
     );
     write(
-      'src/adapters/pi/tools.ts',
-      `import { WORKFLOW_PI_TOOL_NAMES } from '../../schemas/names.ts';\nconst [LIST, LAUNCH] = WORKFLOW_PI_TOOL_NAMES;\nconst [RUN] = ['workflow_run'] as const;\n${tool('LIST')}\n${tool('LAUNCH')}\n${tool('RUN')}`,
+      'src/tools/tools.ts',
+      `import { WORKFLOW_PI_TOOL_NAMES } from '../schemas/names';\nconst [LIST, LAUNCH] = WORKFLOW_PI_TOOL_NAMES;\nconst [RUN] = ['workflow_run'] as const;\n${tool('LIST')}\n${tool('LAUNCH')}\n${tool('RUN')}`,
     );
     write('src/web/index.ts', entry("['list_workflows', 'launch_workflow', 'workflow_run']"));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
     write('src/web/index.ts', entry("['list_workflows']"));
     const result = webPluginToolRenderers.check?.(file, root);
-    expect(result).toContain('launch_workflow (src/adapters/pi/tools.ts)');
-    expect(result).toContain('workflow_run (src/adapters/pi/tools.ts)');
+    expect(result).toContain('launch_workflow (src/tools/tools.ts)');
+    expect(result).toContain('workflow_run (src/tools/tools.ts)');
   });
 
   it('reports an unclaimed tool with the file that registers it', () => {
     const file = manifest();
-    write('src/adapters/pi/tool.ts', `${tool("'read'")}\n${tool("'write'")}`);
+    write('src/tools/tool.ts', `${tool("'read'")}\n${tool("'write'")}`);
     write('src/web/index.ts', entry("['read']"));
     const result = webPluginToolRenderers.check?.(file, root);
-    expect(result).toContain('write (src/adapters/pi/tool.ts)');
+    expect(result).toContain('write (src/tools/tool.ts)');
     expect(result).not.toContain('read (');
     expect(result).toContain('toolRenderers');
   });
 
   it('requires a matches renderer for a name computed at runtime', () => {
     const file = manifest();
-    write('src/adapters/pi/tool.ts', tool('tool.piName'));
+    write('src/tools/tool.ts', tool('tool.piName'));
     write('src/web/index.ts', entry('[]'));
     expect(webPluginToolRenderers.check?.(file, root)).toContain('computed at runtime');
     write('src/web/index.ts', entry('[]', 'matches: () => true, '));
@@ -158,21 +170,21 @@ describe('web-plugin-tool-renderers', () => {
   it('skips a name imported from another package, and lists it only beside a real miss', () => {
     const file = manifest();
     write(
-      'src/adapters/pi/tool.ts',
-      `import { NARRATE_TOOL_NAME } from '@agimon-ai/doompi-extension-contracts/voice-tools';\n${tool('NARRATE_TOOL_NAME')}`,
+      'src/tools/tool.ts',
+      `import { NARRATE_TOOL_NAME } from '@agimon-ai/doompi-voice/voice-tools';\n${tool('NARRATE_TOOL_NAME')}`,
     );
     write('src/web/index.ts', entry("['narrate']"));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
-    write('src/adapters/pi/other.ts', tool("'other'"));
+    write('src/tools/other.ts', tool("'other'"));
     const result = webPluginToolRenderers.check?.(file, root);
-    expect(result).toContain('other (src/adapters/pi/other.ts)');
+    expect(result).toContain('other (src/tools/other.ts)');
     expect(result).toContain('Not checked (name imported from a package): NARRATE_TOOL_NAME');
   });
 
   it('honours the ignore marker beside a definition', () => {
     const file = manifest();
     write(
-      'src/adapters/pi/child.ts',
+      'src/tools/child.ts',
       `// web-plugin-tool-renderers: ignore structured_output (child process only)\n${tool("'structured_output'")}`,
     );
     write('src/web/index.ts', entry('[]'));
@@ -181,7 +193,7 @@ describe('web-plugin-tool-renderers', () => {
 
   it('ignores test files and fixtures under src', () => {
     const file = manifest();
-    write('src/adapters/pi/tool.test.ts', tool("'ghost'"));
+    write('src/tools/tool.test.ts', tool("'ghost'"));
     write('src/fixtures/tool.ts', tool("'ghost'"));
     write('src/web/index.ts', entry('[]'));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
@@ -189,13 +201,13 @@ describe('web-plugin-tool-renderers', () => {
 
   it('asks for a web plugin when tools are registered and none is declared', () => {
     const file = manifest(false);
-    write('src/adapters/pi/tool.ts', tool("'read'"));
+    write('src/tools/tool.ts', tool("'read'"));
     expect(webPluginToolRenderers.check?.(file, root)).toContain('scaffold-doom-web-plugin');
   });
 
   it('reads a contribution array kept in a sibling web module', () => {
     const file = manifest();
-    write('src/adapters/pi/tool.ts', `${tool("'subagent'")}\n${tool("'intercom'")}`);
+    write('src/tools/tool.ts', `${tool("'subagent'")}\n${tool("'intercom'")}`);
     write(
       'src/web/toolRenderers.ts',
       "export const teamToolRenderers = [{ tools: ['subagent'], message: A }, { tools: ['intercom'], message: B }];",
@@ -215,11 +227,11 @@ describe('web-plugin-tool-renderers', () => {
       'package.json',
       JSON.stringify({ name: 'p', doompiWeb: { pluginId: 'demo', client: './src/exports/webClient.ts' } }),
     );
-    write('src/adapters/pi/tool.ts', tool("'read'"));
+    write('src/tools/tool.ts', tool("'read'"));
     write('src/web/index.ts', entry("['read']"));
     expect(webPluginToolRenderers.check?.(file, root)).toBeNull();
 
-    write('src/adapters/pi/tool.ts', `${tool("'read'")}\n${tool("'write'")}`);
+    write('src/tools/tool.ts', `${tool("'read'")}\n${tool("'write'")}`);
     expect(webPluginToolRenderers.check?.(file, root)).toContain('write');
   });
 });

@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createWorktreeGit } from '../../../../src/adapters/worktree/gitCli.ts';
-import type { WorktreeGit } from '../../../../src/types/worktreeRegistry.ts';
+import { createWorktreeGit } from '../../../../src/services/gitCli';
+import type { WorktreeGit } from '../../../../src/types/worktreeRegistry';
 
 let root: string;
 let repository: string;

@@ -7,9 +7,9 @@ import {
   type ToolRenderResultOptions,
 } from '@earendil-works/pi-coding-agent';
 import { type Component, Text } from '@earendil-works/pi-tui';
-import { renderLineNumber } from './codeGutter.ts';
-import { renderDoomDiff } from './diffRender.ts';
-import { DoomToolCall, DoomToolResult, frameDoomToolResult, renderToolHeading } from './toolChrome.ts';
+import { renderLineNumber } from './codeGutter';
+import { renderDoomDiff } from './diffRender';
+import { DoomToolCall, DoomToolResult, frameDoomToolResult, renderToolHeading } from './toolChrome';
 
 export const READ_COLLAPSED_LINES = 10;
 export const GREP_COLLAPSED_LINES = 15;

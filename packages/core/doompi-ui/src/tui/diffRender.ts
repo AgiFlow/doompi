@@ -1,7 +1,7 @@
 import { highlightCode, type Theme, type ThemeColor } from '@earendil-works/pi-coding-agent';
 import type { Component } from '@earendil-works/pi-tui';
-import { renderLineNumber } from './codeGutter.ts';
-import { fitStyledLine } from './rendering.ts';
+import { renderLineNumber } from './codeGutter';
+import { fitStyledLine } from './rendering';
 
 /** The background palette is not exported by name, so take it from the method. */
 type ThemeBg = Parameters<Theme['bg']>[0];

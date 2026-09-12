@@ -6,7 +6,7 @@ import {
   AskUserPromptEventSchema,
   DOOM_ASK_USER_BLOCKED_EVENT,
   DOOM_ASK_USER_PROMPT_EVENT,
-} from '../src/schemas/askUser.ts';
+} from '../src/schemas/askUser';
 
 const prompt = {
   questions: [

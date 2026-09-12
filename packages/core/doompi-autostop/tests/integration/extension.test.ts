@@ -1,9 +1,9 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { autoStopExtension } from '../../src/adapters/pi/extension.ts';
-import { DEFAULT_AUTO_STOP_DELAYS } from '../../src/services/idlePolicy.ts';
-import { createSessionHarness } from '../helpers/session.ts';
+import { autoStopExtension } from '../../src/extensions/pi';
+import { DEFAULT_AUTO_STOP_DELAYS } from '../../src/exports';
+import { createSessionHarness } from '../helpers/session';
 
 const { cooldownMs, recheckMs } = DEFAULT_AUTO_STOP_DELAYS;
 
@@ -150,8 +150,7 @@ describe('auto-stop Pi factory', () => {
       });
 
     await expect(autoStopExtension(pi)).rejects.toThrow('registration boom');
-    // The shutdown hook is the last registration, so a throw before it means
-    // nothing is left holding the session.
-    expect(pi.on).toHaveBeenCalledTimes(1);
+    expect(pi.on).toHaveBeenCalledWith('session_shutdown', expect.any(Function));
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

@@ -2,14 +2,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { HARNESS_STATE_KEYS, readHarnessState } from '../src/adapters/harnessState.ts';
+import { HARNESS_STATE_KEYS, readHarnessState } from '../src/services/harnessState';
 import {
   createHarnessSession,
   getHarnessState,
   HARNESS_STATE_POINTER,
   resetHarnessStore,
   updateHarnessState,
-} from '../src/adapters/harnessStore.ts';
+} from '../src/services/harnessStore';
 
 const TRACKED_KEYS = [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)];
 

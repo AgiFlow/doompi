@@ -12,8 +12,8 @@ import {
   normalizeDoomNotificationRequest,
   readDoomNotificationService,
   requireDoomNotificationService,
-} from '../src/exports/notification.ts';
-import * as internalNotification from '../src/schemas/notification.ts';
+} from '../src/exports/notification';
+import * as internalNotification from '../src/schemas/notification';
 describe('Doom notification Cordis contract', () => {
   it('normalizes a bounded request into complete versioned entry data', () => {
     const request = normalizeDoomNotificationRequest({

@@ -12,7 +12,7 @@ import {
   computerExecCallSummary,
   computerExecCollapsedLines,
   computerExecResultLines,
-} from '../lib/computerExecToolRender.ts';
+} from '../lib/computerExecToolRender';
 
 export function ComputerExecToolCard({ toolName, args, result, running, isError }: ToolMessageRenderProps) {
   const lines = computerExecResultLines(result);

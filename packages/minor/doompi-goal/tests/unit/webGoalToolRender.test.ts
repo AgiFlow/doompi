@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GOAL_TOOL_NAMES, goalCallSummary, goalResultLines } from '../../src/web/lib/goalToolRender.ts';
+import { GOAL_TOOL_NAMES, goalCallSummary, goalResultLines } from '../../src/web/lib/goalToolRender';
 
 const text = (value: string, details?: unknown) => ({ content: [{ type: 'text', text: value }], details });
 const done = { expanded: false, isError: false, isPartial: false };

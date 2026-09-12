@@ -1,0 +1,14 @@
+import type { WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+import type { {{ methodName | pascalCase }}Input, {{ methodName | pascalCase }}Output } from '../../types/{{ methodName | camelCase }}Protocol';
+
+/** The mount is explicit, so no parent scope is selected implicitly. */
+export async function {{ methodName | camelCase }}(
+  runtime: WebPluginRuntime,
+  mount: {% if scope == 'workspace' %}{ scope: 'workspace'; workspaceId: string }{% else %}{ scope: 'global' }{% endif %},
+  input: {{ methodName | pascalCase }}Input,
+): Promise<{{ methodName | pascalCase }}Output> {
+  const value = await runtime.invokeServerMethod({ mount, service: '{{ serviceName }}', method: '{{ methodName | camelCase }}', input });
+  if (typeof value !== 'object' || value === null || !('value' in value) || typeof value.value !== 'string')
+    throw new Error('Invalid {{ serviceName }}.{{ methodName | camelCase }} response.');
+  return { value: value.value };
+}

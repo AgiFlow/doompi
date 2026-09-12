@@ -49,11 +49,6 @@
       "import": "./dist/askUser.mjs",
       "require": "./dist/askUser.cjs"
     },
-    "./author-facade": {
-      "types": "./dist/authorFacade.d.mts",
-      "import": "./dist/authorFacade.mjs",
-      "require": "./dist/authorFacade.cjs"
-    },
     "./background-work": {
       "types": "./dist/backgroundWork.d.mts",
       "import": "./dist/backgroundWork.mjs",
@@ -109,11 +104,6 @@
       "import": "./dist/leader.mjs",
       "require": "./dist/leader.cjs"
     },
-    "./loop-launchers": {
-      "types": "./dist/loopLaunchers.d.mts",
-      "import": "./dist/loopLaunchers.mjs",
-      "require": "./dist/loopLaunchers.cjs"
-    },
     "./mcp-projection": {
       "types": "./dist/mcpProjection.d.mts",
       "import": "./dist/mcpProjection.mjs",
@@ -158,6 +148,11 @@
       "types": "./dist/profileIdentity.d.mts",
       "import": "./dist/profileIdentity.mjs",
       "require": "./dist/profileIdentity.cjs"
+    },
+    "./plugin-protocol": {
+      "types": "./dist/pluginProtocol.d.mts",
+      "import": "./dist/pluginProtocol.mjs",
+      "require": "./dist/pluginProtocol.cjs"
     },
     "./protocol": {
       "types": "./dist/protocol.d.mts",
@@ -244,17 +239,12 @@
       "import": "./dist/uiHub.mjs",
       "require": "./dist/uiHub.cjs"
     },
-    "./voice-reload-handoff": {
-      "types": "./dist/voiceReloadHandoff.d.mts",
-      "import": "./dist/voiceReloadHandoff.mjs",
-      "require": "./dist/voiceReloadHandoff.cjs"
-    },
-    "./voice-tools": {
-      "types": "./dist/voiceTools.d.mts",
-      "import": "./dist/voiceTools.mjs",
-      "require": "./dist/voiceTools.cjs"
-    },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./pi-extension": {
+      "types": "./dist/piExtension.d.mts",
+      "import": "./dist/piExtension.mjs",
+      "require": "./dist/piExtension.cjs"
+    }
   },
   "publishConfig": {
     "access": "public"

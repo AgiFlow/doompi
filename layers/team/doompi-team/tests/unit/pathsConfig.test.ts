@@ -12,7 +12,7 @@ import {
   resolveChildCwd,
   resolveConfigDirName,
   resolveWatchPath,
-} from '../../src/adapters/filesystem/configDir';
+} from '../../src/services/configDir';
 import {
   createSessionScope,
   scopeResultsDir,
@@ -22,7 +22,7 @@ import {
   sessionScopeKey,
   resolveTempScopeId,
   TEMP_ROOT_DIR,
-} from '../../src/adapters/filesystem/paths';
+} from '../../src/services/sessionPaths';
 
 const temporaryDirs: string[] = [];
 

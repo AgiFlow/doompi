@@ -1,12 +1,12 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RunnerShellPanel } from '../../src/web/components/RunnerShellPanel.tsx';
-import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore.ts';
-import type { RunnerRunView } from '../../src/types/webRunners.ts';
-import { sendRunnerInput } from '../../src/web/api/screenApi.ts';
+import { RunnerShellPanel } from '../../src/web/components/RunnerShellPanel';
+import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore';
+import type { RunnerRunView } from '../../src/types/webRunners';
+import { sendRunnerInput } from '../../src/web/api/screenApi';
 
-vi.mock('../../src/web/api/screenApi.ts', () => ({
+vi.mock('../../src/web/api/screenApi', () => ({
   decodeChunk: vi.fn(),
   sendRunnerInput: vi.fn().mockResolvedValue(true),
   watchRunnerScreen: vi.fn(),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { readDirectToolFilter } from '../src/adapters/process/directToolsEnvironment.ts';
-import { DIRECT_TOOLS_ENV, NO_DIRECT_TOOLS } from '../src/schemas/directTools.ts';
-import { DirectToolFilter } from '../src/services/directTools.ts';
+import { readDirectToolFilter } from '../src/services/directToolsEnvironment';
+import { DIRECT_TOOLS_ENV, NO_DIRECT_TOOLS } from '../src/schemas/directTools';
+import { DirectToolFilter } from '../src/services/directTools';
 
 describe('DirectToolFilter', () => {
   it('allows every tool of a server selected whole', () => {

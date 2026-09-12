@@ -1,18 +1,13 @@
-import type {
-  MinorModeCatalogService,
-  MinorModeOwnerDefinition,
-  MinorModeOwnerHandle,
-} from '@agimon-ai/doompi-extension-contracts/mode';
-import { DOOM_TOOL_SURFACE_SERVICE, createDoomToolSurface } from '@agimon-ai/doompi-extension-contracts/tool-surface';
-import type { Context } from '@deepseek-ai/cordis';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { MinorModeOwnerDefinition, MinorModeOwnerHandle } from '@agimon-ai/doompi-extension-contracts/mode';
+import { createDoomToolSurface } from '@agimon-ai/doompi-extension-contracts/tool-surface';
+import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { installAuthorMode } from '../../src/services/authorMode.ts';
-import type { AuthorCatalog } from '../../src/services/authorCatalog.ts';
+import { authorToolRestriction, createAuthorCatalogMonitor } from '../../src/services/authorCatalog/monitor';
+import { authorMinorMode } from '../../src/models/authorMode';
+import type { AuthorCatalog } from '../../src/services/authorCatalog/type';
 
 function fixture() {
   let definition: MinorModeOwnerDefinition<ExtensionContext> | undefined;
-  let cleanup: (() => void) | undefined;
   const allTools = ['read', 'open_authoring_file', 'describe_author_tools', 'use_author_tools'];
   let activeTools = [...allTools];
   let viewportFocused = false;
@@ -22,12 +17,6 @@ function fixture() {
     publish: vi.fn(),
     dispose: vi.fn(),
   };
-  const modeCatalog = {
-    registerOwner(next: MinorModeOwnerDefinition<ExtensionContext>) {
-      definition = next;
-      return handle;
-    },
-  } as MinorModeCatalogService;
   const surface = createDoomToolSurface({
     generation: 'test',
     allTools: () => allTools,
@@ -36,22 +25,6 @@ function fixture() {
       activeTools = next;
     },
   });
-  const cordis = {
-    inject(services: readonly string[], callback: (context: Context) => (() => void) | void) {
-      const service = services.includes(DOOM_TOOL_SURFACE_SERVICE) ? surface : modeCatalog;
-      callback({ get: () => service } as unknown as Context);
-    },
-    effect(factory: () => () => void) {
-      cleanup = factory();
-    },
-  } as unknown as Context;
-  const pi = {
-    on: vi.fn((event: string, listener: () => void) => {
-      if (event === 'session_start') sessionStart = listener;
-    }),
-  } as unknown as ExtensionAPI;
-  const facade = { dispose: vi.fn() };
-  const registerFacades = vi.fn(() => facade);
   const catalog: AuthorCatalog = {
     open: vi.fn(),
     describe: vi.fn(async () => {
@@ -64,25 +37,71 @@ function fixture() {
     execute: vi.fn(),
   };
 
-  const controller = installAuthorMode(cordis, pi, catalog, registerFacades, {
+  const monitor = createAuthorCatalogMonitor(catalog, {
     schedule(callback, delayMs) {
       const timer = setTimeout(callback, delayMs);
       return () => clearTimeout(timer);
     },
   });
+  let active = false;
+  let disposed = false;
+  const mode = authorMinorMode.createOwner({
+    isActive: () => active,
+    detail: () => (monitor.snapshot() ? 'document viewport focused' : 'waiting for a focused document'),
+    setActive(enabled) {
+      if (disposed || active === enabled) return;
+      active = enabled;
+      if (enabled) monitor.start();
+      else monitor.stop();
+      updateRestriction();
+    },
+  });
+  definition = mode.definition;
+  mode.attach(handle);
+  const restriction = surface.register({
+    source: '@agimon-ai/doompi-author',
+    restrict: authorToolRestriction(active, !!monitor.snapshot()),
+  });
+  const updateRestriction = () => restriction.update(authorToolRestriction(active, !!monitor.snapshot()));
+  const unsubscribeMonitor = monitor.subscribe(() => {
+    mode.publish();
+    updateRestriction();
+  });
+  sessionStart = () => mode.publish();
+  const change = (enabled: boolean) => {
+    if (disposed || active === enabled) return;
+    active = enabled;
+    if (enabled) monitor.start();
+    else monitor.stop();
+    updateRestriction();
+    mode.publish();
+  };
   return {
-    controller,
+    controller: {
+      activate: () => change(true),
+      deactivate: () => change(false),
+      snapshot: () => ({
+        activation: active ? ('active' as const) : ('inactive' as const),
+        catalogToken: monitor.snapshot()?.catalogToken ?? '',
+        capabilityCount: monitor.snapshot()?.tools.length ?? 0,
+      }),
+    },
     definition: () => definition!,
     activeTools: () => activeTools,
     handle,
-    facade,
     catalog,
     surface,
     startSession: () => sessionStart?.(),
     focus: (focused: boolean) => {
       viewportFocused = focused;
     },
-    cleanup: () => cleanup?.(),
+    cleanup: () => {
+      change(false);
+      disposed = true;
+      monitor.dispose();
+      unsubscribeMonitor();
+      mode.detach();
+    },
   };
 }
 
@@ -99,6 +118,7 @@ describe('Author minor mode', () => {
     const definition = value.definition();
 
     expect(definition.descriptor).toMatchObject({ id: 'author', label: 'Author' });
+    expect(definition.descriptor).toBe(authorMinorMode.descriptor);
     expect(definition.initialState).toMatchObject({ activation: 'inactive', condition: 'ready' });
     // The arbiter hides an inactive mode's tools as soon as it registers, so
     // the surface is already narrowed before the first session starts.
@@ -122,7 +142,6 @@ describe('Author minor mode', () => {
 
     value.cleanup();
     expect(value.activeTools()).toEqual(['read']);
-    expect(value.facade.dispose).toHaveBeenCalledOnce();
   });
 
   it('adds facades for an accepted focused catalog, then removes them on blur and deactivation', async () => {
@@ -157,9 +176,12 @@ describe('Author minor mode', () => {
     const signal = vi.mocked(value.catalog.describe).mock.calls[0]![0];
 
     value.cleanup();
+    value.cleanup();
+    value.controller.activate();
     await vi.advanceTimersByTimeAsync(2_000);
 
     expect(signal?.aborted).toBe(true);
+    expect(value.handle.dispose).not.toHaveBeenCalled();
     expect(value.catalog.describe).toHaveBeenCalledOnce();
     expect(value.activeTools()).toEqual(['read']);
   });

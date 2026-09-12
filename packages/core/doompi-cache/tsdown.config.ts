@@ -20,7 +20,7 @@ export default defineConfig([
     entry: {
       index: 'src/exports/index.ts',
       env: 'src/exports/env.ts',
-      'extensions/server': 'src/exports/extensions/server.ts',
+      'extensions/server': 'src/extensions/server.ts',
     },
     clean: true,
     dts: { incremental: true, parallel: false, eager: true },
@@ -29,7 +29,7 @@ export default defineConfig([
   {
     ...output,
     name: 'pi-extension',
-    entry: { 'extensions/pi': 'src/exports/extensions/pi.ts' },
+    entry: { 'extensions/pi': 'src/extensions/pi.ts' },
     clean: false,
     dts: { incremental: true, parallel: false, eager: true },
     alias: {

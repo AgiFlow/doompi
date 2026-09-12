@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { applyTaskMutation, MAX_UPSERT_ITEMS } from '../src/exports/store/reducer';
-import { emptyDocument, type TaskDocument, type TaskItemMutation } from '../src/exports/store/types';
+import { applyTaskMutation, MAX_UPSERT_ITEMS } from '../src/exports/storeReducer';
+import { emptyDocument, type TaskDocument, type TaskItemMutation } from '../src/exports/storeTypes';
 
 const NOW = '2026-07-31T00:00:00.000Z';
 

@@ -2,11 +2,11 @@ import { AnsiLine, Button, Input, SearchIcon, StatusBadge, type StatusTone } fro
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { RunnerRunView } from '../../types/webRunners.ts';
-import type { RunnerLogResponse } from '../../types/webRunnerLog.ts';
-import { formatRunnerUptime, isFollowingLive, logViewLines, tailLineNumbers } from '../lib/format.ts';
-import { fetchRunnerLog, followRunnerLog } from '../api/logApi.ts';
-import { requestRunnerStop, runners } from '../stores/runnersStore.ts';
+import type { RunnerRunView } from '../../types/webRunners';
+import type { RunnerLogResponse } from '../../types/webRunnerLog';
+import { formatRunnerUptime, isFollowingLive, logViewLines, tailLineNumbers } from '../lib/format';
+import { fetchRunnerLog, followRunnerLog } from '../api/logApi';
+import { requestRunnerStop, runners } from '../stores/runnersStore';
 
 const TICK_MS = 10_000;
 /** The tab id doubles as the URL segment, so it stays plain and unique across plugins. */

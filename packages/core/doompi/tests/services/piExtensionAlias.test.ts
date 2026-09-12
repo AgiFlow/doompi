@@ -9,18 +9,18 @@ import {
   piExtensionAliasIsCurrent,
   piExtensionAliasPath,
   writePiExtensionAlias,
-} from '../../src/adapters/piExtensionAlias';
+} from '../../src/services/piExtensionAlias';
 import {
   PI_DISPATCHER_VERSION,
   piExtensionDispatcherIsUpgradeable,
   piExtensionDispatcherVersion,
-} from '../../src/adapters/piExtensionDispatcher.ts';
+} from '../../src/services/piExtensionDispatcher';
 import {
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '../../src/adapters/syncRegistration.ts';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation.ts';
+} from '../../src/services/syncRegistration';
+import { resolveSyncLocation, syncGenerationDirectory } from '../../src/services/syncLocation';
 
 const temporaryRoots: string[] = [];
 

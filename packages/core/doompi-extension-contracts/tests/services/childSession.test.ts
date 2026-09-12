@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DoomChildSessionRequest, DoomChildSessionRuntime } from '../../src/schemas/childSession.ts';
-import { createDoomChildSessionService } from '../../src/services/childSession.ts';
+import type { DoomChildSessionRequest, DoomChildSessionRuntime } from '../../src/schemas/childSession';
+import { createDoomChildSessionService } from '../../src/services/childSession';
 
 function deferred<T = void>(): {
   readonly promise: Promise<T>;
@@ -49,7 +49,7 @@ function service(
 
 describe('createDoomChildSessionService', () => {
   it('publishes completion only after cleanup and replays it without retaining late subscribers', async () => {
-    const prompt = deferred();
+    const prompt = deferred<string | void>();
     const dispose = deferred();
     const child = runtime({
       sessionFile: '/sessions/child.jsonl',
@@ -58,13 +58,13 @@ describe('createDoomChildSessionService', () => {
     });
     const sessions = service(async () => child);
     const handle = await sessions.start(request());
-    const events: Array<{ state: string; timestamp: number; sessionFile?: string }> = [];
+    const events: Array<{ state: string; timestamp: number; message?: string; sessionFile?: string }> = [];
     handle.subscribe((event) => events.push(event));
 
     expect(events).toEqual([
       { runId: 'run-1', state: 'running', timestamp: 100, sessionFile: '/sessions/child.jsonl' },
     ]);
-    prompt.resolve();
+    prompt.resolve('final answer');
     await vi.waitFor(() => expect(child.dispose).toHaveBeenCalledOnce());
     expect(handle.state()).toBe('running');
     expect(sessions.get('run-1')).toBe(handle);
@@ -72,7 +72,7 @@ describe('createDoomChildSessionService', () => {
     dispose.resolve();
     await vi.waitFor(() => expect(handle.state()).toBe('completed'));
     expect(events.map((event) => event.state)).toEqual(['running', 'completed']);
-    expect(events[1]?.timestamp).toBe(101);
+    expect(events[1]).toMatchObject({ timestamp: 101, message: 'final answer' });
     expect(sessions.get('run-1')).toBeUndefined();
 
     const lateEvents: string[] = [];

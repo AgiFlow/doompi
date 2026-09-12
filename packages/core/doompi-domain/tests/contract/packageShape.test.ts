@@ -42,7 +42,7 @@ describe('doompi-domain package contract', () => {
       expect.arrayContaining([
         'dist',
         'src/web',
-        'src/exports/webClient.ts',
+        'src/extensions/web.ts',
         'llms.txt',
         'src/prompts',
         'README.md',
@@ -101,12 +101,12 @@ describe('doompi-domain package contract', () => {
     expect(manifest.doompiWeb).toEqual({
       pluginId: 'domain',
       channels: [],
-      client: './src/exports/webClient.ts',
+      client: './src/extensions/web.ts',
       scopes: ['session'],
     });
-    const client = await readFile(path.join(packageDirectory, 'src/exports/webClient.ts'), 'utf8');
-    expect(client).toContain("export { webPlugin } from '../web/index.ts';");
-    const entry = await readFile(path.join(packageDirectory, 'src/web/index.ts'), 'utf8');
+    const client = await readFile(path.join(packageDirectory, 'src/extensions/web.ts'), 'utf8');
+    expect(client).toContain('export const webPlugin = defineWebPlugin');
+    const entry = client;
     expect(entry).toContain('defineWebPlugin');
     expect(entry).toContain("statusKey: 'doom-domain'");
     expect(entry).toContain('multi: true');
@@ -122,16 +122,16 @@ describe('doompi-domain package contract', () => {
   });
 
   it('routes Pi discovery through the command and voice-tool factory', async () => {
-    const entry = await readFile(path.join(packageDirectory, 'src/exports/extensions/pi.ts'), 'utf8');
-    const factory = await readFile(path.join(packageDirectory, 'src/adapters/pi/extension.ts'), 'utf8');
+    const entry = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
+    const factory = await readFile(path.join(packageDirectory, 'src/controllers/domainRuntime.ts'), 'utf8');
 
-    expect(entry).toContain("from '../../adapters/pi/extension.ts'");
-    expect(entry).toContain('as default');
-    expect(factory).toContain('registerDomainsCommand');
+    expect(entry).toContain('definePiExtension');
+    expect(entry).toContain('export default domainsExtension');
+    expect(factory).toContain('createDomainsCommand');
     expect(factory).toContain('registerDomainVoiceCapabilities');
-    expect(factory).toContain('connectDoomCordisHost');
-    expect(factory).toContain('.root.plugin(');
-    expect(factory).toContain('inject([DOOM_HELP_SERVICE]');
+    expect(factory).toContain('services:');
+    expect(factory).toContain('commands:');
+    expect(entry).toContain('resources:');
     expect(factory).toContain('inject([DOOM_CONFIG_SERVICE, DOOM_TRANSITION_SERVICE]');
     expect(factory).not.toContain('new Context()');
   });

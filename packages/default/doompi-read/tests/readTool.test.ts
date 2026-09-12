@@ -3,14 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { hashLine } from '@agimon-ai/doompi-hashline';
 import { computeFileTag } from '@agimon-ai/doompi-hashline/files';
-import type { AgentToolResult, ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import {
-  assertNotAborted,
-  createTaggedReadResult,
-  isImageRead,
-  registerHashlineReadTool,
-} from '../src/adapters/pi/readTool.ts';
+import { assertNotAborted, createTaggedReadResult, isImageRead, createHashlineReadTool } from '../src/tools/piRead';
 
 interface CapturedTool {
   readonly name: string;
@@ -47,11 +42,7 @@ const theme = {
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'doompi-read-'));
   tool = undefined;
-  registerHashlineReadTool({
-    registerTool(registered) {
-      tool = registered as unknown as CapturedTool;
-    },
-  } as Pick<ExtensionAPI, 'registerTool'>);
+  tool = createHashlineReadTool() as unknown as CapturedTool;
 });
 
 afterEach(async () => {
@@ -130,14 +121,7 @@ describe('hashline read tool', () => {
 
   it('returns native Pi text without hashes when the file is not writable', async () => {
     await writeFile(join(directory, 'readonly.ts'), 'const answer = 42;\n');
-    registerHashlineReadTool(
-      {
-        registerTool(registered) {
-          tool = registered as unknown as CapturedTool;
-        },
-      } as Pick<ExtensionAPI, 'registerTool'>,
-      async () => false,
-    );
+    tool = createHashlineReadTool(async () => false) as unknown as CapturedTool;
 
     const output = text(await execute({ path: 'readonly.ts' }));
     expect(output).toContain('const answer = 42;');

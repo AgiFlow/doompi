@@ -6,7 +6,7 @@ import {
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { registerRunProvider } from '../../src/services/backgroundWork.ts';
+import { registerRunProvider } from '../../src/services/backgroundWork';
 
 const roots: Context[] = [];
 

@@ -3,9 +3,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { formatFleetView, formatRunTranscript } from '../../src/adapters/pi/extensions/statusViews';
-import type { TrackedAsyncJob } from '../../src/adapters/asyncJobTracker';
-import type { AsyncRunStatus } from '../../src/adapters/runs/background/asyncExecution';
+import { formatFleetView, formatRunTranscript } from '../../src/services/statusViews';
+import type { TrackedAsyncJob } from '../../src/services/asyncJobTracker';
+import type { AsyncRunStatus } from '../../src/services/asyncExecution';
 
 const temporaryDirs: string[] = [];
 

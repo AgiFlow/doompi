@@ -30,7 +30,7 @@
     "dist",
     "llms.txt",
     "package.json",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "src/prompts",
     "src/types/webWorktrees.ts",
     "src/types/worktreeRegistry.ts",
@@ -107,7 +107,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session",
@@ -120,7 +120,7 @@
     "channels": [
       "git_worktrees"
     ],
-    "client": "./src/exports/webClient.ts",
+    "client": "./src/extensions/web.ts",
     "scopes": [
       "session"
     ]

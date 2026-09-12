@@ -1,4 +1,8 @@
 import {
+  DOOM_SERVER_HOST_SERVICE,
+  type DoomServerHostService,
+} from '@agimon-ai/doompi-extension-contracts/server-facet';
+import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
   type DoomHeadlessCommand,
@@ -9,11 +13,11 @@ import {
   type DoomHeadlessResource,
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-extension-contracts/headless';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
-import { voiceHeadlessFacet } from '../../../src/adapters/headless/facet.ts';
+import { voiceServerFacet } from '../../../src/extensions/server';
 
-function fixture(selectionModes: string[] = []) {
+async function fixture(selectionModes: string[] = []) {
   let minorModes = selectionModes;
   const execution = {
     cwd: process.cwd(),
@@ -73,10 +77,14 @@ function fixture(selectionModes: string[] = []) {
       return registrations;
     },
   } as unknown as DoomHeadlessHostService;
-  const context = {
-    get: (name: string) => (name === DOOM_HEADLESS_HOST_SERVICE ? host : undefined),
-  } as unknown as Context;
-  const close = voiceHeadlessFacet.apply(context);
+  const context = new Context();
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  context.provide(DOOM_SERVER_HOST_SERVICE, {
+    scope: 'session',
+    context: {},
+    registerApi: () => ({ dispose() {} }),
+  } as unknown as DoomServerHostService);
+  const close = await voiceServerFacet.apply(context);
   return { execution, modes, activities, tools, resources, commands, hooks, publish, dispose, registrations, close };
 }
 
@@ -91,7 +99,7 @@ function operation(execution: DoomHeadlessExecutionContext) {
 
 describe('voice headless facet', () => {
   it('reports the explicit no-media contract across mode, tools, commands, and activity', async () => {
-    const test = fixture(['voice-auto']);
+    const test = await fixture(['voice-auto']);
     const mode = test.modes[0];
     const activity = test.activities[0];
     const resource = test.resources[0];
@@ -140,7 +148,7 @@ describe('voice headless facet', () => {
     await shutdown.handle({}, test.execution);
     expect(test.execution.client.setStatus).toHaveBeenCalledWith('@agimon-ai/doompi-voice', undefined);
 
-    test.close?.();
+    await test.close?.();
     expect(test.dispose).toHaveBeenCalledOnce();
     expect(test.registrations.dispose).toHaveBeenCalled();
   });

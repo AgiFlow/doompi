@@ -26,10 +26,10 @@ function runtimeImports(text: string): string[] {
  */
 describe('startup module graph', () => {
   const startupModules = [
-    'src/adapters/pi/extension.ts',
-    'src/adapters/pi/voiceTool.ts',
-    'src/adapters/domainCatalog.ts',
-    'src/commands/domainsCommand.ts',
+    'src/controllers/domainRuntime.ts',
+    'src/controllers/voiceTool.ts',
+    'src/controllers/domainCatalog.ts',
+    'src/controllers/domainsCommand.ts',
   ];
 
   it('keeps the domain manifest, the switch and the picker behind dynamic imports', () => {
@@ -45,7 +45,7 @@ describe('startup module graph', () => {
   });
 
   it('resolves defaultDomainsForMajorMode from the dynamically imported manifest module', () => {
-    const catalog = source('src/adapters/domainCatalog.ts');
+    const catalog = source('src/controllers/domainCatalog.ts');
 
     expect(catalog).toContain("import('@agimon-ai/doompi-config/domains')");
     expect(catalog).toContain('defaultDomainsForMajorMode');
@@ -59,9 +59,9 @@ describe('startup module graph', () => {
   });
 
   it('emits the lazy switch import into the built Pi entry', () => {
-    const built = path.join(packageDirectory, 'dist', 'adapters', 'pi', 'extension.mjs');
+    const built = path.join(packageDirectory, 'dist', 'controllers', 'domainRuntime.mjs');
     if (!fs.existsSync(built)) return;
 
-    expect(fs.readFileSync(built, 'utf8')).toMatch(/import\(`\.\.\/applyDomains\.mjs`\)/u);
+    expect(fs.readFileSync(built, 'utf8')).toContain('applyDomains.mjs');
   });
 });

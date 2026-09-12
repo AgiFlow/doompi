@@ -6,7 +6,7 @@ import {
   createTelemetryHeaders,
   sanitizeTelemetryAttributes,
   subscribeTelemetryRecords,
-} from '../src/exports/index.js';
+} from '../src/exports';
 
 interface MockHandleOptions {
   backend?: NodeTelemetryHandle['backend'];

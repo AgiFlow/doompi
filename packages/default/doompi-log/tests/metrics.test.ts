@@ -4,7 +4,7 @@ import {
   MAX_RETAINED_METRIC_NAMES,
   MAX_RETAINED_STATE_PER_TOOL,
   METRIC_OVERFLOW_NAME,
-} from '../src/services/metrics.ts';
+} from '../src/services/metrics';
 
 /**
  * The aggregator consumes the same log records the telemetry extension already

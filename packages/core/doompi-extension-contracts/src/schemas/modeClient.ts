@@ -6,7 +6,7 @@ import type {
   MinorModeInvokeOptions,
   MinorModeRecord,
   MinorModeRegistrationRef,
-} from './mode.ts';
+} from './mode';
 
 /** Read-only facade used by UI and voice surfaces over the injected service. */
 export interface MinorModeCatalogClient {

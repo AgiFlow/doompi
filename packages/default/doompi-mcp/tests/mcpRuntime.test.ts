@@ -4,8 +4,8 @@ import path from 'node:path';
 import type { McpServerStateChange, SharedServices } from '@agimon-ai/mcp-proxy';
 import mcpProxyPackage from '@agimon-ai/mcp-proxy/package.json' with { type: 'json' };
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { definitionsCachePath, McpRuntimeOwner, readCachedCatalog } from '../src/adapters/node/mcpRuntime.ts';
-import type { McpConfigSource } from '../src/types/mcpConfig.ts';
+import { definitionsCachePath, McpRuntimeOwner, readCachedCatalog } from '../src/services/mcpRuntime';
+import type { McpConfigSource } from '../src/types/mcpConfig';
 
 const createProxyContainer = vi.fn();
 const getDefaultCachePath = vi.fn((..._args: unknown[]) => '/cache/definitions.json');

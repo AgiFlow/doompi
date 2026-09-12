@@ -7,10 +7,10 @@ export type {
   FooterStatusPlacement,
   FooterTextColor,
   FooterTextSegment,
-} from '../schemas/footer.ts';
+} from '../schemas/footer';
 export {
   FooterStatusItemSchema,
   FooterStatusPlacementSchema,
   FooterTextColorSchema,
   FooterTextSegmentSchema,
-} from '../schemas/footer.ts';
+} from '../schemas/footer';

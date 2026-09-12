@@ -6,9 +6,9 @@ import type {
   VoiceMediaPlayback,
   VoiceMediaPlaybackResult,
   VoiceMediaTransport,
-} from '../src/types/clientMedia.ts';
-import type { BrowserRealtimeOptions, RealtimeBrowserState } from '../src/types/realtime.ts';
-import { VoiceMediaClient, type RealtimeBrowserSessionFactory } from '../src/web/api/voiceMediaClient.ts';
+} from '../src/types/clientMedia';
+import type { BrowserRealtimeOptions, RealtimeBrowserState } from '../src/types/realtime';
+import { VoiceMediaClient, type RealtimeBrowserSessionFactory } from '../src/web/api/voiceMediaClient';
 
 function deferred<T>(): { promise: Promise<T>; resolve(value: T): void; reject(error: Error): void } {
   let resolve!: (value: T) => void;

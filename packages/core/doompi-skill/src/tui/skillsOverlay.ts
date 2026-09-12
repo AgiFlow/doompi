@@ -20,11 +20,11 @@ import {
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from '@agimon-ai/doompi-ui/components/doomOverlay';
+} from '@agimon-ai/doompi-ui/doom-overlay';
 import { fitStyledLine, formatTokens } from '@agimon-ai/doompi-ui/rendering';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
-import type { SkillCatalog, SkillEntry } from '../adapters/skillCatalog.ts';
+import type { SkillCatalog, SkillEntry } from '../services/skillCatalog';
 
 type ThemeColor = Parameters<Theme['fg']>[0];
 type ThemeBg = Parameters<Theme['bg']>[0];

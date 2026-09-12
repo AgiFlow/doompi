@@ -53,7 +53,7 @@ boundary.
 ## Public API
 
 ```ts
-import { ReadParamsSchema, registerHashlineReadTool } from '@agimon-ai/doompi-read';
+import { ReadParamsSchema, createHashlineReadTool } from '@agimon-ai/doompi-read';
 import type { ReadParams } from '@agimon-ai/doompi-read';
 ```
 
@@ -71,3 +71,5 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+The Pi entry in `src/extensions/pi.ts` declares a typed `read` replacement. The helper owns its override claim and releases it when the plugin stops. The server entry declares the headless tool separately. Tool declarations consume logic from named service folders; flat `src/exports` files expose reusable factories and schemas.

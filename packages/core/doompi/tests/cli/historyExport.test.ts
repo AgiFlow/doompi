@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HistoryExportCommand } from '../../src/commands/historyExportCommand.ts';
-import { CliApp } from '../../src/commands/cli/cliApp.ts';
+import { HistoryExportCommand } from '../../src/controllers/historyExportCommand';
+import { CliApp } from '../../src/controllers/cliApp';
 
 function v4Source(): string {
   return `${JSON.stringify({

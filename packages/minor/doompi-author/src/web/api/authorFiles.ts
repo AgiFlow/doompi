@@ -6,8 +6,8 @@ import type {
   DocumentPreflightReport,
   ParsedStructuredDocument,
   StructuredDocumentFormat,
-} from '../../types/structuredDocuments.ts';
-import type { AuthorDocumentInput, AuthorDocumentKind } from '../lib/authorViewportTypes.ts';
+} from '../../types/structuredDocuments';
+import type { AuthorDocumentInput, AuthorDocumentKind } from '../lib/authorViewportTypes';
 
 const IMAGE_EXTENSIONS = new Set(['avif', 'bmp', 'gif', 'jpeg', 'jpg', 'png', 'svg', 'webp']);
 const VIDEO_EXTENSIONS = new Set(['m4v', 'mov', 'mp4', 'webm']);

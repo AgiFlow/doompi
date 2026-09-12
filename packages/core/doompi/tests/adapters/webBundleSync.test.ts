@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { syncWebBundle } from '../../src/adapters/webBundleSync.ts';
+import { syncWebBundle } from '../../src/services/webBundleSync';
 
 let cleanups: Array<() => void> = [];
 

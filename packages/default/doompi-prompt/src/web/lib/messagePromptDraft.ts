@@ -1,5 +1,5 @@
 import { defineGlobalStore, type UserMessageActionRunContext } from '@agimon-ai/doompi-web-contracts';
-import type { DraftState } from './promptsActions.ts';
+import type { DraftState } from './promptsActions';
 
 /**
  * Package-local handoff from anything that asks for the prompt library to the

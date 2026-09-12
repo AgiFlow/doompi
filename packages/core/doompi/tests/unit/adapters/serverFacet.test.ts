@@ -14,30 +14,32 @@ import {
   DOOM_SERVER_HOST_SERVICE,
   type DoomServerHostService,
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
-import { api } from '../../../src/adapters/contextApi.ts';
-import { sessionFilesApi } from '../../../src/adapters/server/sessionFilesApi.ts';
-import { doompiServerFacet } from '../../../src/adapters/server/facet.ts';
+import { api } from '../../../src/controllers/contextApi';
+import { machineApi } from '../../../src/controllers/machineApi';
+import { remoteApi } from '../../../src/controllers/remoteApi';
+import { sessionFilesApi } from '../../../src/controllers/sessionFilesApi';
+import { doompiServerFacet } from '../../../src/extensions/server';
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
-function hostContext(scope: DoomServerHostService['scope']) {
+function hostContext(scope: DoomServerHostService['scope'], remoteControl = false) {
   const registered: MountedApi[] = [];
   const state = { disposed: 0 };
   const host: DoomServerHostService = {
     scope,
-    context: { locality: 'local' } as unknown as DoomServerHostService['context'],
+    context: { locality: 'local', remoteControl } as unknown as DoomServerHostService['context'],
     registerApi(candidate) {
       registered.push(candidate);
       return { dispose: () => void (state.disposed += 1) };
     },
     registerChannel: () => ({ dispose: () => undefined }),
+    registerMethod: () => ({ dispose: () => undefined }),
     mounted: () => registered.map((candidate) => candidate.basePath),
     mountedChannels: () => [],
   };
-  const context = {
-    get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? host : undefined),
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, host);
   return { context, registered, state };
 }
 
@@ -46,21 +48,33 @@ describe('doompiServerFacet', () => {
     expect(doompiServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
   });
 
-  it('registers the exact context API in session scope', () => {
+  it('registers the exact context API in session scope', async () => {
     const harness = hostContext('session');
-    expect(typeof doompiServerFacet.apply(harness.context)).toBe('function');
+    const dispose = await doompiServerFacet.apply(harness.context);
+    expect(typeof dispose).toBe('function');
     expect(harness.registered).toEqual([api, sessionFilesApi]);
+    await dispose?.();
   });
 
-  it('unregisters the API on disposal', () => {
+  it('unregisters the API on disposal', async () => {
     const harness = hostContext('session');
-    doompiServerFacet.apply(harness.context)?.();
+    await (
+      await doompiServerFacet.apply(harness.context)
+    )?.();
     expect(harness.state.disposed).toBe(2);
   });
 
-  it('does nothing in workspace scope', () => {
+  it.each([false, true])('preserves remote API selection in global scope (%s)', async (remoteControl) => {
+    const harness = hostContext('global', remoteControl);
+    const dispose = await doompiServerFacet.apply(harness.context);
+    expect(harness.registered).toEqual(remoteControl ? [machineApi, remoteApi] : [machineApi]);
+    await dispose?.();
+    expect(harness.state.disposed).toBe(remoteControl ? 2 : 1);
+  });
+
+  it('does nothing in workspace scope', async () => {
     const harness = hostContext('workspace');
-    expect(doompiServerFacet.apply(harness.context)).toBeUndefined();
+    expect(await doompiServerFacet.apply(harness.context)).toBeUndefined();
     expect(harness.registered).toEqual([]);
   });
 });
@@ -130,19 +144,16 @@ describe('doompiServerFacet headless minor command', () => {
         return { dispose: apiDispose };
       },
       registerChannel: () => ({ dispose: () => undefined }),
+      registerMethod: () => ({ dispose: () => undefined }),
       mounted: () => registered.map((candidate) => candidate.basePath),
       mountedChannels: () => [],
     };
-    const context = {
-      get(name: string) {
-        if (name === DOOM_SERVER_HOST_SERVICE) return server;
-        if (name === DOOM_HEADLESS_HOST_SERVICE) return headless;
-        if (name === DOOM_MINOR_MODE_CATALOG_SERVICE) return catalog;
-        return undefined;
-      },
-    } as unknown as Context;
+    const context = new Context();
+    context.provide(DOOM_SERVER_HOST_SERVICE, server);
+    context.provide(DOOM_HEADLESS_HOST_SERVICE, headless);
+    context.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, catalog);
 
-    const dispose = doompiServerFacet.apply(context);
+    const dispose = await doompiServerFacet.apply(context);
     expect(command?.name).toBe('minor');
     expect(registered).toEqual([api, sessionFilesApi]);
 
@@ -159,7 +170,7 @@ describe('doompiServerFacet headless minor command', () => {
     });
     expect(notify).toHaveBeenCalledWith({ body: 'Plan is inactive.', level: 'info' });
 
-    dispose?.();
+    await dispose?.();
     expect(commandDispose).toHaveBeenCalledOnce();
     expect(apiDispose).toHaveBeenCalledTimes(2);
   });

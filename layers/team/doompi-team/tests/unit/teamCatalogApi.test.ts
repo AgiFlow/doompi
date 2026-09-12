@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTeamCatalogApi } from '../../src/adapters/teamCatalogApi.ts';
+import { createTeamCatalogApi } from '../../src/controllers/teamCatalogApi';
 
 const pluginAgent = {
   name: 'plugins.reviewer',

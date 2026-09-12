@@ -5,9 +5,9 @@ import {
   HARNESS_STATE_KEYS,
   projectHarnessEnvironment,
   refreshHarnessState,
-} from '../../src/exports/config/harnessState';
+} from '../../src/exports/harnessState';
 import { applyMajorMode } from '@agimon-ai/doompi-config/selectionSwitch';
-import { extensionLayers, needsRelaunch } from '../../src/exports/services/matrixSwitcher';
+import { extensionLayers, needsRelaunch } from '../../src/exports/matrixSwitcher';
 
 const config: MajorModesConfig = {
   layers: {

@@ -5,7 +5,7 @@ import type {
   DoomHeadlessHostService,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { describe, expect, it, vi } from 'vitest';
-import { notificationHeadlessFacet } from '../../src/adapters/headless/facet.ts';
+import { notificationServerFacet as notificationHeadlessFacet } from '../../src/extensions/server';
 
 describe('notification headless command', () => {
   it('trims and forwards a non-empty notification body', async () => {
@@ -17,7 +17,10 @@ describe('notification headless command', () => {
         return { dispose };
       },
     } as unknown as DoomHeadlessHostService;
-    const close = notificationHeadlessFacet.apply({ get: () => host } as unknown as Context);
+    const close = await notificationHeadlessFacet.apply({
+      effect() {},
+      get: (name: string) => (name === 'doom/server-host' ? { scope: 'session', context: {} } : host),
+    } as unknown as Context);
     if (!command) throw new Error('Notification command was not registered');
     const notify = vi.fn();
     const execution = { client: { notify } } as unknown as DoomHeadlessExecutionContext;
@@ -28,7 +31,7 @@ describe('notification headless command', () => {
     notify.mockClear();
     await command.execute('   ', execution);
     expect(notify).not.toHaveBeenCalled();
-    close();
+    await close?.();
     expect(dispose).toHaveBeenCalledOnce();
   });
 });

@@ -1,3 +1,4 @@
+import { voiceRuntime } from './helpers/voiceRuntime';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,9 +31,9 @@ import {
   PcmWavAnalyzer,
   SystemClock,
   TemporaryWorkspace,
-} from '../src/adapters/audio/infrastructure.ts';
+} from '../src/services/infrastructure';
 import {
-  createVoiceContainer,
+  createVoiceDependencies,
   formatAutoCaptureActivity,
   formatVoiceActivity,
   MlxWhisperAdapter,
@@ -40,7 +41,6 @@ import {
   TranscriberRegistry,
   voiceLeaderBindings,
   VoiceSessionController,
-  installVoiceRuntime,
   WhisperCppAdapter,
 } from '../src/exports';
 import {
@@ -59,7 +59,7 @@ import {
   type TimerHandle,
   type VoiceActivityUpdate,
   type VoiceUi,
-} from '../src/types/index.ts';
+} from '../src/types';
 
 const roots: string[] = [];
 function temporaryRoot(): string {
@@ -358,12 +358,12 @@ describe('transcription adapters and registry', () => {
     ).toMatchObject({ adapter: openAi, config: { model: { id: 'turbo' } } });
   });
   it('shares one instance of each dependency across the graph', () => {
-    const container = createVoiceContainer();
+    const dependencies = createVoiceDependencies();
 
     // The record is the graph, so collaborators are shared by construction.
-    expect(container.sessionController).toBe(container.sessionController);
-    expect(container.spawner).toBe(container.spawner);
-    expect(container.registry).toBeDefined();
+    expect(dependencies.sessionController).toBe(dependencies.sessionController);
+    expect(dependencies.spawner).toBe(dependencies.spawner);
+    expect(dependencies.registry).toBeDefined();
   });
   it('substitutes an override instead of constructing the default', () => {
     const replacementClock: IClock = {
@@ -373,7 +373,7 @@ describe('transcription adapters and registry', () => {
       clear: () => undefined,
     };
 
-    expect(createVoiceContainer({ clock: replacementClock }).clock).toBe(replacementClock);
+    expect(createVoiceDependencies({ clock: replacementClock }).clock).toBe(replacementClock);
   });
   it('reports unusable explicit adapters', async () => {
     const bad: ITranscriberAdapter = {
@@ -627,6 +627,7 @@ describe('voice session controller', () => {
     const getActiveTools = vi.fn(() => []);
     const getAllTools = vi.fn(() => []);
     const pi = {
+      registerTool: vi.fn(),
       registerCommand: (name: string) => {
         commands.push(name);
       },
@@ -638,7 +639,7 @@ describe('voice session controller', () => {
       setActiveTools: vi.fn(),
     };
     const cordis = new Context();
-    installVoiceRuntime(cordis, pi as never);
+    await voiceRuntime.install(cordis, pi as never);
     expect(getActiveTools).not.toHaveBeenCalled();
     expect(getAllTools).not.toHaveBeenCalled();
     expect(commands).toEqual(['voice', 'voice-auto']);
@@ -726,7 +727,7 @@ describe('voice session controller', () => {
         };
       }),
     };
-    const container = createVoiceContainer({
+    const dependencies = createVoiceDependencies({
       sessionController: controller,
       pcmRecorder: recorder,
       registry: transcribers,
@@ -937,7 +938,7 @@ describe('voice session controller', () => {
       catalogContext.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, modeService),
     );
     await catalogFiber.await();
-    installVoiceRuntime(cordis, pi as never, { footer, container, autoClientFactory });
+    await voiceRuntime.install(cordis, pi as never, { footer, dependencies, autoClientFactory });
     await handlers.get('session_start')?.({}, context);
     expect(modeRegistrations).toEqual(
       expect.arrayContaining([expect.objectContaining({ descriptor: expect.objectContaining({ label: 'Voice' }) })]),

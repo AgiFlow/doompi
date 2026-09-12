@@ -13,7 +13,7 @@ import {
   computerActionCallSummary,
   computerActionCollapsedLines,
   computerActionResultLines,
-} from '../lib/computerActionToolRender.ts';
+} from '../lib/computerActionToolRender';
 
 /**
  * The computer_action tool's timeline item: Perform one constrained semantic action in the authorized application window. The shell owns

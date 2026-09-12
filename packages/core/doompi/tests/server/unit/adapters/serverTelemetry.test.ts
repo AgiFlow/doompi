@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { observe } from '../../../../src/adapters/server/serverTelemetry.ts';
-import { validatedTraceContext } from '../../../../src/services/server/traceContext.ts';
+import { observe } from '../../../../src/services/serverTelemetry';
+import { validatedTraceContext } from '../../../../src/services/traceContext';
 
 const VALID = '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01';
 

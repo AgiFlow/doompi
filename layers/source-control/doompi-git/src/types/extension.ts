@@ -1,5 +1,5 @@
 // @scaffold-generated
-import type { WorktreeOperations } from '../adapters/worktree/worktreeOperations.ts';
+import type { WorktreeOperations } from '../services/worktreeOperations';
 
 export type GitNotificationLevel = 'info';
 

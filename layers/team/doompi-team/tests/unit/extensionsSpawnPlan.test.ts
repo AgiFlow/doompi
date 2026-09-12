@@ -3,39 +3,34 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ExtensionConfig } from '../../src/adapters/pi/extensions/config';
+import type { ExtensionConfig } from '../../src/services/config';
 import {
   captureSessionForkSource,
   type SessionForkSource,
   SpawnPlanner,
   type SpawnPlanRequest,
-} from '../../src/adapters/pi/extensions/spawnPlan';
+} from '../../src/services/spawnPlan';
 import { SubagentCapabilityPolicyStore } from '../../src/schemas/team/capabilityCeiling';
-import { AdmissionGate } from '../../src/adapters/runs/shared/admissionGate';
+import { AdmissionGate } from '../../src/services/admissionGate';
 import type {
   DiscoveredSkill,
   SkillDiscoveryContract,
   SkillLocation,
   SkillResolution,
-} from '../../src/adapters/agents/skills';
-import type {
-  AgentConfig,
-  AgentDiscoveryResult,
-  AgentScope,
-  AgentDiscoveryContract,
-} from '../../src/adapters/agents/types';
+} from '../../src/services/agentSkills';
+import type { AgentConfig, AgentDiscoveryResult, AgentScope, AgentDiscoveryContract } from '../../src/types/agent';
 import type {
   AsyncSubagentSpawnInput,
   AsyncSubagentSpawnResult,
   AsyncSubagentSpawnerContract,
-} from '../../src/adapters/runs/background/asyncExecution';
+} from '../../src/services/asyncExecution';
 import type {
   DoomChildSessionHandle,
   DoomChildSessionRequest,
   DoomChildSessionService,
   DoomChildSessionServiceProvider,
 } from '@agimon-ai/doompi-extension-contracts/child-session';
-import type { NativeRunCoordinatorContract } from '../../src/adapters/nativeRunCoordinator';
+import type { NativeRunCoordinatorContract } from '../../src/services/nativeRunCoordinator';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 function agentConfig(name: string, overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {

@@ -25,7 +25,7 @@ export type {
   ModeTextColor,
   MinorModeCatalogService,
   MinorModeInvokeOptions,
-} from '../schemas/mode.ts';
+} from '../schemas/mode';
 export {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   MINOR_MODE_ACTION_TIMEOUT_MS,
@@ -61,13 +61,20 @@ export {
   ModeTextColorSchema,
   readMinorModeCatalog,
   requireMinorModeCatalog,
-} from '../schemas/mode.ts';
-export type { MinorModeCatalogClient } from '../schemas/modeClient.ts';
-export { createMinorModeCatalogClient } from '../schemas/modeClient.ts';
-export { registerMinorModeOwner } from '../schemas/modeOwner.ts';
+} from '../schemas/mode';
+export type { MinorModeCatalogClient } from '../schemas/modeClient';
+export { createMinorModeCatalogClient } from '../schemas/modeClient';
+export { registerMinorModeOwner } from '../schemas/modeOwner';
+export {
+  defineMinorMode,
+  type DefinedMinorMode,
+  type MinorModeDefinition,
+  type MinorModeExecution,
+  type MinorModeOwner,
+} from '../schemas/minorModeFactory';
 export {
   minorModeKey,
   minorModeRegistrationRef,
   validateMinorModeActionArguments,
   validateMinorModeDefinition,
-} from '../schemas/modeValidation.ts';
+} from '../schemas/modeValidation';

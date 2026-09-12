@@ -1,1 +1,1 @@
-export * from '../adapters/telemetry/logSinkTelemetry';
+export * from '../services/logSinkTelemetry';

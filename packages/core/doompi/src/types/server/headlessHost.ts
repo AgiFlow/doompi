@@ -1,6 +1,6 @@
 import type { DoomServerBundleEntry } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { PackageAttribution } from '@agimon-ai/doompi-config/types';
-import type { ContextSkillInventory, ContextToolSource } from '../../services/contextProjection.ts';
+import type { ContextSkillInventory, ContextToolSource } from '../../services/contextProjection';
 import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessSelection,

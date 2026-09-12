@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toPiToolName } from '../../src/services/toolNames.ts';
+import { toPiToolName } from '../../src/services/toolNames';
 
 describe('toPiToolName', () => {
   it('maps every Claude tool a plugin agent may declare', () => {

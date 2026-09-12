@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatGoalStatusView, parseGoalStatusView } from '../../src/types/goalView.ts';
+import { formatGoalStatusView, parseGoalStatusView } from '../../src/types/goalView';
 
 /**
  * The wire format between the session and the activity dock.

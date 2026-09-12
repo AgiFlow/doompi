@@ -9,9 +9,9 @@ import {
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readServerFacet } from '../src/adapters/server/facet.ts';
+import { readServerFacet } from '../src/extensions/server';
 
 let directory: string;
 
@@ -24,13 +24,10 @@ afterEach(async () => {
 });
 
 function contextFor(host: DoomHeadlessHostService): Context {
-  return {
-    get(name: string) {
-      if (name === DOOM_SERVER_HOST_SERVICE) return {};
-      if (name === DOOM_HEADLESS_HOST_SERVICE) return host;
-      return undefined;
-    },
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session' });
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  return context;
 }
 
 function execution(): DoomHeadlessExecutionContext {
@@ -46,7 +43,7 @@ describe('read server facet', () => {
       return { dispose };
     });
     const host = { registerTool } as unknown as DoomHeadlessHostService;
-    const cleanup = readServerFacet.apply(contextFor(host));
+    const cleanup = await readServerFacet.apply(contextFor(host));
 
     expect(registerTool).toHaveBeenCalledOnce();
     expect(tool?.name).toBe('read');
@@ -60,7 +57,7 @@ describe('read server facet', () => {
     expect(text).toContain(`@file sample.txt#${computeFileTag(bytes)}`);
     expect(text).toMatch(/^1#[a-z]{3}\|one$/mu);
     expect(text).toMatch(/^2#[a-z]{3}\|two$/mu);
-    cleanup?.();
+    await cleanup?.();
     expect(dispose).toHaveBeenCalledOnce();
   });
 });

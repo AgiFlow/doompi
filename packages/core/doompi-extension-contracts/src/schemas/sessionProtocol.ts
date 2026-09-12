@@ -1,4 +1,5 @@
 import { defineService, type Context, type ReplicatedState } from '@earendil-works/chord';
+import type { DoomSessionUpdateEvent } from './sessionUpdates';
 
 export const DOOM_SESSION_SERVICE_ID = 'doompi.session.v2';
 export const DOOM_SESSION_MANAGEMENT_SERVICE_ID = 'doompi.session-management.v1';
@@ -116,6 +117,8 @@ export const DoomHubService = defineService<HubService>('doompi.hub.v1');
 export interface SessionServiceState {
   snapshot: Omit<SessionSnapshot, 'transcript'>;
   progress: TranscriptProgress | null;
+  /** ACP v2-shaped agent events, replayed in sequence across fresh bindings. */
+  updates?: DoomSessionUpdateEvent[];
   presentation?: SessionPresentation;
   /** Current concurrent drafts/tools, so a fresh attachment does not depend on missed progress events. */
   inFlight?: TranscriptItem[];

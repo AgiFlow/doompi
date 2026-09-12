@@ -1,7 +1,7 @@
 import { mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
 import { describe, expect, it } from 'vitest';
-import { api, create{{ topic | pascalCase }}Api } from '../../src/adapters/{{ topic | camelCase }}Api.ts';
-import { API_BASE_PATH, itemPath, itemUrl, SESSION_QUERY_PARAM } from '../../src/types/{{ topic | camelCase }}Api.ts';
+import { api, create{{ topic | pascalCase }}Api } from '../../src/controllers/{{ topic | camelCase }}Api';
+import { API_BASE_PATH, itemPath, itemUrl, SESSION_QUERY_PARAM } from '../../src/types/{{ topic | camelCase }}Api';
 
 
 /**

@@ -5,7 +5,7 @@ import {
   DOOM_API_CALLER_DEVICE_ID_HEADER,
   DOOM_API_CALLER_LOCALITY_HEADER,
   DOOM_API_CALLER_STEP_UP_HEADER,
-} from '../src/schemas/packageApi.ts';
+} from '../src/schemas/packageApi';
 
 describe('owned HTTP package authoring', () => {
   it('uses server facets without doompiApi manifest declarations', () => {
@@ -21,7 +21,7 @@ describe('owned HTTP package authoring', () => {
       const manifest = JSON.parse(fs.readFileSync(new URL(`${directory}/package.json`, repositoryRoot), 'utf8'));
       expect(manifest.doompiApi, directory).toBeUndefined();
       expect(manifest.doompiServer, directory).toMatchObject({
-        entry: './src/exports/extensions/server.ts',
+        entry: './src/extensions/server.ts',
         dist: './dist/extensions/server.mjs',
       });
     }

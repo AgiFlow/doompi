@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_LLMS_BYTES, renderHelpSkillWrapper, validateLlmsBytes } from '../../../src/services/llmsContent.ts';
-import type { ResolvedHelpIndex } from '../../../src/types/help.ts';
+import { MAX_LLMS_BYTES, renderHelpSkillWrapper, validateLlmsBytes } from '../../../src/services/llmsContent';
+import type { ResolvedHelpIndex } from '../../../src/types/help';
 
 const encode = (value: string): Uint8Array => new TextEncoder().encode(value);
 

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SpawnHandshake, type SpawnHandshakeOutcome } from '../../src/adapters/runs/background/spawnHandshake';
+import { SpawnHandshake, type SpawnHandshakeOutcome } from '../../src/services/spawnHandshake';
 import {
   EXTERNAL_IPC_CHANNEL,
   EXTERNAL_IPC_VERSION,
   type ExternalProcessEndpoint,
-} from '../../src/adapters/process/externalProcessIpc';
+} from '../../src/services/externalProcessIpc';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 function endpoint(): {

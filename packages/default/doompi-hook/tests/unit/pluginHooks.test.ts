@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { selectPluginHooks } from '../../src/services/pluginHooks.ts';
-import type { PluginHookDocument } from '../../src/types/hooks.ts';
+import { selectPluginHooks } from '../../src/services/pluginHooks';
+import type { PluginHookDocument } from '../../src/types/hooks';
 
 const documents: PluginHookDocument[] = [
   {

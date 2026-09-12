@@ -1,25 +1,25 @@
-export type { DoomConfigSelection } from '../adapters/pi/piContext.ts';
 export {
+  DOOM_CONFIG_ENTRY_TYPE,
+  DOOM_CONFIG_TRANSITION_ENTRY_TYPE,
   acknowledgeDoomConfigTransition,
   appendDoomConfigSelection,
   appendDoomConfigTransition,
   createDoomConfigContext,
   createDoomConfigContextAsync,
-  DOOM_CONFIG_ENTRY_TYPE,
-  DOOM_CONFIG_TRANSITION_ENTRY_TYPE,
   freezeDoomConfigContext,
+  persistHarnessSelection,
   provideDoomConfigContext,
   readDoomConfigContextGeneration,
   readDoomConfigPendingSelection,
   readDoomConfigSelection,
-  persistHarnessSelection,
   replaceDoomConfigContext,
   requireDoomConfigContext,
   supersedeDoomConfigTransition,
-} from '../adapters/pi/piContext.ts';
+} from '../services/sessionConfig';
+export type { DoomConfigSelection } from '../services/sessionConfig';
 export type {
   DoomConfigPendingSelection,
   DoomConfigTransitionPhase,
   DoomConfigTransitionRecord,
   DoomConfigTransitionStrategy,
-} from '../types/config.ts';
+} from '../types/config';

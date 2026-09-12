@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { sha256Base64Url } from '../../../src/adapters/node/digest.ts';
+import { sha256Base64Url } from '../../../src/services/digest';
 import {
   createChildPromptCacheProjection,
   createParentPromptCacheNamespace,
   createPromptCacheKey,
   createPromptCacheModelFingerprint,
-} from '../../../src/services/namespace.ts';
-import type { PromptCacheParentState } from '../../../src/types/cache.ts';
+} from '../../../src/services/namespace';
+import type { PromptCacheParentState } from '../../../src/types/cache';
 
 function parentState(overrides: Partial<PromptCacheParentState> = {}): PromptCacheParentState {
   return {

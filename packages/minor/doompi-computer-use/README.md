@@ -50,3 +50,7 @@ pnpm build
 ## License
 
 MIT
+
+Direct plugin entries live in `src/extensions`. Controllers coordinate host APIs, commands, and mode actions. Models own computer-use state and projections; named services own Desktop transport, scripts, and configuration dependencies. Flat `src/exports` exposes reusable helpers and types.
+
+The Pi entry declares a live minor-mode collection so the global opt-in controls catalog presence. Its tool restriction is reactive and the helper owns all registration changes. Session startup begins availability polling; `onStop` cancels the timer and final disposal clears status. The server declares its session mode, activity, tools, commands, and API alongside hub channel factories.

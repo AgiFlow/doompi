@@ -41,7 +41,7 @@ A package declares one `doompiServer` facet in `package.json`:
 ```json
 {
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": ["session"]
   }

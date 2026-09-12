@@ -10,7 +10,7 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { profileHeadlessFacet } from '../../src/adapters/headless/facet.ts';
+import profileHeadlessFacet from '../../src/extensions/server';
 
 const roots: string[] = [];
 const SECRET = 'synthetic-headless-profile-secret';
@@ -47,7 +47,7 @@ function execution(repoRoot: string, profile: string): DoomHeadlessExecutionCont
   };
 }
 
-function profileSetup() {
+async function profileSetup() {
   const commands: DoomHeadlessCommand[] = [];
   const hooks: DoomHeadlessHook<'session_start'>[] = [];
   const resources: DoomHeadlessResource[] = [];
@@ -68,12 +68,15 @@ function profileSetup() {
     },
     changeSelection,
   } as unknown as DoomHeadlessHostService;
-  const dispose = profileHeadlessFacet.apply({ get: () => host } as unknown as Context);
+  const dispose = await profileHeadlessFacet.apply({
+    effect() {},
+    get: (name: string) => (name === 'doom/server-host' ? { scope: 'session', context: {} } : host),
+  } as unknown as Context);
   return { changeSelection, command: commands[0]!, dispose, disposed, hook: hooks[0]!, resources };
 }
 
-function profileResource(): DoomHeadlessResource {
-  const resource = profileSetup().resources.find(({ name }) => name === 'doompi/profile-config');
+async function profileResource(): Promise<DoomHeadlessResource> {
+  const resource = (await profileSetup()).resources.find(({ name }) => name === 'doompi/profile-config');
   if (!resource) throw new Error('profile headless resource was not registered');
   return resource;
 }
@@ -94,7 +97,7 @@ describe('profile headless resource', () => {
       `profiles:\n  entries:\n    writer:\n      persona: agents/writer/mara\n      env:\n        API_TOKEN: ${SECRET}\n`,
     );
 
-    const resource = profileResource();
+    const resource = await profileResource();
     const first = await resource.read(execution(root, 'writer'));
     expect(first).toContain('# Mara, first version');
     expect(first).not.toContain(SECRET);
@@ -107,7 +110,7 @@ describe('profile headless resource', () => {
 
   it('rejects an unknown selected profile', async () => {
     const root = temporaryRoot();
-    const resource = profileResource();
+    const resource = await profileResource();
 
     await expect(resource.read(execution(root, 'missing'))).rejects.toThrow('Unknown profile: missing');
   });
@@ -130,7 +133,7 @@ describe('headless profile command', () => {
   }
 
   it('opens a typed picker and applies the selected configured profile', async () => {
-    const { changeSelection, command } = profileSetup();
+    const { changeSelection, command } = await profileSetup();
     const context = configuredExecution();
     vi.mocked(context.client.request).mockResolvedValue('reviewer');
     await command.execute('', context);
@@ -149,7 +152,7 @@ describe('headless profile command', () => {
   });
 
   it('publishes the selected identity when the headless session starts', async () => {
-    const { hook } = profileSetup();
+    const { hook } = await profileSetup();
     const context = configuredExecution();
     await hook.handle({}, context);
     expect(context.session.appendCustomEntry).toHaveBeenCalledWith('doom-profile-identity', {
@@ -160,7 +163,7 @@ describe('headless profile command', () => {
   it.each([undefined, false, '', 'writer'])(
     'does not transition for cancellation or the current profile: %s',
     async (answer) => {
-      const { changeSelection, command } = profileSetup();
+      const { changeSelection, command } = await profileSetup();
       const context = configuredExecution();
       vi.mocked(context.client.request).mockResolvedValue(answer);
       await command.execute('', context);
@@ -169,7 +172,7 @@ describe('headless profile command', () => {
   );
 
   it('rejects unknown values and propagates selection failures', async () => {
-    const { changeSelection, command } = profileSetup();
+    const { changeSelection, command } = await profileSetup();
     const context = configuredExecution();
     await expect(command.execute('missing', context)).rejects.toThrow('Unknown profile: missing');
     vi.mocked(context.client.request).mockResolvedValue('missing');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertRunFlags, parseRunFlags } from '../../../src/services/runFlags.ts';
+import { assertRunFlags, parseRunFlags } from '../../../src/services/runFlags';
 
 const OPTION_NAME = 'DOOMPI_SANDBOX_RUN_FLAGS';
 

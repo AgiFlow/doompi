@@ -4,7 +4,7 @@ import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
 import { readDoomSkillSourcesService } from '@agimon-ai/doompi-extension-contracts/skills';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
-import skillsExtension from '../../src/adapters/pi/extension.ts';
+import skillsExtension from '../../src/extensions/pi';
 
 interface Snapshot {
   skills: Array<{ name: string }>;
@@ -29,7 +29,7 @@ const { generations, registerLeaderContribution, buildPromptWithDeferredSkills, 
 vi.mock('@agimon-ai/doompi-config/piContext', () => ({
   requireDoomConfigContext: () => ({ harness: { skillDirectories: ['/skills'] } }),
 }));
-vi.mock('../../src/adapters/deferredSkills.ts', () => ({
+vi.mock('../../src/services/deferredSkills', () => ({
   DeferredSkillLoader: class DeferredSkillLoader {
     start(): Promise<Snapshot> {
       const generation = generations.shift();
@@ -148,7 +148,7 @@ describe('skills readiness generations', () => {
     expect(first.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-skill',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-author-skill',

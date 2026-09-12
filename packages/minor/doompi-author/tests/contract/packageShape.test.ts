@@ -40,7 +40,13 @@ describe('doompi-author package contract', () => {
         'typescript',
       ]),
     );
-    expect(Object.keys(value.exports ?? {})).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
+    expect(Object.keys(value.exports ?? {})).toEqual([
+      '.',
+      './extensions/pi',
+      './extensions/server',
+      './package.json',
+      './author-facade',
+    ]);
     expect(value.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });
 
@@ -48,14 +54,14 @@ describe('doompi-author package contract', () => {
     const value = await manifest();
     expect('doompiApi' in value).toBe(false);
     expect(value.doompiServer).toEqual({
-      entry: './src/exports/extensions/server.ts',
+      entry: './src/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
     });
     expect(value.doompiWeb).toMatchObject({
       pluginId: 'author',
       channels: ['author_webmcp'],
-      client: './src/exports/webClient.ts',
+      client: './src/extensions/web.ts',
     });
     expect(value.doompiWeb?.hub).toBeUndefined();
     expect(value.files).toEqual(expect.arrayContaining(['dist', 'src/web', 'src/prompts', 'llms.txt', 'README.md']));

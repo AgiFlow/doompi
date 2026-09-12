@@ -55,7 +55,7 @@ describe('@agimon-ai/doompi-plan package shape', () => {
     const config = readConfig('tsdown.config.ts');
     expect(config).toMatch(/format\s*:\s*\[[^\]]*['"]esm['"][^\]]*['"]cjs['"]/u);
     expect(config).toMatch(/dts\s*:\s*\{[^}]*eager/u);
-    expect(config).toContain("'*': ['src/exports/**/*.ts', '!src/exports/webClient.ts']");
+    expect(config).toContain("'extensions/pi': 'src/extensions/pi.ts'");
   });
 
   it('keeps the package export map closed and explicit', () => {
@@ -76,7 +76,7 @@ describe('@agimon-ai/doompi-plan package shape', () => {
       require: './dist/extensions/server.cjs',
     });
     expect(packageJson.doompiServer).toEqual({
-      entry: './src/exports/extensions/server.ts',
+      entry: './src/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['session'],
     });

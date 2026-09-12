@@ -28,7 +28,7 @@
   "files": [
     "dist",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "llms.txt",
     "src/prompts",
     "src/types/loopView.ts",
@@ -57,7 +57,12 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./loop-launchers": {
+      "types": "./dist/loopLaunchers.d.mts",
+      "import": "./dist/loopLaunchers.mjs",
+      "require": "./dist/loopLaunchers.cjs"
+    }
   },
   "publishConfig": {
     "access": "public"
@@ -105,7 +110,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
@@ -114,7 +119,7 @@
   "doompiWeb": {
     "pluginId": "loop",
     "channels": [],
-    "client": "./src/exports/webClient.ts",
+    "client": "./src/extensions/web.ts",
     "scopes": [
       "session"
     ]

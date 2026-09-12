@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { RunnerReporting } from '../../src/adapters/runs/background/runnerReporting';
-import type { AsyncRunStatus } from '../../src/adapters/runs/background/asyncExecution';
-import type { RunResultFile } from '../../src/adapters/resultWatcher';
-import type { CoalescedStatusWriterContract } from '../../src/adapters/runs/background/statusWriter';
-import type { TerminalTrigger } from '../../src/adapters/runs/background/terminalPersistence';
-import type { SessionScope } from '../../src/adapters/filesystem/paths';
+import { RunnerReporting } from '../../src/services/runnerReporting';
+import type { AsyncRunStatus } from '../../src/services/asyncExecution';
+import type { RunResultFile } from '../../src/services/resultWatcher';
+import type { CoalescedStatusWriterContract } from '../../src/services/statusWriter';
+import type { TerminalTrigger } from '../../src/services/terminalPersistence';
+import type { SessionScope } from '../../src/services/sessionPaths';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 /**

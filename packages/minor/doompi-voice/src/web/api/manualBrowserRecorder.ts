@@ -1,7 +1,7 @@
 import {
   MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,
   MANUAL_TRANSCRIPTION_MAX_DURATION_MS,
-} from '../../types/manualTranscription.ts';
+} from '../../types/manualTranscription';
 
 const DATA_TIMESLICE_MS = 1_000;
 const SILENCE_SAMPLE_INTERVAL_MS = 100;

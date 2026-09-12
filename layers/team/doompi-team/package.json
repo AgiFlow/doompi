@@ -28,7 +28,7 @@
   "files": [
     "dist",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "src/types/webSubagents.ts",
     "!src/web/**/*.stories.tsx"
   ],
@@ -37,9 +37,21 @@
   "jsnext:main": "./dist/index.mjs",
   "exports": {
     ".": "./dist/index.mjs",
-    "./api/capability-ceiling": "./dist/api/capabilityCeiling.mjs",
-    "./api/delegation": "./dist/api/delegation.mjs",
-    "./api/team-snapshot": "./dist/api/teamSnapshot.mjs",
+    "./capability-ceiling": {
+      "types": "./dist/capabilityCeiling.d.mts",
+      "import": "./dist/capabilityCeiling.mjs",
+      "require": "./dist/capabilityCeiling.cjs"
+    },
+    "./delegation": {
+      "types": "./dist/delegation.d.mts",
+      "import": "./dist/delegation.mjs",
+      "require": "./dist/delegation.cjs"
+    },
+    "./team-snapshot": {
+      "types": "./dist/teamSnapshot.d.mts",
+      "import": "./dist/teamSnapshot.mjs",
+      "require": "./dist/teamSnapshot.cjs"
+    },
     "./env": "./dist/env.mjs",
     "./extensions/pi": "./dist/extensions/pi.mjs",
     "./extensions/server": {
@@ -112,7 +124,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session",
@@ -126,7 +138,7 @@
       "subagent_runs",
       "subagent_catalog"
     ],
-    "client": "./src/exports/webClient.ts",
+    "client": "./src/extensions/web.ts",
     "scopes": [
       "session"
     ]

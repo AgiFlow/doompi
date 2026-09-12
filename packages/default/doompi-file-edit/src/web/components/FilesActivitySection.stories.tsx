@@ -7,9 +7,9 @@
  * different session id seeded before the render runs.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { FilesItemView } from '../../types/webFiles.ts';
-import { FilesActivitySection } from './FilesActivitySection.tsx';
-import { files } from '../stores/filesStore.ts';
+import type { FilesItemView } from '../../types/webFiles';
+import { FilesActivitySection } from './FilesActivitySection';
+import { files } from '../stores/filesStore';
 
 const NOW = Date.parse('2024-05-04T10:00:00Z');
 

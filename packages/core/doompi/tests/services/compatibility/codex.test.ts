@@ -3,12 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompatibilityOptions } from '../../../src/types/interfaces/compatibility';
-import {
-  codexEnvironment,
-  codexPluginDirectories,
-  launchCodex,
-} from '../../../src/exports/services/compatibility/codex';
-import type { CompatibilityContext } from '../../../src/exports/services/compatibilityContext';
+import { codexEnvironment, codexPluginDirectories, launchCodex } from '../../../src/exports/codex';
+import type { CompatibilityContext } from '../../../src/exports/compatibilityContext';
 
 /** Writes an executable shell stub so the launcher resolves it from PATH. */
 function writeStub(binDirectory: string, name: string, body: string): void {

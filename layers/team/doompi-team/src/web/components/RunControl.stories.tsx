@@ -5,8 +5,8 @@
  * contracts package's own testing fixture rather than a hand-rolled stub.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { SubagentRun } from '../../types/webSubagents.ts';
-import { elapsedRun, RunControl } from './RunControl.tsx';
+import type { SubagentRun } from '../../types/webSubagents';
+import { elapsedRun, RunControl } from './RunControl';
 
 const NOW = Date.now();
 const MINUTE = 60_000;

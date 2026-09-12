@@ -3,14 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { findVoiceWorkerUrl, VoiceWorkerClient } from '../src/adapters/process/voiceWorkerClient.ts';
+import { findVoiceWorkerUrl, VoiceWorkerClient } from '../src/services/voiceWorkerClient';
 import {
   VOICE_WORKER_INTENTIONAL_BARGE_IN_CAPABILITY,
   VOICE_WORKER_PROTOCOL_VERSION,
   VOICE_WORKER_RANKED_BARGE_IN_CAPABILITY,
   VOICE_WORKER_TRANSCRIPTION_TIMEOUT_CAPABILITY,
-} from '../src/services/voiceWorkerProtocol.ts';
-import type { VoiceWorkerHandle } from '../src/services/voiceWorkerSupervisor.ts';
+} from '../src/services/voiceWorkerProtocol';
+import type { VoiceWorkerHandle } from '../src/services/voiceWorkerSupervisor';
 
 type Listener = (value: never) => void;
 const directories: string[] = [];

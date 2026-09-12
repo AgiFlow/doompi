@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { LiveVoiceController } from '../src/adapters/pi/liveVoiceController.ts';
-import type { RealtimeHost } from '../src/adapters/realtime/realtimeHost.ts';
-import type { AutoCaptureUi, IClock } from '../src/types/index.ts';
+import { LiveVoiceController } from '../src/controllers/liveVoiceController';
+import type { RealtimeHost } from '../src/services/realtimeHost';
+import type { AutoCaptureUi, IClock } from '../src/types';
 
 const clock: IClock = {
   now: () => Date.now(),

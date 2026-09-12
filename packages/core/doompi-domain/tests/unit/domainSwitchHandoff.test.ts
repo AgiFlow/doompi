@@ -3,7 +3,7 @@ import {
   createDomainSwitchHandoffStore,
   DOMAIN_SWITCH_HANDOFF_MAX_DOMAINS,
   DOMAIN_SWITCH_HANDOFF_TTL_MS,
-} from '../../src/adapters/domainSwitchHandoff.ts';
+} from '../../src/models/domainSwitchHandoff';
 
 const identity = { sessionId: 'voice-session', hostGeneration: 'host-generation' };
 const request = {

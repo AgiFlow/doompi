@@ -2,10 +2,10 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { computeFileTag } from '@agimon-ai/doompi-hashline/files';
-import type { AgentToolResult, ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
 import { rgPath } from '@vscode/ripgrep';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { registerHashlineGrepTool } from '../src/adapters/pi/grepTool.ts';
+import { createHashlineGrepTool } from '../src/tools/piGrep';
 
 interface CapturedTool {
   readonly name: string;
@@ -35,11 +35,7 @@ afterAll(() => {
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'doompi-grep-'));
   tool = undefined;
-  registerHashlineGrepTool({
-    registerTool(definition) {
-      tool = definition as unknown as CapturedTool;
-    },
-  } as Pick<ExtensionAPI, 'registerTool'>);
+  tool = createHashlineGrepTool() as unknown as CapturedTool;
 });
 
 afterEach(async () => {
@@ -88,14 +84,7 @@ describe('hashline grep execution', () => {
   it('tags only writable files while preserving native output for other matches', async () => {
     await writeFile(join(directory, 'writable.txt'), 'needle writable');
     await writeFile(join(directory, 'readonly.txt'), 'needle readonly');
-    registerHashlineGrepTool(
-      {
-        registerTool(definition) {
-          tool = definition as unknown as CapturedTool;
-        },
-      } as Pick<ExtensionAPI, 'registerTool'>,
-      async (path) => path.endsWith('writable.txt'),
-    );
+    tool = createHashlineGrepTool(async (path) => path.endsWith('writable.txt')) as unknown as CapturedTool;
 
     const output = text(await execute({ pattern: 'needle', path: '.', literal: true }));
     expect(output).toMatch(/^@file writable\.txt#[A-Za-z0-9_-]{8}$/mu);

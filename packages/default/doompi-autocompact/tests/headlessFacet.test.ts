@@ -1,7 +1,9 @@
+import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/headless';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import type {
   DoomHeadlessActivity,
   DoomHeadlessExecutionContext,
@@ -9,8 +11,14 @@ import type {
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { autocompactHeadlessFacet } from '../src/adapters/headless/facet.ts';
+import { autocompactServerFacet as autocompactHeadlessFacet } from '../src/extensions/server';
 
+function contextFor(host: DoomHeadlessHostService): Context {
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session' });
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  return context;
+}
 let root: string;
 const SECRET = 'synthetic-autocompact-config-secret';
 
@@ -25,7 +33,7 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-function fixture(cwd = root) {
+async function fixture(cwd = root) {
   const resources: DoomHeadlessResource[] = [];
   const host = {
     registerResource: (resource: DoomHeadlessResource) => {
@@ -35,7 +43,7 @@ function fixture(cwd = root) {
     registerHook: () => ({ dispose: vi.fn() }),
     registerActivity: () => ({ dispose: vi.fn() }),
   } as unknown as DoomHeadlessHostService;
-  autocompactHeadlessFacet.apply({ get: () => host } as unknown as Context);
+  await autocompactHeadlessFacet.apply(contextFor(host));
   const resource = resources.find(({ name }) => name === 'doompi/autocompact-config');
   if (!resource) throw new Error('Autocompact resource was not registered');
   const execution: DoomHeadlessExecutionContext = {
@@ -68,7 +76,7 @@ function config(enabled: boolean): void {
 describe('autocompact headless configuration projection', () => {
   it('projects only validated owned settings and re-reads changes without exposing raw configuration', async () => {
     config(false);
-    const read = fixture();
+    const read = await fixture();
     const first = await read();
     expect(first).not.toContain(SECRET);
     expect(first).not.toContain('private-planning-model');
@@ -79,14 +87,14 @@ describe('autocompact headless configuration projection', () => {
 
   it('uses the admitted repository rather than a different working directory', async () => {
     config(false);
-    expect(JSON.parse(await fixture(path.join(root, 'nested-working-directory'))())).toEqual({
+    expect(JSON.parse(await (await fixture(path.join(root, 'nested-working-directory')))())).toEqual({
       enabled: false,
       thresholds: { pass1: 0.4 },
     });
   });
 
   it('returns empty settings when absent and rejects malformed settings without a raw fallback', async () => {
-    const read = fixture();
+    const read = await fixture();
     expect(JSON.parse(await read())).toEqual({});
     fs.writeFileSync(
       path.join(root, '.doom/config.yaml'),
@@ -110,7 +118,7 @@ describe('autocompact headless configuration projection', () => {
         return { dispose: vi.fn() };
       },
     } as unknown as DoomHeadlessHostService;
-    autocompactHeadlessFacet.apply({ get: () => host } as unknown as Context);
+    await autocompactHeadlessFacet.apply(contextFor(host));
     const activity = activities.find(({ name }) => name === 'doompi-autocompact');
     if (!activity) throw new Error('Autocompact activity was not registered');
     const setStatus = vi.fn();

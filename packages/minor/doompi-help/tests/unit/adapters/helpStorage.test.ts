@@ -9,8 +9,8 @@ import {
   HelpIndexCache,
   resolveHelpPackageIdentity,
   sha256Hex,
-} from '../../../src/adapters/helpStorage.ts';
-import type { ResolvedHelpIndex } from '../../../src/types/help.ts';
+} from '../../../src/services/helpStorage';
+import type { ResolvedHelpIndex } from '../../../src/types/help';
 
 const SOURCE = '@agimon-ai/example-help';
 

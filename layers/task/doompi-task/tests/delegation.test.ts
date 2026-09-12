@@ -27,15 +27,15 @@ import {
   ERR_CHILD_SESSION,
   ERR_NO_RUNTIME,
   MAX_BRIEF_FILES,
-} from '../src/exports/delegation/manager';
+} from '../src/exports/delegationManager';
 import { TASK_EVENT, type TaskErrorSink, type TaskEventSink } from '../src/exports/logSinkTelemetry';
-import { narrateTaskCommit } from '../src/services/narration/taskNarration.ts';
-import { resolveSessionKey, resolveStorePath } from '../src/exports/store/paths';
-import { applyTaskMutation } from '../src/exports/store/reducer';
-import { TaskStore } from '../src/exports/store/taskStore';
-import type { Task } from '../src/exports/store/types';
-import { DEFAULT_PROMPT_GUIDELINES } from '../src/exports/tool/promptGuidelines';
-import { TaskParamsSchema } from '../src/schemas/task.ts';
+import { narrateTaskCommit } from '../src/services/taskNarration';
+import { resolveSessionKey, resolveStorePath } from '../src/exports/storePaths';
+import { applyTaskMutation } from '../src/exports/storeReducer';
+import { TaskStore } from '../src/exports/storeTaskStore';
+import type { Task } from '../src/exports/storeTypes';
+import { DEFAULT_PROMPT_GUIDELINES } from '../src/exports/toolPromptGuidelines';
+import { TaskParamsSchema } from '../src/schemas/task';
 
 /** Minimal Team service mounted on a real Cordis root. */
 class FakeBus {

@@ -51,7 +51,7 @@ describe('doompi-user-feedback package contract', () => {
     expect(await readFile(path.join(packageDirectory, 'src/exports/index.ts'), 'utf8')).not.toContain(
       'registerUserFeedbackExtension',
     );
-    expect(await readFile(path.join(packageDirectory, 'src/exports/extensions/pi.ts'), 'utf8')).not.toMatch(
+    expect(await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8')).not.toMatch(
       /Symbol\.for|installed-hosts|WeakSet/u,
     );
   });

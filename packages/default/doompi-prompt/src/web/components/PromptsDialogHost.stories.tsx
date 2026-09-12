@@ -13,9 +13,10 @@
  * delete; add matching branches if a story needs the mutation states.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { API_BASE_PATH, PROMPTS_PATH, type SavedPromptListResponse } from '../../types/webPrompts.ts';
-import { PromptsDialogHost } from './PromptsDialogHost.tsx';
-import { requestPromptDialogOpen } from '../lib/messagePromptDraft.ts';
+import { API_BASE_PATH, PROMPTS_PATH } from '../../constants/webPrompts';
+import { type SavedPromptListResponse } from '../../types/webPrompts';
+import { PromptsDialogHost } from './PromptsDialogHost';
+import { requestPromptDialogOpen } from '../lib/messagePromptDraft';
 
 const body: SavedPromptListResponse = {
   prompts: [

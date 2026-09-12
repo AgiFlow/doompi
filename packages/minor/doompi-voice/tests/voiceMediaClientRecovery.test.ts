@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { SpeechPresenceDetector, SpeechPresenceWindow } from '../src/types/clientCaptureActivity.ts';
+import type { SpeechPresenceDetector, SpeechPresenceWindow } from '../src/types/clientCaptureActivity';
 import type {
   VoiceMediaCapabilities,
   VoiceMediaCapture,
@@ -11,8 +11,8 @@ import type {
   VoiceMediaPlaybackOutcome,
   VoiceMediaPlaybackResult,
   VoiceMediaTransport,
-} from '../src/types/clientMedia.ts';
-import { VoiceMediaClient } from '../src/web/api/voiceMediaClient.ts';
+} from '../src/types/clientMedia';
+import { VoiceMediaClient } from '../src/web/api/voiceMediaClient';
 
 const capabilities: VoiceMediaCapabilities = {
   capture: true,

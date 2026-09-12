@@ -1,5 +1,5 @@
-import type { DoomExtensionContext } from './config.ts';
-import type { MinorModeCatalogService, MinorModeOwnerDefinition, MinorModeOwnerHandle } from './mode.ts';
+import type { DoomExtensionContext } from './config';
+import type { MinorModeCatalogService, MinorModeOwnerDefinition, MinorModeOwnerHandle } from './mode';
 
 /** Register an owner directly with the injected session catalog. */
 export function registerMinorModeOwner<ExtensionContext extends DoomExtensionContext>(

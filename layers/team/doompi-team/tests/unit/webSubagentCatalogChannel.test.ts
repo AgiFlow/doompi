@@ -3,9 +3,9 @@ import type {
   DoomHubChannelHost as HubChannelHost,
 } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { describe, expect, it } from 'vitest';
-import { createSubagentCatalogChannel } from '../../src/adapters/webSubagentCatalogChannel.ts';
-import type { CatalogAgentInput } from '../../src/services/webSubagentCatalog.ts';
-import type { SubagentCatalogPayload } from '../../src/types/webSubagents.ts';
+import { createSubagentCatalogChannel } from '../../src/controllers/webSubagentCatalogChannel';
+import type { CatalogAgentInput } from '../../src/services/webSubagentCatalog';
+import type { SubagentCatalogPayload } from '../../src/types/webSubagents';
 
 interface FakeHost extends HubChannelHost {
   published: Array<{ sessionId: string; payload: SubagentCatalogPayload }>;

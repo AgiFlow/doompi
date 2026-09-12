@@ -1,1 +1,1 @@
-export { type DoomHarnessMetadata, readDoomHarnessMetadata } from '../types/harnessMetadata.ts';
+export { type DoomHarnessMetadata, readDoomHarnessMetadata } from '../types/harnessMetadata';

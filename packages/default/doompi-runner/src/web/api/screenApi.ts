@@ -1,10 +1,6 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
-import {
-  RUNNER_SCREEN_EVENT,
-  type RunnerScreenEvent,
-  runnerInputUrl,
-  runnerScreenStreamUrl,
-} from '../../types/webRunnerLog.ts';
+import { RUNNER_SCREEN_EVENT } from '../../constants/webRunnerLog';
+import { type RunnerScreenEvent, runnerInputUrl, runnerScreenStreamUrl } from '../../types/webRunnerLog';
 
 /**
  * The page's half of the attached pane.

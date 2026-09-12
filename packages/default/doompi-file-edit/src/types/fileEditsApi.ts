@@ -1,4 +1,4 @@
-import type { FileEditOrigin, FileEditTool } from './domain.ts';
+import type { FileEditOrigin, FileEditTool } from './domain';
 
 /**
  * The wire vocabulary this package's API shares with whatever calls it.

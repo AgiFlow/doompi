@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { NodePlanPointerAdapter } from '../../../src/adapters/node/planPointer.ts';
+import { PlanPointerService } from '../../../src/services/planPointer';
 
 /**
  * The extension and the session's API server are separate processes that never
@@ -20,8 +20,8 @@ function homeDirectory(): string {
 }
 
 /** The adapter as the other process would build it: same home, nothing shared. */
-function adapterOn(home: string, env: NodeJS.ProcessEnv = {}): NodePlanPointerAdapter {
-  return new NodePlanPointerAdapter({ homeDirectory: home, env });
+function adapterOn(home: string, env: NodeJS.ProcessEnv = {}): PlanPointerService {
+  return new PlanPointerService({ homeDirectory: home, env });
 }
 
 afterEach(() => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createRpcTranscript, type RpcTranscript } from '../../../../src/services/server/rpcTranscript.ts';
-import type { SessionFrame } from '../../../../src/types/server/session.ts';
+import { createRpcTranscript, type RpcTranscript } from '../../../../src/services/rpcTranscript';
+import type { SessionFrame } from '../../../../src/types/server/session';
 
 /** A clock the assertions can predict. */
 function transcript(): RpcTranscript {

@@ -9,8 +9,8 @@ import {
   resolveWorkflowHome,
   runBelongsToSession,
   workflowPosition,
-} from '../src/services/workflowRuns.ts';
-import type { WorkflowRunView } from '../src/types/webWorkflows.ts';
+} from '../src/services/workflowRuns';
+import type { WorkflowRunView } from '../src/types/webWorkflows';
 
 describe('workflowRuns', () => {
   it('resolves the registry home the way the engine does: env override, then ~/.workflow-mcp', () => {

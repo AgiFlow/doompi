@@ -5,7 +5,7 @@ import {
   parseAgentToken,
   parseInlineConfig,
   parseSingleTaskToken,
-} from '../../src/adapters/pi/commands/slash/chainExpression.ts';
+} from '../../src/services/chainExpression';
 
 describe('Team slash argument parsing', () => {
   it('parses supported inline settings and ignores unknown or empty fields', () => {

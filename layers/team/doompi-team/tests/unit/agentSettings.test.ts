@@ -33,14 +33,14 @@ import {
   saveBuiltinAgentOverride,
   setAgentFrontmatterFields,
   writeSettingsFile,
-} from '../../src/adapters/agents/settings';
+} from '../../src/services/agentSettings';
 import type {
   AgentConfig,
   AgentModelSourceInfo,
   BuiltinAgentOverrideConfig,
   SubagentSettings,
-} from '../../src/adapters/agents/types';
-import { getProjectConfigDir } from '../../src/adapters/filesystem/configDir';
+} from '../../src/types/agent';
+import { getProjectConfigDir } from '../../src/services/configDir';
 
 const SETTINGS_FILE_NAME = 'settings.json';
 

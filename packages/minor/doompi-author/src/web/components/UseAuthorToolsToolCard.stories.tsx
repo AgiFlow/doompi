@@ -4,7 +4,7 @@
  * testing fixture rather than a hand-rolled stub.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { UseAuthorToolsToolCard } from './UseAuthorToolsToolCard.tsx';
+import { UseAuthorToolsToolCard } from './UseAuthorToolsToolCard';
 
 const SHORT = ['applied revision to docs/spec.md', 'fragment slide2 updated'].join('\n');
 

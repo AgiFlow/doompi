@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { runWithConcurrency } from '../../src/adapters/runs/shared/runWithConcurrency';
+import { runWithConcurrency } from '../../src/services/runWithConcurrency';
 
 /** Resolves after a macrotask tick, cheap and deterministic enough to order concurrent starts without relying on wall-clock timing. */
 function tick(): Promise<void> {

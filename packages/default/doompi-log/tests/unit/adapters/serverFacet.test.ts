@@ -2,10 +2,10 @@ import {
   DOOM_SERVER_HOST_SERVICE,
   type DoomServerHostService,
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
-import { api } from '../../../src/adapters/hubApi.ts';
-import { logServerFacet } from '../../../src/adapters/server/facet.ts';
+import { api } from '../../../src/controllers/hubApi';
+import { logServerFacet } from '../../../src/extensions/server';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
@@ -19,40 +19,45 @@ function hostContext(scope: DoomServerHostService['scope']) {
       registered.push(candidate);
       return { dispose: () => void (state.disposed += 1) };
     },
+    registerMethod() {
+      return { dispose() {} };
+    },
     registerChannel() {
       return { dispose: () => undefined };
     },
     mounted: () => registered.map((candidate) => candidate.basePath),
     mountedChannels: () => [],
   };
-  const context = {
-    get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? host : undefined),
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, host);
   return { context, registered, state };
 }
 
 describe('logServerFacet', () => {
-  it('injects the server host', () => {
+  it('injects the server host', async () => {
     expect(logServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
   });
 
-  it('registers the exact API on the hub scope', () => {
+  it('registers the exact API on the hub scope', async () => {
     const harness = hostContext('global');
-    const dispose = logServerFacet.apply(harness.context);
+    const dispose = await logServerFacet.apply(harness.context);
     expect(harness.registered).toHaveLength(1);
     expect(harness.registered[0]).toBe(api);
     expect(typeof dispose).toBe('function');
   });
 
-  it('unregisters the API when disposed', () => {
+  it('unregisters the API when disposed', async () => {
     const harness = hostContext('global');
-    logServerFacet.apply(harness.context)?.();
+    await (
+      await logServerFacet.apply(harness.context)
+    )?.();
     expect(harness.state.disposed).toBe(1);
   });
 
-  it('registers nothing on the session scope', () => {
+  it('registers nothing on the session scope', async () => {
     const harness = hostContext('session');
-    expect(logServerFacet.apply(harness.context)).toBeUndefined();
+    const dispose = await logServerFacet.apply(harness.context);
+    await dispose?.();
     expect(harness.registered).toEqual([]);
   });
 });

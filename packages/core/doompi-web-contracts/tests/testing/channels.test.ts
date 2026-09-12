@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { defineSessionStore } from '../../src/services/sessionStore.ts';
-import { driveChannel } from '../../src/services/testing/channels.ts';
+import { defineSessionStore } from '../../src/models/sessionStore';
+import { driveChannel } from '../../src/services/testing/channels';
 
 interface Runs {
   items: string[];

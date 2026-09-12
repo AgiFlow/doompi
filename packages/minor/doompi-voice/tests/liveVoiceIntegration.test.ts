@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createTestVoiceMediaApi as createVoiceMediaApi } from './support.ts';
-import { LiveVoiceController } from '../src/adapters/pi/liveVoiceController.ts';
-import type { RealtimeHost } from '../src/adapters/realtime/realtimeHost.ts';
-import type { AutoCaptureUi, IClock } from '../src/types/index.ts';
+import { createTestVoiceMediaApi as createVoiceMediaApi } from './support';
+import { LiveVoiceController } from '../src/controllers/liveVoiceController';
+import type { RealtimeHost } from '../src/services/realtimeHost';
+import type { AutoCaptureUi, IClock } from '../src/types';
 import type {
   BrowserRealtimeOptions,
   RealtimeBrowserState,
   RealtimeProvider,
   RealtimeHostSnapshot,
-} from '../src/types/realtime.ts';
-import { REALTIME_ROUTES } from '../src/types/realtime.ts';
+} from '../src/types/realtime';
+import { REALTIME_ROUTES } from '../src/types/realtime';
 import type {
   VoiceMediaCapabilities,
   VoiceMediaCapture,
@@ -18,10 +18,10 @@ import type {
   VoiceMediaPlayback,
   VoiceMediaPlaybackResult,
   VoiceMediaTransport,
-} from '../src/types/clientMedia.ts';
-import { VOICE_MEDIA_PROTOCOL_VERSION, VOICE_MEDIA_ROUTES } from '../src/types/clientMedia.ts';
-import { VOICE_OWNERSHIP_ROUTES } from '../src/types/voiceOwnership.ts';
-import { VoiceMediaClient, type RealtimeBrowserSessionFactory } from '../src/web/api/voiceMediaClient.ts';
+} from '../src/types/clientMedia';
+import { VOICE_MEDIA_PROTOCOL_VERSION, VOICE_MEDIA_ROUTES } from '../src/types/clientMedia';
+import { VOICE_OWNERSHIP_ROUTES } from '../src/types/voiceOwnership';
+import { VoiceMediaClient, type RealtimeBrowserSessionFactory } from '../src/web/api/voiceMediaClient';
 
 const clock: IClock = {
   now: () => Date.now(),

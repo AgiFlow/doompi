@@ -13,13 +13,13 @@ import {
   DOOM_VOICE_TOOLS_SERVICE,
   createDoomVoiceToolsService,
   type DoomVoiceToolsService,
-} from '@agimon-ai/doompi-extension-contracts/voice-tools';
+} from '@agimon-ai/doompi-voice/voice-tools';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { majorModeExtension } from '../../src/adapters/pi/extension.ts';
-import type { MajorModeTelemetry } from '../../src/types/telemetry.ts';
-import { bindStubCoordinator } from '../helpers/coordinator.ts';
+import { majorModeExtension } from '../../src/extensions/pi';
+import type { MajorModeTelemetry } from '../../src/types/telemetry';
+import { bindStubCoordinator } from '../helpers/coordinator';
 
 type Handler = (event: unknown, ctx: ExtensionContext) => unknown;
 
@@ -274,7 +274,7 @@ describe('major mode Pi factory', () => {
     expect(firstHelp.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-major-mode',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-author-major-mode',

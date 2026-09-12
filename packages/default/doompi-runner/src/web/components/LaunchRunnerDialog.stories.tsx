@@ -6,7 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { LaunchRunnerDialog } from './LaunchRunnerDialog.tsx';
+import { LaunchRunnerDialog } from './LaunchRunnerDialog';
 
 const { props } = slotPropsFixture({ sessionId: 'runner-launch' });
 

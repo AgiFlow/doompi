@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HeadlessSessionHost } from '../../../../src/types/server/headlessSessionHost.ts';
+import type { HeadlessSessionHost } from '../../../../src/types/server/headlessSessionHost';
 
 const { createHeadlessSessionHost } = vi.hoisted(() => ({ createHeadlessSessionHost: vi.fn() }));
 
-vi.mock('../../../../src/adapters/server/headlessSessionHost.ts', () => ({ createHeadlessSessionHost }));
+vi.mock('../../../../src/controllers/headlessSessionHost', () => ({ createHeadlessSessionHost }));
 
-import { createHeadlessSessionManager } from '../../../../src/adapters/server/headlessSessionManager.ts';
+import { createHeadlessSessionManager } from '../../../../src/controllers/headlessSessionManager';
 
 function host(): HeadlessSessionHost {
   return {

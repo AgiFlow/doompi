@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { isRecord, readJson, writeFileAtomic, writeJson } from '../../src/exports/utils/json';
+import { isRecord, readJson, writeFileAtomic, writeJson } from '../../src/exports/json';
 import {
   consumerPackageEntries,
   consumerPackageEntry,
@@ -15,9 +15,9 @@ import {
   packageEntry,
   piCliPath,
   splitPackageSpecifier,
-} from '../../src/exports/utils/moduleResolution';
-import { findRepositoryRoot, isRepositoryRoot } from '../../src/exports/utils/repository';
-import { toClaudeToolName, toPiToolName } from '../../src/exports/utils/toolNames';
+} from '../../src/exports/moduleResolution';
+import { findRepositoryRoot, isRepositoryRoot } from '../../src/exports/repository';
+import { toClaudeToolName, toPiToolName } from '../../src/exports/toolNames';
 
 /** The meta-package root, whose manifest declares the local Doom closure. */
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
@@ -324,8 +324,8 @@ describe('harness utilities', () => {
     it('resolves its own entries next to this module, matching the running extension', () => {
       const entry = ownEntry('modeCatalog');
 
-      expect(path.basename(path.dirname(entry))).toBe('entries');
-      // Running from source under Node's strip-only mode, so .ts rather than .mjs.
+      expect(path.basename(path.dirname(entry))).toBe('extensions');
+      // Source resolves TypeScript; published runtime resolves the compiled entry.
       expect(entry.endsWith('.ts') || entry.endsWith('.mjs')).toBe(true);
       expect(fs.existsSync(entry)).toBe(true);
     });

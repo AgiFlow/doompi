@@ -1,7 +1,7 @@
 import type { PackageAttribution } from '@agimon-ai/doompi-config/types';
 import type { SkillEntry } from '@agimon-ai/doompi-skill/catalog';
 import { describe, expect, it } from 'vitest';
-import { projectContext, type ContextToolSource } from '../../src/services/contextProjection.ts';
+import { projectContext, type ContextToolSource } from '../../src/services/contextProjection';
 
 // One token per character, so every figure below is checkable by hand.
 const countTokens = (text: string): number => text.length;

@@ -8,9 +8,9 @@ import {
   DOOM_SERVER_HOST_SERVICE,
   type DoomServerHostService,
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
-import { configServerFacet } from '../../src/adapters/server/facet.ts';
+import { configServerFacet } from '../../src/extensions/server';
 
 describe('config server resources', () => {
   it('declares the server host and publishes selection and authoring resources', async () => {
@@ -32,16 +32,12 @@ describe('config server resources', () => {
       mounted: () => [],
       mountedChannels: () => [],
     } as unknown as DoomServerHostService;
-    const context = {
-      get: (service: string) => {
-        if (service === DOOM_SERVER_HOST_SERVICE) return serverHost;
-        if (service === DOOM_HEADLESS_HOST_SERVICE) return headlessHost;
-        return undefined;
-      },
-    } as unknown as Context;
+    const context = new Context();
+    context.provide(DOOM_SERVER_HOST_SERVICE, serverHost);
+    context.provide(DOOM_HEADLESS_HOST_SERVICE, headlessHost);
 
     expect(configServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
-    const close = configServerFacet.apply(context);
+    const close = await configServerFacet.apply(context);
     const execution = {
       selection: {
         majorMode: 'development',
@@ -64,7 +60,8 @@ describe('config server resources', () => {
       }),
     );
     expect(await authoring.read(execution)).toContain('doompi');
-    close?.();
+    await close?.();
+    await context.fiber.dispose();
     expect(disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
   });
 });

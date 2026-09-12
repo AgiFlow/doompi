@@ -1,7 +1,8 @@
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessCommand,
@@ -10,7 +11,7 @@ import {
   type DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { promptHeadlessFacet } from '../src/adapters/headless/facet.ts';
+import { promptServerFacet as promptHeadlessFacet } from '../src/extensions/server';
 
 const roots: string[] = [];
 const originalAgentDirectory = process.env.PI_CODING_AGENT_DIR;
@@ -22,11 +23,10 @@ afterEach(async () => {
 });
 
 function contextFor(host: DoomHeadlessHostService): Context {
-  return {
-    get(name: string) {
-      return name === DOOM_HEADLESS_HOST_SERVICE ? host : undefined;
-    },
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session', registerApi: () => ({ dispose() {} }) });
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  return context;
 }
 
 describe('prompt headless facet', () => {
@@ -53,7 +53,7 @@ describe('prompt headless facet', () => {
         return register();
       },
     } as unknown as DoomHeadlessHostService;
-    const close = promptHeadlessFacet.apply(contextFor(host));
+    const close = await promptHeadlessFacet.apply(contextFor(host));
     if (!command) throw new Error('Prompt command was not registered');
     const execution = {
       cwd: agentDirectory,
@@ -91,7 +91,7 @@ describe('prompt headless facet', () => {
     expect(execution.session.prompt).toHaveBeenCalledWith('Ship the feature now');
     expect(await readFile(path.join(agentDirectory, 'prompts', 'ship.md'), 'utf8')).toContain('Ship the feature now');
 
-    close();
+    await close?.();
     expect(disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
   });
 });

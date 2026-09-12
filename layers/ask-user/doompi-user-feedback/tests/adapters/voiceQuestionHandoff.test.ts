@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-extension-contracts/narration';
+import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
 import {
   buildVoiceToolResult,
   createVoiceQuestionHandoff,
   formatVoiceQuestionPrompt,
   VOICE_WAIT_MESSAGE,
   VoiceQuestionHandoff,
-} from '../../src/adapters/doom/voiceQuestionHandoff.js';
-import type { QuestionParams } from '../../src/schemas/questionnaire.js';
+} from '../../src/services/voiceQuestionHandoff';
+import type { QuestionParams } from '../../src/schemas/questionnaire';
 
 const params: QuestionParams = {
   questions: [

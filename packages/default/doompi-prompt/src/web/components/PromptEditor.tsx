@@ -1,5 +1,5 @@
 import { Button, Input, Textarea } from '@agimon-ai/doompi-web-components';
-import { canSaveDraft, type DraftState } from '../lib/promptsActions.ts';
+import { canSaveDraft, type DraftState } from '../lib/promptsActions';
 
 /**
  * The create and edit form for one saved prompt.

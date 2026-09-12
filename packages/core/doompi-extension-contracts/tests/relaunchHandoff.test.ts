@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DOOM_RELAUNCH_FILE_ENV,
-  parseRelaunchHandoff,
-  serializeRelaunchHandoff,
-} from '../src/exports/relaunchHandoff.ts';
+import { DOOM_RELAUNCH_FILE_ENV, parseRelaunchHandoff, serializeRelaunchHandoff } from '../src/exports/relaunchHandoff';
 
 const HANDOFF = { version: 1, majorMode: 'minimal', operationId: 'op-1' } as const;
 

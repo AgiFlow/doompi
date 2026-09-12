@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis';
-import { DoomConfigService } from '../src/providers/doomConfigService.ts';
+import { DoomConfigService } from '../src/services/doomConfigService';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,7 +39,7 @@ import {
   restoreHarnessStateSnapshot,
   snapshotHarnessState,
   updateHarnessState,
-} from '../src/exports/index.ts';
+} from '../src/exports';
 
 const roots: string[] = [];
 const ACTIVE_COMPOSITION_FINGERPRINT = 'a'.repeat(64);

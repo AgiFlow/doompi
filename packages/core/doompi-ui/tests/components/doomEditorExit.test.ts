@@ -1,9 +1,9 @@
 import type { KeybindingsManager as CodingKeybindingsManager } from '@earendil-works/pi-coding-agent';
 import { KeybindingsManager, TUI_KEYBINDINGS, type EditorTheme, type TUI } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DoomEditor, type DoomEditorLeaderOptions } from '../../src/exports/components/doomEditor.ts';
-import { createPlanLeaderRegistry } from '../helpers/leader.ts';
-import { DoomUiState, type LeaderSnapshot } from '../../src/exports/uiState.ts';
+import { DoomEditor, type DoomEditorLeaderOptions } from '../../src/exports/doomEditor';
+import { createPlanLeaderRegistry } from '../helpers/leader';
+import { DoomUiState, type LeaderSnapshot } from '../../src/exports/uiState';
 
 type ExitTestLeaderOptions = DoomEditorLeaderOptions & {
   onUnavailableAction?: (action: string) => void;

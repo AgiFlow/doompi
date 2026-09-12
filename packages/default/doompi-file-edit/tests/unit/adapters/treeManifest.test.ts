@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { NodeTreeManifestAdapter } from '../../../src/adapters/node/treeManifest.ts';
+import { NodeTreeManifestAdapter } from '../../../src/services/treeManifest';
 
 let root: string;
 

@@ -774,6 +774,7 @@ describe('the web plugin registry', () => {
     const stop = startWebPlugins({
       sendSessionFrame: () => undefined,
       sendHubFrame: () => undefined,
+      invokeServerMethod: async () => undefined,
       onHubConnected: () => () => undefined,
     });
     stop();

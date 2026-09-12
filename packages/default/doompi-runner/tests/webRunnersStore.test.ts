@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { isFollowingLive, logViewLines, tailLineNumbers } from '../src/web/lib/format.ts';
-import { requestRunnerStop, runnerActivitySource, runnerRunsChannel, runners } from '../src/web/stores/runnersStore.ts';
+import { isFollowingLive, logViewLines, tailLineNumbers } from '../src/web/lib/format';
+import { requestRunnerStop, runnerActivitySource, runnerRunsChannel, runners } from '../src/web/stores/runnersStore';
 
 const run = (id: string, state: 'running' | 'completed') => ({ id, name: id, command: 'sleep 60', state });
 const session = (sessionId: string | null) => runners.select(runners.store.state, sessionId);

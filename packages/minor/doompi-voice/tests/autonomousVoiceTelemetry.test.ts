@@ -4,8 +4,8 @@ import {
   AutonomousVoiceTelemetry,
   type AutonomousVoiceTelemetrySink,
   autonomousVoiceTelemetryStage,
-} from '../src/services/autonomousVoiceTelemetry.ts';
-import { autonomousVoiceMachine } from '../src/services/autonomousVoiceMachine.ts';
+} from '../src/services/autonomousVoiceTelemetry';
+import { autonomousVoiceMachine } from '../src/models/autonomousVoiceMachine';
 
 const identity = {
   sessionId: 'session-1',

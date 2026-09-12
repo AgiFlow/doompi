@@ -1,7 +1,7 @@
 import { mountPackageApi, standardExtensionScenarios } from '@agimon-ai/doompi-extension-contracts/testing';
 import { describe, expect, it } from 'vitest';
-import { workflowExtension } from '../../src/adapters/pi/extension.ts';
-import { api } from '../../src/adapters/workflowHubApi.ts';
+import { workflowExtension } from '../../src/extensions/pi';
+import { api } from '../../src/controllers/workflowHubApi';
 
 /**
  * The surfaces this package ships.

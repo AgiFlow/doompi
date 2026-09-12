@@ -1,4 +1,4 @@
-import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '@agimon-ai/doompi-extension-contracts/voice-tools';
+import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '../src/constants/voiceTools';
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 import {
@@ -6,7 +6,7 @@ import {
   renderNarrationToolResult,
   renderVoiceToolCall,
   renderVoiceToolResult,
-} from '../src/adapters/pi/voiceToolRender.ts';
+} from '../src/controllers/voiceToolRender';
 
 function plainTheme(): Theme {
   const identity = (text: string): string => text;

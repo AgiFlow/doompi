@@ -9,9 +9,9 @@
  * WorkflowsActivitySection.stories.tsx does.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { WorkflowRunView } from '../../types/webWorkflows.ts';
-import { workflows } from '../stores/workflowsStore.ts';
-import { WorkflowsPanel } from './WorkflowsPanel.tsx';
+import type { WorkflowRunView } from '../../types/webWorkflows';
+import { workflows } from '../stores/workflowsStore';
+import { WorkflowsPanel } from './WorkflowsPanel';
 
 /** Its own session id, so seeding this store cannot disturb another story's. */
 const SESSION_ID = 'workflows-panel';

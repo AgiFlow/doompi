@@ -382,7 +382,10 @@ export function startSessionRuntime(): () => void {
     },
   });
 
-  bindTransport((frame) => socket.send(frame));
+  bindTransport(
+    (frame) => socket.send(frame),
+    (call) => socket.invokePlugin(call),
+  );
   // Focus changes come from routing; the runtime follows them with
   // subscribe/unsubscribe so features never touch the wire protocol.
   const subscription = sessionsStore.subscribe(() => syncSubscription());

@@ -6,7 +6,7 @@ import {
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { planCallSummary, planResultLines } from '../lib/planToolRender.ts';
+import { planCallSummary, planResultLines } from '../lib/planToolRender';
 
 /**
  * The plan tools' timeline item: the plan action, the issue or decision it

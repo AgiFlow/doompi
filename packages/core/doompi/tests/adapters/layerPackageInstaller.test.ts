@@ -12,8 +12,8 @@ import {
   missingLayerPackageSpecifiers,
   packageManagerCommandWithStderr,
   SAFE_TRANSITIVE_OVERRIDES,
-} from '../../src/adapters/layerPackageInstaller.ts';
-import type { ExtensionLayerResolvers } from '../../src/services/extensionAssembler.ts';
+} from '../../src/services/layerPackageInstaller';
+import type { ExtensionLayerResolvers } from '../../src/services/extensionAssembler';
 
 const EMPTY_RESOLVED_PATHS: ResolvedPaths = {
   extensions: [],

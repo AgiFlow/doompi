@@ -1,7 +1,7 @@
 import { MessageItem, MessageItemHeader, toolTone } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { findCallView } from '../lib/builtinToolView.ts';
-import { ListingBody, listingExpandable } from './ListingBody.tsx';
+import { findCallView } from '../lib/builtinToolView';
+import { ListingBody, listingExpandable } from './ListingBody';
 
 const LIMIT_KEY = 'resultLimitReached';
 const LIMIT_UNIT = 'results';

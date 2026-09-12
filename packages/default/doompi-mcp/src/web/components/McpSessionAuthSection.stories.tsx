@@ -7,8 +7,8 @@
  * literal, so a story cannot show a shape the parser would reject.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../types/webMcp.ts';
-import { McpSessionAuthSection } from './McpSessionAuthSection.tsx';
+import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../types/webMcp';
+import { McpSessionAuthSection } from './McpSessionAuthSection';
 
 const status = formatMcpSessionAuthStatus([
   { name: 'linear', state: 'connected' },

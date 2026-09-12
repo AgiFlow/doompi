@@ -1,3 +1,5 @@
+import { createSubagentTool } from '../../src/tools/subagent';
+import { renderSubagentCall, renderSubagentResult } from '../../src/tui/subagentToolRender';
 import * as fs from 'node:fs';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -7,26 +9,17 @@ import type {
   ListActionResult,
   StatusActionResult,
   SteerActionResult,
-} from '../../src/adapters/pi/extensions/managementActions';
-import type {
-  SpawnPlannerContract,
-  SpawnPlanRequest,
-  SpawnPlanResult,
-} from '../../src/adapters/pi/extensions/spawnPlan';
-import { SUBAGENT_TOOL_NAME, SubagentToolService } from '../../src/adapters/pi/extensions/subagentTool';
-import type {
-  AgentConfig,
-  AgentDiscoveryResult,
-  AgentScope,
-  AgentDiscoveryContract,
-} from '../../src/adapters/agents/types';
+} from '../../src/services/managementActions';
+import type { SpawnPlannerContract, SpawnPlanRequest, SpawnPlanResult } from '../../src/services/spawnPlan';
+import { SUBAGENT_TOOL_NAME, SubagentToolService } from '../../src/services/subagentTool';
+import type { AgentConfig, AgentDiscoveryResult, AgentScope, AgentDiscoveryContract } from '../../src/types/agent';
 import type {
   AsyncJobTrackerContract,
   TrackedAsyncJob,
   TrackedAsyncJobsContract,
-} from '../../src/adapters/asyncJobTracker';
-import { listSuspendedRuns, suspendRun } from '../../src/adapters/suspendedRuns';
-import { sessionScopeDir, sessionScopeEnvironment, type SessionScope } from '../../src/adapters/filesystem/paths';
+} from '../../src/services/asyncJobTracker';
+import { listSuspendedRuns, suspendRun } from '../../src/services/suspendedRuns';
+import { sessionScopeDir, sessionScopeEnvironment, type SessionScope } from '../../src/services/sessionPaths';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 class FakeSpawnPlanner implements SpawnPlannerContract {
@@ -191,7 +184,14 @@ function harness() {
     sessionScopeEnvironment(TEST_SESSION_SCOPE),
   );
   const registered = host();
-  service.registerTool(registered.pi);
+  registered.pi.registerTool(
+    createSubagentTool(
+      service,
+      registered.pi,
+      { renderCall: (params, theme) => renderSubagentCall(params as never, theme), renderResult: renderSubagentResult },
+      async () => undefined,
+    ),
+  );
   const tool = registered.tools[0]!;
   const call = async (
     params: Record<string, unknown>,
@@ -202,9 +202,8 @@ function harness() {
 }
 
 describe('SubagentToolService registration', () => {
-  it('registers exactly one subagent tool and is idempotent per host', () => {
+  it('declares exactly one subagent tool', () => {
     const h = harness();
-    h.service.registerTool(h.registered.pi);
     expect(h.registered.tools.map((tool) => tool.name)).toEqual([SUBAGENT_TOOL_NAME]);
   });
 
@@ -219,7 +218,7 @@ describe('SubagentToolService registration', () => {
   it('fails loudly on a foreign tool collision', () => {
     const h = harness();
     const foreign = host([{ name: 'subagent' } as ToolDefinition]);
-    expect(() => h.service.registerTool(foreign.pi)).toThrow(/\[tool_conflict\]/);
+    expect(() => createSubagentTool(h.service, foreign.pi, {}, async () => undefined)).toThrow(/\[tool_conflict\]/);
   });
 });
 
@@ -437,6 +436,30 @@ describe('SubagentToolService actions', () => {
     const result = await h.call({ action: 'status' });
     expect(result.details).toHaveProperty('fleet');
     await expect(h.call({ action: 'status', transcriptLines: 10 })).rejects.toThrow(/requires a run id/);
+  });
+
+  it('returns completed native status without requiring filesystem result paths', async () => {
+    const h = harness();
+    h.management.statusResult = {
+      runId: 'run-1',
+      runDir: undefined,
+      claimed: false,
+      status: {
+        version: 1,
+        runId: 'run-1',
+        agent: 'worker',
+        cwd: '/work',
+        state: 'completed',
+        startedAt: 1,
+        lastUpdate: 2,
+        summary: 'child summary',
+      },
+    };
+
+    const result = await h.call({ action: 'status', id: 'run-1' });
+
+    expect(result.content[0]).toMatchObject({ text: "Run 'run-1': completed" });
+    expect(result.details).toHaveProperty('status.status.summary', 'child summary');
   });
 
   it('rejects the removed wait action', async () => {

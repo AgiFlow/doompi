@@ -9,7 +9,7 @@
  * the header naming the job and step, and the empty terminal body.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { StepTerminalPanel, type StepTabTarget } from './StepTerminalPanel.tsx';
+import { StepTerminalPanel, type StepTabTarget } from './StepTerminalPanel';
 
 const props = slotPropsFixture({ sessionId: 'step-terminal' }).props;
 

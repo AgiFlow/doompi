@@ -1,8 +1,8 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { standardExtensionScenarios } from '../../src/adapters/testing/extensionContract.ts';
-import { createPiTestHost } from '../../src/adapters/testing/piHost.ts';
+import { standardExtensionScenarios } from '../../src/controllers/extensionContract';
+import { createPiTestHost } from '../../src/controllers/piTestHost';
 
 function tool(name: string) {
   return {

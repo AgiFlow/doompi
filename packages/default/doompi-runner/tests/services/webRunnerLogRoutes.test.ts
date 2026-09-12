@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createRunnerLogApi } from '../../src/adapters/runnerLogApi.ts';
-import {
-  RUNNER_API_BASE_PATH,
-  runnerLogPath,
-  runnerLogStreamUrl,
-  runnerLogUrl,
-  SESSION_QUERY_PARAM,
-} from '../../src/types/webRunnerLog.ts';
+import { createRunnerLogApi } from '../../src/controllers/runnerLogApi';
+import { RUNNER_API_BASE_PATH, SESSION_QUERY_PARAM } from '../../src/constants/webRunnerLog';
+import { runnerLogPath, runnerLogStreamUrl, runnerLogUrl } from '../../src/types/webRunnerLog';
 
 /**
  * The page builds absolute URLs against the hub and the session server mounts

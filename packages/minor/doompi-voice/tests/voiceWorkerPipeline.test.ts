@@ -3,18 +3,18 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ClientPcmAudioRecorder } from '../src/adapters/audio/clientMedia.ts';
-import { createTestVoiceMediaApi as createVoiceMediaApi } from './support.ts';
-import { NodeTurnSpool } from '../src/adapters/process/turnSpool.ts';
-import { VoiceWorkerPipeline } from '../src/adapters/process/voiceWorkerPipeline.ts';
-import { PCM_FRAME_BYTES, PCM_FRAME_MS } from '../src/services/pcm.ts';
+import { ClientPcmAudioRecorder } from '../src/services/clientMedia';
+import { createTestVoiceMediaApi as createVoiceMediaApi } from './support';
+import { NodeTurnSpool } from '../src/services/fileTurnSpool';
+import { VoiceWorkerPipeline } from '../src/services/voiceWorkerPipeline';
+import { PCM_FRAME_BYTES, PCM_FRAME_MS } from '../src/services/pcm';
 import {
   VOICE_WORKER_INTENTIONAL_BARGE_IN_CAPABILITY,
   VOICE_WORKER_PROTOCOL_VERSION,
   VOICE_WORKER_RANKED_BARGE_IN_CAPABILITY,
   VOICE_WORKER_TRANSCRIPTION_TIMEOUT_CAPABILITY,
   type VoiceWorkerEventPayload,
-} from '../src/services/voiceWorkerProtocol.ts';
+} from '../src/services/voiceWorkerProtocol';
 import type {
   IClock,
   IPcmAudioRecorder,
@@ -28,7 +28,7 @@ import type {
   TimerHandle,
   TranscriptionRequest,
   VoiceMediaAudioPoll,
-} from '../src/types/index.ts';
+} from '../src/types';
 import {
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
   VOICE_MEDIA_ACTIVITY_LEVEL_HEADER,
@@ -37,7 +37,7 @@ import {
   VOICE_MEDIA_PROTOCOL_VERSION,
   VOICE_MEDIA_ROUTES,
   type VoiceMediaCaptureActivity,
-} from '../src/types/clientMedia.ts';
+} from '../src/types/clientMedia';
 
 const directories: string[] = [];
 const AMBIENT_REBASE_EXERCISE_MS = 1_600;

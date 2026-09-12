@@ -1,13 +1,13 @@
 import { Button } from '@agimon-ai/doompi-web-components';
 import { useEffect } from 'react';
-import type { DocumentFragment } from '../../types/structuredDocuments.ts';
-import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes.ts';
-import { registerAuthorGridResolver } from '../lib/authorGrid.ts';
+import type { DocumentFragment } from '../../types/structuredDocuments';
+import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes';
+import { registerAuthorGridResolver } from '../lib/authorGrid';
 import {
   reviseAuthorFragment,
   setAuthorRegionCandidate,
   type AuthorWorkspaceDocument,
-} from '../stores/authorWorkspaceStore.ts';
+} from '../stores/authorWorkspaceStore';
 
 export function AuthorStructuredView({
   sessionId,

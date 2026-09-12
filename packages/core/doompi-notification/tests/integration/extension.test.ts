@@ -14,9 +14,9 @@ import {
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { notificationExtension } from '../../src/adapters/pi/extension.ts';
-import { createMainThreadTitleController } from '../../src/adapters/shellTitleController.ts';
-import { createPiHarness, type PiHarness } from '../helpers/piHarness.ts';
+import { notificationExtension } from '../../src/extensions/pi';
+import { createMainThreadTitleController } from '../../src/controllers/shellTitleController';
+import { createPiHarness, type PiHarness } from '../helpers/piHarness';
 
 const COMMAND_TIMEOUT_MS = 3_000;
 const TITLE_FRAME_INTERVAL_MS = 80;

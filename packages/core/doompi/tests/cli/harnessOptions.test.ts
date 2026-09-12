@@ -22,7 +22,7 @@ vi.mock('@agimon-ai/doompi-config/profiles', async (importOriginal) => ({
   loadProfileCatalog: configMocks.loadProfileCatalog,
 }));
 
-const { resolveHarnessOptions } = await import('../../src/commands/cli/harnessOptions.ts');
+const { resolveHarnessOptions } = await import('../../src/controllers/harnessOptions');
 
 const temporaryDirectories: string[] = [];
 

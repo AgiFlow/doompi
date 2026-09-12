@@ -89,7 +89,7 @@ describe('doompi-computer-use package contract', () => {
     expect(conditions(exportsMap['./extensions/pi'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/server'])).toEqual(['types', 'import', 'require']);
     expect(manifest.doompiServer).toEqual({
-      entry: './src/exports/extensions/server.ts',
+      entry: './src/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
     });

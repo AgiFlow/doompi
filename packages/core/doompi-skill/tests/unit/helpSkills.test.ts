@@ -6,7 +6,7 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/help';
 import { createSyntheticSourceInfo, type Skill } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
-import { createActiveHelpSkillView, mergeActiveHelpSkills } from '../../src/adapters/helpSkills.ts';
+import { createActiveHelpSkillView, mergeActiveHelpSkills } from '../../src/services/helpSkills';
 
 function skill(name: string, source = 'normal'): Skill {
   const filePath = `/tmp/${source}/${name}/SKILL.md`;

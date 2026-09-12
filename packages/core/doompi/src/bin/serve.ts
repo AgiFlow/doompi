@@ -4,32 +4,32 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { HARNESS_STATE_KEYS, HARNESS_STATE_POINTER } from '../adapters/config/harnessState.ts';
-import { createWebCompositions } from '../adapters/server/webCompositions.ts';
+import { HARNESS_STATE_KEYS, HARNESS_STATE_POINTER } from '../services/harnessState';
+import { createWebCompositions } from '../services/webCompositions';
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
-import { resolveSyncLocation } from '../adapters/syncLocation.ts';
+import { resolveSyncLocation } from '../services/syncLocation';
 import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type {
   DoomHubSessionApiRequest,
   DoomHubSessionCreateRequest,
   DoomHubSessionScope,
 } from '@agimon-ai/doompi-extension-contracts/hub-channel';
-import { resolveHarnessOptions } from '../commands/cli/harnessOptions';
-import { buildHarnessContext } from '../adapters/harnessContext.ts';
+import { resolveHarnessOptions } from '../controllers/harnessOptions';
+import { buildHarnessContext } from '../services/harnessContext';
 import { filterHookDisabledLayers, loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
-import { createHarnessTelemetry } from '../adapters/telemetry/logSinkTelemetry';
-import { findRepositoryRoot } from '../adapters/repository/repository';
-import { readSyncRegistration } from '../adapters/syncRegistration';
-import { createHeadlessHub, type HeadlessHub } from '../adapters/server/headlessHub.ts';
-import { createHeadlessSessionManager } from '../adapters/server/headlessSessionManager.ts';
-import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../types/server/headlessSessionHost.ts';
-import type { HeadlessSessionManager } from '../types/server/headlessSessionManager.ts';
-import { serveSessionApis, type PackageApiServer } from '../adapters/server/packageApiServer.ts';
-import { createServerTelemetry } from '../adapters/server/serverTelemetry.ts';
-import { serveHeadlessServer } from '../adapters/server/headlessServer.ts';
-import { createRemoteRuntime, type RemoteRuntime } from '../adapters/server/remote/remoteRuntime.ts';
+import { createHarnessTelemetry } from '../services/logSinkTelemetry';
+import { findRepositoryRoot } from '../services/repository';
+import { readSyncRegistration } from '../services/syncRegistration';
+import { createHeadlessHub, type HeadlessHub } from '../controllers/headlessHub';
+import { createHeadlessSessionManager } from '../controllers/headlessSessionManager';
+import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../types/server/headlessSessionHost';
+import type { HeadlessSessionManager } from '../types/server/headlessSessionManager';
+import { serveSessionApis, type PackageApiServer } from '../controllers/packageApiServer';
+import { createServerTelemetry } from '../services/serverTelemetry';
+import { serveHeadlessServer } from '../controllers/headlessServer';
+import { createRemoteRuntime, type RemoteRuntime } from '../controllers/remoteRuntime';
 import WebSocket from 'ws';
-import { parseServeOptions, resolveSessionIdentity } from '../services/server/serveOptions.ts';
+import { parseServeOptions, resolveSessionIdentity } from '../services/serveOptions';
 const TELEMETRY_SHUTDOWN_TIMEOUT_MS = 2_000;
 
 async function bounded(operation: Promise<unknown>, label: string, notice: (message: string) => void): Promise<void> {

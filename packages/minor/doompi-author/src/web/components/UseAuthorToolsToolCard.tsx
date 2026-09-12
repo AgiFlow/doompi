@@ -12,7 +12,7 @@ import {
   useAuthorToolsCallSummary,
   useAuthorToolsCollapsedLines,
   useAuthorToolsResultLines,
-} from '../lib/useAuthorToolsToolRender.ts';
+} from '../lib/useAuthorToolsToolRender';
 
 /**
  * The use_author_tools tool's timeline item: Use one capability of the current Author viewport. The shell owns

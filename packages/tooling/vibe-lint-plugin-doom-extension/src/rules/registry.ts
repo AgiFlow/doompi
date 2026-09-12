@@ -1,3 +1,7 @@
+import { compositionLayout } from './compositionLayout.js';
+import { pluginCompositionWiring } from './pluginWiring.js';
+import { doomConstants } from './constants.js';
+import { neutralExtensionContracts } from './neutralContracts.js';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import {
   cleanImportPath,
@@ -43,10 +47,16 @@ import {
   webPluginLayerBoundary,
   webPluginManifest,
   webPluginNoModuleState,
+  webPluginProtocolLayout,
+  webPluginTypedCalls,
 } from './webPlugin.js';
 import { webPluginToolRenderers } from './webPluginTools.js';
 
 export const rules: Record<string, RuleDefinition> = {
+  'composition-layout': compositionLayout,
+  'plugin-composition-wiring': pluginCompositionWiring,
+  'doom-constants': doomConstants,
+  'neutral-extension-contracts': neutralExtensionContracts,
   'clean-import-path': cleanImportPath,
   'cordis-context-in-pi-adapter': cordisContextInPiAdapter,
   'cordis-feature-plugin': cordisFeaturePlugin,
@@ -86,5 +96,7 @@ export const rules: Record<string, RuleDefinition> = {
   'web-plugin-layer-boundary': webPluginLayerBoundary,
   'web-plugin-manifest': webPluginManifest,
   'web-plugin-no-module-state': webPluginNoModuleState,
+  'web-plugin-protocol-layout': webPluginProtocolLayout,
+  'web-plugin-typed-calls': webPluginTypedCalls,
   'web-plugin-tool-renderers': webPluginToolRenderers,
 };

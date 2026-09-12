@@ -1,11 +1,11 @@
 import type { ExtensionContext, ReadonlyFooterDataProvider, Theme } from '@earendil-works/pi-coding-agent';
 import { type TUI, visibleWidth } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DoomFooter, type DoomFooterStatusView } from '../../src/exports/components/doomFooter.ts';
-import { DoomHeader } from '../../src/exports/components/doomHeader.ts';
-import { LeaderHints, MAX_WIDGET_LINES as LEADER_WIDGET_MAX_LINES } from '../../src/exports/components/leaderHints.ts';
-import type { DoomFooterStatus } from '../../src/exports/footer.ts';
-import { fitStyledLine } from '../../src/exports/rendering.ts';
+import { DoomFooter, type DoomFooterStatusView } from '../../src/exports/doomFooter';
+import { DoomHeader } from '../../src/exports/doomHeader';
+import { LeaderHints, MAX_WIDGET_LINES as LEADER_WIDGET_MAX_LINES } from '../../src/exports/leaderHints';
+import type { DoomFooterStatus } from '../../src/exports/footer';
+import { fitStyledLine } from '../../src/exports/rendering';
 
 /**
  * The widget's self-imposed height budget: Pi's setWidget takes no line cap, so
@@ -14,7 +14,7 @@ import { fitStyledLine } from '../../src/exports/rendering.ts';
  * own and stopped catching anything.
  */
 
-import { DoomUiState } from '../../src/exports/uiState.ts';
+import { DoomUiState } from '../../src/exports/uiState';
 
 const theme = {
   fg: (_color: string, text: string) => text,

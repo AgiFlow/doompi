@@ -3,7 +3,7 @@ export type {
   AskUserPromptEvent,
   AskUserPromptOption,
   AskUserPromptQuestion,
-} from '../schemas/askUser.ts';
+} from '../schemas/askUser';
 export {
   AskUserBlockedEventSchema,
   DOOM_ASK_USER_BLOCKED_EVENT,
@@ -11,4 +11,4 @@ export {
   AskUserPromptEventSchema,
   AskUserPromptOptionSchema,
   AskUserPromptQuestionSchema,
-} from '../schemas/askUser.ts';
+} from '../schemas/askUser';

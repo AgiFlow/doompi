@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { pathToFileURL } from 'node:url';
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
-import { runCli } from '../commands/cli/cliApp.ts';
-import { createRunnerContainer } from '../container/index.ts';
+import { pathToFileURL } from 'node:url';
+import { runCli } from '../controllers/cliApp';
+import { createRunnerDependencies } from '../services/runnerDependencies';
 
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
@@ -21,7 +21,7 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
     enableLogs: true,
     enableTraces: true,
   });
-  const container = createRunnerContainer({ environment });
+  const container = createRunnerDependencies({ environment });
   const registry = container.runnerRegistry;
   let stdoutBytes = 0;
   let stderrBytes = 0;

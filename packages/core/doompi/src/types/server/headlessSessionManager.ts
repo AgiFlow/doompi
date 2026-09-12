@@ -1,4 +1,4 @@
-import type { HeadlessSessionHost, HeadlessSessionHostOptions } from './headlessSessionHost.ts';
+import type { HeadlessSessionHost, HeadlessSessionHostOptions } from './headlessSessionHost';
 
 export interface HeadlessSessionManagerCreateOptions extends HeadlessSessionHostOptions {
   signal?: AbortSignal;

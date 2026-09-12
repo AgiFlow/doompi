@@ -1,15 +1,15 @@
 import type { WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
-import type { RealtimeBrowserState } from '../../types/realtime.ts';
-import { browserVoiceMediaClientId } from '../lib/browserMediaIdentity.ts';
-import { BrowserVoiceMediaDevice } from '../api/browserMediaDevice.ts';
-import { BrowserVoiceMediaTransport } from '../stores/clientMediaTransport.ts';
-import { VoiceMediaClient, type VoiceMediaClientConnectionState } from '../api/voiceMediaClient.ts';
+import type { RealtimeBrowserState } from '../../types/realtime';
+import { browserVoiceMediaClientId } from '../lib/browserMediaIdentity';
+import { BrowserVoiceMediaDevice } from '../api/browserMediaDevice';
+import { BrowserVoiceMediaTransport } from '../stores/clientMediaTransport';
+import { VoiceMediaClient, type VoiceMediaClientConnectionState } from '../api/voiceMediaClient';
 import {
   activeVoiceSession,
   voiceMediaBrowserState,
   voiceMediaPageRuntime,
   voiceRealtimeBrowserControls,
-} from '../stores/voiceMediaWakeStore.ts';
+} from '../stores/voiceMediaWakeStore';
 
 class PageVoiceMediaRuntime {
   private readonly device = new BrowserVoiceMediaDevice(true);

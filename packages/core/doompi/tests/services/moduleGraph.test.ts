@@ -29,40 +29,36 @@ function runtimeImports(contents: string): string[] {
 
 describe('startup module graph boundaries', () => {
   it('keeps the dedicated Pi entry and package bootstrap dependency-light', () => {
-    const entry = source('src/exports/extensions/pi.ts');
-    const bootstrap = source('src/adapters/packageBootstrap.ts');
+    const bootstrap = source('src/extensions/pi.ts');
 
-    expect(entry.trim()).toBe("export { packageBootstrap as default } from '../../adapters/packageBootstrap';");
     // bootstrapClaim is on this list deliberately: deduping two installs has to
     // happen before anything else is read, so it may not pull in a graph.
     expect(runtimeImports(bootstrap)).toEqual([
       "import { pathToFileURL } from 'node:url';",
       "import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';",
-      "import { acquireBootstrapClaim } from './bootstrapClaim.ts';",
-      "import { findSyncedRoot, readStartupBootstrapStatus } from './bootstrapLocator.ts';",
+      "import { acquireBootstrapClaim } from '../models/bootstrapClaim';",
+      "import { findSyncedRoot, readStartupBootstrapStatus } from '../services/bootstrapLocator';",
     ]);
-    expect(runtimeImports(source('src/adapters/bootstrapClaim.ts'))).toEqual(["import path from 'node:path';"]);
+    expect(runtimeImports(source('src/models/bootstrapClaim.ts'))).toEqual(["import path from 'node:path';"]);
     expect(bootstrap).not.toContain('startupPrecompiler');
     expect(bootstrap).not.toContain('syncedRuntimeBuilder');
   });
 
   it('loads domain switching through the standalone fixed-core package', () => {
-    const composer = source('src/adapters/composer.ts');
-    const composition = source('src/services/extensionAssembler.ts');
-    const facade = source('src/exports/entries/domains.ts');
+    const composer = source('src/controllers/composer.ts');
+    const composition = source('src/services/extensionAssembler/index.ts');
 
     expect(composer).toContain('@agimon-ai/doompi-domain/apply');
     expect(composer).not.toContain("'./matrixSwitcher.ts'");
     expect(composition).toContain('@agimon-ai/doompi-domain/extensions/pi');
     expect(composition).not.toContain('OWN_ENTRIES.domains');
-    expect(facade).toContain('@agimon-ai/doompi-domain/extensions/pi');
   });
 
   it('does not use the config root barrel from startup-selected entries', () => {
     const paths = [
-      'src/extensions/entries/doom.ts',
-      'src/extensions/entries/styleSystem.ts',
-      'src/adapters/config/harnessState.ts',
+      'src/extensions/composedPi.ts',
+      'src/extensions/styleSystem.ts',
+      'src/services/harnessState/index.ts',
     ];
 
     for (const relativePath of paths) {
@@ -71,12 +67,10 @@ describe('startup module graph boundaries', () => {
   });
 
   it('emits dependency-light built interactive entries', () => {
-    const domains = source('dist/entries/domains.mjs');
-    const bootstrap = source('dist/src/adapters/packageBootstrap.mjs');
+    const bootstrap = source('dist/extensions/pi.mjs');
     const cacheExtensionPath = path.join(CACHE_PACKAGE_ROOT, 'dist', 'extensions', 'pi.mjs');
     const cacheExtension = fs.readFileSync(cacheExtensionPath, 'utf8');
 
-    expect(domains).toContain('@agimon-ai/doompi-domain/extensions/pi');
     expect(bootstrap).not.toContain('startupPrecompiler');
     expect(staticImports(bootstrap).join('\n')).not.toContain('composer');
     expect(cacheExtension).not.toContain('pi-cache-optimizer/index.ts');

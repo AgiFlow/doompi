@@ -29,7 +29,7 @@
   "files": [
     "dist",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "src/types/webMetrics.ts",
     "src/types/issueGrouping.ts",
     "!src/web/**/*.stories.tsx"
@@ -64,10 +64,10 @@
       "import": "./dist/metricsSource.mjs",
       "require": "./dist/metricsSource.cjs"
     },
-    "./tui/metricsOverlay": {
-      "types": "./dist/tui/metricsOverlay.d.mts",
-      "import": "./dist/tui/metricsOverlay.mjs",
-      "require": "./dist/tui/metricsOverlay.cjs"
+    "./metrics-overlay": {
+      "types": "./dist/metrics-overlay.d.mts",
+      "import": "./dist/metrics-overlay.mjs",
+      "require": "./dist/metrics-overlay.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -123,7 +123,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "global",
@@ -133,7 +133,7 @@
   },
   "doompiWeb": {
     "pluginId": "log",
-    "client": "./src/exports/webClient.ts",
+    "client": "./src/extensions/web.ts",
     "scopes": [
       "global"
     ]

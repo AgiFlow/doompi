@@ -8,7 +8,7 @@ import {
   materializeSharedBuild,
   publishSharedBuild,
   withSharedBuildLock,
-} from '../../src/adapters/sharedBuildCache.ts';
+} from '../../src/services/sharedBuildCache';
 
 const temporaryDirectories: string[] = [];
 

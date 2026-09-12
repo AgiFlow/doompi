@@ -3,8 +3,8 @@
  * looking for a bare `const meta`. The log takes the request history straight
  * as a prop, so the states here are the request statuses it styles.
  */
-import type { AuthorRegionDraft, AuthorRequestRecord } from '../lib/authorViewportTypes.ts';
-import { AuthorRequestLog } from './AuthorRequestLog.tsx';
+import type { AuthorRegionDraft, AuthorRequestRecord } from '../lib/authorViewportTypes';
+import { AuthorRequestLog } from './AuthorRequestLog';
 
 const region = (id: string, comment: string, startLine: number, endLine: number): AuthorRegionDraft => ({
   id,

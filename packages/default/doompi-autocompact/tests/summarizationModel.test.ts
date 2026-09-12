@@ -1,3 +1,4 @@
+import { parseModelReference, resolveSummarizationModel } from '../src/services/summarizationModel';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -5,8 +6,7 @@ const loadDoomConfig = vi.hoisted(() => vi.fn());
 const harnessState = vi.hoisted(() => vi.fn(() => ({})));
 vi.mock('@agimon-ai/doompi-config', () => ({ loadDoomConfig, getHarnessState: harnessState }));
 
-const { autocompactRuntimeConfig, parseModelReference, resolveDoomSummarizationModel, resolveSummarizationModel } =
-  await import('../src/adapters/pi/extension.ts');
+const { autocompactRuntimeConfig, resolveDoomSummarizationModel } = await import('../src/services/autocompactRuntime');
 
 type Model = NonNullable<ExtensionContext['model']>;
 

@@ -6,8 +6,8 @@ import {
   refuseClose,
   refuseSpawn,
   worktreeDirectory,
-} from '../../../src/services/worktreeNaming.ts';
-import { WORKTREE_RECORD_VERSION, type WorktreeRecord } from '../../../src/types/worktreeRegistry.ts';
+} from '../../../src/services/worktreeNaming';
+import { WORKTREE_RECORD_VERSION, type WorktreeRecord } from '../../../src/types/worktreeRegistry';
 
 function record(overrides: Partial<WorktreeRecord> = {}): WorktreeRecord {
   return {

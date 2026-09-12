@@ -3,7 +3,7 @@ import {
   useAuthorToolsCallSummary,
   useAuthorToolsResultLines,
   useAuthorToolsToolName,
-} from '../../src/web/lib/useAuthorToolsToolRender.ts';
+} from '../../src/web/lib/useAuthorToolsToolRender';
 
 describe('the use_author_tools tool view', () => {
   it('names the tool the package registers', () => {

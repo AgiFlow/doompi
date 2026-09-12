@@ -1,4 +1,4 @@
-import type { SessionChannelContribution } from '../../types/webPlugin.ts';
+import type { SessionChannelContribution } from '../../types/webPlugin';
 
 export interface ChannelDelivery {
   accepted: boolean;

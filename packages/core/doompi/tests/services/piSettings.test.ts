@@ -9,7 +9,7 @@ import {
   piSettingsPath,
   readPiSettings,
   writePiSettings,
-} from '../../src/exports/services/piSettings';
+} from '../../src/exports/piSettings';
 
 const UPDATE = {
   themePath: '/agent/themes/doom-pi-dark.json',

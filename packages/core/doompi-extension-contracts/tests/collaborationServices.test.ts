@@ -2,17 +2,17 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type DoomBackgroundWorkService,
   readDoomBackgroundWorkService,
-} from '../src/schemas/backgroundWork.ts';
+} from '../src/schemas/backgroundWork';
 import {
   DOOM_DELEGATION_SERVICE,
   type DoomDelegationService,
   readDoomDelegationService,
-} from '../src/schemas/delegation.ts';
+} from '../src/schemas/delegation';
 import {
   DOOM_SUBAGENT_POLICY_SERVICE,
   type DoomSubagentPolicyService,
   readDoomSubagentPolicyService,
-} from '../src/schemas/subagentPolicy.ts';
+} from '../src/schemas/subagentPolicy';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 

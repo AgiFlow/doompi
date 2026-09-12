@@ -1,7 +1,7 @@
 import type { DoomExtensionContext } from '@agimon-ai/doompi-extension-contracts/config';
 import { describe, expect, it, vi } from 'vitest';
-import { createDoomUiHub } from '../../src/services/hub/uiHub.ts';
-import { DoomLeaderRegistry } from '../../src/services/leader/leaderRegistry.ts';
+import { createDoomUiHub } from '../../src/services/uiHub';
+import { DoomLeaderRegistry } from '../../src/services/leaderRegistry';
 
 function createHub() {
   const diagnostics = vi.fn();

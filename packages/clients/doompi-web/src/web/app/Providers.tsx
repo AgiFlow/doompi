@@ -10,7 +10,7 @@ import { acquireModelContext, disposeModelContextAdapter } from '../lib/modelCon
 import { installWebPlugins, webPluginDiagnostics, webPluginsInstalled } from '../lib/pluginRegistry.ts';
 import { startSessionWebPluginRuntime } from '../lib/pluginRuntime.ts';
 import { bindThreadRenderer } from '../lib/threadRenderer.ts';
-import { onHubConnected, sendFrame, sendHubFrame } from '../lib/transport.ts';
+import { invokeServerMethod, onHubConnected, sendFrame, sendHubFrame } from '../lib/transport.ts';
 import { routeTree } from '../routes/routeTree.tsx';
 import { restoreSealedSession } from '../lib/sealedSession.ts';
 import { restoreLivePushRegistration } from '../lib/livePush.ts';
@@ -54,6 +54,7 @@ export function Providers() {
       stopPlugins = startSessionWebPluginRuntime({
         sendSessionFrame: sendFrame,
         sendHubFrame,
+        invokeServerMethod,
         onHubConnected,
         acquireModelContext,
         onComposerSubmitted,

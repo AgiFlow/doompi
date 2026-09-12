@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDoomKernel } from '../src/exports/index.ts';
+import { createDoomKernel } from '../src/exports';
 
 /** Collects every list a slot receives, which is the whole observable contract. */
 function recorder(): { pushes: string[][]; sink: (active: readonly string[]) => void } {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseDescribeAuthorToolsInput, parseUseAuthorToolInput } from '../../src/schemas/authorTools.ts';
-import { createAuthorBridgeState } from '../../src/services/authorBridgeState.ts';
+import { parseDescribeAuthorToolsInput, parseUseAuthorToolInput } from '../../src/schemas/authorTools';
+import { createAuthorBridgeState } from '../../src/models/authorBridgeState';
 
 const scheduleTimeout = (callback: () => void, delayMs: number): (() => void) => {
   const timer = setTimeout(callback, delayMs);

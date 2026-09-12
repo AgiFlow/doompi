@@ -6,11 +6,11 @@ export type {
   DoomBackgroundWorkChanged,
   DoomBackgroundWorkService,
   DoomBackgroundWorkSnapshot,
-} from '../schemas/backgroundWork.ts';
+} from '../schemas/backgroundWork';
 export {
   BackgroundProviderWorkItemSchema,
   BackgroundWorkItemSchema,
   DOOM_BACKGROUND_WORK_CHANGED_EVENT,
   DOOM_BACKGROUND_WORK_SERVICE,
   readDoomBackgroundWorkService,
-} from '../schemas/backgroundWork.ts';
+} from '../schemas/backgroundWork';

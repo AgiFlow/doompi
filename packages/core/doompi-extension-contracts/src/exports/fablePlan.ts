@@ -9,7 +9,7 @@ export type {
   FablePlanStartedPayload,
   FablePlanStartPayload,
   FablePlanStatus,
-} from '../schemas/fablePlan.ts';
+} from '../schemas/fablePlan';
 export {
   DOOM_FABLE_PLAN_SERVICE,
   FABLE_PLAN_MODEL,
@@ -26,4 +26,4 @@ export {
   FablePlanStartSchema,
   FablePlanStatusSchema,
   readDoomFablePlanService,
-} from '../schemas/fablePlan.ts';
+} from '../schemas/fablePlan';

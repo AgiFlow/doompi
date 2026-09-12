@@ -7,7 +7,7 @@ export type {
   ProtocolRuntimeOptions,
   RequestOptions,
   RequestReplyDefinition,
-} from '../schemas/protocol.ts';
+} from '../schemas/protocol';
 export {
   createProtocolRuntime,
   DOOM_PROTOCOL_ERROR_CODE,
@@ -17,4 +17,4 @@ export {
   defineNotification,
   defineRequestReply,
   ProtocolErrorSchema,
-} from '../schemas/protocol.ts';
+} from '../schemas/protocol';

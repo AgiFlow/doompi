@@ -5,7 +5,7 @@ import type {
 } from '@agimon-ai/doompi-extension-contracts/mode';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { actionsFor, matchMinorMode, registerMinorModeCommand } from '../../src/extensions/entries/minorModeCommand.ts';
+import { actionsFor, matchMinorMode, registerMinorModeCommand } from '../../src/controllers/minorModeCommand';
 
 function record(overrides: {
   id: string;

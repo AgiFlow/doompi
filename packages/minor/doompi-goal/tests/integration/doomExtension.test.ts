@@ -9,7 +9,7 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  activateGoalRuntime: vi.fn(),
+  createGoalRuntime: vi.fn(),
   runtimeDispose: vi.fn(),
   bindBackgroundWork: vi.fn(),
   backgroundWorkChanged: vi.fn(),
@@ -25,27 +25,25 @@ const mocks = vi.hoisted(() => ({
 }));
 const cordisRoots: Context[] = [];
 
-vi.mock('../../src/adapters/pi/runtimeActivation.ts', () => ({
-  activateGoalRuntime: mocks.activateGoalRuntime,
+vi.mock('../../src/controllers/runtimeActivation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/controllers/runtimeActivation')>()),
+  createGoalRuntime: mocks.createGoalRuntime,
   isRetainedGoalStatus: (status: unknown) =>
     typeof status === 'string' && status !== 'cleared' && status !== 'complete',
 }));
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
-  connectDoomCordisHost: async () => {
-    const root = mocks.createCordisRoot() as Context;
-    await mocks.prepareCordisRoot(root);
-    return {
-      root,
-      runtime: { abiVersion: 1, generation: 'goal-test', hostId: 'goal-test', mode: 'composed' },
-      dispose: async () => undefined,
-    };
-  },
-}));
-vi.mock('../../src/tui/goalHistoryOverlay.ts', () => ({
+vi.mock('../../src/tui/goalHistoryOverlay', () => ({
   openGoalHistoryOverlay: vi.fn(),
 }));
 
-import { registerGoalExtension } from '../../src/adapters/pi/extension';
+import { goalExtension as goalPiExtension } from '../../src/extensions/pi';
+
+async function registerGoalExtension(pi: ExtensionAPI): Promise<void> {
+  const root = mocks.createCordisRoot() as Context;
+  await mocks.prepareCordisRoot(root);
+  const fiber = root.plugin((context) => goalPiExtension.install(context, pi));
+  await fiber;
+  pi.on('session_shutdown', () => fiber.dispose());
+}
 
 interface Fixture {
   pi: ExtensionAPI;
@@ -66,8 +64,12 @@ interface Fixture {
 
 function createFixture(): Fixture {
   const listeners = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
-  let stateListener: ((event: { status: string }) => void) | undefined;
+  const stateListeners = new Set<(event: { status: string }) => void>();
   const manager = {
+    tools: vi.fn(() => []),
+    toolRestrictions: vi.fn(() => []),
+    commands: vi.fn(() => []),
+    events: vi.fn(() => ({})),
     snapshot: vi.fn(() => ({ goal: undefined })),
     showFromLeader: vi.fn(),
     startFromLeader: vi.fn(),
@@ -75,14 +77,27 @@ function createFixture(): Fixture {
     endFromLeader: vi.fn(),
     listHistory: vi.fn(),
     subscribeState: vi.fn((listener: (event: { status: string }) => void) => {
-      stateListener = listener;
+      stateListeners.add(listener);
       return mocks.stateDispose;
     }),
     bindBackgroundWork: mocks.bindBackgroundWork,
     backgroundWorkChanged: mocks.backgroundWorkChanged,
   };
-  mocks.activateGoalRuntime.mockReturnValue({ manager, dispose: mocks.runtimeDispose });
+  let disposed = false;
+  mocks.createGoalRuntime.mockImplementation(() => {
+    disposed = false;
+    return {
+      manager,
+      dispose() {
+        if (disposed) return;
+        disposed = true;
+        mocks.runtimeDispose();
+      },
+    };
+  });
   const pi = {
+    registerTool: vi.fn(),
+    registerCommand: vi.fn(),
     on(event: string, handler: (payload: unknown, ctx: ExtensionContext) => unknown) {
       listeners.set(event, handler);
     },
@@ -90,7 +105,9 @@ function createFixture(): Fixture {
   return {
     pi,
     listeners,
-    emitState: (status) => stateListener?.({ status }),
+    emitState: (status) => {
+      for (const listener of stateListeners) listener({ status });
+    },
     manager,
   };
 }
@@ -195,7 +212,7 @@ describe('standard Goal entrypoint', () => {
     expect(mocks.runtimeDispose).toHaveBeenCalledOnce();
 
     await registerGoalExtension(fixture.pi);
-    expect(mocks.activateGoalRuntime).toHaveBeenCalledTimes(2);
+    expect(mocks.createGoalRuntime).toHaveBeenCalledTimes(2);
   });
 
   it('binds the current background-work generation and forwards invalidations', async () => {

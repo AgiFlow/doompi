@@ -3,14 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { afterEach, describe, expect, it } from 'vitest';
-import { computeWebSourcesHash } from '../../src/adapters/syncState.ts';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
+import { computeWebSourcesHash } from '../../src/services/syncState';
+import { resolveSyncLocation, syncGenerationDirectory } from '../../src/services/syncLocation';
 import {
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '../../src/adapters/syncRegistration.ts';
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/adapters/syncStateContract';
+} from '../../src/services/syncRegistration';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/services/syncStateContract';
 import {
   computeInputsHash,
   createMapResolvers,
@@ -32,8 +32,8 @@ import {
   settingsRelativePath,
   runDirectory as stateRunDirectory,
   writeSyncState as writeState,
-} from '../../src/exports/services/syncState';
-import { testMcpProjection } from '../helpers/mcpProjection.ts';
+} from '../../src/exports/syncState';
+import { testMcpProjection } from '../helpers/mcpProjection';
 
 const REPO_ROOT = path.resolve(__dirname, '..', 'fixtures', 'repository');
 const SELECTION: SyncSelection = { majorMode: 'dev', domains: ['development'], preset: 'default' };

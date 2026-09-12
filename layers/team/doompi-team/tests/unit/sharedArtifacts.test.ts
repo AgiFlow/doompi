@@ -15,8 +15,8 @@ import {
   getProjectSubagentsDir,
   writeArtifact,
   writeMetadata,
-} from '../../src/adapters/filesystem/artifacts';
-import { TEMP_ARTIFACTS_DIR } from '../../src/adapters/filesystem/paths';
+} from '../../src/services/artifacts';
+import { TEMP_ARTIFACTS_DIR } from '../../src/services/sessionPaths';
 import type { ArtifactDirPreference } from '../../src/types';
 
 const temporaryDirs: string[] = [];

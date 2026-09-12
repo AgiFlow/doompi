@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { SyncLocation } from '../../src/adapters/syncLocation.ts';
-import type { HarnessContext } from '../../src/exports/services/harnessContext';
+import type { SyncLocation } from '../../src/services/syncLocation';
+import type { HarnessContext } from '../../src/exports/harnessContext';
 
 const mocks = vi.hoisted(() => ({
   compileExtensionSet: vi.fn(),
@@ -11,21 +11,17 @@ const mocks = vi.hoisted(() => ({
   writeFileAtomic: vi.fn(),
 }));
 
-vi.mock('../../src/services/extensionAssembler.ts', () => ({
+vi.mock('../../src/services/extensionAssembler', () => ({
   createLayerResolvers: mocks.createLayerResolvers,
   resolveExtensionComposition: mocks.resolveExtensionComposition,
 }));
-vi.mock('../../src/adapters/extensionCompiler.ts', () => ({
+vi.mock('../../src/services/extensionCompiler', () => ({
   compileExtensionSet: mocks.compileExtensionSet,
   extensionSetManifestPath: mocks.extensionSetManifestPath,
 }));
-vi.mock('../../src/adapters/serialization/json.ts', () => ({ writeFileAtomic: mocks.writeFileAtomic }));
+vi.mock('../../src/services/json', () => ({ writeFileAtomic: mocks.writeFileAtomic }));
 
-import {
-  buildRuntimeBundle,
-  compileModeExtension,
-  createRuntimeExtensionPlan,
-} from '../../src/adapters/runtimeBundle.ts';
+import { buildRuntimeBundle, compileModeExtension, createRuntimeExtensionPlan } from '../../src/services/runtimeBundle';
 
 describe('runtime bundle', () => {
   const location = {

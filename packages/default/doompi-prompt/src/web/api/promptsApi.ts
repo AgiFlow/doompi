@@ -5,7 +5,7 @@ import {
   promptUrl,
   type SavedPromptListResponse,
   type SavedPromptView,
-} from '../../types/webPrompts.ts';
+} from '../../types/webPrompts';
 
 /**
  * The browser half of the prompt library API.

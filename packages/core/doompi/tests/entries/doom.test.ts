@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import doomExtension from '../../src/exports/entries/doom';
+import doomExtension from '../../src/extensions/composedPi';
 
 const acquireCompositionClaim = vi.hoisted(() => vi.fn());
 const releaseCompositionClaim = vi.hoisted(() => vi.fn());
@@ -12,13 +12,13 @@ const cleanupRunDirectory = vi.hoisted(() => vi.fn());
 const findSyncedRoot = vi.hoisted(() => vi.fn());
 const registerDoomFlags = vi.hoisted(() => vi.fn());
 
-vi.mock('../../src/adapters/composer.ts', () => ({
+vi.mock('../../src/controllers/composer', () => ({
   composeDoomSession,
   cleanupRunDirectory,
   findSyncedRoot,
   registerDoomFlags,
 }));
-vi.mock('../../src/adapters/compositionState.ts', () => ({ acquireCompositionClaim }));
+vi.mock('../../src/models/compositionState', () => ({ acquireCompositionClaim }));
 
 type Handler = (event: unknown, ctx: ExtensionContext) => unknown;
 

@@ -111,7 +111,7 @@ a file this session never changed.
 ## Public API
 
 ```ts
-import { createFileEditContainer, fileEditExtension } from '@agimon-ai/doompi-file-edit';
+import { createFileEditDependencies, fileEditExtension } from '@agimon-ai/doompi-file-edit';
 import type { FileDiff, FileEditEntry } from '@agimon-ai/doompi-file-edit';
 ```
 
@@ -131,3 +131,5 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+The public Pi and server loaders live in `src/extensions`. Controllers declare commands, events, APIs, and tracking activities. Services own filesystem and timeline logic; TUI modules assemble and present the review workflow. Public reusable types and dependency construction are exposed through flat `src/exports` entries. The Pi factory owns its optional UI service and awaits cleanup through `onDispose`.

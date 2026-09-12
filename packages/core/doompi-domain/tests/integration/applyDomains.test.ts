@@ -5,7 +5,7 @@ import { HARNESS_STATE_KEYS } from '@agimon-ai/doompi-config/harnessState';
 import { resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
 import type { DoomHarnessContext } from '@agimon-ai/doompi-config/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyDomains } from '../../src/adapters/applyDomains.ts';
+import { applyDomains } from '../../src/controllers/applyDomains';
 
 const collectResources = vi.hoisted(() => vi.fn());
 const resolveMcpAllowlist = vi.hoisted(() => vi.fn(() => ({ servers: ['figma'] })));
@@ -15,11 +15,11 @@ vi.mock('@agimon-ai/doompi-config/domains', async (importOriginal) => ({
   resolvePluginEntries: vi.fn(() => []),
   resolveSharedSkills: vi.fn(() => false),
 }));
-vi.mock('../../src/adapters/mcpFilter.ts', () => ({ resolveMcpAllowlist }));
-vi.mock('../../src/adapters/pluginMaterializer.ts', () => ({
+vi.mock('../../src/services/mcpFilter', () => ({ resolveMcpAllowlist }));
+vi.mock('../../src/services/pluginMaterializer', () => ({
   materializePluginEntries: vi.fn(async () => []),
 }));
-vi.mock('../../src/adapters/resourceCollector.ts', () => ({ collectResources }));
+vi.mock('../../src/services/resourceCollector', () => ({ collectResources }));
 
 let state: DoomHarnessContext;
 

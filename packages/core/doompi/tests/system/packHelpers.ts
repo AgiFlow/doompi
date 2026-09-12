@@ -8,15 +8,15 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { RmuxBackend } from '@agimon-ai/doompi-runner/services/RmuxBackend';
-import type { IRunnerPaths } from '@agimon-ai/doompi-runner/services/RunnerPaths';
+import { RmuxBackend } from '@agimon-ai/doompi-runner/rmux-backend';
+import type { IRunnerPaths } from '@agimon-ai/doompi-runner/runner-paths';
 import {
   FORBIDDEN_PACK_CONTENT,
   PACKAGE_MATRIX,
   type PackageMatrixEntry,
   packageRootFor,
   REPOSITORY_ROOT,
-} from './packageMatrix.ts';
+} from './packageMatrix';
 
 const PACKAGE_DIRECTORY_NAME = 'package';
 const PACK_FILE_SUFFIX = '.tgz';
@@ -124,6 +124,7 @@ export async function runCommand(
   args: readonly string[],
   cwd: string,
   environment: NodeJS.ProcessEnv = process.env,
+  timeoutMs = COMMAND_TIMEOUT_MS,
 ): Promise<CommandResult> {
   return new Promise<CommandResult>((resolve) => {
     const child = execFileCallback(
@@ -133,14 +134,14 @@ export async function runCommand(
         cwd,
         env: environment,
         maxBuffer: MAX_COMMAND_OUTPUT,
-        timeout: COMMAND_TIMEOUT_MS,
+        timeout: timeoutMs,
         killSignal: 'SIGTERM',
       },
       (error, stdout, stderr) => {
         resolve({
           code: error && typeof error.code === 'number' ? error.code : error ? 1 : 0,
           stdout,
-          stderr: error ? stderr || error.message : stderr,
+          stderr: error ? [stderr, error.message].filter(Boolean).join('\n') : stderr,
         });
       },
     );

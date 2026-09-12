@@ -17,7 +17,7 @@ import {
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from './doomOverlay.ts';
+} from './doomOverlay';
 import { CURSOR_BLOCK, fit, isControlInput, rightAligned, SELECTION_MARKER } from './overlayText';
 
 export const WORKFLOW_PROMPT_OVERLAY_OPTIONS = DOOM_FULLSCREEN_UI_OPTIONS.overlayOptions;

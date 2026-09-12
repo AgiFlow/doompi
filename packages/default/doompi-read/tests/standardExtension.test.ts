@@ -1,3 +1,6 @@
+vi.mock('@agimon-ai/doompi-extension-contracts/pi-extension', () =>
+  vi.importActual('../../../core/doompi-extension-contracts/src/exports/piExtension'),
+);
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,11 +11,11 @@ const hostMocks = vi.hoisted(() => ({
   plugin: vi.fn(),
 }));
 
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
+vi.mock('../../../core/doompi-extension-contracts/src/adapters/pi/cordisHost', () => ({
   connectDoomCordisHost: hostMocks.connect,
 }));
 
-const { activateDoomPiReadExtension } = await import('../src/adapters/pi/extension.ts');
+const { activateDoomPiReadExtension } = await import('../src/extensions/pi');
 
 function createPi(): {
   readonly pi: ExtensionAPI;

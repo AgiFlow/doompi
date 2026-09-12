@@ -1,0 +1,15 @@
+export const STORE_DIR_NAME = 'doom-runner';
+export const DEFAULT_CONFIG_DIR_NAME = '.pi';
+export const AGENT_DIR_NAME = 'agent';
+export const LOG_DIR_NAME = 'logs';
+export const STATE_DIR_NAME = 'runs';
+export const LOG_EXTENSION = '.log';
+export const STATE_EXTENSION = '.json';
+export const ROTATED_SUFFIX = '.1';
+export const RAW_SUFFIX = '.raw';
+export const PI_CODING_AGENT_DIR_ENV = 'PI_CODING_AGENT_DIR';
+export const HOME_ALIAS = '~';
+export const HOME_ALIAS_PREFIX = '~/';
+export const FILE_ENCODING = 'utf8';
+export const NOT_FOUND_ERROR_CODE = 'ENOENT';
+export const EMPTY_SESSION_GRACE_MS = 300_000;

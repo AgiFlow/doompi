@@ -14,7 +14,7 @@ import {
   type TaskStatus,
   taskCallView,
   taskResultView,
-} from '../lib/taskToolFormat.ts';
+} from '../lib/taskToolFormat';
 
 const STATUS_TONE: Record<TaskStatus, string> = {
   pending: 'text-doom-dim',

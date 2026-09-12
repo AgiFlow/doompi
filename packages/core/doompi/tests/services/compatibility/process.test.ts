@@ -14,7 +14,7 @@ import {
   runInteractive,
   signalExitCode,
   waitForExit,
-} from '../../../src/exports/services/compatibility/process';
+} from '../../../src/exports/process';
 
 const NODE = process.execPath;
 const SIGINT: NodeJS.Signals = 'SIGINT';

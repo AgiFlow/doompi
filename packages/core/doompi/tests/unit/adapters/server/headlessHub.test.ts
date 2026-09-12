@@ -5,9 +5,9 @@ import {
   requireDoomServerHost,
   type DoomServerFacet,
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { HeadlessSessionHost } from '../../../../src/types/server/headlessSessionHost.ts';
-import type { DirectHarnessFrame } from '../../../../src/types/server/directHarnessRuntime.ts';
-import { createHeadlessHub } from '../../../../src/adapters/server/headlessHub.ts';
+import type { HeadlessSessionHost } from '../../../../src/types/server/headlessSessionHost';
+import type { DirectHarnessFrame } from '../../../../src/types/server/directHarnessRuntime';
+import { createHeadlessHub } from '../../../../src/controllers/headlessHub';
 
 function host() {
   let resolveExit: ((code: number) => void) | undefined;

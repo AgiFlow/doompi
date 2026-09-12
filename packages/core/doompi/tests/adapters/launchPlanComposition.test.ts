@@ -2,17 +2,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HarnessContext } from '../../src/adapters/harnessContext';
+import type { HarnessContext } from '../../src/services/harnessContext';
 import type { HarnessTelemetry } from '../../src/exports/logSinkTelemetry';
-import { LAUNCHER_COMPOSITION_ENV } from '../../src/types/interfaces/launcherComposition';
+import { LAUNCHER_COMPOSITION_ENV } from '../../src/constants/launcherComposition';
 
 const runtimeBundleMocks = vi.hoisted(() => ({
   buildRuntimeBundle: vi.fn(),
   createRuntimeExtensionPlan: vi.fn(),
 }));
-vi.mock('../../src/adapters/runtimeBundle.ts', () => runtimeBundleMocks);
+vi.mock('../../src/services/runtimeBundle', () => runtimeBundleMocks);
 
-const { resolveLaunchPlan } = await import('../../src/adapters/launchPlan.ts');
+const { resolveLaunchPlan } = await import('../../src/services/launchPlan');
 
 const FINGERPRINT = 'f'.repeat(64);
 const BUNDLE = '/cache/dist/copilot.ffffffffffff.mjs';

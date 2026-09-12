@@ -12,7 +12,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: ['./tests/setup.ts'],
+    setupFiles: ['./tests/setup'],
     bail: 10,
     exclude: ['node_modules/**/*', 'dist/**/*', 'coverage/**/*'],
     coverage: {
@@ -28,6 +28,10 @@ export default defineConfig({
   },
   resolve: {
     alias: [
+      {
+        find: '@agimon-ai/doompi-extension-contracts/pi-extension',
+        replacement: `${doomExtensionContractsExports}piExtension.ts`,
+      },
       { find: /^@agimon-ai\/doompi-team\/(.*)$/, replacement: `${doomTeamSrc}$1.ts` },
       {
         find: '@agimon-ai/doompi-extension-contracts/cordis-host',
@@ -57,6 +61,7 @@ export default defineConfig({
         find: /^@agimon-ai\/doompi-extension-contracts\/(.*)$/,
         replacement: `${doomExtensionContractsExports}$1.ts`,
       },
+      { find: '@agimon-ai/doompi-ui/doom-overlay', replacement: `${doomUiExports}doomOverlay.ts` },
       { find: /^@agimon-ai\/doompi-ui\/(.*)$/, replacement: `${doomUiExports}$1.ts` },
     ],
   },

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { IClock } from '../src/types/clock';
 import type { ILogFile, LogWriter } from '../src/types/logFile';
-import type { IRunnerPaths } from '../src/services/RunnerPaths/types';
+import type { IRunnerPaths } from '../src/services/runnerPaths/type';
 import type { IProcessControl } from '../src/types/processControl';
 import type { IPtySpawner, PtyProcess, PtySpawnRequest } from '../src/types/ptySpawner';
 import type { IRtkProcessor, RtkProcessRequest, RtkProcessResult } from '../src/types/rtkProcessor';

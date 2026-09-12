@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { doctorHelp, syncHelp } from '../../src/commands/cli/help.ts';
-import { CompatibilityCommand } from '../../src/commands/compatibilityCommand.ts';
-import { DoctorCommand } from '../../src/commands/doctorCommand.ts';
-import { InitCommand } from '../../src/commands/initCommand.ts';
-import { SyncPipeline } from '../../src/commands/syncPipeline.ts';
+import { doctorHelp, syncHelp } from '../../src/controllers/help';
+import { CompatibilityCommand } from '../../src/controllers/compatibilityCommand';
+import { DoctorCommand } from '../../src/controllers/doctorCommand';
+import { InitCommand } from '../../src/controllers/initCommand';
+import { SyncPipeline } from '../../src/controllers/syncPipeline';
 
 /** Collects what a command wrote so a help run can be checked for side effects. */
 function recorder(): { write: (chunk: string) => boolean; text: () => string } {

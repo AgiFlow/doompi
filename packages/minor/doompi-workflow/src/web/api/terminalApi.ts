@@ -7,7 +7,7 @@ import {
   type WorkflowControlResponse,
   type WorkflowDeleteResponse,
   type WorkflowScreenEvent,
-} from '../../types/webWorkflowTerminal.ts';
+} from '../../types/webWorkflowTerminal';
 
 /**
  * The page's half of this package's hub API: one run's terminal and the files

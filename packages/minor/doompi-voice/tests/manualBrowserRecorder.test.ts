@@ -4,15 +4,15 @@ import {
   MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,
   MANUAL_TRANSCRIPTION_MAX_DURATION_MS,
   MANUAL_TRANSCRIPTION_ROUTE,
-} from '../src/types/manualTranscription.ts';
+} from '../src/types/manualTranscription';
 import {
   ManualRecordingSilenceGate,
   startManualBrowserRecording,
   type ManualBrowserRecording,
   type ManualBrowserRecordingResult,
-} from '../src/web/api/manualBrowserRecorder.ts';
-import { ManualComposerRecorder } from '../src/web/api/manualComposerRecorder.ts';
-import { transcribeManualRecording } from '../src/web/api/manualTranscriptionClient.ts';
+} from '../src/web/api/manualBrowserRecorder';
+import { ManualComposerRecorder } from '../src/web/api/manualComposerRecorder';
+import { transcribeManualRecording } from '../src/web/api/manualTranscriptionClient';
 
 function recorderFixture() {
   const stopTrack = vi.fn();

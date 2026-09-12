@@ -19,7 +19,7 @@ interface PackageManifest {
 
 const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
 const PROMPT_SUPPORT_DIRECTORIES = new Set(['agents', 'assets', 'references', 'scripts']);
-const SERVER_ENTRY_KINDS = ['server', 'headless'] as const;
+const SERVER_ENTRY_KINDS = ['server'] as const;
 type ServerEntryKind = (typeof SERVER_ENTRY_KINDS)[number];
 
 async function readManifest(): Promise<PackageManifest> {
@@ -86,7 +86,7 @@ describe('{{ packageName | kebabCase }} package contract', () => {
     const serverEntryKinds = (
       await Promise.all(
         SERVER_ENTRY_KINDS.map(async (kind) =>
-          access(path.join(packageDirectory, `src/exports/extensions/${kind}.ts`))
+          access(path.join(packageDirectory, `src/extensions/${kind}.ts`))
             .then(() => kind)
             .catch(() => undefined),
         ),
@@ -116,15 +116,15 @@ describe('{{ packageName | kebabCase }} package contract', () => {
     }
 
     expect(server).toBeDefined();
-    const serverKind = typeof server?.entry === 'string' ? SERVER_ENTRY_KINDS.find((kind) => server.entry === `./src/exports/extensions/${kind}.ts`) : undefined;
+    const serverKind = typeof server?.entry === 'string' ? SERVER_ENTRY_KINDS.find((kind) => server.entry === `./src/extensions/${kind}.ts`) : undefined;
     expect(serverKind).toBeDefined();
     expect(server).toMatchObject({
-      entry: `./src/exports/extensions/${serverKind}.ts`,
+      entry: `./src/extensions/${serverKind}.ts`,
       dist: `./dist/extensions/${serverKind}.mjs`,
     });
     const scopes = server?.scopes ?? [];
     expect(scopes.length).toBeGreaterThan(0);
-    expect(scopes.every((scope) => scope === 'session' || scope === 'hub')).toBe(true);
+    expect(scopes.every((scope) => scope === 'session' || scope === 'global' || scope === 'workspace')).toBe(true);
   });
 
   it('ships an H1-led Help index and every linked package resource', async () => {
@@ -175,7 +175,7 @@ describe('{{ packageName | kebabCase }} package contract', () => {
   it('pins matching Pi peer and development versions', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.0');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.0');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.1');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.1');
   });
 });

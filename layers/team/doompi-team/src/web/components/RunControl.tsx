@@ -1,9 +1,9 @@
 import { Button, type StatusTone } from '@agimon-ai/doompi-web-components';
 import type { SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import type { SubagentRun, SubagentRunState } from '../../types/webSubagents.ts';
-import { formatRunDuration } from '../lib/format.ts';
-import { dismissRun, isTerminalRun, requestRunStop } from '../stores/subagentsStore.ts';
+import type { SubagentRun, SubagentRunState } from '../../types/webSubagents';
+import { formatRunDuration } from '../lib/format';
+import { dismissRun, isTerminalRun, requestRunStop } from '../stores/subagentsStore';
 
 /** One run state, in the host's shared outcome vocabulary. */
 export const RUN_BADGE: Readonly<Record<SubagentRunState, { label: string; tone: StatusTone }>> = {

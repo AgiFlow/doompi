@@ -4,7 +4,7 @@ import {
   type MinorModeActionRequest,
   type MinorModeCatalogService,
   type MinorModeCatalogSnapshot,
-} from './mode.ts';
+} from './mode';
 
 export type TransitionAxis = 'domains' | 'major-mode' | 'minor-mode' | 'profile';
 

@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { extensionToolSource } from '@agimon-ai/doompi-ui/extensionName';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { compileExtensionModule, compileExtensionSet } from '../../src/adapters/extensionCompiler.ts';
+import { compileExtensionModule, compileExtensionSet } from '../../src/services/extensionCompiler';
 
 const temporaryDirectories: string[] = [];
 
@@ -456,6 +456,22 @@ describe('compiled direct modules', () => {
     );
   });
 
+  it('preserves named server exports without requiring or inventing a default', async () => {
+    const directory = temporaryDirectory();
+    const dependency = writeModule(directory, 'dependency', 'export const value = "original";');
+    const entry = writeModule(
+      directory,
+      'server',
+      'import { value } from "./dependency.mjs"; export const serverPlugin = { apply() { return value; } };',
+    );
+    const output = await compileExtensionModule(entry, path.join(directory, 'cache'));
+    fs.rmSync(dependency);
+    fs.rmSync(entry);
+    const loaded = (await import(pathToFileURL(output).href)) as { serverPlugin: { apply(): string } };
+    expect(Object.keys(loaded)).toEqual(['serverPlugin']);
+    expect(loaded.serverPlugin.apply()).toBe('original');
+  });
+
   it('preserves the server object default and bundles its static dependencies', async () => {
     const directory = temporaryDirectory();
     const dependency = writeModule(directory, 'dependency', 'export const value = "original";');
@@ -777,7 +793,7 @@ describe('compiled extension sets', () => {
   });
   it('activates a production own entry', async () => {
     const directory = temporaryDirectory();
-    const entry = fileURLToPath(new URL('../../src/extensions/entries/effort.ts', import.meta.url));
+    const entry = fileURLToPath(new URL('../../src/extensions/effort.ts', import.meta.url));
     const registerCommand = vi.fn();
 
     const output = await compileExtensionSet([entry], path.join(directory, 'cache'));

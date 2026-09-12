@@ -1,14 +1,15 @@
-import type { ExtensionAPI, Theme } from '@earendil-works/pi-coding-agent';
+import { openTaskSpace } from '../src/tui/taskSpace';
+import type { Theme } from '@earendil-works/pi-coding-agent';
 import type { TUI } from '@earendil-works/pi-tui';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerTasksCommand } from '../src/exports/commands';
-import { TaskStore } from '../src/exports/store/taskStore';
-import { STORE_SCHEMA_VERSION, type Task } from '../src/exports/store/types';
-import { ERR_REQUIRES_INTERACTIVE, TASK_STATUSES } from '../src/exports/tool/schema';
-import { TASK_SPACE_OVERLAY_OPTIONS, TaskSpaceComponent, type TaskSpaceOptions } from '../src/tui/taskSpace.ts';
+import { createTasksCommand } from '../src/exports/commands';
+import { TaskStore } from '../src/exports/storeTaskStore';
+import { STORE_SCHEMA_VERSION, type Task } from '../src/exports/storeTypes';
+import { ERR_REQUIRES_INTERACTIVE, TASK_STATUSES } from '../src/exports/toolSchema';
+import { TASK_SPACE_OVERLAY_OPTIONS, TaskSpaceComponent, type TaskSpaceOptions } from '../src/tui/taskSpace';
 
 const WIDTH = 120;
 const KEY_UP = '\x1b[A';
@@ -447,33 +448,19 @@ describe('TaskSpaceComponent editing and layout', () => {
   });
 });
 
-describe('registerTasksCommand overlay dispatch', () => {
-  function createPi(): { pi: ExtensionAPI; handler: () => (args: string, ctx: unknown) => Promise<void> } {
-    let registered: ((args: string, ctx: unknown) => Promise<void>) | undefined;
-    const pi = {
-      registerCommand: (_name: string, options: { handler: (args: string, ctx: unknown) => Promise<void> }) => {
-        registered = options.handler;
-      },
-    } as unknown as ExtensionAPI;
-    return {
-      pi,
-      handler: () => {
-        if (!registered) throw new Error('tasks command was not registered');
-        return registered;
-      },
-    };
-  }
-
+describe('createTasksCommand overlay dispatch', () => {
   it('refuses without a UI and never opens the overlay', async () => {
     seed([{ subject: 'anything' }]);
     const store = new TaskStore({ storePath });
     store.read();
-    const { pi, handler } = createPi();
-    registerTasksCommand(pi, store);
+    const handler = createTasksCommand(store, openTaskSpace)[1].handler as (
+      args: string,
+      context: unknown,
+    ) => Promise<void>;
     const custom = vi.fn();
     const notify = vi.fn();
 
-    await handler()('', { hasUI: false, ui: { custom, notify } });
+    await handler('', { hasUI: false, ui: { custom, notify } });
 
     expect(custom).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith(ERR_REQUIRES_INTERACTIVE, 'error');
@@ -484,11 +471,13 @@ describe('registerTasksCommand overlay dispatch', () => {
     seed([{ subject: 'anything' }]);
     const store = new TaskStore({ storePath });
     store.read();
-    const { pi, handler } = createPi();
-    registerTasksCommand(pi, store);
+    const handler = createTasksCommand(store, openTaskSpace)[1].handler as (
+      args: string,
+      context: unknown,
+    ) => Promise<void>;
     const custom = vi.fn();
 
-    await handler()('', { hasUI: true, ui: { custom, notify: vi.fn() } });
+    await handler('', { hasUI: true, ui: { custom, notify: vi.fn() } });
 
     expect(custom).toHaveBeenCalledOnce();
     expect(custom.mock.calls[0]?.[1]).toEqual({ overlay: true, overlayOptions: TASK_SPACE_OVERLAY_OPTIONS });

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { agentIdentityColor, DEFAULT_THEME, DEFAULT_THEME_NAME, writeDefaultTheme } from '../src/exports/theme.ts';
+import { agentIdentityColor, DEFAULT_THEME, DEFAULT_THEME_NAME, writeDefaultTheme } from '../src/exports/theme';
 
 describe('Doom Pi theme', () => {
   let root: string;

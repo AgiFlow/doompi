@@ -7,11 +7,11 @@ import { pathToFileURL } from 'node:url';
 import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { loadServerBundle } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { afterEach, describe, expect, it } from 'vitest';
-import { compileExtensionModule } from '../../src/adapters/extensionCompiler.ts';
-import { syncServerBundle, type ServerBundleSyncInput } from '../../src/adapters/serverBundleSync.ts';
-import type { ExtensionComposition } from '../../src/services/extensionAssembler.ts';
-import { serverBundleIsFresh } from '../../src/adapters/syncDrift.ts';
-import { computeServerSourcesHash } from '../../src/adapters/syncState.ts';
+import { compileExtensionModule } from '../../src/services/extensionCompiler';
+import { syncServerBundle, type ServerBundleSyncInput } from '../../src/services/serverBundleSync';
+import type { ExtensionComposition } from '../../src/services/extensionAssembler';
+import { serverBundleIsFresh } from '../../src/services/syncDrift';
+import { computeServerSourcesHash } from '../../src/services/syncState';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -40,7 +40,7 @@ function installedPackage(root: string, name: string, scopes = ['session']) {
     path.join(directory, 'package.json'),
     JSON.stringify({
       name,
-      doompiServer: { entry: './src/exports/extensions/server.ts', dist: './dist/server.mjs', scopes },
+      doompiServer: { entry: './src/extensions/server.ts', dist: './dist/server.mjs', scopes },
     }),
   );
   const entry = path.join(directory, 'dist', 'pi.mjs');
@@ -75,7 +75,7 @@ function packageWithRmuxResource(root: string, name: string) {
     JSON.stringify({
       name,
       optionalDependencies: { [resourcePackage]: 'fixture' },
-      doompiServer: { entry: './src/exports/extensions/server.ts', dist: './dist/server.mjs', scopes: ['session'] },
+      doompiServer: { entry: './src/extensions/server.ts', dist: './dist/server.mjs', scopes: ['session'] },
     }),
   );
   fs.writeFileSync(
@@ -148,6 +148,28 @@ function loadOptions(input: ServerBundleSyncInput, majorMode: string, activeLaye
 }
 
 describe('syncServerBundle', () => {
+  it.each([false, true])('requires the default server export after compilation (required: %s)', async (required) => {
+    const { root, input } = fixture();
+    const pkg = installedPackage(root, 'named-only');
+    const manifestPath = path.join(pkg.directory, 'package.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    manifest.doompiServer.required = required;
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+    fs.writeFileSync(path.join(pkg.directory, 'dist', 'server.mjs'), 'export const serverPlugin = { apply() {} };');
+    await syncServerBundle({ ...input, compositions: [composition('coding', [pkg.entry])] });
+    const notices: string[] = [];
+    const loading = loadServerBundle('session', {
+      ...loadOptions(input, 'coding', ['default']),
+      onNotice: (message) => notices.push(message),
+    });
+    if (required) {
+      await expect(loading).rejects.toThrow('default export is not a server object facet');
+    } else {
+      expect((await loading).facets).toEqual([]);
+      expect(notices).toEqual([expect.stringContaining('default export is not a server object facet')]);
+    }
+  });
+
   it('writes one empty descriptor without route or facet aggregates', async () => {
     const { input } = fixture();
     const { descriptor } = await syncServerBundle(input);
@@ -338,7 +360,7 @@ describe('syncServerBundle', () => {
   // Copies installed native packages and compiles a real graph alongside the full suite.
   it(
     'retains the installed current-platform RMUX executable after isolated source replacement',
-    { timeout: 30_000 },
+    { timeout: 60_000 },
     async () => {
       const runnerPackage = '@agimon-ai/doompi-runner';
       const resourcePrefix = '@agimon-ai/doompi-runner-rmux-';
@@ -430,8 +452,8 @@ describe('syncServerBundle', () => {
         ...runnerPackage.split('/'),
       );
       expect(fs.existsSync(path.join(generatedRunner, 'dist', 'bin', 'runnerHost.mjs'))).toBe(true);
-      expect(fs.existsSync(path.join(generatedRunner, 'dist', 'src', 'adapters', 'Lifeline', 'client.mjs'))).toBe(true);
-      expect(fs.existsSync(path.join(generatedRunner, 'dist', 'src', 'schemas', 'runnerSpec.mjs'))).toBe(true);
+      expect(fs.existsSync(path.join(generatedRunner, 'dist', 'services', 'lifeline', 'client.mjs'))).toBe(true);
+      expect(fs.existsSync(path.join(generatedRunner, 'dist', 'services', 'runnerSupervisor', 'index.mjs'))).toBe(true);
 
       fs.writeFileSync(sourceBinary, 'replacement');
       fs.rmSync(sourceRoot, { recursive: true, force: true });
@@ -467,11 +489,11 @@ describe('syncServerBundle', () => {
         ),
       );
       const runnerHostPath = path.join(generatedRunner, 'dist', 'bin', 'runnerHost.mjs');
-      const runnerSpecPath = path.join(generatedRunner, 'dist', 'src', 'schemas', 'runnerSpec.mjs');
-      const runnerSpec = (await import(pathToFileURL(runnerSpecPath).href)) as {
+      const runnerSupervisorPath = path.join(generatedRunner, 'dist', 'services', 'runnerSupervisor', 'index.mjs');
+      const runnerSupervisor = (await import(pathToFileURL(runnerSupervisorPath).href)) as {
         runtimeEntry(name: 'runnerHost', moduleUrl?: string): string;
       };
-      const executable = runnerSpec.runtimeEntry('runnerHost', pathToFileURL(runnerSpecPath).href);
+      const executable = runnerSupervisor.runtimeEntry('runnerHost', pathToFileURL(runnerSupervisorPath).href);
       expect(executable).toBe(fs.realpathSync(runnerHostPath));
       const spec = path.join(root, 'runner.command.json');
       const gate = path.join(root, 'runner.gate');

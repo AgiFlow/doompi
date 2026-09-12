@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { verifyBundleAsset, verifySignedBundleManifest } from '../../src/adapters/browserBundleVerifier.ts';
-import { createBundleSigner } from '../../src/adapters/bundleSigner.ts';
+import { verifyBundleAsset, verifySignedBundleManifest } from '../../src/services/browserBundleVerifier';
+import { createBundleSigner } from '../../src/services/bundleSigner';
 import {
   BUNDLE_MANIFEST_VERSION,
   type BundleManifest,
@@ -12,7 +12,7 @@ import {
   digestFor,
   isBundleManifest,
   isSignedBundleManifest,
-} from '../../src/types/bundleManifest.ts';
+} from '../../src/types/bundleManifest';
 
 let stateDir: string;
 let assetsDir: string;

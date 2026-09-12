@@ -21,28 +21,28 @@ vi.mock('@agimon-ai/doompi-config/majorModes', () => ({
   filterHookDisabledLayers: mocks.filterHookDisabledLayers,
   loadMajorModesConfig: mocks.loadMajorModesConfig,
 }));
-vi.mock('../../src/services/extensionAssembler.ts', () => ({
+vi.mock('../../src/services/extensionAssembler', () => ({
   PERSONA_ENTRY: 'persona',
   resolveExtensionComposition: mocks.resolveExtensionComposition,
 }));
-vi.mock('../../src/adapters/extensionCompiler.ts', () => ({
+vi.mock('../../src/services/extensionCompiler', () => ({
   compileExtensionSet: mocks.compileExtensionSet,
   extensionSetManifestPath: mocks.extensionSetManifestPath,
 }));
-vi.mock('../../src/adapters/modules/moduleResolution.ts', () => ({ ownEntry: mocks.ownEntry }));
-vi.mock('../../src/adapters/runtimeBundle.ts', () => ({
+vi.mock('../../src/services/moduleResolution', () => ({ ownEntry: mocks.ownEntry }));
+vi.mock('../../src/services/runtimeBundle', () => ({
   compileModeExtension: mocks.compileModeExtension,
 }));
-vi.mock('../../src/adapters/syncState.ts', () => ({
+vi.mock('../../src/services/syncState', () => ({
   createMapResolvers: mocks.createMapResolvers,
   readSyncState: mocks.readSyncState,
   syncDirectory: mocks.syncDirectory,
   writeSyncState: mocks.writeSyncState,
 }));
 
-import { buildSyncedRuntime } from '../../src/adapters/syncedRuntimeBuilder.ts';
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/adapters/syncStateContract.ts';
-import { testMcpProjection } from '../helpers/mcpProjection.ts';
+import { buildSyncedRuntime } from '../../src/services/syncedRuntimeBuilder';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/services/syncStateContract';
+import { testMcpProjection } from '../helpers/mcpProjection';
 
 const state = {
   version: 1,
@@ -96,7 +96,7 @@ beforeEach(() => {
       compilerManifest: `/manifests/${outputName}.json`,
     }),
   );
-  mocks.ownEntry.mockReturnValue('/doom.ts');
+  mocks.ownEntry.mockReturnValue('/composedPi.ts');
   mocks.compileExtensionSet.mockResolvedValue('/dist/bootstrap.mjs');
   mocks.syncDirectory.mockReturnValue('/repo/.pi/doom');
   mocks.writeSyncState.mockResolvedValue('/repo/.pi/doom/state.json');
@@ -129,7 +129,7 @@ describe('buildSyncedRuntime', () => {
       expect.objectContaining({ compositionFingerprint: expect.stringMatching(/^fingerprint:/) }),
     );
     expect(mocks.compileExtensionSet).toHaveBeenCalledWith(
-      ['/doom.ts'],
+      ['/composedPi.ts'],
       path.join('/repo/.pi/doom', 'cache'),
       expect.objectContaining({ outputName: 'bootstrap' }),
     );
@@ -142,7 +142,7 @@ describe('buildSyncedRuntime', () => {
         precompile: {
           version: PRECOMPILE_STATE_VERSION,
           strategy: BUNDLED_PRECOMPILE_STRATEGY,
-          bootstrapEntry: '/doom.ts',
+          bootstrapEntry: '/composedPi.ts',
           bootstrapManifest: '/manifests/bootstrap.json',
           bundleManifests: result.bundleManifests,
         },

@@ -1,21 +1,21 @@
 export {
   DEFAULT_DOMAIN,
-  defaultDomainsForMajorMode,
-  DOOM_DIR,
   DOOMPI_DOMAINS_ENV,
+  DOOM_DIR,
+  defaultDomainsForMajorMode,
   listDomainNames,
   loadDomains,
   resolvePluginDirectories,
   resolvePluginEntries,
   resolveSharedSkills,
-} from '../adapters/domains.ts';
+} from '../services/domains';
+export { domainCompletionItems, domainCompletionPrefix, expandDomainNames } from '../services/domains/completion';
 export {
+  MARKETPLACE_MANIFEST_RELATIVE_PATHS,
   findPluginManifestPath,
   isRemotePluginSource,
-  MARKETPLACE_MANIFEST_RELATIVE_PATHS,
   pluginDirectoryForSource,
-} from '../adapters/pluginCatalog.ts';
-export { domainCompletionItems, domainCompletionPrefix, expandDomainNames } from '../services/domains.ts';
+} from '../services/pluginCatalog';
 export type {
   DomainDefinition,
   DomainManifest,
@@ -31,4 +31,4 @@ export type {
   PluginSkillDiscovery,
   PluginSource,
   ResolvedDomain,
-} from '../types/domains.ts';
+} from '../types/domains';

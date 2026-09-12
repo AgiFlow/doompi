@@ -11,9 +11,9 @@ import {
 } from '@agimon-ai/doompi-config/profiles';
 import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-extension-contracts/mcp-session';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createRuntimeExtensionPlan } from '../../src/adapters/runtimeBundle.ts';
+import { createRuntimeExtensionPlan } from '../../src/services/runtimeBundle';
 import type { HarnessOptions } from '../../src/types/interfaces/harness';
-import { buildHarnessContext, resolveHarnessProfile } from '../../src/exports/services/harnessContext';
+import { buildHarnessContext, resolveHarnessProfile } from '../../src/exports/harnessContext';
 
 let root: string;
 

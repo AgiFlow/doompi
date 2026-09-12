@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { brokeredProviderOverrides } from '../../../src/services/brokerProviders.ts';
-import { BROKER_ADDRESS_ENV, BROKER_PROVIDERS_ENV, BROKER_SOCKET_ENV } from '../../../src/services/sandboxBridge.ts';
+import { brokeredProviderOverrides } from '../../../src/services/brokerProviders';
+import { BROKER_ADDRESS_ENV, BROKER_PROVIDERS_ENV, BROKER_SOCKET_ENV } from '../../../src/services/sandboxBridge';
 
 describe('brokeredProviderOverrides', () => {
   it('routes through the loopback bridge when the broker is a mounted socket', () => {

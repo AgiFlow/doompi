@@ -10,7 +10,7 @@ import {
   parseLineAnchor,
   parseTaggedLine,
   splitLines,
-} from '../src/services/hashline.ts';
+} from '../src/services/hashline';
 
 function anchor(lines: readonly string[], line: number): string {
   return `${line}#${hashLine(lines[line - 1] ?? '')}`;

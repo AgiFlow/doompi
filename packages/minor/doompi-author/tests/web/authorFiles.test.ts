@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadAuthorDocument, saveAuthorDocument } from '../../src/web/api/authorFiles.ts';
+import { loadAuthorDocument, saveAuthorDocument } from '../../src/web/api/authorFiles';
 
 const SOURCE_SHA = 'a'.repeat(64);
 const SAVED_SHA = 'b'.repeat(64);

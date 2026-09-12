@@ -1,12 +1,11 @@
+import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { registerPromptSaveCommand } from '../../../src/commands/promptSaveCommand.ts';
-import { registerPromptsCommand } from '../../../src/commands/promptsCommand.ts';
-import { createRecentPrompts } from '../../../src/services/recentPrompts.ts';
-import type { PromptExtensionDependencies, SavedPrompt } from '../../../src/types/prompt.ts';
+import { createPromptSaveCommand } from '../../../src/controllers/promptSaveCommand';
+import { createPromptsCommand } from '../../../src/controllers/promptsCommand';
+import { createRecentPrompts } from '../../../src/models/recentPrompts';
+import type { PromptExtensionDependencies, SavedPrompt } from '../../../src/types/prompt';
 
-interface CommandHandler {
-  (args: string, ctx: unknown): Promise<void>;
-}
+type CommandHandler = Parameters<ExtensionAPI['registerCommand']>[1]['handler'];
 
 /**
  * The shared Pi test host cannot resolve a custom component and drops editor
@@ -44,7 +43,7 @@ function testHost() {
     pi,
     ctx,
     notifications,
-    run: async (name: string, args = '') => handlers.get(name)?.(args, ctx),
+    run: async (name: string, args = '') => handlers.get(name)?.(args, ctx as unknown as ExtensionCommandContext),
     editor: () => editorText,
     setEditor: (text: string) => {
       editorText = text;
@@ -81,7 +80,7 @@ describe('/prompts', () => {
     const host = testHost();
     const deps = dependencies();
     deps.recent.push('review the diff');
-    registerPromptsCommand(host.pi, deps);
+    host.pi.registerCommand(...createPromptsCommand(deps));
 
     await host.run('prompts');
 
@@ -92,7 +91,7 @@ describe('/prompts', () => {
     const host = testHost();
     const deps = dependencies();
     deps.recent.push('review the diff');
-    registerPromptsCommand(host.pi, deps);
+    host.pi.registerCommand(...createPromptsCommand(deps));
     host.setEditor('half written');
 
     await host.run('prompts');
@@ -102,7 +101,7 @@ describe('/prompts', () => {
 
   it('says so when there is nothing staged or saved', async () => {
     const host = testHost();
-    registerPromptsCommand(host.pi, dependencies());
+    host.pi.registerCommand(...createPromptsCommand(dependencies()));
 
     await host.run('prompts');
 
@@ -122,7 +121,7 @@ describe('/prompts', () => {
         remove: async () => false,
       },
     });
-    registerPromptsCommand(host.pi, deps);
+    host.pi.registerCommand(...createPromptsCommand(deps));
 
     await host.run('prompts');
 
@@ -137,7 +136,7 @@ describe('/prompts', () => {
     const deps = dependencies();
     deps.recent.push('review the diff');
     host.ctx.ui.select.mockResolvedValueOnce(undefined);
-    registerPromptsCommand(host.pi, deps);
+    host.pi.registerCommand(...createPromptsCommand(deps));
 
     await host.run('prompts');
 
@@ -149,7 +148,7 @@ describe('/prompts', () => {
     host.ctx.hasUI = false;
     const deps = dependencies();
     deps.recent.push('review the diff');
-    registerPromptsCommand(host.pi, deps);
+    host.pi.registerCommand(...createPromptsCommand(deps));
 
     await host.run('prompts');
 
@@ -161,7 +160,7 @@ describe('/prompt-save', () => {
   it('saves the editor draft under the given name', async () => {
     const host = testHost();
     const deps = dependencies();
-    registerPromptSaveCommand(host.pi, deps);
+    host.pi.registerCommand(...createPromptSaveCommand(deps));
     host.setEditor('Review the diff\nand report');
 
     await host.run('prompt-save', 'review');
@@ -177,7 +176,7 @@ describe('/prompt-save', () => {
     const deps = dependencies();
     deps.recent.push('older');
     deps.recent.push('newest');
-    registerPromptSaveCommand(host.pi, deps);
+    host.pi.registerCommand(...createPromptSaveCommand(deps));
 
     await host.run('prompt-save', 'again');
 
@@ -187,7 +186,7 @@ describe('/prompt-save', () => {
   it('asks before replacing an existing prompt and honours a refusal', async () => {
     const host = testHost();
     const deps = dependencies();
-    registerPromptSaveCommand(host.pi, deps);
+    host.pi.registerCommand(...createPromptSaveCommand(deps));
     host.setEditor('first');
     await host.run('prompt-save', 'review');
     host.answerConfirm(false);
@@ -202,7 +201,7 @@ describe('/prompt-save', () => {
   it('rejects a name that would not work as a file or a command', async () => {
     const host = testHost();
     const deps = dependencies();
-    registerPromptSaveCommand(host.pi, deps);
+    host.pi.registerCommand(...createPromptSaveCommand(deps));
     host.setEditor('body');
 
     await host.run('prompt-save', '../escape');
@@ -213,7 +212,7 @@ describe('/prompt-save', () => {
 
   it('asks for a name when none is given', async () => {
     const host = testHost();
-    registerPromptSaveCommand(host.pi, dependencies());
+    host.pi.registerCommand(...createPromptSaveCommand(dependencies()));
 
     await host.run('prompt-save', '   ');
 
@@ -222,7 +221,7 @@ describe('/prompt-save', () => {
 
   it('refuses to save nothing', async () => {
     const host = testHost();
-    registerPromptSaveCommand(host.pi, dependencies());
+    host.pi.registerCommand(...createPromptSaveCommand(dependencies()));
 
     await host.run('prompt-save', 'empty');
 
@@ -231,7 +230,7 @@ describe('/prompt-save', () => {
 
   it('warns when the saved text carries template argument tokens', async () => {
     const host = testHost();
-    registerPromptSaveCommand(host.pi, dependencies());
+    host.pi.registerCommand(...createPromptSaveCommand(dependencies()));
     host.setEditor('Review $1 carefully');
 
     await host.run('prompt-save', 'review');
@@ -251,7 +250,7 @@ describe('/prompt-save', () => {
         remove: async () => false,
       },
     });
-    registerPromptSaveCommand(host.pi, deps);
+    host.pi.registerCommand(...createPromptSaveCommand(deps));
     host.setEditor('body');
 
     await host.run('prompt-save', 'review');
@@ -263,7 +262,7 @@ describe('/prompt-save', () => {
     const host = testHost();
     host.ctx.hasUI = false;
     const deps = dependencies();
-    registerPromptSaveCommand(host.pi, deps);
+    host.pi.registerCommand(...createPromptSaveCommand(deps));
     host.setEditor('body');
 
     await host.run('prompt-save', 'review');

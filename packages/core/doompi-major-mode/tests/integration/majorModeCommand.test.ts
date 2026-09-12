@@ -5,14 +5,14 @@ import { createHarnessSession, getHarnessState, resetHarnessStore } from '@agimo
 import { HARNESS_STATE_KEYS, readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-extension-contracts/voice-reload-handoff';
+import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerMajorModeCommand } from '../../src/commands/majorModeCommand.ts';
-import type { MajorModeView } from '../../src/types/majorMode.ts';
-import type { MajorModeTelemetry } from '../../src/types/telemetry.ts';
-import { bindStubCoordinator } from '../helpers/coordinator.ts';
+import { createMajorModeCommand } from '../../src/controllers/majorModeCommand';
+import type { MajorModeView } from '../../src/types/majorMode';
+import type { MajorModeTelemetry } from '../../src/types/telemetry';
+import { bindStubCoordinator } from '../helpers/coordinator';
 
 const OWNED_KEYS = Object.values(HARNESS_STATE_KEYS);
 let root: string;
@@ -67,7 +67,9 @@ function handlerFor(
 ): (args: string, ctx: never) => Promise<void> {
   const registerCommand = vi.fn();
   const pi = { registerCommand, appendEntry: vi.fn() } as unknown as ExtensionAPI;
-  registerMajorModeCommand(pi, telemetry, dependencies(currentMajorMode, requestSupervisedRelaunch));
+  pi.registerCommand(
+    ...createMajorModeCommand(pi, telemetry, dependencies(currentMajorMode, requestSupervisedRelaunch)),
+  );
   const command = registerCommand.mock.calls[0]?.[1] as { handler: (args: string, ctx: never) => Promise<void> };
   return command.handler;
 }

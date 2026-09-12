@@ -28,7 +28,7 @@
   "files": [
     "dist",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "src/types/webTasks.ts",
     "package.json",
     "!src/web/**/*.stories.tsx"
@@ -53,10 +53,10 @@
       "import": "./dist/config.mjs",
       "require": "./dist/config.cjs"
     },
-    "./delegation/manager": {
-      "types": "./dist/delegation/manager.d.mts",
-      "import": "./dist/delegation/manager.mjs",
-      "require": "./dist/delegation/manager.cjs"
+    "./delegation-manager": {
+      "types": "./dist/delegation-manager.d.mts",
+      "import": "./dist/delegation-manager.mjs",
+      "require": "./dist/delegation-manager.cjs"
     },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
@@ -73,85 +73,85 @@
       "import": "./dist/logSinkTelemetry.mjs",
       "require": "./dist/logSinkTelemetry.cjs"
     },
-    "./store/invariants": {
-      "types": "./dist/store/invariants.d.mts",
-      "import": "./dist/store/invariants.mjs",
-      "require": "./dist/store/invariants.cjs"
+    "./store-invariants": {
+      "types": "./dist/store-invariants.d.mts",
+      "import": "./dist/store-invariants.mjs",
+      "require": "./dist/store-invariants.cjs"
     },
-    "./store/paths": {
-      "types": "./dist/store/paths.d.mts",
-      "import": "./dist/store/paths.mjs",
-      "require": "./dist/store/paths.cjs"
+    "./store-paths": {
+      "types": "./dist/store-paths.d.mts",
+      "import": "./dist/store-paths.mjs",
+      "require": "./dist/store-paths.cjs"
     },
-    "./store/processLiveness": {
-      "types": "./dist/store/processLiveness.d.mts",
-      "import": "./dist/store/processLiveness.mjs",
-      "require": "./dist/store/processLiveness.cjs"
+    "./store-process-liveness": {
+      "types": "./dist/store-process-liveness.d.mts",
+      "import": "./dist/store-process-liveness.mjs",
+      "require": "./dist/store-process-liveness.cjs"
     },
-    "./store/reconcile": {
-      "types": "./dist/store/reconcile.d.mts",
-      "import": "./dist/store/reconcile.mjs",
-      "require": "./dist/store/reconcile.cjs"
+    "./store-reconcile": {
+      "types": "./dist/store-reconcile.d.mts",
+      "import": "./dist/store-reconcile.mjs",
+      "require": "./dist/store-reconcile.cjs"
     },
-    "./store/reducer": {
-      "types": "./dist/store/reducer.d.mts",
-      "import": "./dist/store/reducer.mjs",
-      "require": "./dist/store/reducer.cjs"
+    "./store-reducer": {
+      "types": "./dist/store-reducer.d.mts",
+      "import": "./dist/store-reducer.mjs",
+      "require": "./dist/store-reducer.cjs"
     },
-    "./store/taskGraph": {
-      "types": "./dist/store/taskGraph.d.mts",
-      "import": "./dist/store/taskGraph.mjs",
-      "require": "./dist/store/taskGraph.cjs"
+    "./store-task-graph": {
+      "types": "./dist/store-task-graph.d.mts",
+      "import": "./dist/store-task-graph.mjs",
+      "require": "./dist/store-task-graph.cjs"
     },
-    "./store/taskStore": {
-      "types": "./dist/store/taskStore.d.mts",
-      "import": "./dist/store/taskStore.mjs",
-      "require": "./dist/store/taskStore.cjs"
+    "./store-task-store": {
+      "types": "./dist/store-task-store.d.mts",
+      "import": "./dist/store-task-store.mjs",
+      "require": "./dist/store-task-store.cjs"
     },
-    "./store/types": {
-      "types": "./dist/store/types.d.mts",
-      "import": "./dist/store/types.mjs",
-      "require": "./dist/store/types.cjs"
+    "./store-types": {
+      "types": "./dist/store-types.d.mts",
+      "import": "./dist/store-types.mjs",
+      "require": "./dist/store-types.cjs"
     },
-    "./tool/promptGuidelines": {
-      "types": "./dist/tool/promptGuidelines.d.mts",
-      "import": "./dist/tool/promptGuidelines.mjs",
-      "require": "./dist/tool/promptGuidelines.cjs"
+    "./tool-prompt-guidelines": {
+      "types": "./dist/tool-prompt-guidelines.d.mts",
+      "import": "./dist/tool-prompt-guidelines.mjs",
+      "require": "./dist/tool-prompt-guidelines.cjs"
     },
-    "./tool/responseEnvelope": {
-      "types": "./dist/tool/responseEnvelope.d.mts",
-      "import": "./dist/tool/responseEnvelope.mjs",
-      "require": "./dist/tool/responseEnvelope.cjs"
+    "./tool-response-envelope": {
+      "types": "./dist/tool-response-envelope.d.mts",
+      "import": "./dist/tool-response-envelope.mjs",
+      "require": "./dist/tool-response-envelope.cjs"
     },
-    "./tool/schema": {
-      "types": "./dist/tool/schema.d.mts",
-      "import": "./dist/tool/schema.mjs",
-      "require": "./dist/tool/schema.cjs"
+    "./tool-schema": {
+      "types": "./dist/tool-schema.d.mts",
+      "import": "./dist/tool-schema.mjs",
+      "require": "./dist/tool-schema.cjs"
     },
-    "./tool/taskTool": {
-      "types": "./dist/tool/taskTool.d.mts",
-      "import": "./dist/tool/taskTool.mjs",
-      "require": "./dist/tool/taskTool.cjs"
+    "./tool-task-tool": {
+      "types": "./dist/tool-task-tool.d.mts",
+      "import": "./dist/tool-task-tool.mjs",
+      "require": "./dist/tool-task-tool.cjs"
     },
-    "./tui/format": {
-      "types": "./dist/tui/format.d.mts",
-      "import": "./dist/tui/format.mjs",
-      "require": "./dist/tui/format.cjs"
+    "./tui-format": {
+      "types": "./dist/tui-format.d.mts",
+      "import": "./dist/tui-format.mjs",
+      "require": "./dist/tui-format.cjs"
     },
-    "./tui/selectors": {
-      "types": "./dist/tui/selectors.d.mts",
-      "import": "./dist/tui/selectors.mjs",
-      "require": "./dist/tui/selectors.cjs"
+    "./tui-selectors": {
+      "types": "./dist/tui-selectors.d.mts",
+      "import": "./dist/tui-selectors.mjs",
+      "require": "./dist/tui-selectors.cjs"
     },
-    "./tui/taskOverlay": {
-      "types": "./dist/tui/taskOverlay.d.mts",
-      "import": "./dist/tui/taskOverlay.mjs",
-      "require": "./dist/tui/taskOverlay.cjs"
+    "./tui-task-overlay": {
+      "types": "./dist/tui-task-overlay.d.mts",
+      "import": "./dist/tui-task-overlay.mjs",
+      "require": "./dist/tui-task-overlay.cjs"
     },
-    "./tui/taskSpace": {
-      "types": "./dist/tui/taskSpace.d.mts",
-      "import": "./dist/tui/taskSpace.mjs",
-      "require": "./dist/tui/taskSpace.cjs"
+    "./tui-task-space": {
+      "types": "./dist/tui-task-space.d.mts",
+      "import": "./dist/tui-task-space.mjs",
+      "require": "./dist/tui-task-space.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -205,7 +205,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session",
@@ -218,7 +218,7 @@
     "channels": [
       "task_graph"
     ],
-    "client": "./src/exports/webClient.ts",
+    "client": "./src/extensions/web.ts",
     "scopes": [
       "session"
     ]

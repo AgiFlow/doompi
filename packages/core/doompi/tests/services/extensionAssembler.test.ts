@@ -10,7 +10,7 @@ import {
   type ExtensionLayerResolvers,
   packageAttribution,
   resolveExtensionComposition,
-} from '../../src/services/extensionAssembler.ts';
+} from '../../src/services/extensionAssembler';
 
 const CONFIG_PATH = '/repo/.doom/modes.yaml';
 const REPOSITORY_ROOT = path.resolve(__dirname, '..', 'fixtures', 'repository');
@@ -106,7 +106,7 @@ describe('standard extension composition', () => {
       layers: [],
       majorModesConfig: config,
     });
-    const ownDirectory = path.resolve(__dirname, '..', '..', 'src', 'extensions', 'entries');
+    const ownDirectory = path.resolve(__dirname, '..', '..', 'src', 'extensions');
     const ownEntries = entries.filter((entry) => entry.startsWith(ownDirectory));
 
     expect(ownEntries.length).toBeGreaterThan(0);

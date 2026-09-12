@@ -6,8 +6,8 @@ import {
   type MinorModeDescriptor,
   type MinorModeState,
   MinorModeStateSchema,
-} from '../src/schemas/mode.ts';
-import { validateMinorModeActionArguments, validateMinorModeDefinition } from '../src/schemas/modeValidation.ts';
+} from '../src/schemas/mode';
+import { validateMinorModeActionArguments, validateMinorModeDefinition } from '../src/schemas/modeValidation';
 
 const action: MinorModeActionDescriptor = {
   id: 'configure',

@@ -1,5 +1,5 @@
-import type { ComputerUseSessionClient } from '../adapters/pi/sessionApiClient.ts';
-import type { ComputerUseAction, ComputerUseObservation } from './computerUse.ts';
+import type { ComputerUseSessionClient } from '../services/sessionApiClient';
+import type { ComputerUseAction, ComputerUseObservation } from './computerUse';
 
 export interface ComputerScriptProgram {
   observe(): Promise<ComputerUseObservation>;

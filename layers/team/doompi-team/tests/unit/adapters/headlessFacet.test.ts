@@ -1,3 +1,4 @@
+import { api } from '../../../src/controllers/teamCatalogApi';
 import * as fs from 'node:fs';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
@@ -10,12 +11,13 @@ import {
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { teamHeadlessFacet } from '../../../src/adapters/headless/facet.ts';
-import { sessionScopeDir } from '../../../src/adapters/filesystem/paths';
-import type { TeamExtensionRuntime } from '../../../src/adapters/pi/teamRuntime';
+import { teamServerFacet as teamHeadlessFacet } from '../../../src/extensions/server';
+import { sessionScopeDir } from '../../../src/services/sessionPaths';
+import * as runtimeModule from '../../../src/services/teamRuntime';
+import type { TeamExtensionRuntime } from '../../../src/services/teamRuntime';
 import { TEST_SESSION_SCOPE } from '../../support/sessionScope';
 
-function fixture(options: { serverHost?: unknown } = {}) {
+async function fixture(options: { serverHost?: unknown } = {}) {
   const sessionId = TEST_SESSION_SCOPE.rootSessionId;
   const execution = {
     cwd: process.cwd(),
@@ -47,6 +49,7 @@ function fixture(options: { serverHost?: unknown } = {}) {
     return { dispose };
   };
   const defaultServerHost = {
+    registerApi: vi.fn(() => registration()),
     scope: 'session' as const,
     context: {
       environment: {},
@@ -79,20 +82,26 @@ function fixture(options: { serverHost?: unknown } = {}) {
       if (name === DOOM_SERVER_HOST_SERVICE) return serverHost;
       return undefined;
     },
-    plugin: (
-      plugin: (ctx: Context, config: { runtime: TeamExtensionRuntime }) => void,
-      config: { runtime: TeamExtensionRuntime },
-    ) => {
-      runtime = config.runtime;
-      plugin(context, config);
+    effect: () => undefined,
+    plugin: (plugin: (ctx: Context) => void) => {
+      plugin(context);
+      return { dispose: vi.fn() };
     },
     provide: vi.fn(),
     emit: vi.fn(),
   } as unknown as Context;
 
-  const dispose = teamHeadlessFacet.apply(context);
+  const runtimeSpy = vi.spyOn(runtimeModule, 'createTeamExtensionRuntime');
+  let dispose: Awaited<ReturnType<typeof teamHeadlessFacet.apply>>;
+  try {
+    dispose = await teamHeadlessFacet.apply(context);
+    runtime = runtimeSpy.mock.results.at(-1)?.value as TeamExtensionRuntime | undefined;
+  } finally {
+    runtimeSpy.mockRestore();
+  }
   if (!dispose || !runtime) throw new Error('Team headless facet did not mount');
   return {
+    serverHost: defaultServerHost,
     activities,
     client: execution.client,
     context,
@@ -111,31 +120,28 @@ afterEach(() => {
 });
 
 describe('teamHeadlessFacet', () => {
-  it('rejects a missing session server host', () => {
-    expect(() => fixture({ serverHost: null })).toThrow('requires a session server host');
+  it('rejects a missing session server host', async () => {
+    await expect(fixture({ serverHost: null })).rejects.toThrow('The Doom server host is unavailable');
   });
-
-  it('rejects a missing host-owned direct event bus', () => {
-    expect(() => fixture({ serverHost: { scope: 'session', context: { environment: {} } } })).toThrow(
+  it('rejects a missing host-owned direct event bus', async () => {
+    await expect(fixture({ serverHost: { scope: 'session', context: { environment: {} } } })).rejects.toThrow(
       'requires host-owned direct events',
     );
   });
-
-  it('rejects a missing admitted session environment', () => {
-    expect(() =>
+  it('rejects a missing admitted session environment', async () => {
+    await expect(
       fixture({
         serverHost: {
           scope: 'session',
-          context: {
-            directEvents: { publish: vi.fn(), subscribe: vi.fn(() => () => undefined), close: vi.fn() },
-          },
+          context: { directEvents: { publish: vi.fn(), subscribe: vi.fn(() => () => undefined), close: vi.fn() } },
         },
       }),
-    ).toThrow('requires an admitted session environment');
+    ).rejects.toThrow('requires an admitted session environment');
   });
   it('retains tracked jobs across optional activity disable and re-enable', async () => {
     vi.useFakeTimers();
-    const test = fixture();
+    const test = await fixture();
+    expect(test.serverHost.registerApi).toHaveBeenCalledWith(api);
     const scope = TEST_SESSION_SCOPE;
     let activityStop: (() => void | Promise<void>) | undefined;
 
@@ -170,14 +176,15 @@ describe('teamHeadlessFacet', () => {
       activityStop = undefined;
     } finally {
       await activityStop?.();
-      test.dispose();
+      await test.dispose();
       fs.rmSync(sessionScopeDir(scope), { recursive: true, force: true });
     }
   });
 
   it('detaches intercom on activity stop and stops every runtime worker on final disposal', async () => {
     vi.useFakeTimers();
-    const test = fixture();
+    const test = await fixture();
+    expect(test.serverHost.registerApi).toHaveBeenCalledWith(api);
     const scope = TEST_SESSION_SCOPE;
     let activityStop: (() => void | Promise<void>) | undefined;
     const intercom = test.tools.find((tool) => tool.name === 'intercom');
@@ -194,22 +201,23 @@ describe('teamHeadlessFacet', () => {
       ).rejects.toThrow('Intercom is not active for this session');
       expect(jobs.list()).toHaveLength(1);
 
-      test.dispose();
+      await test.dispose();
       expect(test.runtime.asyncJobTracker.forSession(test.sessionId, scope).list()).toEqual([]);
       expect(vi.getTimerCount()).toBe(0);
       expect(test.disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
 
-      test.dispose();
+      await test.dispose();
       expect(test.disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
     } finally {
       await activityStop?.();
-      test.dispose();
+      await test.dispose();
       fs.rmSync(sessionScopeDir(scope), { recursive: true, force: true });
     }
   });
 
   it('dispatches headless subagent actions without a Pi ExtensionAPI', async () => {
-    const test = fixture();
+    const test = await fixture();
+    expect(test.serverHost.registerApi).toHaveBeenCalledWith(api);
     const scope = TEST_SESSION_SCOPE;
     const subagent = test.tools.find((tool) => tool.name === 'subagent');
     if (!subagent) throw new Error('subagent headless tool was not registered');
@@ -248,13 +256,13 @@ describe('teamHeadlessFacet', () => {
       expect(await invoke({ action: 'restore', id: 'missing-run' })).toMatchObject({ isError: true });
     } finally {
       spawn.mockRestore();
-      test.dispose();
+      await test.dispose();
       fs.rmSync(sessionScopeDir(scope), { recursive: true, force: true });
     }
   });
 
   it('attaches completion notifications to the headless client', async () => {
-    const test = fixture();
+    const test = await fixture();
     try {
       await expect(
         test.runtime.completionNotifier.deliver({
@@ -268,7 +276,7 @@ describe('teamHeadlessFacet', () => {
         expect.objectContaining({ body: expect.stringContaining('failed') }),
       );
     } finally {
-      test.dispose();
+      await test.dispose();
     }
   });
 });

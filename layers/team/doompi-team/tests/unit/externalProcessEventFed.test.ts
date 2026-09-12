@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { AsyncJobTracker } from '../../src/adapters/asyncJobTracker';
-import { createSessionScope } from '../../src/adapters/filesystem/paths';
+import { AsyncJobTracker } from '../../src/services/asyncJobTracker';
+import { createSessionScope } from '../../src/services/sessionPaths';
 import {
   ExternalProcessIpc,
   type ExternalProcessEndpoint,
   type ExternalRunnerStatusMessage,
-} from '../../src/adapters/process/externalProcessIpc';
+} from '../../src/services/externalProcessIpc';
 
 const scope = createSessionScope('session-event-fed');
 

@@ -1,6 +1,6 @@
 import type { AuthEntry, TokenStore } from '@agimon-ai/mcp-proxy';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { KEYRING_SERVICE, type KeyringEntry, KeyringTokenStore } from '../src/adapters/node/keyringTokenStore.ts';
+import { KEYRING_SERVICE, type KeyringEntry, KeyringTokenStore } from '../src/services/keyringTokenStore';
 
 const entry: AuthEntry = {
   serverUrl: 'https://api.example.test/mcp',
@@ -172,7 +172,7 @@ describe('createTokenStore', () => {
       throw new Error('no prebuilt binary for this platform');
     });
     vi.resetModules();
-    const { createTokenStore } = await import('../src/adapters/node/keyringTokenStore.ts');
+    const { createTokenStore } = await import('../src/services/keyringTokenStore');
     const configured = memoryStore();
 
     expect(await createTokenStore(configured)).toBe(configured);

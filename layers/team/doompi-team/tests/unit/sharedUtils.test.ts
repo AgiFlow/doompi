@@ -8,17 +8,17 @@ import {
   writeAtomicJson,
   writeAtomicJsonAsync,
   writePrivateAtomicJson,
-} from '../../src/adapters/atomicJson';
-import { BoundedKeySet } from '../../src/services/support/boundedKeySet';
+} from '../../src/services/atomicJson';
+import { BoundedKeySet } from '../../src/services/boundedKeySet';
 import {
   DEFAULT_FILE_SYSTEM_RETRY_DELAYS_MS,
   delayForFileSystemRetry,
   isRetryableFileSystemError,
   runFileSystemOperationWithRetry,
   runFileSystemOperationWithRetryAsync,
-} from '../../src/adapters/filesystem/fileSystemRetry';
-import { LruCache } from '../../src/services/support/lruCache';
-import { describeVersionedFailure, parseVersioned } from '../../src/services/support/versioned';
+} from '../../src/services/fileSystemRetry';
+import { LruCache } from '../../src/services/lruCache';
+import { describeVersionedFailure, parseVersioned } from '../../src/services/versioned';
 
 const temporaryDirs: string[] = [];
 

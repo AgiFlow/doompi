@@ -2,9 +2,9 @@ import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
 import { describe, expect, it, vi } from 'vitest';
-import { COMMAND_NAME } from '../../../src/commands/doomAuthorCommand.ts';
-import { activateAuthorExtension } from '../../../src/adapters/pi/extension.ts';
-import type { AuthorExtensionService } from '../../../src/types/extension.ts';
+import { COMMAND_NAME } from '../../../src/controllers/doomAuthorCommand';
+import { activateAuthorExtension } from '../../../src/extensions/pi';
+import type { AuthorExtensionService } from '../../../src/types/extension';
 
 /**
  * The Pi surface.
@@ -66,7 +66,7 @@ describe('doompi-author Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-author',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-use-author',

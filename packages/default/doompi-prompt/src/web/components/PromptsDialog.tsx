@@ -10,11 +10,11 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import type { SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
 import { useEffect, useState } from 'react';
-import type { SavedPromptView } from '../../types/webPrompts.ts';
-import { PromptEditor } from './PromptEditor.tsx';
-import { PromptPickerList } from './PromptPickerList.tsx';
-import { commitDraft, type DraftState, draftOf, EMPTY_DRAFT, promptFrame } from '../lib/promptsActions.ts';
-import { deleteSavedPrompt, saveSavedPrompt } from '../api/promptsApi.ts';
+import type { SavedPromptView } from '../../types/webPrompts';
+import { PromptEditor } from './PromptEditor';
+import { PromptPickerList } from './PromptPickerList';
+import { commitDraft, type DraftState, draftOf, EMPTY_DRAFT, promptFrame } from '../lib/promptsActions';
+import { deleteSavedPrompt, saveSavedPrompt } from '../api/promptsApi';
 
 /**
  * The prompt picker, opened from the activity dock.

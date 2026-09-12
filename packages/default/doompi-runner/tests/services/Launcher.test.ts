@@ -5,9 +5,9 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RESULT_MAX_BYTES_ENV } from '../../src/exports/config';
-import { runtimeEntry, supervisorPaths } from '../../src/schemas/runnerSpec';
-import { Launcher } from '../../src/adapters/Launcher/Launcher';
-import { FakeClock, FakeLogFile, FakeProcessControl, FakeRunnerPaths, FakeSpawner } from '../doubles.ts';
+import { runtimeEntry, supervisorPaths } from '../../src/services/runnerSupervisor';
+import { Launcher } from '../../src/services/launcher';
+import { FakeClock, FakeLogFile, FakeProcessControl, FakeRunnerPaths, FakeSpawner } from '../doubles';
 
 let previousMaxBytes: string | undefined;
 let previousNoColor: string | undefined;
@@ -101,7 +101,7 @@ describe('Launcher.launch', () => {
     expect(spawner.last.request.command).toContain('exec ');
     expect(spawner.last.request.command).toContain('runnerHost');
     expect(spawner.last.request.command).toContain(supervisor.spec);
-    expect(runtimeEntry('runnerHost')).toContain(`${path.sep}bin${path.sep}runnerHost.ts`);
+    expect(runtimeEntry('runnerHost')).toContain(`${path.sep}bin${path.sep}runnerHost.mjs`);
     expect(runtimeEntry('runnerHost')).not.toContain(`${path.sep}schemas${path.sep}bin${path.sep}`);
     // Nothing has to attach before a native run starts, so its gate opens at once.
     expect(fs.existsSync(supervisor.gate)).toBe(true);

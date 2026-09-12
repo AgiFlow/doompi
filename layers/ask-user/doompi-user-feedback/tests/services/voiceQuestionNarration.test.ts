@@ -1,7 +1,7 @@
 import { MAX_NARRATION_TEXT_CHARACTERS } from '@agimon-ai/doompi-extension-contracts/narration';
 import { describe, expect, it } from 'vitest';
-import type { QuestionParams } from '../../src/schemas/questionnaire.js';
-import { buildVoiceQuestionNarration, sanitizeVoiceQuestionText } from '../../src/services/voiceQuestionNarration.js';
+import type { QuestionParams } from '../../src/schemas/questionnaire';
+import { buildVoiceQuestionNarration, sanitizeVoiceQuestionText } from '../../src/services/voiceQuestionNarration';
 
 const questionnaire: QuestionParams = {
   questions: [

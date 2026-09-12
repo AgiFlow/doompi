@@ -1,6 +1,6 @@
 import type { DoomTelemetryOptions } from '@agimon-ai/doompi-telemetry';
 import { describe, expect, it, vi } from 'vitest';
-import { AUTOCOMPACT_EVENT, createAutocompactTelemetry } from '../src/adapters/telemetry/logSinkTelemetry.ts';
+import { AUTOCOMPACT_EVENT, createAutocompactTelemetry } from '../src/services/autocompactTelemetry';
 
 type TelemetryHandle = Awaited<ReturnType<NonNullable<DoomTelemetryOptions['telemetryFactory']>>>;
 

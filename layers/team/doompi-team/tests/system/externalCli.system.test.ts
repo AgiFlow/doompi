@@ -4,13 +4,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SUBAGENT_ROOT_SESSION_ENV, SUBAGENT_RUN_ID_ENV } from '../../src/exports/env';
-import { createSessionScope, scopeResultsDir, sessionScopeDir } from '../../src/adapters/filesystem/paths';
+import { createSessionScope, scopeResultsDir, sessionScopeDir } from '../../src/services/sessionPaths';
 import {
   makeExternalControlMessage,
   makeExternalLaunchMessage,
   parseExternalRunnerMessage,
   type ExternalRunnerMessage,
-} from '../../src/adapters/process/externalProcessIpc';
+} from '../../src/services/externalProcessIpc';
 
 const runnerEntry = path.resolve('dist/runs/background/cliRunnerEntry.mjs');
 const cleanup: string[] = [];

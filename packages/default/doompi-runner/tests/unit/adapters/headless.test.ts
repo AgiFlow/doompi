@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-extension-contracts/headless';
-import { createHeadlessBashTool } from '../../../src/adapters/headless.ts';
-import type { BashRunRequest, BashRunResult } from '../../../src/types/bashRunService.ts';
+import { createHeadlessBashTool } from '../../../src/controllers/headless';
+import type { BashRunRequest, BashRunResult } from '../../../src/types/bashRunService';
 
 function execution(): DoomHeadlessExecutionContext {
   return {

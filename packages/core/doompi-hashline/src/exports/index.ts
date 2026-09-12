@@ -11,7 +11,7 @@ export {
   parseTaggedLine,
   splitLines,
   stripBom,
-} from '../services/hashline.ts';
+} from '../services/hashline';
 export type {
   AppliedHashlineEdits,
   FileHeader,
@@ -21,4 +21,4 @@ export type {
   PreparedHashlineEdit,
   TaggedLineMarker,
   TaggedLinePrefix,
-} from '../types/hashline.ts';
+} from '../types/hashline';

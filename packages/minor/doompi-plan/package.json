@@ -28,7 +28,7 @@
   "files": [
     "dist",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "llms.txt",
     "src/prompts",
     "src/types/planApi.ts",
@@ -63,25 +63,25 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
-    "./fableFlow": {
-      "types": "./dist/fableFlow.d.mts",
-      "import": "./dist/fableFlow.mjs",
-      "require": "./dist/fableFlow.cjs"
+    "./fable-flow": {
+      "types": "./dist/fable-flow.d.mts",
+      "import": "./dist/fable-flow.mjs",
+      "require": "./dist/fable-flow.cjs"
     },
-    "./logSinkTelemetry": {
-      "types": "./dist/logSinkTelemetry.d.mts",
-      "import": "./dist/logSinkTelemetry.mjs",
-      "require": "./dist/logSinkTelemetry.cjs"
+    "./log-sink-telemetry": {
+      "types": "./dist/log-sink-telemetry.d.mts",
+      "import": "./dist/log-sink-telemetry.mjs",
+      "require": "./dist/log-sink-telemetry.cjs"
     },
-    "./planConfig": {
-      "types": "./dist/planConfig.d.mts",
-      "import": "./dist/planConfig.mjs",
-      "require": "./dist/planConfig.cjs"
+    "./plan-config": {
+      "types": "./dist/plan-config.d.mts",
+      "import": "./dist/plan-config.mjs",
+      "require": "./dist/plan-config.cjs"
     },
-    "./planMode": {
-      "types": "./dist/planMode.d.mts",
-      "import": "./dist/planMode.mjs",
-      "require": "./dist/planMode.cjs"
+    "./plan-mode": {
+      "types": "./dist/plan-mode.d.mts",
+      "import": "./dist/plan-mode.mjs",
+      "require": "./dist/plan-mode.cjs"
     },
     "./prompts": {
       "types": "./dist/prompts.d.mts",
@@ -102,9 +102,11 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
+    "@agimon-ai/doompi-author": "workspace:*",
     "@agimon-ai/doompi-config": "workspace:*",
     "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
+    "@agimon-ai/doompi-voice": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
@@ -131,7 +133,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
@@ -140,7 +142,7 @@
   "doompiWeb": {
     "pluginId": "plan",
     "channels": [],
-    "client": "./src/exports/webClient.ts",
+    "client": "./src/extensions/web.ts",
     "scopes": [
       "global",
       "workspace",

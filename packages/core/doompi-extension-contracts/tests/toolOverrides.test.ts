@@ -5,7 +5,7 @@ import {
   createDoomToolOverridesService,
   readDoomToolOverrides,
   requireDoomToolOverrides,
-} from '../src/exports/toolOverrides.ts';
+} from '../src/exports/toolOverrides';
 
 describe('Doom tool override contract', () => {
   it('grants and releases one atomic first-owner claim', () => {

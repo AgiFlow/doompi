@@ -1,0 +1,9 @@
+export const WORD_CHARS_PER_TOKEN = 5;
+export const MIXED_CHARS_PER_TOKEN = 2.1;
+export const PUNCTUATION_CHARS_PER_TOKEN = 2;
+export const DENSE_SCRIPT_START = 0x2fff;
+export const ASTRAL_TOKEN_COST = 2;
+export const ALPHANUMERIC_RUN = /([^\p{L}\p{N}]+)/u;
+export const HAS_ALPHANUMERIC = /[\p{L}\p{N}]/u;
+export const HAS_DIGIT = /\d/u;
+export const HAS_LETTER = /[A-Za-z]/u;

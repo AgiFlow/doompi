@@ -6,8 +6,8 @@
  * contracts package's own testing fixture.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { SubagentCatalogAgent } from '../../types/webSubagents.ts';
-import { LaunchAgentDialog } from './LaunchAgentDialog.tsx';
+import type { SubagentCatalogAgent } from '../../types/webSubagents';
+import { LaunchAgentDialog } from './LaunchAgentDialog';
 
 const REVIEWER: SubagentCatalogAgent = {
   name: 'reviewer',

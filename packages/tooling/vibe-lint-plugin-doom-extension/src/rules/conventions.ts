@@ -1,3 +1,4 @@
+import { hasPluginHelperCall } from './pluginWiring.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
@@ -23,9 +24,9 @@ const SUPERSEDED_CONTAINER_IMPORT =
   /(?:^|\n)\s*import\s[^;]*?from\s*['"](inversify|reflect-metadata)['"]|(?:^|\n)\s*import\s*['"](inversify|reflect-metadata)['"]/;
 const DOOM_PACKAGE_NAME = '@agimon-ai/doompi';
 const DOOM_PACKAGE_PREFIX = `${DOOM_PACKAGE_NAME}-`;
-const NATIVE_DIRECT_HARNESS_RUNTIME_PATH = 'src/adapters/server/directHarnessRuntime.ts';
+const NATIVE_DIRECT_HARNESS_RUNTIME_PATH = 'src/controllers/directHarnessRuntime.ts';
 const CORDIS_CONTRACTS_PACKAGE = '@agimon-ai/doompi-extension-contracts';
-const CORDIS_HOST_ADAPTER_PATH = 'src/adapters/pi/cordisHost.ts';
+const CORDIS_HOST_ADAPTER_PATH = 'src/controllers/cordisHost.ts';
 const CORDIS_PROTOCOL_EXPORT = `${CORDIS_CONTRACTS_PACKAGE}/protocol`;
 const CORDIS_HOST_QUERY_CHANNEL_IDENTIFIER = 'DOOM_CORDIS_HOST_QUERY_CHANNEL';
 const CORDIS_HOST_QUERY_CHANNEL = 'doom:cordis:host:v1:query';
@@ -71,19 +72,14 @@ const SAME_RUNNER_PROTOCOL_EXPORTS = new Set([
 type ProcessGlobalBoundaryKind = 'claim' | 'reload';
 
 const LEGITIMATE_PROCESS_GLOBAL_BOUNDARIES = new Map<string, ReadonlyMap<string, ProcessGlobalBoundaryKind>>([
-  [
-    CORDIS_CONTRACTS_PACKAGE,
-    new Map([
-      ['src/schemas/transitionContext.ts', 'reload'],
-      ['src/schemas/voiceReloadHandoff.ts', 'reload'],
-    ]),
-  ],
-  ['@agimon-ai/doompi-domain', new Map([['src/adapters/domainSwitchHandoff.ts', 'reload']])],
+  [CORDIS_CONTRACTS_PACKAGE, new Map([['src/schemas/transitionContext.ts', 'reload']])],
+  ['@agimon-ai/doompi-voice', new Map([['src/services/voiceReloadHandoff/index.ts', 'reload']])],
+  ['@agimon-ai/doompi-domain', new Map([['src/models/domainSwitchHandoff.ts', 'reload']])],
   [
     DOOM_PACKAGE_NAME,
     new Map([
-      ['src/adapters/bootstrapClaim.ts', 'claim'],
-      ['src/adapters/compositionState.ts', 'claim'],
+      ['src/models/bootstrapClaim.ts', 'claim'],
+      ['src/models/compositionState.ts', 'claim'],
     ]),
   ],
 ]);
@@ -627,6 +623,8 @@ export const thinPiAdapter: RuleDefinition = {
     if (!stem || !piDiscoveryEntryStems(configRoot).has(stem)) return null;
     const text = readText(filePath);
     if (!text) return null;
+    if (hasPluginHelperCall(ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true), 'definePiExtension'))
+      return null;
     const lines = text.split('\n').length;
     const ownsImplementation = /\b(class|interface)\s+\w+|registerTool\s*\(\s*\{/.test(text);
     return lines > 80 || ownsImplementation
@@ -750,8 +748,8 @@ export const disposeExternalSubscriptions: RuleDefinition = {
  */
 const TOOL_SURFACE_OWNER_PATHS = new Set([
   CORDIS_HOST_ADAPTER_PATH,
-  'src/services/toolSurface.ts',
-  'src/adapters/testing/piHost.ts',
+  'src/services/toolSurface/index.ts',
+  'src/controllers/piTestHost.ts',
 ]);
 
 export const noDirectToolActivation: RuleDefinition = {

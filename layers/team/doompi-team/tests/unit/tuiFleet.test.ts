@@ -3,11 +3,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/adapters/asyncJobTracker';
-import type { PollSchedulerContract, PollSubscription } from '../../src/adapters/pollScheduler';
-import { collectFleetSnapshot, SubagentFleetComponent } from '../../src/adapters/pi/tui/fleet';
+import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
+import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
+import { collectFleetSnapshot, SubagentFleetComponent } from '../../src/tui/fleet';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
-import { readFleetTranscriptTail } from '../../src/adapters/pi/tui/fleetTranscript';
+import { readFleetTranscriptTail } from '../../src/services/fleetTranscript';
 
 /**
  * `fleet.ts`'s cache is keyed on the transcript file's disk fingerprint
@@ -23,8 +23,8 @@ import { readFleetTranscriptTail } from '../../src/adapters/pi/tui/fleetTranscri
  * a call without one re-parses the file from byte zero. The wrapper keeps the
  * real implementation so those calls do real work.
  */
-vi.mock('../../src/adapters/pi/tui/fleetTranscript', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/adapters/pi/tui/fleetTranscript')>();
+vi.mock('../../src/services/fleetTranscript', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/fleetTranscript')>();
   return {
     ...actual,
     readFleetTranscriptTail: vi.fn(actual.readFleetTranscriptTail),

@@ -1,3 +1,6 @@
+vi.mock('@agimon-ai/doompi-extension-contracts/pi-extension', () =>
+  vi.importActual('../../../core/doompi-extension-contracts/src/exports/piExtension'),
+);
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import { Context } from '@deepseek-ai/cordis';
@@ -19,8 +22,8 @@ const runtimeMocks = vi.hoisted(() => ({
 
 const cordisRoots: Context[] = [];
 
-vi.mock('../src/container/index.ts', () => ({
-  createFileEditContainer: runtimeMocks.createContainer,
+vi.mock('../src/tui/fileEditDependencies', () => ({
+  createFileEditDependencies: runtimeMocks.createContainer,
 }));
 vi.mock('@agimon-ai/doompi-telemetry', () => ({
   createDoomTelemetry: () => ({
@@ -28,7 +31,7 @@ vi.mock('@agimon-ai/doompi-telemetry', () => ({
     shutdown: runtimeMocks.shutdownTelemetry,
   }),
 }));
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
+vi.mock('../../../core/doompi-extension-contracts/src/adapters/pi/cordisHost', () => ({
   connectDoomCordisHost: async () => {
     const root = runtimeMocks.createCordisRoot() as Context;
     await runtimeMocks.prepareCordisRoot(root);
@@ -40,7 +43,7 @@ vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
   },
 }));
 
-const { fileEditExtension } = await import('../src/adapters/pi/extension.ts');
+const { fileEditExtension } = await import('../src/extensions/pi');
 
 interface TestPi {
   pi: ExtensionAPI;

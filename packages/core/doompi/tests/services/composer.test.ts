@@ -6,14 +6,14 @@ import { loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/ma
 import { extensionToolSource } from '@agimon-ai/doompi-ui/extensionName';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { acquireCompositionClaim } from '../../src/adapters/compositionState';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
+import { acquireCompositionClaim } from '../../src/models/compositionState';
+import { resolveSyncLocation, syncGenerationDirectory } from '../../src/services/syncLocation';
 import {
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '../../src/adapters/syncRegistration.ts';
-import { HARNESS_STATE_POINTER, readHarnessState, resetHarnessStore } from '../../src/exports/config/harnessState';
+} from '../../src/services/syncRegistration';
+import { HARNESS_STATE_POINTER, readHarnessState, resetHarnessStore } from '../../src/exports/harnessState';
 import {
   alreadyComposed,
   applyStartupFlags,
@@ -30,7 +30,7 @@ import {
   readStartupFlags,
   registerDoomFlags,
   startSyncedSession,
-} from '../../src/exports/services/composer';
+} from '../../src/exports/composer';
 import {
   createMapResolvers,
   recordResolvedEntries,
@@ -38,10 +38,10 @@ import {
   SYNC_STATE_VERSION,
   type SyncState,
   writeSyncState,
-} from '../../src/exports/services/syncState';
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/adapters/syncStateContract.ts';
+} from '../../src/exports/syncState';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/services/syncStateContract';
 import { assembleExtensions, PERSONA_ENTRY, resolveExtensionComposition } from '../../src/services/extensionAssembler';
-import { testMcpProjection } from '../helpers/mcpProjection.ts';
+import { testMcpProjection } from '../helpers/mcpProjection';
 
 /** Digest a compiler manifest must now record so freshness is judged by content. */
 function sha256Of(file: string): string {

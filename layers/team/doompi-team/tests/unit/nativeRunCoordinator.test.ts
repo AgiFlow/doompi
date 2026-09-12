@@ -6,12 +6,12 @@ import type {
   DoomChildSessionService,
   DoomChildSessionServiceProvider,
 } from '@agimon-ai/doompi-extension-contracts/child-session';
-import { AsyncJobTracker, type NativeAsyncJobProjection } from '../../src/adapters/asyncJobTracker';
-import { NativeRunCoordinator } from '../../src/adapters/nativeRunCoordinator';
-import { createSessionScope } from '../../src/adapters/filesystem/paths';
-import type { NativeRunProjectionSink } from '../../src/adapters/nativeRunProjection';
-import type { CompletionNotifierContract } from '../../src/adapters/runs/background/notify';
-import type { RunResultFile } from '../../src/adapters/resultWatcher';
+import { AsyncJobTracker, type NativeAsyncJobProjection } from '../../src/services/asyncJobTracker';
+import { NativeRunCoordinator } from '../../src/services/nativeRunCoordinator';
+import { createSessionScope } from '../../src/services/sessionPaths';
+import type { NativeRunProjectionSink } from '../../src/services/nativeRunProjection';
+import type { CompletionNotifierContract } from '../../src/services/notify';
+import type { RunResultFile } from '../../src/services/resultWatcher';
 
 class FakeHandle implements DoomChildSessionHandle {
   readonly runId: string;

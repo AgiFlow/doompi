@@ -1,3 +1,4 @@
+import { PROMPTS_PATH } from '../constants/webPrompts';
 /**
  * The vocabulary this package's HTTP API and its cockpit plugin share.
  *
@@ -12,10 +13,8 @@
  */
 
 /** Where a host mounts this package's API; the segment after /api/plugin/. */
-export const API_BASE_PATH = 'prompts';
 
 /** The collection, relative to the API's own mount. */
-export const PROMPTS_PATH = '/prompts';
 
 /** One saved prompt, relative to the API's own mount. */
 export function promptPath(name: string): string {

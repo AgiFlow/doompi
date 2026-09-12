@@ -1,13 +1,10 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDefaultLoopLauncher } from '../src/adapters/pi/defaultLoopLauncher.ts';
-import { createDoomLoopLaunchersService } from '../src/services/loopLaunchers.ts';
-
-type EventListener = (event: unknown, ctx: ExtensionContext) => void | Promise<void>;
+import { createDefaultLoopLauncher } from '../src/services/defaultLoopLauncher';
+import { createDoomLoopLaunchersService } from '../src/services/loopLaunchers';
 
 function fixture(sessionId: string) {
   let idle = true;
-  const listeners = new Map<string, EventListener>();
   const editor = vi.fn<() => Promise<string | undefined>>(async () => 'Check the project status.');
   const input = vi.fn<() => Promise<string | undefined>>(async () => '60');
   const notify = vi.fn();
@@ -18,7 +15,6 @@ function fixture(sessionId: string) {
     ui: { editor, input, notify },
   } as unknown as ExtensionContext;
   const pi = {
-    on: vi.fn((event: string, listener: EventListener) => listeners.set(event, listener)),
     sendUserMessage,
   } as unknown as ExtensionAPI;
   let instanceSequence = 0;
@@ -34,7 +30,7 @@ function fixture(sessionId: string) {
     context,
     editor,
     input,
-    listeners,
+    settled: launcher.onAgentSettled,
     notify,
     registration,
     sendUserMessage,
@@ -133,9 +129,9 @@ describe('default loop launcher', () => {
     expect(current.sendUserMessage).toHaveBeenCalledOnce();
 
     current.setIdle(true);
-    await current.listeners.get('agent_settled')?.({}, current.context);
+    current.settled();
     expect(current.sendUserMessage).toHaveBeenCalledTimes(2);
-    await current.listeners.get('agent_settled')?.({}, current.context);
+    current.settled();
     expect(current.sendUserMessage).toHaveBeenCalledTimes(2);
 
     await current.registration.dispose();
@@ -149,15 +145,15 @@ describe('default loop launcher', () => {
     expect(current.sendUserMessage).not.toHaveBeenCalled();
 
     current.setIdle(true);
-    await current.listeners.get('agent_settled')?.({}, current.context);
+    current.settled();
     expect(current.sendUserMessage).toHaveBeenCalledOnce();
 
     current.setIdle(false);
-    await current.listeners.get('agent_settled')?.({}, current.context);
+    current.settled();
     expect(current.sendUserMessage).toHaveBeenCalledOnce();
 
     current.setIdle(true);
-    await current.listeners.get('agent_settled')?.({}, current.context);
+    current.settled();
     expect(current.sendUserMessage).toHaveBeenCalledTimes(2);
     await current.registration.dispose();
   });

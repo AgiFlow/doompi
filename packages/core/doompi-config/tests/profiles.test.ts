@@ -10,7 +10,7 @@ import {
   loadProfiles,
   replaceProfileEnvironment,
   resolveProfile,
-} from '../src/exports/profiles.ts';
+} from '../src/exports/profiles';
 
 describe('profile configuration', () => {
   let root: string;

@@ -1,18 +1,18 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { afterEach, describe, expect, it } from 'vitest';
-import { LaunchRunnerDialog } from '../../src/web/components/LaunchRunnerDialog.tsx';
-import { RunnersActivitySection } from '../../src/web/components/RunnersActivitySection.tsx';
-import { RunnersPanel } from '../../src/web/components/RunnersPanel.tsx';
-import { RunnerShellPanel, runnerShellTab } from '../../src/web/components/RunnerShellPanel.tsx';
-import { webPlugin as scopedWebPlugin } from '../../src/web/index.ts';
+import { LaunchRunnerDialog } from '../../src/web/components/LaunchRunnerDialog';
+import { RunnersActivitySection } from '../../src/web/components/RunnersActivitySection';
+import { RunnersPanel } from '../../src/web/components/RunnersPanel';
+import { RunnerShellPanel, runnerShellTab } from '../../src/web/components/RunnerShellPanel';
+import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,
   ...scopedWebPlugin.workspace,
   ...scopedWebPlugin.session,
 };
-import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore.ts';
-import type { RunnerRunView } from '../../src/types/webRunners.ts';
+import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore';
+import type { RunnerRunView } from '../../src/types/webRunners';
 
 const run = (id: string, state: 'running' | 'completed'): RunnerRunView =>
   ({

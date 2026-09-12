@@ -6,9 +6,9 @@
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
-import type { AuthorDocumentInput } from '../lib/authorViewportTypes.ts';
-import { putAuthorDocument, reviseAuthorDocument } from '../stores/authorWorkspaceStore.ts';
-import { AuthorDocumentPanel } from './AuthorDocumentPanel.tsx';
+import type { AuthorDocumentInput } from '../lib/authorViewportTypes';
+import { putAuthorDocument, reviseAuthorDocument } from '../stores/authorWorkspaceStore';
+import { AuthorDocumentPanel } from './AuthorDocumentPanel';
 
 const SPEC: AuthorDocumentInput = {
   path: 'docs/spec.md',

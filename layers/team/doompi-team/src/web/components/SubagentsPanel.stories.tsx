@@ -7,9 +7,9 @@
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import type { ReactNode } from 'react';
-import type { SubagentRun } from '../../types/webSubagents.ts';
-import { subagents } from '../stores/subagentsStore.ts';
-import { SubagentsPanel } from './SubagentsPanel.tsx';
+import type { SubagentRun } from '../../types/webSubagents';
+import { subagents } from '../stores/subagentsStore';
+import { SubagentsPanel } from './SubagentsPanel';
 
 const NOW = Date.now();
 const MINUTE = 60_000;

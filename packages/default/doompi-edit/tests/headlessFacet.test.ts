@@ -10,9 +10,9 @@ import {
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { editServerFacet } from '../src/adapters/server/facet.ts';
+import { editServerFacet } from '../src/extensions/server';
 
 let directory: string;
 
@@ -25,13 +25,10 @@ afterEach(async () => {
 });
 
 function contextFor(host: DoomHeadlessHostService): Context {
-  return {
-    get(name: string) {
-      if (name === DOOM_SERVER_HOST_SERVICE) return {};
-      if (name === DOOM_HEADLESS_HOST_SERVICE) return host;
-      return undefined;
-    },
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session' });
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  return context;
 }
 
 function execution(): DoomHeadlessExecutionContext {
@@ -47,7 +44,7 @@ describe('edit server facet', () => {
       return { dispose };
     });
     const host = { registerTool } as unknown as DoomHeadlessHostService;
-    const cleanup = editServerFacet.apply(contextFor(host));
+    const cleanup = await editServerFacet.apply(contextFor(host));
 
     expect(registerTool).toHaveBeenCalledOnce();
     expect(tool?.name).toBe('edit');
@@ -69,7 +66,7 @@ describe('edit server facet', () => {
 
     expect(result.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('Edited sample.txt') });
     expect(await readFile(join(directory, 'sample.txt'), 'utf8')).toBe('one\nTWO\n');
-    cleanup?.();
+    await cleanup?.();
     expect(dispose).toHaveBeenCalledOnce();
   });
 });

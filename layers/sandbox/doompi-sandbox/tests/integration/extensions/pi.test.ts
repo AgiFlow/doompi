@@ -3,9 +3,9 @@ import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { COMMAND_NAME } from '../../../src/commands/doomSandboxCommand.ts';
-import { activateSandboxExtension } from '../../../src/adapters/pi/extension.ts';
-import type { SandboxExtensionService } from '../../../src/types/extension.ts';
+import { COMMAND_NAME } from '../../../src/constants/sandbox';
+import { activateSandboxExtension } from '../../../src/extensions/pi';
+import type { SandboxExtensionService } from '../../../src/types/extension';
 
 interface CommandDefinition {
   handler: (
@@ -35,6 +35,7 @@ async function createPiFixture(): Promise<{
       },
     },
     on: vi.fn((event: string, listener: () => void) => listeners.set(event, listener)),
+    registerProvider: vi.fn(),
     registerCommand: vi.fn((name: string, definition: CommandDefinition) => commands.set(name, definition)),
   } as unknown as ExtensionAPI;
   await installDoomCordisHost(pi, { mode: 'composed', source: 'sandbox-test-host' });
@@ -91,7 +92,7 @@ describe('doompi-sandbox Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-sandbox',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-use-sandbox',

@@ -4,7 +4,7 @@ import {
   type DoomTransitionCoordinator,
 } from '@agimon-ai/doompi-extension-contracts/transition';
 import { Context } from '@deepseek-ai/cordis';
-import { createDoomTransitionCoordinator } from '../../src/services/transitionCoordinator.ts';
+import { createDoomTransitionCoordinator } from '../../src/services/transitionCoordinator';
 import type {
   TransitionSelectionSnapshot,
   TransitionSynchronization,

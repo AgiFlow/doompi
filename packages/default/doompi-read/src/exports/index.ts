@@ -1,6 +1,4 @@
-export { activateDoomPiReadExtension, installDoomPiReadRuntime } from '../adapters/pi/extension.ts';
-export { registerHashlineReadTool } from '../adapters/pi/readTool.ts';
-export { createHeadlessReadTool, executeHeadlessRead } from '../adapters/readTool.ts';
-export { ReadParamsSchema } from '../schemas/readTool.ts';
-export type { ReadParams } from '../schemas/readTool.ts';
-export { readServerFacet } from '../adapters/server/facet.ts';
+export { createHashlineReadTool } from '../tools/piRead';
+export { createHeadlessReadTool, executeHeadlessRead } from '../services/readTool';
+export { ReadParamsSchema } from '../schemas/readTool';
+export type { ReadParams } from '../schemas/readTool';

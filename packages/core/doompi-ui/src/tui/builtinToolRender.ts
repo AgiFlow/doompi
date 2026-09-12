@@ -11,9 +11,9 @@ import {
   type WriteToolInput,
 } from '@earendil-works/pi-coding-agent';
 import { type Component, wrapTextWithAnsi } from '@earendil-works/pi-tui';
-import { gutterWidth, renderLineNumber } from './codeGutter.ts';
-import { renderDoomDiff } from './diffRender.ts';
-import { DoomToolCall, frameDoomToolResult, previousDoomToolResult, renderToolHeading } from './toolChrome.ts';
+import { gutterWidth, renderLineNumber } from './codeGutter';
+import { renderDoomDiff } from './diffRender';
+import { DoomToolCall, frameDoomToolResult, previousDoomToolResult, renderToolHeading } from './toolChrome';
 
 const COLLAPSED_FILE_LINES = 10;
 

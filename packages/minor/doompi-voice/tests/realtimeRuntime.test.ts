@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createRealtimeRuntime } from '../src/adapters/realtime/realtimeRuntime.ts';
+import { createRealtimeRuntime } from '../src/services/realtimeRuntime';
 
 const roots: string[] = [];
 const signal = new AbortController().signal;

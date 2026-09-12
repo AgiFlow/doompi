@@ -2,11 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  createHistoryOwnership,
-  historyOwnershipLockPath,
-} from '../../../../src/adapters/serialization/historyOwnership.ts';
-import { preserveHistoryBeforeOpen } from '../../../../src/adapters/serialization/historyImport.ts';
+import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../src/services/historyOwnership';
+import { preserveHistoryBeforeOpen } from '../../../../src/services/historyImport';
 function v4Source(): string {
   return `${JSON.stringify({
     v: 4,

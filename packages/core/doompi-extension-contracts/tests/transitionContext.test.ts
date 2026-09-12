@@ -1,14 +1,14 @@
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MinorModeCatalogSnapshot } from '../src/exports/mode.ts';
-import type { DoomTransitionCoordinator, MinorModeCatalogHost } from '../src/exports/transition.ts';
+import type { MinorModeCatalogSnapshot } from '../src/exports/mode';
+import type { DoomTransitionCoordinator, MinorModeCatalogHost } from '../src/exports/transition';
 import {
   consumeMinorModeReloadHandoff,
   DOOM_TRANSITION_SERVICE,
   MINOR_MODE_CATALOG_SERVICE,
   prepareMinorModeReloadHandoff,
   requireDoomTransitionCoordinator,
-} from '../src/exports/transition.ts';
+} from '../src/exports/transition';
 
 const cleanup: Array<() => void> = [];
 

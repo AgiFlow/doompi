@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createCodexRealtimeProvider } from '../src/adapters/realtime/codexRealtime.ts';
-import type { RealtimeAuth } from '../src/types/realtime.ts';
+import { createCodexRealtimeProvider } from '../src/services/codexRealtime';
+import type { RealtimeAuth } from '../src/types/realtime';
 
 const offer = 'v=0\r\na=offer\r\n';
 const answer = 'v=0\r\na=answer\r\n';

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createHeadlessClient } from '../../../../src/adapters/server/headlessClient';
+import { createHeadlessClient } from '../../../../src/services/headlessClient';
 
 function setup() {
   const frames: Record<string, unknown>[] = [];

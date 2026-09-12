@@ -19,7 +19,7 @@ import {
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from './doomOverlay.ts';
+} from './doomOverlay';
 import { fitTerminalLine } from './overlayText';
 import { humanizeDuration } from './workflowStatusRow';
 

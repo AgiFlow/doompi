@@ -1,4 +1,4 @@
-import type { SubagentCatalogAgent, SubagentCatalogSource } from '../../types/webSubagents.ts';
+import type { SubagentCatalogAgent, SubagentCatalogSource } from '../../types/webSubagents';
 
 /** The session's own verb, whose parser takes agent[model=x], then the rest as the task, then a trailing --fork. */
 const RUN_VERB = '/run';

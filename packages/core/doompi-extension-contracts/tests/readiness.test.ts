@@ -7,7 +7,7 @@ import {
   DoomReadinessError,
   readDoomReadinessCoordinator,
   requireDoomReadinessCoordinator,
-} from '../src/schemas/readiness.ts';
+} from '../src/schemas/readiness';
 
 function deferred<TValue>(): {
   readonly promise: Promise<TValue>;

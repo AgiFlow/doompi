@@ -6,8 +6,8 @@ import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
 import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import * as directRuntime from '../../../../src/adapters/server/directHarnessRuntime';
-import { createHeadlessSessionHost } from '../../../../src/adapters/server/headlessSessionHost';
+import * as directRuntime from '../../../../src/controllers/directHarnessRuntime';
+import { createHeadlessSessionHost } from '../../../../src/controllers/headlessSessionHost';
 import type { DirectHarnessRuntimeOptions } from '../../../../src/types/server/directHarnessRuntime';
 
 const usage = {

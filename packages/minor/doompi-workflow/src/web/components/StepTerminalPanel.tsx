@@ -2,10 +2,10 @@ import { AnsiLine, Badge, Button, StatusBadge, StreamCursor } from '@agimon-ai/d
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
-import type { WorkflowRunView } from '../../types/webWorkflows.ts';
-import type { WorkflowTerminalCapabilitiesView } from '../../types/webWorkflowTerminal.ts';
-import { followScreen, releaseControl, sendKeys, takeControl } from '../api/terminalApi.ts';
-import { workflows } from '../stores/workflowsStore.ts';
+import type { WorkflowRunView } from '../../types/webWorkflows';
+import type { WorkflowTerminalCapabilitiesView } from '../../types/webWorkflowTerminal';
+import { followScreen, releaseControl, sendKeys, takeControl } from '../api/terminalApi';
+import { workflows } from '../stores/workflowsStore';
 
 /** The tab id doubles as the URL segment, so it stays plain and unique across plugins. */
 const TAB_ID_PREFIX = 'workflows-step-';

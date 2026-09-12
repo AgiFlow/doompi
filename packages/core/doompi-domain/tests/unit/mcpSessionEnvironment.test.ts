@@ -1,6 +1,6 @@
 import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-extension-contracts/mcp-session';
 import { describe, expect, it } from 'vitest';
-import { mcpSessionEnvironment } from '../../src/adapters/mcpSessionEnvironment.ts';
+import { mcpSessionEnvironment } from '../../src/services/mcpSessionEnvironment';
 
 describe('mcpSessionEnvironment', () => {
   it('projects the complete picture the session needs', () => {

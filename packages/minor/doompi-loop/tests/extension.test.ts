@@ -8,7 +8,7 @@ import {
   type DoomLoopLaunchersService,
   type LoopLauncherDefinition,
   requireDoomLoopLaunchers,
-} from '@agimon-ai/doompi-extension-contracts/loop-launchers';
+} from '../src/schemas/loopLaunchers';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   type MinorModeArguments,
@@ -19,10 +19,10 @@ import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-ex
 import { Context, type Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { installLoopRuntime, loopExtension } from '../src/adapters/pi/extension.ts';
-import { STATUS_KEY } from '../src/adapters/pi/loopConstants.ts';
-import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../src/schemas/loopCommands.ts';
-import { LOOP_VIEW_STATUS_KEY, parseLoopStatusView } from '../src/types/loopView.ts';
+import { loopExtension } from '../src/extensions/pi';
+import { STATUS_KEY } from '../src/constants/piLoop';
+import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../src/constants/loop';
+import { LOOP_VIEW_STATUS_KEY, parseLoopStatusView } from '../src/types/loopView';
 
 type CommandDefinition = { handler: (args: string, ctx: ExtensionContext) => Promise<void> };
 type EventListener = (event: unknown, ctx: ExtensionContext) => void | Promise<void>;
@@ -108,7 +108,7 @@ async function harness(sessionId: string, mode: ExtensionContext['mode'] = 'prin
   const cordis = new Context();
   cordis.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, modeService);
   cordis.provide(DOOM_UI_HUB_SERVICE, uiHub);
-  installLoopRuntime(cordis, pi);
+  await loopExtension.install(cordis, pi);
 
   let activeService: DoomLoopLaunchersService | undefined;
   cordis.inject([DOOM_LOOP_LAUNCHERS_SERVICE], (serviceContext) => {

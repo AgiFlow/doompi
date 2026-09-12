@@ -18,8 +18,8 @@ import {
   retainedMessagesAfterSnapshot,
   thresholdTokens,
   withCanonicalFileSections,
-} from '../src/adapters/compaction/policy';
-import { CHECKPOINT_MESSAGE_TYPE, CONTEXT_MESSAGE_TYPE } from '../src/types/constants.ts';
+} from '../src/services/compactionPolicy';
+import { CHECKPOINT_MESSAGE_TYPE, CONTEXT_MESSAGE_TYPE } from '../src/constants/autocompact';
 
 const STRUCTURED_CHECKPOINT = `## Goal
 Ship staged compaction.

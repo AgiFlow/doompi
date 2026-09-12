@@ -2,15 +2,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { FfmpegEncodedAudioDecoder } from '../src/adapters/audio/encodedAudio.ts';
-import { SystemClock } from '../src/adapters/audio/infrastructure.ts';
+import { FfmpegEncodedAudioDecoder } from '../src/services/encodedAudio';
+import { SystemClock } from '../src/services/infrastructure';
 import {
   ManualTranscriptionApi,
   normalizeManualTranscriptionMediaType,
-} from '../src/adapters/manualTranscriptionApi.ts';
-import { createTestVoiceSessionApi as createVoiceSessionApi } from './support.ts';
-import { encodePcm16Wav } from '../src/services/pcm.ts';
-import { ManualTranscriptionService } from '../src/services/manualTranscription.ts';
+} from '../src/controllers/manualTranscriptionApi';
+import { createTestVoiceSessionApi as createVoiceSessionApi } from './support';
+import { encodePcm16Wav } from '../src/services/pcm';
+import { ManualTranscriptionService } from '../src/services/manualTranscription';
 import type {
   IClock,
   IExecutableResolver,
@@ -22,7 +22,7 @@ import type {
   RunningProcess,
   TimerHandle,
   TranscriptionAdapterOutput,
-} from '../src/types/index.ts';
+} from '../src/types';
 import {
   MANUAL_TRANSCRIPTION_DURATION_HEADER,
   MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,
@@ -31,7 +31,7 @@ import {
   MANUAL_TRANSCRIPTION_TIMEOUT_MS,
   type IManualTranscriptionService,
   ManualTranscriptionError,
-} from '../src/types/manualTranscription.ts';
+} from '../src/types/manualTranscription';
 import type { ResolvedVoiceConfig, VoiceAdapterConfig } from '@agimon-ai/doompi-config';
 
 const adapterConfig: VoiceAdapterConfig = { model: { id: 'test' } };

@@ -1,4 +1,5 @@
-import type { Context } from '@deepseek-ai/cordis';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { Context } from '@deepseek-ai/cordis';
 import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHook,
@@ -6,7 +7,8 @@ import type {
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { describe, expect, it, vi } from 'vitest';
-import { hookHeadlessFacet } from '../../../src/adapters/headless/facet.ts';
+import { hookServerFacet } from '../../../src/extensions/server';
+import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/headless';
 
 describe('hook headless facet', () => {
   it('records lifecycle hooks, clears shutdown status, and exposes authoring guidance', async () => {
@@ -28,7 +30,10 @@ describe('hook headless facet', () => {
         return registration();
       },
     } as unknown as DoomHeadlessHostService;
-    const close = hookHeadlessFacet.apply({ get: () => host } as unknown as Context);
+    const context = new Context();
+    context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session' });
+    context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+    const close = await hookServerFacet.apply(context);
     if (!resource) throw new Error('Hook authoring resource was not registered');
 
     const appendCustomEntry = vi.fn();
@@ -51,7 +56,7 @@ describe('hook headless facet', () => {
     expect(setStatus).toHaveBeenCalledWith('doom-hook', undefined);
     expect(await resource.read(execution)).toContain('hook');
 
-    close();
+    await close?.();
     expect(disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
   });
 });

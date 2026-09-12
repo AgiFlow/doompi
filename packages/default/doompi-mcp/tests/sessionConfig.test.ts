@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readSessionConfig, sessionConfigEnvironment } from '../src/adapters/process/sessionConfig.ts';
-import { SESSION_ENV_VAR } from '../src/schemas/sessionConfig.ts';
+import { readSessionConfig, sessionConfigEnvironment } from '../src/services/sessionConfig';
+import { SESSION_ENV_VAR } from '../src/schemas/sessionConfig';
 
 function envWith(value: unknown): NodeJS.ProcessEnv {
   return { [SESSION_ENV_VAR]: typeof value === 'string' ? value : JSON.stringify(value) };

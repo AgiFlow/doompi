@@ -1,13 +1,13 @@
 import { Button } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
-import type { AuthorDocumentKind, AuthorToolMode } from '../lib/authorViewportTypes.ts';
+import type { AuthorDocumentKind, AuthorToolMode } from '../lib/authorViewportTypes';
 import {
   authorDocument,
   authorSessionWorkspace,
   reviseAuthorDocument,
   setAuthorRegionCandidate,
   setAuthorToolMode,
-} from '../stores/authorWorkspaceStore.ts';
+} from '../stores/authorWorkspaceStore';
 
 export function AuthorToolPalette({
   sessionId,

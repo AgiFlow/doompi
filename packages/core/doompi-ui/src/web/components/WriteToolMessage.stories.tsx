@@ -6,7 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { WriteToolMessage } from './WriteToolMessage.tsx';
+import { WriteToolMessage } from './WriteToolMessage';
 
 /** Past the ten-line collapsed budget, so the preview reports what it hid. */
 const CONTENT = [

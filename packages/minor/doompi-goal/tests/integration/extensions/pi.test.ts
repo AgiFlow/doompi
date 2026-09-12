@@ -1,10 +1,10 @@
 import { createPiTestHost } from '@agimon-ai/doompi-extension-contracts/testing';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { registerGoalExtension } from '../../../src/adapters/pi/extension';
-import { activateGoalExtension } from '../../../src/adapters/pi/runtimeActivation.ts';
-import { COMMAND_NAME } from '../../../src/commands/goalCommand.ts';
-import type { GoalExtensionService } from '../../../src/types/extension.ts';
+import { goalExtension as registerGoalExtension } from '../../../src/extensions/pi';
+import { Context } from '@deepseek-ai/cordis';
+import { COMMAND_NAME } from '../../../src/constants/goal';
+import type { GoalExtensionService } from '../../../src/types/extension';
 
 interface CommandDefinition {
   handler: (
@@ -33,6 +33,7 @@ function createPiFixture(): {
         return () => handlers.delete(handler);
       },
     },
+    registerTool: vi.fn(),
     on: vi.fn((event: string, listener: () => void) => listeners.set(event, listener)),
     registerCommand: vi.fn((name: string, definition: CommandDefinition) => commands.set(name, definition)),
   } as unknown as ExtensionAPI;
@@ -47,11 +48,13 @@ describe('doompi-goal Pi extension', () => {
     };
     const notify = vi.fn();
 
-    activateGoalExtension(fixture.pi, { service });
+    const context = new Context();
+    await registerGoalExtension.install(context, fixture.pi, { service });
     await fixture.commands.get(COMMAND_NAME)?.handler('', { hasUI: true, ui: { notify } });
 
     expect(service.execute).toHaveBeenCalledOnce();
     expect(notify).toHaveBeenCalledWith('ready', 'info');
+    await context.fiber.dispose();
   });
 
   it('is headless-safe and disposes runtime registrations once', async () => {
@@ -60,11 +63,13 @@ describe('doompi-goal Pi extension', () => {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
     const notify = vi.fn();
-    const dispose = activateGoalExtension(fixture.pi, { service });
+    const context = new Context();
+    await registerGoalExtension.install(context, fixture.pi, { service });
+    const dispose = () => context.fiber.dispose();
 
     await fixture.commands.get(COMMAND_NAME)?.handler('', { hasUI: false, ui: { notify } });
-    dispose();
-    dispose();
+    await dispose();
+    await dispose();
 
     expect(notify).not.toHaveBeenCalled();
   });

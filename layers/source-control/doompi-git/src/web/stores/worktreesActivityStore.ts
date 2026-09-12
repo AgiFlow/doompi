@@ -18,7 +18,7 @@
  *   command bound for the agent, which never reaches a channel's `receive`.
  */
 import { defineGlobalStore, defineSessionStore, type WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
-import { GIT_WORKTREES_TYPE, type GitWorktreesCommand, type WorktreeView } from '../../types/webWorktrees.ts';
+import { GIT_WORKTREES_TYPE, type GitWorktreesCommand, type WorktreeView } from '../../types/webWorktrees';
 
 export interface WorktreesSession {
   /** The worktrees the hub last reported for this session's repository. */

@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SubagentCatalogAgent } from '../../src/types/webSubagents.ts';
-import {
-  agentMeta,
-  filterCatalog,
-  groupCatalog,
-  launchCommand,
-  modelChoices,
-} from '../../src/web/lib/launchCommand.ts';
+import type { SubagentCatalogAgent } from '../../src/types/webSubagents';
+import { agentMeta, filterCatalog, groupCatalog, launchCommand, modelChoices } from '../../src/web/lib/launchCommand';
 
 const row = (name: string, source: SubagentCatalogAgent['source'], extra: Partial<SubagentCatalogAgent> = {}) =>
   ({

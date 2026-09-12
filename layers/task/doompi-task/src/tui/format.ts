@@ -2,15 +2,8 @@ import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import { DoomToolCall, renderToolHeading } from '@agimon-ai/doompi-ui/toolChrome';
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { type Component, Text, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
-import { DelegationManager, type DelegationProgress } from '../services/delegation/manager.ts';
-import type {
-  Task,
-  TaskAction,
-  TaskDetails,
-  TaskItemMutation,
-  TaskMutationParams,
-  TaskStatus,
-} from '../services/store/types.ts';
+import { DelegationManager, type DelegationProgress } from '../services/delegation';
+import type { Task, TaskAction, TaskDetails, TaskItemMutation, TaskMutationParams, TaskStatus } from '../models/task';
 
 export const STATUS_GLYPH: Record<TaskStatus, string> = {
   pending: '○',

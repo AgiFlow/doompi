@@ -6,8 +6,8 @@ import type {
   SessionStartEvent,
 } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
-import cordisFinalizerExtension from '../../src/extensions/entries/cordisFinalizer.ts';
-import cordisHostExtension from '../../src/extensions/entries/cordisHost.ts';
+import cordisFinalizerExtension from '../../src/extensions/cordisFinalizer';
+import cordisHostExtension from '../../src/extensions/cordisHost';
 
 type Handler = (event: never, context: ExtensionContext) => unknown;
 

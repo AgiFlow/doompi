@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { resetHarnessStore } from '@agimon-ai/doompi-config';
-import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-extension-contracts/author-facade';
+import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-author/author-facade';
 import type { LeaderContribution } from '@agimon-ai/doompi-extension-contracts/leader';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
@@ -14,11 +14,10 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/mode';
 import {
   DOOM_NARRATION_SERVICE,
-  DOOM_VOICE_AUTO_MODE_ID,
-  DOOM_VOICE_SOURCE,
   type DoomNarrationService,
   type NarrationRequest,
 } from '@agimon-ai/doompi-extension-contracts/narration';
+import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
 import {
   DOOM_SUBAGENT_POLICY_SERVICE,
   type DoomSubagentPolicyService,
@@ -31,7 +30,7 @@ import {
   DOOM_VOICE_TOOLS_SERVICE,
   type DoomVoiceToolsService,
   VOICE_MODE_TOOL_NAMES,
-} from '@agimon-ai/doompi-extension-contracts/voice-tools';
+} from '@agimon-ai/doompi-voice/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_TOOL_SURFACE_SERVICE,
@@ -41,8 +40,8 @@ import {
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import type { PlanningModeConfig, PlanningThinkingLevel } from '../src/exports/config';
-import type { PlanPointerRecord } from '../src/types/planApi.ts';
-import type { PlanPointerPort } from '../src/types/planPointer.ts';
+import type { PlanPointerRecord } from '../src/types/planApi';
+import type { PlanPointerPort } from '../src/types/planPointer';
 import type { FablePlanBroker, FablePlanPacket } from '../src/exports/fableFlow';
 import {
   configurePlanningSubagentInput,
@@ -53,7 +52,7 @@ import {
   type PlanModeExtensionOptions,
   parseDebugEvidencePacket,
   parsePersistedPlanState,
-  planModeExtension,
+  createPlanModeRuntime,
   planToolRestriction,
   planningSubagentModel,
   planSessionIdentifier,
@@ -396,8 +395,7 @@ function createExtensionFixture(
   cordis.provide(DOOM_TOOL_SURFACE_SERVICE, toolSurface);
   refreshToolSurface = () => toolSurface.refresh();
   cordis.effect(() => () => voiceTools.dispose(), 'plan-test-voice-tools');
-  planModeExtension(
-    cordis,
+  const contributions = createPlanModeRuntime(
     pi,
     planningConfigProvider,
     {
@@ -415,6 +413,23 @@ function createExtensionFixture(
       doomIntegrations: extensionOptions.doomIntegrations,
       planPointers: extensionOptions.planPointers,
     },
+  );
+  for (const service of contributions.services ?? []) cordis.plugin(service);
+  for (const tool of contributions.tools ?? []) {
+    if ('kind' in tool) throw new Error('This harness expects native Plan tools.');
+    pi.registerTool(tool);
+  }
+  const on = pi.on.bind(pi) as (event: string, handler: unknown) => void;
+  for (const [event, handler] of Object.entries(contributions.events ?? {})) on(event, handler);
+  cordis.effect(
+    () => () =>
+      contributions.onStop?.({
+        pi,
+        context: cordis,
+        signal: new AbortController().signal,
+        options: undefined,
+        runtime: undefined,
+      }),
   );
   pi.on('session_shutdown', () => cordis.fiber.dispose());
 

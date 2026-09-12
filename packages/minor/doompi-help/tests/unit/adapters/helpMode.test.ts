@@ -2,7 +2,7 @@ import type { DoomHelpDiagnostic, DoomHelpSkill } from '@agimon-ai/doompi-extens
 import type { MinorModeCatalogService } from '@agimon-ai/doompi-extension-contracts/mode';
 import type { DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HelpActivationService, HelpRuntimeState } from '../../../src/types/help.ts';
+import type { HelpActivationService, HelpRuntimeState } from '../../../src/types/help';
 
 const mocks = vi.hoisted(() => ({
   modeDefinition: undefined as
@@ -56,7 +56,7 @@ import {
   helpMinorModeState,
   registerHelpModeIntegration,
   registerHelpUiIntegration,
-} from '../../../src/adapters/pi/helpMode.ts';
+} from '../../../src/controllers/helpMode';
 
 const catalog = {} as MinorModeCatalogService;
 

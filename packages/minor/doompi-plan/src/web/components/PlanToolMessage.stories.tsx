@@ -4,7 +4,7 @@
  * default export is a bare `const meta`.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { PlanToolMessage } from './PlanToolMessage.tsx';
+import { PlanToolMessage } from './PlanToolMessage';
 
 const props = (overrides: Parameters<typeof toolMessagePropsFixture>[0]) => toolMessagePropsFixture(overrides).props;
 

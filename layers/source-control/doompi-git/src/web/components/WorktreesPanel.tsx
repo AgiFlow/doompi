@@ -27,8 +27,8 @@ import { Button, Dot, EmptyState, Input, Spinner, StatusBadge } from '@agimon-ai
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
-import type { WorktreeView } from '../../types/webWorktrees.ts';
-import { requestWorktreeClose, requestWorktreeCreate, worktreeActivity } from '../stores/worktreesActivityStore.ts';
+import type { WorktreeView } from '../../types/webWorktrees';
+import { requestWorktreeClose, requestWorktreeCreate, worktreeActivity } from '../stores/worktreesActivityStore';
 
 const WORKTREES_TAB_ID = 'git-worktrees';
 

@@ -8,7 +8,7 @@ import {
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import type { McpResultBlock } from '../../types/webMcp.ts';
+import type { McpResultBlock } from '../../types/webMcp';
 import {
   type McpStatusTone,
   matchMcpTool,
@@ -17,7 +17,7 @@ import {
   mcpImageBlocks,
   mcpResultBlocks,
   mcpResultView,
-} from '../lib/mcpToolMatch.ts';
+} from '../lib/mcpToolMatch';
 
 const STATUS_TONE: Record<McpStatusTone, StatusTone> = {
   running: 'running',

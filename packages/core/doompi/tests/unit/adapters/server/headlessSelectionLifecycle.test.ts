@@ -11,8 +11,8 @@ import {
 import type { DoomServerBundleEntry } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import { describe, expect, it, vi } from 'vitest';
 import { Type } from 'typebox';
-import { HeadlessHost } from '../../../../src/adapters/server/headlessHost.ts';
-import type { HeadlessHostOptions, ResolvedHeadlessResource } from '../../../../src/types/server/headlessHost.ts';
+import { HeadlessHost } from '../../../../src/controllers/headlessHost';
+import type { HeadlessHostOptions, ResolvedHeadlessResource } from '../../../../src/types/server/headlessHost';
 
 const baseCandidate: DoomServerBundleEntry = {
   packageName: '@test/base-facet',

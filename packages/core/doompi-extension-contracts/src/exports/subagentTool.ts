@@ -1,4 +1,4 @@
-export type { InlineAgent, SubagentAction, SubagentToolParams } from '../schemas/subagentTool.ts';
+export type { InlineAgent, SubagentAction, SubagentToolParams } from '../schemas/subagentTool';
 export {
   InlineAgentSchema,
   isSubagentAction,
@@ -6,4 +6,4 @@ export {
   SUBAGENT_ACTIONS,
   SubagentParams,
   subagentActionAcceptsField,
-} from '../schemas/subagentTool.ts';
+} from '../schemas/subagentTool';

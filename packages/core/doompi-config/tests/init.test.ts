@@ -11,7 +11,7 @@ import {
   initializeRepositoryDoomConfig,
   parseDoomConfig,
   REPOSITORY_DOOM_CONFIG_TEMPLATES,
-} from '../src/exports/index.ts';
+} from '../src/exports';
 
 const temporaryRoots: string[] = [];
 const MAJOR_MODES = ['minimal', 'copilot'] as const;

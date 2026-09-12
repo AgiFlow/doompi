@@ -1,6 +1,5 @@
-export { registerGoalExtension } from '../adapters/pi/extension';
-export { DefaultGoalExtensionService } from '../services/extensionService.ts';
-export type { GoalAccountingState, UsageContext, UsageLike } from '../services/accounting.ts';
+export { DefaultGoalExtensionService } from '../services/extensionService';
+export type { GoalAccountingState, UsageContext, UsageLike } from '../models/accounting';
 export {
   assistantUsageTokens,
   checkpointGoalActiveTime,
@@ -12,41 +11,41 @@ export {
   nonNegativeFiniteNumber,
   normalizeTokenBudget,
   updateGoalUsage,
-} from '../services/accounting.ts';
-export type { GoalArgumentCompletion, GoalCommandKind, GoalCommandResult } from '../services/parser.ts';
+} from '../models/accounting';
+export type { GoalArgumentCompletion, GoalCommandKind, GoalCommandResult } from '../services/parser';
 export {
   completeGoalArguments,
   parseCommand,
   parseGoalCommand,
   parseTokenBudget,
   validateObjective,
-} from '../services/parser.ts';
-export type { GoalPromptContext } from '../services/prompts.ts';
+} from '../services/parser';
+export type { GoalPromptContext } from '../services/prompts';
 export {
   buildContinuePrompt,
   buildGoalPrompt,
   buildGoalSystemPrompt,
   buildObjectiveUpdatedPrompt,
   buildResumePrompt,
-} from '../services/prompts.ts';
-export type { RuntimeCommitPort } from '../services/runtime.ts';
-export { GoalRuntimeModel } from '../services/runtime.ts';
-export type { SafetyProgress, SafetySettings } from '../services/safety.ts';
+} from '../services/prompts';
+export type { RuntimeCommitPort } from '../models/runtime';
+export { GoalRuntimeModel } from '../models/runtime';
+export type { SafetyProgress, SafetySettings } from '../models/safety';
 export {
   nextToolFreeRepeatState,
   outputFingerprint,
   resetGoalSafetyEpoch,
   safetyLimitReached,
   shouldPauseForSafety,
-} from '../services/safety.ts';
-export type { GoalSettings, GoalSettingsLoadResult } from '../services/settings.ts';
+} from '../models/safety';
+export type { GoalSettings, GoalSettingsLoadResult } from '../services/settings';
 export {
   DEFAULT_GOAL_SETTINGS,
   decodeGoalSettings,
   normalizeGoalSettings,
   normalizeToolVisibility,
-} from '../services/settings.ts';
-export type { SessionEntryLike } from '../services/stateCodec.ts';
+} from '../services/settings';
+export type { SessionEntryLike } from '../models/stateCodec';
 export {
   decodeGoalStateEntries,
   GOAL_STATE_ENTRY_TYPE,
@@ -55,8 +54,8 @@ export {
   loadGoalStateFromSession,
   normalizeLoadedGoal,
   serializeGoalState,
-} from '../services/stateCodec.ts';
-export type { GoalCreateOptions } from '../services/stateMachine.ts';
+} from '../models/stateCodec';
+export type { GoalCreateOptions } from '../models/stateMachine';
 export {
   blocksStaleGoalToolCalls,
   createGoal,
@@ -73,8 +72,8 @@ export {
   isRetainedGoalStatus,
   nextGoalInstance,
   transitionGoal,
-} from '../services/stateMachine.ts';
-export type { GoalBlockedInput, GoalCompleteInput, GoalToolName, ToolValidationResult } from '../services/tools.ts';
+} from '../models/stateMachine';
+export type { GoalBlockedInput, GoalCompleteInput, GoalToolName, ToolValidationResult } from '../services/tools';
 export {
   addGoalTools,
   filterGoalTools,
@@ -85,8 +84,8 @@ export {
   validateBlockedInput,
   validateCompletionInput,
   validateGoalId,
-} from '../services/tools.ts';
-export type { GoalExtensionDependencies, GoalExtensionResult, GoalExtensionService } from '../types/extension.ts';
+} from '../services/tools';
+export type { GoalExtensionDependencies, GoalExtensionResult, GoalExtensionService } from '../types/extension';
 export type {
   ActiveGoal,
   GoalExecutionState,
@@ -95,9 +94,9 @@ export type {
   GoalStatus,
   LoadedGoalState,
   SafetyPauseCause,
-} from '../types/goal.ts';
-export { GOAL_STATUSES, MAX_OBJECTIVE_LENGTH } from '../types/goal.ts';
-export type { GoalStatusView } from '../types/goalView.ts';
-export { formatGoalStatusView, GOAL_VIEW_STATUS_KEY, parseGoalStatusView } from '../types/goalView.ts';
-export type { GoalClock, GoalIdFactory, GoalStateStore } from '../types/ports.ts';
-export type { GoalToolVisibility, LegacyGoalToolVisibility } from '../types/settings.ts';
+} from '../types/goal';
+export { GOAL_STATUSES, MAX_OBJECTIVE_LENGTH } from '../types/goal';
+export type { GoalStatusView } from '../types/goalView';
+export { formatGoalStatusView, GOAL_VIEW_STATUS_KEY, parseGoalStatusView } from '../types/goalView';
+export type { GoalClock, GoalIdFactory, GoalStateStore } from '../types/ports';
+export type { GoalToolVisibility, LegacyGoalToolVisibility } from '../types/settings';

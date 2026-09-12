@@ -3,9 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { NodeLifeline } from '../../src/adapters/Lifeline/NodeLifeline';
-import { LIFELINE_ENV, watchOwner } from '../../src/adapters/Lifeline/client';
-import { FakeRunnerPaths } from '../doubles.ts';
+import { NodeLifeline } from '../../src/services/lifeline';
+import { LIFELINE_ENV, watchOwner } from '../../src/services/lifeline/client';
+import { FakeRunnerPaths } from '../doubles';
 
 let directory: string;
 let previousLifeline: string | undefined;

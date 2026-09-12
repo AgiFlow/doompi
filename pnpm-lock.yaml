@@ -132,6 +132,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-ui
+      '@agimon-ai/doompi-voice':
+        specifier: workspace:*
+        version: link:../../../packages/minor/doompi-voice
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-components
@@ -824,6 +827,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../doompi-ui
+      '@agimon-ai/doompi-voice':
+        specifier: workspace:*
+        version: link:../../minor/doompi-voice
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -946,6 +952,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../doompi-ui
+      '@agimon-ai/doompi-voice':
+        specifier: workspace:*
+        version: link:../../minor/doompi-voice
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1023,6 +1032,9 @@ importers:
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
         version: link:../doompi-ui
+      '@agimon-ai/doompi-voice':
+        specifier: workspace:*
+        version: link:../../minor/doompi-voice
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -2042,6 +2054,9 @@ importers:
       saxes:
         specifier: 6.0.0
         version: 6.0.0
+      typebox:
+        specifier: 1.3.25
+        version: 1.3.25
       yauzl:
         specifier: 3.4.0
         version: 3.4.0
@@ -2296,6 +2311,9 @@ importers:
 
   packages/minor/doompi-plan:
     dependencies:
+      '@agimon-ai/doompi-author':
+        specifier: workspace:*
+        version: link:../doompi-author
       '@agimon-ai/doompi-config':
         specifier: workspace:*
         version: link:../../core/doompi-config
@@ -2305,6 +2323,9 @@ importers:
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../core/doompi-telemetry
+      '@agimon-ai/doompi-voice':
+        specifier: workspace:*
+        version: link:../doompi-voice
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -2387,6 +2408,9 @@ importers:
       sherpa-onnx-node:
         specifier: 1.13.7
         version: 1.13.7
+      typebox:
+        specifier: 1.3.25
+        version: 1.3.25
       xstate:
         specifier: 5.32.6
         version: 5.32.6

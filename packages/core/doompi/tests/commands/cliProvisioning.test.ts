@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HarnessContext } from '../../src/adapters/harnessContext.ts';
-import type { HarnessTelemetry } from '../../src/adapters/telemetry/logSinkTelemetry.ts';
-import { CliApp } from '../../src/commands/cli/cliApp.ts';
-import type { HarnessOptions } from '../../src/types/interfaces/harness.ts';
+import type { HarnessContext } from '../../src/services/harnessContext';
+import type { HarnessTelemetry } from '../../src/services/logSinkTelemetry';
+import { CliApp } from '../../src/controllers/cliApp';
+import type { HarnessOptions } from '../../src/types/interfaces/harness';
 
 const mocks = vi.hoisted(() => ({
   buildHarnessContext: vi.fn(),
   ensureLayerPackages: vi.fn(),
 }));
 
-vi.mock('../../src/adapters/harnessContext.ts', () => ({ buildHarnessContext: mocks.buildHarnessContext }));
-vi.mock('../../src/adapters/layerPackageInstaller.ts', () => ({
+vi.mock('../../src/services/harnessContext', () => ({ buildHarnessContext: mocks.buildHarnessContext }));
+vi.mock('../../src/services/layerPackageInstaller', () => ({
   ensureLayerPackages: mocks.ensureLayerPackages,
 }));
 

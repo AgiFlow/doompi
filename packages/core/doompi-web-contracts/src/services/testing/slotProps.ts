@@ -10,7 +10,7 @@ import type {
   TransientTab,
   WebPluginContextItem,
   WebPluginSlotProps,
-} from '../../types/webPlugin.ts';
+} from '../../types/webPlugin';
 
 /**
  * The props the cockpit hands a plugin's components, built for a test.

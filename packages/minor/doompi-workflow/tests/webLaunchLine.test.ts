@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { WorkflowCatalogEntryView } from '../src/types/webWorkflows.ts';
-import { initialInputs, initialRunner, launchProblems } from '../src/web/lib/launchLine.ts';
+import type { WorkflowCatalogEntryView } from '../src/types/webWorkflows';
+import { initialInputs, initialRunner, launchProblems } from '../src/web/lib/launchLine';
 import {
   catalog,
   closeCatalog,
@@ -11,15 +11,15 @@ import {
   selectWorkflow,
   toggleInspect,
   workflowCatalogChannel,
-} from '../src/web/stores/catalogStore.ts';
-import { requestLaunch, workflowRunsChannel, workflows } from '../src/web/stores/workflowsStore.ts';
+} from '../src/web/stores/catalogStore';
+import { requestLaunch, workflowRunsChannel, workflows } from '../src/web/stores/workflowsStore';
 
 /** Feeds runs through the real channel, which is where the pending launch resolves. */
 function workflowsApply(runs: WorkflowRunView[]): void {
   workflowRunsChannel.apply('s1', { runs });
 }
-import { workflowActivityGroups, workflowActivityRows } from '../src/web/lib/workflowActivity.ts';
-import type { WorkflowRunView } from '../src/types/webWorkflows.ts';
+import { workflowActivityGroups, workflowActivityRows } from '../src/web/lib/workflowActivity';
+import type { WorkflowRunView } from '../src/types/webWorkflows';
 
 function entry(overrides: Partial<WorkflowCatalogEntryView> = {}): WorkflowCatalogEntryView {
   return {

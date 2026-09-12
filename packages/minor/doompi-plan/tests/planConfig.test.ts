@@ -1,7 +1,7 @@
 import { DOOM_PLANNING_THINKING_LEVELS } from '@agimon-ai/doompi-config';
 import { describe, expect, it } from 'vitest';
 import { PLAN_SETTINGS, planConfigSections, planSettingByFieldId } from '../src/exports/planConfig';
-import { PLAN_THINKING_LEVELS } from '../src/types/planSettings.ts';
+import { PLAN_THINKING_LEVELS } from '../src/types/planSettings';
 
 describe('planConfigSections', () => {
   it('renders one section holding every planning setting', () => {

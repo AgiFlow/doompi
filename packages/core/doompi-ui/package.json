@@ -28,7 +28,7 @@
   "files": [
     "dist",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "themes",
     "!src/web/**/*.stories.tsx"
   ],
@@ -42,45 +42,45 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./components/configOverlay": {
-      "types": "./dist/components/configOverlay.d.mts",
-      "import": "./dist/components/configOverlay.mjs",
-      "require": "./dist/components/configOverlay.cjs"
+    "./config-overlay": {
+      "types": "./dist/config-overlay.d.mts",
+      "import": "./dist/config-overlay.mjs",
+      "require": "./dist/config-overlay.cjs"
     },
-    "./components/doomEditor": {
-      "types": "./dist/components/doomEditor.d.mts",
-      "import": "./dist/components/doomEditor.mjs",
-      "require": "./dist/components/doomEditor.cjs"
+    "./doom-editor": {
+      "types": "./dist/doom-editor.d.mts",
+      "import": "./dist/doom-editor.mjs",
+      "require": "./dist/doom-editor.cjs"
     },
-    "./components/doomFooter": {
-      "types": "./dist/components/doomFooter.d.mts",
-      "import": "./dist/components/doomFooter.mjs",
-      "require": "./dist/components/doomFooter.cjs"
+    "./doom-footer": {
+      "types": "./dist/doom-footer.d.mts",
+      "import": "./dist/doom-footer.mjs",
+      "require": "./dist/doom-footer.cjs"
     },
-    "./components/doomHeader": {
-      "types": "./dist/components/doomHeader.d.mts",
-      "import": "./dist/components/doomHeader.mjs",
-      "require": "./dist/components/doomHeader.cjs"
+    "./doom-header": {
+      "types": "./dist/doom-header.d.mts",
+      "import": "./dist/doom-header.mjs",
+      "require": "./dist/doom-header.cjs"
     },
-    "./components/doomOverlay": {
-      "types": "./dist/components/doomOverlay.d.mts",
-      "import": "./dist/components/doomOverlay.mjs",
-      "require": "./dist/components/doomOverlay.cjs"
+    "./doom-overlay": {
+      "types": "./dist/doom-overlay.d.mts",
+      "import": "./dist/doom-overlay.mjs",
+      "require": "./dist/doom-overlay.cjs"
     },
-    "./components/leaderHints": {
-      "types": "./dist/components/leaderHints.d.mts",
-      "import": "./dist/components/leaderHints.mjs",
-      "require": "./dist/components/leaderHints.cjs"
+    "./leader-hints": {
+      "types": "./dist/leader-hints.d.mts",
+      "import": "./dist/leader-hints.mjs",
+      "require": "./dist/leader-hints.cjs"
     },
-    "./components/matrixPicker": {
-      "types": "./dist/components/matrixPicker.d.mts",
-      "import": "./dist/components/matrixPicker.mjs",
-      "require": "./dist/components/matrixPicker.cjs"
+    "./matrix-picker": {
+      "types": "./dist/matrix-picker.d.mts",
+      "import": "./dist/matrix-picker.mjs",
+      "require": "./dist/matrix-picker.cjs"
     },
-    "./components/toolsOverlay": {
-      "types": "./dist/components/toolsOverlay.d.mts",
-      "import": "./dist/components/toolsOverlay.mjs",
-      "require": "./dist/components/toolsOverlay.cjs"
+    "./tools-overlay": {
+      "types": "./dist/tools-overlay.d.mts",
+      "import": "./dist/tools-overlay.mjs",
+      "require": "./dist/tools-overlay.cjs"
     },
     "./config": {
       "types": "./dist/config.d.mts",
@@ -216,7 +216,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
@@ -225,7 +225,7 @@
   "doompiWeb": {
     "pluginId": "builtin-tools",
     "channels": [],
-    "client": "./src/exports/webClient.ts",
+    "client": "./src/extensions/web.ts",
     "scopes": [
       "session"
     ]

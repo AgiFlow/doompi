@@ -1,12 +1,12 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { FileEditsDetailView, FileEditsDiffHunk } from '../../src/types/fileEditsApi.ts';
-import { CommentDraft } from '../../src/web/components/CommentDraft.tsx';
-import { DeleteFileDialog } from '../../src/web/components/DeleteFileDialog.tsx';
-import { DiffView } from '../../src/web/components/DiffView.tsx';
-import { FilePanel } from '../../src/web/components/FilePanel.tsx';
-import { FilesActivitySection } from '../../src/web/components/FilesActivitySection.tsx';
-import { addComment, files, filesChannel, storeDetail, storeError } from '../../src/web/stores/filesStore.ts';
+import type { FileEditsDetailView, FileEditsDiffHunk } from '../../src/types/fileEditsApi';
+import { CommentDraft } from '../../src/web/components/CommentDraft';
+import { DeleteFileDialog } from '../../src/web/components/DeleteFileDialog';
+import { DiffView } from '../../src/web/components/DiffView';
+import { FilePanel } from '../../src/web/components/FilePanel';
+import { FilesActivitySection } from '../../src/web/components/FilesActivitySection';
+import { addComment, files, filesChannel, storeDetail, storeError } from '../../src/web/stores/filesStore';
 
 /**
  * Every surface this plugin puts on the page, rendered once.

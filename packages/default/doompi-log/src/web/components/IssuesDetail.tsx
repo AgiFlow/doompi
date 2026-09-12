@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { groupIssues, type IssueGroup } from '../../types/issueGrouping.ts';
-import type { IssuesView, MetricsTool } from '../../types/webMetrics.ts';
-import { barFraction } from '../lib/chartScale.ts';
+import { groupIssues, type IssueGroup } from '../../types/issueGrouping';
+import type { IssuesView, MetricsTool } from '../../types/webMetrics';
+import { barFraction } from '../lib/chartScale';
 
 /**
  * What is actually going wrong, ranked by how often.

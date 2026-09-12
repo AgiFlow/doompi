@@ -4,7 +4,7 @@ import {
   catalogAgentOf,
   catalogModels,
   presentCatalog,
-} from '../../src/services/webSubagentCatalog.ts';
+} from '../../src/services/webSubagentCatalog';
 
 const agent = (
   name: string,

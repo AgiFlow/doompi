@@ -9,7 +9,7 @@ import {
   previousDoomToolResult,
   renderToolBadge,
   renderToolHeading,
-} from '../../src/tui/toolChrome.ts';
+} from '../../src/tui/toolChrome';
 
 const theme = {
   fg: (color: string, text: string) => `<${color}>${text}</${color}>`,

@@ -3,7 +3,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { InstalledServerFacets } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { DoomHeadlessSelection } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { DoomServerBundleEntry } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { HeadlessHost } from '../../adapters/server/headlessHost';
+import type { HeadlessHost } from '../../controllers/headlessHost';
 import type { DirectHarnessRuntime } from './directHarnessRuntime';
 import type { HeadlessHostOptions } from './headlessHost';
 

@@ -13,8 +13,8 @@ import {
   suspendRun,
   suspendRunAsync,
   type SuspendedRun,
-} from '../../src/adapters/suspendedRuns.ts';
-import { createSessionScope, scopeSuspendedDir, sessionScopeDir } from '../../src/adapters/filesystem/paths.ts';
+} from '../../src/services/suspendedRuns';
+import { createSessionScope, scopeSuspendedDir, sessionScopeDir } from '../../src/services/sessionPaths';
 
 const scopes: ReturnType<typeof createSessionScope>[] = [];
 afterEach(() => {

@@ -6,7 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { FindToolMessage } from './FindToolMessage.tsx';
+import { FindToolMessage } from './FindToolMessage';
 
 const MATCHES = [
   'src/web/components/FindToolMessage.tsx:10:export function FindToolMessage(props',

@@ -1,13 +1,15 @@
-import type { Context } from '@deepseek-ai/cordis';
-import type {
-  DoomHeadlessExecutionContext,
-  DoomHeadlessHook,
-  DoomHeadlessHostService,
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { Context } from '@deepseek-ai/cordis';
+import {
+  DOOM_HEADLESS_HOST_SERVICE,
+  type DoomHeadlessExecutionContext,
+  type DoomHeadlessHook,
+  type DoomHeadlessHostService,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { autoStopHeadlessFacet } from '../../src/adapters/headless/facet.ts';
+import { autoStopServerFacet as autoStopHeadlessFacet } from '../../src/extensions/server';
 
-function fixture(states: Array<{ hasPendingMessages: boolean; isIdle: boolean }>) {
+async function fixture(states: Array<{ hasPendingMessages: boolean; isIdle: boolean }>) {
   const hooks: DoomHeadlessHook[] = [];
   const shutdown = vi.fn();
   const activity = vi.fn(async () => states.shift() ?? { hasPendingMessages: false, isIdle: true });
@@ -35,7 +37,10 @@ function fixture(states: Array<{ hasPendingMessages: boolean; isIdle: boolean }>
       return { dispose: vi.fn() };
     },
   } as unknown as DoomHeadlessHostService;
-  const dispose = autoStopHeadlessFacet.apply({ get: () => host } as unknown as Context);
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session' });
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  const dispose = await autoStopHeadlessFacet.apply(context);
   const hook = <E extends DoomHeadlessHook['event']>(event: E): Extract<DoomHeadlessHook, { event: E }> => {
     const found = hooks.find((candidate) => candidate.event === event);
     if (!found) throw new Error(`Missing ${event} hook`);
@@ -51,17 +56,27 @@ describe('headless auto-stop activity checks', () => {
     vi.restoreAllMocks();
   });
 
+  it('cancels a pending cooldown when the server plugin is disposed', async () => {
+    const test = await fixture([{ hasPendingMessages: false, isIdle: true }]);
+    await test.hook('agent_settled').handle({}, test.execution);
+    expect(vi.getTimerCount()).toBe(1);
+    await test.dispose?.();
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.runAllTimersAsync();
+    expect(test.shutdown).not.toHaveBeenCalled();
+  });
+
   it('cancels a scheduled shutdown when a new run starts', async () => {
-    const test = fixture([{ hasPendingMessages: false, isIdle: true }]);
+    const test = await fixture([{ hasPendingMessages: false, isIdle: true }]);
     await test.hook('agent_settled').handle({}, test.execution);
     await test.hook('agent_start').handle({}, test.execution);
     await vi.runAllTimersAsync();
     expect(test.shutdown).not.toHaveBeenCalled();
-    test.dispose();
+    await test.dispose?.();
   });
 
   it('stands down when queued work appears during the cooldown', async () => {
-    const test = fixture([
+    const test = await fixture([
       { hasPendingMessages: false, isIdle: true },
       { hasPendingMessages: true, isIdle: false },
     ]);
@@ -69,11 +84,11 @@ describe('headless auto-stop activity checks', () => {
     await vi.runAllTimersAsync();
     expect(test.shutdown).not.toHaveBeenCalled();
     expect(test.activity).toHaveBeenCalledTimes(2);
-    test.dispose();
+    await test.dispose?.();
   });
 
   it('rechecks an active lane and shuts down only after it becomes idle', async () => {
-    const test = fixture([
+    const test = await fixture([
       { hasPendingMessages: false, isIdle: true },
       { hasPendingMessages: false, isIdle: false },
       { hasPendingMessages: false, isIdle: true },
@@ -82,20 +97,20 @@ describe('headless auto-stop activity checks', () => {
     await vi.runAllTimersAsync();
     expect(test.shutdown).toHaveBeenCalledTimes(1);
     expect(test.activity).toHaveBeenCalledTimes(3);
-    test.dispose();
+    await test.dispose?.();
   });
 
   it('does not arm shutdown when work is already queued at settle', async () => {
-    const test = fixture([{ hasPendingMessages: true, isIdle: true }]);
+    const test = await fixture([{ hasPendingMessages: true, isIdle: true }]);
     await test.hook('agent_settled').handle({}, test.execution);
     await vi.runAllTimersAsync();
     expect(test.shutdown).not.toHaveBeenCalled();
     expect(test.activity).toHaveBeenCalledTimes(1);
-    test.dispose();
+    await test.dispose?.();
   });
 
   it('uses authoritative activity when the session tree changes during cooldown', async () => {
-    const idle = fixture([
+    const idle = await fixture([
       { hasPendingMessages: false, isIdle: true },
       { hasPendingMessages: false, isIdle: true },
     ]);
@@ -103,9 +118,9 @@ describe('headless auto-stop activity checks', () => {
     await idle.hook('session_tree').handle({}, idle.execution);
     expect(idle.shutdown).toHaveBeenCalledTimes(1);
     await idle.hook('agent_start').handle({}, idle.execution);
-    idle.dispose();
+    await idle.dispose?.();
 
-    const queued = fixture([
+    const queued = await fixture([
       { hasPendingMessages: false, isIdle: true },
       { hasPendingMessages: true, isIdle: false },
     ]);
@@ -113,9 +128,9 @@ describe('headless auto-stop activity checks', () => {
     await queued.hook('session_tree').handle({}, queued.execution);
     await vi.runAllTimersAsync();
     expect(queued.shutdown).not.toHaveBeenCalled();
-    queued.dispose();
+    await queued.dispose?.();
 
-    const active = fixture([
+    const active = await fixture([
       { hasPendingMessages: false, isIdle: true },
       { hasPendingMessages: false, isIdle: false },
     ]);
@@ -124,6 +139,6 @@ describe('headless auto-stop activity checks', () => {
     await active.hook('agent_start').handle({}, active.execution);
     await vi.runAllTimersAsync();
     expect(active.shutdown).not.toHaveBeenCalled();
-    active.dispose();
+    await active.dispose?.();
   });
 });

@@ -16,10 +16,10 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import type { SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
 import { type KeyboardEvent as ReactKeyboardEvent, useState } from 'react';
-import type { SubagentCatalogAgent } from '../../types/webSubagents.ts';
-import { abbreviateCwd } from '../lib/format.ts';
-import { launchCommand, type LaunchRequest, modelChoices } from '../lib/launchCommand.ts';
-import { requestLaunch } from '../stores/subagentsStore.ts';
+import type { SubagentCatalogAgent } from '../../types/webSubagents';
+import { abbreviateCwd } from '../lib/format';
+import { launchCommand, type LaunchRequest, modelChoices } from '../lib/launchCommand';
+import { requestLaunch } from '../stores/subagentsStore';
 
 /** The picker's stand-in for "no override"; a Radix item cannot carry an empty value. */
 const AGENT_DEFAULT = 'agent-default';

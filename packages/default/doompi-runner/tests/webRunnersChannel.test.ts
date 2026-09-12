@@ -1,7 +1,7 @@
 import type { DoomDirectEventBus, DoomHubChannelHost } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { describe, expect, it } from 'vitest';
-import { createRunnersChannel } from '../src/adapters/webRunnersChannel.ts';
-import type { RunnerRunView } from '../src/types/webRunners.ts';
+import { createRunnersChannel } from '../src/services/runnersChannel';
+import type { RunnerRunView } from '../src/types/webRunners';
 
 interface FakeHost extends DoomHubChannelHost {
   published: Array<{ sessionId: string; payload: unknown }>;

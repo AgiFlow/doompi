@@ -11,7 +11,7 @@ import {
   resolvePluginDirectories,
   resolvePluginEntries,
   resolveSharedSkills,
-} from '../src/exports/domains.ts';
+} from '../src/exports/domains';
 
 const AGENT_PLUGIN_SCHEMA = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json';
 

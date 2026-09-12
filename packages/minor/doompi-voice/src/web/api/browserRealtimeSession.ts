@@ -1,4 +1,4 @@
-import { REALTIME_LIMITS, type BrowserRealtimeOptions, type RealtimeBrowserState } from '../../types/realtime.ts';
+import { REALTIME_LIMITS, type BrowserRealtimeOptions, type RealtimeBrowserState } from '../../types/realtime';
 
 interface BrowserMediaTrack {
   readonly kind: string;

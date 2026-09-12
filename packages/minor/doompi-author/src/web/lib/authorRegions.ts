@@ -1,4 +1,4 @@
-import type { AuthorNormalizedRect } from './authorViewportTypes.ts';
+import type { AuthorNormalizedRect } from './authorViewportTypes';
 
 export interface AuthorClientRect {
   left: number;

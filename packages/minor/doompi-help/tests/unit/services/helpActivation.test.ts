@@ -1,7 +1,7 @@
 import type { DoomHelpContribution, DoomHelpSkill } from '@agimon-ai/doompi-extension-contracts/help';
 import { describe, expect, it, vi } from 'vitest';
-import { DefaultHelpActivationService, HelpActivationError } from '../../../src/services/helpActivation.ts';
-import type { HelpActivationDependencies, ResolvedHelpIndex } from '../../../src/types/help.ts';
+import { DefaultHelpActivationService, HelpActivationError } from '../../../src/services/helpActivation';
+import type { HelpActivationDependencies, ResolvedHelpIndex } from '../../../src/types/help';
 
 function contribution(source: string, name = `${source.split('/').at(-1)}-help`): DoomHelpContribution {
   return {

@@ -1,3 +1,4 @@
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +10,7 @@ import type {
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { domainHeadlessFacet } from '../../src/adapters/headless/facet.ts';
+import { domainServerFacet as domainHeadlessFacet } from '../../src/extensions/server';
 
 const roots: string[] = [];
 
@@ -18,7 +19,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
-function setup() {
+async function setup() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-domain-headless-'));
   roots.push(root);
   const home = path.join(root, 'home');
@@ -43,7 +44,10 @@ function setup() {
     },
     changeSelection,
   } as unknown as DoomHeadlessHostService;
-  const dispose = domainHeadlessFacet.apply({ get: () => host } as unknown as Context);
+  const dispose = await domainHeadlessFacet.apply({
+    effect() {},
+    get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? { scope: 'session' } : host),
+  } as unknown as Context);
   const execution: DoomHeadlessExecutionContext = {
     cwd: root,
     repoRoot: root,
@@ -66,7 +70,7 @@ function setup() {
 
 describe('headless domains command', () => {
   it('opens a typed toggle picker and applies the resulting domain set', async () => {
-    const { changeSelection, command, execution } = setup();
+    const { changeSelection, command, execution } = await setup();
     vi.mocked(execution.client.request).mockResolvedValue('[ ] web');
     await command.execute('', execution);
     expect(execution.client.request).toHaveBeenCalledExactlyOnceWith({
@@ -81,14 +85,14 @@ describe('headless domains command', () => {
   });
 
   it.each([undefined, false, ''])('does not transition when the picker is cancelled: %s', async (answer) => {
-    const { changeSelection, command, execution } = setup();
+    const { changeSelection, command, execution } = await setup();
     vi.mocked(execution.client.request).mockResolvedValue(answer);
     await command.execute('', execution);
     expect(changeSelection).not.toHaveBeenCalled();
   });
 
   it('validates requested and picker domain names before selecting', async () => {
-    const { changeSelection, command, execution } = setup();
+    const { changeSelection, command, execution } = await setup();
     await expect(command.execute('foreign', execution)).rejects.toThrow('Unknown domain: foreign');
     vi.mocked(execution.client.request).mockResolvedValue('[ ] foreign');
     await expect(command.execute('', execution)).rejects.toThrow('Unknown domain: foreign');
@@ -96,7 +100,7 @@ describe('headless domains command', () => {
   });
 
   it('skips an unchanged explicit selection and propagates selection failures', async () => {
-    const { changeSelection, command, execution } = setup();
+    const { changeSelection, command, execution } = await setup();
     await command.execute('default', execution);
     expect(changeSelection).not.toHaveBeenCalled();
     changeSelection.mockRejectedValueOnce(new Error('Selection was not applied'));
@@ -104,11 +108,11 @@ describe('headless domains command', () => {
   });
 
   it('projects domain metadata, reads its skill, and disposes every contribution', async () => {
-    const { resources, execution, dispose, disposed } = setup();
+    const { resources, execution, dispose, disposed } = await setup();
     const texts = await Promise.all(resources.map((resource) => Promise.resolve(resource.read(execution))));
     expect(JSON.parse(texts[0]!)).toEqual({ domains: ['default'] });
     expect(texts[1]).toContain('doompi-author-domain');
-    dispose();
+    await dispose?.();
     expect(disposed).toHaveBeenCalledTimes(3);
   });
 });

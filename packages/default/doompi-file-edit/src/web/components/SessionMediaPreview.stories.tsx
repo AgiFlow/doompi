@@ -7,7 +7,7 @@
  * a remote session file needs, so the story answers that fetch and shows the
  * three states it settles into.
  */
-import { SessionMediaPreview } from './SessionMediaPreview.tsx';
+import { SessionMediaPreview } from './SessionMediaPreview';
 
 const SVG = [
   '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" viewBox="0 0 240 120">',

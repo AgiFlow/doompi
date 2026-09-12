@@ -10,7 +10,7 @@ import {
   normalizeNarrationText,
   readDoomNarrationService,
   requireDoomNarrationService,
-} from '../src/schemas/narration.ts';
+} from '../src/schemas/narration';
 
 describe('Doom narration Cordis contract', () => {
   it('normalizes whitespace and control characters into a validated request', () => {

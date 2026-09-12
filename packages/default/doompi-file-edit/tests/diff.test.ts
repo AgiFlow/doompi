@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { GitDiffService, MAX_DIFF_LINES } from '../src/adapters/GitDiffService/GitDiffService.ts';
+import { GitDiffService, MAX_DIFF_LINES } from '../src/services/gitDiffService';
 
 let repository: string;
 const service = new GitDiffService();

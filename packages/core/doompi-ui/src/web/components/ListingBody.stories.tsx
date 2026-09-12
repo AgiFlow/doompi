@@ -6,7 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { ListingBody } from './ListingBody.tsx';
+import { ListingBody } from './ListingBody';
 
 /** Past the twenty-line collapsed budget, so the collapsed body reports what it hid. */
 const ENTRIES = Array.from({ length: 26 }, (_, index) => `src/web/components/Panel${String(index + 1)}.tsx`).join('\n');

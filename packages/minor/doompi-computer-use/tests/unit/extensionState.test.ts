@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { computerUseRestriction, modeState } from '../../src/adapters/pi/extension.ts';
-import type { ComputerUseSessionView } from '../../src/types/computerUseApi.ts';
+import { computerUseRestriction, modeState } from '../../src/models/computerUseMode';
+import type { ComputerUseSessionView } from '../../src/types/computerUseApi';
 
 function state(phase: ComputerUseSessionView['phase']): ComputerUseSessionView {
   return { sessionId: 'session-1', revision: 1, wake: 1, phase };

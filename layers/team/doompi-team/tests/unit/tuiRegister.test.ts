@@ -1,23 +1,24 @@
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import type { DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentConfig } from '../../src/adapters/agents/types';
+import type { AgentConfig } from '../../src/types/agent';
 import { SUBAGENT_CAPABILITY_CEILING_ENV } from '../../src/exports/env';
 import {
   createFleetActionDispatcher,
-  registerAgentListCommand,
-  registerAgentStatus,
-  registerFleetCommand,
+  createAgentListCommand,
+  createAgentStatus,
+  createFleetCommand,
   registerSubagentLeaderContribution,
   SUBAGENT_FLEET_COMMAND,
   SUBAGENT_LEADER_SOURCE,
   SUBAGENT_LIST_COMMAND,
-} from '../../src/adapters/pi/tui/register';
-import type { ManagementActionsContract } from '../../src/adapters/pi/extensions/managementActions';
-import { AGENT_PULSE_FRAMES, COST_STATUS_KEY, FLEET_STATUS_KEY } from '../../src/adapters/pi/tui/fleetStatus';
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/adapters/asyncJobTracker';
-import type { PollSchedulerContract, PollSubscription } from '../../src/adapters/pollScheduler';
+} from '../../src/tui/contributions';
+import type { ManagementActionsContract } from '../../src/services/managementActions';
+import { AGENT_PULSE_FRAMES, COST_STATUS_KEY, FLEET_STATUS_KEY } from '../../src/tui/fleetStatus';
+import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
+import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
 
 const {
   footerDispose,
@@ -47,9 +48,9 @@ const uiHub = {
   registerLeaderActions: vi.fn(),
 } as unknown as DoomUiHubService;
 
-vi.mock('../../src/adapters/agents/discovery', () => ({ resolveActiveTeamPackageConfig }));
+vi.mock('../../src/services/agentDiscovery', () => ({ resolveActiveTeamPackageConfig }));
 
-vi.mock('../../src/adapters/pi/tui/agentCatalog', () => ({ openAgentCatalog }));
+vi.mock('../../src/tui/agentCatalog', () => ({ openAgentCatalog }));
 
 class FakeScheduler implements PollSchedulerContract {
   subscriptions: PollSubscription[] = [];
@@ -139,11 +140,11 @@ describe('registerAgentListCommand', () => {
     });
     const registerCommand = vi.fn();
     const pi = { registerCommand } as never;
-    registerAgentListCommand(pi, {
+    createAgentListCommand({
       discovery: { discover } as never,
       skills: { resolveSkillsWithFallback, discoverAvailableSkills } as never,
       policies: { resolve } as never,
-    });
+    }).forEach(([name, options]) => (pi as ExtensionAPI).registerCommand(name, options));
     const handler = registerCommand.mock.calls[0][1].handler as (args: string, ctx: unknown) => Promise<void>;
     const ctx = { cwd: '/session/cwd' };
 
@@ -186,7 +187,7 @@ describe('registerAgentListCommand', () => {
     );
     const registerCommand = vi.fn();
     const pi = { registerCommand } as never;
-    registerAgentListCommand(pi, {
+    createAgentListCommand({
       discovery: { discover: vi.fn().mockReturnValue({ agents, warnings: [] }) } as never,
       skills: {
         resolveSkillsWithFallback,
@@ -201,7 +202,7 @@ describe('registerAgentListCommand', () => {
           sources: ['plan-mode'],
         }),
       } as never,
-    });
+    }).forEach(([name, options]) => (pi as ExtensionAPI).registerCommand(name, options));
     const handler = registerCommand.mock.calls[0][1].handler as (args: string, ctx: unknown) => Promise<void>;
     const ctx = { cwd: '/session/cwd' };
 
@@ -217,7 +218,7 @@ describe('registerAgentListCommand', () => {
   it('binds the catalog launcher to the handler-time context', async () => {
     const launchAgent = vi.fn();
     const registerCommand = vi.fn();
-    registerAgentListCommand({ registerCommand } as never, {
+    createAgentListCommand({
       discovery: { discover: vi.fn().mockReturnValue({ agents: [catalogAgent('worker')], warnings: [] }) } as never,
       skills: {
         resolveSkillsWithFallback: vi.fn().mockReturnValue({ resolved: [], missing: [] }),
@@ -233,7 +234,7 @@ describe('registerAgentListCommand', () => {
         }),
       } as never,
       launchAgent,
-    });
+    }).forEach(([name, options]) => registerCommand(name, options));
     const handler = registerCommand.mock.calls[0][1].handler as (args: string, ctx: unknown) => Promise<void>;
     const ctx = { cwd: '/session/cwd' };
 
@@ -249,14 +250,18 @@ describe('registerFleetCommand', () => {
   it('registers the fleet command under the same name the leader-space overlay (G10) will target', () => {
     const registerCommand = vi.fn();
     const pi = { registerCommand } as never;
-    registerFleetCommand(pi, { scheduler: new FakeScheduler(), tracker: new FakeTracker(), environment: {} });
+    createFleetCommand({ scheduler: new FakeScheduler(), tracker: new FakeTracker(), environment: {} }).forEach(
+      ([name, options]) => (pi as ExtensionAPI).registerCommand(name, options),
+    );
     expect(registerCommand).toHaveBeenCalledWith(SUBAGENT_FLEET_COMMAND, expect.any(Object));
   });
 
   it('does not replace the compact footer status while the overlay is open', async () => {
     const registerCommand = vi.fn();
     const pi = { registerCommand } as never;
-    registerFleetCommand(pi, { scheduler: new FakeScheduler(), tracker: new FakeTracker(), environment: {} });
+    createFleetCommand({ scheduler: new FakeScheduler(), tracker: new FakeTracker(), environment: {} }).forEach(
+      ([name, options]) => (pi as ExtensionAPI).registerCommand(name, options),
+    );
     const handler = registerCommand.mock.calls[0][1].handler as (args: string, ctx: unknown) => Promise<void>;
 
     const setStatus = vi.fn();
@@ -291,7 +296,7 @@ describe('registerAgentStatus', () => {
       ui: { setStatus },
     } as never;
 
-    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker, environment: {} });
+    const dispose = registerStatusForTest(pi, uiHub, { scheduler, tracker, environment: {} });
     handlers.get('session_start')?.({}, ctx);
     expect(setStatus).toHaveBeenLastCalledWith(FLEET_STATUS_KEY, 'Agents ○');
     expect(footerUpdate).toHaveBeenLastCalledWith({
@@ -332,7 +337,7 @@ describe('registerAgentStatus', () => {
       ui: { setStatus: vi.fn() },
     } as never;
 
-    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker, environment: {} });
+    const dispose = registerStatusForTest(pi, uiHub, { scheduler, tracker, environment: {} });
     handlers.get('session_start')?.({}, ctx);
     await scheduler.subscriptions[0]?.run();
     await scheduler.subscriptions[0]?.run();
@@ -362,7 +367,7 @@ describe('registerAgentStatus', () => {
     const publishedCosts = (): unknown[] =>
       setStatus.mock.calls.filter(([key]) => key === COST_STATUS_KEY).map(([, value]) => value);
 
-    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker, environment: {} });
+    const dispose = registerStatusForTest(pi, uiHub, { scheduler, tracker, environment: {} });
     handlers.get('session_start')?.({}, ctx);
     tracker.jobs = [{ runId: 'run-1', status: 'completed', cost: 0.57 }];
     await scheduler.subscriptions[0]?.run();
@@ -392,7 +397,7 @@ describe('registerAgentStatus', () => {
       ui: { setStatus },
     } as never;
 
-    const dispose = registerAgentStatus(pi, uiHub, { scheduler, tracker, environment: {} });
+    const dispose = registerStatusForTest(pi, uiHub, { scheduler, tracker, environment: {} });
     handlers.get('session_start')?.({}, ctx);
     await scheduler.subscriptions[0]?.run();
 
@@ -485,3 +490,9 @@ describe('registerSubagentLeaderContribution', () => {
     expect(unregister).toHaveBeenCalledOnce();
   });
 });
+
+function registerStatusForTest(pi: ExtensionAPI, ...args: Parameters<typeof createAgentStatus>): () => void {
+  const status = createAgentStatus(...args);
+  pi.on('session_start', (_event, context) => status.sessionStart(context));
+  return () => status.dispose();
+}

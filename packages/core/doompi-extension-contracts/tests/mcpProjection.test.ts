@@ -8,7 +8,7 @@ import {
   DoomMcpProjectionSchema,
   readDoomMcpProjectionService,
   requireDoomMcpProjectionService,
-} from '../src/schemas/mcpProjection.ts';
+} from '../src/schemas/mcpProjection';
 
 const enabledProjection = {
   version: 1 as const,

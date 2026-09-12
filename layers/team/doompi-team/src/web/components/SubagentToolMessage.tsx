@@ -7,8 +7,8 @@ import {
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { shapeResult, subagentCallDetail } from '../lib/toolText.ts';
-import { subagentsTab } from './SubagentsPanel.tsx';
+import { shapeResult, subagentCallDetail } from '../lib/toolText';
+import { subagentsTab } from './SubagentsPanel';
 
 const CLOSING = {
   running: { tone: 'running', text: 'running' },

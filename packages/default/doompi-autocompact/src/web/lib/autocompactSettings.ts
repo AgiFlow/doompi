@@ -1,5 +1,5 @@
 import type { SettingsSectionContribution } from '@agimon-ai/doompi-web-contracts';
-import { AUTOCOMPACT_CONFIG_SECTION_ID, AUTOCOMPACT_SETTING_SHAPES } from '../../types/autocompactSettings.ts';
+import { AUTOCOMPACT_CONFIG_SECTION_ID, AUTOCOMPACT_SETTING_SHAPES } from '../../types/autocompactSettings';
 
 /**
  * The autocompact settings, as the cockpit's settings page renders them.

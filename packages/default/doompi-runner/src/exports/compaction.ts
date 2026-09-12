@@ -1,1 +1,1 @@
-export * from '../services/runs/compaction';
+export * from '../services/compaction';

@@ -6,8 +6,8 @@
  * story at the type level instead of silently drifting.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { WorkflowCatalogEntryView } from '../../types/webWorkflows.ts';
-import { LaunchWorkflowDialog } from './LaunchWorkflowDialog.tsx';
+import type { WorkflowCatalogEntryView } from '../../types/webWorkflows';
+import { LaunchWorkflowDialog } from './LaunchWorkflowDialog';
 
 const SESSION_ID = 'workflow-launch';
 const CWD = '/Users/doom/workspace/doompi';

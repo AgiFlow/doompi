@@ -14,10 +14,10 @@ import {
   parsePackageName,
   pluginAgentDirs,
   splitToolList,
-} from '../../src/adapters/agents/loader';
-import { parseFrontmatter, parseFrontmatterList } from '../../src/adapters/agents/frontmatter';
-import type { AgentConfig } from '../../src/adapters/agents/types';
-import { getProjectConfigDir } from '../../src/adapters/filesystem/configDir';
+} from '../../src/services/agentLoader';
+import { parseFrontmatter, parseFrontmatterList } from '../../src/services/agentFrontmatter';
+import type { AgentConfig } from '../../src/types/agent';
+import { getProjectConfigDir } from '../../src/services/configDir';
 
 const temporaryDirs: string[] = [];
 

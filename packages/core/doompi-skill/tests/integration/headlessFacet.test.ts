@@ -9,7 +9,7 @@ import type {
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { skillHeadlessFacet } from '../../src/adapters/headless/facet.ts';
+import { skillServerFacet as skillHeadlessFacet } from '../../src/extensions/server';
 
 const temporaryDirectories: string[] = [];
 afterEach(async () => {
@@ -48,7 +48,10 @@ describe('skill headless facet', () => {
         return registration();
       },
     } as unknown as DoomHeadlessHostService;
-    const close = await skillHeadlessFacet.apply({ get: () => host } as unknown as Context);
+    const close = await skillHeadlessFacet.apply({
+      effect() {},
+      get: (name: string) => (name === 'doom/server-host' ? { scope: 'session' } : host),
+    } as unknown as Context);
     if (!command) throw new Error('Skill command was not registered');
     const notify = vi.fn();
     const prompt = vi.fn();
@@ -71,7 +74,7 @@ describe('skill headless facet', () => {
     await namedSkill.execute('extra context', execution);
     expect(prompt).toHaveBeenCalledWith(expect.stringContaining('extra context'));
 
-    close();
+    await close?.();
     expect(disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
   });
 });

@@ -1,46 +1,41 @@
-export { createHeadlessHub } from '../adapters/server/headlessHub.ts';
-export { serveHeadlessServer } from '../adapters/server/headlessServer.ts';
-export type {
-  HeadlessHub,
-  HeadlessHubEvent,
-  HeadlessHubOptions,
-  HeadlessHubSession,
-} from '../adapters/server/headlessHub.ts';
-export type { HeadlessServer, HeadlessServerOptions } from '../adapters/server/headlessServer.ts';
-export type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../types/server/headlessSessionHost.ts';
+export { createHeadlessHub } from '../controllers/headlessHub';
+export { serveHeadlessServer } from '../controllers/headlessServer';
+export type { HeadlessHub, HeadlessHubEvent, HeadlessHubOptions, HeadlessHubSession } from '../controllers/headlessHub';
+export type { HeadlessServer, HeadlessServerOptions } from '../controllers/headlessServer';
+export type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../types/server/headlessSessionHost';
 export type {
   HeadlessSessionManager,
   HeadlessSessionManagerCreateOptions,
-} from '../types/server/headlessSessionManager.ts';
+} from '../types/server/headlessSessionManager';
 export {
   createHeadlessChildSessionService,
   createHeadlessChildSessionServiceProvider,
-} from '../adapters/server/headlessChildSessionService.ts';
+} from '../controllers/headlessChildSessionService';
 export {
   captureTerminalPiForkSource,
   createTerminalPiChildSessionService,
   createTerminalPiChildSessionServiceProvider,
-} from '../adapters/pi/terminalPiChildSessionService.ts';
+} from '../controllers/terminalPiChildSessionService';
 export type {
   HeadlessChildSessionServiceOptions,
   HeadlessChildSessionServiceProvider,
-} from '../adapters/server/headlessChildSessionService.ts';
+} from '../controllers/headlessChildSessionService';
 export type {
   TerminalPiChildSessionServiceOptions,
   TerminalPiChildSessionServiceProvider,
   TerminalPiForkSourceManager,
-} from '../adapters/pi/terminalPiChildSessionService.ts';
+} from '../controllers/terminalPiChildSessionService';
 // The protocol surface, published so a client can compose the same session
 // server it dials rather than reimplementing the projection behind it.
-export { createAgentServerService, createAgentSessionRuntime } from '../adapters/server/piSessionRuntime.ts';
+export { createAgentServerService, createAgentSessionRuntime } from '../controllers/piSessionRuntime';
 export type {
   AgentServerServiceOptions,
   AgentSessionRuntime,
   AgentSessionRuntimeOptions,
   DoomSessionMetadata,
-} from '../adapters/server/piSessionRuntime.ts';
-export { createRpcTranscript } from '../services/server/rpcTranscript.ts';
-export type { RpcTranscript, RpcTranscriptOptions, TranscriptReduction } from '../services/server/rpcTranscript.ts';
-export { parseServeOptions, SERVE_USAGE } from '../services/server/serveOptions.ts';
-export type { ServeOptions } from '../services/server/serveOptions.ts';
-export type { SessionFrame } from '../types/server/session.ts';
+} from '../controllers/piSessionRuntime';
+export { createRpcTranscript } from '../services/rpcTranscript';
+export type { RpcTranscript, RpcTranscriptOptions, TranscriptReduction } from '../services/rpcTranscript';
+export { parseServeOptions, SERVE_USAGE } from '../services/serveOptions';
+export type { ServeOptions } from '../services/serveOptions';
+export type { SessionFrame } from '../types/server/session';

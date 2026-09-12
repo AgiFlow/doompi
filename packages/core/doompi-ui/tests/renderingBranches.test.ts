@@ -1,11 +1,11 @@
 import type { ExtensionContext, ReadonlyFooterDataProvider, Theme } from '@earendil-works/pi-coding-agent';
 import { visibleWidth, type TUI } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DoomFooter, type DoomFooterStatusView } from '../src/exports/components/doomFooter.ts';
-import { DoomHeader } from '../src/exports/components/doomHeader.ts';
-import { LeaderHints } from '../src/exports/components/leaderHints.ts';
-import { alignLine, fitLine, packSegments } from '../src/exports/rendering.ts';
-import { DoomUiState } from '../src/exports/uiState.ts';
+import { DoomFooter, type DoomFooterStatusView } from '../src/exports/doomFooter';
+import { DoomHeader } from '../src/exports/doomHeader';
+import { LeaderHints } from '../src/exports/leaderHints';
+import { alignLine, fitLine, packSegments } from '../src/exports/rendering';
+import { DoomUiState } from '../src/exports/uiState';
 
 const theme = {
   fg: (_color: string, text: string) => text,

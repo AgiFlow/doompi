@@ -5,8 +5,8 @@ import {
   multiRegionCaptureProvider,
   AUTHOR_CAPTURE_MAX_BYTES,
   AUTHOR_REGION_COLORS,
-} from '../../src/web/stores/authorCapture.ts';
-import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes.ts';
+} from '../../src/web/stores/authorCapture';
+import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
 
 function canvasFixture(blobs: (Blob | null)[] = [new Blob(['png'])]) {
   const context = {

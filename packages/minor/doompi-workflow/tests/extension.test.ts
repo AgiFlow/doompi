@@ -16,13 +16,13 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const TEST_ENVIRONMENT = Object.freeze({});
 import {
-  createDispatcherBridge,
+  dispatcherTools,
   dispatcherToolRestriction,
   isWorkflowDispatcherProcess,
   resolveDispatcherParentSession,
-  workflowExtension,
-} from '../src/adapters/pi/extension.ts';
-import { registerLeaderContribution, workflowLeaderBindings } from '../src/adapters/pi/leader.ts';
+} from '../src/services/workflowFence';
+import { workflowExtension } from '../src/extensions/pi';
+import { registerLeaderContribution, workflowLeaderBindings } from '../src/tui/leader';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -75,17 +75,15 @@ describe('doom workflow extension', () => {
     expect(help.listContributions()).toEqual([
       expect.objectContaining({
         source: '@agimon-ai/doompi-workflow',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-author-workflow',
-            description:
-              'Author DoomPi workflow definitions. Use when creating or changing a *.workflow.yml graph, arranging job dependencies and host-executed steps, or deciding how a command requiring a TTY should run.',
+            description: 'Author DoomPi workflow definitions, job dependencies and host-executed steps.',
           },
           {
             name: 'doompi-use-workflow',
-            description:
-              'Use DoomPi workflows. Use when discovering or launching workflows, monitoring or controlling asynchronous runs, interpreting terminal notifications, or recovering a failed run safely.',
+            description: 'Discover, launch, monitor, control and recover DoomPi workflow runs.',
           },
         ],
       }),
@@ -158,100 +156,47 @@ describe('workflow dispatcher bridge', () => {
     expect(isWorkflowDispatcherProcess({ [SUBAGENT_PARENT_SESSION_ENV]: 'legacy-session' })).toBe(false);
   });
 
-  it('passes through tools when no parent session is available', () => {
-    const registerTool = vi.fn();
-    const pi = { registerTool } as unknown as ExtensionAPI;
+  it('keeps eligible tool identity when no parent session is available', () => {
     const tool = { name: 'list_workflows' } as Parameters<ExtensionAPI['registerTool']>[0];
-
-    const bridge = createDispatcherBridge(pi, undefined, TEST_ENVIRONMENT);
-    bridge.registerTool(tool);
-
-    expect((bridge as unknown as { events?: unknown }).events).toBeUndefined();
-    expect(registerTool).toHaveBeenCalledWith(tool);
+    expect(dispatcherTools([tool], undefined, TEST_ENVIRONMENT)).toEqual([tool]);
+    expect(dispatcherTools([tool], 'parent-session', TEST_ENVIRONMENT)[0]).toBe(tool);
   });
 
-  it('does not wrap non-run tools for a parent session', () => {
-    const registerTool = vi.fn();
-    const pi = { registerTool } as unknown as ExtensionAPI;
-    const tool = { name: 'list_workflows' } as Parameters<ExtensionAPI['registerTool']>[0];
-
-    createDispatcherBridge(pi, 'parent-session', TEST_ENVIRONMENT).registerTool(tool);
-
-    expect(registerTool).toHaveBeenCalledWith(tool);
-  });
-
-  it('reads non-function context properties through the parent proxy', async () => {
-    let registered: Parameters<ExtensionAPI['registerTool']>[0] | undefined;
-    const pi = {
-      registerTool: vi.fn((tool) => {
-        registered = tool;
-      }),
-    } as unknown as ExtensionAPI;
-    const bridge = createDispatcherBridge(pi, 'parent-session', TEST_ENVIRONMENT);
-    bridge.registerTool({
-      name: 'launch_workflow',
-      label: 'Launch',
-      description: 'Launch',
-      parameters: { type: 'object' },
-      execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => ({
-        content: [{ type: 'text', text: `${ctx.sessionManager.getSessionId()}:${String(ctx.cwd)}` }],
-        details: undefined,
-      }),
-    });
-
+  it.each([
+    ['parent-session', TEST_ENVIRONMENT],
+    ['root-session', { [SUBAGENT_ROOT_SESSION_ENV]: 'root-session' }],
+  ])('attributes launch calls to %s and preserves context properties', async (expected, environment) => {
+    const [registered] = dispatcherTools(
+      [
+        {
+          name: 'launch_workflow',
+          label: 'Launch',
+          description: 'Launch',
+          parameters: { type: 'object' },
+          execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => ({
+            content: [{ type: 'text', text: `${ctx.sessionManager.getSessionId()}:${String(ctx.cwd)}` }],
+            details: undefined,
+          }),
+        },
+      ],
+      'parent-session',
+      environment,
+    );
     const result = await registered?.execute('call', {}, undefined, undefined, {
       cwd: '/child',
       sessionManager: { getSessionId: () => 'child-session' },
     } as never);
-
-    expect(result?.content[0]).toEqual({ type: 'text', text: 'parent-session:/child' });
+    expect(result?.content[0]).toEqual({ type: 'text', text: `${expected}:/child` });
   });
 
-  it('attributes launch_workflow calls to the root session', async () => {
-    let registered: Parameters<ExtensionAPI['registerTool']>[0] | undefined;
-    const pi = {
-      registerTool: vi.fn((tool) => {
-        registered = tool;
-      }),
-    } as unknown as ExtensionAPI;
-    const bridge = createDispatcherBridge(
-      pi,
-      'parent-session',
-      Object.freeze({
-        [SUBAGENT_ROOT_SESSION_ENV]: 'root-session',
-      }),
+  it('keeps dispatcher tools limited to discovery and launch', () => {
+    const tools = ['list_workflows', 'launch_workflow', 'workflow_run'].map(
+      (name) => ({ name }) as Parameters<ExtensionAPI['registerTool']>[0],
     );
-    bridge.registerTool({
-      name: 'launch_workflow',
-      label: 'Workflow',
-      description: 'Workflow',
-      parameters: { type: 'object' },
-      execute: async (_toolCallId, _params, _signal, _onUpdate, ctx) => ({
-        content: [{ type: 'text', text: ctx.sessionManager.getSessionId() }],
-        details: undefined,
-      }),
-    });
-
-    const result = await registered?.execute('call', {}, undefined, undefined, {
-      sessionManager: { getSessionId: () => 'child-session' },
-    } as never);
-
-    expect(result?.content[0]).toEqual({ type: 'text', text: 'root-session' });
-  });
-
-  it('keeps dispatcher tools limited to list_workflows and launch_workflow', () => {
-    const registerTool = vi.fn();
-    const bridge = createDispatcherBridge(
-      { registerTool } as unknown as ExtensionAPI,
-      'parent-session',
-      TEST_ENVIRONMENT,
-    );
-
-    bridge.registerTool({ name: 'list_workflows' } as Parameters<ExtensionAPI['registerTool']>[0]);
-    bridge.registerTool({ name: 'launch_workflow' } as Parameters<ExtensionAPI['registerTool']>[0]);
-    bridge.registerTool({ name: 'workflow_run' } as Parameters<ExtensionAPI['registerTool']>[0]);
-
-    expect(registerTool.mock.calls.map(([tool]) => tool.name)).toEqual(['list_workflows', 'launch_workflow']);
+    expect(dispatcherTools(tools, 'parent-session', TEST_ENVIRONMENT).map(({ name }) => name)).toEqual([
+      'list_workflows',
+      'launch_workflow',
+    ]);
   });
 
   // The bridge drops the registration, and this drops the name: a dispatcher

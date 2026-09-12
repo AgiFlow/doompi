@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis';
-import type { DoomConfigContributionHandle, DoomConfigContributionOptions, DoomExtensionContext } from './config.ts';
-import type { DoomFooterContributionDefinition, DoomFooterContributionHandle } from './footer.ts';
-import type { DoomLeaderActionHandlerOptions, DoomLeaderContributionHandle, LeaderContribution } from './leader.ts';
+import type { DoomConfigContributionHandle, DoomConfigContributionOptions, DoomExtensionContext } from './config';
+import type { DoomFooterContributionDefinition, DoomFooterContributionHandle } from './footer';
+import type { DoomLeaderActionHandlerOptions, DoomLeaderContributionHandle, LeaderContribution } from './leader';
 
 /** The application-scoped UI aggregation service owned by doompi-ui. */
 export const DOOM_UI_HUB_SERVICE = 'doom/ui-hub';

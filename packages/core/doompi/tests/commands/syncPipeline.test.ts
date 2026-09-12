@@ -11,21 +11,21 @@ const mocks = vi.hoisted(() => ({
   syncOptions: vi.fn(),
 }));
 
-vi.mock('../../src/adapters/layerPackageInstaller.ts', () => ({
+vi.mock('../../src/services/layerPackageInstaller', () => ({
   ensureLayerPackages: mocks.ensureLayerPackages,
 }));
 
-vi.mock('../../src/adapters/syncDrift.ts', () => ({
+vi.mock('../../src/services/syncDrift', () => ({
   readSyncDrift: mocks.readSyncDrift,
 }));
 
-vi.mock('../../src/commands/buildCommand.ts', () => ({
+vi.mock('../../src/controllers/buildCommand', () => ({
   BuildCommand: class {
     execute = mocks.buildExecute;
   },
 }));
 
-vi.mock('../../src/commands/syncCommand.ts', () => ({
+vi.mock('../../src/controllers/syncCommand', () => ({
   SyncCommand: class {
     execute = mocks.syncExecute;
 
@@ -35,7 +35,7 @@ vi.mock('../../src/commands/syncCommand.ts', () => ({
   },
 }));
 
-import { SyncPipeline } from '../../src/commands/syncPipeline.ts';
+import { SyncPipeline } from '../../src/controllers/syncPipeline';
 
 const environment = { DOOMPI_ROOT: '/repo' };
 const output = { write: vi.fn((_chunk: string) => true) };

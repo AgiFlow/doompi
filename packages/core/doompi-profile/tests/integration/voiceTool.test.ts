@@ -1,11 +1,11 @@
 import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
-import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-extension-contracts/voice-reload-handoff';
-import { createDoomVoiceToolsService } from '@agimon-ai/doompi-extension-contracts/voice-tools';
+import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
+import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerProfileVoiceCapability, type ProfileVoiceView } from '../../src/adapters/pi/voiceTool.ts';
-import { bindStubCoordinator } from '../helpers/coordinator.ts';
+import { registerProfileVoiceCapability, type ProfileVoiceView } from '../../src/controllers/voiceTool';
+import { bindStubCoordinator } from '../helpers/coordinator';
 
 const SESSION_ID = 'profile-voice-session';
 

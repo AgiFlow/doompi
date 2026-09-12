@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePcm16, summarizePcm16 } from '../src/services/transcriptionCoordinator.ts';
+import { normalizePcm16, summarizePcm16 } from '../src/services/transcriptionCoordinator';
 
 describe('PCM transcription normalization', () => {
   it('summarizes and amplifies quiet signed samples without clipping', () => {

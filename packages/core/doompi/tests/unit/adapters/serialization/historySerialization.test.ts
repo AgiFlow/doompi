@@ -7,10 +7,10 @@ import {
   restoreProtectedHistory,
   type HistoryStagingImportInput,
   type HistoryOwnership,
-} from '../../../../src/adapters/serialization/historyImport';
-import { exportV4ToV3 } from '../../../../src/adapters/serialization/v3Export';
+} from '../../../../src/services/historyImport';
+import { exportV4ToV3 } from '../../../../src/services/v3Export';
 
-import { importV3WithPinnedUpstream } from '../../../../src/adapters/serialization/jsonlSessionRepo';
+import { importV3WithPinnedUpstream } from '../../../../src/services/jsonlSessionRepo';
 
 function owner(): HistoryOwnership {
   let held = false;

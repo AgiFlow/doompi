@@ -14,7 +14,7 @@ import {
   getMessageActivity,
   getMessageUsageCost,
   getMessageUsageTokens,
-} from '../../src/adapters/process/childTranscript';
+} from '../../src/services/childTranscript';
 
 const temporaryDirs: string[] = [];
 

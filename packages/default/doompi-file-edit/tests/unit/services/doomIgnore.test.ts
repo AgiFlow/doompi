@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createDoomIgnoreMatcher, filterDoomIgnoredFiles } from '../../../src/services/doomIgnore.ts';
-import type { FilesItemView } from '../../../src/types/webFiles.ts';
+import { createDoomIgnoreMatcher, filterDoomIgnoredFiles } from '../../../src/services/doomIgnore';
+import type { FilesItemView } from '../../../src/types/webFiles';
 
 function item(relPath: string): FilesItemView {
   return { path: `/work/${relPath}`, relPath, tool: 'edit', at: 1, count: 1, diffable: true };

@@ -1,3 +1,4 @@
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
@@ -5,9 +6,9 @@ import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
-import { sandboxHeadlessFacet } from '../../../src/adapters/headless/facet.ts';
+import { sandboxServerFacet as sandboxHeadlessFacet } from '../../../src/extensions/server';
 
 function fixture(environment: Readonly<Record<string, string | undefined>> = {}) {
   const client = {
@@ -58,16 +59,24 @@ function fixture(environment: Readonly<Record<string, string | undefined>> = {})
     registerTool: vi.fn(),
     registerHook: vi.fn(),
   };
-  const context = {
-    get: (key: string) => (key === DOOM_HEADLESS_HOST_SERVICE ? host : undefined),
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session', context: {} });
   return { activities, client, commands, context, disposers, execution, resources };
 }
 
 describe('sandbox headless facet', () => {
+  it('mounts without optional agent services', async () => {
+    const context = new Context();
+    context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session', context: {} });
+    const dispose = await sandboxHeadlessFacet.apply(context);
+    await dispose?.();
+    await context.fiber.dispose();
+  });
+
   it('defers the optional broker and registers the live status command and resources', async () => {
     const test = fixture({ DOOMPI_SANDBOX_BROKER: '0' });
-    const dispose = sandboxHeadlessFacet.apply(test.context);
+    const dispose = await sandboxHeadlessFacet.apply(test.context);
 
     expect(test.resources.map((resource) => resource.name)).toEqual([
       'doompi-sandbox',
@@ -83,15 +92,15 @@ describe('sandbox headless facet', () => {
     await test.commands[0]!.execute('', test.execution);
     expect(test.client.notify).toHaveBeenCalledOnce();
 
-    dispose?.();
+    await dispose?.();
     expect(test.disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
   });
 
   it('uses each session environment for sandbox state', async () => {
     const sandboxed = fixture({ DOOMPI_SANDBOX: '1', DOOMPI_SANDBOX_BROKER: '0' });
     const host = fixture({ DOOMPI_SANDBOX: undefined, DOOMPI_SANDBOX_BROKER: '0' });
-    const sandboxedDispose = sandboxHeadlessFacet.apply(sandboxed.context);
-    const hostDispose = sandboxHeadlessFacet.apply(host.context);
+    const sandboxedDispose = await sandboxHeadlessFacet.apply(sandboxed.context);
+    const hostDispose = await sandboxHeadlessFacet.apply(host.context);
 
     await sandboxed.commands[0]!.execute('', sandboxed.execution);
     await host.commands[0]!.execute('', host.execution);
@@ -105,7 +114,7 @@ describe('sandbox headless facet', () => {
       level: 'info',
     });
 
-    sandboxedDispose?.();
-    hostDispose?.();
+    await sandboxedDispose?.();
+    await hostDispose?.();
   });
 });

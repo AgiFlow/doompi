@@ -16,9 +16,9 @@ import {
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
-import type { WebTask } from '../../types/webTasks.ts';
-import { TaskDetailDialog, type TaskDialogMode } from './TaskDetailDialog.tsx';
-import { requestTaskRemoval, tasks } from '../stores/tasksStore.ts';
+import type { WebTask } from '../../types/webTasks';
+import { TaskDetailDialog, type TaskDialogMode } from './TaskDetailDialog';
+import { requestTaskRemoval, tasks } from '../stores/tasksStore';
 
 const STATUS_TONE: Readonly<Record<WebTask['status'], DotTone>> = {
   pending: 'muted',

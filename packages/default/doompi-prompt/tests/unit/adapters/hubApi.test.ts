@@ -2,9 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { api, createPromptHubApi } from '../../../src/adapters/hubApi.ts';
-import type { SavedPrompt, SavedPromptStore } from '../../../src/types/prompt.ts';
-import { promptsUrl, promptUrl } from '../../../src/types/webPrompts.ts';
+import { api, createPromptHubApi } from '../../../src/controllers/promptsApi';
+import type { SavedPrompt, SavedPromptStore } from '../../../src/types/prompt';
+import { promptsUrl, promptUrl } from '../../../src/types/webPrompts';
 
 /** The hub mounts the app under /api/global/plugin/prompts and strips that prefix. */
 function mounted(path: string): string {

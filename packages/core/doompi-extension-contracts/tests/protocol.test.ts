@@ -7,14 +7,10 @@ import {
   readChildProcessContext,
   resolveRootSessionId,
   SUBAGENT_ROOT_SESSION_ENV,
-} from '../src/schemas/childProcess.ts';
-import {
-  DelegationAcceptedSchema,
-  DelegationRequestSchema,
-  DelegationResultSchema,
-} from '../src/schemas/delegation.ts';
-import { FooterStatusItemSchema } from '../src/schemas/footer.ts';
-import { LeaderBindingSchema, LeaderSourceSchema } from '../src/schemas/leader.ts';
+} from '../src/schemas/childProcess';
+import { DelegationAcceptedSchema, DelegationRequestSchema, DelegationResultSchema } from '../src/schemas/delegation';
+import { FooterStatusItemSchema } from '../src/schemas/footer';
+import { LeaderBindingSchema, LeaderSourceSchema } from '../src/schemas/leader';
 import {
   createProtocolRuntime,
   DoomProtocolError,
@@ -22,7 +18,7 @@ import {
   defineNotification,
   defineRequestReply,
   type EventBusLike,
-} from '../src/exports/protocol.ts';
+} from '../src/exports/protocol';
 
 class TestBus implements EventBusLike {
   private readonly handlers = new Map<string, Set<(data: unknown) => void>>();

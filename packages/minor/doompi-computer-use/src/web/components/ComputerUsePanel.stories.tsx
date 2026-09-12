@@ -9,9 +9,9 @@
  * to serve it, and an empty <video> box says less than the rest of the card.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { ComputerUsePanel } from './ComputerUsePanel.tsx';
-import type { ComputerUseChannelPayload } from '../../types/computerUseApi.ts';
-import { computerUse } from '../stores/computerUseStore.ts';
+import { ComputerUsePanel } from './ComputerUsePanel';
+import type { ComputerUseChannelPayload } from '../../types/computerUseApi';
+import { computerUse } from '../stores/computerUseStore';
 
 const TARGETS = [
   { windowId: 'w-1', applicationName: 'Reports', windowTitle: 'Reports — Acme' },

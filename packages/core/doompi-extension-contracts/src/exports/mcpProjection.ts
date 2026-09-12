@@ -8,7 +8,7 @@ export type {
   DoomMcpProjectionServiceInput,
   DoomMcpProjectionSource,
   DoomMcpProjectionSourceFormat,
-} from '../schemas/mcpProjection.ts';
+} from '../schemas/mcpProjection';
 export {
   AGENT_PLUGIN_MCP_SCHEMA_URL,
   createDisabledDoomMcpProjection,
@@ -23,4 +23,4 @@ export {
   isDoomMcpProjection,
   readDoomMcpProjectionService,
   requireDoomMcpProjectionService,
-} from '../schemas/mcpProjection.ts';
+} from '../schemas/mcpProjection';

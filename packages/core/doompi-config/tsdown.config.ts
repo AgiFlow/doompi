@@ -1,7 +1,27 @@
 import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-  entry: { '*': 'src/exports/**/*.ts' },
+  entry: {
+    agentPluginMcp: 'src/exports/agentPluginMcp.ts',
+    atomicJson: 'src/exports/atomicJson.ts',
+    config: 'src/exports/config.ts',
+    configSchema: 'src/exports/configSchema.ts',
+    configWriter: 'src/exports/configWriter.ts',
+    domains: 'src/exports/domains.ts',
+    harnessState: 'src/exports/harnessState.ts',
+    harnessStore: 'src/exports/harnessStore.ts',
+    index: 'src/exports/index.ts',
+    init: 'src/exports/init.ts',
+    layeredConfig: 'src/exports/layeredConfig.ts',
+    majorModes: 'src/exports/majorModes.ts',
+    piConfig: 'src/exports/piConfig.ts',
+    piContext: 'src/exports/piContext.ts',
+    profiles: 'src/exports/profiles.ts',
+    selectionSwitch: 'src/exports/selectionSwitch.ts',
+    types: 'src/exports/types.ts',
+    'extensions/pi': 'src/extensions/pi.ts',
+    'extensions/server': 'src/extensions/server.ts',
+  },
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },
   exports: false,

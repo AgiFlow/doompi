@@ -130,24 +130,22 @@ describe('Doom package convention rules', () => {
 
   it('checks only manifest-declared Pi entry modules for thinness', () => {
     writeManifest({ pi: { extensions: ['./dist/extensions/pi.mjs'] } });
-    const entry = write('src/exports/extensions/pi.ts', 'export class RuntimeState {}');
+    const entry = write('src/extensions/pi.ts', 'export class RuntimeState {}');
     const helper = write('src/services/helper.ts', 'export class Helper {}');
 
     expect(thinPiAdapter.check?.(entry, root, boundaryContext())).toContain('too broad');
     fs.writeFileSync(entry, 'export function activate(): void {}', 'utf8');
     expect(thinPiAdapter.check?.(entry, root, boundaryContext())).toBeNull();
     expect(thinPiAdapter.check?.(helper, root, boundaryContext())).toBeNull();
-    expect(
-      thinPiAdapter.check?.(path.join(root, 'src/exports/extensions/missing.ts'), root, boundaryContext()),
-    ).toBeNull();
+    expect(thinPiAdapter.check?.(path.join(root, 'src/extensions/missing.ts'), root, boundaryContext())).toBeNull();
   });
 
   it('rejects oversized or tool-owning Pi entries', () => {
     writeManifest({ pi: { extensions: ['./dist/extensions/pi.mjs'] } });
-    const oversized = write('src/exports/extensions/pi.ts', Array.from({ length: 81 }, () => '// line').join('\n'));
+    const oversized = write('src/extensions/pi.ts', Array.from({ length: 81 }, () => '// line').join('\n'));
     expect(thinPiAdapter.check?.(oversized, root, boundaryContext())).toContain('too broad');
 
-    const toolOwning = write('src/exports/extensions/pi.ts', 'pi.registerTool({ name: "run" });');
+    const toolOwning = write('src/extensions/pi.ts', 'pi.registerTool({ name: "run" });');
     expect(thinPiAdapter.check?.(toolOwning, root, boundaryContext())).toContain('too broad');
   });
 
@@ -174,7 +172,7 @@ describe('Doom package convention rules', () => {
       ].join('\n'),
     );
     const host = write(
-      'src/adapters/pi/cordisHost.ts',
+      'src/controllers/cordisHost.ts',
       [
         `export const DOOM_CORDIS_HOST_QUERY_CHANNEL = 'doom:cordis:host:v1:query';`,
         `pi.events.on(DOOM_CORDIS_HOST_QUERY_CHANNEL, handler);`,
@@ -212,8 +210,8 @@ describe('Doom package convention rules', () => {
 
   it('recognizes only the core-owned direct AgentHarness event boundary', () => {
     writeManifest({ name: '@agimon-ai/doompi' });
-    const native = write('src/adapters/server/directHarnessRuntime.ts', "harness.events.on('run_start', handler);");
-    const wrongPath = write('src/adapters/server/runtime.ts', "harness.events.on('run_start', handler);");
+    const native = write('src/controllers/directHarnessRuntime.ts', "harness.events.on('run_start', handler);");
+    const wrongPath = write('src/controllers/runtime.ts', "harness.events.on('run_start', handler);");
 
     expect(noRawPiEvents.check?.(native, root, boundaryContext())).toBeNull();
     expect(noRawPiEvents.check?.(wrongPath, root, boundaryContext())).toContain('Raw Pi EventBus access');
@@ -229,7 +227,7 @@ describe('Doom package convention rules', () => {
   it('rejects same-runner protocol runtimes and legacy host/client helpers while preserving types and schemas', () => {
     writeManifest({ name: '@agimon-ai/doompi-ui' });
     const runtime = write(
-      'src/adapters/pi/runtime.ts',
+      'src/controllers/runtime.ts',
       [
         `import { createProtocolRuntime as createRuntime } from '@agimon-ai/doompi-extension-contracts/protocol';`,
         `import { DoomFooterStatusRegistry } from '@agimon-ai/doompi-extension-contracts/footer';`,
@@ -246,18 +244,18 @@ describe('Doom package convention rules', () => {
       `import { createDoomLeaderContribution } from '@agimon-ai/doompi-extension-contracts/leader';`,
     );
     const reexportedLegacyHelper = write(
-      'src/adapters/pi/leader.ts',
+      'src/controllers/leader.ts',
       `import { registerDoomLeaderContribution } from '@agimon-ai/doompi-ui/leader';`,
     );
     const namespaceLegacyHelper = write(
-      'src/adapters/pi/narration.ts',
+      'src/controllers/narration.ts',
       [
         `import * as narration from '@agimon-ai/doompi-extension-contracts/narration';`,
         `narration?.createNarrationRequester(options);`,
       ].join('\n'),
     );
     const defaultProtocolRuntime = write(
-      'src/adapters/pi/defaultRuntime.ts',
+      'src/controllers/defaultRuntime.ts',
       `import runtime from '@agimon-ai/doompi-extension-contracts/protocol';`,
     );
     const legacyReexport = write(
@@ -265,7 +263,7 @@ describe('Doom package convention rules', () => {
       `export { registerDoomHelpContribution } from '@agimon-ai/doompi-extension-contracts/help';`,
     );
     const cordisCatalog = write(
-      'src/adapters/pi/catalog.ts',
+      'src/controllers/catalog.ts',
       [
         `import { createMinorModeCatalogClient } from '@agimon-ai/doompi-extension-contracts/mode-client';`,
         `import { registerMinorModeOwner } from '@agimon-ai/doompi-extension-contracts/mode-owner';`,
@@ -274,7 +272,7 @@ describe('Doom package convention rules', () => {
       ].join('\n'),
     );
     const futureProtocolRuntime = write(
-      'src/adapters/pi/futureRuntime.ts',
+      'src/controllers/futureRuntime.ts',
       `import { createFutureTransport } from '@agimon-ai/doompi-extension-contracts/protocol';`,
     );
 
@@ -352,9 +350,9 @@ const mounts = { global: {} }; export const selected = mounts.global;`,
       `const key = Symbol.for('doom/live');\nconst root = globalThis as Record<PropertyKey, unknown>;\nroot[key] = new globalThis.AudioContext();`,
     );
     expect(noLiveGlobalRegistry.check?.(browserGlobal, root, boundaryContext())).toBeNull();
-    writeManifest({ name: '@agimon-ai/doompi-extension-contracts' });
+    writeManifest({ name: '@agimon-ai/doompi-voice' });
     const voiceReloadHandoff = write(
-      'src/schemas/voiceReloadHandoff.ts',
+      'src/services/voiceReloadHandoff/index.ts',
       [
         `const VOICE_RELOAD_HANDOFF_TTL_MS = 30_000;`,
         `const key = Symbol.for('doom/voice/reload');`,
@@ -364,7 +362,7 @@ const mounts = { global: {} }; export const selected = mounts.global;`,
       ].join('\n'),
     );
     const liveVoiceRegistry = write(
-      'src/schemas/voiceTools.ts',
+      'src/services/voiceTools/index.ts',
       `const key = Symbol.for('doom/voice/live');\nconst state = globalThis as Record<PropertyKey, unknown>;`,
     );
     expect(noLiveGlobalRegistry.check?.(voiceReloadHandoff, root, boundaryContext())).toBeNull();
@@ -374,7 +372,7 @@ const mounts = { global: {} }; export const selected = mounts.global;`,
 
     writeManifest({ name: '@agimon-ai/doompi-domain' });
     const reloadHandoff = write(
-      'src/adapters/domainSwitchHandoff.ts',
+      'src/models/domainSwitchHandoff.ts',
       [
         `const DOMAIN_SWITCH_HANDOFF_TTL_MS = 30_000;`,
         `const key = Symbol.for('doom/reload');`,
@@ -387,7 +385,7 @@ const mounts = { global: {} }; export const selected = mounts.global;`,
 
     writeManifest({ name: '@agimon-ai/doompi' });
     const bootstrap = write(
-      'src/adapters/bootstrapClaim.ts',
+      'src/models/bootstrapClaim.ts',
       [
         `const key = Symbol.for('doom/bootstrap');`,
         `const claim = Symbol();`,
@@ -444,7 +442,7 @@ const mounts = { global: {} }; export const selected = mounts.global;`,
   it('recognizes retained direct-harness subscriptions disposed by the native runtime', () => {
     writeManifest({ name: '@agimon-ai/doompi' });
     const native = write(
-      'src/adapters/server/directHarnessRuntime.ts',
+      'src/controllers/directHarnessRuntime.ts',
       [
         'const unsubscribe = EVENT_TYPES.map((type) => harness.events.on(type, handler));',
         'const dispose = async (): Promise<void> => {',
@@ -504,8 +502,8 @@ const mounts = { global: {} }; export const selected = mounts.global;`,
 
   it('allows the contracts package arbiter and its fake host to drive the setter', () => {
     writeManifest({ name: '@agimon-ai/doompi-extension-contracts' });
-    const arbiter = write('src/services/toolSurface.ts', 'options.setActiveTools(next);');
-    const fakeHost = write('src/adapters/testing/piHost.ts', 'host.setActiveTools(names);');
+    const arbiter = write('src/services/toolSurface/index.ts', 'options.setActiveTools(next);');
+    const fakeHost = write('src/controllers/piTestHost.ts', 'host.setActiveTools(names);');
     const other = write('src/services/other.ts', 'pi.setActiveTools(names);');
 
     expect(noDirectToolActivation.check?.(arbiter, root, boundaryContext())).toBeNull();
@@ -515,8 +513,8 @@ const mounts = { global: {} }; export const selected = mounts.global;`,
 
   it('allows only the direct harness lane to set tools in the native host runtime', () => {
     writeManifest({ name: '@agimon-ai/doompi' });
-    const native = write('src/adapters/server/directHarnessRuntime.ts', 'lane.setActiveTools(names);');
-    const wrongPath = write('src/adapters/server/toolRuntime.ts', 'lane.setActiveTools(names);');
+    const native = write('src/controllers/directHarnessRuntime.ts', 'lane.setActiveTools(names);');
+    const wrongPath = write('src/controllers/toolRuntime.ts', 'lane.setActiveTools(names);');
 
     expect(noDirectToolActivation.check?.(native, root, boundaryContext())).toBeNull();
     expect(noDirectToolActivation.check?.(wrongPath, root, boundaryContext())).toContain('setActiveTools');

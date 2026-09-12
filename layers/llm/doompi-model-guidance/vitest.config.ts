@@ -49,6 +49,10 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: '@agimon-ai/doompi-extension-contracts/pi-extension',
+        replacement: `${doomExtensionContractsExports}piExtension.ts`,
+      },
+      {
         find: '@agimon-ai/doompi-extension-contracts/cordis-host',
         replacement: `${doomExtensionContractsExports}cordisHost.ts`,
       },

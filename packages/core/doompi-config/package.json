@@ -1,7 +1,7 @@
 {
   "name": "@agimon-ai/doompi-config",
   "version": "0.0.1-alpha.68",
-  "description": "Typed configuration loading, validation, and host adapters for composing DoomPi sessions.",
+  "description": "Typed configuration loading, validation, and host services for composing DoomPi sessions.",
   "keywords": [
     "agent-configuration",
     "ai",
@@ -56,16 +56,6 @@
       "types": "./dist/config.d.mts",
       "import": "./dist/config.mjs",
       "require": "./dist/config.cjs"
-    },
-    "./config/schema": {
-      "types": "./dist/config/schema.d.mts",
-      "import": "./dist/config/schema.mjs",
-      "require": "./dist/config/schema.cjs"
-    },
-    "./config/piConfig": {
-      "types": "./dist/config/piConfig.d.mts",
-      "import": "./dist/config/piConfig.mjs",
-      "require": "./dist/config/piConfig.cjs"
     },
     "./configWriter": {
       "types": "./dist/configWriter.d.mts",
@@ -132,7 +122,17 @@
       "import": "./dist/types.mjs",
       "require": "./dist/types.cjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./pi-config": {
+      "types": "./dist/piConfig.d.mts",
+      "import": "./dist/piConfig.mjs",
+      "require": "./dist/piConfig.cjs"
+    },
+    "./config-schema": {
+      "types": "./dist/configSchema.d.mts",
+      "import": "./dist/configSchema.mjs",
+      "require": "./dist/configSchema.cjs"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -166,7 +166,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "global",

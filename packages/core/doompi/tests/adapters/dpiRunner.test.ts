@@ -7,7 +7,7 @@ import {
   type DpiRunnerDependencies,
   runDpi,
   runDpiInit,
-} from '../../src/adapters/dpiRunner.ts';
+} from '../../src/controllers/dpiRunner';
 
 const temporaryRoots: string[] = [];
 const DOOM_CONFIG_FILES = ['config.yaml', 'modes.yaml', 'domains.yaml', 'profiles.yaml'] as const;

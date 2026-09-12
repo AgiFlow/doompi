@@ -1,5 +1,5 @@
-export { type ChannelDelivery, driveChannel } from '../services/testing/channels.ts';
-export { renderPlugin, type RenderedPlugin } from '../services/testing/render.ts';
+export { type ChannelDelivery, driveChannel } from '../services/testing/channels';
+export { renderPlugin, type RenderedPlugin } from '../services/testing';
 export {
   type RecordedSlotAction,
   slotPropsFixture,
@@ -8,4 +8,4 @@ export {
   toolMessagePropsFixture,
   type ToolMessagePropsFixture,
   type ToolMessagePropsOptions,
-} from '../services/testing/slotProps.ts';
+} from '../services/testing/slotProps';

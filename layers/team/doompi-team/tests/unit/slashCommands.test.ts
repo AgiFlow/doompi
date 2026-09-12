@@ -2,20 +2,12 @@ import * as fs from 'node:fs';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 
-import type { AgentConfig, AgentDiscoveryContract } from '../../src/adapters/agents/types';
-import type { ExtensionConfig } from '../../src/adapters/pi/extensions/config';
-import type {
-  SpawnPlannerContract,
-  SpawnPlanRequest,
-  SpawnPlanResult,
-} from '../../src/adapters/pi/extensions/spawnPlan';
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/adapters/asyncJobTracker';
-import type { PollSchedulerContract, PollSubscription } from '../../src/adapters/pollScheduler';
-import {
-  registerSlashCommands,
-  type SlashCommandDeps,
-  startSingleAgentRun,
-} from '../../src/adapters/pi/commands/slash/slashCommands';
+import type { AgentConfig, AgentDiscoveryContract } from '../../src/types/agent';
+import type { ExtensionConfig } from '../../src/services/config';
+import type { SpawnPlannerContract, SpawnPlanRequest, SpawnPlanResult } from '../../src/services/spawnPlan';
+import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
+import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
+import { createSlashCommands, type SlashCommandDeps, startSingleAgentRun } from '../../src/controllers/slashCommands';
 
 interface FakeHost {
   pi: ExtensionAPI;
@@ -194,7 +186,9 @@ function register(
   deps?: ReturnType<typeof makeDeps>,
 ) {
   const resolved = deps ?? makeDeps();
-  registerSlashCommands(host.pi, state, resolved.deps);
+  createSlashCommands(host.pi, state, resolved.deps).forEach(([name, options]) =>
+    host.pi.registerCommand(name, options),
+  );
   return resolved;
 }
 
@@ -447,7 +441,9 @@ describe('/subagents-steer', () => {
 
   function registerWithManagement(host: FakeHost, management: FakeManagement) {
     const resolved = makeDeps({ management: management as unknown as SlashCommandDeps['management'] });
-    registerSlashCommands(host.pi, { baseCwd: '/work' }, resolved.deps);
+    createSlashCommands(host.pi, { baseCwd: '/work' }, resolved.deps).forEach(([name, options]) =>
+      host.pi.registerCommand(name, options),
+    );
   }
 
   it('passes the run id and full guidance to ManagementActions and reports its acknowledgment', async () => {
@@ -508,7 +504,9 @@ describe('/subagents-stop', () => {
   function registerWithManagement(host: FakeHost, management: FakeManagement) {
     const resolved = makeDeps({ management: management as unknown as SlashCommandDeps['management'] });
     resolved.tracker.jobs.set('run-1', { runId: 'run-1', status: 'running' });
-    registerSlashCommands(host.pi, { baseCwd: '/work' }, resolved.deps);
+    createSlashCommands(host.pi, { baseCwd: '/work' }, resolved.deps).forEach(([name, options]) =>
+      host.pi.registerCommand(name, options),
+    );
     return resolved;
   }
 

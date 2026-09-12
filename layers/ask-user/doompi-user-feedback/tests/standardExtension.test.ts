@@ -1,28 +1,28 @@
+import { ASK_USER_QUESTION_TOOL_NAME } from '../src/constants/tool';
 import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, type MinorModeRecord } from '@agimon-ai/doompi-extension-contracts/mode';
-import {
-  DOOM_NARRATION_SERVICE,
-  DOOM_VOICE_AUTO_MODE_ID,
-  DOOM_VOICE_SOURCE,
-} from '@agimon-ai/doompi-extension-contracts/narration';
+import { DOOM_NARRATION_SERVICE } from '@agimon-ai/doompi-extension-contracts/narration';
+import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
 import {
   type DoomToolSurfaceService,
   requireDoomToolSurface,
 } from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ASK_USER_QUESTION_TOOL_NAME,
-  type AskUserQuestionToolDependencies,
-} from '../src/adapters/pi/askUserQuestionAdapter.js';
-import { QuestionnaireCoordinator } from '../src/services/questionnaireCoordinator.js';
-import type { QuestionnaireResult } from '../src/types/questionnaire.js';
+import { type AskUserQuestionToolDependencies } from '../src/tools/askUserQuestion';
+import { QuestionnaireCoordinator } from '../src/services/questionnaireCoordinator';
+import type { QuestionnaireResult } from '../src/types/questionnaire';
 
 const extensionMocks = vi.hoisted(() => {
   const handoffs: Array<{ handoff: ReturnType<typeof vi.fn> }> = [];
   return {
     handoffs,
-    registerTool: vi.fn((_pi: unknown, _cordis: unknown, _dependencies: unknown) => undefined),
+    registerTool: vi.fn((_cordis: unknown, _dependencies: unknown, _renderers: unknown) => ({
+      name: 'ask_user_question',
+      description: '',
+      parameters: { type: 'object', properties: {} },
+      execute: async () => ({ content: [] }),
+    })),
     runTuiQuestionnaire: vi.fn(async () => ({ answers: [], cancelled: false })),
     createVoiceHandoff: vi.fn((_modes: unknown, _narration: unknown) => {
       const handoff = { handoff: vi.fn(async () => undefined) };
@@ -32,19 +32,19 @@ const extensionMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('../src/adapters/pi/askUserQuestionAdapter.ts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/adapters/pi/askUserQuestionAdapter.ts')>()),
-  registerAskUserQuestionTool: extensionMocks.registerTool,
+vi.mock('../src/tools/askUserQuestion', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/tools/askUserQuestion')>()),
+  createAskUserQuestionTool: extensionMocks.registerTool,
 }));
-vi.mock('../src/adapters/doom/voiceQuestionHandoff.ts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/adapters/doom/voiceQuestionHandoff.ts')>()),
+vi.mock('../src/services/voiceQuestionHandoff', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/services/voiceQuestionHandoff')>()),
   createVoiceQuestionHandoff: extensionMocks.createVoiceHandoff,
 }));
-vi.mock('../src/tui/runQuestionnaire.ts', () => ({
+vi.mock('../src/tui/runQuestionnaire', () => ({
   runTuiQuestionnaire: extensionMocks.runTuiQuestionnaire,
 }));
 
-import { userFeedbackExtension } from '../src/adapters/pi/extension.js';
+import { userFeedbackExtension } from '../src/extensions/pi';
 
 type PiHandler = (event: unknown, context: ExtensionContext) => unknown;
 
@@ -67,6 +67,7 @@ function createHarness(options: HarnessOptions = {}) {
   const tools = options.tools ? [...options.tools] : [];
   let activeTools = [...tools];
   const pi = {
+    registerTool: vi.fn(),
     getAllTools: () => tools.map((name) => ({ name })),
     getActiveTools: () => [...activeTools],
     setActiveTools: (names: string[]) => {
@@ -144,7 +145,7 @@ async function installVoiceServices(pi: ExtensionAPI, catalog?: unknown): Promis
 }
 
 function dependencies(): AskUserQuestionToolDependencies {
-  return extensionMocks.registerTool.mock.calls.at(-1)?.[2] as AskUserQuestionToolDependencies;
+  return extensionMocks.registerTool.mock.calls.at(-1)?.[1] as AskUserQuestionToolDependencies;
 }
 
 /** Reads the session-scoped surface the host provides, so a test can model a rival owner. */
@@ -159,7 +160,12 @@ async function waitForToolSurface(pi: ExtensionAPI): Promise<DoomToolSurfaceServ
 beforeEach(() => {
   vi.clearAllMocks();
   extensionMocks.handoffs.length = 0;
-  extensionMocks.registerTool.mockImplementation(() => undefined);
+  extensionMocks.registerTool.mockImplementation(() => ({
+    name: 'ask_user_question',
+    description: '',
+    parameters: { type: 'object', properties: {} },
+    execute: async () => ({ content: [] }),
+  }));
   extensionMocks.runTuiQuestionnaire.mockImplementation(async () => ({ answers: [], cancelled: false }));
   extensionMocks.createVoiceHandoff.mockImplementation(() => {
     const handoff = { handoff: vi.fn(async () => undefined) };
@@ -411,10 +417,10 @@ describe('standard User Feedback extension', () => {
 
   it('rolls back the Cordis runtime when installation fails partway through', async () => {
     const shutdown = vi.spyOn(QuestionnaireCoordinator.prototype, 'shutdown');
-    extensionMocks.registerTool.mockImplementationOnce(() => {
+    const harness = createHarness();
+    vi.mocked(harness.pi.registerTool).mockImplementationOnce(() => {
       throw new Error('tool registration failed');
     });
-    const harness = createHarness();
 
     await expect(userFeedbackExtension(harness.pi)).rejects.toThrow('tool registration failed');
 

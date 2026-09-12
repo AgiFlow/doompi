@@ -9,7 +9,7 @@ vi.mock('@agimon-ai/doompi-config', () => ({
   getHarnessState: () => harnessState,
 }));
 
-const { registerModelGuidanceHandlers } = await import('../../../src/adapters/pi/extension.ts');
+const { modelGuidanceEvents } = await import('../../../src/controllers/modelGuidanceEvents');
 
 type Handler = (
   event: { systemPrompt: string },
@@ -19,18 +19,8 @@ type Handler = (
 let workspace: string;
 let handler: Handler;
 
-/** Captures the single before_agent_start handler the adapter registers. */
 function registerHandler(): Handler {
-  let captured: Handler | undefined;
-  const pi = {
-    on(event: string, candidate: Handler) {
-      if (event === 'before_agent_start') captured = candidate;
-    },
-  };
-
-  registerModelGuidanceHandlers(pi as never);
-  if (!captured) throw new Error('before_agent_start handler was not registered');
-  return captured;
+  return (event, context) => modelGuidanceEvents.before_agent_start(event as never, context as never);
 }
 
 function writeRepositoryGuidance(contents: string): void {

@@ -3,7 +3,7 @@ import {
   parseVoiceWorkerCommand,
   parseVoiceWorkerEvent,
   VOICE_WORKER_PROTOCOL_VERSION,
-} from '../src/services/voiceWorkerProtocol.ts';
+} from '../src/services/voiceWorkerProtocol';
 
 const initialize = {
   version: VOICE_WORKER_PROTOCOL_VERSION,

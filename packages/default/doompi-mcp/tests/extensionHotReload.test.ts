@@ -16,7 +16,7 @@ import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protoco
 import type { Context, Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerMcpExtension } from '../src/adapters/pi/extension.ts';
+import { mcpExtension } from '../src/extensions/pi';
 
 const DEFERRED_RUNTIME_TIMEOUT_MS = 5_000;
 
@@ -41,7 +41,7 @@ vi.mock('@agimon-ai/doompi-extension-contracts/mcp-projection', async (importOri
   };
 });
 
-vi.mock('../src/adapters/pi/leader.ts', () => ({
+vi.mock('../src/controllers/leader', () => ({
   registerLeaderContribution: () => () => undefined,
 }));
 
@@ -88,7 +88,7 @@ async function extensionHarness(context: ExtensionContext): Promise<ExtensionHar
   } as unknown as ExtensionAPI;
 
   const controller = await installDoomCordisHost(pi, { mode: 'composed', source: 'doompi-mcp-hot-reload-test' });
-  await registerMcpExtension(pi);
+  await mcpExtension(pi);
   const fire = async (event: string): Promise<void> => {
     for (const listener of listeners.get(event) ?? []) await listener({}, context);
   };

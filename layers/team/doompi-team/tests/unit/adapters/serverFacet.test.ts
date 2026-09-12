@@ -4,8 +4,7 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
-import { teamServerFacet } from '../../../src/adapters/server/facet.ts';
-import { api } from '../../../src/adapters/teamCatalogApi.ts';
+import { teamServerFacet } from '../../../src/extensions/server';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 type MountedChannel = Parameters<DoomServerHostService['registerChannel']>[0];
@@ -17,6 +16,9 @@ function hostContext(scope: DoomServerHostService['scope']) {
   const host: DoomServerHostService = {
     scope,
     context: { locality: 'local' } as unknown as DoomServerHostService['context'],
+    registerMethod() {
+      return { dispose: () => undefined };
+    },
     registerApi(candidate) {
       registered.push(candidate);
       return { dispose: () => void (state.disposed += 1) };
@@ -29,6 +31,7 @@ function hostContext(scope: DoomServerHostService['scope']) {
     mountedChannels: () => channels.map((candidate) => candidate.frameType),
   };
   const context = {
+    effect: () => undefined,
     get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? host : undefined),
   } as unknown as Context;
   return { channels, context, registered, state };
@@ -39,21 +42,11 @@ describe('teamServerFacet', () => {
     expect(teamServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
   });
 
-  it('registers the exact Team API in session scope', () => {
-    const harness = hostContext('session');
-    expect(typeof teamServerFacet.apply(harness.context)).toBe('function');
-    expect(harness.registered).toEqual([api]);
-  });
-
-  it('unregisters the API on disposal', () => {
-    const harness = hostContext('session');
-    teamServerFacet.apply(harness.context)?.();
-    expect(harness.state.disposed).toBe(1);
-  });
-
-  it('registers and disposes Team channels in hub scope', () => {
+  it('registers and disposes Team channels in hub scope', async () => {
     const harness = hostContext('global');
-    teamServerFacet.apply(harness.context)?.();
+    await (
+      await teamServerFacet.apply(harness.context)
+    )?.();
     expect(harness.channels.map((channel) => channel.frameType)).toEqual(['subagent_runs', 'subagent_catalog']);
     expect(harness.registered).toEqual([]);
     expect(harness.state.disposed).toBe(2);

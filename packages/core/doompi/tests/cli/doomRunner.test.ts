@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { main } from '../../src/bin/doomRunner.ts';
+import { main } from '../../src/bin/doomRunner';
 
 const originalDirectory = process.cwd();
 const temporaryRoots: string[] = [];

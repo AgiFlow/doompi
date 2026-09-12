@@ -7,9 +7,9 @@ import {
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createDelegationBridge, type DelegationBridgeDeps } from '../../src/adapters/pi/extensions/delegationBridge';
+import { createDelegationBridge, type DelegationBridgeDeps } from '../../src/services/delegationBridge';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
-import type { TrackedAsyncJobsContract } from '../../src/adapters/asyncJobTracker';
+import type { TrackedAsyncJobsContract } from '../../src/services/asyncJobTracker';
 
 interface StoredEvent {
   name: string;

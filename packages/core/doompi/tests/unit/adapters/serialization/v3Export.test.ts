@@ -5,8 +5,8 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/contex
 import { JsonlSessionRepo } from '@earendil-works/pi-agent-core/harness/session';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { exportV4ToV3 } from '../../../../src/adapters/serialization/v3Export';
-import type { HistoryOwnership } from '../../../../src/adapters/serialization/historyImport';
+import { exportV4ToV3 } from '../../../../src/services/v3Export';
+import type { HistoryOwnership } from '../../../../src/services/historyImport';
 
 const CREATED_AT = Date.parse('2026-01-01T00:00:00.000Z');
 

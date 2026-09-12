@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { piExtensionAliasPath } from '../../src/adapters/piExtensionAlias.ts';
+import { piExtensionAliasPath } from '../../src/services/piExtensionAlias';
 import {
   mergeProjectPiSettings,
   projectPiSettingsPath,
@@ -10,7 +10,7 @@ import {
   readProjectPiSettings,
   serializeProjectPiSettings,
   writeProjectPiSettings,
-} from '../../src/adapters/projectPiSettings.ts';
+} from '../../src/services/projectPiSettings';
 
 const DOOM_PACKAGE_ROOT = path.resolve(import.meta.dirname, '../..');
 const temporaryRoots: string[] = [];

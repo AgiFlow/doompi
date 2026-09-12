@@ -1,12 +1,12 @@
 import { Button } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
-import type { AuthorSessionWorkspace } from '../stores/authorWorkspaceStore.ts';
+import type { AuthorSessionWorkspace } from '../stores/authorWorkspaceStore';
 import {
   commitAuthorRegion,
   removeAuthorRegion,
   seekAuthorVideo,
   setAuthorRegionCandidate,
-} from '../stores/authorWorkspaceStore.ts';
+} from '../stores/authorWorkspaceStore';
 
 export function AuthorRegionDrafts({ sessionId, workspace }: { sessionId: string; workspace: AuthorSessionWorkspace }) {
   const [comment, setComment] = useState('');

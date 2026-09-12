@@ -1,6 +1,6 @@
-export { defineSessionChannel, defineSlot, defineWebPlugin } from '../services/define.ts';
-export { defineGlobalStore } from '../services/globalStore.ts';
-export { defineSessionStore } from '../services/sessionStore.ts';
+export { defineSessionChannel, defineSlot, defineWebPlugin } from '../schemas/webPlugin';
+export { defineGlobalStore } from '../models/globalStore';
+export { defineSessionStore } from '../models/sessionStore';
 export {
   HUB_ADVERTISEMENT_VERSION,
   hubAdvertisementPath,
@@ -10,9 +10,9 @@ export {
   resolveRegistryDir,
   SESSION_LINEAGE_RECORD_VERSION,
   sessionLineagePath,
-} from '../services/sessionRegistry.ts';
-export { toolResultText, toolResultTextLines } from '../services/toolResult.ts';
-export type { HubAdvertisement, RegistryDirInput, SessionLineageRecord } from '../types/sessionRegistry.ts';
+} from '../services/sessionRegistry';
+export { toolResultText, toolResultTextLines } from '../services/toolResult';
+export type { HubAdvertisement, RegistryDirInput, SessionLineageRecord } from '../types/sessionRegistry';
 export type {
   ModelContext,
   ModelContextAbortSignal,
@@ -23,7 +23,7 @@ export type {
   ModelContextToolChangeEvent,
   ModelContextToolChangeListener,
   ModelContextToolDescriptor,
-} from '../types/modelContext.ts';
+} from '../types/modelContext';
 export type {
   WebPluginScope,
   WebPluginContributions,
@@ -77,4 +77,4 @@ export type {
   WebPluginDefinition,
   WebPluginRuntime,
   WebPluginSlotProps,
-} from '../types/webPlugin.ts';
+} from '../types/webPlugin';

@@ -10,8 +10,8 @@
  * so what is covered here is the preview the tab opens on.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { FileEditsDetailView } from '../../types/fileEditsApi.ts';
-import { FilePanel } from './FilePanel.tsx';
+import type { FileEditsDetailView } from '../../types/fileEditsApi';
+import { FilePanel } from './FilePanel';
 
 const AT = Date.parse('2024-05-04T10:00:00Z');
 

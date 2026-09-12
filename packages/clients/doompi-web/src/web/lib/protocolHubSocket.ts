@@ -6,10 +6,12 @@ import {
   DoomHubService,
   type HubService,
 } from '@agimon-ai/doompi-extension-contracts/session-protocol';
+import { DoomPluginService, type DoomPluginCall } from '@agimon-ai/doompi-extension-contracts/plugin-protocol';
 type Frame = Record<string, unknown>;
 
 export interface SessionSocket {
   send(frame: object): void;
+  invokePlugin(call: DoomPluginCall): Promise<unknown>;
   close(): void;
 }
 
@@ -23,6 +25,7 @@ export interface SessionSocketHandlers {
 export function createProtocolHubSocket(client: Client, handlers: SessionSocketHandlers): SessionSocket {
   let binding: RemoteServiceBinding | undefined;
   let service: HubService | undefined;
+  let pluginService: DoomPluginService | undefined;
   let unsubscribe: (() => void) | undefined;
   let cancelOpening: ((reason?: unknown) => void) | undefined;
   let stopped = false;
@@ -32,6 +35,7 @@ export function createProtocolHubSocket(client: Client, handlers: SessionSocketH
     cancelOpening?.(new Error('The hub binding was replaced.'));
     cancelOpening = undefined;
     service = undefined;
+    pluginService = undefined;
     unsubscribe?.();
     unsubscribe = undefined;
     const previous = binding;
@@ -42,7 +46,7 @@ export function createProtocolHubSocket(client: Client, handlers: SessionSocketH
     release();
     const mine = generation;
     const next = createRemoteServiceBinding({
-      services: [DoomHubService],
+      services: [DoomHubService, DoomPluginService],
       transport: createClientServiceTransport(client, () => ({ serverId: DOOM_COCKPIT_SERVER_ID })),
     });
     binding = next;
@@ -53,6 +57,7 @@ export function createProtocolHubSocket(client: Client, handlers: SessionSocketH
       await next.ready(opening.context);
       if (stopped || mine !== generation) return;
       service = hub;
+      pluginService = next.use(DoomPluginService);
       let sequence = 0;
       const publish = (state: NonNullable<typeof hub.state.value>) => {
         for (const event of state.events) {
@@ -91,6 +96,11 @@ export function createProtocolHubSocket(client: Client, handlers: SessionSocketH
   });
   if (client.connected) void open();
   return {
+    async invokePlugin(call) {
+      const current = pluginService;
+      if (!current) throw new Error('The hub protocol is not connected.');
+      return current.invoke(call as Parameters<DoomPluginService['invoke']>[0], BACKGROUND_CONTEXT);
+    },
     send(frame) {
       const current = service;
       if (!current) throw new Error('The hub protocol is not connected.');

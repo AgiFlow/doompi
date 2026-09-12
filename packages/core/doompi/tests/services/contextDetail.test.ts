@@ -4,14 +4,14 @@ import path from 'node:path';
 import type { SkillEntry } from '@agimon-ai/doompi-skill/catalog';
 import type { ToolSource } from '@agimon-ai/doompi-ui/toolInventory';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildContextDetail } from '../../src/services/contextDetail.ts';
+import { buildContextDetail } from '../../src/services/contextDetail';
 import {
   contextDetailPath,
   findContextItem,
   readContextDetail,
   removeContextDetail,
   writeContextDetail,
-} from '../../src/adapters/contextDetailStore.ts';
+} from '../../src/services/contextDetailStore';
 
 const countTokens = (text: string): number => Math.ceil(text.length / 4);
 

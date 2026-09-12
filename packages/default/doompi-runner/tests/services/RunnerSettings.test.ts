@@ -3,8 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { CONFIG_DIR_NAME } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { RunnerSettingsLoader } from '../../src/adapters/RunnerSettings/RunnerSettingsLoader';
-import { parseResultPragma } from '../../src/exports/tool/responseEnvelope';
+import { RunnerSettingsLoader } from '../../src/services/runnerSettings';
+import { parseResultPragma } from '../../src/exports/responseEnvelope';
 
 let directory: string;
 

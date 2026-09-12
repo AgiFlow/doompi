@@ -6,7 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { LsToolMessage } from './LsToolMessage.tsx';
+import { LsToolMessage } from './LsToolMessage';
 
 const ENTRIES = ['components/', 'lib/', 'stores/', 'index.ts', 'plugin.ts', 'toolRenderers.ts'].join('\n');
 

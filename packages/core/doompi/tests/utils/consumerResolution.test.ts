@@ -2,11 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import {
-  consumerPackageEntries,
-  consumerPackageEntry,
-  localPackageName,
-} from '../../src/exports/utils/moduleResolution';
+import { consumerPackageEntries, consumerPackageEntry, localPackageName } from '../../src/exports/moduleResolution';
 
 /**
  * Consumer resolution against synthetic packages.

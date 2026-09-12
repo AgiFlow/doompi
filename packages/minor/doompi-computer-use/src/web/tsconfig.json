@@ -18,11 +18,5 @@
     "allowImportingTsExtensions": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": [
-    ".",
-    "../types/computerUse.ts",
-    "../types/computerUseApi.ts",
-    "../exports/webClient.ts",
-    "../../tests/web"
-  ]
+  "include": [".", "../types/computerUse.ts", "../types/computerUseApi.ts", "../extensions/web.ts", "../../tests/web"]
 }

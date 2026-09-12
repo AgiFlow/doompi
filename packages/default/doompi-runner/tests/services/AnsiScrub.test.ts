@@ -5,7 +5,7 @@ import {
   scrubTerminalOutputToPlainText,
   stripAnsi,
   stripAnsiKeepingColour,
-} from '../../src/services/AnsiScrub/ansiScrub';
+} from '../../src/services/ansiScrub';
 
 const ESC = '\u001B';
 const BEL = '\u0007';

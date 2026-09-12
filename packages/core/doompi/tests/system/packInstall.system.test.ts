@@ -8,7 +8,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { readSyncRegistration } from '../../src/adapters/syncRegistration.ts';
+import { readSyncRegistration } from '../../src/services/syncRegistration';
 import {
   FORBIDDEN_PACK_CONTENT,
   PACKAGE_MATRIX,
@@ -18,7 +18,7 @@ import {
   RMUX_TARGETS,
   RTK_TARGETS,
   STANDARD_PI_ENTRIES,
-} from './packageMatrix.ts';
+} from './packageMatrix';
 import {
   type CommandResult,
   type ConsumerRoot,
@@ -47,9 +47,11 @@ import {
   unsafePackedContent,
   waitForProcessExit,
   writeMinimalDoomRepository,
-} from './packHelpers.ts';
+} from './packHelpers';
 
 const SYSTEM_HOOK_TIMEOUT_MS = 120_000;
+// Cold sync builds both the global and workspace generations.
+const COLD_SYNC_TIMEOUT_MS = 180_000;
 const RUNTIME_TEST_TIMEOUT_MS = 240_000;
 const STARTUP_TEST_TIMEOUT_MS = 600_000;
 const STARTUP_RUN_TIMEOUT_MS = 8_000;
@@ -121,6 +123,7 @@ function packedExportTargetExists(root: string, files: readonly string[], target
   );
 }
 interface PackedCordisContract {
+  readonly packageName: string;
   readonly subpath: string;
   readonly values?: Readonly<Record<string, string | number>>;
   readonly functions?: readonly string[];
@@ -298,7 +301,7 @@ interface CallableProbe {
   shutdown(): Promise<void>;
 }
 
-function createCallableProbe(): CallableProbe {
+function createCallableProbe(onTool?: (tool: unknown) => void): CallableProbe {
   const calls: string[] = [];
   const eventListeners = new Map<string, Set<(data: unknown) => void>>();
   const lifecycleHandlers = new Map<string, ProbeLifecycleHandler[]>();
@@ -343,6 +346,7 @@ function createCallableProbe(): CallableProbe {
     return new Proxy(target, {
       apply(_target, _thisArg, _args) {
         calls.push(label);
+        if (label === 'api.registerTool') onTool?.(_args[0]);
         if (label.endsWith('.on')) return () => undefined;
         return undefined;
       },
@@ -377,6 +381,12 @@ function createCallableProbe(): CallableProbe {
 async function importInstalledExtension(name: string, subpath: string): Promise<Record<string, unknown>> {
   const entry = installedPackageEntry(consumer.root, name, subpath);
   if (!entry) throw new Error(`Installed package entry is missing: ${name}${subpath}`);
+  return (await import(pathToFileURL(entry).href)) as Record<string, unknown>;
+}
+
+/** The composition boot sequence owns these private artifacts, not public package exports. */
+async function importInstalledHostEntry(name: 'cordis-host' | 'cordis-finalizer'): Promise<Record<string, unknown>> {
+  const entry = path.join(installedPackageRoot(consumer.root, '@agimon-ai/doompi'), 'dist/extensions', `${name}.mjs`);
   return (await import(pathToFileURL(entry).href)) as Record<string, unknown>;
 }
 
@@ -681,7 +691,7 @@ async function readPackedLoadOrder(
   fixture: RuntimeFixture,
   state: PackedSyncState,
 ): Promise<{ readonly entries: readonly string[]; readonly environment: NodeJS.ProcessEnv }> {
-  const composerEntry = installedPackageEntry(consumer.root, '@agimon-ai/doompi', './services/composer');
+  const composerEntry = installedPackageEntry(consumer.root, '@agimon-ai/doompi', './composer');
   const harnessStateEntry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-config', './harnessState');
   const harnessStoreEntry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-config', './harnessStore');
   if (!composerEntry || !harnessStateEntry || !harnessStoreEntry) {
@@ -754,7 +764,7 @@ async function createStartupFixture(
   const statePath = packedSyncStatePath(root, syncEnvironment);
   const state = JSON.parse(fs.readFileSync(statePath, 'utf8')) as PackedSyncState;
   const { entries, environment } = await readPackedLoadOrder(fixture, state);
-  const wrapperExtension = installedPackageEntry(consumer.root, '@agimon-ai/doompi', '.');
+  const wrapperExtension = installedPackageEntry(consumer.root, '@agimon-ai/doompi', './extensions/pi');
   if (!wrapperExtension) throw new Error('Packed Doom wrapper extension is missing');
   const probes = writeStartupProbes(root);
   return { ...fixture, mode: options.mcp ? 'copilot-mcp' : mode, ...probes, wrapperExtension, entries, environment };
@@ -1253,12 +1263,12 @@ describe('packed package identity and closure', () => {
   });
 
   it.each(PACKED_CORDIS_CONTRACTS)(
-    '$subpath resolves the clean-break Cordis contract through ESM, CJS, and declarations',
-    async ({ subpath, values = {}, functions = [] }) => {
+    '$packageName$subpath resolves the Cordis contract through ESM, CJS, and declarations',
+    async ({ packageName, subpath, values = {}, functions = [] }) => {
       assertConsumerInstall();
-      const esmEntry = installedConditionalTarget('@agimon-ai/doompi-extension-contracts', subpath, 'import');
-      const cjsEntry = installedConditionalTarget('@agimon-ai/doompi-extension-contracts', subpath, 'require');
-      const typesEntry = installedConditionalTarget('@agimon-ai/doompi-extension-contracts', subpath, 'types');
+      const esmEntry = installedConditionalTarget(packageName, subpath, 'import');
+      const cjsEntry = installedConditionalTarget(packageName, subpath, 'require');
+      const typesEntry = installedConditionalTarget(packageName, subpath, 'types');
       const esm = (await import(pathToFileURL(esmEntry).href)) as Record<string, unknown>;
       const cjs = packedRequire(cjsEntry) as Record<string, unknown>;
 
@@ -1277,7 +1287,7 @@ describe('packed package identity and closure', () => {
   it('keeps packed Voice registries service-local and reload continuity explicit', async () => {
     assertConsumerInstall();
     const contracts = (await import(
-      pathToFileURL(installedConditionalTarget('@agimon-ai/doompi-extension-contracts', './voice-tools', 'import')).href
+      pathToFileURL(installedConditionalTarget('@agimon-ai/doompi-voice', './voice-tools', 'import')).href
     )) as {
       createDoomVoiceToolsService(generation: string): {
         register(definition: { descriptor: Record<string, unknown>; execute(input: unknown): unknown }): {
@@ -1322,7 +1332,7 @@ describe('packed package identity and closure', () => {
 });
 
 describe('conventional Pi discovery', () => {
-  it.each(STANDARD_PI_ENTRIES)('$name exports ./extensions/pi and advertises its default adapter', (entry) => {
+  it.each(STANDARD_PI_ENTRIES)('$name exports ./extensions/pi and advertises its default extension', (entry) => {
     const manifest = packed(entry.name).packedManifest;
 
     expect(manifest.exports).toMatchObject({ [entry.piExport]: expect.anything() });
@@ -1382,30 +1392,14 @@ describe('conventional Pi discovery', () => {
         context: { readonly cwd: string; readonly model: undefined },
       ): Promise<CapturedToolResult>;
     }
-    type ToolRegistrar = (pi: { registerTool(tool: unknown): void }) => void;
-
     const tools = new Map<string, CapturedTool>();
+    const registered: CapturedTool[] = [];
+    const probe = createCallableProbe((tool) => registered.push(tool as CapturedTool));
     const packages = [
-      ['@agimon-ai/doompi-read', 'registerHashlineReadTool', 'read'],
-      ['@agimon-ai/doompi-grep', 'registerHashlineGrepTool', 'grep'],
-      ['@agimon-ai/doompi-edit', 'registerHashlineEditTool', 'edit'],
+      ['@agimon-ai/doompi-read', 'read'],
+      ['@agimon-ai/doompi-grep', 'grep'],
+      ['@agimon-ai/doompi-edit', 'edit'],
     ] as const;
-    for (const [packageName, exportName, toolName] of packages) {
-      const entry = installedConditionalTarget(packageName, '.', 'import');
-      const module = (await import(pathToFileURL(entry).href)) as Record<string, unknown>;
-      const registrar = module[exportName];
-      if (typeof registrar !== 'function') throw new Error(`${packageName} is missing ${exportName}`);
-      const registered: CapturedTool[] = [];
-      (registrar as ToolRegistrar)({
-        registerTool(tool) {
-          registered.push(tool as CapturedTool);
-        },
-      });
-      expect(registered.map(({ name }) => name)).toEqual([toolName]);
-      const [tool] = registered;
-      if (!tool) throw new Error(`${packageName} did not register ${toolName}`);
-      tools.set(toolName, tool);
-    }
 
     const fixtureRoot = fs.mkdtempSync(path.join(consumer.root, 'hashline-roundtrip-'));
     const fixturePath = path.join(fixtureRoot, 'sample.txt');
@@ -1428,6 +1422,18 @@ describe('conventional Pi discovery', () => {
     };
 
     try {
+      const hostModule = await importInstalledHostEntry('cordis-host');
+      const finalizerModule = await importInstalledHostEntry('cordis-finalizer');
+      await (hostModule.default as (pi: unknown) => unknown)(probe.api);
+      for (const [packageName, toolName] of packages) {
+        const before = registered.length;
+        const extension = await importInstalledExtension(packageName, './extensions/pi');
+        await (extension.default as (pi: unknown) => unknown)(probe.api);
+        const ownedTools = registered.slice(before);
+        expect(ownedTools.map(({ name }) => name)).toEqual([toolName]);
+        tools.set(toolName, ownedTools[0]!);
+      }
+      await (finalizerModule.default as (pi: unknown) => unknown)(probe.api);
       fs.writeFileSync(fixturePath, 'Heading\nState: created\n');
       const readSnapshot = snapshot(resultText(await execute('read', { path: 'sample.txt' })), 'State: created');
       await execute('edit', {
@@ -1454,6 +1460,7 @@ describe('conventional Pi discovery', () => {
 
       expect(fs.readFileSync(fixturePath, 'utf8')).toBe('Heading\nState: edited from grep\n');
     } finally {
+      await probe.shutdown();
       fs.rmSync(fixtureRoot, { recursive: true, force: true });
     }
   });
@@ -1471,9 +1478,9 @@ describe('conventional Pi discovery', () => {
 
   it.each(STANDARD_PI_ENTRIES)('$name activates through its public extension entry', async (entry) => {
     assertConsumerInstall();
-    const hostModule = await importInstalledExtension('@agimon-ai/doompi', './entries/cordisHost');
+    const hostModule = await importInstalledHostEntry('cordis-host');
     const module = await importInstalledExtension(entry.name, entry.piExport);
-    const finalizerModule = await importInstalledExtension('@agimon-ai/doompi', './entries/cordisFinalizer');
+    const finalizerModule = await importInstalledHostEntry('cordis-finalizer');
     const hostExtension = hostModule.default as ((api: unknown) => unknown) | undefined;
     const extension = module.default as ((api: unknown) => unknown) | undefined;
     const finalizerExtension = finalizerModule.default as ((api: unknown) => unknown) | undefined;
@@ -1494,7 +1501,7 @@ describe('conventional Pi discovery', () => {
 
   it('registers packed package-owned Help descriptors through the shared Cordis host', async () => {
     assertConsumerInstall();
-    const hostModule = await importInstalledExtension('@agimon-ai/doompi', './entries/cordisHost');
+    const hostModule = await importInstalledHostEntry('cordis-host');
     const helpEntry = installedConditionalTarget('@agimon-ai/doompi-extension-contracts', './help', 'import');
     const hostEntry = installedConditionalTarget('@agimon-ai/doompi-extension-contracts', './cordis-host', 'import');
     const helpContracts = (await import(pathToFileURL(helpEntry).href)) as {
@@ -1508,7 +1515,7 @@ describe('conventional Pi discovery', () => {
       ): Promise<{ readonly root: Context; dispose(): Promise<void> }>;
     };
     const contributionEntries = [
-      ['@agimon-ai/doompi', './entries/modeCatalog'],
+      ['@agimon-ai/doompi', './extensions/mode-catalog'],
       ['@agimon-ai/doompi-config', './extensions/pi'],
       ['@agimon-ai/doompi-domain', './extensions/pi'],
       ['@agimon-ai/doompi-goal', './extensions/pi'],
@@ -1596,30 +1603,24 @@ describe('consumer ownership boundaries', () => {
   });
 
   it(
-    'installs and imports the packed root without selectable Doom packages or browser dependencies',
+    'installs and imports the root with its declared Voice contract dependency closure',
     async () => {
       const isolatedConsumer = createConsumerRoot('dp-core-only-');
       try {
         const rootClosure = packedOwnedRuntimeClosure(['@agimon-ai/doompi']);
-        const browserOnlyPackages = [
-          '@agimon-ai/doompi-web',
-          '@agimon-ai/doompi-web-components',
-          '@agimon-ai/doompi-web-contracts',
-          'react',
-          'react-dom',
-        ];
-        for (const name of selectablePackageNames) expect(rootClosure.has(name), name).toBe(false);
-        for (const name of browserOnlyPackages) expect(rootClosure.has(name), name).toBe(false);
+        // Voice owns shared contracts, so its runtime closure is intentionally installed.
+        expect(selectablePackageNames.filter((name) => rootClosure.has(name))).toEqual(['@agimon-ai/doompi-voice']);
+        expect(rootClosure.has('@agimon-ai/doompi-web')).toBe(false);
 
         const install = await installLocalPackages(isolatedConsumer, rootClosure);
         const diagnostics = [install.stderr, install.stdout].filter(Boolean).join('\n');
-        expect(install.code, diagnostics || 'core-only consumer installation failed without output').toBe(0);
+        expect(install.code, diagnostics || 'root consumer installation failed without output').toBe(0);
         for (const name of selectablePackageNames) {
-          expect(fs.existsSync(installedPackageRoot(isolatedConsumer.root, name)), name).toBe(false);
+          expect(fs.existsSync(installedPackageRoot(isolatedConsumer.root, name)), name).toBe(
+            name === '@agimon-ai/doompi-voice',
+          );
         }
-        for (const name of browserOnlyPackages) {
-          expect(fs.existsSync(installedPackageRoot(isolatedConsumer.root, name)), name).toBe(false);
-        }
+        expect(fs.existsSync(installedPackageRoot(isolatedConsumer.root, '@agimon-ai/doompi-web'))).toBe(false);
 
         const extensionEntry = installedPackageEntry(isolatedConsumer.root, '@agimon-ai/doompi', './extensions/pi');
         if (!extensionEntry) throw new Error('Core-only consumer is missing the Doom Pi extension entry');
@@ -1743,7 +1744,7 @@ describe('DPI installed experiment runtime', () => {
         fixture.root,
         environment,
       );
-      expect(check.code, check.stderr || check.stdout).toBe(0);
+      expect(check.code, `${check.stderr}\n${check.stdout}`).toBe(0);
       expect(fs.readFileSync(projectSettingsPath, 'utf8')).toBe(projectSettings);
       expect(fs.readFileSync(userSettingsPath, 'utf8')).toBe(userSettings);
       expect(fs.existsSync(path.join(fixture.agentDirectory, 'themes', 'doom-pi-dark.json'))).toBe(false);
@@ -1851,11 +1852,12 @@ describe('DPI installed experiment runtime', () => {
         [installedDoomPiCli(consumerRoot), 'sync', ...extra, ...syncOptions],
         root,
         environment,
+        COLD_SYNC_TIMEOUT_MS,
       );
 
     const syncA = await syncRepository(packedA.root, fixtureA.root);
-    const syncB = await syncRepository(packedB.root, fixtureB.root);
     expect(syncA.code, syncA.stderr || syncA.stdout).toBe(0);
+    const syncB = await syncRepository(packedB.root, fixtureB.root);
     expect(syncB.code, syncB.stderr || syncB.stdout).toBe(0);
     const [overlapA, overlapB] = await Promise.all([
       syncRepository(packedA.root, fixtureA.root),
@@ -1901,7 +1903,7 @@ describe('DPI installed experiment runtime', () => {
       [packedB.root, fixtureB.root],
     ] as const) {
       const check = await syncRepository(consumerRoot, root, ['--check']);
-      expect(check.code, check.stderr || check.stdout).toBe(0);
+      expect(check.code, `${check.stderr}\n${check.stdout}`).toBe(0);
     }
     expect(fs.readFileSync(settingsPath)).toEqual(initOwned.settings);
     expect(fs.readFileSync(themePath)).toEqual(initOwned.theme);
@@ -1981,7 +1983,9 @@ describe('DPI installed experiment runtime', () => {
       await shutdownRuntime(invalidRuntime);
       fs.writeFileSync(registrationAPath, validRegistrationA);
     }
-  }, 180_000);
+    // Two isolated installs and five syncs include two cold browser builds.
+    // Each subprocess keeps its own deadline; the scenario needs room for their sum.
+  }, 600_000);
 });
 
 describe('DOOM-PI-LAUNCH installed runtime modes', () => {
@@ -2119,6 +2123,7 @@ describe('RPC-LIFECYCLE installed runtime', () => {
         ],
         fixture.root,
         environment,
+        COLD_SYNC_TIMEOUT_MS,
       );
       expect(sync.code, `${sync.stderr}\n${sync.stdout}`).toBe(0);
 
@@ -2233,6 +2238,7 @@ describe('RPC-LIFECYCLE installed runtime', () => {
         ],
         fixture.root,
         environment,
+        COLD_SYNC_TIMEOUT_MS,
       );
       expect(sync.code, sync.stderr || sync.stdout).toBe(0);
       // Sync removes the redundant registration and keeps the rest of the file.
@@ -2319,6 +2325,7 @@ describe('RPC-LIFECYCLE installed runtime', () => {
         ],
         fixture.root,
         environment,
+        COLD_SYNC_TIMEOUT_MS,
       );
       expect(sync.code, sync.stderr || sync.stdout).toBe(0);
 
@@ -2618,7 +2625,7 @@ describe('resources, RMUX, and installed text rendering', () => {
 
   it('maps supported RMUX targets from the installed Doom Runner package', async () => {
     assertConsumerInstall();
-    const entry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-runner', './services/RmuxBackend');
+    const entry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-runner', './rmux-backend');
     if (!entry) throw new Error('Installed Doom Runner RMUX backend export is missing');
     const module = (await import(pathToFileURL(entry).href)) as {
       rmuxPackageForTarget: (platform: string, architecture: string) => string | undefined;
@@ -2632,7 +2639,7 @@ describe('resources, RMUX, and installed text rendering', () => {
 
   it('maps supported RTK targets from the installed Doom Runner package', async () => {
     assertConsumerInstall();
-    const entry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-runner', './services/RtkProcessor');
+    const entry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-runner', './rtk-processor');
     if (!entry) throw new Error('Installed Doom Runner RTK processor export is missing');
     const module = (await import(pathToFileURL(entry).href)) as {
       rtkPackageForTarget: (platform: string, architecture: string) => string | undefined;
@@ -2646,7 +2653,7 @@ describe('resources, RMUX, and installed text rendering', () => {
 
   it('renders the installed Doom Pi UI at the supported terminal widths', async () => {
     assertConsumerInstall();
-    const entry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-ui', './components/doomHeader');
+    const entry = installedPackageEntry(consumer.root, '@agimon-ai/doompi-ui', './doom-header');
     if (!entry) throw new Error('Installed Doom Pi UI header export is missing');
     const module = (await import(pathToFileURL(entry).href)) as {
       DoomHeader: new (

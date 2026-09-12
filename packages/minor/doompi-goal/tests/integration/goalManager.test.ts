@@ -2,8 +2,8 @@ import type { DoomBackgroundWorkService } from '@agimon-ai/doompi-extension-cont
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 import { createDoomToolSurface } from '@agimon-ai/doompi-extension-contracts/tool-surface';
-import { activateGoalRuntime } from '../../src/adapters/pi/runtimeActivation.ts';
-import type { GoalHistoryPort } from '../../src/types/history.ts';
+import { createGoalRuntime } from '../../src/controllers/runtimeActivation';
+import type { GoalHistoryPort } from '../../src/types/history';
 
 interface HandlerRecord {
   event: string;
@@ -81,11 +81,23 @@ function createFixture() {
     surface,
     /** Activates the runtime the way the plugin does: runtime first, then the arbiter binding. */
     activateRuntime() {
-      const activation = activateGoalRuntime(pi, {
+      const activation = createGoalRuntime(pi, {
         service: { execute: async () => ({ message: 'unused', level: 'info' as const }) },
         history,
       });
-      const unbindSurface = activation.manager.bindToolSurface(surface);
+      for (const tool of activation.manager.tools()) pi.registerTool(tool);
+      for (const command of activation.manager.commands()) pi.registerCommand(...command);
+      for (const [event, handler] of Object.entries(activation.manager.events()))
+        (pi.on as (event: string, handler: unknown) => void)(event, handler);
+      const restriction = activation.manager.toolRestrictions()[0]!;
+      const registration = surface.register(restriction);
+      const unsubscribe = restriction.subscribe?.(() => registration.update(restriction.restrict));
+      const unbind = activation.manager.bindToolSurface(surface);
+      const unbindSurface = () => {
+        unsubscribe?.();
+        registration.dispose();
+        unbind();
+      };
       return {
         manager: activation.manager,
         unbindSurface,
@@ -682,8 +694,8 @@ describe('Goal manager command and restore branches', () => {
 
   it('restores an active goal without duplicate kickoff and keeps paused goals dormant', async () => {
     const fixture = createFixture();
-    const { createGoal } = await import('../../src/services/stateMachine.ts');
-    const { serializeGoalState } = await import('../../src/services/stateCodec.ts');
+    const { createGoal } = await import('../../src/models/stateMachine');
+    const { serializeGoalState } = await import('../../src/models/stateCodec');
     const restored = createGoal('restored', undefined, { id: 'restored', now: 10 });
     const session = fixture.context.sessionManager as unknown as {
       getBranch: () => unknown[];

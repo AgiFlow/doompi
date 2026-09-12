@@ -2,11 +2,11 @@ import {
   DOOM_SERVER_HOST_SERVICE,
   type DoomServerHostService,
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
-import { api } from '../../../src/adapters/fileEditsApi.ts';
-import { fileEditsServerFacet } from '../../../src/adapters/server/facet.ts';
-import { filesChannelType } from '../../../src/types/webFiles.ts';
+import { api } from '../../../src/controllers/fileEditsApi';
+import { fileEditsServerFacet } from '../../../src/extensions/server';
+import { filesChannelType } from '../../../src/types/webFiles';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
@@ -23,6 +23,9 @@ function hostContext(scope: DoomServerHostService['scope']) {
       registered.push(candidate);
       return { dispose: () => void (state.disposed += 1) };
     },
+    registerMethod() {
+      return { dispose() {} };
+    },
     registerChannel(candidate) {
       channels.push(candidate);
       return { dispose: () => void (state.disposed += 1) };
@@ -30,39 +33,42 @@ function hostContext(scope: DoomServerHostService['scope']) {
     mounted: () => registered.map((candidate) => candidate.basePath),
     mountedChannels: () => channels.map((candidate) => candidate.frameType),
   };
-  const context = {
-    get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? host : undefined),
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, host);
   return { context, registered, channels, state };
 }
 
 describe('fileEditsServerFacet', () => {
-  it('declares its host dependency', () => {
+  it('declares its host dependency', async () => {
     expect(fileEditsServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
   });
 
-  it('registers the exact file-edits API in session scope', () => {
+  it('registers the exact file-edits API in session scope', async () => {
     const harness = hostContext('session');
-    expect(typeof fileEditsServerFacet.apply(harness.context)).toBe('function');
+    expect(typeof (await fileEditsServerFacet.apply(harness.context))).toBe('function');
     expect(harness.registered).toEqual([api]);
     expect(harness.channels).toEqual([]);
   });
 
-  it('registers the file-edits channel in hub scope', () => {
+  it('registers the file-edits channel in hub scope', async () => {
     const harness = hostContext('global');
-    expect(typeof fileEditsServerFacet.apply(harness.context)).toBe('function');
+    expect(typeof (await fileEditsServerFacet.apply(harness.context))).toBe('function');
     expect(harness.registered).toEqual([]);
     expect(harness.channels).toHaveLength(1);
     expect(harness.channels[0]?.frameType).toBe(filesChannelType);
   });
 
-  it('unregisters the API and channel on disposal', () => {
+  it('unregisters the API and channel on disposal', async () => {
     const session = hostContext('session');
-    fileEditsServerFacet.apply(session.context)?.();
+    await (
+      await fileEditsServerFacet.apply(session.context)
+    )?.();
     expect(session.state.disposed).toBe(1);
 
     const hub = hostContext('global');
-    fileEditsServerFacet.apply(hub.context)?.();
+    await (
+      await fileEditsServerFacet.apply(hub.context)
+    )?.();
     expect(hub.state.disposed).toBe(1);
   });
 });

@@ -5,7 +5,7 @@ import {
   hasArgumentTokens,
   isValidPromptName,
   parsePromptDocument,
-} from '../../../src/services/savedPromptDocument.ts';
+} from '../../../src/services/savedPromptDocument';
 
 describe('saved prompt names', () => {
   it('accepts a lowercase slug', () => {

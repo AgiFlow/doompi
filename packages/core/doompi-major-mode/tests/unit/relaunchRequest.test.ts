@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DOOM_RELAUNCH_FILE_ENV, parseRelaunchHandoff } from '@agimon-ai/doompi-extension-contracts/relaunch-handoff';
-import { requestSupervisedRelaunch, supervisedRelaunchAvailable } from '../../src/adapters/pi/relaunchRequest.ts';
+import { requestSupervisedRelaunch, supervisedRelaunchAvailable } from '../../src/controllers/relaunchRequest';
 
 let workDir: string;
 

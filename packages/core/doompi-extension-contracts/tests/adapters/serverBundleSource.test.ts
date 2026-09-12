@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadServerBundle, resolveServerBundleSource } from '../../src/adapters/serverFacetLoader.ts';
+import { loadServerBundle, resolveServerBundleSource } from '../../src/controllers/serverFacetLoader';
 
 const roots: string[] = [];
 afterEach(() => {

@@ -6,11 +6,11 @@ import {
   DOOM_SERVER_BUNDLE_FILE,
   type DoomServerBundleEntry,
   parseDoomServerBundle,
-} from '../../src/schemas/serverBundle.ts';
-import type { DoomApi, DoomApiContext } from '../../src/schemas/packageApi.ts';
-import { DOOM_SERVER_HOST_SERVICE, type DoomServerFacet } from '../../src/schemas/serverFacet.ts';
-import { createDoomServerHost } from '../../src/services/serverFacet.ts';
-import { installServerFacets, type LoadedServerFacet, loadServerBundle } from '../../src/adapters/serverFacetLoader.ts';
+} from '../../src/schemas/serverBundle';
+import type { DoomApi, DoomApiContext } from '../../src/schemas/packageApi';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerFacet } from '../../src/schemas/serverFacet';
+import { createDoomServerHost } from '../../src/services/serverFacet';
+import { installServerFacets, type LoadedServerFacet, loadServerBundle } from '../../src/controllers/serverFacetLoader';
 
 const directories: string[] = [];
 afterEach(() => {
@@ -218,13 +218,17 @@ describe('installServerFacets', () => {
         loadedFacet('first', {
           apply() {
             events.push('apply:first');
-            return () => events.push('dispose:first');
+            return () => {
+              events.push('dispose:first');
+            };
           },
         }),
         loadedFacet('second', {
           apply() {
             events.push('apply:second');
-            return () => events.push('dispose:second');
+            return () => {
+              events.push('dispose:second');
+            };
           },
         }),
       ],

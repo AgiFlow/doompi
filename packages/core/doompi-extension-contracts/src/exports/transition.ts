@@ -19,17 +19,17 @@ export type {
   TransitionSource,
   TransitionSynchronization,
   TransitionTarget,
-} from '../schemas/transition.ts';
+} from '../schemas/transition';
 export {
   DOOM_TRANSITION_SERVICE,
   MINOR_MODE_CATALOG_SERVICE,
   readDoomTransitionCoordinator,
   readMinorModeCatalogHost,
   requireDoomTransitionCoordinator,
-} from '../schemas/transition.ts';
+} from '../schemas/transition';
 export {
   consumeMinorModeReloadHandoff,
   discardMinorModeReloadHandoff,
   type MinorModeReloadHandoffHandle,
   prepareMinorModeReloadHandoff,
-} from '../schemas/transitionContext.ts';
+} from '../schemas/transitionContext';

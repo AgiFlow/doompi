@@ -1,5 +1,5 @@
 import { type Static, Type } from 'typebox';
-import type { DoomExtensionContext } from './config.ts';
+import type { DoomExtensionContext } from './config';
 
 /**
  * How the key badge is painted. `exit` marks the row that leaves an active minor

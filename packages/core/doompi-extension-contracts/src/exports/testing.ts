@@ -2,7 +2,7 @@ export {
   type ExtensionContractScenario,
   standardExtensionScenarios,
   type StandardExtensionContractOptions,
-} from '../adapters/testing/extensionContract.ts';
+} from '../controllers/extensionContract';
 export {
   createPiTestHost,
   type PiTestContextOptions,
@@ -20,14 +20,10 @@ export {
   type RecordedStatus,
   type RecordedUserMessage,
   type RecordedWidget,
-} from '../adapters/testing/piHost.ts';
+} from '../controllers/piTestHost';
 export {
   doomHubChannelHarness,
   type DoomHubChannelHarness,
   type DoomHubChannelHarnessOptions,
-} from '../adapters/testing/hubChannel.ts';
-export {
-  mountPackageApi,
-  type MountedPackageApi,
-  type MountPackageApiOptions,
-} from '../services/testing/packageApi.ts';
+} from '../services/hubChannelHarness';
+export { mountPackageApi, type MountedPackageApi, type MountPackageApiOptions } from '../services/packageApiHarness';

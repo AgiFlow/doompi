@@ -4,9 +4,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
-import { findSileroVadModelPath, SileroSpeechPresenceDetector } from '../src/adapters/audio/silero.ts';
-import { PCM_FRAME_BYTES, PCM_FRAME_MS, PCM_SAMPLE_RATE } from '../src/services/pcm.ts';
-import { AdaptiveVoiceActivityDetector } from '../src/services/vad.ts';
+import { findSileroVadModelPath, SileroSpeechPresenceDetector } from '../src/services/silero';
+import { PCM_FRAME_BYTES, PCM_FRAME_MS, PCM_SAMPLE_RATE } from '../src/services/pcm';
+import { AdaptiveVoiceActivityDetector } from '../src/services/vad';
 
 const SILERO_MODEL_SHA256 = '1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3';
 const FIXTURE_DIRECTORY = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');

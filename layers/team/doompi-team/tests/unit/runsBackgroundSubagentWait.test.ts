@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SubagentWaiter } from '../../src/adapters/runs/background/subagentWait';
+import { SubagentWaiter } from '../../src/services/subagentWait';
 import type {
   AsyncJobTrackerContract,
   TrackedAsyncJob,
   TrackedAsyncJobsContract,
-} from '../../src/adapters/asyncJobTracker';
-import type { SessionScope } from '../../src/adapters/filesystem/paths';
+} from '../../src/services/asyncJobTracker';
+import type { SessionScope } from '../../src/services/sessionPaths';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 /** An in-memory job tracker a test can mutate directly to simulate event-fed state. */

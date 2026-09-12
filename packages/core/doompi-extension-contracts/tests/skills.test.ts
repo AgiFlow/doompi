@@ -5,7 +5,7 @@ import {
   DOOM_SKILL_SOURCES_SERVICE,
   readDoomSkillSourcesService,
   requireDoomSkillSourcesService,
-} from '../src/schemas/skills.ts';
+} from '../src/schemas/skills';
 
 describe('Doom skill-sources Cordis service', () => {
   it('replaces a source and makes stale disposal harmless', () => {

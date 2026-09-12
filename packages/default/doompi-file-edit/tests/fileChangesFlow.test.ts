@@ -2,17 +2,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EditTracker } from '../src/adapters/EditTracker/EditTracker.ts';
-import { createFileEditsApi } from '../src/adapters/fileEditsApi.ts';
-import { FileEditPaths } from '../src/adapters/FileEditPaths/FileEditPaths.ts';
-import { NodeSnapshotStoreAdapter } from '../src/adapters/node/snapshotStore.ts';
-import { NodeTreeManifestAdapter } from '../src/adapters/node/treeManifest.ts';
-import { readSessionFiles } from '../src/adapters/webFilesChannel.ts';
-import { TimelineStore } from '../src/adapters/TimelineStore/TimelineStore.ts';
-import { createDoomIgnoreMatcher } from '../src/services/doomIgnore.ts';
-import type { FileEditsDetailView } from '../src/types/fileEditsApi.ts';
-import { detailUrl } from '../src/types/fileEditsApi.ts';
-import type { GitStatusPort } from '../src/types/gitStatus.ts';
+import { EditTracker } from '../src/services/editTracker';
+import { createFileEditsApi } from '../src/controllers/fileEditsApi';
+import { FileEditPaths } from '../src/services/fileEditPaths';
+import { NodeSnapshotStoreAdapter } from '../src/services/snapshotStore';
+import { NodeTreeManifestAdapter } from '../src/services/treeManifest';
+import { readSessionFiles } from '../src/controllers/webFilesChannel';
+import { TimelineStore } from '../src/services/timelineStore';
+import { createDoomIgnoreMatcher } from '../src/services/doomIgnore';
+import type { FileEditsDetailView } from '../src/types/fileEditsApi';
+import { detailUrl } from '../src/types/fileEditsApi';
+import type { GitStatusPort } from '../src/types/gitStatus';
 
 /**
  * The three halves meeting on disk.

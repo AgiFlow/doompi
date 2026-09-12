@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defineGlobalStore } from '../src/services/globalStore.ts';
+import { defineGlobalStore } from '../src/models/globalStore';
 
 describe('defineGlobalStore', () => {
   it('shares one reactive value and resets it to the original value', () => {

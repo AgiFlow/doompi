@@ -3,15 +3,16 @@ import { installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cor
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const planModeExtension = vi.hoisted(() => vi.fn());
-vi.mock('../src/services/planMode.ts', () => ({ planModeExtension }));
+const createPlanModeRuntime = vi.hoisted(() => vi.fn());
+vi.mock('../src/controllers/planMode', () => ({ createPlanModeRuntime }));
 
-const { activatePlanExtension } = await import('../src/adapters/pi/extension.ts');
+const { activatePlanExtension } = await import('../src/extensions/pi');
 
 function createPi(): { pi: ExtensionAPI; shutdown: () => Promise<void> } {
   const handlers = new Map<string, () => Promise<void>>();
   const eventHandlers = new Map<string, Set<(payload: unknown) => void>>();
   const pi = {
+    registerTool: vi.fn(),
     events: {
       emit(event: string, payload: unknown) {
         for (const handler of eventHandlers.get(event) ?? []) handler(payload);
@@ -38,7 +39,8 @@ function createPi(): { pi: ExtensionAPI; shutdown: () => Promise<void> } {
 
 describe('standard Plan composition', () => {
   beforeEach(() => {
-    planModeExtension.mockReset();
+    createPlanModeRuntime.mockReset();
+    createPlanModeRuntime.mockReturnValue({ tools: [], events: {} });
   });
 
   it('installs the complete Plan factory and awaits its package-local lifecycle', async () => {
@@ -46,18 +48,22 @@ describe('standard Plan composition', () => {
 
     await activatePlanExtension(pi);
 
-    expect(planModeExtension).toHaveBeenCalledOnce();
-    expect(planModeExtension).toHaveBeenCalledWith(expect.any(Context), pi);
+    expect(createPlanModeRuntime).toHaveBeenCalledOnce();
+    expect(createPlanModeRuntime).toHaveBeenCalledWith(pi);
     await expect(shutdown()).resolves.toBeUndefined();
   });
 
   it('cleans partial initialization before rejecting the factory', async () => {
     const cleanup = vi.fn(async () => undefined);
     const failure = new Error('install failed');
-    planModeExtension.mockImplementationOnce((cordis: Context) => {
-      cordis.effect(() => cleanup, 'test-partial-plan-runtime');
-      throw failure;
-    });
+    createPlanModeRuntime.mockImplementationOnce(() => ({
+      services: [
+        (cordis: Context) => {
+          cordis.effect(() => cleanup, 'test-partial-plan-runtime');
+          throw failure;
+        },
+      ],
+    }));
     const { pi } = createPi();
 
     await expect(activatePlanExtension(pi)).rejects.toBe(failure);
@@ -67,9 +73,7 @@ describe('standard Plan composition', () => {
 
   it('memoizes repeated session shutdown disposal', async () => {
     const cleanup = vi.fn(async () => undefined);
-    planModeExtension.mockImplementationOnce((cordis: Context) => {
-      cordis.effect(() => cleanup, 'test-plan-runtime');
-    });
+    createPlanModeRuntime.mockImplementationOnce(() => ({ onStop: cleanup }));
     const { pi, shutdown } = createPi();
     await activatePlanExtension(pi);
 
@@ -78,18 +82,18 @@ describe('standard Plan composition', () => {
     expect(cleanup).toHaveBeenCalledOnce();
   });
 
-  it('creates a fresh Cordis root when Pi recreates the factory', async () => {
+  it('constructs each runtime with its own Pi host', async () => {
     const first = createPi();
     const second = createPi();
 
     await activatePlanExtension(first.pi);
     await activatePlanExtension(second.pi);
 
-    const firstRoot = planModeExtension.mock.calls[0]?.[0];
-    const secondRoot = planModeExtension.mock.calls[1]?.[0];
-    expect(firstRoot).toBeInstanceOf(Context);
-    expect(secondRoot).toBeInstanceOf(Context);
-    expect(secondRoot).not.toBe(firstRoot);
+    const firstHost = createPlanModeRuntime.mock.calls[0]?.[0];
+    const secondHost = createPlanModeRuntime.mock.calls[1]?.[0];
+    expect(firstHost).toBe(first.pi);
+    expect(secondHost).toBe(second.pi);
+    expect(secondHost).not.toBe(firstHost);
     await Promise.all([first.shutdown(), second.shutdown()]);
   });
 });

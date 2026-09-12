@@ -1,8 +1,8 @@
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { runRpcQuestionnaire } from '../../src/adapters/pi/rpcQuestionnaireAdapter.js';
-import type { QuestionParams } from '../../src/schemas/questionnaire.js';
-import { ANSWER_ENVELOPE_PREFIX, encodeAnswerEnvelope } from '../../src/types/askUserWire.js';
+import { runRpcQuestionnaire } from '../../src/services/rpcQuestionnaire';
+import type { QuestionParams } from '../../src/schemas/questionnaire';
+import { ANSWER_ENVELOPE_PREFIX, encodeAnswerEnvelope } from '../../src/types/askUserWire';
 
 function context(
   select: (...args: unknown[]) => Promise<string | undefined>,

@@ -5,10 +5,10 @@ export type {
   DoomContextContributionRegistration,
   DoomContextContributionsService,
   DoomContextContributionsSnapshot,
-} from '../schemas/contextContributions.ts';
+} from '../schemas/contextContributions';
 export {
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
   readDoomContextContributions,
   requireDoomContextContributions,
-} from '../schemas/contextContributions.ts';
-export { createDoomContextContributionsService } from '../services/contextContributions.ts';
+} from '../schemas/contextContributions';
+export { createDoomContextContributionsService } from '../services/contextContributions';

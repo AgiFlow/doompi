@@ -1,13 +1,13 @@
 import type { ModelContext, ModelContextTool, WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AuthorBrowserMessage, AuthorHubMessage } from '../../src/types/webAuthor.ts';
+import type { AuthorBrowserMessage, AuthorHubMessage } from '../../src/types/webAuthor';
 import {
   applyAuthorHubMessage,
   authorBridgeView,
   dropAuthorViewportSession,
   focusAuthorViewport,
   startAuthorBrowserBridge,
-} from '../../src/web/api/authorBrowserBridge.ts';
+} from '../../src/web/api/authorBrowserBridge';
 
 const releases: Array<() => void> = [];
 
@@ -39,9 +39,12 @@ function fixture() {
     removeEventListener() {},
   };
   const runtime: WebPluginRuntime = {
+    mount: { scope: 'session', workspaceId: 'work-1', sessionId: 'session-1' },
     sendSessionFrame() {},
-    sendHubFrame(frame) {
-      sent.push(frame.payload as unknown as AuthorBrowserMessage);
+    sendHubFrame() {},
+    async invokeServerMethod(call) {
+      sent.push((call.input as { message: AuthorBrowserMessage }).message);
+      return {};
     },
     onHubConnected(listener) {
       connected = listener;

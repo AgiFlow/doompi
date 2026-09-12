@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { AsyncSubagentSpawner, type AsyncSubagentSpawnInput } from '../../src/adapters/runs/background/asyncExecution';
-import { ExternalProcessIpc, type ExternalProcessEndpoint } from '../../src/adapters/process/externalProcessIpc';
+import { AsyncSubagentSpawner, type AsyncSubagentSpawnInput } from '../../src/services/asyncExecution';
+import { ExternalProcessIpc, type ExternalProcessEndpoint } from '../../src/services/externalProcessIpc';
 import {
   SpawnHandshake,
   type SpawnHandshakeContract,
   type SpawnHandshakeOutcome,
-} from '../../src/adapters/runs/background/spawnHandshake';
-import type { SessionScope } from '../../src/adapters/filesystem/paths';
+} from '../../src/services/spawnHandshake';
+import type { SessionScope } from '../../src/services/sessionPaths';
 import { SUBAGENT_ROOT_SESSION_ENV, SUBAGENT_RUN_ID_ENV } from '../../src/types/environment';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 

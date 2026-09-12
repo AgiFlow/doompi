@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DefaultGoalExtensionService } from '../../../src/services/extensionService.ts';
+import { DefaultGoalExtensionService } from '../../../src/services/extensionService';
 
 describe('DefaultGoalExtensionService', () => {
   it('returns the command result without depending on a host API', async () => {

@@ -2,11 +2,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import { describe, expect, it, vi } from 'vitest';
-import { resolveLauncherLoadPlan } from '../../src/adapters/launcherComposition.ts';
-import {
-  LAUNCHER_COMPOSITION_VERSION,
-  type LauncherCompositionState,
-} from '../../src/types/interfaces/launcherComposition';
+import { resolveLauncherLoadPlan } from '../../src/services/launcherComposition';
+import { LAUNCHER_COMPOSITION_VERSION } from '../../src/constants/launcherComposition';
+import { type LauncherCompositionState } from '../../src/types/interfaces/launcherComposition';
 
 const configMocks = vi.hoisted(() => ({
   loadMajorModesConfig: vi.fn(() => ({

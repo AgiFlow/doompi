@@ -1,8 +1,8 @@
 import type { DoomApiContext } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { McpSettingsManager } from '../src/adapters/node/mcpSettingsManager.ts';
-import { mcpHubApi } from '../src/adapters/web/mcpHubApi.ts';
-import type { McpAuthorizationFlow, McpRepositoryCatalog } from '../src/types/webMcp.ts';
+import { McpSettingsManager } from '../src/services/mcpSettingsManager';
+import { mcpHubApi } from '../src/controllers/mcpHubApi';
+import type { McpAuthorizationFlow, McpRepositoryCatalog } from '../src/types/webMcp';
 
 const REPOSITORY_ID = `repo-${'a'.repeat(24)}`;
 const WORKSPACE_ID = '4f4de908130477dba317d65a8f77f50a';

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { defineSessionChannel, defineWebPlugin } from '../src/exports/index.ts';
+import { defineSessionChannel, defineWebPlugin } from '../src/exports';
 import type {
   SessionChannelContribution,
   UserMessageActionContribution,
   UserMessageActionRunContext,
   WebPluginRuntime,
-} from '../src/exports/index.ts';
+} from '../src/exports';
 
 interface DemoPayload {
   items: string[];
@@ -61,6 +61,7 @@ describe('contract identity helpers', () => {
     const runtime: WebPluginRuntime = {
       sendSessionFrame: () => undefined,
       sendHubFrame: () => undefined,
+      invokeServerMethod: async () => undefined,
       onHubConnected(listener) {
         listeners.add(listener);
         return () => listeners.delete(listener);

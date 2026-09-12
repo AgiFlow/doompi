@@ -4,13 +4,13 @@ import {
   type GlobalStore,
   type SessionStore,
 } from '@agimon-ai/doompi-web-contracts';
-import { VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../../types/clientMedia.ts';
-import type { RealtimeBrowserState } from '../../types/realtime.ts';
+import { VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../../types/clientMedia';
+import type { RealtimeBrowserState } from '../../types/realtime';
 import {
   VOICE_OWNERSHIP_FRAME_TYPE,
   parseBrowserVoiceOwnershipPayload,
   type BrowserVoiceOwnershipPayload,
-} from '../../types/voiceOwnership.ts';
+} from '../../types/voiceOwnership';
 
 const MAX_EVENT_EPOCH_LENGTH = 200;
 const VOICE_MEDIA_PAGE_STATE_VERSION = 1;

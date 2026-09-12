@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { acquireBootstrapClaim } from '../../src/adapters/bootstrapClaim.ts';
+import { acquireBootstrapClaim } from '../../src/models/bootstrapClaim';
 
 describe('bootstrap claim', () => {
   it('gives the load cycle to the first caller for a repository', () => {

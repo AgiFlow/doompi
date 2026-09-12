@@ -21,8 +21,10 @@ import { subscribeTelemetryRecords } from '@agimon-ai/doompi-telemetry';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { installTeamRuntime } from '../../src/adapters/pi/extension';
-import { createSessionScope } from '../../src/adapters/filesystem/paths';
+import { activateTeamExtension } from '../../src/extensions/pi';
+import * as runtimeModule from '../../src/services/teamRuntime';
+import type { TeamExtensionRuntime } from '../../src/services/teamRuntime';
+import { createSessionScope } from '../../src/services/sessionPaths';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-team';
@@ -67,7 +69,7 @@ const activeHosts: FakeHost[] = [];
 const activeRuntimes: Array<{
   pi: ExtensionAPI;
   cordis: Context;
-  runtime: ReturnType<typeof installTeamRuntime>;
+  runtime: TeamExtensionRuntime;
 }> = [];
 const activeReadinessBindings: Array<{
   coordinator: DoomReadinessCoordinator;
@@ -94,15 +96,15 @@ function testSessionPlugin(cordis: Context, { context, coordinator }: TestSessio
   cordis.effect(() => () => coordinator.dispose(), `${PACKAGE_SOURCE}/test-readiness`);
 }
 
-function activateTeamForTest(pi: ExtensionAPI): ReturnType<typeof installTeamRuntime> {
+async function activateTeamForTest(pi: ExtensionAPI): Promise<TeamExtensionRuntime> {
   const cordis = new Context();
-  const runtime = installTeamRuntime(cordis, pi);
+  const runtime = await installTeamRuntime(cordis, pi);
   pi.on('session_shutdown', () => cordis.fiber.dispose());
   activeRuntimes.push({ pi, cordis, runtime });
   return runtime;
 }
 
-function runtimeFor(pi: ExtensionAPI): ReturnType<typeof installTeamRuntime> {
+function runtimeFor(pi: ExtensionAPI): TeamExtensionRuntime {
   const runtime = activeRuntimes.findLast((candidate) => candidate.pi === pi);
   if (!runtime) throw new Error('Expected the Team runtime to be active.');
   return runtime.runtime;
@@ -246,49 +248,49 @@ afterEach(async () => {
 });
 
 describe('Team standard runtime', () => {
-  it('registers the subagent tool, so a session can actually spawn', () => {
+  it('registers the subagent tool, so a session can actually spawn', async () => {
     resetRuntimeState();
     const host = fakePi();
 
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
 
     expect(host.tools).toContain('subagent');
     expect(host.tools).not.toContain('subagent_wait');
   });
 
-  it('registers exactly the two Doom Team model-facing tools', () => {
+  it('registers exactly the two Doom Team model-facing tools', async () => {
     resetRuntimeState();
     const host = fakePi();
 
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
 
     expect(host.tools.toSorted((left, right) => left.localeCompare(right))).toEqual(['intercom', 'subagent']);
   });
 
-  it('registers the catalog and fleet commands', () => {
+  it('registers the catalog and fleet commands', async () => {
     resetRuntimeState();
     const host = fakePi();
 
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
 
     expect(host.commands).toContain('subagents-list');
     expect(host.commands).toContain('subagents-fleet');
   });
 
-  it('registers slash commands beyond the fleet command', () => {
+  it('registers slash commands beyond the fleet command', async () => {
     resetRuntimeState();
     const host = fakePi();
 
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
 
     expect(host.commands.length).toBeGreaterThan(1);
   });
 
-  it('registers the completion renderer, so a finished run renders as more than raw markdown', () => {
+  it('registers the completion renderer, so a finished run renders as more than raw markdown', async () => {
     resetRuntimeState();
     const host = fakePi();
 
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
 
     expect(host.renderers).toContain('subagent-notify');
   });
@@ -302,14 +304,14 @@ describe('Team standard runtime', () => {
     const host = fakePi();
 
     try {
-      expect(() => activateTeamForTest(host.pi)).not.toThrow();
+      await expect(activateTeamForTest(host.pi)).resolves.toBeDefined();
       await expect(host.fireAsync('session_start')).resolves.toBeUndefined();
       await waitForTeamReadiness(host);
     } finally {
     }
   });
 
-  it('activates with no scope while stale team environment is still set', () => {
+  it('activates with no scope while stale team environment is still set', async () => {
     resetRuntimeState();
     const host = fakePi();
     // A parent puts these on its OWN process.env when it binds as team member
@@ -326,7 +328,7 @@ describe('Team standard runtime', () => {
     process.env.PI_SUBAGENT_TEAM_MAIN_MEMBER = 'main';
 
     try {
-      expect(() => activateTeamForTest(host.pi)).not.toThrow();
+      await expect(activateTeamForTest(host.pi)).resolves.toBeDefined();
     } finally {
       delete process.env.PI_SUBAGENT_TEAM_ID;
       delete process.env.PI_SUBAGENT_TEAM_ROOT_SESSION;
@@ -334,11 +336,11 @@ describe('Team standard runtime', () => {
     }
   });
 
-  it('subscribes to session_start and session_shutdown', () => {
+  it('subscribes to session_start and session_shutdown', async () => {
     resetRuntimeState();
     const host = fakePi();
 
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
 
     expect(host.handlers.has('session_start')).toBe(true);
     expect(host.handlers.has('session_shutdown')).toBe(true);
@@ -347,7 +349,7 @@ describe('Team standard runtime', () => {
   it('binds main intercom membership against the host session id', async () => {
     resetRuntimeState();
     const host = fakePi();
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
 
     // Main membership is created only once a session id exists, so binding is
     // driven from session_start rather than activation.
@@ -371,7 +373,7 @@ describe('Team standard runtime', () => {
         context,
       }),
     );
-    const runtime = installTeamRuntime(cordis, host.pi);
+    const runtime = await installTeamRuntime(cordis, host.pi);
     host.pi.on('session_shutdown', () => cordis.fiber.dispose());
     activeRuntimes.push({ pi: host.pi, cordis, runtime });
     await cordis.fiber.await();
@@ -387,7 +389,7 @@ describe('Team standard runtime', () => {
     const host = fakePi();
     const events: string[] = [];
     const unsubscribe = subscribeTelemetryRecords((record) => events.push(record.event));
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
     const runtime = runtimeFor(host.pi);
 
     try {
@@ -404,7 +406,7 @@ describe('Team standard runtime', () => {
   it('keeps each Pi session in its own tracked fleet', async () => {
     resetRuntimeState();
     const host = fakePi();
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
     const runtime = runtimeFor(host.pi);
     const tracker = runtime.asyncJobTracker;
 
@@ -438,7 +440,7 @@ describe('Team standard runtime', () => {
   it('publishes direct runs for the exact active session and invalidates on tracker changes', async () => {
     resetRuntimeState();
     const host = fakePi();
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
     const tracker = runtimeFor(host.pi).asyncJobTracker;
     const cordis = cordisFor(host.pi);
     const invalidations: string[] = [];
@@ -461,7 +463,7 @@ describe('Team standard runtime', () => {
   it('serves the typed delegation lifecycle through the session Cordis service', async () => {
     resetRuntimeState();
     const host = fakePi();
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
     const runtime = runtimeFor(host.pi);
 
     const planner = runtime.spawnPlanner;
@@ -566,7 +568,7 @@ describe('Team standard runtime', () => {
   it('resolves the fork source when the transcript is persisted after the session binds', async () => {
     resetRuntimeState();
     const host = fakePi();
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
     const runtime = runtimeFor(host.pi);
 
     const planner = runtime.spawnPlanner;
@@ -625,7 +627,7 @@ describe('Team standard runtime', () => {
   it('follows the session leaf as it moves between delegation requests', async () => {
     resetRuntimeState();
     const host = fakePi();
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
     const runtime = runtimeFor(host.pi);
 
     const planner = runtime.spawnPlanner;
@@ -685,7 +687,7 @@ describe('Team standard runtime', () => {
   it('collects typed subagent policies for every central spawn path', async () => {
     resetRuntimeState();
     const host = fakePi();
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
     const runtime = runtimeFor(host.pi);
     const policies = runtime.capabilityPolicies;
     await host.fireAsync('session_start');
@@ -712,11 +714,11 @@ describe('Team standard runtime', () => {
   it('creates a fresh package-local container after Pi replaces the runtime', async () => {
     resetRuntimeState();
     const firstHost = fakePi();
-    const firstContainer = activateTeamForTest(firstHost.pi);
+    const firstContainer = await activateTeamForTest(firstHost.pi);
     await firstHost.fireAsync('session_shutdown');
 
     const secondHost = fakePi();
-    const secondContainer = activateTeamForTest(secondHost.pi);
+    const secondContainer = await activateTeamForTest(secondHost.pi);
 
     expect(secondContainer).not.toBe(firstContainer);
     expect(secondHost.commands).toEqual(expect.arrayContaining(['subagents-list', 'subagents-fleet']));
@@ -725,7 +727,7 @@ describe('Team standard runtime', () => {
   it('releases every Cordis-owned effect during session shutdown', async () => {
     resetRuntimeState();
     const host = fakePi();
-    activateTeamForTest(host.pi);
+    await activateTeamForTest(host.pi);
     const runtime = activeRuntimes.find((candidate) => candidate.pi === host.pi);
     if (!runtime) throw new Error('Expected the Team runtime to be active.');
 
@@ -737,7 +739,7 @@ describe('Team standard runtime', () => {
   it('runs package cleanup only once when shutdown is delivered twice', async () => {
     resetRuntimeState();
     const host = fakePi();
-    const runtime = activateTeamForTest(host.pi);
+    const runtime = await activateTeamForTest(host.pi);
     const scheduler = runtime.pollScheduler;
     const stop = vi.spyOn(scheduler, 'stop');
 
@@ -747,3 +749,12 @@ describe('Team standard runtime', () => {
     expect(stop).toHaveBeenCalledOnce();
   });
 });
+
+async function installTeamRuntime(context: Context, pi: ExtensionAPI): Promise<TeamExtensionRuntime> {
+  const observed = vi.spyOn(runtimeModule, 'createTeamExtensionRuntime');
+  await activateTeamExtension.install(context, pi);
+  const runtime = observed.mock.results.at(-1)?.value;
+  observed.mockRestore();
+  if (!runtime) throw new Error('Runtime was not constructed');
+  return runtime;
+}

@@ -1,6 +1,6 @@
 import { Button, Input } from '@agimon-ai/doompi-web-components';
-import type { SavedPromptView } from '../../types/webPrompts.ts';
-import { filterPrompts } from '../lib/promptsActions.ts';
+import type { SavedPromptView } from '../../types/webPrompts';
+import { filterPrompts } from '../lib/promptsActions';
 
 /**
  * The list-first body of the prompt dialog.

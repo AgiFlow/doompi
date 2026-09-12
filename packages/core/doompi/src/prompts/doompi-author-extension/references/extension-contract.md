@@ -57,110 +57,64 @@ Use the canonical source vocabulary and omit unused folders:
 
 ```text
 src/
-|-- types/       Domain types and ports
+|-- constants/   Constant data
+|-- types/       Shared types
 |-- schemas/     Runtime validation
-|-- services/    Host-neutral behavior
-|-- adapters/    Filesystem, process, network, and host implementations
-|   `-- pi/      Pi and Cordis composition root
-|-- commands/    Pi command translation when needed
-|-- container/   Plain dependency construction when needed
+|-- models/      Mutable state
+|-- services/    Logic, including filesystem, process, and network operations
+|   `-- review/  index.ts implementation, type.ts service ports
+|-- controllers/ Request and command handlers using services and models
+|-- tools/       Typed tool declarations using services and models
+|-- extensions/  Direct pi.ts, server.ts, and web.ts host composition
+|-- web/         Browser presentation when needed
+|-- tui/         Terminal presentation when needed
 |-- prompts/     Published package-owned Help prompts
-`-- exports/     Package manifest surfaces only
+`-- exports/     Flat public forwarding files, reusable APIs only
 ```
 
-Services must not import Pi, Cordis, concrete adapters, containers, or Node builtins. Put host interaction in adapters and keep the Pi entry thin.
+Omit unused folders. There are no adapters, container, commands, or providers roots. Services may perform IO and provide Cordis services, but host bootstrapping and native registration belong to the extension helpers. Imports point from extensions to controllers/tools to services/models, then schemas/types/constants. Use extensionless source imports and omit `/index`.
 
-## Standard Pi and Cordis lifecycle
+## Plugin declarations and lifecycle
 
-The factory joins the runner-owned host, mounts one package fiber, and releases resources in order:
+The helper joins the shared Cordis host and owns registration and teardown. A Pi entry composes typed declarations:
 
 ```ts
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import type { Context } from '@deepseek-ai/cordis';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { createReviewCommand } from '../controllers/reviewCommand';
+import { createReviewService } from '../services/review';
 
-const PACKAGE_SOURCE = '@example/doompi-review';
-
-function reviewPlugin(cordis: Context, { pi }: { readonly pi: ExtensionAPI }): void {
-  cordis.effect(function* () {
-    pi.registerCommand('review', {
-      description: 'Review the current change',
-      handler: async () => undefined,
-    });
-    yield () => undefined;
-  }, PACKAGE_SOURCE);
-}
-
-export async function reviewExtension(pi: ExtensionAPI): Promise<void> {
-  const connection = await connectDoomCordisHost(pi, PACKAGE_SOURCE);
-  const fiber = connection.root.plugin(reviewPlugin, { pi });
-  try {
-    await fiber;
-  } catch (error) {
-    try {
-      await fiber.dispose();
-    } finally {
-      await connection.dispose();
-    }
-    throw error;
-  }
-
-  let disposal: Promise<void> | undefined;
-  pi.on(
-    'session_shutdown',
-    () =>
-      (disposal ??= (async () => {
-        try {
-          await fiber.dispose();
-        } finally {
-          await connection.dispose();
-        }
-      })()),
-  );
-}
+export const reviewExtension = definePiExtension('@example/doompi-review', () => {
+  const service = createReviewService();
+  return {
+    commands: [createReviewCommand(service)],
+    resources: [
+      {
+        source: '@example/doompi-review',
+        moduleUrl: import.meta.url,
+        skills: [{ name: 'doompi-use-review', description: 'Configure and use the review extension.' }],
+      },
+    ],
+  };
+});
 
 export default reviewExtension;
 ```
 
-Do not construct a package-local Cordis `Context`. Same-runner collaboration belongs to the shared host. A separately installed extension can use the host bridge's standalone fallback.
+Controllers use `defineCommand` for portable commands; tools use `defineTool` for portable tools or `definePiTool` for native Pi capabilities. Server plugins declare a `name` and explicit `global`, `workspace`, and `session` scopes. Each scope is a contribution object or typed factory, and exposes `api`, `methods`, or `channels`; session scope also exposes agent capabilities. A `doompiServer` manifest points directly to `./src/extensions/server.ts`. Browser plugins similarly live directly in `./src/extensions/web.ts`.
 
-## Consuming shared services
+Factories may return a promise. The helper waits for the declaration, mounts service contributions, registers capabilities, and awaits `onStart`. Shutdown aborts the instance signal, waits for startup to settle, awaits `onStop`, releases registrations in reverse order, then awaits `onDispose`. `onStop` runs once the start stage has been reached, including when `onStart` is absent or fails. Registration failures still release acquired handles and call accepted `onDispose`. Cleanup is idempotent and all cleanup stages run even when one fails.
 
-Use an owning injection for every required service:
+Hooks receive one typed context. Factories construct state; `onStart` begins external work. Use `onStop` to stop and drain it, and `onDispose` for final instance resources. Omit unused hooks and let the helper own registration cleanup. Do not manually connect the Cordis host, call another facet's `apply`, or register a second shutdown wrapper.
 
-```ts
-cordis.inject([DOOM_UI_HUB_SERVICE], (context) => {
-  const handle = requireDoomUiHub(context).registerLeader({
-    source: PACKAGE_SOURCE,
-    bindings: [],
-  });
-  return () => handle.dispose();
-});
-```
+Use arrays for fixed tools and minor modes. Pi supports typed `PiToolCollection` and `PiMinorModeCollection` with `snapshot()` and `subscribe(listener)` when availability changes while mounted. Helpers own subscriptions, cancel withdrawn tools, detach withdrawn mode owners, and follow optional provider replacement. A new tool declaration with the same name replaces the implementation and aborts old invocations. Removed tools retain an unavailable native wrapper.
 
-The injection waits for late providers, disposes the handle when a provider disappears, and registers again against a replacement. Do not read a required service outside the injection that owns it.
+## Shared providers and Help
 
-## Contributing activation-gated Help
+Place a provider's Cordis implementation in its service folder, then include the plugin in the extension's `services` array. Consume a required service inside an owning injection using its `require...` accessor. Return subscription and registration disposers from that injection so provider replacement retracts stale handles. The extension entry only composes the service plugin.
 
-Ship an H1-led `llms.txt` whose relative links remain inside the published package. Register concise skill descriptors from the package plugin:
+The helper already handles optional provider binding for declared `resources`, minor modes, tool restrictions, and other native contributions. Do not duplicate those registrations in a service plugin or lifecycle hook.
 
-```ts
-cordis.inject([DOOM_HELP_SERVICE], (context) => {
-  const handle = requireDoomHelpService(context).register({
-    source: PACKAGE_SOURCE,
-    moduleUrl: import.meta.url,
-    skills: [
-      {
-        name: 'doompi-use-review',
-        description: 'Configure and use the review extension.',
-      },
-    ],
-  });
-  return () => handle.dispose();
-});
-```
-
-The contribution must use the exact nearest package name. Help resolves that package's local `llms.txt`, then its immutable exact-version cache, then a verified exact-version download. Do not point an index at repository files outside the package.
+Help contributions use the exact nearest package name. Publish every relative resource linked from the package's H1-led `llms.txt`, and provide `moduleUrl: import.meta.url` in the resources declaration. Help resolves the local index, then an immutable exact-version cache, then a verified exact-version download. Never point the index at unpublished repository files.
 
 ## Verification
 

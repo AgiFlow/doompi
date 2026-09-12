@@ -8,18 +8,21 @@ import doomExtensionPlugin, {
 const EXPECTED_RULE_IDS = [
   'clean-import-path',
   'compatibility-wrapper-only',
+  'composition-layout',
   'cordis-context-in-pi-adapter',
   'cordis-feature-plugin',
   'cordis-host-order',
   'cordis-service-injection',
   'dispose-external-subscriptions',
   'doom-clean-architecture-boundary',
+  'doom-constants',
   'doom-folder-layout',
   'doom-layer-boundary',
   'doom-package-shape',
   'doom-prompt-shape',
   'doom-server-facet-shape',
   'flat-service-layout',
+  'neutral-extension-contracts',
   'no-ambient-host-access',
   'no-direct-tool-activation',
   'no-forwarding-module',
@@ -33,6 +36,7 @@ const EXPECTED_RULE_IDS = [
   'package-layer-order',
   'pi-extension-default-factory',
   'pi-peer-version',
+  'plugin-composition-wiring',
   'ports-declared-in-types',
   'prefer-cordis-container',
   'provider-owned-policy',
@@ -45,7 +49,9 @@ const EXPECTED_RULE_IDS = [
   'web-plugin-layer-boundary',
   'web-plugin-manifest',
   'web-plugin-no-module-state',
+  'web-plugin-protocol-layout',
   'web-plugin-tool-renderers',
+  'web-plugin-typed-calls',
 ] as const;
 
 describe('Doom extension plugin contract', () => {
@@ -66,7 +72,7 @@ describe('Doom extension plugin contract', () => {
     ).toBe(true);
   });
 
-  it('enforces the layout rules now that every package is on src/exports', () => {
+  it('enforces the declared layout rules', () => {
     for (const ruleId of [
       'public-export-boundary',
       'no-internal-public-import',
@@ -87,6 +93,7 @@ describe('Doom extension plugin contract', () => {
       'no-same-runner-protocol',
       'prefer-cordis-container',
       'doom-clean-architecture-boundary',
+      'doom-constants',
       'web-plugin-layer-boundary',
     ]) {
       expect(recommended.rules[ruleId], ruleId).toBe('error');
@@ -94,14 +101,64 @@ describe('Doom extension plugin contract', () => {
     expect(Object.keys(recommended.rules).sort()).toEqual(EXPECTED_RULE_IDS);
   });
 
-  it('leaves only the import-spelling rule opt-in', () => {
-    // Relative imports still carry a .ts extension across most of the
-    // repository; this promotes with the codemod that removes them.
-    const optIn = Object.entries(recommended.rules)
-      .filter(([, severity]) => severity === 'off')
-      .map(([ruleId]) => ruleId);
+  it('enforces clean import paths with every recommended rule', () => {
+    expect(recommended.rules['clean-import-path']).toBe('error');
+    expect(Object.values(recommended.rules).every((severity) => severity === 'error')).toBe(true);
+  });
 
-    expect(optIn).toEqual(['clean-import-path']);
+  it('publishes only canonical architecture guidance and boundaries', () => {
+    const patterns = doomExtensionPlugin.patterns ?? {};
+    for (const obsolete of ['adapters', 'commands', 'container', 'providers']) {
+      expect(patterns[`doom-${obsolete}`]).toBeUndefined();
+      expect(recommended.boundaries?.some((boundary) => boundary.name === obsolete)).toBe(false);
+      for (const boundary of recommended.boundaries ?? []) {
+        expect(boundary.allowedImports ?? []).not.toContain(`src/${obsolete}/**`);
+      }
+    }
+    for (const root of ['extensions', 'controllers', 'services', 'models', 'tools', 'constants', 'schemas', 'types']) {
+      expect(patterns[`doom-${root}`]?.includes).toContain(`src/${root}/**/*.ts`);
+    }
+    expect(patterns['doom-exports']?.includes).toEqual(['src/exports/*.ts']);
+    expect(patterns['doom-services']?.description).toContain('src/services/{serviceName}/index.ts and type.ts');
+  });
+
+  it('keeps host entries out of public forwarding and separate executable roots', () => {
+    const boundaries = recommended.boundaries ?? [];
+    const exported = boundaries.find((boundary) => boundary.name === 'exports')?.allowedImports ?? [];
+    for (const root of ['extensions', 'bin', 'web', 'exports']) {
+      expect(exported).not.toContain(`src/${root}/**`);
+    }
+    for (const root of ['constants', 'controllers', 'models', 'schemas', 'services', 'tools', 'tui', 'types']) {
+      expect(exported).toContain(`src/${root}/**`);
+    }
+    const extensions = boundaries.find((boundary) => boundary.name === 'extensions')?.allowedImports ?? [];
+    const bin = boundaries.find((boundary) => boundary.name === 'bin')?.allowedImports ?? [];
+    expect(extensions).toContain('src/extensions/**');
+    expect(extensions).not.toContain('src/bin/**');
+    expect(bin).not.toContain('src/extensions/**');
+    expect(bin).not.toContain('src/exports/**');
+    const exceptions = recommended.overrides?.flatMap((override) => override.files) ?? [];
+    expect(exceptions).toEqual([
+      'src/extensions/pi.ts',
+      'src/extensions/server.ts',
+      'tsdown.config.ts',
+      'vitest.config.ts',
+    ]);
+  });
+
+  it('applies the browser boundary before the broader extension composition boundary', () => {
+    const boundaries = recommended.boundaries ?? [];
+    const browser = boundaries.findIndex((boundary) => boundary.name === 'web-plugin-entry');
+    const extensions = boundaries.findIndex((boundary) => boundary.name === 'extensions');
+    expect(browser).toBeGreaterThanOrEqual(0);
+    expect(browser).toBeLessThan(extensions);
+    expect(boundaries[browser]).toEqual({
+      name: 'web-plugin-entry',
+      pattern: 'src/extensions/web.ts',
+      allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
+    });
+    expect(doomExtensionPlugin.patterns?.['doom-web-plugin-entry']?.includes).toEqual(['src/extensions/web.ts']);
+    expect(doomExtensionPlugin.patterns?.['doom-web-plugin-store']?.includes).toEqual(['src/web/stores/**/*.ts']);
   });
 
   it('provides a warning-only migration preset', () => {
@@ -112,7 +169,7 @@ describe('Doom extension plugin contract', () => {
     expect(recommended.boundaries).toContainEqual({
       name: 'web-plugin',
       pattern: 'src/web/**',
-      allowedImports: ['src/web/**', 'src/types', 'src/types/**'],
+      allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
     });
     // tests reach the browser half through the src/** entry, so no separate
     // web entry is needed here any more.

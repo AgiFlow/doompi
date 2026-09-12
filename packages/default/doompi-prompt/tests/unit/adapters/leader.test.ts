@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { registerLeaderContribution } from '../../../src/adapters/pi/leader.ts';
-import { LEADER_GROUP, LEADER_KEY, PACKAGE_SOURCE } from '../../../src/adapters/pi/promptConstants.ts';
-import { COMMAND_NAME } from '../../../src/commands/promptsCommand.ts';
+import { registerLeaderContribution } from '../../../src/services/promptLeader';
+import { LEADER_GROUP, LEADER_KEY, PACKAGE_SOURCE } from '../../../src/constants/prompt';
+import { COMMAND_NAME } from '../../../src/constants/prompts';
 
 describe('the leader contribution', () => {
   it('binds the picker under the shared extension group', () => {

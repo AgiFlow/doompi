@@ -1,12 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DelegationManager } from '../src/exports/delegation/manager';
-import { TaskStore } from '../src/exports/store/taskStore';
-import { TaskAssignmentSchema, TaskParamsSchema } from '../src/exports/tool/schema';
-import { DEFAULT_PROMPT_GUIDELINES, registerTaskTool } from '../src/exports/tool/taskTool';
+import type { DelegationManager } from '../src/exports/delegationManager';
+import { TaskStore } from '../src/exports/storeTaskStore';
+import { TaskAssignmentSchema, TaskParamsSchema } from '../src/exports/toolSchema';
+import { DEFAULT_PROMPT_GUIDELINES, createTaskTool } from '../src/exports/toolTaskTool';
 
 let directory: string;
 
@@ -25,16 +25,11 @@ function harness(outcome = { ok: false, message: '#1 is blocked by #2' }, maxTas
     assign: vi.fn().mockResolvedValue(outcome),
     cancel: vi.fn().mockResolvedValue(outcome),
   } as unknown as DelegationManager;
-  let tool: ToolDefinition | undefined;
-  registerTaskTool(
-    {
-      registerTool: (registered: ToolDefinition) => {
-        tool = registered;
-      },
-    } as unknown as ExtensionAPI,
-    { store, delegation, ...(maxTasks === undefined ? {} : { maxTasks }) },
-  );
-  if (!tool) throw new Error('Task tool was not registered.');
+  const tool = createTaskTool({
+    store,
+    delegation,
+    ...(maxTasks === undefined ? {} : { maxTasks }),
+  }) as unknown as ToolDefinition;
   return { store, delegation, tool };
 }
 

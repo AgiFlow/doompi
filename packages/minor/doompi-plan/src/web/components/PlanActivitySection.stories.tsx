@@ -4,8 +4,8 @@
  * default export is a bare `const meta`.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { PlanActivitySection } from './PlanActivitySection.tsx';
-import { formatPlanStatus, PLAN_STATUS_KEY } from '../../types/planApi.ts';
+import { PlanActivitySection } from './PlanActivitySection';
+import { formatPlanStatus, PLAN_STATUS_KEY } from '../../types/planApi';
 
 const slot = (status?: string, sessionId: string | null = 's1') =>
   slotPropsFixture({

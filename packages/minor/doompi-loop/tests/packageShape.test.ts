@@ -99,7 +99,7 @@ describe('doom-loop package boundary', () => {
       scopes: ['session'],
       pluginId: 'loop',
       channels: [],
-      client: './src/exports/webClient.ts',
+      client: './src/extensions/web.ts',
     });
   });
 
@@ -130,7 +130,7 @@ describe('doom-loop package boundary', () => {
     expect(files).toContain('src/prompts');
     expect(files).toContain('src/types/loopView.ts');
     expect(files).toContain('src/web');
-    expect(files).toContain('src/exports/webClient.ts');
+    expect(files).toContain('src/extensions/web.ts');
     expect(files).toContain('README.md');
     expect(files).toContain('package.json');
     for (const resource of files) {

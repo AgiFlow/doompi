@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { startVoiceWorker, type VoiceWorkerRuntimeHandle } from '../src/adapters/process/voiceWorker.ts';
-import { VoiceWorkerClient } from '../src/adapters/process/voiceWorkerClient.ts';
-import type { VoiceWorkerHandle } from '../src/services/voiceWorkerSupervisor.ts';
+import { startVoiceWorker, type VoiceWorkerRuntimeHandle } from '../src/services/voiceWorker';
+import { VoiceWorkerClient } from '../src/services/voiceWorkerClient';
+import type { VoiceWorkerHandle } from '../src/services/voiceWorkerSupervisor';
 import {
   type VoiceWorkerCommand,
   type VoiceWorkerEvent,
   VOICE_WORKER_PROTOCOL_VERSION,
   VOICE_WORKER_TRANSCRIPTION_TIMEOUT_CAPABILITY,
-} from '../src/services/voiceWorkerProtocol.ts';
+} from '../src/services/voiceWorkerProtocol';
 
 class WorkerBridge implements VoiceWorkerHandle {
   private readonly listeners = new Map<string, Array<(value: unknown) => void>>();

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BoundedTranscriptionQueue, UtteranceAssembler } from '../src/services/utterance.ts';
-import type { IClock, TimerHandle } from '../src/types/index.ts';
+import { BoundedTranscriptionQueue, UtteranceAssembler } from '../src/services/utterance';
+import type { IClock, TimerHandle } from '../src/types';
 
 function controlledClock() {
   let now = 0;

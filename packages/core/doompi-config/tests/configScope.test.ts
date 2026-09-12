@@ -2,15 +2,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadDoomConfigLayers } from '../src/adapters/config.ts';
-import { setDoomConfigValue, unsetDoomConfigValue } from '../src/adapters/configWriter.ts';
+import { loadDoomConfigLayers } from '../src/services/config';
+import { setDoomConfigValue, unsetDoomConfigValue } from '../src/services/configWriter';
 import {
   configLeafKeys,
   configScopeOf,
   mergeDoomConfigs,
   parseDoomConfig,
   resolveVoiceConfig,
-} from '../src/services/configPolicy.ts';
+} from '../src/services/configPolicy';
 
 /**
  * Scope, made answerable.

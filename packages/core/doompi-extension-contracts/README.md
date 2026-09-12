@@ -2,6 +2,8 @@
 
 Validated payloads, named Cordis services, and lifecycle contracts shared by DoomPi extensions.
 
+See [Plugin declarations and lifecycle](docs/plugins.md) for `definePiExtension`, `defineServerPlugin`, scope ownership, and `onStart` / `onStop` / `onDispose`.
+
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).
 
 This is a library, not a Pi extension: it has no Pi manifest and nothing to add to a DoomPi layer.
@@ -32,7 +34,7 @@ boundaries; same-runner extensions collaborate through the named Cordis services
 | `/mode`                                 | `doom/minor-mode-catalog` registration, snapshots, and owner-routed actions         |
 | `/ui-hub`, `/leader`, `/footer`         | `doom/ui-hub` aggregation and typed UI contribution values                          |
 | `/help`                                 | `doom/help` contributions and active-skill snapshots                                |
-| `/skills`, `/loop-launchers`            | Provider-owned registries for skill directories and recurring-loop launchers        |
+| `/skills`                               | Provider-owned registry for skill directories                                       |
 | `/voice-tools`, `/narration`            | `doom/voice-tools` registration and `doom/narration` requests                       |
 | `/notification`                         | Versioned `doom/notification` requests and `doom-notification` session entry data   |
 | `/ask-user`                             | Typed `doom/ask-user/*` fan-out events                                              |

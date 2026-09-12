@@ -1,13 +1,15 @@
-import type { Context } from '@deepseek-ai/cordis';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { Context } from '@deepseek-ai/cordis';
 import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHook,
   DoomHeadlessHostService,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { describe, expect, it, vi } from 'vitest';
-import { cacheHeadlessFacet } from '../../../src/adapters/headless/facet.ts';
+import { cacheServerFacet } from '../../../src/extensions/server';
+import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/headless';
 
-function fixture() {
+async function fixture() {
   const hooks: DoomHeadlessHook[] = [];
   const host = {
     registerResource: () => ({ dispose: vi.fn() }),
@@ -16,7 +18,10 @@ function fixture() {
       return { dispose: vi.fn() };
     },
   } as unknown as DoomHeadlessHostService;
-  cacheHeadlessFacet.apply({ get: () => host } as unknown as Context);
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session' });
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  await cacheServerFacet.apply(context);
   const hook = hooks.find(({ event }) => event === 'before_provider_request') as
     | DoomHeadlessHook<'before_provider_request'>
     | undefined;
@@ -31,7 +36,7 @@ function fixture() {
 
 describe('cache headless provider hook', () => {
   it('wraps an effective cache rewrite as a provider payload patch', async () => {
-    const { execution, hook } = fixture();
+    const { execution, hook } = await fixture();
     const result = await hook.handle(
       {
         lane: 'main',
@@ -51,7 +56,7 @@ describe('cache headless provider hook', () => {
   });
 
   it('returns no patch when the provider payload has no replaceable key', async () => {
-    const { execution, hook } = fixture();
+    const { execution, hook } = await fixture();
     const result = await hook.handle(
       {
         lane: 'main',

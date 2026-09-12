@@ -2,12 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BaseCommand } from '../../src/commands/baseCommand';
-import { EmitMcpCommand } from '../../src/commands/emitMcpCommand';
-import { ExplainCommand, explainMatrix } from '../../src/commands/explainCommand';
-import type { MatrixExplanation } from '../../src/commands/explainCommand';
+import { BaseCommand } from '../../src/controllers/baseCommand';
+import { EmitMcpCommand } from '../../src/controllers/emitMcpCommand';
+import { ExplainCommand, explainMatrix } from '../../src/controllers/explainCommand';
+import type { MatrixExplanation } from '../../src/controllers/explainCommand';
 import type { HarnessOptions } from '../../src/types/interfaces/harness';
-import type { HarnessContext } from '../../src/adapters/harnessContext';
+import type { HarnessContext } from '../../src/services/harnessContext';
 
 function baseExplanation(overrides: Partial<MatrixExplanation> = {}): MatrixExplanation {
   return {

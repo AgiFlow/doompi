@@ -13,9 +13,9 @@ import {
   DOOM_SERVER_HOST_SERVICE,
   type DoomServerHostService,
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
-import { workflowHeadlessFacet } from '../../../src/adapters/headless/facet.ts';
+import { workflowServerFacet } from '../../../src/extensions/server';
 
 const embeddedFeature = vi.hoisted(() => {
   const control = {
@@ -57,7 +57,7 @@ vi.mock('@agimon-ai/workflow-mcp', () => ({
 }));
 vi.mock('zod', () => ({ z: { toJSONSchema: vi.fn(() => ({ type: 'object' })) } }));
 
-function fixture() {
+async function fixture() {
   let minorModes: string[] = [];
   const execution = {
     cwd: process.cwd(),
@@ -118,13 +118,14 @@ function fixture() {
     },
   } as unknown as DoomHeadlessHostService;
   const serverHost = {
+    scope: 'session',
+    registerApi: () => ({ dispose() {} }),
     context: { directEvents: { publish: vi.fn() } },
   } as unknown as DoomServerHostService;
-  const context = {
-    get: (name: string) =>
-      name === DOOM_HEADLESS_HOST_SERVICE ? host : name === DOOM_SERVER_HOST_SERVICE ? serverHost : undefined,
-  } as unknown as Context;
-  const close = workflowHeadlessFacet.apply(context);
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, serverHost);
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  const close = await workflowServerFacet.apply(context);
   return { execution, modes, activities, tools, resources, commands, hooks, publish, modeDispose, registration, close };
 }
 
@@ -139,7 +140,7 @@ function operation(execution: DoomHeadlessExecutionContext) {
 
 describe('workflow headless facet', () => {
   it('executes mode, resource, workflow, run-control, command, and shutdown boundaries', async () => {
-    const test = fixture();
+    const test = await fixture();
     const mode = test.modes[0];
     const activity = test.activities[0];
     const list = test.tools.find(({ name }) => name === 'list_workflows');
@@ -248,7 +249,7 @@ describe('workflow headless facet', () => {
     await shutdown.handle({}, test.execution);
     expect(embeddedFeature.control.dispose).toHaveBeenCalledOnce();
     await stopActivity();
-    test.close?.();
+    await test.close?.();
     expect(test.modeDispose).toHaveBeenCalledOnce();
     expect(test.registration.dispose).toHaveBeenCalled();
   });

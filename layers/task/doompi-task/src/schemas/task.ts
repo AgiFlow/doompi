@@ -1,7 +1,8 @@
+export { COMMAND_NAME } from '../constants/task';
 import { InlineAgentSchema } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
 import { type Static, Type } from 'typebox';
 import { MAX_BRIEF_FILES } from '../types/delegation';
-import type { TaskAction } from '../services/store/types.ts';
+import type { TaskAction } from '../models/task';
 
 export const TASK_ACTIONS = ['upsert', 'list', 'get', 'delete', 'clear', 'assign', 'cancel'] as const;
 export const TASK_STATUSES = ['pending', 'in_progress', 'completed', 'failed', 'deleted'] as const;
@@ -9,7 +10,6 @@ export const TASK_CONTEXTS = ['fresh', 'fork'] as const;
 
 export const TOOL_NAME = 'task';
 export const TOOL_LABEL = 'Task';
-export const COMMAND_NAME = 'tasks';
 
 export const ERR_REQUIRES_INTERACTIVE = '/tasks requires interactive mode';
 export const MSG_NO_TASKS = 'No tasks yet. Ask the agent to add some!';

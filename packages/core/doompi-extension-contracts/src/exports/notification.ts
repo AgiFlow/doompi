@@ -3,7 +3,7 @@ export type {
   DoomNotificationLevel,
   DoomNotificationRequest,
   DoomNotificationService,
-} from '../schemas/notification.ts';
+} from '../schemas/notification';
 export {
   createDoomNotificationEntryData,
   DOOM_NOTIFICATION_ENTRY_TYPE,
@@ -20,4 +20,4 @@ export {
   normalizeDoomNotificationRequest,
   readDoomNotificationService,
   requireDoomNotificationService,
-} from '../schemas/notification.ts';
+} from '../schemas/notification';

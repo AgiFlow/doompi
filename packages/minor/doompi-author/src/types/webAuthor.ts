@@ -1,4 +1,4 @@
-import type { AuthorViewportCapabilityDescriptor } from './author.ts';
+import type { AuthorViewportCapabilityDescriptor } from './author';
 
 export const authorChannelType = 'author_webmcp';
 

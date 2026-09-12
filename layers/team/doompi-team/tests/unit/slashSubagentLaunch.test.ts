@@ -1,18 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ExtensionConfig } from '../../src/adapters/pi/extensions/config';
-import type {
-  SpawnPlannerContract,
-  SpawnPlanRequest,
-  SpawnPlanResult,
-} from '../../src/adapters/pi/extensions/spawnPlan';
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/adapters/asyncJobTracker';
-import type { PollSchedulerContract, PollSubscription } from '../../src/adapters/pollScheduler';
+import type { ExtensionConfig } from '../../src/services/config';
+import type { SpawnPlannerContract, SpawnPlanRequest, SpawnPlanResult } from '../../src/services/spawnPlan';
+import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
+import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
 import {
   launchParallelSubagents,
   launchSingleSubagent,
   watchTrackedRunUntilTerminal,
-} from '../../src/adapters/pi/commands/slash/subagentLaunch';
+} from '../../src/services/subagentLaunch';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 const config: ExtensionConfig = {};

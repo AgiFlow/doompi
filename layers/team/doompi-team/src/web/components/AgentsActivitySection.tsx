@@ -2,12 +2,12 @@ import { Button, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
-import type { SubagentRun } from '../../types/webSubagents.ts';
-import { formatRunDuration } from '../lib/format.ts';
-import { openCatalog } from '../stores/catalogStore.ts';
-import { activityRuns, isTerminalRun, subagents } from '../stores/subagentsStore.ts';
-import { agentThreadTab } from './AgentThreadPanel.tsx';
-import { subagentsTab } from './SubagentsPanel.tsx';
+import type { SubagentRun } from '../../types/webSubagents';
+import { formatRunDuration } from '../lib/format';
+import { openCatalog } from '../stores/catalogStore';
+import { activityRuns, isTerminalRun, subagents } from '../stores/subagentsStore';
+import { agentThreadTab } from './AgentThreadPanel';
+import { subagentsTab } from './SubagentsPanel';
 
 const TICK_MS = 10_000;
 

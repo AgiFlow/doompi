@@ -9,7 +9,7 @@ import {
   profileTitle,
   PROFILE_SWITCH_HANDOFF_KIND,
   voiceSwitchToken,
-} from '../../src/services/profileText.ts';
+} from '../../src/services/profileText';
 
 const marketing: AgentProfile = {
   name: 'marketing-agiflow',

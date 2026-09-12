@@ -3,9 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NodeTurnSpool } from '../src/adapters/process/turnSpool.ts';
-import { CaptureSession } from '../src/services/captureSession.ts';
-import { PCM_FRAME_BYTES } from '../src/services/pcm.ts';
+import { NodeTurnSpool } from '../src/services/fileTurnSpool';
+import { CaptureSession } from '../src/services/captureSession';
+import { PCM_FRAME_BYTES } from '../src/services/pcm';
 import type {
   IClock,
   IPcmAudioRecorder,
@@ -13,8 +13,8 @@ import type {
   PcmAudioRecorderStartOptions,
   ProcessResult,
   TimerHandle,
-} from '../src/types/index.ts';
-import type { VoiceMediaCaptureActivity } from '../src/types/clientMedia.ts';
+} from '../src/types';
+import type { VoiceMediaCaptureActivity } from '../src/types/clientMedia';
 
 const directories: string[] = [];
 const config: ResolvedVoiceConfig = {

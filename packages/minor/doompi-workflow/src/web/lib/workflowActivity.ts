@@ -1,5 +1,5 @@
-import type { WorkflowRunView } from '../../types/webWorkflows.ts';
-import { formatRunDuration } from './runDuration.ts';
+import type { WorkflowRunView } from '../../types/webWorkflows';
+import { formatRunDuration } from './runDuration';
 
 export type WorkflowActivityTone = 'running' | 'paused' | 'failed' | 'done' | 'skipped';
 

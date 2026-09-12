@@ -37,7 +37,6 @@ export const vitestConfig = defineConfig({
       '@agimon-ai/doompi-extension-contracts/notification': source('notification'),
       '@agimon-ai/doompi-extension-contracts/protocol': source('protocol'),
       '@agimon-ai/doompi-extension-contracts/skills': source('skills'),
-      '@agimon-ai/doompi-extension-contracts/voice-tools': source('voiceTools'),
     },
   },
 });

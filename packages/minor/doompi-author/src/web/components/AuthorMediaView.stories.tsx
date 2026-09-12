@@ -6,9 +6,9 @@
  * variant reuses that still, so it shows the player frame and the locked
  * controls, not real playback.
  */
-import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes.ts';
-import type { AuthorWorkspaceDocument } from '../stores/authorWorkspaceStore.ts';
-import { AuthorMediaView } from './AuthorMediaView.tsx';
+import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes';
+import type { AuthorWorkspaceDocument } from '../stores/authorWorkspaceStore';
+import { AuthorMediaView } from './AuthorMediaView';
 
 const PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKAAAABkCAIAAACO1KzYAAABGUlEQVR4nO3RwQmDABAAQQuRPC0lRaQIy/FtqalBJJhbBraAhVnW16Zwy+MH+mmA4wGOBzge4HiA4wGOBzge4HiA4wGOBzge4HiA4wGOBzge4HiA4wGOBzjeZeDPfup+gOMBjgc4HuB4gOMBjgc4HuB4gOMBjgc4HuB4gOP9L7BmBTge4HiA4wGOBzge4HiA4wGOBzge4HiA4wGOBzge4HiA410GPvZ3uMc9AAMGDBgwYMCRAAMGPDnAgAFPDjBgwJMDDBjw5AADBjw5wIABTw4wYMCTAwwY8OQAAwY8OcCANTnA8QDHAxwPcDzA8QDHAxwPcDzA8QDHAxwPcDzA8QDHAxwPcDzA8QDHAxwPcDzA8QDHAxwPcLwvgg7vHumFeDwAAAAASUVORK5CYII=';

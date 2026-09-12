@@ -1,8 +1,8 @@
 import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { describe, expect, it } from 'vitest';
-import { createTasksChannel } from '../src/adapters/webTasksChannel.ts';
-import { emptyDocument, type TaskDocument } from '../src/services/store/types.ts';
-import { TASKS_CHANNEL_TYPE } from '../src/types/webTasks.ts';
+import { createTasksChannel } from '../src/controllers/webTasksChannel';
+import { emptyDocument, type TaskDocument } from '../src/models/task';
+import { TASKS_CHANNEL_TYPE } from '../src/types/webTasks';
 
 class FakeStore {
   snapshot: TaskDocument;

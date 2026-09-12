@@ -19,8 +19,8 @@ import {
   TUI_KEYBINDINGS,
 } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import doomPiUiExtension from '../../src/exports/extensions/pi.ts';
-import type { UiTelemetry } from '../../src/exports/logSinkTelemetry.ts';
+import doomPiUiExtension from '../../src/extensions/pi';
+import type { UiTelemetry } from '../../src/exports/logSinkTelemetry';
 
 type EventHandler = (event: unknown, context: ExtensionContext) => unknown;
 

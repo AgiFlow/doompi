@@ -1,5 +1,5 @@
 import { Store } from '@tanstack/store';
-import type { McpAuthorizationFlow, McpRepositoryCatalog } from '../../types/webMcp.ts';
+import type { McpAuthorizationFlow, McpRepositoryCatalog } from '../../types/webMcp';
 import {
   cancelMcpAuthorization,
   discoverMcpCatalog,
@@ -7,7 +7,7 @@ import {
   readMcpAuthorization,
   readMcpCatalog,
   startMcpAuthorization,
-} from '../api/mcpSettingsApi.ts';
+} from '../api/mcpSettingsApi';
 
 export interface McpSettingsState {
   repositoryId: string | undefined;

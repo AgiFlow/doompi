@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Type } from 'typebox';
 import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 import { loadMajorModesConfig, resolveLayers, filterHookDisabledLayers } from '@agimon-ai/doompi-config/majorModes';
-import { profileHeadlessFacet } from '@agimon-ai/doompi-profile/extensions/server';
+import { profileServerFacet } from '@agimon-ai/doompi-profile/extensions/server';
 import {
   createAssistantMessageEventStream,
   type AssistantMessage,
@@ -20,9 +20,9 @@ import {
   createHeadlessSessionHost,
   restoreHeadlessSelection,
   validateDirectHeadlessArgs,
-} from '../../../../src/adapters/server/headlessSessionHost';
-import { readContextDetail } from '../../../../src/adapters/contextDetailStore.ts';
-import { serveSessionApis } from '../../../../src/adapters/server/packageApiServer';
+} from '../../../../src/controllers/headlessSessionHost';
+import { readContextDetail } from '../../../../src/services/contextDetailStore';
+import { serveSessionApis } from '../../../../src/controllers/packageApiServer';
 
 const model: Model<Api> = {
   id: 'test',
@@ -324,13 +324,13 @@ describe('headless startup', () => {
       initiallyEligible: true,
       declaration: {
         packageName: '@agimon-ai/doompi-profile',
-        entry: './src/exports/extensions/server.ts',
+        entry: './src/extensions/server.ts',
         module: './dist/extensions/server.mjs',
         scopes: ['session'],
         required: true,
         owners: ['development', 'review'].map((majorMode) => ({ majorMode, layer: 'default' })),
       },
-      facet: profileHeadlessFacet,
+      facet: profileServerFacet,
     };
     const admittedEnvironment = { PI_CODING_AGENT_DIR: root };
     let session: Awaited<ReturnType<typeof createHeadlessSessionHost>> | undefined;

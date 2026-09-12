@@ -1,4 +1,4 @@
-import type { AuthorModeActivation } from './author.ts';
+import type { AuthorModeActivation } from './author';
 
 export const API_BASE_PATH = 'author';
 export const SESSION_QUERY_PARAM = 'session';

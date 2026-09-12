@@ -4,16 +4,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { scopeRunsDir, type SessionScope } from '../../src/adapters/filesystem/paths';
+import { scopeRunsDir, type SessionScope } from '../../src/services/sessionPaths';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
-import {
-  TerminalPersistenceService,
-  type TerminalTrigger,
-} from '../../src/adapters/runs/background/terminalPersistence';
-import type {
-  CoalescedStatusWriterContract,
-  StatusWithRecentEntries,
-} from '../../src/adapters/runs/background/statusWriter';
+import { TerminalPersistenceService, type TerminalTrigger } from '../../src/services/terminalPersistence';
+import type { CoalescedStatusWriterContract, StatusWithRecentEntries } from '../../src/services/statusWriter';
 
 /**
  * A status writer that records what was flushed instead of touching disk.

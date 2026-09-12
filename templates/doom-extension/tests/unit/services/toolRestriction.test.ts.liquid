@@ -14,7 +14,7 @@
  */
 import { createDoomToolSurface } from '@agimon-ai/doompi-extension-contracts/tool-surface';
 import { describe, expect, it } from 'vitest';
-import { {{ restrictionName | camelCase }}ToolRestriction } from '../../../src/services/{{ restrictionName | camelCase }}Tools.ts';
+import { {{ restrictionName | camelCase }}ToolRestriction } from '../../../src/services/{{ restrictionName | camelCase }}Tools';
 
 const ALL_TOOLS = ['read', 'bash', 'edit', 'write'];
 
@@ -23,6 +23,7 @@ function surfaceOver(tools: readonly string[]) {
   const surface = createDoomToolSurface({
     generation: '{{ restrictionName | kebabCase }}-test',
     allTools: () => tools,
+    activeTools: () => pushed,
     setActiveTools: (names) => {
       pushed = [...names];
     },

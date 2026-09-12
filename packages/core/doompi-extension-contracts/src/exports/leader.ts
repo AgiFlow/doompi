@@ -7,7 +7,7 @@ export type {
   LeaderContribution,
   LeaderSegment,
   LeaderTone,
-} from '../schemas/leader.ts';
+} from '../schemas/leader';
 export {
   LeaderActionSchema,
   LeaderBindingSchema,
@@ -16,4 +16,4 @@ export {
   LeaderSegmentSchema,
   LeaderSourceSchema,
   LeaderToneSchema,
-} from '../schemas/leader.ts';
+} from '../schemas/leader';

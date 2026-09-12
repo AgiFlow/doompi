@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { DoomApi, DoomApiContext } from '../../src/schemas/packageApi.ts';
-import { mountPackageApi } from '../../src/services/testing/packageApi.ts';
+import type { DoomApi, DoomApiContext } from '../../src/schemas/packageApi';
+import { mountPackageApi } from '../../src/services/packageApiHarness';
 
 /** An API written the way a package writes one: routes relative to its mount. */
 function demoApi(overrides: Partial<DoomApi> = {}): DoomApi {

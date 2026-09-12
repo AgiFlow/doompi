@@ -67,16 +67,16 @@ describe('doompi-major-mode package contract', () => {
   });
 
   it('routes Pi discovery through the command and voice-tool factory', async () => {
-    const entry = await readFile(path.join(packageDirectory, 'src/exports/extensions/pi.ts'), 'utf8');
-    const factory = await readFile(path.join(packageDirectory, 'src/adapters/pi/extension.ts'), 'utf8');
+    const entry = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
+    const factory = await readFile(path.join(packageDirectory, 'src/controllers/majorModeRuntime.ts'), 'utf8');
 
-    expect(entry).toContain("from '../../adapters/pi/extension.ts'");
-    expect(entry).toContain('as default');
+    expect(entry).toContain('definePiExtension');
+    expect(entry).toContain('export default majorModeExtension');
     expect(entry).not.toContain('doom.ts');
-    expect(factory).toContain('registerMajorModeCommand');
+    expect(factory).toContain('createMajorModeCommand');
     expect(factory).toContain('registerMajorModeVoiceCapability');
-    expect(factory).toContain('connectDoomCordisHost');
-    expect(factory).toContain('.root.plugin(');
+    expect(factory).toContain('services:');
+    expect(factory).toContain('commands:');
     expect(factory).toContain('inject([DOOM_CONFIG_SERVICE, DOOM_TRANSITION_SERVICE]');
     expect(factory).not.toContain('new Context()');
   });

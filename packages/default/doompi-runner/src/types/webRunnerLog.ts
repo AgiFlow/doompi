@@ -1,4 +1,5 @@
-import type { LogSlice } from './logReader.ts';
+import { RUNNER_API_BASE_PATH, SESSION_QUERY_PARAM } from '../constants/webRunnerLog';
+import type { LogSlice } from './logReader';
 
 /**
  * The runner log API, shared by this package's session-scoped routes and its
@@ -13,10 +14,8 @@ import type { LogSlice } from './logReader.ts';
  */
 
 /** Where this package's API is mounted; the segment after /api/plugin/. */
-export const RUNNER_API_BASE_PATH = 'runner';
 
 /** Query parameter the hub reads to pick which session server to proxy to. */
-export const SESSION_QUERY_PARAM = 'session';
 
 /** One runner's log, relative to the API's own mount. */
 export function runnerLogPath(runId: string): string {
@@ -94,7 +93,6 @@ export interface RunnerInputRequest {
 }
 
 /** The named SSE event carrying a RunnerScreenEvent payload. */
-export const RUNNER_SCREEN_EVENT = 'screen';
 
 /**
  * A log request as query parameters. `grep` is a literal substring, not a
@@ -137,7 +135,6 @@ export interface RunnerLogStreamEvent {
 }
 
 /** The named SSE event carrying a RunnerLogStreamEvent payload. */
-export const RUNNER_LOG_STREAM_EVENT = 'append';
 
 /**
  * The named SSE event that carries nothing.
@@ -147,7 +144,6 @@ export const RUNNER_LOG_STREAM_EVENT = 'append';
  * the socket keeps proving itself. Readers that only listen for `append`
  * ignore it, which is what makes it safe to add.
  */
-export const RUNNER_LOG_PING_EVENT = 'ping';
 
 /** Query parameter names, shared so the page and the route cannot drift apart. */
 export const RUNNER_LOG_PARAMS = {

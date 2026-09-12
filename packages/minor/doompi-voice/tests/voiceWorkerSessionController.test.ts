@@ -1,12 +1,12 @@
 import type { DoomConfig, IDoomConfigLoader } from '@agimon-ai/doompi-config';
 import { describe, expect, it, vi } from 'vitest';
-import type { VoiceWorkerClientOptions } from '../src/adapters/process/voiceWorkerClient.ts';
+import type { VoiceWorkerClientOptions } from '../src/services/voiceWorkerClient';
 import {
   type VoiceWorkerSessionClient,
   VoiceWorkerSessionController,
-} from '../src/adapters/process/voiceWorkerSessionController.ts';
-import { VOICE_WORKER_PROTOCOL_VERSION } from '../src/services/voiceWorkerProtocol.ts';
-import type { IClock, TimerHandle, VoiceUi } from '../src/types/index.ts';
+} from '../src/services/voiceWorkerSessionController';
+import { VOICE_WORKER_PROTOCOL_VERSION } from '../src/services/voiceWorkerProtocol';
+import type { IClock, TimerHandle, VoiceUi } from '../src/types';
 
 const doomConfig: DoomConfig = {
   projectTrust: 'ask',

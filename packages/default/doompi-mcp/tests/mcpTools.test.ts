@@ -1,9 +1,11 @@
+import { renderMcpCall, renderMcpResult } from '../src/tui/mcpToolRender';
 import type { McpClientManagerService, McpToolInfo } from '@agimon-ai/mcp-proxy';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mcpToolRestriction, registerMcpTool, registerNewTools } from '../src/adapters/pi/mcpTools.ts';
-import { McpCatalog } from '../src/services/mcpCatalog.ts';
+import { createMcpTool } from '../src/tools/mcpTools';
+import { mcpToolRestriction } from '../src/services/toolVisibility';
+import { McpCatalog } from '../src/services/mcpCatalog';
 
 function mcpTool(name: string, inputSchema: Record<string, unknown> = { type: 'object' }): McpToolInfo {
   return { name, inputSchema };
@@ -62,11 +64,20 @@ const screenshotTool = {
   inputSchema: { type: 'object', properties: { scale: { type: 'number' } } },
 };
 
-describe('registerMcpTool', () => {
+describe('createMcpTool', () => {
   it('registers under the prefixed name with the downstream description', () => {
     const { pi, registered } = fakePi();
 
-    registerMcpTool(pi, () => clientManager, screenshotTool);
+    createMcpTool(
+      () => clientManager,
+      screenshotTool,
+      () => true,
+      {
+        renderCall: (params, theme) => renderMcpCall(screenshotTool, params as Record<string, unknown>, theme),
+        renderResult: (result, options, theme, context) =>
+          renderMcpResult(result, { ...options, isError: context.isError }, theme),
+      },
+    ).register(pi);
 
     expect(registered.get('pencil_get_screenshot')).toMatchObject({
       label: 'pencil: get_screenshot',
@@ -80,7 +91,7 @@ describe('registerMcpTool', () => {
   it('supplies a description for a downstream tool that has none', () => {
     const { pi, registered } = fakePi();
 
-    registerMcpTool(pi, () => clientManager, { ...screenshotTool, description: undefined });
+    createMcpTool(() => clientManager, { ...screenshotTool, description: undefined }).register(pi);
 
     expect(registered.get('pencil_get_screenshot')?.description).toContain('get_screenshot');
   });
@@ -88,15 +99,35 @@ describe('registerMcpTool', () => {
   it('accepts any object when the downstream tool declares no schema', () => {
     const { pi, registered } = fakePi();
 
-    registerMcpTool(pi, () => clientManager, { ...screenshotTool, inputSchema: {} });
+    createMcpTool(() => clientManager, { ...screenshotTool, inputSchema: {} }).register(pi);
 
     expect(registered.get('pencil_get_screenshot')?.parameters).toMatchObject({ type: 'object' });
   });
 
   describe('execution', () => {
+    it('rejects cached tools until a runtime is available', async () => {
+      const { pi, registered } = fakePi();
+      createMcpTool(() => undefined, screenshotTool).register(pi);
+
+      await expect(registered.get('pencil_get_screenshot')?.execute('call-1', {})).rejects.toThrow(
+        'The MCP runtime is not ready',
+      );
+      expect(ensureConnected).not.toHaveBeenCalled();
+    });
+
+    it('uses the downstream default timeout and an empty argument object when omitted', async () => {
+      vi.mocked(clientManager.getServerRequestTimeout).mockReturnValue(undefined);
+      const { pi, registered } = fakePi();
+      createMcpTool(() => clientManager, screenshotTool).register(pi);
+
+      await registered.get('pencil_get_screenshot')?.execute('call-1', undefined);
+
+      expect(callTool).toHaveBeenCalledWith('get_screenshot', {}, undefined);
+    });
+
     it('calls the downstream tool by its own name, with the server timeout', async () => {
       const { pi, registered } = fakePi();
-      registerMcpTool(pi, () => clientManager, screenshotTool);
+      createMcpTool(() => clientManager, screenshotTool).register(pi);
 
       const result = await registered.get('pencil_get_screenshot')?.execute('call-1', { scale: 2 });
 
@@ -108,7 +139,7 @@ describe('registerMcpTool', () => {
     // Resolved per call, so a server that reconnected underneath still answers.
     it('resolves the connection at call time rather than at registration', async () => {
       const { pi, registered } = fakePi();
-      registerMcpTool(pi, () => clientManager, screenshotTool);
+      createMcpTool(() => clientManager, screenshotTool).register(pi);
 
       expect(ensureConnected).not.toHaveBeenCalled();
       await registered.get('pencil_get_screenshot')?.execute('call-1', {});
@@ -118,19 +149,18 @@ describe('registerMcpTool', () => {
     it('raises a downstream error instead of returning it as output', async () => {
       callTool.mockResolvedValue({ content: [{ type: 'text', text: 'canvas is locked' }], isError: true });
       const { pi, registered } = fakePi();
-      registerMcpTool(pi, () => clientManager, screenshotTool);
+      createMcpTool(() => clientManager, screenshotTool).register(pi);
 
       await expect(registered.get('pencil_get_screenshot')?.execute('call-1', {})).rejects.toThrow('canvas is locked');
     });
 
     it('fails closed when a retained wrapper is absent from the current configuration', async () => {
       const { pi, registered } = fakePi();
-      registerMcpTool(
-        pi,
+      createMcpTool(
         () => clientManager,
         screenshotTool,
         () => false,
-      );
+      ).register(pi);
 
       await expect(registered.get('pencil_get_screenshot')?.execute('call-1', {})).rejects.toThrow(
         'not available in the current session configuration',
@@ -141,7 +171,7 @@ describe('registerMcpTool', () => {
     it('says so when a tool returns nothing at all', async () => {
       callTool.mockResolvedValue({ content: [] });
       const { pi, registered } = fakePi();
-      registerMcpTool(pi, () => clientManager, screenshotTool);
+      createMcpTool(() => clientManager, screenshotTool).register(pi);
 
       const result = await registered.get('pencil_get_screenshot')?.execute('call-1', {});
 
@@ -156,7 +186,7 @@ describe('registerMcpTool', () => {
         ],
       });
       const { pi, registered } = fakePi();
-      registerMcpTool(pi, () => clientManager, screenshotTool);
+      createMcpTool(() => clientManager, screenshotTool).register(pi);
 
       const result = await registered.get('pencil_get_screenshot')?.execute('call-1', {});
 
@@ -181,7 +211,7 @@ describe('registerMcpTool', () => {
         structuredContent: { count: 2 },
       });
       const { pi, registered } = fakePi();
-      registerMcpTool(pi, () => clientManager, screenshotTool);
+      createMcpTool(() => clientManager, screenshotTool).register(pi);
 
       const result = await registered.get('pencil_get_screenshot')?.execute('call-1', {});
 
@@ -199,9 +229,23 @@ describe('registerMcpTool', () => {
       });
     });
 
+    it('preserves resource link descriptions when optional rendering metadata is absent', async () => {
+      callTool.mockResolvedValue({
+        content: [{ type: 'resource_link', uri: 'file:///a', name: 'a', description: 'Reference document' }],
+      });
+      const { pi, registered } = fakePi();
+      createMcpTool(() => clientManager, screenshotTool).register(pi);
+      const result = await registered.get('pencil_get_screenshot')?.execute('call-1', {});
+      expect(result?.details).toEqual({
+        server: 'pencil',
+        tool: 'get_screenshot',
+        blocks: [{ type: 'resource_link', uri: 'file:///a', name: 'a', description: 'Reference document' }],
+      });
+    });
+
     it('names the server and tool the result came from', async () => {
       const { pi, registered } = fakePi();
-      registerMcpTool(pi, () => clientManager, screenshotTool);
+      createMcpTool(() => clientManager, screenshotTool).register(pi);
 
       const result = await registered.get('pencil_get_screenshot')?.execute('call-1', {});
 
@@ -210,7 +254,7 @@ describe('registerMcpTool', () => {
   });
 });
 
-describe('registerNewTools', () => {
+describe('cached tool declarations', () => {
   // Pi permits registerTool while extensions load but throws on the active-list
   // calls until the runtime is bound, which is why the two are separate.
   it('registers cached tools without touching the active list', () => {
@@ -218,7 +262,7 @@ describe('registerNewTools', () => {
     catalog.seed({ servers: [{ name: 'pencil', tools: [mcpTool('get_screenshot')] }] });
     const { pi, registered } = fakePi(['read']);
 
-    registerNewTools(pi, () => clientManager, catalog.allTools());
+    for (const tool of catalog.allTools()) createMcpTool(() => clientManager, tool).register(pi);
 
     expect([...registered.keys()]).toEqual(['pencil_get_screenshot']);
     expect(pi.getActiveTools).not.toHaveBeenCalled();

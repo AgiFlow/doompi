@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const connectDoomCordisHost = vi.fn();
 
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
+vi.mock('../../../../../../packages/core/doompi-extension-contracts/src/adapters/pi/cordisHost', () => ({
   connectDoomCordisHost: (...args: unknown[]) => connectDoomCordisHost(...args),
 }));
 
@@ -10,7 +10,7 @@ vi.mock('@agimon-ai/doompi-config', () => ({
   getHarnessState: () => ({ root: undefined }),
 }));
 
-const { activateModelGuidanceExtension } = await import('../../../src/adapters/pi/extension.ts');
+const { activateModelGuidanceExtension } = await import('../../../src/extensions/pi');
 
 type Listener = (...args: unknown[]) => unknown;
 
@@ -34,8 +34,8 @@ function createRecorder(fiberOutcome: 'resolve' | 'reject'): Recorder {
   const fiber = Object.assign(settled, { dispose: fiberDispose });
 
   // Invoke the plugin so its body is exercised the way cordis would run it.
-  const plugin = vi.fn((factory: (cordis: unknown, config: unknown) => void, config: unknown) => {
-    factory({}, config);
+  const plugin = vi.fn((factory: (cordis: unknown, config: unknown) => Promise<void>, config: unknown) => {
+    void factory({ effect() {} }, config);
     return fiber;
   });
 
@@ -114,6 +114,8 @@ describe('activateModelGuidanceExtension', () => {
 
     expect(recorder.fiberDispose).toHaveBeenCalledTimes(1);
     expect(recorder.connectionDispose).toHaveBeenCalledTimes(1);
-    expect(recorder.listeners.get('session_shutdown')).toBeUndefined();
+    await recorder.listeners.get('session_shutdown')?.[0]?.();
+    expect(recorder.fiberDispose).toHaveBeenCalledTimes(1);
+    expect(recorder.connectionDispose).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { DoomHubChannel, DoomHubChannelHost } from '../../src/schemas/hubChannel.ts';
-import { doomHubChannelHarness } from '../../src/adapters/testing/hubChannel.ts';
+import type { DoomHubChannel, DoomHubChannelHost } from '../../src/schemas/hubChannel';
+import { doomHubChannelHarness } from '../../src/services/hubChannelHarness';
 
 function runsChannel(): DoomHubChannel {
   return {

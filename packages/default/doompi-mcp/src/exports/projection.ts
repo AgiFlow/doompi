@@ -4,5 +4,5 @@ export {
   type NormalizeAgentPluginMcpOptions,
   type NormalizedAgentPluginMcpSource,
 } from '@agimon-ai/doompi-config/agentPluginMcp';
-export { mcpSessionConfigFromProjection } from '../adapters/node/projection.ts';
-export type { McpConfigSource, McpSessionConfig } from '../types/mcpConfig.ts';
+export { mcpSessionConfigFromProjection } from '../services/projection';
+export type { McpConfigSource, McpSessionConfig } from '../types/mcpConfig';

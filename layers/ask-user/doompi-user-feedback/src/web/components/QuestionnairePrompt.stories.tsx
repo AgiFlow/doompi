@@ -10,7 +10,7 @@
  */
 import type { ToolPromptDialog } from '@agimon-ai/doompi-web-contracts';
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { QuestionnairePrompt } from './QuestionnairePrompt.tsx';
+import { QuestionnairePrompt } from './QuestionnairePrompt';
 
 const TOOL_NAME = 'ask_user_question';
 const dialog = (id: string): ToolPromptDialog => ({

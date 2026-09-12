@@ -1,13 +1,12 @@
-import {
-  createDoomVoiceToolsService,
-  type VoiceToolDefinition,
-  VoiceToolDescribeInputSchema,
-} from '@agimon-ai/doompi-extension-contracts/voice-tools';
+import { Context } from '@deepseek-ai/cordis';
+import { definePiExtension, type PiToolCollection } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { createDoomVoiceToolsService, type VoiceToolDefinition } from '../src/services/voiceTools';
+import { VoiceToolDescribeInputSchema } from '../src/schemas/voiceTools';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
-import { describe, expect, it, vi } from 'vitest';
-import { registerVoiceToolFacades } from '../src/adapters/pi/voiceTools.ts';
-import { AutonomousTurnIdentityFactory } from '../src/services/autonomousTurn.ts';
-import type { IClock } from '../src/types/index.ts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createVoiceToolFacades } from '../src/controllers/voiceTools';
+import { AutonomousTurnIdentityFactory } from '../src/services/autonomousTurn';
+import type { IClock } from '../src/types';
 
 type RegisteredTool = ToolDefinition;
 
@@ -51,7 +50,8 @@ describe('voice Pi façade tools', () => {
     const voiceTools = createDoomVoiceToolsService<ExtensionContext>('voice-facade-test');
     const registration = voiceTools.register(definition('transcribe'));
     const session = voiceTools.bindSession('facade-session', context('facade-session'));
-    const facades = registerVoiceToolFacades(pi as unknown as Pick<ExtensionAPI, 'registerTool'>, () => session);
+    const facades = createVoiceToolFacades(() => session);
+    await mountTools(pi, facades);
 
     expect([...registered.keys()]).toEqual(['describe_voice_tools', 'use_voice_tools']);
     for (const tool of registered.values()) {
@@ -114,7 +114,7 @@ describe('voice Pi façade tools', () => {
     voiceTools.dispose();
   });
 
-  it('publishes the capability names into the describe description, and only when they change', () => {
+  it('publishes the capability names into the describe description, and only when they change', async () => {
     const registrations: RegisteredTool[] = [];
     const registered = new Map<string, RegisteredTool>();
     const pi = {
@@ -125,7 +125,8 @@ describe('voice Pi façade tools', () => {
     };
     const voiceTools = createDoomVoiceToolsService<ExtensionContext>('voice-digest-test');
     const session = voiceTools.bindSession('digest-session', context('digest-session'));
-    const facades = registerVoiceToolFacades(pi as unknown as Pick<ExtensionAPI, 'registerTool'>, () => session);
+    const facades = createVoiceToolFacades(() => session);
+    await mountTools(pi, facades);
     expect(registrations).toHaveLength(2);
 
     // An empty catalog keeps the protocol text alone rather than an empty header.
@@ -170,7 +171,8 @@ describe('voice Pi façade tools', () => {
   it('fails closed for an unbound or stale session context', async () => {
     const registered = new Map<string, RegisteredTool>();
     const pi = { registerTool: (tool: RegisteredTool) => registered.set(tool.name, tool) };
-    const facades = registerVoiceToolFacades(pi as unknown as Pick<ExtensionAPI, 'registerTool'>, () => undefined);
+    const facades = createVoiceToolFacades(() => undefined);
+    await mountTools(pi, facades);
     const describe = registered.get('describe_voice_tools');
     const unavailable = await describe?.execute('describe-3', {}, undefined, undefined, context('missing'));
     expect(unavailable?.details).toMatchObject({ error: { code: 'VOICE_TOOL_HOST_UNAVAILABLE' } });
@@ -202,7 +204,7 @@ describe('autonomous voice identity freshness', () => {
     clear: () => undefined,
   };
 
-  it('includes the injected nonce in every fresh identity', () => {
+  it('includes the injected nonce in every fresh identity', async () => {
     const factory = new AutonomousTurnIdentityFactory(clock, () => 'reload-nonce');
     const sessionId = factory.createSession();
     const turn = factory.createTurn(sessionId);
@@ -211,7 +213,21 @@ describe('autonomous voice identity freshness', () => {
     expect(turn.turnId).toContain('reload-nonce');
   });
 
-  it('rejects an empty injected nonce', () => {
+  it('rejects an empty injected nonce', async () => {
     expect(() => new AutonomousTurnIdentityFactory(clock, () => '  ')).toThrow('nonce');
   });
 });
+
+const roots: Context[] = [];
+afterEach(async () => {
+  for (const root of roots.splice(0)) await root.fiber.dispose();
+});
+async function mountTools(pi: { registerTool(tool: RegisteredTool): unknown }, tools: PiToolCollection): Promise<void> {
+  const root = new Context();
+  roots.push(root);
+  await definePiExtension({ name: 'voice-facades-test', tools }).install(root, {
+    ...pi,
+    on: vi.fn(),
+    registerCommand: vi.fn(),
+  } as unknown as ExtensionAPI);
+}

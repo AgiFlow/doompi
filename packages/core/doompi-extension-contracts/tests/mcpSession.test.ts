@@ -8,7 +8,7 @@ import {
   readDoomMcpSessionConfig,
   serializeDoomMcpSessionConfig,
   type DoomMcpSessionConfig,
-} from '../src/exports/mcpSession.ts';
+} from '../src/exports/mcpSession';
 
 const config: DoomMcpSessionConfig = {
   enabled: true,

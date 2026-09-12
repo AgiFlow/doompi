@@ -90,12 +90,13 @@ describe('doom Pi UI package boundary', () => {
     expect(manifest.doompiWeb).toEqual({
       pluginId: 'builtin-tools',
       channels: [],
-      client: './src/exports/webClient.ts',
+      client: './src/extensions/web.ts',
       scopes: ['session'],
     });
-    expect(await readFile(path.join(packageDirectory, 'tsdown.config.ts'), 'utf8')).toContain(
-      '!src/exports/webClient.ts',
-    );
+    const buildConfig = await readFile(path.join(packageDirectory, 'tsdown.config.ts'), 'utf8');
+    expect(buildConfig).toContain('src/extensions/pi.ts');
+    expect(buildConfig).toContain('src/extensions/server.ts');
+    expect(buildConfig).not.toContain('src/extensions/web.ts');
   });
   it('uses package-local project configuration without private rig packages or Doom Config runtime coupling', async () => {
     const project = await readJsonFile<ProjectManifest>(path.join(packageDirectory, 'project.json'));

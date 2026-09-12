@@ -1,8 +1,8 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runnerLogTab, RunnerLogPanel } from '../../src/web/components/RunnerLogPanel.tsx';
-import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore.ts';
-import type { RunnerRunView } from '../../src/types/webRunners.ts';
+import { runnerLogTab, RunnerLogPanel } from '../../src/web/components/RunnerLogPanel';
+import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore';
+import type { RunnerRunView } from '../../src/types/webRunners';
 
 /**
  * The log panel, mounted.

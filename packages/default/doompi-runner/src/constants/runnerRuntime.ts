@@ -1,0 +1,15 @@
+export const LEADER_SOURCE = '@agimon-ai/doompi-runner';
+export const LEADER_GROUP_ORDER = 67;
+export const ERR_REQUIRES_INTERACTIVE = '/runners requires interactive mode';
+export const ERR_STOP_USAGE = 'Usage: /runners stop <runner-id> [reason]';
+export const ERR_START_USAGE = 'Usage: /runners start [name=x] [cwd=y] [interactive=true] -- <command>';
+export const SESSION_START_EVENT = 'session_start';
+export const RUNNER_FINISHED_MESSAGE = 'doom-runner-finished';
+export const COMPLETED_STATE = 'completed';
+export const RMUX_BACKEND = 'rmux';
+export const STOPPED_REASON = 'stopped';
+export const RUNNER_STATUS_KEY = 'doom-runner-runners';
+export const BACKGROUND_WORK_PROVIDER = 'doom-runner';
+export const RUNNER_FOOTER_ORDER = 10;
+export const RUNNER_STATUS_POLL_MS = 500;
+export const HISTORY_SWEEP_INTERVAL_MS = 600_000;

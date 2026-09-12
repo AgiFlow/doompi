@@ -2,11 +2,11 @@ import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-
 import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
 import { describe, expect, it } from 'vitest';
-import { COMMAND_NAME as PROMPT_SAVE_COMMAND } from '../../../src/commands/promptSaveCommand.ts';
-import { COMMAND_NAME } from '../../../src/commands/promptsCommand.ts';
-import { createRecentPrompts } from '../../../src/services/recentPrompts.ts';
-import { activatePromptExtension } from '../../../src/adapters/pi/extension.ts';
-import type { PromptExtensionDependencies, SavedPrompt } from '../../../src/types/prompt.ts';
+import { COMMAND_NAME as PROMPT_SAVE_COMMAND } from '../../../src/constants/promptSave';
+import { COMMAND_NAME } from '../../../src/constants/prompts';
+import { createRecentPrompts } from '../../../src/models/recentPrompts';
+import { activatePromptExtension } from '../../../src/extensions/pi';
+import type { PromptExtensionDependencies, SavedPrompt } from '../../../src/types/prompt';
 
 /** A store that never touches the developer's own prompts directory. */
 function memoryDependencies(): PromptExtensionDependencies {
@@ -98,7 +98,7 @@ describe('doompi-prompt Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-prompt',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-use-prompt',

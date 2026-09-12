@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { RESULT_FILE_SUFFIX, type RunResultFile } from '../../src/adapters/resultWatcher';
+import { RESULT_FILE_SUFFIX, type RunResultFile } from '../../src/services/resultWatcher';
 
 describe('durable external result records', () => {
   it('retains the run id when a runner writes a result record', () => {

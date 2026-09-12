@@ -6,7 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { TaskToolMessage } from './TaskToolMessage.tsx';
+import { TaskToolMessage } from './TaskToolMessage';
 
 const TASKS = [
   { id: 1, subject: 'Seed the plugin story files', status: 'completed', blockedBy: [] },

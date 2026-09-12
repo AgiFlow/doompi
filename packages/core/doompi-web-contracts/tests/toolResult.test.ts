@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toolResultText, toolResultTextLines } from '../src/services/toolResult.ts';
+import { toolResultText, toolResultTextLines } from '../src/services/toolResult';
 
 describe('toolResultText', () => {
   it('joins the text blocks with newlines and drops everything else', () => {

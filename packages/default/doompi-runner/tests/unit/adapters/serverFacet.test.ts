@@ -9,9 +9,9 @@ import {
   DOOM_SERVER_HOST_SERVICE,
   type DoomServerHostService,
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createRunnerServerFacet, type RunnerContainerFactory } from '../../../src/adapters/server/facet.ts';
+import { runnerServerFacet } from '../../../src/extensions/server';
 
 const lifecycleMocks = vi.hoisted(() => {
   const container = {
@@ -54,10 +54,10 @@ const lifecycleMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('../../../src/container/index.ts', () => ({
-  createRunnerContainer: lifecycleMocks.createContainer,
+vi.mock('../../../src/services/runnerDependencies', () => ({
+  createRunnerDependencies: lifecycleMocks.createContainer,
 }));
-vi.mock('../../../src/services/runs/reconcile.ts', () => ({
+vi.mock('../../../src/services/reconcile', () => ({
   reconcileActiveRunners: lifecycleMocks.reconcileActiveRunners,
   stopRunnerProcess: lifecycleMocks.stopRunnerProcess,
 }));
@@ -81,6 +81,9 @@ function hostContext(scope: DoomServerHostService['scope'], directEvents?: DoomD
         },
       };
     },
+    registerMethod() {
+      return { dispose() {} };
+    },
     registerChannel() {
       return { dispose: () => undefined };
     },
@@ -91,11 +94,8 @@ function hostContext(scope: DoomServerHostService['scope'], directEvents?: DoomD
       return [];
     },
   };
-  const context = {
-    get(name: string) {
-      return name === DOOM_SERVER_HOST_SERVICE ? host : undefined;
-    },
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, host);
   return { context, registered, state };
 }
 
@@ -132,13 +132,9 @@ function headlessFacetContext() {
       return { dispose: vi.fn() };
     }),
   } as unknown as DoomHeadlessHostService;
-  const context = {
-    get(name: string) {
-      if (name === DOOM_SERVER_HOST_SERVICE) return server.context.get(name);
-      if (name === DOOM_HEADLESS_HOST_SERVICE) return headless;
-      return undefined;
-    },
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, server.context.get(DOOM_SERVER_HOST_SERVICE));
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, headless);
   return {
     context,
     execution,
@@ -152,34 +148,34 @@ function headlessFacetContext() {
 
 beforeEach(() => vi.clearAllMocks());
 
-const runnerServerFacet = createRunnerServerFacet(lifecycleMocks.createContainer as unknown as RunnerContainerFactory);
-
 describe('runnerServerFacet', () => {
-  it('injects the server host so the facet mounts as one fiber', () => {
+  it('injects the server host so the facet mounts as one fiber', async () => {
     expect(runnerServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
   });
 
-  it('registers the package API on the session scope', () => {
+  it('registers the package API on the session scope', async () => {
     const harness = hostContext('session');
 
-    const dispose = runnerServerFacet.apply(harness.context);
+    const dispose = await runnerServerFacet.apply(harness.context);
 
     expect(harness.registered).toHaveLength(1);
     expect(typeof dispose).toBe('function');
   });
 
-  it('unregisters the API when the host disposes the facet', () => {
+  it('unregisters the API when the host disposes the facet', async () => {
     const harness = hostContext('session');
 
-    runnerServerFacet.apply(harness.context)?.();
+    await (
+      await runnerServerFacet.apply(harness.context)
+    )?.();
 
     expect(harness.state.disposed).toBe(1);
   });
 
-  it('registers nothing on the other scope', () => {
+  it('registers nothing on the other scope', async () => {
     const harness = hostContext('global');
 
-    const dispose = runnerServerFacet.apply(harness.context);
+    const dispose = await runnerServerFacet.apply(harness.context);
 
     expect(harness.registered).toEqual([]);
     expect(typeof dispose).toBe('function');
@@ -187,7 +183,7 @@ describe('runnerServerFacet', () => {
 
   it('retains runner ownership across activation changes and cleans it on session disposal', async () => {
     const harness = headlessFacetContext();
-    const dispose = runnerServerFacet.apply(harness.context);
+    const dispose = await runnerServerFacet.apply(harness.context);
     const activity = harness.activity();
 
     const firstStop = await activity.start(harness.execution);

@@ -32,12 +32,17 @@ function client(): Client {
 }
 
 function binding(ready: () => Promise<void> = async () => {}): {
-  service: { state: { value: { events: never[] }; subscribe: () => () => void }; send: ReturnType<typeof vi.fn> };
+  service: {
+    state: { value: { events: never[] }; subscribe: () => () => void };
+    send: ReturnType<typeof vi.fn>;
+    invoke: ReturnType<typeof vi.fn>;
+  };
   value: { use: () => unknown; ready: () => Promise<void>; dispose: ReturnType<typeof vi.fn> };
 } {
   const service = {
     state: { value: { events: [] as never[] }, subscribe: () => () => undefined },
     send: vi.fn(),
+    invoke: vi.fn().mockResolvedValue({ accepted: true }),
   };
   return {
     service,
@@ -50,6 +55,32 @@ function binding(ready: () => Promise<void> = async () => {}): {
 }
 
 describe('protocol hub socket lifecycle', () => {
+  it('only invokes plugin methods on the ready current binding', async () => {
+    const first = binding();
+    const second = binding();
+    fake.binding.mockReturnValueOnce(first.value).mockReturnValueOnce(second.value);
+    const socket = createProtocolHubSocket(client(), { onFrame: vi.fn(), onOpen: vi.fn(), onClose: vi.fn() });
+    const call = {
+      mount: { scope: 'session' as const, sessionId: 'session-a' },
+      service: 'documents',
+      method: 'open',
+      input: { path: 'README.md' },
+    };
+    await expect(socket.invokePlugin(call)).rejects.toThrow('not connected');
+    await Promise.resolve();
+    await expect(socket.invokePlugin(call)).resolves.toEqual({ accepted: true });
+    expect(first.service.invoke).toHaveBeenCalledWith(call, expect.anything());
+    fake.connectionChanged({ state: 'connected' });
+    await expect(socket.invokePlugin(call)).rejects.toThrow('not connected');
+    await Promise.resolve();
+    await socket.invokePlugin(call);
+    expect(second.service.invoke).toHaveBeenCalledWith(call, expect.anything());
+    expect(first.service.invoke).toHaveBeenCalledOnce();
+    socket.close();
+    await expect(socket.invokePlugin(call)).rejects.toThrow('not connected');
+    expect(second.service.invoke).toHaveBeenCalledOnce();
+  });
+
   it('disposes a stale binding once when a shared client reconnects', async () => {
     let finishFirst!: () => void;
     const first = binding(() => new Promise<void>((resolve) => (finishFirst = resolve)));

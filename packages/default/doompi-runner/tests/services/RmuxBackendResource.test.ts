@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveBundledRmuxBinary, rmuxPackageForTarget } from '../../src/adapters/RmuxBackend/RmuxBackend.ts';
+import { resolveBundledRmuxBinary, rmuxPackageForTarget } from '../../src/services/rmuxBackend';
 
 const directories: string[] = [];
 afterEach(() => {

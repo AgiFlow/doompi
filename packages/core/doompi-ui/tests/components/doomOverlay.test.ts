@@ -7,7 +7,7 @@ import {
   type DoomOverlayTui,
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_NAVIGATION_KEYS,
-} from '../../src/exports/components/doomOverlay.ts';
+} from '../../src/exports/doomOverlay';
 
 const theme = {
   fg: (_color: string, text: string) => text,

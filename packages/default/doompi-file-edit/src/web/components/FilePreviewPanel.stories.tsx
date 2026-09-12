@@ -7,8 +7,8 @@
  * story answers the preview route and each variant is a different file.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { FileEditsPreviewView } from '../../types/fileEditsApi.ts';
-import { FilePreviewPanel } from './FilePreviewPanel.tsx';
+import type { FileEditsPreviewView } from '../../types/fileEditsApi';
+import { FilePreviewPanel } from './FilePreviewPanel';
 
 const CODE = [
   "export const filesChannelType = 'file_edits';",

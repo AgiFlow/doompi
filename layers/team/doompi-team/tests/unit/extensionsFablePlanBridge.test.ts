@@ -9,15 +9,15 @@ import {
   type FablePlanStartPayload,
 } from '@agimon-ai/doompi-extension-contracts/fable-plan';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createFablePlanBridge } from '../../src/adapters/pi/extensions/fablePlanBridge';
+import { createFablePlanBridge } from '../../src/services/fablePlanBridge';
 import { SubagentCapabilityPolicyStore } from '../../src/schemas/team/capabilityCeiling';
 import {
   fableProfileResultPathFor,
   type AsyncSubagentSpawnInput,
   type AsyncSubagentSpawnerContract,
-} from '../../src/adapters/runs/background/asyncExecution';
-import type { SubagentWaiterContract, WaitOutcome, WaitRequest } from '../../src/adapters/runs/background/subagentWait';
-import type { ManagementActionsContract } from '../../src/adapters/pi/extensions/managementActions';
+} from '../../src/services/asyncExecution';
+import type { SubagentWaiterContract, WaitOutcome, WaitRequest } from '../../src/services/subagentWait';
+import type { ManagementActionsContract } from '../../src/services/managementActions';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 const REQUEST: FablePlanStartPayload = {

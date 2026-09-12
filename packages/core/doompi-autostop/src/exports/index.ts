@@ -1,13 +1,3 @@
-export { autoStopHeadlessFacet } from '../adapters/headless/facet.ts';
-export { autoStopExtension } from '../adapters/pi/extension.ts';
-export { registerIdleShutdown } from '../adapters/pi/idleShutdown.ts';
-export {
-  AUTO_STOP_ACTION,
-  type AutoStopAction,
-  type AutoStopDecision,
-  type AutoStopDelays,
-  DEFAULT_AUTO_STOP_DELAYS,
-  decideOnRecheck,
-  decideOnSettled,
-  type SessionActivity,
-} from '../services/idlePolicy.ts';
+export { AUTO_STOP_ACTION, DEFAULT_AUTO_STOP_DELAYS } from '../constants/idlePolicy';
+export { decideOnRecheck, decideOnSettled } from '../services/idlePolicy';
+export type { AutoStopAction, AutoStopDecision, AutoStopDelays, SessionActivity } from '../services/idlePolicy/type';

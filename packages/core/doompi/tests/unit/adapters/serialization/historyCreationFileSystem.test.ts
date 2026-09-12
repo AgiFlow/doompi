@@ -6,12 +6,9 @@ import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import { BACKGROUND_CONTEXT as context } from '@earendil-works/pi-agent-core/harness/context';
 import { JsonlSessionRepo } from '@earendil-works/pi-agent-core/harness/session';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHistoryCreationFileSystem } from '../../../../src/adapters/serialization/historyCreationFileSystem';
-import {
-  createHistoryOwnership,
-  historyOwnershipLockPath,
-} from '../../../../src/adapters/serialization/historyOwnership';
-import type { HistoryOwnershipLease } from '../../../../src/adapters/serialization/historyImport';
+import { createHistoryCreationFileSystem } from '../../../../src/services/historyCreationFileSystem';
+import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../src/services/historyOwnership';
+import type { HistoryOwnershipLease } from '../../../../src/services/historyImport';
 
 const roots: string[] = [];
 afterEach(() => {

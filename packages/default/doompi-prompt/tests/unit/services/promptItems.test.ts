@@ -4,8 +4,8 @@ import {
   promptItems,
   resolvePromptSelection,
   stagedEditorText,
-} from '../../../src/services/promptItems.ts';
-import type { SavedPrompt } from '../../../src/types/prompt.ts';
+} from '../../../src/services/promptItems';
+import type { SavedPrompt } from '../../../src/types/prompt';
 
 const saved: SavedPrompt[] = [
   { name: 'review', description: 'Review the diff', text: 'Review the diff carefully' },

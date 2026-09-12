@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createComputerUseSessionClient,
-  type ComputerUseSessionClient,
-} from '../../src/adapters/pi/sessionApiClient.ts';
+import { createComputerUseSessionClient, type ComputerUseSessionClient } from '../../src/services/sessionApiClient';
 
 const host: ComputerUseSessionClient = {
   state: vi.fn(async () => ({ sessionId: 'session', revision: 0, wake: 0, phase: 'inactive' as const })),

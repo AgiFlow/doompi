@@ -1,5 +1,5 @@
 import { defineSessionStore, type SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
-import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../../types/webSubagents.ts';
+import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../../types/webSubagents';
 
 /** Session slash verbs used by the browser controls. */
 const STOP_COMMAND = '/subagents-stop';

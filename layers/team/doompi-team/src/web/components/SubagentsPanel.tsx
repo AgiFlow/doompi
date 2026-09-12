@@ -22,10 +22,10 @@ import {
 import type { SessionFrameSender, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from 'react';
-import type { SubagentRun } from '../../types/webSubagents.ts';
-import { RUN_ACTIONS_SLOT } from '../api/runActionsSlot.ts';
-import { abbreviateCwd } from '../lib/format.ts';
-import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from '../stores/catalogStore.ts';
+import type { SubagentRun } from '../../types/webSubagents';
+import { RUN_ACTIONS_SLOT } from '../api/runActionsSlot';
+import { abbreviateCwd } from '../lib/format';
+import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from '../stores/catalogStore';
 import {
   clearAutoOpen,
   dismissRun,
@@ -34,11 +34,11 @@ import {
   requestRunStop,
   subagents,
   visibleRuns,
-} from '../stores/subagentsStore.ts';
-import { AgentCatalogDrawer } from './AgentCatalogDrawer.tsx';
-import { agentThreadTab } from './AgentThreadPanel.tsx';
-import { LaunchAgentDialog } from './LaunchAgentDialog.tsx';
-import { elapsedRun, RUN_BADGE, RunControl } from './RunControl.tsx';
+} from '../stores/subagentsStore';
+import { AgentCatalogDrawer } from './AgentCatalogDrawer';
+import { agentThreadTab } from './AgentThreadPanel';
+import { LaunchAgentDialog } from './LaunchAgentDialog';
+import { elapsedRun, RUN_BADGE, RunControl } from './RunControl';
 
 /** One fleet tab per session; the fleet is singular, so the id needs nothing else. */
 export const SUBAGENTS_TAB_ID = 'subagents-fleet';

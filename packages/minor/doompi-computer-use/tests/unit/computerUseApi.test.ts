@@ -8,8 +8,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createComputerUseApi as createComputerUseApiImpl,
   type ComputerUseApiOptions,
-} from '../../src/adapters/computerUseApi.ts';
-import { COMPUTER_USE_ROUTES } from '../../src/types/computerUseApi.ts';
+} from '../../src/controllers/computerUseApi';
+import { COMPUTER_USE_ROUTES } from '../../src/types/computerUseApi';
 
 const internal = { authorization: 'Bearer internal' };
 const hub = { authorization: 'Bearer hub' };

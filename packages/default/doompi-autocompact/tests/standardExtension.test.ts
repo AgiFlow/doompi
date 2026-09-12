@@ -1,3 +1,6 @@
+vi.mock('@agimon-ai/doompi-extension-contracts/pi-extension', () =>
+  vi.importActual('../../../core/doompi-extension-contracts/src/controllers/piExtension'),
+);
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import { Context } from '@deepseek-ai/cordis';
@@ -15,7 +18,7 @@ const lifecycleMocks = vi.hoisted(() => ({
 
 const cordisRoots: Context[] = [];
 
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
+vi.mock('../../../core/doompi-extension-contracts/src/controllers/cordisHost', () => ({
   connectDoomCordisHost: async () => {
     const root = lifecycleMocks.createCordisRoot() as Context;
     await lifecycleMocks.prepareCordisRoot(root);
@@ -26,12 +29,12 @@ vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
     };
   },
 }));
-vi.mock('../src/adapters/telemetry/logSinkTelemetry.ts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/adapters/telemetry/logSinkTelemetry.ts')>()),
+vi.mock('../src/services/autocompactTelemetry', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/services/autocompactTelemetry')>()),
   createAutocompactTelemetry: lifecycleMocks.createTelemetry,
 }));
 
-const { autocompactExtension } = await import('../src/adapters/pi/extension.ts');
+const { autocompactExtension } = await import('../src/extensions/pi');
 
 function testBus() {
   const handlers = new Map<string, Set<(payload: unknown) => void>>();

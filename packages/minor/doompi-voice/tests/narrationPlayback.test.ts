@@ -1,13 +1,7 @@
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { describe, expect, it, vi } from 'vitest';
-import { VoiceNarrationPlayback } from '../src/services/narrationPlayback.ts';
-import type {
-  IClock,
-  ITtsAdapter,
-  TtsPlaybackOutcome,
-  TtsPlaybackResult,
-  TtsSpeakRequest,
-} from '../src/types/index.ts';
+import { VoiceNarrationPlayback } from '../src/services/narrationPlayback';
+import type { IClock, ITtsAdapter, TtsPlaybackOutcome, TtsPlaybackResult, TtsSpeakRequest } from '../src/types';
 
 const config: ResolvedVoiceConfig = {
   mode: 'legacy',

@@ -5,9 +5,9 @@ import {
   DOOM_CORDIS_SESSION_SERVICE,
   finalizeDoomCordisHost,
   installDoomCordisHost,
-} from '../src/adapters/pi/cordisHost.ts';
-import { DOOM_CONTEXT_CONTRIBUTIONS_SERVICE } from '../src/schemas/contextContributions.ts';
-import { DOOM_TOOL_OVERRIDES_SERVICE } from '../src/schemas/toolOverrides.ts';
+} from '../src/controllers/cordisHost';
+import { DOOM_CONTEXT_CONTRIBUTIONS_SERVICE } from '../src/schemas/contextContributions';
+import { DOOM_TOOL_OVERRIDES_SERVICE } from '../src/schemas/toolOverrides';
 import { Context } from '@deepseek-ai/cordis';
 import type {
   ExtensionAPI,
@@ -16,7 +16,7 @@ import type {
   SessionStartEvent,
 } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
-import type { EventBusLike } from '../src/schemas/protocol.ts';
+import type { EventBusLike } from '../src/schemas/protocol';
 
 type LifecycleHandler = (event: never, context: ExtensionContext) => unknown;
 

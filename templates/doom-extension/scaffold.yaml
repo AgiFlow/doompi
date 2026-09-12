@@ -1,47 +1,45 @@
 boilerplate:
   - name: scaffold-doom-extension
     targetFolder: packages/default
-    description: |-
-      Create a publishable Pi extension package for the DoomPi distribution using the repository's canonical KISS service-layer structure.
-      The generated package uses plain factory dependency injection, a thin standalone Pi entrypoint, deterministic lifecycle cleanup, strict TypeScript, dual ESM/CJS output, and portable Vibe-Lint boundaries.
+    description: Create a publishable DoomPi extension using typed plugin declarations, controllers, services, and automatic lifecycle ownership.
     variables_schema:
       type: object
       properties:
         packageName:
           type: string
           description: Publishable package folder/name without the @agimon-ai scope (doompi-* in kebab-case)
-          pattern: "^doompi-[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          pattern: ^doompi-[a-z][a-z0-9]*(-[a-z0-9]+)*$
           maxLength: 58
           example: doompi-log
         packageDescription:
           type: string
           description: Public npm package description; quotes, backslashes, and newlines are rejected so generated JSON stays valid
-          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$
           minLength: 1
           maxLength: 240
           example: Session metrics for DoomPi
         packageKeyword:
           type: string
           description: Lowercase capability-specific npm search keyword
-          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          pattern: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$
           minLength: 2
           maxLength: 40
           example: session-metrics
         commandName:
           type: string
           description: Pi command name without the leading slash
-          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          pattern: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$
           example: doom-log
         commandDescription:
           type: string
           description: Command help text and default service response
-          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$
           minLength: 1
           example: Show session metrics
         author:
           type: string
           description: Package author and copyright holder
-          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,'()-]*$"
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 .,'()-]*$
           minLength: 1
           maxLength: 120
           default: Vuong Ngo
@@ -49,7 +47,7 @@ boilerplate:
         copyrightYear:
           type: string
           description: Year recorded in the LICENSE copyright line
-          pattern: "^[0-9]{4}$"
+          pattern: ^[0-9]{4}$
           default: "2026"
           example: "2026"
       required:
@@ -71,37 +69,63 @@ boilerplate:
       - vitest.config.ts
       - vibe-lint.config.yaml
       - src/exports/index.ts
-      - src/types/extension.ts
-      - src/services/extensionService.ts
-      - src/container/index.ts
-      - src/commands/command.ts->src/commands/{{ commandName | camelCase }}Command.ts
+      - src/services/extensionService/type.ts
+      - src/services/extensionService/index.ts
+      - src/constants/command.ts->src/constants/{{ commandName | camelCase }}.ts
+      - src/controllers/command.ts->src/controllers/{{ commandName | camelCase }}Command.ts
       - 'src/prompts/use/SKILL.md->src/prompts/doompi-use-{{ packageName | replace: "doompi-", "" | kebabCase }}/SKILL.md'
-      - src/exports/extensions/pi.ts
-      - src/adapters/pi/extension.ts
       - tests/unit/services/extensionService.test.ts
       - tests/integration/extensions/pi.test.ts
       - tests/contract/packageShape.test.ts
+      - src/extensions/pi.ts
     instruction: |-
-      Generate the minimum canonical DoomPi extension. The executable source vocabulary is fixed: types, schemas, services, adapters, providers, container, commands, tui, and bin, with src/exports as the only public surface. Package-owned Help resources live under src/prompts. Omit unused folders; do not introduce alternate architecture roots.
+      Generate only used folders. Host entries live directly in src/extensions/pi.ts, server.ts, and web.ts. src/exports contains flat, pure public re-export modules for services, constants, types, and schemas. Never re-export extensions from src/exports.
 
-      File responsibilities:
-      - src/exports/: The only public surface. One pure re-export file per package.json exports subpath, mirroring the subpath tree. No src/index.ts.
-      - src/types/: Ports and domain contracts, owned by the core. A port is the interface the package needs, named in the package's own vocabulary; the adapter that satisfies it lives elsewhere and imports it from here. Never declare a port beside its implementation, or services can no longer depend on the capability at all.
-      - src/schemas/: Runtime TypeBox or Zod validation contracts.
-      - src/services/: Host-neutral business behavior, flat. The package already names its subject, so do not add a src/services/<subject> folder; group only where two or more domains need telling apart. A service is a function of its arguments: it may import types and schemas, never Pi, Node builtins, TUI, containers, or concrete adapters, and it must not read Date.now(), Math.random(), timers or process.* ambiently. Take a clock, an id factory or the environment as a parameter.
-      - src/providers/: Cordis Services published on the shared Context for other extensions to consume. Extend Service and call super(ctx, name).
-      - src/adapters/: Implementations of the ports declared in src/types, one per technology. This is where the filesystem, processes, the network, the clock and the Pi host API enter. src/adapters/pi connects to the shared Doom Cordis host, mounts one package-owned plugin fiber, and disposes that fiber before releasing its host lease on session_shutdown. Never construct a package-local Cordis Context.
-      - src/container/index.ts: Plain factory dependency construction and test overrides. Use @deepseek-ai/cordis, never inversify.
-      - src/commands/: Pi command translation; invoke injected service contracts and map results to UI.
-      - src/prompts/: Package-owned Help resources. Each direct child is a kebab-case skill directory containing SKILL.md. Prompts are published as source resources, linked from llms.txt, and registered through optional Cordis Help injection. Do not export them or copy them into dist.
-      - llms.txt: Concise H1-led package Help index whose relative links resolve to explicitly shipped resources and route to every package prompt.
+      Dependency direction: extensions -> controllers -> services/models. Tools consume services/models. Services own all package logic, including filesystem and network work, under src/services/{serviceName}/index.ts and type.ts. Models own state. Controllers translate API, method, and command requests. Constants own metadata and guidance; schemas own runtime validation. Do not generate adapters, containers, commands, or providers directories.
 
-      Run pnpm fixcode in the generated package before the first lint. Rendered names change line widths, so a template signature that wraps in the source can render as a single line the formatter wants joined.
+      Use definePiExtension({name, ...contributions}) for static plugins or definePiExtension(name, context => contributions) for per-mount dependencies. Pi factories and server scope factories may be async; readiness awaits their contribution result before registration. Most contributions are arrays. Pi tools may instead use a typed PiToolCollection with snapshot() and subscribe(listener). Reuse immutable declarations across snapshots. A new declaration with the same name replaces the implementation and aborts old invocations. The helper owns subscriptions and cancels withdrawn tools. Pi minorModes may use PiMinorModeCollection with snapshot() and subscribe(listener) when catalog availability changes; the helper owns attachment, withdrawal, provider rebinding, and unsubscribe. Shared tools use defineTool and commands use defineCommand. No mandatory setup, teardown, registration callbacks, or empty lifecycle hooks. The helper owns Cordis, registrations, and cleanup.
 
-      Pi packages use version 0.85.1 exactly. The packageKeyword value must name the extension's real user-facing capability rather than repeat a generic shared keyword. Keep package exports closed and explicit. Run build, typecheck, test, lint, Vibe-Lint preflight, and npm pack --dry-run before publishing.
+      Lifecycle: construct declarations, register, await onStart, run, abort signal, await onStop, unregister in reverse order, await onDispose. Hooks receive one typed context. onStop runs after the start stage is reached, even if onStart is absent or fails. Factories create state; onStart begins external work. Scope activation and minor-mode actions are separate lifetimes.
 
-      An HTTP API and a cockpit (web) presence are not generated here. Both halves live under src and leave through src/exports: add the API with scaffold-doom-package-api (src/types, src/adapters, src/exports/sessionApi.ts), register its DoomApi through an existing or newly scaffolded DoomServerFacet, and add the cockpit with scaffold-doom-web-plugin, then one scaffold-doom-web-tool-card per Pi tool the package registers. The cockpit's browser code sits in src/web, published through src/exports/webClient.ts, and is governed by the web-plugin-* rules on top of the folder vocabulary.
+      Use extensionless source imports without /index. tsdown uses explicit entries from src/extensions and flat src/exports. Browser entries remain source-bundled and excluded from the node build. Keep exports closed and Pi versions matching. Prompts remain published resources under src/prompts, indexed by llms.txt and declared through resources.
+
+      Run pnpm fixcode, lint, typecheck, tests, build, VibeLint preflight, and npm pack --dry-run. Add APIs, server, web, tools, or services through the matching feature only when needed.
 features:
+  - name: scaffold-doom-plugin-method
+    description: Add one exact-scope typed browser-to-server method to an extension that already has a server facet and web plugin.
+    variables_schema:
+      type: object
+      properties:
+        methodName:
+          type: string
+          pattern: ^[a-z][a-zA-Z0-9]*$
+          example: readSelection
+        serviceName:
+          type: string
+          pattern: ^[a-z][a-z0-9.]*$
+          example: document.selection
+        scope:
+          type: string
+          enum:
+            - global
+            - workspace
+          example: workspace
+      required:
+        - methodName
+        - serviceName
+        - scope
+      additionalProperties: false
+    includes:
+      - src/types/pluginMethod.ts->src/types/{{ methodName | camelCase }}Protocol.ts
+      - src/schemas/pluginMethod.ts->src/schemas/{{ methodName | camelCase }}Method.ts
+      - src/controllers/pluginMethod.ts->src/controllers/{{ methodName | camelCase }}Method.ts
+      - src/web/api/pluginMethod.ts->src/web/api/{{ methodName | camelCase }}.ts
+    instruction: Replace example JSON shapes with the package contract. Include the defineServerMethod controller in the {{ scope }} scope's methods array. The helper owns registration and validates scope. The browser calls the typed method using its WebPluginRuntime. Controllers delegate business work to services. Use HTTP for binary transfers. Test request and response validation.
+    patterns:
+      - src/types/**/*.ts
+      - src/schemas/**/*.ts
+      - src/controllers/**/*.ts
+      - src/web/api/**/*.ts
   - name: scaffold-doom-prompt
     description: Add one package-owned DoomPi Help prompt under src/prompts for either extension authoring or user guidance.
     variables_schema:
@@ -110,13 +134,13 @@ features:
         promptName:
           type: string
           description: Help skill name beginning with doompi-author- or doompi-use-
-          pattern: "^doompi-(author|use)-[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          pattern: ^doompi-(author|use)-[a-z][a-z0-9]*(-[a-z0-9]+)*$
           maxLength: 64
           example: doompi-use-log
         promptDescription:
           type: string
           description: Concise discovery description explaining what the prompt helps with and when it applies
-          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/@-]*$"
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/@-]*$
           minLength: 1
           maxLength: 480
           example: Use DoomPi Log to inspect structured session diagnostics
@@ -126,14 +150,7 @@ features:
       additionalProperties: false
     includes:
       - src/prompts/prompt/SKILL.md->src/prompts/{{ promptName | kebabCase }}/SKILL.md
-    instruction: |-
-      Generate one package-owned Help prompt at src/prompts/{{ promptName | kebabCase }}/SKILL.md. Keep its instructions specific to the owning package and put substantial conditional detail in references only when needed.
-
-      Complete the package integration after generation:
-      - Link the prompt from the matching How to author or How to use section in llms.txt.
-      - Register a descriptor with the exact same name and description through an optional cordis.inject([DOOM_HELP_SERVICE], ...) binding in the Pi adapter. Use the package name as source, import.meta.url as moduleUrl, and return the contribution disposer.
-      - Ensure package.json publishes the exact src/prompts directory. Do not add an export, build entry, or dist copy for Markdown prompts.
-      - Validate the new skill and run the package contract, integration, lint, typecheck, and build targets.
+    instruction: Generate the package-owned prompt and link it from llms.txt. Add its matching name and description to the Pi plugin resources array, using package source and import.meta.url. The helper binds the optional Help provider and removes the contribution automatically. Publish src/prompts, never export Markdown or copy it into dist. Run package contract and integration tests.
     patterns:
       - src/prompts/**/*.md
   - name: scaffold-doom-service
@@ -144,13 +161,13 @@ features:
         serviceName:
           type: string
           description: camelCase service module and function name
-          pattern: "^[a-z][a-zA-Z0-9]*$"
+          pattern: ^[a-z][a-zA-Z0-9]*$
           maxLength: 48
           example: idlePolicy
         serviceDescription:
           type: string
           description: What the service decides or derives, in one line
-          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$
           minLength: 1
           maxLength: 240
           example: Decide whether an idle session should stop
@@ -159,41 +176,34 @@ features:
         - serviceDescription
       additionalProperties: false
     includes:
-      - src/services/service.ts->src/services/{{ serviceName | camelCase }}.ts
+      - src/services/service/index.ts->src/services/{{ serviceName | camelCase }}/index.ts
+      - src/services/service/type.ts->src/services/{{ serviceName | camelCase }}/type.ts
       - tests/unit/services/service.test.ts->tests/unit/services/{{ serviceName | camelCase }}.test.ts
-    instruction: |-
-      Generate one host-neutral service at src/services/{{ serviceName | camelCase }}.ts. Keep src/services flat; the package already names its subject, so add a subfolder only when two or more domains need telling apart.
-
-      The service is a function of its arguments. It may import src/types and src/schemas, never Pi, node builtins, TUI, containers, or concrete adapters, and it must not read Date.now(), Math.random(), timers, or process.* ambiently. Take the clock, id factory, or environment as a parameter so the unit test stays deterministic.
-
-      Complete the package integration after generation:
-      - Replace the placeholder input, result, and body with the real contract; do not keep the generated shape.
-      - Re-export from src/exports/index.ts only if the service is part of the package's public surface.
-      - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
+    instruction: Implement package logic under src/services/{{ serviceName | camelCase }}/. Keep its input/result contracts in type.ts and import the directory without /index or .ts. Services may use platform APIs when needed but must not import extensions, controllers, or tools. Models own shared state. Publish selected service interfaces through flat src/exports modules only when other packages consume them. Replace placeholder behavior and verify meaningful unit tests.
     patterns:
       - src/services/**/*.ts
   - name: scaffold-doom-tool-restriction
-    description: Add a Doom tool-surface restriction that hides tools while the package is active, with its cordis binding and unit test.
+    description: Add a Doom tool-surface restriction that hides tools while the package is active, with its typed lifecycle contribution and unit test.
     variables_schema:
       type: object
       properties:
         restrictionName:
           type: string
           description: camelCase name of the state that hides tools, used for the module and function names
-          pattern: "^[a-z][a-zA-Z0-9]*$"
+          pattern: ^[a-z][a-zA-Z0-9]*$
           maxLength: 48
           example: voiceMode
         restrictionDescription:
           type: string
           description: Which tools this hides and while what is true, in one line
-          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$
           minLength: 1
           maxLength: 240
           example: Hide file writes while voice mode is speaking
         packageName:
           type: string
           description: This package's npm name, used as the restriction owner label
-          pattern: "^@[a-z0-9-]+/[a-z0-9-]+$"
+          pattern: ^@[a-z0-9-]+/[a-z0-9-]+$
           maxLength: 64
           example: "@agimon-ai/doompi-voice"
       required:
@@ -202,24 +212,14 @@ features:
         - packageName
       additionalProperties: false
     includes:
-      - src/services/toolRestriction.ts->src/services/{{ restrictionName | camelCase }}Tools.ts
-      - src/adapters/pi/toolSurfaceBinding.ts->src/adapters/pi/{{ restrictionName | camelCase }}ToolSurface.ts
+      - src/services/toolRestriction/index.ts->src/services/{{ restrictionName | camelCase }}Tools/index.ts
+      - src/services/toolRestriction/type.ts->src/services/{{ restrictionName | camelCase }}Tools/type.ts
+      - src/constants/toolRestriction.ts->src/constants/{{ restrictionName | camelCase }}Tools.ts
       - tests/unit/services/toolRestriction.test.ts->tests/unit/services/{{ restrictionName | camelCase }}Tools.test.ts
-    instruction: |-
-      Generate a tool-surface restriction. The Doom tool surface, a session-scoped Cordis service from @agimon-ai/doompi-extension-contracts/tool-surface, is the only writer of the host's active tool list. Packages never call pi.setActiveTools: that is a whole-list write, so the last writer silently restores whatever another package had deliberately hidden. The no-direct-tool-activation lint rule rejects the call in src.
-
-      A restriction is a pure function (incoming, available) => names that only ever REMOVES. Removal is inherent: dropping the restriction makes the surface recompute from every registered tool, so nothing snapshots the previous list and no restore path can go stale.
-
-      Complete the package integration after generation:
-      - Replace the placeholder tool names in {{ restrictionName | upperCase }}_RESTRICTED_TOOLS and the boolean `active` parameter with the package's real state. Keep the function pure: pass state in, never read Date.now, process.env or a host.
-      - Call bind{{ restrictionName | pascalCase }}ToolSurface from the package's Pi adapter, inside its own plugin fiber, so host disposal unwinds the registration. cordis.inject resolves asynchronously, after the extension factory returns, so nothing may assume the restriction is applied during setup.
-      - Call the returned apply(active) on every state change. Never mutate the closure a previous restriction captured.
-      - A restriction cannot add a tool. If a tool must be conditionally invisible, register it unconditionally with pi.registerTool and hide it here.
-      - Model rival owners in tests as another surface.register call, never as a direct setActiveTools call, or the test proves nothing about arbitration.
-      - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
+    instruction: Replace placeholder restricted tool names with the feature policy. Include create{{ restrictionName | pascalCase }}ToolSurface(state) in toolRestrictions. State exposes isActive and subscribe; the helper owns subscription and registration disposal. Restrictions only remove incoming tools. Never write pi.setActiveTools or manually retain registrar handles. Test state changes and composition with other restrictions.
     patterns:
       - src/services/**/*.ts
-      - src/adapters/pi/**/*.ts
+      - src/constants/**/*.ts
   - name: scaffold-doom-server-facet
     description: Add the package's server facet, the Cordis object plugin a session server or the cockpit hub installs to mount its HTTP API, with its unit test.
     variables_schema:
@@ -228,15 +228,15 @@ features:
         facetName:
           type: string
           description: camelCase prefix for the exported facet, usually the package's short name
-          pattern: "^[a-z][a-zA-Z0-9]*$"
+          pattern: ^[a-z][a-zA-Z0-9]*$
           maxLength: 48
           example: runner
         apiModule:
           type: string
-          description: Path of the adapter exporting the DoomApi, relative to src/adapters/server/
-          pattern: "^\\.\\./[A-Za-z0-9_./-]+\\.ts$"
+          description: Extensionless import from src/extensions/server.ts to the API controller
+          pattern: ^\.\.?/[A-Za-z0-9_./-]+$
           maxLength: 120
-          example: ../runnerLogApi.ts
+          example: ../controllers/runnerApi
         scope:
           type: string
           description: Which host installs this facet
@@ -247,7 +247,7 @@ features:
         scopeReason:
           type: string
           description: Why the surface belongs to that scope, in one line and lower case
-          pattern: "^[a-z][A-Za-z0-9 .,;:!?()/'-]*$"
+          pattern: ^[a-z][A-Za-z0-9 .,;:!?()/'-]*$
           minLength: 1
           maxLength: 200
           example: the runner log belongs to the session that owns the runners
@@ -258,39 +258,32 @@ features:
         - scopeReason
       additionalProperties: false
     includes:
-      - src/adapters/server/facet.ts
-      - src/exports/extensions/server.ts
-      - tests/unit/adapters/serverFacet.test.ts
+      - src/extensions/server.ts
+      - tests/unit/extensions/server.test.ts
     instruction: |-
-      Generate the package's server facet. A package ships two facets: the Pi extension the agent process installs, and this one, installed by the headless host that serves the package's HTTP API. The facet is where the API is registered, so the API and the server are one declaration rather than two.
+      Generate defineServerPlugin with a stable name and explicit supported global/workspace/session sections. Static sections contain contribution arrays; stateful sections are sync or async factories receiving one typed context. API declarations come from controllers. Shared tools and commands are defined once and reused by Pi and server.
 
-      The facet MUST be a Cordis object plugin, `{ inject: [...], apply(context) {} }`, never a bare function calling context.inject inside itself. Only the object form declares its own inject, so the host mounts one fiber and `fiber.await()` settles once apply has run. A nested inject mounts a child fiber the host holds no handle on, and the host decides whether to open a listener from a mount table it must know is complete. The doom-server-facet-shape lint rule rejects the other forms.
+      Add doompiServer.entry './src/extensions/server.ts', dist './dist/extensions/server.mjs', and supported scopes. Add the matching closed ./extensions/server package export and 'extensions/server': 'src/extensions/server.ts' tsdown entry. apiModule must be an extensionless relative import from src/extensions to its controller.
 
-      Complete the package integration after generation:
-      - Add one top-level `doompiServer` block with entry `./src/exports/extensions/server.ts`, dist `./dist/extensions/server.mjs`, and a `scopes` array containing only the supported `session` and/or `hub` hosts. Add the matching `./extensions/server` export with `types: './dist/extensions/server.d.mts'`, `import: './dist/extensions/server.mjs'`, and `require: './dist/extensions/server.cjs'`. Sync reads that block; a package without it contributes no facet.
-      - Keep the DoomApi in its adapter. The facet reads the host, registers the api and returns the disposer; it never builds routes or holds state.
-      - Do nothing else in apply. A facet that opens a socket, reads a file or starts a timer at install has the same problem an eager Pi extension has, and a server has no reload to recover from it.
-      - A base path already claimed by another facet is refused with a notice, so pick one that is globally unique across loaded packages.
-      - Update the package's contract test: the exports map and the doompiServer block are both part of the published shape.
-      - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
+      Only add onStart, onStop, onDispose when work exists. Factories construct state, onStart begins background work, onStop stops it before registrations are removed, and onDispose performs final instance cleanup. The helper handles Cordis and registration cleanup, including failure rollback. Never use setup/teardown, low-level host registration, or separate headless facets.
     patterns:
-      - src/adapters/server/**/*.ts
-      - src/exports/extensions/**/*.ts
+      - src/extensions/server.ts
+      - src/controllers/**/*.ts
   - name: scaffold-doom-command
-    description: Add one Pi command under src/commands with its integration test.
+    description: Add a shared Pi/server command controller and its integration test.
     variables_schema:
       type: object
       properties:
         commandName:
           type: string
           description: Pi command name without the leading slash
-          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          pattern: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$
           maxLength: 48
           example: doom-log
         commandDescription:
           type: string
           description: Command help text shown in the Pi command list
-          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$
           minLength: 1
           maxLength: 240
           example: Show session metrics
@@ -299,18 +292,12 @@ features:
         - commandDescription
       additionalProperties: false
     includes:
-      - src/commands/featureCommand.ts->src/commands/{{ commandName | camelCase }}Command.ts
-      - tests/integration/commands/featureCommand.test.ts->tests/integration/commands/{{ commandName | camelCase }}Command.test.ts
-    instruction: |-
-      Generate one Pi command at src/commands/{{ commandName | camelCase }}Command.ts. Commands are a translation layer only: invoke an injected contract and map its result to the UI. Business behavior belongs in src/services.
-
-      Complete the package integration after generation:
-      - Call register{{ commandName | pascalCase }}Command from the package's Pi adapter, inside the plugin fiber, passing dependencies built by src/container/index.ts. Do not construct the dependency inline.
-      - Guard every UI call with ctx.hasUI so the command stays headless-safe, and check ctx.mode when it needs the TUI.
-      - Document the command under the README Use section.
-      - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
+      - src/constants/featureCommand.ts->src/constants/{{ commandName | camelCase }}.ts
+      - src/controllers/featureCommand.ts->src/controllers/{{ commandName | camelCase }}Command.ts
+      - tests/integration/controllers/featureCommand.test.ts->tests/integration/controllers/{{ commandName | camelCase }}Command.test.ts
+    instruction: Declare a shared command controller through defineCommand. Its execute handler delegates to an injected service and uses execution.notify. Include the returned declaration in Pi and/or session server commands arrays. The helper adapts notifications to the host. Metadata lives in constants; behavior lives in services. Document the command and test its result.
     patterns:
-      - src/commands/**/*.ts
+      - src/controllers/**/*.ts
   - name: scaffold-doom-provider
     description: Add one Cordis provider under src/providers that publishes a service on the shared Context.
     variables_schema:
@@ -319,13 +306,13 @@ features:
         providerName:
           type: string
           description: kebab-case capability name, used for the class name and the doom/ service key
-          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          pattern: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$
           maxLength: 48
           example: session-metrics
         providerDescription:
           type: string
           description: What the provider publishes for other extensions to consume
-          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$
           minLength: 1
           maxLength: 240
           example: Publish session metrics for other extensions to read
@@ -334,64 +321,49 @@ features:
         - providerDescription
       additionalProperties: false
     includes:
-      - src/providers/provider.ts->src/providers/{{ providerName | camelCase }}.ts
-    instruction: |-
-      Generate one Cordis provider at src/providers/{{ providerName | camelCase }}.ts. A provider is the package's contribution to the shared Doom Context: it extends Service, calls super(context, key), and is what other extensions inject rather than importing across packages.
-
-      Complete the package integration after generation:
-      - Construct the service inside the package's own plugin fiber in src/adapters/pi, never on a package-local Context, so host disposal unwinds it.
-      - Keep the declare module augmentation key identical to the exported service key string.
-      - Consumers read it through cordis.inject or the generated read{{ providerName | pascalCase }} helper and must tolerate undefined; a provider is optional until some extension mounts it.
-      - Export the service, its key, and its snapshot type from src/exports/index.ts if other packages consume them.
-      - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
+      - src/services/provider/index.ts->src/services/{{ providerName | camelCase }}/index.ts
+      - src/services/provider/type.ts->src/services/{{ providerName | camelCase }}/type.ts
+      - src/constants/provider.ts->src/constants/{{ providerName | camelCase }}.ts
+    instruction: Implement a Cordis service in its service directory and pass create{{ providerName | pascalCase }}Plugin(source) in the extension services array. The shared helper mounts service fibers before other contributions and owns disposal. Native Pi model providers remain the distinct providers field. Keep the shared service contract in type.ts and key in constants. Consumers require the service through a declared dependency. Do not manually create Context, root.plugin, or leases in extension entries.
     patterns:
-      - src/providers/**/*.ts
-  - name: scaffold-doom-adapter
-    description: Add one port under src/types and the adapter under src/adapters that implements it, with a unit test.
+      - src/services/**/*.ts
+      - src/constants/**/*.ts
+  - name: scaffold-doom-service-implementation
+    description: Add a service implementation and its colocated interface with a unit test.
     variables_schema:
       type: object
       properties:
         capabilityName:
           type: string
           description: camelCase capability the port names, in the package's own vocabulary
-          pattern: "^[a-z][a-zA-Z0-9]*$"
+          pattern: ^[a-z][a-zA-Z0-9]*$
           maxLength: 48
           example: clock
-        adapterName:
+        implementationName:
           type: string
-          description: camelCase technology that satisfies the port, used as the src/adapters subfolder
-          pattern: "^[a-z][a-zA-Z0-9]*$"
+          description: Technology name used to distinguish this implementation
+          pattern: ^[a-z][a-zA-Z0-9]*$
           maxLength: 48
           example: node
         capabilityDescription:
           type: string
           description: What the capability provides, in one line
-          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$
           minLength: 1
           maxLength: 240
           example: Read the current wall clock time
       required:
         - capabilityName
-        - adapterName
+        - implementationName
         - capabilityDescription
       additionalProperties: false
     includes:
-      - src/types/port.ts->src/types/{{ capabilityName | camelCase }}.ts
-      - src/adapters/adapter/adapter.ts->src/adapters/{{ adapterName | camelCase }}/{{ capabilityName | camelCase }}.ts
-      - tests/unit/adapters/adapter.test.ts->tests/unit/adapters/{{ capabilityName | camelCase }}.test.ts
-    instruction: |-
-      Generate the {{ capabilityName | pascalCase }}Port in src/types and one {{ adapterName | camelCase }} implementation of it in src/adapters. The dependency points inward: the port is named in the package's vocabulary and the adapter imports it, never the reverse.
-
-      If src/types/{{ capabilityName | camelCase }}.ts already exists, keep the existing port, delete the generated one, and point the adapter import at it rather than declaring a second contract.
-
-      Complete the package integration after generation:
-      - Replace the placeholder read() signature with the real contract before writing the implementation.
-      - Wire the adapter through src/container/index.ts so services receive the port and tests can override it.
-      - Keep filesystem, process, network, clock, and Pi host access inside this folder; services must keep importing only the port.
-      - Run pnpm fixcode, then the package lint, typecheck, test, and build targets.
+      - src/services/implementation/type.ts->src/services/{{ capabilityName | camelCase }}/type.ts
+      - src/services/implementation/index.ts->src/services/{{ capabilityName | camelCase }}/index.ts
+      - tests/unit/services/implementation.test.ts->tests/unit/services/{{ capabilityName | camelCase }}.test.ts
+    instruction: Put the capability contract in src/services/{{ capabilityName | camelCase }}/type.ts and its implementation in index.ts. Reuse an existing contract when present. Construct dependencies in the per-mount extension factory and pass them to controllers/services. No adapters or container directories. Keep effects in the service and start long-lived work through onStart with shutdown through onStop.
     patterns:
-      - src/adapters/**/*.ts
-      - src/types/**/*.ts
+      - src/services/**/*.ts
   - name: scaffold-doom-package-api
     description: Add this package's HTTP API, served by the session's own doompi-server, by the cockpit hub, or by both, with its shared route vocabulary and a unit test.
     variables_schema:
@@ -400,13 +372,13 @@ features:
         pluginId:
           type: string
           description: The kebab-case base path the API is mounted under, /api/plugin/<pluginId>; unique across every installed package
-          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          pattern: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$
           maxLength: 48
           example: runner
         topic:
           type: string
           description: camelCase stem for the adapter, the route vocabulary module, and the view types
-          pattern: "^[a-z][a-zA-Z0-9]*$"
+          pattern: ^[a-z][a-zA-Z0-9]*$
           maxLength: 48
           example: runner
       required:
@@ -415,24 +387,13 @@ features:
       additionalProperties: false
     includes:
       - src/types/topicApi.ts->src/types/{{ topic | camelCase }}Api.ts
-      - src/adapters/topicApi.ts->src/adapters/{{ topic | camelCase }}Api.ts
+      - src/controllers/topicApi.ts->src/controllers/{{ topic | camelCase }}Api.ts
       - src/exports/sessionApi.ts
       - tests/unit/topicApi.test.ts->tests/unit/{{ topic | camelCase }}Api.test.ts
-    instruction: |-
-      Generate the package's HTTP API: src/types/{{ topic | camelCase }}Api.ts with the base path, the route paths, and the view types both halves share; src/adapters/{{ topic | camelCase }}Api.ts with the Hono app and the `api` export; src/exports/sessionApi.ts as a useful barrel for the API helpers and `api` value. Keep this source barrel, but do not generate separate session or hub aggregate modules.
-
-      The rules: a host mounts the API under /api/plugin/{{ pluginId }} and strips that prefix, so routes are declared relative and nothing repeats the mount. The scope decides the host: a session-scoped API is served by that session's own doompi-server and its context names the session; a hub-scoped one is served by the cockpit hub and names none. Keep the adapter free of ambient filesystem, clock, and process access the way every other adapter here is: take those as options. Route paths and query building live in src/types so the browser half can import them; a page never appends its own query to a URL this module built.
-
-      Complete the package integration after generation:
-      - Register `api` through an existing or newly scaffolded DoomServerFacet. Its `apiModule` points at `../{{ topic | camelCase }}Api.ts` relative to `src/adapters/server/`, and its host-scope handling must match the scopes this package serves. Add the matching `./extensions/server` export with `types: './dist/extensions/server.d.mts'`, `import: './dist/extensions/server.mjs'`, and `require: './dist/extensions/server.cjs'`.
-      - Keep `src/exports/sessionApi.ts` as the useful source barrel, but do not add a package export or separate scope aggregate modules solely for session and hub.
-      - Add one top-level `doompiServer` block with entry `./src/exports/extensions/server.ts`, dist `./dist/extensions/server.mjs`, and `scopes` set to `['session']`, `['hub']`, or `['session', 'hub']` as supported. Do not add the legacy `doompiApi` field or separate per-scope manifest entries.
-      - Add @agimon-ai/doompi-extension-contracts (workspace:*) to dependencies; Hono is already included by the base package template.
-      - `doompi sync` discovers the built server facet named by `doompiServer`, so build and sync before a host sees it; a running host imports the built facet, never the source.
-      - Run pnpm fixcode, then lint, typecheck, test, build, and pnpm vibe-lint check --preflight-only on src/types, src/adapters, src/adapters/server, src/exports, src/exports/extensions, and package.json.
+    instruction: Put HTTP request handling in the controller and delegate package behavior to services. Routes are relative to the host mount. Include api in defineServerPlugin's appropriate global/workspace/session api arrays. Do not use a hub scope. Add a direct server extension entry and explicit tsdown entry plus manifest export if absent. src/exports/sessionApi.ts is a flat public module; include its tsdown entry and package subpath only when external consumers need it. Never create nested export wrappers. Test requests through the API harness.
     patterns:
       - src/types/*Api.ts
-      - src/adapters/*Api.ts
+      - src/controllers/*Api.ts
       - src/exports/sessionApi.ts
   - name: scaffold-doom-web-plugin
     description: Add this package's browser-only cockpit plugin under web/ with its per-session store, shared view types, and component tests.
@@ -442,19 +403,19 @@ features:
         pluginId:
           type: string
           description: The kebab-case web plugin id, also the tab id and URL segment; unique across every installed plugin
-          pattern: "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          pattern: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$
           maxLength: 48
           example: runners
         topic:
           type: string
           description: camelCase stem for the store, panel, view types, and channel module names
-          pattern: "^[a-z][a-zA-Z0-9]*$"
+          pattern: ^[a-z][a-zA-Z0-9]*$
           maxLength: 48
           example: runners
         channelName:
           type: string
           description: The snake_case wire frame type the hub publishes and the plugin claims; unique across every installed plugin
-          pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+          pattern: ^[a-z][a-z0-9]*(_[a-z0-9]+)*$
           maxLength: 48
           example: runner_runs
       required:
@@ -463,36 +424,23 @@ features:
         - channelName
       additionalProperties: false
     includes:
-      - src/web/index.ts
+      - src/extensions/web.ts
       - src/web/topicStore.ts->src/web/stores/{{ topic | camelCase }}Store.ts
       - src/web/TopicPanel.tsx->src/web/components/{{ topic | pascalCase }}Panel.tsx
       - src/web/tsconfig.json
-      - src/exports/webClient.ts
       - src/types/webTopic.ts->src/types/web{{ topic | pascalCase }}.ts
       - tests/unit/webTopicStore.test.ts->tests/unit/web{{ topic | pascalCase }}Store.test.ts
       - tests/web/topicPanel.test.ts->tests/web/{{ topic | camelCase }}Panel.test.ts
     instruction: |-
-      Generate the package's browser-only cockpit plugin: src/web/index.ts exporting webPlugin through defineWebPlugin, src/web/stores/{{ topic | camelCase }}Store.ts holding the per-session record through defineSessionStore with its declared channel, src/web/components/{{ topic | pascalCase }}Panel.tsx as the tab, src/exports/webClient.ts re-exporting the entry as the package's public browser surface, and src/types/web{{ topic | pascalCase }}.ts with the wire-JSON view types shared with the server facet.
+      Declare webPlugin through defineWebPlugin directly in src/extensions/web.ts. Use session/global contribution objects. Keep components, stores, hooks, api, and lib under src/web. Shared wire view types remain browser-safe.
 
-      The browser vocabulary is fixed: components for rendering, stores for reactive state and channel reducers, hooks for React subscriptions and effects, api for browser HTTP or streaming clients, and lib for stateless formatting and view calculations. Dependencies point inward in that order: lib, api, stores, hooks, components. Keep only index.ts and tsconfig.json at src/web root; index.ts is the composition root.
+      Add doompiWeb.pluginId, channels, and client './src/extensions/web.ts' to package.json. Publish src/extensions/web.ts, src/web, and every imported shared type/constant. Exclude the browser entry from node tsdown/typecheck; include it in src/web/tsconfig.json. Add the web contracts/components workspace dependencies plus the current React/TanStack dependencies. Typecheck both node and browser projects.
 
-      The rules: the store record is the whole per-session state (the hub's last payload plus this page's ephemeral state), components read it with useStore over the store's select and act through props.sendSessionFrame, tool cards receive the session statuses as props, and no src/web module keeps a top-level let. src/web may import only react, @tanstack/store, @tanstack/react-store, @agimon-ai/doompi-web-contracts, @agimon-ai/doompi-web-components, its own src/web/** and src/types/**; plugins never import each other. Plugins are independent: open a slot with slots: [defineSlot({ slot: '{{ pluginId }}.<name>' })] and render it with props.renderSlot; fill another plugin's or the host's slot with fills; every relation resolves by name after install, so never depend on order, and a collision is an install diagnostic, not a failure.
-
-      Complete the package integration after generation:
-      - Add the doompiWeb block to package.json: pluginId "{{ pluginId }}", channels ["{{ channelName }}"], client "./src/exports/webClient.ts", and registrationOrder only if this plugin must install before or after another for a tool matcher or start hook. Never add doompiWeb.hub. Register the channel source through a DoomServerFacet declared by doompiServer.
-      - Add "src/web", "src/exports/webClient.ts", and "src/types/web{{ topic | pascalCase }}.ts" to the files allowlist. Do not add a package export for the client or a web-hub entry. The cockpit resolves doompiWeb.client and bundles it from source.
-      - Keep src/exports/webClient.ts out of the node build and node typecheck. The package web tsconfig includes it, so it remains typechecked.
-      - Add @agimon-ai/doompi-web-contracts and @agimon-ai/doompi-web-components (both workspace:*) to dependencies; add @tanstack/store 0.11.1, @tanstack/react-store 0.11.1, react 19.2.8, @types/react 19.2.7, react-dom 19.2.8, and @types/react-dom 19.2.3 to devDependencies. react-dom is what renders a component to markup in tests/web.
-      - Component tests live in tests/web, never under src/web: the web-plugin import allowlist governs every file under src/web and would reject react-dom/server. The scaffolded tsconfigs already route them, the package tsconfig excluding tests/web and src/web/tsconfig.json including it, so the JSX project compiles them and no third tsc invocation is needed.
-      - Change the typecheck script to "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json".
-      - Replace the placeholder item view with the package's real records. The channel constant in src/types must equal the doompiWeb channels entry, and the server facet must register its runtime producer.
-      - Every Pi tool this package registers needs a timeline item: scaffold one per tool with scaffold-doom-web-tool-card and list it under toolRenderers (web-plugin-tool-renderers checks package.json against src/**). The shell owns the frame, tone, badge, and expand toggle; a card supplies the header summary and the body.
-      - Run pnpm install, pnpm fixcode, then lint, typecheck, test, build, and pnpm vibe-lint check --preflight-only on src/web, src/exports, src/types, src/adapters/web*, and package.json.
-      - To iterate with hot reload, run the cockpit's dev loop: the hub on 7433, then pnpm dev in packages/clients/doompi-web with DOOMPI_WEB_PLUGIN_ROOTS naming this package (or after a doompi sync), and open port 7434.
+      Store state with defineSessionStore and declare its channels. The server declares the producer through its channels contribution array. Add tool renderers to the session contribution for each Pi tool. Tests belong in tests/web and tests/unit, never src/web. Use typed client methods for server calls. Run lint, both typechecks, tests, and build.
     patterns:
+      - src/extensions/web.ts
       - src/web/**
       - src/types/web*.ts
-      - src/exports/webClient.ts
   - name: scaffold-doom-web-tool-card
     description: Add the cockpit timeline item for one Pi tool this package registers, a message renderer on the shared MessageItem shell, with its pure view module and a unit test.
     variables_schema:
@@ -501,13 +449,13 @@ features:
         toolName:
           type: string
           description: The tool name exactly as registerTool's name gives it, snake_case
-          pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
+          pattern: ^[a-z][a-z0-9]*(_[a-z0-9]+)*$
           maxLength: 48
           example: write_report
         toolSummary:
           type: string
           description: What the tool does, in one line, for the card's doc comment
-          pattern: "^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$"
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$
           minLength: 1
           maxLength: 240
           example: Write the session report
@@ -525,8 +473,28 @@ features:
       The shell owns the frame, the outcome tone, the status badge, and the expand toggle; the card supplies the header summary and the body lines and sets `expandable` only when it hides something. The card may act through props.sendSessionFrame and props.openTab, and it may open its own slots with props.renderSlot.
 
       Complete the package integration after generation:
-      - Register it in src/web/index.ts: toolRenderers: [{ tools: [{{ toolName | camelCase }}ToolName], message: {{ toolName | pascalCase }}ToolCard }] (one entry may list several names). The constant must equal registerTool's name in src/, or web-plugin-tool-renderers fails on package.json.
+      - Register it in src/extensions/web.ts: session: { toolRenderers: [{ tools: [{{ toolName | camelCase }}ToolName], message: {{ toolName | pascalCase }}ToolCard }] (one entry may list several names). The constant must equal registerTool's name in src/, or web-plugin-tool-renderers fails on package.json.
       - Replace the placeholder call summary and result lines with what the tool's args and details really carry.
       - Run pnpm fixcode, then lint, typecheck (both tsconfigs), test, and pnpm vibe-lint check --preflight-only on src/web and package.json.
     patterns:
       - src/web/**
+  - name: scaffold-doom-constants
+    description: Add shared command metadata in the lowest dependency layer.
+    variables_schema:
+      type: object
+      properties:
+        commandName:
+          type: string
+          pattern: ^[a-z][a-z0-9]*(-[a-z0-9]+)*$
+        commandDescription:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$
+      required:
+        - commandName
+        - commandDescription
+      additionalProperties: false
+    includes:
+      - src/constants/featureCommand.ts->src/constants/{{ commandName | camelCase }}.ts
+    instruction: Put names, descriptions, and shared guidance in src/constants. Constants contain data only and may import only constants. Controllers, services, tools, schemas, types, models, and browser code consume these values rather than duplicate them.
+    patterns:
+      - src/constants/**/*.ts

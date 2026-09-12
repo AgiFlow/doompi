@@ -32,7 +32,7 @@
     "src/prompts",
     "skills/workflow-recovery/SKILL.md",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "src/types/webWorkflows.ts",
     "src/types/webWorkflowTerminal.ts",
     "!src/web/**/*.stories.tsx"
@@ -114,7 +114,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/exports/extensions/server.ts",
+    "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "global",
@@ -128,7 +128,7 @@
       "workflow_runs",
       "workflow_catalog"
     ],
-    "client": "./src/exports/webClient.ts",
+    "client": "./src/extensions/web.ts",
     "scopes": [
       "session"
     ]

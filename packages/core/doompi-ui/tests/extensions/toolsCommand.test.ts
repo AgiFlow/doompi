@@ -3,8 +3,8 @@ import { DOOM_MCP_STATUS_SERVICE, type McpStatusSnapshot } from '@agimon-ai/doom
 import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protocol';
 import type { ExtensionAPI, ExtensionContext, ToolInfo } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import doomPiUiExtension from '../../src/exports/extensions/pi.ts';
-import type { UiTelemetry } from '../../src/exports/logSinkTelemetry.ts';
+import doomPiUiExtension from '../../src/extensions/pi';
+import type { UiTelemetry } from '../../src/exports/logSinkTelemetry';
 
 type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
 

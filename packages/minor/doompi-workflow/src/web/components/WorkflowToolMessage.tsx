@@ -11,7 +11,7 @@ import {
   WORKFLOW_TOOL_NAMES,
   workflowCallSummary,
   workflowResultLines,
-} from '../lib/workflowToolRender.ts';
+} from '../lib/workflowToolRender';
 
 function workflowToolName(name: string): WorkflowToolName {
   return WORKFLOW_TOOL_NAMES.includes(name as WorkflowToolName) ? (name as WorkflowToolName) : 'workflow_run';

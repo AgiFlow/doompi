@@ -18,9 +18,9 @@ import {
   bashResultView,
   formatBashCommand,
   formatBashFlags,
-} from '../lib/bashToolFormat.ts';
-import { runnerLogTab } from './RunnerLogPanel.tsx';
-import { requestRunnerStop, runners } from '../stores/runnersStore.ts';
+} from '../lib/bashToolFormat';
+import { runnerLogTab } from './RunnerLogPanel';
+import { requestRunnerStop, runners } from '../stores/runnersStore';
 
 const STATUS_TONE: Record<BashStatusTone, StatusTone> = {
   running: 'running',

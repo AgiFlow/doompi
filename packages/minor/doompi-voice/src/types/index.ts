@@ -5,7 +5,7 @@ import type {
   VoiceMediaCaptureConfiguration,
   VoiceMediaPlaybackDelivery,
   VoiceMediaPlaybackResult,
-} from './clientMedia.ts';
+} from './clientMedia';
 
 /** Everything the voice runtime is assembled from. */
 export interface VoiceDependencies {

@@ -1,6 +1,6 @@
 import { MessageItemBody, MessageItemStatus } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { listResultView, resultText } from '../lib/builtinToolView.ts';
+import { listResultView, resultText } from '../lib/builtinToolView';
 
 /**
  * The body shared by find and ls: Pi's listing lines, collapsed to twenty

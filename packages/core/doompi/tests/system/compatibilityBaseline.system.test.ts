@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { PACKAGE_MATRIX, packageRootFor, RMUX_TARGETS, RTK_TARGETS } from './packageMatrix.ts';
+import { PACKAGE_MATRIX, packageRootFor, RMUX_TARGETS, RTK_TARGETS } from './packageMatrix';
 
 interface PackageBaseline {
   exports: Record<string, string>;

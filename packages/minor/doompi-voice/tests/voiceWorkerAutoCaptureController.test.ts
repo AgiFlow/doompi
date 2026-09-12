@@ -3,21 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   VoiceWorkerAutoCaptureController,
   type VoiceWorkerAutoCaptureTelemetrySink,
-} from '../src/adapters/process/voiceWorkerAutoCaptureController.ts';
-import type { VoiceWorkerClientOptions } from '../src/adapters/process/voiceWorkerClient.ts';
-import type { VoiceWorkerSessionClient } from '../src/adapters/process/voiceWorkerSessionController.ts';
-import type { IVoiceCommandCorrector, VoiceCommandContext } from '../src/services/commandCorrection.ts';
-import type { IVoiceTurnFallbackNarrator } from '../src/services/fallbackNarration.ts';
-import type {
-  IVoiceTranscriptAdjudicator,
-  VoiceTranscriptSignalEvidence,
-} from '../src/services/transcriptAdmission.ts';
+} from '../src/services/voiceWorkerAutoCaptureController';
+import type { VoiceWorkerClientOptions } from '../src/services/voiceWorkerClient';
+import type { VoiceWorkerSessionClient } from '../src/services/voiceWorkerSessionController';
+import type { IVoiceCommandCorrector, VoiceCommandContext } from '../src/services/commandCorrection';
+import type { IVoiceTurnFallbackNarrator } from '../src/services/fallbackNarration';
+import type { IVoiceTranscriptAdjudicator, VoiceTranscriptSignalEvidence } from '../src/services/transcriptAdmission';
 import {
   VOICE_WORKER_PROTOCOL_VERSION,
   type VoiceCandidateOutcome,
   type VoiceWorkerEventPayload,
-} from '../src/services/voiceWorkerProtocol.ts';
-import type { AutoCaptureUi, IClock, ITtsAdapter, TtsPlaybackResult } from '../src/types/index.ts';
+} from '../src/services/voiceWorkerProtocol';
+import type { AutoCaptureUi, IClock, ITtsAdapter, TtsPlaybackResult } from '../src/types';
 
 const config: ResolvedVoiceConfig = {
   mode: 'legacy',

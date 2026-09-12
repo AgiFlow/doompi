@@ -3,19 +3,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { findSyncedRoot, readBootstrapPointer, readBootstrapStatus } from '../../src/adapters/bootstrapLocator.ts';
+import { findSyncedRoot, readBootstrapPointer, readBootstrapStatus } from '../../src/services/bootstrapLocator';
 import {
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '../../src/adapters/syncRegistration.ts';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation.ts';
+} from '../../src/services/syncRegistration';
+import { resolveSyncLocation, syncGenerationDirectory } from '../../src/services/syncLocation';
 import {
   BUNDLED_PRECOMPILE_STRATEGY,
   PRECOMPILE_STATE_VERSION,
   SYNC_STATE_VERSION,
-} from '../../src/adapters/syncStateContract.ts';
-import { testMcpProjection } from '../helpers/mcpProjection.ts';
+} from '../../src/services/syncStateContract';
+import { testMcpProjection } from '../helpers/mcpProjection';
 
 /** Digest a compiler manifest must now record so freshness is judged by content. */
 function sha256Of(file: string): string {

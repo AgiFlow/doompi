@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import * as workspace from '../../src/web/stores/authorWorkspaceStore.ts';
-import type { AuthorRegionDraft, AuthorRequestRecord } from '../../src/web/lib/authorViewportTypes.ts';
+import * as workspace from '../../src/web/stores/authorWorkspaceStore';
+import type { AuthorRegionDraft, AuthorRequestRecord } from '../../src/web/lib/authorViewportTypes';
 const session = 'workspace-boundaries';
 const region: AuthorRegionDraft = {
   id: 'r',

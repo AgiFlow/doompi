@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTestVoiceMediaApi as createVoiceMediaApi } from './support.ts';
-import { voiceOwnershipState } from '../src/adapters/pi/voice.ts';
+import { createTestVoiceMediaApi as createVoiceMediaApi } from './support';
+import { voiceOwnershipState } from '../src/models/voiceMode';
 import {
   SessionVoiceOwnership,
   SessionVoiceOwnershipBridge,
   voiceOwnershipLabel,
-} from '../src/services/sessionVoiceOwnership.ts';
-import { VoiceOwnershipCoordinator } from '../src/services/voiceOwnershipCoordinator.ts';
+} from '../src/services/sessionVoiceOwnership';
+import { VoiceOwnershipCoordinator } from '../src/services/voiceOwnershipCoordinator';
 import {
   VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS,
   VOICE_OWNERSHIP_PROTOCOL_VERSION,
@@ -22,8 +22,8 @@ import {
   type VoiceOwnershipCommand,
   type VoiceOwnershipRegistration,
   type VoiceOwnershipSessionSnapshot,
-} from '../src/types/voiceOwnership.ts';
-import type { VoiceState } from '../src/types/index.ts';
+} from '../src/types/voiceOwnership';
+import type { VoiceState } from '../src/types';
 
 function registration(leaseId: string, label: string, active: boolean): VoiceOwnershipRegistration {
   return {

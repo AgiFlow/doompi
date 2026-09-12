@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createContextApi } from '../../src/adapters/contextApi.ts';
-import type { ContextDetailFile } from '../../src/types/contextApi.ts';
+import { createContextApi } from '../../src/controllers/contextApi';
+import type { ContextDetailFile } from '../../src/types/contextApi';
 
 const FILE: ContextDetailFile = {
   version: 1,

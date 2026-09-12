@@ -1,7 +1,7 @@
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import type { MinorModeActionRequest } from '@agimon-ai/doompi-extension-contracts/mode';
 import { describe, expect, it } from 'vitest';
-import { classifyTransition, type TransitionClassifierContext } from '../../src/services/transitionClassifier.ts';
+import { classifyTransition, type TransitionClassifierContext } from '../../src/services/transitionClassifier';
 import type {
   DoomTransitionRequest,
   TransitionSelectionSnapshot,

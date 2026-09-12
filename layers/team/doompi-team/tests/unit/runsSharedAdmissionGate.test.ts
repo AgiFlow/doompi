@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { AdmissionGate } from '../../src/adapters/runs/shared/admissionGate';
+import { AdmissionGate } from '../../src/services/admissionGate';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 /** Live children whose lifetime the test controls, standing in for real processes. */

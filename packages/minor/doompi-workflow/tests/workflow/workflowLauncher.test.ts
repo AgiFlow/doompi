@@ -9,8 +9,8 @@ import {
   summarizeWorkflowFile,
   parseWorkflowCatalogPage,
   type WorkflowLauncherUi,
-} from '../../src/adapters/pi/workflow/workflowLauncher';
-import { createWorkflowLaunchExecutor, type WorkflowLaunchInput } from '../../src/adapters/pi/workflow/piTools';
+} from '../../src/services/workflowLauncher';
+import { createWorkflowLaunchExecutor, type WorkflowLaunchInput } from '../../src/services/workflowExecution';
 
 const CWD = '/repo';
 const SESSION_ID = 'session-1';

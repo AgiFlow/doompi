@@ -1,3 +1,7 @@
+import { Context } from '@deepseek-ai/cordis';
+import { definePiExtension } from '@agimon-ai/doompi-extension-contracts/pi-extension';
+import { createMcpToolCollection } from '../src/tools/mcpToolCollection';
+const toolContexts: Context[] = [];
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -5,9 +9,9 @@ import { createDoomToolSurface, type DoomToolSurfaceService } from '@agimon-ai/d
 import type { McpServerStateChange } from '@agimon-ai/mcp-proxy';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { McpSession } from '../src/adapters/pi/mcpSession.ts';
-import { SESSION_ENV_VAR } from '../src/schemas/sessionConfig.ts';
-import type { McpSessionConfig } from '../src/types/mcpConfig.ts';
+import { McpSession } from '../src/services/mcpSession';
+import { SESSION_ENV_VAR } from '../src/schemas/sessionConfig';
+import type { McpSessionConfig } from '../src/types/mcpConfig';
 
 const createProxyContainer = vi.fn();
 
@@ -36,6 +40,7 @@ function fakePi() {
   >();
   let active: string[] = [...BUILTIN_TOOLS];
   const pi = {
+    on: vi.fn(),
     registerTool: vi.fn(
       (definition: { name: string; execute?: (toolCallId: string, params: unknown) => Promise<unknown> }) => {
         registered.push(definition.name);
@@ -65,14 +70,15 @@ function configuration(overrides: Partial<McpSessionConfig> = {}): McpSessionCon
   };
 }
 
-function newSession(pi: ExtensionAPI): McpSession {
-  return new McpSession({
-    pi,
-    environment: {
-      [SESSION_ENV_VAR]: JSON.stringify({ repoRoot, stagingDirectory: path.join(repoRoot, '.staging') }),
-    },
+async function newSession(pi: ExtensionAPI): Promise<McpSession> {
+  const active = new McpSession({
+    environment: { [SESSION_ENV_VAR]: JSON.stringify({ repoRoot, stagingDirectory: path.join(repoRoot, '.staging') }) },
     tokenStore: { read: vi.fn(), write: vi.fn(), clear: vi.fn() },
   });
+  const context = new Context();
+  toolContexts.push(context);
+  await definePiExtension({ name: '@test/mcp-tools', tools: createMcpToolCollection(active) }).install(context, pi);
+  return active;
 }
 
 /** The one arbiter of this host's active list, as the session fiber provides it. */
@@ -88,19 +94,19 @@ function toolSurfaceFor(pi: ExtensionAPI): DoomToolSurfaceService {
 }
 
 /** A session already bound to its own tool surface, as the session fiber binds it. */
-function sessionWithSurface(pi: ExtensionAPI): {
+async function sessionWithSurface(pi: ExtensionAPI): Promise<{
   active: McpSession;
   surface: DoomToolSurfaceService;
   unbind: () => void;
-} {
-  const active = newSession(pi);
+}> {
+  const active = await newSession(pi);
   const surface = toolSurfaceFor(pi);
   const unbind = active.bindToolSurface(surface);
   return { active, surface, unbind };
 }
 
-function session(pi: ExtensionAPI): McpSession {
-  return sessionWithSurface(pi).active;
+async function session(pi: ExtensionAPI): Promise<McpSession> {
+  return (await sessionWithSurface(pi)).active;
 }
 
 beforeEach(() => {
@@ -135,30 +141,31 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(toolContexts.splice(0).map((context) => context.fiber.dispose()));
   for (const surface of surfaces) surface.dispose();
   fs.rmSync(repoRoot, { recursive: true, force: true });
 });
 
 describe('McpSession', () => {
   describe('install', () => {
-    it('reports the configured servers before anything has connected', () => {
+    it('reports the configured servers before anything has connected', async () => {
       const { pi } = fakePi();
 
-      expect(session(pi).install()).toEqual({
+      expect((await session(pi)).install()).toEqual({
         servers: [{ name: 'pencil', state: 'not-connected', tools: [], resourceCount: 0 }],
       });
     });
 
-    it('does not build a container', () => {
+    it('does not build a container', async () => {
       const { pi } = fakePi();
 
-      session(pi).install();
+      (await session(pi)).install();
 
       expect(createProxyContainer).not.toHaveBeenCalled();
     });
 
-    it('exposes proxy upstreams as their actual MCP servers', () => {
+    it('exposes proxy upstreams as their actual MCP servers', async () => {
       writeRepoConfig({
         'mcp-proxy': {
           type: 'stdio',
@@ -173,11 +180,11 @@ describe('McpSession', () => {
       );
       const { pi } = fakePi();
 
-      expect(
-        session(pi)
-          .install()
-          .servers.map((server) => server.name),
-      ).toEqual(['pencil', 'review-server', 'scaffold-mcp']);
+      expect((await session(pi)).install().servers.map((server) => server.name)).toEqual([
+        'pencil',
+        'review-server',
+        'scaffold-mcp',
+      ]);
     });
   });
 
@@ -192,7 +199,7 @@ describe('McpSession', () => {
     const upstreamConfig = path.join(repoRoot, 'mcp-config.yaml');
     fs.writeFileSync(upstreamConfig, 'mcpServers:\n  review-server:\n    command: reviewer\n');
     const { pi } = fakePi();
-    const active = session(pi);
+    const active = await session(pi);
     active.install();
 
     await active.start();
@@ -210,7 +217,7 @@ describe('McpSession', () => {
   describe('session-only disconnect', () => {
     it('closes the connection, deactivates tools, keeps credentials and allows reauthorization', async () => {
       const { pi, activeTools, definitions } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await active.start();
       emitState({ serverName: 'pencil', state: 'connected' });
@@ -225,7 +232,7 @@ describe('McpSession', () => {
       ensureConnected.mockClear();
       await expect(active.listResources('pencil')).rejects.toThrow('disconnected');
       await expect(definitions.get('pencil_get_screenshot')?.execute?.('stale-call', {})).rejects.toThrow(
-        'not available',
+        'unavailable in this plugin generation',
       );
       expect(ensureConnected).not.toHaveBeenCalled();
       await active.reauthorize('pencil');
@@ -236,7 +243,7 @@ describe('McpSession', () => {
 
     it('ignores late tool discovery and connection events after disconnect', async () => {
       const { pi, activeTools } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await active.start();
       let finishDiscovery: (tools: never[]) => void = () => undefined;
@@ -258,7 +265,7 @@ describe('McpSession', () => {
 
     it('reports disconnect failures without marking the server closed', async () => {
       const { pi } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await expect(active.disconnect('missing')).rejects.toThrow('Unknown MCP server');
       await expect(active.disconnect('pencil')).rejects.toThrow();
@@ -271,9 +278,27 @@ describe('McpSession', () => {
   });
 
   describe('folding in a server as it connects', () => {
+    it('restores the original declaration after a connection failure without registering it twice', async () => {
+      const { pi, registered, definitions, activeTools } = fakePi();
+      const active = await session(pi);
+      active.install();
+      await active.start();
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(activeTools()).toContain('pencil_get_screenshot'));
+      const original = definitions.get('pencil_get_screenshot');
+
+      emitState({ serverName: 'pencil', state: 'failed', error: 'connection lost' });
+      await vi.waitFor(() => expect(activeTools()).not.toContain('pencil_get_screenshot'));
+
+      emitState({ serverName: 'pencil', state: 'connected' });
+      await vi.waitFor(() => expect(activeTools()).toContain('pencil_get_screenshot'));
+      expect(definitions.get('pencil_get_screenshot')).toBe(original);
+      expect(registered).toEqual(['pencil_get_screenshot']);
+    });
+
     it('registers and activates its tools', async () => {
       const { pi, registered, activeTools } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await active.start();
 
@@ -286,7 +311,7 @@ describe('McpSession', () => {
 
     it('records a failure without asking the server for tools', async () => {
       const { pi, activeTools } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await active.start();
 
@@ -300,7 +325,7 @@ describe('McpSession', () => {
     it('keeps the session alive when a connected server refuses to list its tools', async () => {
       listTools.mockRejectedValue(new Error('protocol error'));
       const { pi } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await active.start();
 
@@ -314,7 +339,7 @@ describe('McpSession', () => {
     // write tools into the new session.
     it('ignores a change from a container that is no longer live', async () => {
       const { pi, registered } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await active.start();
       const staleEmit = emitState;
@@ -330,7 +355,7 @@ describe('McpSession', () => {
   describe('reconfigure', () => {
     it('returns early for an unchanged fingerprint without rebuilding or re-registering', async () => {
       const { pi, registered } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install(configuration({ allowlist: { servers: ['pencil', 'boomlink'] } }));
       await active.start();
 
@@ -344,7 +369,7 @@ describe('McpSession', () => {
       const pluginConfig = path.join(repoRoot, 'design.mcp.json');
       fs.writeFileSync(pluginConfig, JSON.stringify({ mcpServers: { figma: { command: 'figma' } } }));
       const { pi, activeTools } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install(configuration());
       await active.start();
 
@@ -364,7 +389,7 @@ describe('McpSession', () => {
 
     it('deactivates removed wrappers and registers each newly selected tool once', async () => {
       const { pi, registered, activeTools } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install(configuration());
       await active.start();
       emitState({ serverName: 'pencil', state: 'connected' });
@@ -383,7 +408,7 @@ describe('McpSession', () => {
 
     it('hides incompatible schema reuse and makes the retained wrapper fail closed', async () => {
       const { pi, registered, definitions, activeTools } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install(configuration());
       await active.start();
       emitState({ serverName: 'pencil', state: 'connected' });
@@ -403,13 +428,13 @@ describe('McpSession', () => {
       expect(registered).toEqual(['pencil_get_screenshot']);
       expect(activeTools()).toEqual(['read']);
       await expect(definitions.get('pencil_get_screenshot')?.execute?.('call-1', {})).rejects.toThrow(
-        'not available in the current session configuration',
+        'unavailable in this plugin generation',
       );
     });
 
     it('rejects authorization callbacks from a retired generation', async () => {
       const { pi } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install(configuration());
       await active.start();
       const staleAuthorization = createProxyContainer.mock.calls[0]?.[0]?.auth?.onAuthorizationUrl as
@@ -426,7 +451,7 @@ describe('McpSession', () => {
   describe('reauthorize', () => {
     it('drops the connection and stale OAuth registration before reconnecting', async () => {
       const { pi } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await active.start();
       const store = createProxyContainer.mock.calls[0]?.[0]?.auth.tokenStore;
@@ -441,7 +466,7 @@ describe('McpSession', () => {
     });
 
     it('clears the previous URL before retry even when disconnect rejects without a state event', async () => {
-      const active = session(fakePi().pi);
+      const active = await session(fakePi().pi);
       active.install();
       await active.start();
       const authorize = createProxyContainer.mock.calls[0]?.[0]?.auth?.onAuthorizationUrl;
@@ -461,7 +486,6 @@ describe('McpSession', () => {
       async (state) => {
         const hostCallback = vi.fn().mockRejectedValue(new Error('browser unavailable'));
         const active = new McpSession({
-          pi: fakePi().pi,
           onAuthorizationUrl: hostCallback,
           tokenStore: { read: vi.fn(), write: vi.fn(), clear: vi.fn() },
         });
@@ -483,14 +507,14 @@ describe('McpSession', () => {
     it('says so when the runtime has not started', async () => {
       const { pi } = fakePi();
 
-      await expect(session(pi).reauthorize('boomlink')).rejects.toThrow('has not started yet');
+      await expect((await session(pi)).reauthorize('boomlink')).rejects.toThrow('has not started yet');
     });
   });
 
   describe('enabling and disabling', () => {
     async function connectedSession() {
       const fake = fakePi();
-      const active = session(fake.pi);
+      const active = await session(fake.pi);
       active.install();
       await active.start();
       emitState({ serverName: 'pencil', state: 'connected' });
@@ -538,7 +562,7 @@ describe('McpSession', () => {
         source: 'rival',
         restrict: (incoming) => incoming.filter((name) => name !== 'read'),
       });
-      const active = newSession(fake.pi);
+      const active = await newSession(fake.pi);
       active.bindToolSurface(surface);
       active.install();
       await active.start();
@@ -557,7 +581,7 @@ describe('McpSession', () => {
     // Nothing is snapshotted, so letting the restriction go is the whole restore.
     it('gives every wrapper back when the session unbinds', async () => {
       const fake = fakePi();
-      const { active, unbind } = sessionWithSurface(fake.pi);
+      const { active, unbind } = await sessionWithSurface(fake.pi);
       active.install();
       await active.start();
       emitState({ serverName: 'pencil', state: 'connected' });
@@ -573,7 +597,7 @@ describe('McpSession', () => {
   describe('listResources', () => {
     async function startedSession() {
       const { pi } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await active.start();
       return active;
@@ -620,7 +644,7 @@ describe('McpSession', () => {
     it('says so when the runtime has not started', async () => {
       const { pi } = fakePi();
 
-      await expect(session(pi).listResources('pencil')).rejects.toThrow('has not started yet');
+      await expect((await session(pi)).listResources('pencil')).rejects.toThrow('has not started yet');
     });
 
     it('forgets what it listed when the runtime is rebuilt', async () => {
@@ -637,7 +661,7 @@ describe('McpSession', () => {
   describe('onChange', () => {
     it('announces a server folding in, and stops once disposed', async () => {
       const { pi } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       const listener = vi.fn();
       active.install();
       await active.start();
@@ -655,7 +679,7 @@ describe('McpSession', () => {
     // a listener throw escaping it would silently cost the session its tools.
     it('folds a server in even when a listener throws', async () => {
       const { pi, activeTools } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await active.start();
       active.onChange(() => {
@@ -669,7 +693,7 @@ describe('McpSession', () => {
 
     it('reports a listener failure rather than dropping it', async () => {
       const { pi } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await active.start();
       active.onChange(() => {
@@ -685,7 +709,7 @@ describe('McpSession', () => {
     // A fault that recurs on every repaint must not grow the list forever.
     it('records a repeated listener failure once', async () => {
       const { pi } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await active.start();
       active.onChange(() => {
@@ -704,7 +728,7 @@ describe('McpSession', () => {
   describe('dispose', () => {
     it('tears the container down', async () => {
       const { pi } = fakePi();
-      const active = session(pi);
+      const active = await session(pi);
       active.install();
       await active.start();
 
@@ -717,7 +741,7 @@ describe('McpSession', () => {
   it('builds no container when the repository declares no servers', async () => {
     writeRepoConfig({});
     const { pi } = fakePi();
-    const active = session(pi);
+    const active = await session(pi);
     active.install();
 
     await active.start();

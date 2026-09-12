@@ -1,6 +1,6 @@
-import type { LoopLaunchRequest, StoppableLoop } from '@agimon-ai/doompi-extension-contracts/loop-launchers';
+import type { LoopLaunchRequest, StoppableLoop } from '../src/schemas/loopLaunchers';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDoomLoopLaunchersService } from '../src/services/loopLaunchers.ts';
+import { createDoomLoopLaunchersService } from '../src/services/loopLaunchers';
 
 let sequence = 0;
 

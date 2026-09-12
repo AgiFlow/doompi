@@ -17,7 +17,7 @@ const EXPORT_SUBPATHS = [
   './extensions/server',
   './metrics',
   './metricsSource',
-  './tui/metricsOverlay',
+  './metrics-overlay',
   './package.json',
 ];
 const PI_ENTRY = './dist/extensions/pi.mjs';
@@ -72,7 +72,7 @@ describe('@agimon-ai/doompi-log package shape', () => {
     const pi = objectValue(PACKAGE_MANIFEST.pi);
     expect(pi.extensions).toEqual([PI_ENTRY]);
     expect(PACKAGE_MANIFEST.doompiServer).toEqual({
-      entry: './src/exports/extensions/server.ts',
+      entry: './src/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
     });

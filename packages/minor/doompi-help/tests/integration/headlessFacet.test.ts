@@ -8,7 +8,7 @@ import type {
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { describe, expect, it, vi } from 'vitest';
-import { helpHeadlessFacet } from '../../src/adapters/headless/facet.ts';
+import { helpServerFacet } from '../../src/extensions/server';
 
 describe('help headless facet', () => {
   it('registers activation-gated resources and sends them through the help command', async () => {
@@ -36,7 +36,11 @@ describe('help headless facet', () => {
         return { dispose };
       },
     } as unknown as DoomHeadlessHostService;
-    const close = helpHeadlessFacet.apply({ get: () => host } as unknown as Context);
+    const close = await helpServerFacet.apply({
+      effect() {},
+      get: (name: string) =>
+        name === 'doom/server-host' ? { scope: 'session', context: {}, registerApi: () => ({ dispose() {} }) } : host,
+    } as unknown as Context);
     if (!command || !mode) throw new Error('Help contributions were not registered');
     const execution = {
       client: { notify: vi.fn() },
@@ -71,7 +75,7 @@ describe('help headless facet', () => {
     expect(minorModes).toEqual([]);
     expect(publish).toHaveBeenLastCalledWith(expect.objectContaining({ activation: 'inactive' }));
 
-    close();
+    await close?.();
     expect(dispose).toHaveBeenCalledTimes(4);
   });
 });

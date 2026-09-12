@@ -7,7 +7,7 @@ import {
   SUBAGENT_ACTIONS,
   SubagentParams,
   subagentActionAcceptsField,
-} from '../src/schemas/subagentTool.ts';
+} from '../src/schemas/subagentTool';
 
 interface VariantSchema {
   additionalProperties?: boolean;

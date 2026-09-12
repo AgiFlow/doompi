@@ -5,8 +5,8 @@
  * The samples are typed as IssuesView so the grouping this component runs over
  * them is exercised against the real wire shape rather than a loose literal.
  */
-import type { IssuesView, MetricsTool } from '../../types/webMetrics.ts';
-import { IssuesDetail } from './IssuesDetail.tsx';
+import type { IssuesView, MetricsTool } from '../../types/webMetrics';
+import { IssuesDetail } from './IssuesDetail';
 
 const tools: readonly MetricsTool[] = [
   { name: 'bash', calls: 742, p90TotalTokens: 411_200 },

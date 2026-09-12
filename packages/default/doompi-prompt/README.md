@@ -121,3 +121,7 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+## Extension lifecycle and source layout
+
+Direct `extensions/pi.ts`, `extensions/server.ts`, and `extensions/web.ts` entries declare their host contributions. The Pi entry creates a fresh recent-prompt model and saved-prompt store per installation. A service binding owns the optional leader contribution and removes it when the UI provider is replaced or disposed. Controllers declare native Pi UI commands and server request handlers; `services/<name>/` implements document and storage logic. Flat `exports/` publishes selected reusable services, models, constants, and types.

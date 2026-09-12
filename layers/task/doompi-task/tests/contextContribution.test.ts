@@ -5,8 +5,8 @@ import {
   TASK_CONTEXT_CONTRIBUTION_LABEL,
   TASK_CONTEXT_CONTRIBUTION_ORDER,
   TASK_CONTEXT_CONTRIBUTION_SOURCE,
-} from '../src/services/contextContribution.ts';
-import type { Task } from '../src/services/store/types.ts';
+} from '../src/services/contextContribution';
+import type { Task } from '../src/models/task';
 
 describe('Task context contribution', () => {
   it('renders only active coordination fields from the current in-memory snapshot', () => {

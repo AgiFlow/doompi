@@ -1,8 +1,3 @@
-export { hookHeadlessFacet } from '../adapters/headless/facet.ts';
-export { createHookDocumentReader, type HookDocumentReaderOptions } from '../adapters/hookDocuments.ts';
-export { type BashHookRunnerOptions, createBashHookRunner } from '../adapters/hookRunner.ts';
-export { type HookExtensionOptions, hookExtension } from '../adapters/pi/extension.ts';
-export { createHookTelemetry, type HookTelemetryOptions } from '../adapters/telemetry/logSinkTelemetry.ts';
 export {
   additionalContextsFrom,
   decisionReason,
@@ -11,18 +6,22 @@ export {
   hookFailureMessage,
   isDenied,
   toolResultMessages,
-} from '../services/hookDecisions.ts';
-export { sessionHookPayload, toolHookPayload } from '../services/hookPayload.ts';
+} from '../services/hookDecisions';
+export { createHookDocumentReader, type HookDocumentReaderOptions } from '../services/hookDocuments';
+export { sessionHookPayload, toolHookPayload } from '../services/hookPayload';
 export {
   registryCacheKey,
   registryEntries,
-  type RegistrySelection,
   selectRegistryHooks,
-} from '../services/hookRegistry.ts';
-export { selectPluginHooks } from '../services/pluginHooks.ts';
-export { matchesTool, toClaudeToolName } from '../services/toolNames.ts';
+  type RegistrySelection,
+} from '../services/hookRegistry';
+export { createBashHookRunner, type BashHookRunnerOptions } from '../services/hookRunner';
+export type { HookExtensionOptions } from '../services/hookRuntime/type';
+export { createHookTelemetry, type HookTelemetryOptions } from '../services/hookTelemetry';
+export { selectPluginHooks } from '../services/pluginHooks';
+export { matchesTool, toClaudeToolName } from '../services/toolNames';
+export { HOOK_EVENT } from '../constants/hooks';
 export {
-  HOOK_EVENT,
   type HookCommand,
   type HookDecision,
   type HookDocumentReader,
@@ -32,8 +31,8 @@ export {
   type HookFailureReason,
   type HookOutcome,
   type HookPayload,
-  type HookRunner,
   type HookRunOptions,
+  type HookRunner,
   type HookToolEvent,
   type ParsedRegistrySource,
   type PluginDocumentRead,
@@ -47,10 +46,6 @@ export {
   type RegistryGroup,
   type RegistryRead,
   type ResolvedHook,
-} from '../types/hooks.ts';
-export {
-  HOOK_TELEMETRY_EVENT,
-  type HookTelemetry,
-  type HookTelemetryAttributes,
-  type HookTelemetryEventName,
-} from '../types/telemetry.ts';
+} from '../types/hooks';
+export { HOOK_TELEMETRY_EVENT } from '../constants/telemetry';
+export { type HookTelemetry, type HookTelemetryAttributes, type HookTelemetryEventName } from '../types/telemetry';

@@ -11,7 +11,7 @@ import {
   FablePlanResultSchema,
   FablePlanStartSchema,
   readDoomFablePlanService,
-} from '../src/schemas/fablePlan.ts';
+} from '../src/schemas/fablePlan';
 
 describe('Fable plan Cordis contract', () => {
   it('publishes and retracts a session-scoped named service with its provider fiber', async () => {

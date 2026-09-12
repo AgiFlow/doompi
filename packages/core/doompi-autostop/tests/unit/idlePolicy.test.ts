@@ -5,7 +5,7 @@ import {
   DEFAULT_AUTO_STOP_DELAYS,
   decideOnRecheck,
   decideOnSettled,
-} from '../../src/services/idlePolicy.ts';
+} from '../../src/exports';
 
 const delays: AutoStopDelays = { cooldownMs: 4_000, recheckMs: 50 };
 

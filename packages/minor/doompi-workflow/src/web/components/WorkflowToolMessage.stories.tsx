@@ -6,7 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { WorkflowToolMessage } from './WorkflowToolMessage.tsx';
+import { WorkflowToolMessage } from './WorkflowToolMessage';
 
 /** The tools answer in JSON text blocks, so the fixtures are the payloads themselves. */
 const json = (payload: unknown) => ({ content: [{ type: 'text', text: JSON.stringify(payload) }], details: null });

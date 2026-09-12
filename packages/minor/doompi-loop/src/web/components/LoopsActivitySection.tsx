@@ -1,6 +1,6 @@
 import { Button, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
-import { LOOP_VIEW_STATUS_KEY, parseLoopStatusView, type LoopStatusState } from '../../types/loopView.ts';
+import { LOOP_VIEW_STATUS_KEY, parseLoopStatusView, type LoopStatusState } from '../../types/loopView';
 
 const MANAGE_COMMAND = '/loops';
 const DEFAULT_LOOP_COMMAND = '/loop doompi.default';

@@ -9,7 +9,7 @@ import {
   bindPendingSelection,
   clearPendingSelection,
   selectionFromSnapshot,
-} from '../../src/services/pendingSelection.ts';
+} from '../../src/controllers/pendingSelection';
 
 let cordis: Context | undefined;
 

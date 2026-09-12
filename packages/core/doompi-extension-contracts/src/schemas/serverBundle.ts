@@ -1,4 +1,4 @@
-import type { DoomApiScope } from './packageApi.ts';
+import type { DoomApiScope } from './packageApi';
 
 export const DOOM_SERVER_BUNDLE_VERSION = 2;
 export const DOOM_SERVER_BUNDLE_FILE = 'server.bundle.json';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canRunVoice, voiceModeState, voiceOwnershipState } from '../src/adapters/pi/voice.ts';
+import { canRunVoice, voiceModeState, voiceOwnershipState } from '../src/models/voiceMode';
 
 /** The disabled actions of a published state, as the /minor command reads them. */
 function blocked(state: ReturnType<typeof voiceModeState>): { id: string; reason?: string }[] {

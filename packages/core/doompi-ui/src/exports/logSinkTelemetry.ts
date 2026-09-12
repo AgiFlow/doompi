@@ -5,4 +5,4 @@ export {
   type UiEventName,
   type UiTelemetry,
   type UiTelemetryOptions,
-} from '../adapters/telemetry/logSinkTelemetry.ts';
+} from '../services/telemetry';

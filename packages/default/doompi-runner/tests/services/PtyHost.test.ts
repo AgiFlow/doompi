@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 /** xterm parses writes asynchronously, so the screen lags one tick behind. */
 const flushTerminal = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
-import { PtyHost } from '../../src/adapters/PtyHost/PtyHost';
-import { NodePtySpawner } from '../../src/adapters/PtySpawner/NodePtySpawner';
-import { FakeClock, FakeLogFile, FakeProcessControl, FakePtySpawner } from '../doubles.ts';
+import { PtyHost } from '../../src/services/ptyHost';
+import { NodePtySpawner } from '../../src/services/ptySpawner';
+import { FakeClock, FakeLogFile, FakeProcessControl, FakePtySpawner } from '../doubles';
 
 const ESC = '\u001B';
 

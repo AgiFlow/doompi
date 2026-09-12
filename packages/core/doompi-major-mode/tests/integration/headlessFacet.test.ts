@@ -9,7 +9,7 @@ import type {
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { majorModeHeadlessFacet } from '../../src/adapters/headless/facet.ts';
+import { majorModeServerFacet as majorModeHeadlessFacet } from '../../src/extensions/server';
 
 const roots: string[] = [];
 afterEach(() => {
@@ -17,7 +17,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
-function setup() {
+async function setup() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-major-headless-'));
   roots.push(root);
   const home = path.join(root, 'home');
@@ -50,7 +50,10 @@ function setup() {
     },
     changeSelection,
   } as unknown as DoomHeadlessHostService;
-  const dispose = majorModeHeadlessFacet.apply({ get: () => host } as unknown as Context);
+  const dispose = await majorModeHeadlessFacet.apply({
+    effect() {},
+    get: (name: string) => (name === 'doom/server-host' ? { scope: 'session', context: {} } : host),
+  } as unknown as Context);
   const execution: DoomHeadlessExecutionContext = {
     cwd,
     repoRoot: root,
@@ -73,7 +76,7 @@ function setup() {
 
 describe('headless major-mode command validation', () => {
   it('projects current metadata, reads its skill, and disposes every contribution', async () => {
-    const { resources, execution, dispose, disposed } = setup();
+    const { resources, execution, dispose, disposed } = await setup();
     const texts = await Promise.all(resources.map((resource) => Promise.resolve(resource.read(execution))));
     expect(JSON.parse(texts[0]!)).toEqual({ majorMode: 'development', activeLayers: [] });
     expect(JSON.parse(texts[1]!)).toBeNull();
@@ -85,12 +88,12 @@ describe('headless major-mode command validation', () => {
     };
     expect(JSON.parse(await resources[0]!.read(changed))).toEqual({ majorMode: 'review', activeLayers: ['tools'] });
     expect(JSON.parse(await resources[1]!.read(changed))).toEqual(changed.model);
-    dispose();
+    await dispose?.();
     expect(disposed).toHaveBeenCalledTimes(4);
   });
 
   it('rejects unknown modes from the admitted repository before requesting a transition', async () => {
-    const { changeSelection, command, execution } = setup();
+    const { changeSelection, command, execution } = await setup();
     await expect(command.execute('foreign', execution)).rejects.toThrow('Unknown major mode');
     expect(changeSelection).not.toHaveBeenCalled();
     await command.execute(' review ', execution);
@@ -98,7 +101,7 @@ describe('headless major-mode command validation', () => {
   });
 
   it('opens a typed picker using the admitted repository and applies the selected value', async () => {
-    const { changeSelection, command, execution } = setup();
+    const { changeSelection, command, execution } = await setup();
     vi.mocked(execution.client.request).mockResolvedValue('review');
     await command.execute(' ', execution);
     expect(execution.client.request).toHaveBeenCalledExactlyOnceWith({
@@ -115,7 +118,7 @@ describe('headless major-mode command validation', () => {
   it.each([undefined, false, '', 'development'])(
     'does not transition for cancellation or the current mode: %s',
     async (answer) => {
-      const { changeSelection, command, execution } = setup();
+      const { changeSelection, command, execution } = await setup();
       vi.mocked(execution.client.request).mockResolvedValue(answer);
       await command.execute('', execution);
       expect(changeSelection).not.toHaveBeenCalled();
@@ -123,7 +126,7 @@ describe('headless major-mode command validation', () => {
   );
 
   it('validates picker responses and propagates transition failures', async () => {
-    const { changeSelection, command, execution } = setup();
+    const { changeSelection, command, execution } = await setup();
     vi.mocked(execution.client.request).mockResolvedValue('foreign');
     await expect(command.execute('', execution)).rejects.toThrow('Unknown major mode');
     expect(changeSelection).not.toHaveBeenCalled();

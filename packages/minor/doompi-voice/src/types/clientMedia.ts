@@ -1,5 +1,5 @@
-import type { SpeechPresenceDetector } from './clientCaptureActivity.ts';
-import type { RealtimeMediaCommand, RealtimeMediaTransport } from './realtime.ts';
+import type { SpeechPresenceDetector } from './clientCaptureActivity';
+import type { RealtimeMediaCommand, RealtimeMediaTransport } from './realtime';
 
 export const VOICE_MEDIA_API_BASE_PATH = 'voice-media';
 export const VOICE_MEDIA_PROTOCOL_VERSION = 6;

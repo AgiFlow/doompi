@@ -4,8 +4,8 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
-import { api } from '../../../src/adapters/planApi.ts';
-import { planServerFacet } from '../../../src/adapters/server/facet.ts';
+import { api } from '../../../src/controllers/planApi';
+import { planServerFacet } from '../../../src/extensions/server';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
@@ -22,10 +22,14 @@ function hostContext(scope: DoomServerHostService['scope']) {
     registerChannel() {
       return { dispose: () => undefined };
     },
+    registerMethod() {
+      return { dispose: () => undefined };
+    },
     mounted: () => registered.map((candidate) => candidate.basePath),
     mountedChannels: () => [],
   };
   const context = {
+    effect() {},
     get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? host : undefined),
   } as unknown as Context;
   return { context, registered, state };
@@ -36,21 +40,23 @@ describe('planServerFacet', () => {
     expect(planServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
   });
 
-  it('registers the exact plan API in session scope', () => {
+  it('registers the exact plan API in session scope', async () => {
     const harness = hostContext('session');
-    expect(typeof planServerFacet.apply(harness.context)).toBe('function');
+    expect(typeof (await planServerFacet.apply(harness.context))).toBe('function');
     expect(harness.registered).toEqual([api]);
   });
 
-  it('unregisters the API on disposal', () => {
+  it('unregisters the API on disposal', async () => {
     const harness = hostContext('session');
-    planServerFacet.apply(harness.context)?.();
+    await (
+      await planServerFacet.apply(harness.context)
+    )?.();
     expect(harness.state.disposed).toBe(1);
   });
 
-  it('does nothing in hub scope', () => {
+  it('does nothing in hub scope', async () => {
     const harness = hostContext('global');
-    expect(planServerFacet.apply(harness.context)).toBeUndefined();
+    expect(await planServerFacet.apply(harness.context)).toBeUndefined();
     expect(harness.registered).toEqual([]);
   });
 });

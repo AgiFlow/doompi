@@ -13,7 +13,7 @@ import {
   computerStateCallSummary,
   computerStateCollapsedLines,
   computerStateResultLines,
-} from '../lib/computerStateToolRender.ts';
+} from '../lib/computerStateToolRender';
 
 /**
  * The computer_state tool's timeline item: Observe the authorized application window and semantic accessibility state. The shell owns

@@ -64,28 +64,19 @@ describe('doompi-hook package contract', () => {
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
     expect(manifest.doompiServer).toMatchObject({
-      entry: './src/exports/extensions/server.ts',
+      entry: './src/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['session'],
     });
   });
 
   it('routes the Pi entry through a default-exported factory on the shared Cordis host', async () => {
-    const entry = await readFile(path.join(packageDirectory, 'src/exports/extensions/pi.ts'), 'utf8');
-    const factory = await readFile(path.join(packageDirectory, 'src/adapters/pi/extension.ts'), 'utf8');
-
-    expect(entry).toContain("from '../../adapters/pi/extension.ts'");
-    expect(entry).toContain('as default');
-    expect(entry).not.toContain('doom.ts');
-    expect(factory).toContain('connectDoomCordisHost');
-    expect(factory).toContain('connection.root.plugin(');
-    expect(factory).not.toContain('new Context()');
-    expect(
-      factory.match(/await fiber\.dispose\(\);\s*\}\s*finally\s*\{\s*await connection\.dispose\(\);/gu),
-    ).toHaveLength(2);
-    expect(factory).toContain('registerHookHandlers');
-    expect(factory).toContain('inject([DOOM_HELP_SERVICE]');
-    expect(factory).toContain("name: 'doompi-author-hook'");
+    const entry = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
+    expect(entry).toContain('export default hookExtension');
+    expect(entry).toContain('definePiExtension');
+    expect(entry).toContain('createHookHandlers');
+    expect(entry).toContain('services: [binding.plugin]');
+    expect(entry).not.toContain('new Context()');
   });
 
   it('never depends on the host package, which would make the build graph cyclic', async () => {
@@ -127,10 +118,10 @@ describe('doompi-hook package contract', () => {
   it('declares no protocol channel literals, which belong to the contracts package', async () => {
     const sources = await Promise.all(
       [
-        'src/adapters/pi/extension.ts',
-        'src/adapters/pi/hookHandlers.ts',
-        'src/adapters/hookDocuments.ts',
-        'src/adapters/hookRunner.ts',
+        'src/extensions/pi.ts',
+        'src/controllers/hookHandlers.ts',
+        'src/services/hookDocuments/index.ts',
+        'src/services/hookRunner/index.ts',
         'src/exports/index.ts',
       ].map((relativePath) => readFile(path.join(packageDirectory, relativePath), 'utf8')),
     );

@@ -9,7 +9,7 @@ import {
   parsePiImageSettings,
   piImageSettingsPath,
   savePiImageSettings,
-} from '../src/exports/config/piConfig.ts';
+} from '../src/exports/piConfig';
 
 let home: string;
 

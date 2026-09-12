@@ -7,4 +7,4 @@ export {
   previousDoomToolResult,
   renderToolBadge,
   renderToolHeading,
-} from '../tui/toolChrome.ts';
+} from '../tui/toolChrome';

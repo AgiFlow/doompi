@@ -9,7 +9,7 @@ import {
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { DoomServerBundleEntry } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import { HeadlessHost } from '../../../../src/adapters/server/headlessHost.ts';
+import { HeadlessHost } from '../../../../src/controllers/headlessHost';
 
 const candidate: DoomServerBundleEntry = {
   packageName: '@test/tools',

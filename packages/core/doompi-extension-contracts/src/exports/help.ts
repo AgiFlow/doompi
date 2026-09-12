@@ -9,7 +9,7 @@ export type {
   DoomHelpSkillDescriptor,
   DoomHelpSnapshot,
   DoomHelpSnapshotDraft,
-} from '../schemas/help.ts';
+} from '../schemas/help';
 export {
   createDoomHelpService,
   DOOM_HELP_ERROR_CODE,
@@ -30,4 +30,4 @@ export {
   DoomHelpSourceSchema,
   readDoomHelpService,
   requireDoomHelpService,
-} from '../schemas/help.ts';
+} from '../schemas/help';

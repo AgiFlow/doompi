@@ -1,4 +1,4 @@
-import type { Context } from '@deepseek-ai/cordis';
+import { Context } from '@deepseek-ai/cordis';
 import type {
   DoomHeadlessActivity,
   DoomHeadlessCommand,
@@ -10,9 +10,11 @@ import type {
   DoomHeadlessSelection,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import { describe, expect, it, vi } from 'vitest';
-import { loopHeadlessFacet } from '../../src/adapters/headless/facet.ts';
+import { loopServerFacet } from '../../src/extensions/server';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
+import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/headless';
 
-function fixture() {
+async function fixture() {
   let selection: DoomHeadlessSelection = {
     majorMode: 'copilot',
     activeLayers: [],
@@ -77,13 +79,16 @@ function fixture() {
       return registration();
     },
   } as unknown as DoomHeadlessHostService;
-  const close = loopHeadlessFacet.apply({ get: () => host } as unknown as Context);
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session', context: {} });
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  const close = await loopServerFacet.apply(context);
   return { execution, selection: () => selection, commands, hooks, resources, activity, mode, close };
 }
 
 describe('loop headless facet', () => {
   it('starts the default loop through its activity and lists the active instance', async () => {
-    const test = fixture();
+    const test = await fixture();
     const start = test.commands.find(({ name }) => name === 'loop');
     const list = test.commands.find(({ name }) => name === 'loops');
     const shutdown = test.hooks.find(({ event }) => event === 'session_shutdown') as
@@ -129,6 +134,6 @@ describe('loop headless facet', () => {
     expect(test.execution.client.notify).toHaveBeenLastCalledWith({ body: 'No loops are active.', level: 'info' });
 
     await stopActivity();
-    test.close?.();
+    await test.close?.();
   });
 });

@@ -4,7 +4,7 @@ import {
   insideSandbox,
   isSandboxHarnessModule,
   SANDBOX_HARNESS_EXPORT_SUBPATH,
-} from '../src/schemas/sandboxHarness.ts';
+} from '../src/schemas/sandboxHarness';
 
 describe('sandbox harness contract', () => {
   it('names the exports subpath a providing layer declares', () => {

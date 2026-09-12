@@ -6,10 +6,10 @@
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
-import type { AuthorDocumentInput } from '../lib/authorViewportTypes.ts';
-import { updateAuthorGridGeometry } from '../lib/authorGrid.ts';
-import { addAuthorRegion, focusAuthorDocument, putAuthorDocument } from '../stores/authorWorkspaceStore.ts';
-import { AuthorPanel } from './AuthorPanel.tsx';
+import type { AuthorDocumentInput } from '../lib/authorViewportTypes';
+import { updateAuthorGridGeometry } from '../lib/authorGrid';
+import { addAuthorRegion, focusAuthorDocument, putAuthorDocument } from '../stores/authorWorkspaceStore';
+import { AuthorPanel } from './AuthorPanel';
 
 const SPEC: AuthorDocumentInput = {
   path: 'docs/spec.md',

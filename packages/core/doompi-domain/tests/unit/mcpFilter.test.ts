@@ -10,7 +10,7 @@ import {
   persistMcpConfig,
   PROXY_SERVER_NAME,
   resolveMcpAllowlist,
-} from '../../src/adapters/mcpFilter.ts';
+} from '../../src/services/mcpFilter';
 
 const PROXY_YAML = `# comment
 proxy:

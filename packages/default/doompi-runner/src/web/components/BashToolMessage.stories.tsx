@@ -6,9 +6,9 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { RunnerRunView } from '../../types/webRunners.ts';
-import { runners } from '../stores/runnersStore.ts';
-import { BashToolMessage } from './BashToolMessage.tsx';
+import type { RunnerRunView } from '../../types/webRunners';
+import { runners } from '../stores/runnersStore';
+import { BashToolMessage } from './BashToolMessage';
 
 const SESSION_ID = 's1';
 

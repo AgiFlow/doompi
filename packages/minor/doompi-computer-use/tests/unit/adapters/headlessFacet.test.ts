@@ -12,16 +12,16 @@ import {
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { Context } from '@deepseek-ai/cordis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ComputerUseSessionClient } from '../../../src/adapters/pi/sessionApiClient.ts';
-import type { ComputerUseObservation } from '../../../src/types/computerUse.ts';
-import type { ComputerUseSessionView } from '../../../src/types/computerUseApi.ts';
-import { computerUseHeadlessFacet } from '../../../src/adapters/headless/facet.ts';
+import type { ComputerUseSessionClient } from '../../../src/services/sessionApiClient';
+import type { ComputerUseObservation } from '../../../src/types/computerUse';
+import type { ComputerUseSessionView } from '../../../src/types/computerUseApi';
+import { computerUseServerFacet as computerUseHeadlessFacet } from '../../../src/extensions/server';
 
 const clientState = vi.hoisted(() => ({ current: undefined as unknown }));
 const runnerState = vi.hoisted(() => ({
   options: undefined as { allowedScriptPaths: readonly string[] } | undefined,
 }));
-vi.mock('../../../src/adapters/pi/computerScriptRunner.ts', () => ({
+vi.mock('../../../src/services/computerScriptRunner', () => ({
   ComputerScriptRunner: class {
     constructor(options: { allowedScriptPaths: readonly string[] }) {
       runnerState.options = options;
@@ -31,14 +31,22 @@ vi.mock('../../../src/adapters/pi/computerScriptRunner.ts', () => ({
     });
   },
 }));
-vi.mock('../../../src/adapters/pi/sessionApiClient.ts', () => ({
+vi.mock('../../../src/services/sessionApiClient', () => ({
   createComputerUseSessionClient: () => clientState.current,
 }));
 function contextFor(host: DoomHeadlessHostService): Context {
-  return { get: (name: string) => (name === DOOM_HEADLESS_HOST_SERVICE ? host : undefined) } as unknown as Context;
+  return {
+    effect() {},
+    get: (name: string) =>
+      name === DOOM_HEADLESS_HOST_SERVICE
+        ? host
+        : name === 'doom/server-host'
+          ? { scope: 'session', context: {}, registerApi: () => ({ dispose() {} }) }
+          : undefined,
+  } as unknown as Context;
 }
 
-function fixture(selectionModes: string[] = [], environment: Readonly<Record<string, string | undefined>> = {}) {
+async function fixture(selectionModes: string[] = [], environment: Readonly<Record<string, string | undefined>> = {}) {
   let minorModes = selectionModes;
   const execution = {
     cwd: '/workspace',
@@ -103,7 +111,7 @@ function fixture(selectionModes: string[] = [], environment: Readonly<Record<str
       return registrations;
     },
   } as unknown as DoomHeadlessHostService;
-  const close = computerUseHeadlessFacet.apply(contextFor(host));
+  const close = await computerUseHeadlessFacet.apply(contextFor(host));
   return {
     execution,
     modes,
@@ -147,7 +155,7 @@ beforeEach(() => {
 
 describe('computer use headless facet', () => {
   it('exposes the unavailable behavior without a desktop transport', async () => {
-    const test = fixture();
+    const test = await fixture();
     const mode = test.modes[0];
     const activity = test.activities[0];
     const stateTool = test.tools.find(({ name }) => name === 'computer_state');
@@ -196,7 +204,7 @@ describe('computer use headless facet', () => {
     expect(beforeStart.handle({}, test.execution)).toBeUndefined();
     await shutdown.handle({}, test.execution);
     expect(test.execution.client.setStatus).toHaveBeenCalledWith('@agimon-ai/doompi-computer-use', undefined);
-    test.close?.();
+    await test.close?.();
     expect(test.dispose).toHaveBeenCalledOnce();
     expect(test.registrations.dispose).toHaveBeenCalled();
   });
@@ -218,7 +226,7 @@ describe('computer use headless facet', () => {
       }),
     };
     clientState.current = client;
-    const test = fixture();
+    const test = await fixture();
     const mode = test.modes[0];
     const activity = test.activities[0];
     const stateTool = test.tools.find(({ name }) => name === 'computer_state');
@@ -276,21 +284,21 @@ describe('computer use headless facet', () => {
     });
     await shutdown.handle({}, test.execution);
     expect(client.stop).toHaveBeenCalledTimes(2);
-    test.close?.();
+    await test.close?.();
     expect(test.dispose).toHaveBeenCalledOnce();
   });
 
-  it('uses each session environment for allowed computer script paths', () => {
+  it('uses each session environment for allowed computer script paths', async () => {
     clientState.current = {} as ComputerUseSessionClient;
-    const first = fixture([], {
+    const first = await fixture([], {
       DOOMPI_COMPUTER_USE_SCRIPT_PATHS: ['/first', '/shared'].join(path.delimiter),
     });
     const firstOptions = runnerState.options;
-    const second = fixture([], { DOOMPI_COMPUTER_USE_SCRIPT_PATHS: '/second' });
+    const second = await fixture([], { DOOMPI_COMPUTER_USE_SCRIPT_PATHS: '/second' });
 
     expect(firstOptions?.allowedScriptPaths).toEqual(['/first', '/shared']);
     expect(runnerState.options?.allowedScriptPaths).toEqual(['/second']);
-    first.close?.();
-    second.close?.();
+    await first.close?.();
+    await second.close?.();
   });
 });

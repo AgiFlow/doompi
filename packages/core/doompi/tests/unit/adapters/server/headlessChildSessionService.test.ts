@@ -9,12 +9,12 @@ import type { DoomChildSessionRequest } from '@agimon-ai/doompi-extension-contra
 import type {
   DirectHarnessRuntime,
   DirectHarnessRuntimeOptions,
-} from '../../../../src/adapters/server/directHarnessRuntime.ts';
+} from '../../../../src/controllers/directHarnessRuntime';
 import {
   createHeadlessChildSessionService,
   createHeadlessChildSessionServiceProvider,
   type HeadlessChildSessionServiceOptions,
-} from '../../../../src/adapters/server/headlessChildSessionService.ts';
+} from '../../../../src/controllers/headlessChildSessionService';
 
 function request(source: DoomChildSessionRequest['source'], cwd = '/tmp'): DoomChildSessionRequest {
   return {
@@ -124,6 +124,36 @@ describe('headless child session provider', () => {
     await handle.dispose();
     await handle.dispose();
     expect(runtime.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('publishes the final assistant text in the completion event', async () => {
+    const base = fakeRuntime('summary-child');
+    const readEntries = vi
+      .fn<DirectHarnessRuntime['readEntries']>()
+      .mockResolvedValueOnce({ entries: [{ id: 'parent' }], leafId: 'parent' } as never)
+      .mockResolvedValue({
+        entries: [
+          { id: 'parent' },
+          {
+            id: 'child',
+            type: 'message',
+            message: { role: 'assistant', content: [{ type: 'text', text: 'child summary' }] },
+          },
+        ],
+        leafId: 'child',
+      } as never);
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent-session',
+      cwd: '/tmp',
+      runtimeFactory: runtimeFactory({ ...base, readEntries } as DirectHarnessRuntime),
+    });
+    const handle = await service.start(request({ kind: 'fresh' }));
+    const events: Array<{ state: string; message?: string }> = [];
+    handle.subscribe((event) => events.push(event));
+
+    await vi.waitFor(() => expect(handle.state()).toBe('completed'));
+
+    expect(events.at(-1)).toMatchObject({ state: 'completed', message: 'child summary' });
   });
 
   it('accepts SQLite restore sources and rejects JSONL before runtime creation', async () => {

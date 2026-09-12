@@ -1,5 +1,5 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
-import { contentUrl, currentUrl, type PlanDetailView, type PlanSaveView } from '../../types/planApi.ts';
+import { contentUrl, currentUrl, type PlanDetailView, type PlanSaveView } from '../../types/planApi';
 
 /**
  * The page's half of this package's session API: the current plan, and the

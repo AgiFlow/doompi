@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import { createPiTestHost } from '../../src/adapters/testing/piHost.ts';
+import { createPiTestHost } from '../../src/controllers/piTestHost';
 
 /** A tool shaped the way a real one is, so the harness is exercised through Pi's own type. */
 function echoTool(name: string, execute: (params: { text: string }) => unknown) {

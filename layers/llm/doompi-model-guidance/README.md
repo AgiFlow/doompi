@@ -97,3 +97,8 @@ pnpm nx run @agimon-ai/doompi-model-guidance:test
 ```
 
 Pi entrypoint: `./dist/extensions/pi.mjs`.
+
+The Pi and server declarations live in `src/extensions` and build directly to
+`/extensions/pi` and `/extensions/server`. Controllers handle host events and call the
+named guidance services. Flat root exports expose guidance loading, merging, and types.
+The shared helpers own registration and cleanup; this stateless plugin needs no lifecycle hooks.

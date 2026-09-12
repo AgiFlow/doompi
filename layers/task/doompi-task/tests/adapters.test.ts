@@ -86,8 +86,8 @@ describe('doom-task standalone adapters', () => {
   });
 
   it('exposes one standard Pi adapter and no alternate Doom entry', async () => {
-    const standardAdapter = await import('../src/exports/extensions/pi');
-    const doomAdapterPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/extensions/doom.ts');
+    const standardAdapter = await import('../src/extensions/pi');
+    const doomAdapterPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/extensions/doom');
 
     expect(standardAdapter.default).toEqual(expect.any(Function));
     await expect(access(doomAdapterPath)).rejects.toThrow();

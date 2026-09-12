@@ -1,3 +1,3 @@
-import { createSessionScope } from '../../src/adapters/filesystem/paths';
+import { createSessionScope } from '../../src/services/sessionPaths';
 
 export const TEST_SESSION_SCOPE = createSessionScope('test-session');

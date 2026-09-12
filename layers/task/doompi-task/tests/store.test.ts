@@ -7,10 +7,10 @@ import {
   ERR_ORPHANED_BY_RESTART,
   ERR_ORPHANED_BY_SESSION,
   reconcileOrphanedDelegations,
-} from '../src/exports/store/reconcile';
-import { applyTaskMutation, isCommittingOp, type Op, singleItemOutcome } from '../src/exports/store/reducer';
-import { TaskStore } from '../src/exports/store/taskStore';
-import { emptyDocument, type TaskDocument } from '../src/exports/store/types';
+} from '../src/exports/storeReconcile';
+import { applyTaskMutation, isCommittingOp, type Op, singleItemOutcome } from '../src/exports/storeReducer';
+import { TaskStore } from '../src/exports/storeTaskStore';
+import { emptyDocument, type TaskDocument } from '../src/exports/storeTypes';
 
 const NOW = '2026-07-31T00:00:00.000Z';
 const DEAD_PID = 2 ** 30;

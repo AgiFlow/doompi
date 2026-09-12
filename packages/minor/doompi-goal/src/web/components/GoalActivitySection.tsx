@@ -8,10 +8,10 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useState } from 'react';
-import { GOAL_VIEW_STATUS_KEY, parseGoalStatusView } from '../../types/goalView.ts';
-import { EditGoalDialog } from './EditGoalDialog.tsx';
-import { budgetHintOf, CLEAR_GOAL_COMMAND } from '../lib/goalCommands.ts';
-import { RemoveGoalDialog } from './RemoveGoalDialog.tsx';
+import { GOAL_VIEW_STATUS_KEY, parseGoalStatusView } from '../../types/goalView';
+import { EditGoalDialog } from './EditGoalDialog';
+import { budgetHintOf, CLEAR_GOAL_COMMAND } from '../lib/goalCommands';
+import { RemoveGoalDialog } from './RemoveGoalDialog';
 
 /**
  * The goal group's body in the activity dock: the objective this session is

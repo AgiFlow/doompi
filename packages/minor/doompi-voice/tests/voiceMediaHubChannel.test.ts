@@ -4,8 +4,8 @@ import type {
   DoomHubSessionScope,
 } from '@agimon-ai/doompi-extension-contracts/hub-channel';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createVoiceMediaWakeChannel, createVoiceOwnershipChannel } from '../src/adapters/voiceMediaHubChannel.ts';
-import { VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../src/types/clientMedia.ts';
+import { createVoiceMediaWakeChannel, createVoiceOwnershipChannel } from '../src/controllers/voiceMediaHubChannel';
+import { VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../src/types/clientMedia';
 import {
   VOICE_OWNERSHIP_FRAME_TYPE,
   VOICE_OWNERSHIP_PROTOCOL_VERSION,
@@ -15,7 +15,7 @@ import {
   type VoiceOwnershipCommand,
   type VoiceOwnershipHandoffRequest,
   type VoiceOwnershipTarget,
-} from '../src/types/voiceOwnership.ts';
+} from '../src/types/voiceOwnership';
 
 interface SessionState {
   leaseId: string;

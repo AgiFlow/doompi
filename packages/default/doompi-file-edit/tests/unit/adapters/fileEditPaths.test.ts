@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { FileEditPaths } from '../../../src/adapters/FileEditPaths/FileEditPaths.ts';
+import { FileEditPaths } from '../../../src/services/fileEditPaths';
 
 let agentDirectory: string;
 let repository: string;

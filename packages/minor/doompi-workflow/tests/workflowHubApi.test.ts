@@ -3,12 +3,12 @@ import os from 'node:os';
 import path from 'node:path';
 import type { WorkflowRegistryService, WorkflowRunRecord } from '@agimon-ai/workflow-mcp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createWorkflowHubApi } from '../src/adapters/workflowHubApi.ts';
+import { createWorkflowHubApi } from '../src/controllers/workflowHubApi';
 import type {
   WorkflowArtifactContentResponse,
   WorkflowArtifactsResponse,
   WorkflowControlResponse,
-} from '../src/types/webWorkflowTerminal.ts';
+} from '../src/types/webWorkflowTerminal';
 
 const directories: string[] = [];
 

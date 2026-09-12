@@ -2,9 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { piExtensionAliasPath } from '../../src/adapters/piExtensionAlias.ts';
-import { AMBIENT_EXTENSION_FILTER, DOOM_EXTENSION, readPiSettings } from '../../src/adapters/piSettings.ts';
-import { InitCommand } from '../../src/commands/initCommand.ts';
+import { piExtensionAliasPath } from '../../src/services/piExtensionAlias';
+import { AMBIENT_EXTENSION_FILTER, DOOM_EXTENSION, readPiSettings } from '../../src/services/piSettings';
+import { InitCommand } from '../../src/controllers/initCommand';
 
 const temporaryRoots: string[] = [];
 

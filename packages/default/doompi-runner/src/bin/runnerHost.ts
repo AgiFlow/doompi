@@ -1,9 +1,9 @@
+import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { type ChildProcess, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
-import { LIFELINE_ENV, watchOwner } from '../adapters/Lifeline/client.ts';
+import { LIFELINE_ENV, watchOwner } from '../services/lifeline/client';
 
 interface CommandSpec {
   command: string;

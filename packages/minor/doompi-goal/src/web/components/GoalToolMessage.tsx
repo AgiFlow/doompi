@@ -6,7 +6,7 @@ import {
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { goalCallSummary, goalResultLines } from '../lib/goalToolRender.ts';
+import { goalCallSummary, goalResultLines } from '../lib/goalToolRender';
 
 /**
  * The goal tools' timeline item: complete or blocked, with the summary or

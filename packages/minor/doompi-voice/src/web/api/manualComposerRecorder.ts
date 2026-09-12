@@ -1,5 +1,5 @@
-import { startManualBrowserRecording, type ManualBrowserRecording } from './manualBrowserRecorder.ts';
-import { transcribeManualRecording } from './manualTranscriptionClient.ts';
+import { startManualBrowserRecording, type ManualBrowserRecording } from './manualBrowserRecorder';
+import { transcribeManualRecording } from './manualTranscriptionClient';
 
 export type ManualComposerPhase = 'idle' | 'starting' | 'recording' | 'transcribing';
 

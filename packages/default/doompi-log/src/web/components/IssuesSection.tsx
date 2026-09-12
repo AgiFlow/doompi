@@ -1,8 +1,8 @@
 import { Button, Spinner } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
-import { isIssuesUnavailable, type IssuesView, type MetricsTool } from '../../types/webMetrics.ts';
-import { IssuesDetail } from './IssuesDetail.tsx';
-import { fetchIssues } from '../api/metricsApi.ts';
+import { isIssuesUnavailable, type IssuesView, type MetricsTool } from '../../types/webMetrics';
+import { IssuesDetail } from './IssuesDetail';
+import { fetchIssues } from '../api/metricsApi';
 
 /**
  * The detail behind the issue count.

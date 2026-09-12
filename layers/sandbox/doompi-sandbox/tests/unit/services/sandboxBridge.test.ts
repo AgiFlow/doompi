@@ -9,7 +9,7 @@ import {
   BROKER_PORT_ENV,
   BROKER_SOCKET_ENV,
   sandboxBridgeSource,
-} from '../../../src/services/sandboxBridge.ts';
+} from '../../../src/services/sandboxBridge';
 
 const cleanups: Array<() => Promise<void> | void> = [];
 

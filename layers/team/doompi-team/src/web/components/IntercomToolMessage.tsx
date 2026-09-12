@@ -6,7 +6,7 @@ import {
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { intercomCallSummary, intercomOutcome, shapeResult } from '../lib/toolText.ts';
+import { intercomCallSummary, intercomOutcome, shapeResult } from '../lib/toolText';
 
 const OUTCOME_LINE = {
   delivered: { tone: 'ok', text: 'delivered to' },

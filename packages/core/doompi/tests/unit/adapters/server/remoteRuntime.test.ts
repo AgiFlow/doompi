@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createClientHandshake } from '@agimon-ai/doompi-web-security/node';
 import WebSocket, { WebSocketServer } from 'ws';
-import { createRemoteRuntime, type RemoteRuntime } from '../../../../src/adapters/server/remote/remoteRuntime.ts';
+import { createRemoteRuntime, type RemoteRuntime } from '../../../../src/controllers/remoteRuntime';
 
 const PUBLIC_ORIGIN = 'https://remote.example.com';
 const trust = { publicKey: Buffer.alloc(32, 7).toString('base64url'), revision: 1 };
@@ -191,7 +191,7 @@ describe('global remote control', () => {
       (JSON.parse(Buffer.from(inner.body, 'base64').toString('utf8')) as { state: { status: string } }).state.status,
     ).toBe('on');
     const passkeyStart = await tunnel(publicPort, '/api/remote/passkeys/register/begin', 'POST', {}, cookie);
-    expect(passkeyStart.status).toBe(200);
+    expect(passkeyStart.status, await passkeyStart.clone().text()).toBe(200);
     const passkeyCeremony = (await passkeyStart.json()) as { ceremonyId: string; options: unknown };
     expect(passkeyCeremony.ceremonyId).toBeTypeOf('string');
     expect(passkeyCeremony.options).toBeTypeOf('object');

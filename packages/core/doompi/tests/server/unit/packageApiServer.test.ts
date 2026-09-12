@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DoomApi, DoomApiContext } from '@agimon-ai/doompi-extension-contracts/package-api';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-extension-contracts/server-facet';
-import { serveSessionApis, type PackageApiServer } from '../../../src/adapters/server/packageApiServer.ts';
-import type { ServerTelemetry } from '../../../src/adapters/server/serverTelemetry.ts';
+import { serveSessionApis, type PackageApiServer } from '../../../src/controllers/packageApiServer';
+import type { ServerTelemetry } from '../../../src/services/serverTelemetry';
 
 let cleanups: Array<() => Promise<void> | void> = [];
 

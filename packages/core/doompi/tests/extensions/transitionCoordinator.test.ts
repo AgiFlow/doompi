@@ -6,10 +6,10 @@ import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cor
 import type { DoomConfigContext } from '@agimon-ai/doompi-config/types';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import cordisHostExtension from '../../src/extensions/entries/cordisHost.ts';
+import cordisHostExtension from '../../src/extensions/cordisHost';
 import transitionCoordinatorExtension, {
   currentTransitionSynchronization,
-} from '../../src/extensions/entries/transitionCoordinator.ts';
+} from '../../src/extensions/transitionCoordinator';
 import type { MinorModeCatalogHost } from '@agimon-ai/doompi-extension-contracts/transition';
 import {
   MINOR_MODE_CATALOG_SERVICE,
@@ -23,7 +23,7 @@ const { createMapResolvers, loadMajorModesConfig, readSyncState } = vi.hoisted((
 }));
 
 vi.mock('@agimon-ai/doompi-config/majorModes', () => ({ loadMajorModesConfig }));
-vi.mock('../../src/adapters/syncState.ts', () => ({ createMapResolvers, readSyncState }));
+vi.mock('../../src/services/syncState', () => ({ createMapResolvers, readSyncState }));
 
 beforeEach(() => {
   vi.clearAllMocks();
