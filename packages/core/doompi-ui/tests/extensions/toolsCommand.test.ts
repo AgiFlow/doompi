@@ -1,4 +1,4 @@
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { DOOM_MCP_STATUS_SERVICE, type McpStatusSnapshot } from '@agimon-ai/doompi-extension-contracts/mcp-status';
 import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protocol';
 import type { ExtensionAPI, ExtensionContext, ToolInfo } from '@earendil-works/pi-coding-agent';
@@ -72,6 +72,7 @@ async function register(tools: readonly ToolInfo[]) {
       sessionHandlers.set(event, [...(sessionHandlers.get(event) ?? []), handler]);
     }),
   } as unknown as ExtensionAPI;
+  await installDoomCordisHost(pi, { mode: 'composed', source: 'ui-tools-test-host' });
   const connection = await connectDoomCordisHost(pi, '@agimon-ai/doompi-ui/tools-test');
   await doomPiUiExtension(pi, telemetry());
 

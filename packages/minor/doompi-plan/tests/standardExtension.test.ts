@@ -1,4 +1,5 @@
 import { Context } from '@deepseek-ai/cordis';
+import { installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,6 +27,7 @@ function createPi(): { pi: ExtensionAPI; shutdown: () => Promise<void> } {
       handlers.set(event, handler);
     },
   } as unknown as ExtensionAPI;
+  void installDoomCordisHost(pi, { mode: 'composed', source: 'plan-test-host' });
   return {
     pi,
     shutdown: async () => {

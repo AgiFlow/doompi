@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { autoStopExtension } from '../../src/adapters/pi/extension.ts';
 import { DEFAULT_AUTO_STOP_DELAYS } from '../../src/services/idlePolicy.ts';
@@ -139,10 +140,14 @@ describe('auto-stop Pi factory', () => {
           return () => listeners.delete(handler);
         },
       },
-      on: vi.fn(() => {
-        throw new Error('registration boom');
-      }),
+      on: vi.fn(),
     } as unknown as ExtensionAPI;
+    await installDoomCordisHost(pi, { mode: 'composed', source: 'autostop-registration-test-host' });
+    vi.mocked(pi.on)
+      .mockClear()
+      .mockImplementation(() => {
+        throw new Error('registration boom');
+      });
 
     await expect(autoStopExtension(pi)).rejects.toThrow('registration boom');
     // The shutdown hook is the last registration, so a throw before it means

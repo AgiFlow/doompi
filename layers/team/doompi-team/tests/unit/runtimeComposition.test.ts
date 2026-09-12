@@ -4,6 +4,8 @@ import { createTeamExtensionRuntime } from '../../src/adapters/pi/teamRuntime';
 import { PollScheduler } from '../../src/adapters/pollScheduler';
 import { SubagentToolService } from '../../src/adapters/pi/extensions/subagentTool';
 import { AgentDiscoveryService } from '../../src/adapters/agents/discovery';
+import { ExternalProcessIpc, type ExternalProcessEventListener } from '../../src/adapters/process/externalProcessIpc';
+import { createSessionScope } from '../../src/adapters/filesystem/paths';
 
 const ENVIRONMENT = Object.freeze({ PATH: '/test/bin' });
 
@@ -31,5 +33,57 @@ describe('explicit Team runtime composition', () => {
     expect(second.teamChannel).not.toBe(first.teamChannel);
     first.dispose();
     second.dispose();
+  });
+
+  it('routes external status, error, result, and exit events through the parent tracker', async () => {
+    let listener: ExternalProcessEventListener | undefined;
+    const subscribe = vi.spyOn(ExternalProcessIpc.prototype, 'subscribe').mockImplementation((callback) => {
+      listener = callback;
+      return () => undefined;
+    });
+    const runtime = createTeamExtensionRuntime(undefined, { environment: ENVIRONMENT });
+    const scope = createSessionScope('runtime-events');
+    const upsert = vi.spyOn(runtime.asyncJobTracker, 'upsertExternal');
+    const fail = vi.spyOn(runtime.asyncJobTracker, 'markExternalFailed');
+    const accept = vi.spyOn(runtime.asyncJobTracker, 'acceptExternalResult').mockReturnValue(true);
+    const deliver = vi.spyOn(runtime.completionNotifier, 'deliver').mockResolvedValue(true);
+    const acknowledge = vi.spyOn(runtime.asyncJobTracker, 'acknowledgeHandoff');
+    const base = {
+      channel: 'doompi-team-external',
+      version: 1,
+      direction: 'runner',
+      runId: 'run-1',
+      scopeKey: scope.scopeKey,
+    } as const;
+    try {
+      listener!({
+        scope,
+        message: {
+          ...base,
+          kind: 'status',
+          status: {
+            runId: 'run-1',
+            agent: 'writer',
+            task: 'write',
+            cwd: '/project',
+            runtime: 'pi',
+            state: 'running',
+            startedAt: 1,
+            updatedAt: 2,
+          },
+        },
+      });
+      expect(upsert).toHaveBeenCalledOnce();
+      listener!({ scope, message: { ...base, kind: 'error', error: 'runner failed' } });
+      expect(fail).toHaveBeenCalledWith(scope.rootSessionId, scope, 'run-1', 'runner failed');
+      listener!({ scope, message: { ...base, kind: 'result', result: { summary: 'done' } } });
+      expect(accept).toHaveBeenCalledOnce();
+      expect(deliver).toHaveBeenCalledTimes(2);
+      await vi.waitFor(() => expect(acknowledge).toHaveBeenCalledTimes(2));
+      listener!({ scope, runId: 'unknown', code: 1, signal: null });
+    } finally {
+      runtime.dispose();
+      subscribe.mockRestore();
+    }
   });
 });

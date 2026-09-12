@@ -80,10 +80,7 @@ describe('doom extension contracts package boundary', () => {
 
     for (const constant of constants) expect(owner).toMatch(new RegExp(`export const ${constant}\\b`, 'u'));
 
-    const consumers = [
-      path.resolve(packageDirectory, '../../../layers/team/doompi-team/src/exports/env.ts'),
-      path.resolve(packageDirectory, '../../../layers/team/doompi-team/src/adapters/runs/shared/piArgs.ts'),
-    ];
+    const consumers = [path.resolve(packageDirectory, '../../../layers/team/doompi-team/src/exports/env.ts')];
     for (const consumer of consumers) {
       const contents = await readFile(consumer, 'utf8');
       for (const constant of constants) expect(contents).not.toMatch(new RegExp(`const ${constant}\\s*=`, 'u'));

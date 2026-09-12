@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { vi } from 'vitest';
 
 type Handler = (event: unknown, context: ExtensionContext) => Promise<void> | void;
@@ -56,5 +57,6 @@ export function createSessionHarness(): SessionHarness {
     },
     registered: () => [...handlers.keys()],
   };
+  void installDoomCordisHost(harness.pi, { mode: 'composed', source: 'autostop-test-host' });
   return harness;
 }

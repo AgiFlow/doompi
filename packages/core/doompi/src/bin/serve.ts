@@ -27,6 +27,8 @@ import type { HeadlessSessionManager } from '../types/server/headlessSessionMana
 import { serveSessionApis, type PackageApiServer } from '../adapters/server/packageApiServer.ts';
 import { createServerTelemetry } from '../adapters/server/serverTelemetry.ts';
 import { serveHeadlessServer } from '../adapters/server/headlessServer.ts';
+import { createRemoteRuntime, type RemoteRuntime } from '../adapters/server/remote/remoteRuntime.ts';
+import WebSocket from 'ws';
 import { parseServeOptions, resolveSessionIdentity } from '../services/server/serveOptions.ts';
 const TELEMETRY_SHUTDOWN_TIMEOUT_MS = 2_000;
 
@@ -180,6 +182,7 @@ async function main(): Promise<number> {
   });
   let harnessContext: Awaited<ReturnType<typeof buildHarnessContext>> | undefined;
   let cockpit: Awaited<ReturnType<typeof serveHeadlessServer>> | undefined;
+  let remoteRuntime: RemoteRuntime | undefined;
   let attachToken: string | undefined;
   let webCompositions: ReturnType<typeof createWebCompositions> | undefined;
 
@@ -238,7 +241,31 @@ async function main(): Promise<number> {
       };
       const globalBundle = await loadComposition(globalRoot, 'global');
       webCompositions.publishShell(readSyncRegistration(globalRoot, homeDirectory)!);
-      await hub.mountFacets(globalBundle.facets, { ...sharedApiContext, scope: 'global' });
+      remoteRuntime = createRemoteRuntime({
+        homeDirectory,
+        registrationToken: token,
+        bundleTrust: () => webCompositions?.shellTrust(),
+        onNotice: notice,
+        forward: async (request) => {
+          if (!cockpit || !attachToken)
+            return Response.json({ error: 'The headless server is not ready.' }, { status: 503 });
+          const from = new URL(request.url);
+          const headers = new Headers(request.headers);
+          headers.set('x-doompi-token', attachToken);
+          return fetch(new URL(`${from.pathname}${from.search}`, cockpit.url), new Request(request, { headers }));
+        },
+        connectProtocol: () => {
+          if (!cockpit || !attachToken) throw new Error('The headless protocol listener is not ready.');
+          const url = new URL('/api/pi', cockpit.url);
+          url.protocol = 'ws:';
+          return new WebSocket(url, { headers: { 'x-doompi-token': attachToken } });
+        },
+      });
+      await hub.mountFacets(globalBundle.facets, {
+        ...sharedApiContext,
+        scope: 'global',
+        remoteControl: { fetch: (request: Request) => remoteRuntime!.fetchLocal(request) },
+      });
       webCompositions.publish(
         { scope: 'global' },
         readSyncRegistration(globalRoot, homeDirectory)!,
@@ -486,6 +513,7 @@ async function main(): Promise<number> {
     clearInterval(eventLoopMonitor);
     await bounded(telemetry.recordEvent('doompi_server.shutdown'), 'shutdown telemetry', notice);
     await Promise.allSettled([cockpit?.close()]);
+    await bounded(remoteRuntime?.close() ?? Promise.resolve(), 'remote control shutdown', notice);
     try {
       await hub.close();
     } catch (error) {

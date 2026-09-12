@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createDoomConfigContext, provideDoomConfigContext } from '@agimon-ai/doompi-config';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import type {
@@ -129,6 +129,7 @@ describe('skills pi extension', () => {
       }),
       getCommands: vi.fn(() => []),
     } as unknown as ExtensionAPI;
+    await installDoomCordisHost(pi, { mode: 'composed', source: 'skills-command-test-host' });
     await skillsExtension(pi);
     activeHandlers = handlers;
     const connection = await connectDoomCordisHost(pi, 'skills-command-test');

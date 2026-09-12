@@ -27,6 +27,7 @@ describe('the standard Pi entry contract', () => {
 describe('doompi-git Pi extension', () => {
   it('injects its service into the standalone command', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     const service: GitExtensionService = {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
@@ -42,6 +43,7 @@ describe('doompi-git Pi extension', () => {
   it('says nothing where there is no UI to say it in', async () => {
     // The cockpit and the RPC runtime both load extensions with no terminal.
     const host = createPiTestHost({ hasUI: false, mode: 'rpc' });
+    await host.cordis();
     const service: GitExtensionService = {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
@@ -55,6 +57,7 @@ describe('doompi-git Pi extension', () => {
 
   it('follows optional Help provider replacement and withdraws its contribution on shutdown', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     await activateGitExtension(host.pi);
     const connection = await connectDoomCordisHost(host.pi, 'doompi-git-help-test');
     const firstService = createDoomHelpService('doompi-git-help-first');

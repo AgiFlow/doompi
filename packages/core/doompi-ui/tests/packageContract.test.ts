@@ -91,6 +91,7 @@ describe('doom Pi UI package boundary', () => {
       pluginId: 'builtin-tools',
       channels: [],
       client: './src/exports/webClient.ts',
+      scopes: ['session'],
     });
     expect(await readFile(path.join(packageDirectory, 'tsdown.config.ts'), 'utf8')).toContain(
       '!src/exports/webClient.ts',

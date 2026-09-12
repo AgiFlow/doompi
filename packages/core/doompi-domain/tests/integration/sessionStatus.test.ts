@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { domainsExtension } from '../../src/adapters/pi/extension.ts';
@@ -51,6 +51,7 @@ async function startSession(domains: string[]): Promise<{ setStatus: ReturnType<
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-domain-status-'));
   cleanups.push(async () => fs.rmSync(root, { recursive: true, force: true }));
   const { pi, handlers } = piFixture();
+  await installDoomCordisHost(pi, { mode: 'composed', source: 'domain-status-test-host' });
   await domainsExtension(pi, telemetry);
   const connection = await connectDoomCordisHost(pi, 'domain-status-runtime');
   const fiber = connection.root.plugin((cordis) => {

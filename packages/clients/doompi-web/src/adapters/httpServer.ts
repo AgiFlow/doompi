@@ -91,7 +91,8 @@ function responseHeaders(headers: Headers, bodyLength: number): Record<string, s
 function proxyHeaders(request: IncomingMessage, token: string | undefined): Record<string, string> {
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(request.headers)) {
-    if (value === undefined || HOP_BY_HOP_HEADERS.has(name) || name === 'host') continue;
+    if (value === undefined || HOP_BY_HOP_HEADERS.has(name) || name === 'host' || name === 'x-doompi-web-registration')
+      continue;
     headers[name] = Array.isArray(value) ? value.join(', ') : value;
   }
   if (token !== undefined && token !== '') headers['x-doompi-token'] = token;
@@ -185,6 +186,11 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const headlessUrl = new URL(options.headlessUrl ?? DEFAULT_HEADLESS_URL);
   const server = createServer((request, response) => {
     const url = requestUrl(request);
+    if (url.pathname === '/api/remote/frontend' || url.pathname === '/api/global/plugin/remote/frontend') {
+      response.writeHead(404, { 'content-type': 'application/json; charset=utf-8' });
+      response.end(JSON.stringify({ error: 'Not found.' }));
+      return;
+    }
     if (
       url.pathname.startsWith('/api/') ||
       url.pathname === '/bundle-manifest.json' ||
@@ -258,6 +264,20 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     throw new Error('The web presentation server did not expose a TCP address.');
   }
   const url = `http://${host}:${String(address.port)}`;
+  try {
+    const registration = await fetch(new URL('/api/remote/frontend', headlessUrl), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(options.headlessToken ? { 'x-doompi-token': options.headlessToken } : {}),
+        ...(options.headlessToken ? { 'x-doompi-web-registration': options.headlessToken } : {}),
+      },
+      body: JSON.stringify({ origin: url }),
+    });
+    if (!registration.ok) notice(`remote web registration failed (${String(registration.status)})`);
+  } catch (error) {
+    notice(`remote web registration failed (${error instanceof Error ? error.message : String(error)})`);
+  }
   let closePromise: Promise<void> | undefined;
   return {
     url,

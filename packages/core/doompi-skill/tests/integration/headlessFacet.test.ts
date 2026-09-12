@@ -28,6 +28,7 @@ describe('skill headless facet', () => {
     );
 
     const resources: DoomHeadlessResource[] = [];
+    const commands = new Map<string, DoomHeadlessCommand>();
     let command: DoomHeadlessCommand | undefined;
     const disposers: Array<ReturnType<typeof vi.fn>> = [];
     const registration = () => {
@@ -42,6 +43,7 @@ describe('skill headless facet', () => {
         return registration();
       },
       registerCommand: (registered: DoomHeadlessCommand) => {
+        commands.set(registered.name, registered);
         if (registered.name === 'skills') command = registered;
         return registration();
       },
@@ -63,6 +65,11 @@ describe('skill headless facet', () => {
     await command.execute('example', execution);
     expect(prompt).toHaveBeenCalledWith(expect.stringContaining('<skill name="example"'));
     expect(prompt).toHaveBeenCalledWith(expect.stringContaining('# Example skill'));
+    const namedSkill = commands.get('skill:example');
+    if (!namedSkill) throw new Error('Named skill command was not registered');
+    await namedSkill.execute('', execution);
+    await namedSkill.execute('extra context', execution);
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('extra context'));
 
     close();
     expect(disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);

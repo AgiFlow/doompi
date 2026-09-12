@@ -2,6 +2,14 @@
 
 This ledger records verified evidence and unresolved gates for [migrations.md](./migrations.md). Source presence is not runtime evidence. A gate is accepted only when the named command or scenario has passed and its result is retained.
 
+## Author and remote settings checkpoint (2026-09-12)
+
+- Verified: The Author headless prompt reader now locates `src/prompts/doompi-use-author/SKILL.md` from both source and the nested compiled module layout. The focused test passed. Uncached Author lint, typecheck, build, and test targets passed.
+- Verified: A fresh isolated backend on port 7467 and browser on port 7465 activated Author. The Author chip became active, a subsequent Profile dialog opened, and the backend logged no Author resource failure. The 7447 process was left running so its current session was not interrupted.
+- Verified: `GET /api/remote` returned 404 through the isolated web bridge. The browser now shows that error and a retry action instead of an endless Remote Control settings spinner.
+- Verified: Uncached web lint, typecheck, and build passed, and all 625 web tests passed. The aggregate web test target remains red because branch coverage is 78.6 percent against its 80 percent gate.
+- Open: The `/api/remote` control plane is absent from the current headless server. Remote settings, tunnel setup, pairing, and device controls remain unverified and unavailable in this isolated cutover. Author activation in the existing 7445 session still uses its previously mounted generation until that session can be replaced or hot-reloaded.
+
 ## Command selection checkpoint (2026-09-12)
 
 - Verified: The server wrapper no longer waits for an agent settlement frame after a handled slash command. The focused runtime test passed 13 assertions, including consecutive commands with and without telemetry. Uncached core lint, typecheck, and build passed.

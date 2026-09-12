@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 
 interface FakeWorker {
   postMessage: ReturnType<typeof vi.fn>;
@@ -36,6 +37,7 @@ describe('notification extension without an injected title controller', () => {
 
   it('animates the tab from an unreferenced worker thread', async () => {
     const harness = createPiHarness();
+    await installDoomCordisHost(harness.pi, { mode: 'composed', source: 'notification-worker-test-host' });
 
     await notificationExtension(harness.pi, { environment: {} });
     harness.handlers.get('agent_start')?.({ type: 'agent_start' }, harness.context);

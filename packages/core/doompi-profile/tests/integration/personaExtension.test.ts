@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 import { personaExtension } from '../../src/adapters/pi/persona.ts';
@@ -36,6 +36,7 @@ function harness(failPersonaRegistration = false) {
       handlers.set(event, handler);
     },
   } as unknown as ExtensionAPI;
+  void installDoomCordisHost(pi, { mode: 'composed', source: 'persona-test-host' });
   return { handlers, pi };
 }
 

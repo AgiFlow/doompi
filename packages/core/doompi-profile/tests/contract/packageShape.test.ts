@@ -92,6 +92,7 @@ describe('doompi-profile package contract', () => {
       pluginId: 'profile',
       channels: [],
       client: './src/exports/webClient.ts',
+      scopes: ['session'],
     });
     const client = await readFile(path.join(packageDirectory, 'src/exports/webClient.ts'), 'utf8');
     expect(client).toContain("export { webPlugin } from '../web/index.ts';");

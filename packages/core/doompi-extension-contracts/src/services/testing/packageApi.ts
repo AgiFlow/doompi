@@ -5,6 +5,7 @@ import {
   DOOM_API_ROUTE_PREFIX,
   type DoomApiScope,
 } from '../../schemas/packageApi.ts';
+import type { DoomDirectEventBus } from '../../schemas/hubChannel.ts';
 
 /**
  * A package's HTTP surface, mounted the way a host mounts it.
@@ -24,6 +25,7 @@ export interface MountPackageApiOptions {
   scope?: DoomApiScope;
   sessionId?: string;
   cwd?: string;
+  directEvents?: DoomDirectEventBus;
 }
 
 export interface MountedPackageApi {
@@ -56,6 +58,7 @@ export function mountPackageApi(api: DoomApi, options: MountPackageApiOptions = 
     // A session-scoped host knows both; a hub-scoped one knows neither, and an
     // API that reads them anyway should see the same undefined it would there.
     ...(scope === 'session' ? { sessionId: options.sessionId ?? 'test-session', cwd: options.cwd ?? DEFAULT_CWD } : {}),
+    ...(options.directEvents ? { directEvents: options.directEvents } : {}),
     onNotice: (message) => notices.push(message),
   };
   const handler: DoomApiHandler = api.start(context);

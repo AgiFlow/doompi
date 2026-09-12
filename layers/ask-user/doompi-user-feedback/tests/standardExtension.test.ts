@@ -1,4 +1,4 @@
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, type MinorModeRecord } from '@agimon-ai/doompi-extension-contracts/mode';
 import {
   DOOM_NARRATION_SERVICE,
@@ -89,6 +89,7 @@ function createHarness(options: HarnessOptions = {}) {
       handlers.set(event, registered);
     },
   } as unknown as ExtensionAPI;
+  void installDoomCordisHost(pi, { mode: 'composed', source: 'user-feedback-test-host' });
   const dispatch = async (event: string, activeContext: ExtensionContext): Promise<void> => {
     for (const handler of handlers.get(event) ?? []) await handler({}, activeContext);
   };
@@ -418,9 +419,7 @@ describe('standard User Feedback extension', () => {
     await expect(userFeedbackExtension(harness.pi)).rejects.toThrow('tool registration failed');
 
     expect(shutdown).toHaveBeenCalledOnce();
-    // The standalone host's fenced shutdown listener remains in Pi's table;
-    // the failed feature itself never installs a shutdown listener.
-    expect(harness.handlers.get('session_shutdown')).toHaveLength(1);
+    expect(harness.handlers.get('session_shutdown')).toBeUndefined();
     await expect(harness.dispatch('session_shutdown', context('failed-session'))).resolves.toBeUndefined();
   });
 });

@@ -5,6 +5,7 @@ import {
 import type { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 import { api } from '../../../src/adapters/authorApi.ts';
+import { readAuthorPrompt } from '../../../src/adapters/headless/facet.ts';
 import { authorServerFacet } from '../../../src/adapters/server/facet.ts';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
@@ -52,5 +53,19 @@ describe('authorServerFacet', () => {
     const harness = hostContext('global');
     expect(typeof authorServerFacet.apply(harness.context)).toBe('function');
     expect(harness.registered).toEqual([]);
+  });
+});
+
+describe('Author prompt resource', () => {
+  it('reads the published prompt from source and nested compiled module locations', async () => {
+    const source = new URL('../../../src/adapters/headless/facet.ts', import.meta.url);
+    const compiled = new URL(
+      '../../../dist/packages/minor/doompi-author/src/adapters/headless/facet.mjs',
+      import.meta.url,
+    );
+    const expected = await readAuthorPrompt(source);
+
+    expect(expected).toContain('name: doompi-use-author');
+    await expect(readAuthorPrompt(compiled)).resolves.toBe(expected);
   });
 });

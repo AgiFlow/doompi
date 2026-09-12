@@ -148,6 +148,8 @@ export interface DoomApiContext {
   sessionService?: DoomHubSessionService;
   /** Same-process events shared by session APIs and hub channels. */
   directEvents?: DoomDirectEventBus;
+  /** Machine-owned Remote Control service, mounted only by the global core facet. */
+  remoteControl?: { fetch(request: Request): Promise<Response> };
   onNotice(message: string): void;
 }
 

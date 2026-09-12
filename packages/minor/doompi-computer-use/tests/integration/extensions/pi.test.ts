@@ -22,6 +22,7 @@ describe('the standard Pi entry contract', () => {
 describe('doompi-computer-use Pi extension', () => {
   it('keeps its registered tools off the surface until the grant is active', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     const setActiveTools = vi.spyOn(host.pi, 'setActiveTools');
     await activateComputerUseExtension(host.pi);
     expect(host.tools.map((tool) => tool.name)).toEqual(expect.arrayContaining([...COMPUTER_USE_TOOL_NAMES]));
@@ -33,6 +34,7 @@ describe('doompi-computer-use Pi extension', () => {
 
   it('injects its service into the standalone command', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     const service: ComputerUseExtensionService = {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
@@ -45,6 +47,7 @@ describe('doompi-computer-use Pi extension', () => {
 
   it('exposes tools and guidance only while the session grant is active', async () => {
     const host = createPiTestHost({ builtinTools: ['read'] });
+    await host.cordis();
     let phase: 'active' | 'inactive' | 'awaiting_confirmation' = 'inactive';
     let globallyEnabled = true;
     const client: ComputerUseSessionClient = {

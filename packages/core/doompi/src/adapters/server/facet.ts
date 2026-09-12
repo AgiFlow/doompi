@@ -21,6 +21,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import { api } from '../contextApi.ts';
 import { sessionFilesApi } from './sessionFilesApi.ts';
 import { machineApi } from './machineApi.ts';
+import { remoteApi } from './remote/remoteApi.ts';
 import {
   executeMinorModeCommand,
   MINOR_MODE_COMMAND,
@@ -63,7 +64,11 @@ export const doompiServerFacet: DoomServerFacet = {
     const host = requireDoomServerHost(context);
     if (host.scope === 'global') {
       const registration = host.registerApi(machineApi);
-      return () => registration.dispose();
+      const remoteRegistration = host.context.remoteControl ? host.registerApi(remoteApi) : undefined;
+      return () => {
+        remoteRegistration?.dispose();
+        registration.dispose();
+      };
     }
     const headless = host.scope === 'session' ? readDoomHeadlessHost(context) : undefined;
     if (host.scope !== 'session') return undefined;

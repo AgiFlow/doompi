@@ -9,6 +9,10 @@ import {
   type DoomHeadlessResource,
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-extension-contracts/headless';
+import {
+  DOOM_SERVER_HOST_SERVICE,
+  type DoomServerHostService,
+} from '@agimon-ai/doompi-extension-contracts/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 import { workflowHeadlessFacet } from '../../../src/adapters/headless/facet.ts';
@@ -113,8 +117,12 @@ function fixture() {
       return registration;
     },
   } as unknown as DoomHeadlessHostService;
+  const serverHost = {
+    context: { directEvents: { publish: vi.fn() } },
+  } as unknown as DoomServerHostService;
   const context = {
-    get: (name: string) => (name === DOOM_HEADLESS_HOST_SERVICE ? host : undefined),
+    get: (name: string) =>
+      name === DOOM_HEADLESS_HOST_SERVICE ? host : name === DOOM_SERVER_HOST_SERVICE ? serverHost : undefined,
   } as unknown as Context;
   const close = workflowHeadlessFacet.apply(context);
   return { execution, modes, activities, tools, resources, commands, hooks, publish, modeDispose, registration, close };

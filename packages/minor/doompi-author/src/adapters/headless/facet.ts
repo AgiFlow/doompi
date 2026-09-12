@@ -4,7 +4,10 @@ import {
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-extension-contracts/headless';
 import type { Context } from '@deepseek-ai/cordis';
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createAuthorCatalog } from '../pi/authorBridgeClient.ts';
 import { DefaultAuthorExtensionService } from '../../services/extensionService.ts';
 import {
@@ -41,8 +44,15 @@ function failure(error: unknown): DoomHeadlessToolResult {
   };
 }
 
-async function promptResource(): Promise<string> {
-  return readFile(new URL('../../prompts/doompi-use-author/SKILL.md', import.meta.url), 'utf8');
+export async function readAuthorPrompt(moduleUrl: string | URL = import.meta.url): Promise<string> {
+  let directory = path.dirname(fileURLToPath(moduleUrl));
+  for (;;) {
+    const prompt = path.join(directory, 'src/prompts/doompi-use-author/SKILL.md');
+    if (existsSync(prompt)) return readFile(prompt, 'utf8');
+    const parent = path.dirname(directory);
+    if (parent === directory) throw new Error('Could not locate the Author prompt resource.');
+    directory = parent;
+  }
 }
 
 export const authorHeadlessFacet: HeadlessFacet = {
@@ -120,7 +130,7 @@ export const authorHeadlessFacet: HeadlessFacet = {
         when: { minorMode: 'author' },
         name: 'doompi-use-author',
         kind: 'skill',
-        read: () => promptResource(),
+        read: () => readAuthorPrompt(),
       }),
       host.registerTool({
         when: { minorMode: 'author' },

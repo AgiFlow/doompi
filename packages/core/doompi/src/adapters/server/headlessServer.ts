@@ -197,6 +197,26 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       json(response, 401, { error: 'Unauthorized.' });
       return;
     }
+    if (url.pathname === '/api/remote' || url.pathname.startsWith('/api/remote/')) {
+      const headers = new Headers();
+      for (const [name, value] of Object.entries(request.headers)) {
+        if (value !== undefined && name !== 'authorization' && name !== 'x-doompi-token')
+          headers.set(name, Array.isArray(value) ? value.join(', ') : value);
+      }
+      const result = await options.headlessHub.requestApi(
+        { scope: 'global' },
+        'remote',
+        new Request(`http://doompi.local${url.pathname.slice('/api/remote'.length)}${url.search}`, {
+          method: request.method,
+          headers,
+          ...(request.method === 'GET' || request.method === 'HEAD'
+            ? {}
+            : { body: Buffer.from(await readBody(request)) }),
+        }),
+      );
+      await writeResponse(response, result);
+      return;
+    }
     if (url.pathname === '/api/telemetry/browser' && request.method === 'POST') {
       const body = JSON.parse(new TextDecoder().decode(await readBody(request))) as { v?: unknown; events?: unknown };
       if (body.v !== 1 || !Array.isArray(body.events) || body.events.length > 10) {

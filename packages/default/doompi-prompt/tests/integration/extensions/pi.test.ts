@@ -52,6 +52,7 @@ describe('doompi-prompt Pi extension', () => {
     // The picker itself is exercised in tests/integration/commands: the shared
     // host never resolves a custom component, so opening it here would hang.
     const host = createPiTestHost();
+    await host.cordis();
     const dependencies = memoryDependencies();
 
     await activatePromptExtension(host.pi, dependencies);
@@ -63,6 +64,7 @@ describe('doompi-prompt Pi extension', () => {
 
   it('ignores input an extension injected', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     const dependencies = memoryDependencies();
 
     await activatePromptExtension(host.pi, dependencies);
@@ -75,6 +77,7 @@ describe('doompi-prompt Pi extension', () => {
   it('says nothing where there is no UI to say it in', async () => {
     // The cockpit and the RPC runtime both load extensions with no terminal.
     const host = createPiTestHost({ hasUI: false, mode: 'rpc' });
+    await host.cordis();
 
     await activatePromptExtension(host.pi, memoryDependencies());
     await host.runCommand(COMMAND_NAME);
@@ -85,6 +88,7 @@ describe('doompi-prompt Pi extension', () => {
 
   it('follows optional Help provider replacement and withdraws its contribution on shutdown', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     await activatePromptExtension(host.pi, memoryDependencies());
     const connection = await connectDoomCordisHost(host.pi, 'doompi-prompt-help-test');
     const firstService = createDoomHelpService('doompi-prompt-help-first');

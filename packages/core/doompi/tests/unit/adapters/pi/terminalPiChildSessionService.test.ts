@@ -268,21 +268,18 @@ describe('terminal Pi child session provider', () => {
     expect(fs.readdirSync(root)).toEqual([]);
   });
 
-  it('delegates fresh and v4 restore sources to the shared headless provider', async () => {
+  it('delegates fresh and SQLite restore sources to the shared headless provider', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-provider-shared-'));
     tempRoots.push(root);
-    const v4Path = path.join(root, 'restore.jsonl');
-    fs.writeFileSync(
-      v4Path,
-      `${JSON.stringify({ kind: 'header', v: 4, id: 'restore', storageVersion: 1, createdAt: Date.now(), cwd: root })}\n`,
-    );
+    const v4Path = path.join(root, 'restore.sqlite');
+    fs.writeFileSync(v4Path, '');
     const runtimeFactory = vi.fn(async (options: DirectHarnessRuntimeOptions) => fakeRuntime(options));
     const service = createTerminalPiChildSessionService({ cwd: root, runtimeFactory });
 
     const fresh = await service.start(request({ kind: 'fresh' }, root));
     const restored = await service.start(request({ kind: 'v4-restore', sessionFile: v4Path }, root));
     expect(runtimeFactory.mock.calls[0]?.[0]).not.toHaveProperty('sessionPath');
-    expect(runtimeFactory.mock.calls[1]?.[0].sessionPath).toBe(fs.realpathSync(v4Path));
+    expect(runtimeFactory.mock.calls[1]?.[0].sessionPath).toBe(v4Path);
     await fresh.dispose();
     await restored.dispose();
     await service.close();

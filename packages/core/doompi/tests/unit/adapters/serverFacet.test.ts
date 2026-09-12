@@ -17,6 +17,7 @@ import {
 import type { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 import { api } from '../../../src/adapters/contextApi.ts';
+import { sessionFilesApi } from '../../../src/adapters/server/sessionFilesApi.ts';
 import { doompiServerFacet } from '../../../src/adapters/server/facet.ts';
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
@@ -48,13 +49,13 @@ describe('doompiServerFacet', () => {
   it('registers the exact context API in session scope', () => {
     const harness = hostContext('session');
     expect(typeof doompiServerFacet.apply(harness.context)).toBe('function');
-    expect(harness.registered).toEqual([api]);
+    expect(harness.registered).toEqual([api, sessionFilesApi]);
   });
 
   it('unregisters the API on disposal', () => {
     const harness = hostContext('session');
     doompiServerFacet.apply(harness.context)?.();
-    expect(harness.state.disposed).toBe(1);
+    expect(harness.state.disposed).toBe(2);
   });
 
   it('does nothing in workspace scope', () => {
@@ -143,7 +144,7 @@ describe('doompiServerFacet headless minor command', () => {
 
     const dispose = doompiServerFacet.apply(context);
     expect(command?.name).toBe('minor');
-    expect(registered).toEqual([api]);
+    expect(registered).toEqual([api, sessionFilesApi]);
 
     const execution = {
       client: { request, notify, setStatus: vi.fn() },
@@ -160,6 +161,6 @@ describe('doompiServerFacet headless minor command', () => {
 
     dispose?.();
     expect(commandDispose).toHaveBeenCalledOnce();
-    expect(apiDispose).toHaveBeenCalledOnce();
+    expect(apiDispose).toHaveBeenCalledTimes(2);
   });
 });

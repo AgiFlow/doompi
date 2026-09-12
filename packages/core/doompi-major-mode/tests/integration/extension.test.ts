@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import {
   createDoomHelpService,
   DOOM_HELP_SERVICE,
@@ -59,6 +59,7 @@ function harness() {
     },
     sendUserMessage: vi.fn(),
   } as unknown as ExtensionAPI;
+  void installDoomCordisHost(pi, { mode: 'composed', source: 'major-mode-test-host' });
   return { pi, handlers, registerCommand };
 }
 

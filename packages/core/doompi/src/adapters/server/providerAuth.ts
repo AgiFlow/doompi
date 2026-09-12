@@ -70,12 +70,16 @@ function describe(error: unknown): string {
  * sessions, just not the providers page.
  */
 async function loadPiRuntime(options: ProviderAuthOptions): Promise<AuthRuntime> {
-  const { ModelRuntime } = await import('@earendil-works/pi-coding-agent');
+  const { ModelRuntime } = await importPiRuntime('@earendil-works/pi-coding-agent');
   const directory = piAgentDirectory(options.environment, options.homeDirectory);
   return ModelRuntime.create({
     authPath: path.join(directory, 'auth.json'),
     modelsPath: path.join(directory, 'models.json'),
   });
+}
+
+function importPiRuntime(specifier: string) {
+  return import(specifier) as Promise<typeof import('@earendil-works/pi-coding-agent')>;
 }
 
 /** The methods a page can start, in the order the TUI's selector lists them. */

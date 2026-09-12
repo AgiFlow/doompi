@@ -33,4 +33,30 @@ describe('the Team session catalog API', () => {
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: 'bad projected agent' });
   });
+
+  it('rejects unsupported methods and paths without reading the catalog', async () => {
+    const read = vi.fn(() => ({ agents: [], models: [] }));
+    const api = createTeamCatalogApi({ cwd: '/workspace/project', read });
+    for (const request of [
+      new Request('http://session/other'),
+      new Request('http://session/catalog', { method: 'POST' }),
+    ]) {
+      const response = await api.fetch(request);
+      expect(response.status).toBe(404);
+      await expect(response.json()).resolves.toEqual({ error: 'Not found.' });
+    }
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('reports non-Error failures', async () => {
+    const api = createTeamCatalogApi({
+      cwd: '/workspace/project',
+      read: () => {
+        throw 'catalog unavailable';
+      },
+    });
+    const response = await api.fetch(new Request('http://session/catalog'));
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: 'catalog unavailable' });
+  });
 });

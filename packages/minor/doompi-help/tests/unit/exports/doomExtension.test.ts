@@ -1,4 +1,4 @@
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { readDoomHelpService, type DoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-extension-contracts/mode';
 import { DOOM_UI_HUB_SERVICE } from '@agimon-ai/doompi-extension-contracts/ui-hub';
@@ -83,6 +83,7 @@ function extensionFixture(): ExtensionFixture {
       commands.set(name, definition);
     },
   };
+  void installDoomCordisHost(pi as unknown as ExtensionAPI, { mode: 'composed', source: 'help-test-host' });
   return { commands, pi: pi as unknown as ExtensionAPI, handlers };
 }
 

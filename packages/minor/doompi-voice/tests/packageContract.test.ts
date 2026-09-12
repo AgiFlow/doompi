@@ -2,7 +2,7 @@ import { access, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { api } from '../src/adapters/voiceSessionApi.ts';
 import { MANUAL_TRANSCRIPTION_DURATION_HEADER, MANUAL_TRANSCRIPTION_ROUTE } from '../src/types/manualTranscription.ts';
 
@@ -203,7 +203,16 @@ describe('doom voice package boundary', () => {
   });
 
   it('mounts the manual route at the API path declared by the package', async () => {
-    const mounted = mountPackageApi(api, { scope: 'session', sessionId: 's1', cwd: packageDirectory });
+    const mounted = mountPackageApi(api, {
+      scope: 'session',
+      sessionId: 's1',
+      cwd: packageDirectory,
+      directEvents: {
+        publish: vi.fn(),
+        subscribe: vi.fn(() => () => undefined),
+        close: vi.fn(),
+      },
+    });
     try {
       const response = await mounted.fetch(`/api/plugin/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=s1`, {
         method: 'POST',

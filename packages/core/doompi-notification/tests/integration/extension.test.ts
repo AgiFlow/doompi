@@ -2,7 +2,11 @@ import {
   DOOM_ASK_USER_BLOCKED_EVENT,
   DOOM_ASK_USER_PROMPT_EVENT,
 } from '@agimon-ai/doompi-extension-contracts/ask-user';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import {
+  connectDoomCordisHost,
+  DOOM_CORDIS_HOST_QUERY_CHANNEL,
+  installDoomCordisHost,
+} from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import {
   DOOM_NOTIFICATION_ENTRY_TYPE,
   readDoomNotificationService,
@@ -39,6 +43,7 @@ describe('notification extension', () => {
   beforeEach(async () => {
     vi.useFakeTimers();
     harness = createPiHarness();
+    await installDoomCordisHost(harness.pi, { mode: 'composed', source: 'notification-test-host' });
     cordis = await startExtension(harness);
   });
 
@@ -272,6 +277,7 @@ describe('notification extension', () => {
       const originalEditor = harness.ui.editor;
       const originalNotify = harness.ui.notify;
       const newer = createPiHarness();
+      await installDoomCordisHost(newer.pi, { mode: 'composed', source: 'notification-newer-test-host' });
       const newerContext = { ...newer.context, ui: harness.ui } as ExtensionContext;
       await startExtension(newer);
 
@@ -347,7 +353,10 @@ describe('notification extension', () => {
     await shutdown(harness);
     await shutdown(harness);
 
-    for (const disposer of harness.busDisposers) expect(disposer).toHaveBeenCalledOnce();
+    for (const [index, disposer] of harness.busDisposers.entries()) {
+      const channel = vi.mocked(harness.pi.events.on).mock.calls[index]?.[0];
+      if (channel !== DOOM_CORDIS_HOST_QUERY_CHANNEL) expect(disposer).toHaveBeenCalledOnce();
+    }
 
     harness.setTitle.mockClear();
     cordis.emit(DOOM_ASK_USER_PROMPT_EVENT, {
@@ -387,6 +396,7 @@ describe('notification extension in a detached subagent', () => {
 describe('notification extension when registration fails', () => {
   it('disposes the fiber and reports the failure rather than half-registering', async () => {
     const harness = createPiHarness();
+    await installDoomCordisHost(harness.pi, { mode: 'composed', source: 'notification-registration-test-host' });
     vi.mocked(harness.pi.on).mockImplementation(() => {
       throw new Error('registration boom');
     });
@@ -397,6 +407,9 @@ describe('notification extension when registration fails', () => {
         environment: {},
       }),
     ).rejects.toThrow('registration boom');
-    for (const disposer of harness.busDisposers) expect(disposer).toHaveBeenCalledOnce();
+    for (const [index, disposer] of harness.busDisposers.entries()) {
+      const channel = vi.mocked(harness.pi.events.on).mock.calls[index]?.[0];
+      if (channel !== DOOM_CORDIS_HOST_QUERY_CHANNEL) expect(disposer).toHaveBeenCalledOnce();
+    }
   });
 });

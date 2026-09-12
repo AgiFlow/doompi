@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
 import { readDoomSkillSourcesService } from '@agimon-ai/doompi-extension-contracts/skills';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
@@ -81,6 +81,7 @@ async function register() {
     }),
     registerCommand: vi.fn((name: string, options: unknown) => commands.set(name, options)),
   } as unknown as ExtensionAPI;
+  await installDoomCordisHost(pi, { mode: 'composed', source: 'skill-readiness-test-host' });
   await skillsExtension(pi);
   const ui = { notify: vi.fn() };
   const ctx = {

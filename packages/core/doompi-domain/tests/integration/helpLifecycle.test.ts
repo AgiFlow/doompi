@@ -1,4 +1,4 @@
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import {
   DOOM_HELP_SERVICE,
   type DoomHelpContribution,
@@ -45,6 +45,7 @@ describe('Domain Help contribution lifecycle', () => {
 
   it('registers reactively, follows provider replacement, and disposes each handle', async () => {
     const { pi, handlers } = piFixture();
+    await installDoomCordisHost(pi, { mode: 'composed', source: 'domain-help-test-host' });
     const telemetry = {
       recordError: vi.fn(async () => undefined),
       recordEvent: vi.fn(async () => undefined),

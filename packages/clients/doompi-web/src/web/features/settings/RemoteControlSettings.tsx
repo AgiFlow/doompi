@@ -1,4 +1,4 @@
-import { Spinner } from '@agimon-ai/doompi-web-components';
+import { Button, Spinner } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect } from 'react';
 import { refreshRemoteState, remoteAccessStore } from '../../stores/remoteAccessStore.ts';
@@ -20,7 +20,14 @@ export function RemoteControlSettings() {
         detail="configure how remote devices reach this cockpit. a named tunnel is saved on this machine and reused whenever remote access starts."
       />
 
-      {state.view === undefined ? (
+      {state.view === undefined && state.error ? (
+        <div role="alert" className="flex items-center gap-3 text-sm text-doom-red">
+          <span>{state.error}</span>
+          <Button variant="outline" size="xs" onClick={() => void refreshRemoteState()}>
+            retry
+          </Button>
+        </div>
+      ) : state.view === undefined ? (
         <p className="flex items-center gap-2 text-sm text-doom-faint">
           <Spinner label="reading remote control settings" />
           reading remote control settings…

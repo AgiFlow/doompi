@@ -1,4 +1,4 @@
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
 import type { LeaderBinding } from '@agimon-ai/doompi-extension-contracts/leader';
 import {
   DOOM_NOTIFICATION_SERVICE,
@@ -81,6 +81,7 @@ async function registerExtension(
     }),
   } as unknown as ExtensionAPI;
   capturePi?.(pi);
+  await installDoomCordisHost(pi, { mode: 'composed', source: 'ui-test-host' });
   await connectDoomCordisHost(pi, '@example/ui-test');
   await doomPiUiExtension(pi, telemetry);
   return handlers;
