@@ -3,7 +3,6 @@ import type {
   DoomChildSessionEvent,
   DoomChildSessionHandle,
   DoomChildSessionRequest,
-  DoomChildSessionRuntime,
   DoomChildSessionRuntimeFactory,
   DoomChildSessionService,
   DoomChildSessionState,
@@ -55,7 +54,10 @@ export function createDoomChildSessionService(
           const handle = await createHandle(
             async (ownedRequest, ownedSignal) => {
               const runtime = await factory(ownedRequest, ownedSignal);
-              if (runtime.readTranscriptPage) transcriptReaders.set(request.runId, runtime.readTranscriptPage);
+              if (runtime.readTranscriptPage)
+                transcriptReaders.set(request.runId, (pageRequest, pageSignal) =>
+                  runtime.readTranscriptPage!(pageRequest, pageSignal),
+                );
               return runtime;
             },
             dependencies,

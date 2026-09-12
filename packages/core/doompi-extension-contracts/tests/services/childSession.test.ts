@@ -100,12 +100,12 @@ describe('createDoomChildSessionService', () => {
     const handle = await sessions.start(request());
     await vi.waitFor(() => expect(handle.state()).toBe('completed'));
 
-    await expect(sessions.readTranscriptPage?.('run-1', { limit: 10 })).resolves.toMatchObject({ entries: [] });
+    await expect(sessions.readTranscriptPage!('run-1', { limit: 10 })).resolves.toMatchObject({ entries: [] });
     expect(readTranscriptPage).toHaveBeenCalledWith({ limit: 10 }, undefined);
     await expect(sessions.start(request())).rejects.toThrow("Child run 'run-1' already exists.");
 
     await sessions.close();
-    await expect(sessions.readTranscriptPage?.('run-1', {})).rejects.toThrow('closed');
+    await expect(sessions.readTranscriptPage!('run-1', {})).rejects.toThrow('closed');
   });
 
   it('publishes prompt failure and disposes the runtime', async () => {

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
+import type { TranscriptPage } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
 import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
@@ -380,7 +381,7 @@ describe('SubagentFleetComponent render and interaction', () => {
 
   it('renders a native session page instead of treating it as a Team artifact', async () => {
     tracker.jobs = [job('run-a', { sessionFile: '/sessions/run-a.sqlite' })];
-    const readTranscriptPage = vi.fn(async () => ({
+    const page: TranscriptPage = {
       entries: [
         {
           type: 'message',
@@ -411,7 +412,8 @@ describe('SubagentFleetComponent render and interaction', () => {
       revision: 0,
       context: [],
       drafts: [],
-    }));
+    };
+    const readTranscriptPage = vi.fn(async () => page);
     const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {}, {
       readTranscriptPage,
     });

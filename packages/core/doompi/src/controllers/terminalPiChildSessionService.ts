@@ -288,7 +288,11 @@ export function createTerminalPiChildSessionService(
         runtime = await runtimeFactory(runtimeOptions);
         await installIntercom(runtime, request.intercom, (runtimeOptions.tools ?? []) as DirectHarnessTool[]);
         const file = (runtime.session.metadata as unknown as { path?: unknown }).path;
-        return childRuntime(runtime, request.intercom, typeof file === 'string' ? registerNativeChild(file, runtime) : undefined);
+        return childRuntime(
+          runtime,
+          request.intercom,
+          typeof file === 'string' ? registerNativeChild(file, runtime) : undefined,
+        );
       } catch (error) {
         let failure: unknown = error;
         try {
@@ -314,9 +318,10 @@ export function createTerminalPiChildSessionService(
     },
     get: (runId) => owners.get(runId)?.get(runId) ?? terminal.get(runId) ?? headless.get(runId),
     readTranscriptPage(runId, request, signal) {
-      const reader = owners.get(runId)?.readTranscriptPage;
-      if (!reader) return Promise.reject(new Error(`Child run '${runId}' has no readable transcript.`));
-      return reader.call(owners.get(runId), runId, request, signal);
+      const owner = owners.get(runId);
+      if (!owner?.readTranscriptPage)
+        return Promise.reject(new Error(`Child run '${runId}' has no readable transcript.`));
+      return owner.readTranscriptPage(runId, request, signal);
     },
     close: async () => {
       const failures = await Promise.allSettled([terminal.close(), headless.close()]);

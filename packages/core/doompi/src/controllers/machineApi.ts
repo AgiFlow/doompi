@@ -27,7 +27,7 @@ export const machineApi: DoomApi = {
   start(context) {
     if (context.scope !== 'global') throw new Error('Provider authentication requires the global mount.');
     const auth = createProviderAuth({
-      onNotice: context.onNotice,
+      onNotice: (message) => context.onNotice(message),
       runtime: async () => {
         const { ModelRuntime } = await loadHostPiRuntime();
         const directory = piAgentDirectory(context.environment, context.homeDirectory);
