@@ -8,6 +8,7 @@ export default defineConfig({
     'ask-user': 'src/exports/askUser.ts',
     'author-tools': 'src/exports/authorTools.ts',
     'background-work': 'src/exports/backgroundWork.ts',
+    'bundle-asset-policy': 'src/exports/bundleAssetPolicy.ts',
     'child-process': 'src/exports/childProcess.ts',
     'cockpit-container': 'src/exports/cockpitContainer.ts',
     config: 'src/exports/config.ts',
