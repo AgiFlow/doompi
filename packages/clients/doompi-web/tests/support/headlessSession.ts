@@ -182,7 +182,6 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
 
   const flushReconnectFrames = (): void => {
     if (!reconnecting) return;
-    console.error('[debug-reconnect] flush', reconnectFrames.length, listeners.size);
     reconnecting = false;
     for (const frame of reconnectFrames.splice(0)) session.emit(frame);
   };
@@ -196,7 +195,6 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
   };
 
   const readEntries = async (): Promise<{ entries: unknown[]; leafId: string | null }> => {
-    flushReconnectFrames();
     record({ type: 'get_entries' });
     const tip = entries.at(-1);
     const leafId = typeof tip === 'object' && tip !== null && 'id' in tip && typeof tip.id === 'string' ? tip.id : null;
@@ -221,7 +219,6 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
         type?: string;
         customType?: string;
       }) => {
-        flushReconnectFrames();
         record({ type: 'get_entries' });
         const source = (usageEntries.length > 0 ? usageEntries : entries).filter(
           (entry): entry is Frame => typeof entry === 'object' && entry !== null,
@@ -245,6 +242,8 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     storageQuarantined: false,
     onPresentationFrame(listener: (frame: Frame) => void) {
       listeners.add(listener);
+      // Reads from the disconnected server may still be finishing. A new
+      // presentation subscriber is the first safe receiver for queued frames.
       if (reconnecting) queueMicrotask(flushReconnectFrames);
       return () => listeners.delete(listener);
     },
@@ -257,7 +256,6 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     readState: async () => {
       record({ type: 'get_state' });
       const result = (await answer('get_state', state)) as Frame;
-      flushReconnectFrames();
       return result;
     },
     readEntries,
@@ -579,6 +577,9 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     },
     dropClient() {
       reconnecting = true;
+      // The closing server can leave its presentation subscriber registered until
+      // disposal completes. It must not consume frames queued for the replacement.
+      listeners.clear();
       restarting ??= options.restartHeadless().finally(() => {
         restarting = undefined;
       });

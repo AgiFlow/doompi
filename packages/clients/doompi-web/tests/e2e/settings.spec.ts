@@ -183,9 +183,12 @@ test('reads and writes the image limits on the images page', async ({ page, cock
 
   // A typed cap saves on its own button, so the field is dirty until then.
   await page.getByTestId('image-max-dimension').fill('1024');
+  const saveRequest = page.waitForRequest(
+    (request) => request.method() === 'PUT' && request.url().endsWith('/api/global/plugin/config/images'),
+  );
   await page.getByTestId('image-max-dimension-save').click();
+  expect((await saveRequest).postDataJSON()).toEqual({ maxDimension: 1024 });
   await expect(page.getByTestId('image-max-dimension-save')).toBeDisabled();
-  expect(images.maxDimension).toBe(1024);
 
   // The toggle applies at once, and turning it off locks the cap with it.
   await page.getByTestId('image-auto-resize').click();

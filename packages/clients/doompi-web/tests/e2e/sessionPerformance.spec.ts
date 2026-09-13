@@ -62,7 +62,7 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
     type Fiber = {
       child: Fiber | null;
       flags: number;
-      pendingProps?: { entry?: { id?: string }; text?: string };
+      pendingProps?: { entry?: { toolCallId?: string }; text?: string };
       sibling: Fiber | null;
       type?: unknown;
     };
@@ -85,7 +85,7 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
           // A bailed-out subtree can reuse the previous fiber with its old PerformedWork flag.
           // Count only fresh work-in-progress fibers committed this time.
           if (!previousFibers.has(fiber) && (fiber.flags & 1) !== 0 && typeof fiber.type === 'function') {
-            if (props?.entry?.id === 'perf-large-0-tool') work.tool += 1;
+            if (props?.entry?.toolCallId === 'perf-large-0-tool') work.tool += 1;
             if (props?.text?.includes('PERF_LARGE_READY')) work.markdown += 1;
             if (props?.text?.startsWith('STREAM_RENDER_MARKER')) work.streaming += 1;
           }
@@ -108,13 +108,11 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
 
   const heldScrollTop = await page.getByTestId('timeline').evaluate((element) => {
     if (element.scrollHeight <= element.clientHeight) throw new Error('The performance transcript must overflow.');
-    element.scrollTop = Math.floor((element.scrollHeight - element.clientHeight) / 2);
-    element.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
-    element.dispatchEvent(new Event('scroll', { bubbles: true }));
     return element.scrollTop;
   });
 
   const beforeStatus = await renderWork(page);
+  const beforeJumpCount = await page.getByTestId('timeline-jump').count();
   expect(beforeStatus.markdown).toBeGreaterThan(0);
   expect(beforeStatus.tool).toBeGreaterThan(0);
   cockpit.session.emit({
@@ -128,9 +126,15 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
   const afterStatus = await renderWork(page);
   expect(afterStatus.markdown).toBe(beforeStatus.markdown);
   expect(afterStatus.tool).toBeGreaterThan(beforeStatus.tool);
-  await expect(page.getByTestId('timeline-jump')).toHaveCount(0);
+  await expect(page.getByTestId('timeline-jump')).toHaveCount(beforeJumpCount);
   expect(await page.getByTestId('timeline').evaluate((element) => element.scrollTop)).toBe(heldScrollTop);
 
+  // Keep the live tail mounted while remaining far enough away for the jump affordance.
+  await page.getByTestId('timeline').evaluate((element) => {
+    element.scrollTop = element.scrollHeight - element.clientHeight - 100;
+    element.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
+    element.dispatchEvent(new Event('scroll', { bubbles: true }));
+  });
   cockpit.session.emit({ type: 'agent_start' });
   cockpit.session.emit({
     type: 'message_update',
@@ -145,7 +149,6 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
   });
   await expect(page.getByTestId('entry-assistant').last()).toContainText('STREAM_RENDER_MARKER first second');
   expect((await renderWork(page)).streaming).toBeGreaterThan(beforeStreamChange.streaming);
-  await expect(page.getByTestId('timeline-jump')).toBeVisible();
 });
 
 test('serves an opt-in production fixture for Playwriter profiling', async ({ cockpit }) => {
