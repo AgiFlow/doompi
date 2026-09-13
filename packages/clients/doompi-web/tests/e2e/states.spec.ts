@@ -71,23 +71,16 @@ test('places one-shot voice transcription into the browser composer', async ({ p
   await expect(page.getByTestId('composer-input')).toHaveValue('transcribed on the agent host');
 });
 
-test('explains a refused attach instead of sitting blank', async ({ page, cockpit }) => {
-  // Hold the session from a second client so the cockpit's attach is refused.
+test('stays usable while another authenticated client is attached', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
 
-  const intruder = await cockpit.session.holdFromAnotherClient();
+  const release = await cockpit.session.connectAnotherClient();
 
-  await expect(page.getByTestId('refused-card')).toBeVisible();
-  await expect(page.getByTestId('refused-title')).toHaveText('session already attached');
-  await expect(page.getByTestId('refused-card')).toContainText('one client at a time');
-  // The rail card carries the same story.
-  await expect(page.getByTestId('session-status')).toHaveText('another cockpit holds this session');
+  await expect(page.getByTestId('refused-card')).toBeHidden();
+  await expect(page.getByTestId('composer-input')).toBeEnabled();
 
-  await intruder();
-  // Recovery rides the hub's backoff, whose ceiling is 4s.
-  await expect(page.getByTestId('refused-card')).toBeHidden({ timeout: 15_000 });
-  await expect(page.getByTestId('composer-input')).toBeEnabled({ timeout: 15_000 });
+  await release();
 });
 
 test('answers a permission prompt from the keyboard', async ({ page, cockpit }) => {

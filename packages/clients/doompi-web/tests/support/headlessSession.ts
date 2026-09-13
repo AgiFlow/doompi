@@ -12,8 +12,14 @@ import {
   type HeadlessHubSession,
   type HeadlessSessionHost,
 } from '@agimon-ai/doompi-core/server';
-import { DOOM_COCKPIT_SERVER_ID, DoomSessionManagementService } from '@agimon-ai/doompi-core/session-protocol';
-import { Client, type ByteTransportFactory } from '@earendil-works/pi-client';
+import {
+  DOOM_COCKPIT_SERVER_ID,
+  DoomSessionManagementService,
+  DoomSessionService,
+} from '@agimon-ai/doompi-core/session-protocol';
+import { createRemoteServiceBinding } from '@earendil-works/chord';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { Client, createClientServiceTransport, type ByteTransportFactory } from '@earendil-works/pi-client';
 import WebSocket from 'ws';
 
 type Frame = Record<string, unknown>;
@@ -41,7 +47,7 @@ export interface HeadlessSession {
   waitForAttach(timeoutMs?: number): Promise<void>;
   waitForCommand(type: string, timeoutMs?: number): Promise<Frame>;
   dropClient(): void;
-  holdFromAnotherClient(): Promise<() => Promise<void>>;
+  connectAnotherClient(): Promise<() => Promise<void>>;
   close(): Promise<void>;
 }
 
@@ -164,13 +170,14 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       const waiter: PendingResult = { command, resolve, reject };
       const waiters = pending.get(command) ?? [];
       pending.set(command, [...waiters, waiter]);
+      const fallbackDelay = ['get_available_models', 'get_available_thinking_levels'].includes(command) ? 1_000 : 0;
       setTimeout(() => {
         const current = pending.get(command) ?? [];
         const index = current.indexOf(waiter);
         if (index >= 0) current.splice(index, 1);
         if (current.length === 0) pending.delete(command);
         resolve(defaultValue);
-      }, 0);
+      }, fallbackDelay);
     });
 
   const flushReconnectFrames = (): void => {
@@ -574,8 +581,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
         restarting = undefined;
       });
     },
-    async holdFromAnotherClient() {
-      await options.restartHeadless();
+    async connectAnotherClient() {
       const client = await Client.connect({
         serverId: DOOM_COCKPIT_SERVER_ID,
         transportFactory: websocketTransport(
@@ -586,7 +592,14 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
         { serverId: DOOM_COCKPIT_SERVER_ID },
         { serviceId: DoomSessionManagementService.id, member: 'attach', args: [id] },
       );
+      const binding = createRemoteServiceBinding({
+        services: [DoomSessionService],
+        transport: createClientServiceTransport(client, () => client.attachment),
+      });
+      binding.use(DoomSessionService);
+      await binding.ready(BACKGROUND_CONTEXT);
       return async () => {
+        await binding.dispose(BACKGROUND_CONTEXT);
         await client.dispose();
       };
     },

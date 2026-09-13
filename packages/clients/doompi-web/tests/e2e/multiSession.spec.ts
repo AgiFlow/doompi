@@ -116,22 +116,20 @@ test('keeps unfinished composer input scoped to each session', async ({ page, co
   await expect(input).toHaveValue('draft for session two');
 });
 
-test('keeps a refusal scoped to the session it hits', async ({ page, cockpit }) => {
+test('keeps both sessions usable while another authenticated client is attached', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
   await expect(page.getByTestId('session-card-s1')).toHaveAttribute('data-active', 'true');
 
-  const release = await cockpit.sessions[1].holdFromAnotherClient();
+  const release = await cockpit.sessions[1].connectAnotherClient();
 
-  // The rail reports it; the overlay stays away while another session is focused.
-  const status = page.getByTestId('session-card-s2').getByTestId('session-status');
-  await expect(status).toHaveText('another cockpit holds this session');
   await expect(page.getByTestId('refused-card')).toBeHidden();
+  await expect(page.getByTestId('composer-input')).toBeEnabled();
 
   await page.getByTestId('session-card-s2').click();
-  await expect(page.getByTestId('refused-card')).toBeVisible();
+  await cockpit.sessions[1].waitForAttach();
+  await expect(page.getByTestId('refused-card')).toBeHidden();
+  await expect(page.getByTestId('composer-input')).toBeEnabled();
 
   await release();
-  // Recovery rides the hub's backoff, whose ceiling is 4s.
-  await expect(page.getByTestId('refused-card')).toBeHidden({ timeout: 15_000 });
-  await expect(page.getByTestId('composer-input')).toBeEnabled({ timeout: 15_000 });
 });

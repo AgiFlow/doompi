@@ -362,14 +362,10 @@ test('every migrated tool renders a plugin item, never the host fallback', async
       result: { content: [{ type: 'text', text: `${entry.tool} output` }], details: entry.details },
       isError: false,
     });
-  }
-
-  const items = page.getByTestId('entry-tool');
-  await expect(items).toHaveCount(EVERY_TOOL.length);
-  for (const [index, entry] of EVERY_TOOL.entries()) {
-    await expect(items.nth(index), entry.tool).toHaveAttribute('data-tool-name', entry.tool);
-    await expect(items.nth(index), entry.tool).toHaveAttribute('data-tool-renderer', 'plugin');
-    await expect(items.nth(index), entry.tool).toHaveAttribute('data-tool-state', 'ok');
+    const item = page.locator(`[data-testid="entry-tool"][data-tool-name="${entry.tool}"]`);
+    await expect(item, entry.tool).toHaveCount(1);
+    await expect(item, entry.tool).toHaveAttribute('data-tool-renderer', 'plugin');
+    await expect(item, entry.tool).toHaveAttribute('data-tool-state', 'ok');
   }
 });
 

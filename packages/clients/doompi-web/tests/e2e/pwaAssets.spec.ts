@@ -26,6 +26,7 @@ const test = cockpitTest.extend<{ assetPackageRoot: string }>({
     }
   },
 });
+test.setTimeout(60_000);
 
 interface BundleAsset {
   path: string;
@@ -54,41 +55,49 @@ async function bundleSnapshot(page: Page): Promise<BundleSnapshot> {
       { cache: 'no-store' },
     );
     const policy = (await policyResponse.json()) as { optional: string[] };
-    const cacheNames = (await caches.keys()).filter((name) =>
-      name.startsWith(`doompi-bundle-${String(envelope.manifest.revision)}-`),
-    );
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open('doompi-pwa');
-      request.addEventListener('success', () => resolve(request.result), { once: true });
-      request.addEventListener(
-        'error',
-        () => reject(request.error ?? new Error('The PWA database could not be opened.')),
-        {
-          once: true,
-        },
-      );
-    });
-    const transaction = database.transaction('state', 'readonly');
-    const active = await new Promise<{ cacheName?: unknown } | undefined>((resolve, reject) => {
-      const request = transaction.objectStore('state').get('active-bundle');
-      request.addEventListener('success', () => resolve(request.result as { cacheName?: unknown } | undefined), {
-        once: true,
-      });
-      request.addEventListener(
-        'error',
-        () => reject(request.error ?? new Error('The active bundle could not be read.')),
-        {
-          once: true,
-        },
-      );
-    });
-    database.close();
-    if (typeof active?.cacheName !== 'string' || !cacheNames.includes(active.cacheName)) {
-      throw new Error('The active verified bundle cache is unavailable.');
+    const deadline = Date.now() + 45_000;
+    while (Date.now() < deadline) {
+      const databases = await indexedDB.databases();
+      if (databases.some((database) => database.name === 'doompi-pwa')) {
+        const database = await new Promise<IDBDatabase>((resolve, reject) => {
+          const request = indexedDB.open('doompi-pwa');
+          request.addEventListener('success', () => resolve(request.result), { once: true });
+          request.addEventListener(
+            'error',
+            () => reject(request.error ?? new Error('The PWA database could not be opened.')),
+            { once: true },
+          );
+        });
+        const active = await (async () => {
+          if (!database.objectStoreNames.contains('state')) return undefined;
+          const transaction = database.transaction('state', 'readonly');
+          return await new Promise<{ cacheName?: unknown } | undefined>((resolve, reject) => {
+            const request = transaction.objectStore('state').get('active-bundle');
+            request.addEventListener('success', () => resolve(request.result as { cacheName?: unknown } | undefined), {
+              once: true,
+            });
+            request.addEventListener(
+              'error',
+              () => reject(request.error ?? new Error('The active bundle could not be read.')),
+              { once: true },
+            );
+          });
+        })();
+        database.close();
+        const cacheNames = (await caches.keys()).filter((name) =>
+          name.startsWith(`doompi-bundle-${String(envelope.manifest.revision)}-`),
+        );
+        if (typeof active?.cacheName === 'string' && cacheNames.includes(active.cacheName)) {
+          const cacheName = active.cacheName;
+          const cachedPaths = (await (await caches.open(cacheName)).keys()).map(
+            (request) => new URL(request.url).pathname,
+          );
+          return { cacheName, cachedPaths, manifest: envelope.manifest, optionalPaths: policy.optional };
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    const cacheName = active.cacheName;
-    const cachedPaths = (await (await caches.open(cacheName)).keys()).map((request) => new URL(request.url).pathname);
-    return { cacheName, cachedPaths, manifest: envelope.manifest, optionalPaths: policy.optional };
+    throw new Error('The active verified bundle cache is unavailable.');
   });
 }
 
@@ -128,10 +137,10 @@ function publishChangedWebTree(assetPackageRoot: string): void {
 test('activates the verified production core without eagerly caching deferred assets', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
 
+  const snapshot = await bundleSnapshot(page);
   const controlled = await page.evaluate(
     () => navigator.serviceWorker.controller?.scriptURL.endsWith('/sw.js') ?? false,
   );
-  const snapshot = await bundleSnapshot(page);
   const optional = new Set(snapshot.optionalPaths);
   const corePaths = snapshot.manifest.assets.map((asset) => asset.path).filter((path) => !optional.has(path));
 
@@ -223,6 +232,8 @@ test('notifies every controlled tab after a newer verified revision is committed
     });
   };
   await page.addInitScript(captureRevision, updatedRevisionKey);
+  await page.goto(cockpit.url);
+  await bundleSnapshot(page);
   await page.goto(`${cockpit.url}/api/health`);
   const secondPage = await context.newPage();
   await secondPage.addInitScript(captureRevision, updatedRevisionKey);

@@ -39,7 +39,10 @@ function present(document: TaskDocument): WebTasksPayload {
     if (task.owner) view.owner = task.owner;
     if (task.updatedAt) view.updatedAt = task.updatedAt;
     if (task.delegation) {
-      view.delegation = { agent: task.delegation.agent, state: task.delegation.state };
+      view.delegation = {
+        ...(task.delegation.agent === undefined ? {} : { agent: task.delegation.agent }),
+        ...(task.delegation.state === undefined ? {} : { state: task.delegation.state }),
+      };
     }
     return [view];
   });

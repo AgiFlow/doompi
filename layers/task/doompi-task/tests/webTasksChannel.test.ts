@@ -94,10 +94,22 @@ describe('task graph hub channel', () => {
     expect(source.payloadFor(scopes[1]!)).toMatchObject({ rev: 7 });
 
     const secondUpdate = document(8, 'second updated');
+    secondUpdate.tasks[0]!.delegation = { requestId: 'request-1', agent: 'worker', state: 'running' };
     events.publish(TASKS_CHANNEL_TYPE, 's2', secondUpdate);
-    expect(published.at(-1)).toEqual({
+    expect(published.at(-1)).toStrictEqual({
       sessionId: 's2',
-      payload: { rev: 8, tasks: [{ id: 1, subject: 'second updated', status: 'in_progress', blockedBy: [] }] },
+      payload: {
+        rev: 8,
+        tasks: [
+          {
+            id: 1,
+            subject: 'second updated',
+            status: 'in_progress',
+            blockedBy: [],
+            delegation: { agent: 'worker', state: 'running' },
+          },
+        ],
+      },
     });
 
     const count = published.length;

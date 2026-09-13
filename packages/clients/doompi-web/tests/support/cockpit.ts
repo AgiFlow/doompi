@@ -30,6 +30,8 @@ export interface CockpitFixture {
   teamTemp: string;
   /** Publishes fixture-owned session channel state through the hub event bus. */
   publishSessionEvent(type: string, sessionId: string, payload: unknown): void;
+  /** Number of synchronized plugin styles loaded for the focused session. */
+  pluginStyleCount: number;
   /** Publishes the current shell bytes as a fresh synchronized generation. */
   republishShell(): void;
   url: string;
@@ -49,11 +51,14 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   backlogLimit: [512, { option: true }],
   page: async ({ page, cockpit, assets }, use) => {
     if (assets === 'synced') {
-      await page.addInitScript(() => {
+      await page.addInitScript((expectedStyleCount) => {
         const root = document.documentElement;
         root.style.pointerEvents = 'none';
         const releaseWhenReady = (): boolean => {
-          if (document.querySelectorAll('link[data-doompi-plugin-composition][media="all"]').length < 3) return false;
+          if (
+            document.querySelectorAll('link[data-doompi-plugin-composition][media="all"]').length !== expectedStyleCount
+          )
+            return false;
           root.style.removeProperty('pointer-events');
           return true;
         };
@@ -64,7 +69,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
           });
           observer.observe(document, { attributes: true, childList: true, subtree: true });
         }
-      });
+      }, cockpit.pluginStyleCount);
     }
     for (const session of cockpit.sessions) {
       const waitForAttach = session.waitForAttach.bind(session);
@@ -73,7 +78,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         if (assets === 'synced') {
           await page
             .locator('link[data-doompi-plugin-composition][media="all"]')
-            .nth(2)
+            .nth(cockpit.pluginStyleCount - 1)
             .waitFor({ state: 'attached', timeout: timeoutMs });
           await page.evaluate(
             () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
@@ -158,9 +163,10 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     });
     const source = resolveServerBundleSource({ registration });
     if (source.kind !== 'descriptor') throw new Error('global setup did not publish a synchronized server bundle');
+    const activeLayers = ['team', 'task', 'llm'];
     const [globalBundle, sessionBundle] = await Promise.all([
-      loadServerBundle('global', { ...source, majorMode: 'minimal', activeLayers: [] }),
-      loadServerBundle('session', { ...source, majorMode: 'minimal', activeLayers: ['team', 'task', 'llm'] }),
+      loadServerBundle('global', { ...source, majorMode: 'minimal', activeLayers }),
+      loadServerBundle('session', { ...source, majorMode: 'minimal', activeLayers }),
     ]);
     const environment = Object.freeze({
       ...process.env,
@@ -177,11 +183,12 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       directEvents: hub.directEvents,
       onNotice: (message) => console.error(`[global] ${message}`),
     });
-    const channels = [...new Set([...hub.channelTypes(), 'subagent_runs', 'task_graph'])];
+    const channels = hub.channelTypes();
     const globalComposition = webCompositions.publish({ scope: 'global' }, registration, channels);
     const workspaceComposition = webCompositions.publish({ scope: 'workspace', workspaceId }, registration, channels);
     if (globalComposition === undefined || workspaceComposition === undefined)
       throw new Error('global setup did not publish the E2E web compositions');
+    let pluginStyleCount = globalComposition.stylePaths.length + workspaceComposition.stylePaths.length;
 
     let headless = await serveHeadlessServer({
       headlessHub: hub,
@@ -228,6 +235,9 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       const id = `s${index + 1}`;
       const cwd = path.join(workRoot, id);
       fs.mkdirSync(cwd, { recursive: true });
+      const webComposition = webCompositions.publish({ scope: 'session', sessionId: id }, registration, channels);
+      if (webComposition === undefined) throw new Error(`global setup did not publish the '${id}' web composition`);
+      if (index === 0) pluginStyleCount += webComposition.stylePaths.length;
       const session = await startHeadlessSession({
         id,
         name: `session-${index + 1}`,
@@ -235,11 +245,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         repoRoot: workspaceRoot,
         environment,
         workspaceId,
-        webComposition:
-          webCompositions.publish({ scope: 'session', sessionId: id }, registration, channels) ??
-          (() => {
-            throw new Error(`global setup did not publish the '${id}' web composition`);
-          })(),
+        webComposition,
         hub,
         headlessUrl,
         restartHeadless,
@@ -289,6 +295,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         agentDir,
         teamTemp,
         publishSessionEvent: (type, sessionId, payload) => hub.directEvents.publish(type, sessionId, payload),
+        pluginStyleCount,
         republishShell,
         url: web.url,
       });

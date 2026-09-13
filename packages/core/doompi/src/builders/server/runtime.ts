@@ -16,6 +16,7 @@ import type {
   DoomHubSessionScope,
 } from '@agimon-ai/doompi-core/hub-channel';
 import { serveSessionApis, type PackageApiServer } from '@agimon-ai/doompi-core/package-api-server';
+import { piAgentDirectory } from '@agimon-ai/doompi-core/pi-settings';
 import { createRemoteRuntime, type RemoteRuntime } from '@agimon-ai/doompi-core/remote-runtime';
 import type { HeadlessSessionManager } from '@agimon-ai/doompi-core/runtime-headless-session-manager';
 import { createHarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
@@ -25,7 +26,6 @@ import { resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
 import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
 import { createWebCompositions } from '@agimon-ai/doompi-core/web-compositions';
 import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
-import { getAgentDir } from '@earendil-works/pi-coding-agent';
 import WebSocket from 'ws';
 
 import { HARNESS_STATE_KEYS, HARNESS_STATE_POINTER } from '../../composition/harnessState';
@@ -477,7 +477,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
         if (!workspaceRoot) throw new Error('Session workspace not found.');
         return listSavedSessions(
-          path.join(getAgentDir(), 'server', 'sessions'),
+          path.join(piAgentDirectory(baseEnvironment), 'server', 'sessions'),
           workspaceRoot,
           new Set(hub.snapshot().map((active) => active.id)),
         );
@@ -500,7 +500,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
         if (!workspaceRoot) throw new Error('Session workspace not found.');
         const saved = await listSavedSessions(
-          path.join(getAgentDir(), 'server', 'sessions'),
+          path.join(piAgentDirectory(baseEnvironment), 'server', 'sessions'),
           workspaceRoot,
           new Set(hub.snapshot().map((active) => active.id)),
         );

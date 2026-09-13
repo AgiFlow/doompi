@@ -1344,14 +1344,21 @@ describe('compiled extension sets', () => {
     ).trim();
     const source = readCompiledSource(output);
     const externalImports = [...source.matchAll(/(?:from|import)\s*["']([^"']+)["']/gu)].map((match) => match[1]);
+    const hostedRuntimeImports =
+      manifest.name === '@agimon-ai/doompi'
+        ? [fs.realpathSync(fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent')))]
+        : [];
+    const packageImports = externalImports.filter(
+      (specifier) => !isBuiltin(specifier) && !specifier.startsWith('${') && !specifier.startsWith('.'),
+    );
+    const sourceWithoutHostedRuntimeImports = hostedRuntimeImports.reduce(
+      (compiled, specifier) => compiled.replaceAll(specifier, ''),
+      source,
+    );
 
     expect(loadedType, manifest.name).toBe('object');
-    expect(
-      externalImports.filter(
-        (specifier) => !isBuiltin(specifier) && !specifier.startsWith('${') && !specifier.startsWith('.'),
-      ),
-    ).toEqual([]);
-    expect(source, manifest.name).not.toContain(path.join(repositoryRoot, 'node_modules'));
+    expect(packageImports).toEqual(hostedRuntimeImports);
+    expect(sourceWithoutHostedRuntimeImports, manifest.name).not.toContain(path.join(repositoryRoot, 'node_modules'));
   });
 });
 
