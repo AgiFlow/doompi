@@ -24,6 +24,7 @@ async function renderWork(page: import('@playwright/test').Page): Promise<Render
 async function scrollToOldestTurn(page: import('@playwright/test').Page): Promise<void> {
   const timeline = page.getByTestId('timeline');
   const oldest = page.getByTestId('entry-assistant').filter({ hasText: 'Fixture turn 0' });
+  const tool = page.getByTestId('entry-tool').first();
   await expect
     .poll(
       async () => {
@@ -32,7 +33,7 @@ async function scrollToOldestTurn(page: import('@playwright/test').Page): Promis
           element.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
           element.dispatchEvent(new Event('scroll', { bubbles: true }));
         });
-        return oldest.isVisible();
+        return (await oldest.isVisible()) && (await tool.isVisible());
       },
       { timeout: 15_000 },
     )
