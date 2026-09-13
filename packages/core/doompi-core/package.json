@@ -45,6 +45,11 @@
       "import": "./dist/ask-user.mjs",
       "require": "./dist/ask-user.cjs"
     },
+    "./author-tools": {
+      "types": "./dist/author-tools.d.mts",
+      "import": "./dist/author-tools.mjs",
+      "require": "./dist/author-tools.cjs"
+    },
     "./background-work": {
       "types": "./dist/background-work.d.mts",
       "import": "./dist/background-work.mjs",
@@ -69,6 +74,11 @@
       "types": "./dist/context-contributions.d.mts",
       "import": "./dist/context-contributions.mjs",
       "require": "./dist/context-contributions.cjs"
+    },
+    "./delegation": {
+      "types": "./dist/delegation.d.mts",
+      "import": "./dist/delegation.mjs",
+      "require": "./dist/delegation.cjs"
     },
     "./cordis-host": {
       "types": "./dist/cordis-host.d.mts",
@@ -204,6 +214,16 @@
       "types": "./dist/transition.d.mts",
       "import": "./dist/transition.mjs",
       "require": "./dist/transition.cjs"
+    },
+    "./voice-reload-handoff": {
+      "types": "./dist/voice-reload-handoff.d.mts",
+      "import": "./dist/voice-reload-handoff.mjs",
+      "require": "./dist/voice-reload-handoff.cjs"
+    },
+    "./voice-tools": {
+      "types": "./dist/voice-tools.d.mts",
+      "import": "./dist/voice-tools.mjs",
+      "require": "./dist/voice-tools.cjs"
     },
     "./ui-hub": {
       "types": "./dist/ui-hub.d.mts",

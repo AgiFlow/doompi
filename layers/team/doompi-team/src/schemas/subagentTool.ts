@@ -1,4 +1,8 @@
+import { InlineAgentSchema, type InlineAgent } from '@agimon-ai/doompi-core/delegation';
 import { type Static, Type } from 'typebox';
+
+export { InlineAgentSchema };
+export type { InlineAgent };
 
 export const SUBAGENT_ACTIONS = {
   agents: 'agents',
@@ -33,12 +37,6 @@ export function subagentActionAcceptsField(action: SubagentAction, field: string
 }
 
 const AgentScope = Type.Union([Type.Literal('user'), Type.Literal('project'), Type.Literal('both')]);
-
-export const InlineAgentSchema = Type.Object(
-  { systemPrompt: Type.String({ minLength: 1 }) },
-  { additionalProperties: false },
-);
-export type InlineAgent = Static<typeof InlineAgentSchema>;
 
 const RunRequest = Type.Object(
   {

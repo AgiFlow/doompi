@@ -1,9 +1,3 @@
-import { DOOM_VOICE_SOURCE } from './voiceTools';
-
-export const VOICE_SOURCE = DOOM_VOICE_SOURCE;
-
-export const TRANSFER_VOICE_SOURCE = `${DOOM_VOICE_SOURCE}#transfer-voice`;
-
 export const STATUS_KEY = 'doom-voice';
 
 export const MAX_RECORDING_MS = 300_000;

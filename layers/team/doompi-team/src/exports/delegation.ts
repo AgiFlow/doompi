@@ -1,3 +1,3 @@
 export * from '../schemas/team/delegation';
 
-export * from '../schemas/delegationApi';
+export * from '@agimon-ai/doompi-core/delegation';

@@ -23,9 +23,6 @@
  *   ledger
  */
 
-import type { Context } from '@deepseek-ai/cordis';
-import { Check } from 'typebox/value';
-
 import {
   DelegationCancelSchema,
   DOOM_DELEGATION_ACCEPTED_EVENT,
@@ -38,7 +35,10 @@ import {
   type DelegationRequest,
   DelegationRequestSchema,
   type DelegationResult,
-} from '../../schemas/delegationApi';
+} from '@agimon-ai/doompi-core/delegation';
+import type { Context } from '@deepseek-ai/cordis';
+import { Check } from 'typebox/value';
+
 import type { AsyncJobTrackerContract, TrackedAsyncJobsContract } from '../asyncJobTracker';
 import type { ExtensionConfig } from '../config';
 import type { ManagementActionsContract } from '../managementActions';

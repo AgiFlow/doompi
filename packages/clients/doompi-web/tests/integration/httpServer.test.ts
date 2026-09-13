@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { createServer, type Server } from 'node:http';
+import { createServer, request as requestHttp, type Server } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -25,6 +25,24 @@ function listen(server: Server): Promise<string> {
 
 function closeServer(server: Server): Promise<void> {
   return new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+}
+
+function rawGet(origin: string, requestPath: string): Promise<{ body: string; status: number }> {
+  const target = new URL(origin);
+  return new Promise((resolve, reject) => {
+    const request = requestHttp(
+      { hostname: target.hostname, method: 'GET', path: requestPath, port: target.port },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () =>
+          resolve({ body: Buffer.concat(chunks).toString('utf8'), status: response.statusCode ?? 0 }),
+        );
+      },
+    );
+    request.once('error', reject);
+    request.end();
+  });
 }
 
 describe('the web presentation server', () => {
@@ -109,6 +127,13 @@ describe('the web presentation server', () => {
     for (const path of ['/api/remote/frontend', '/api/global/plugin/remote/frontend']) {
       expect((await fetch(`${presentation.url}${path}`, { method: 'POST' })).status).toBe(404);
     }
+  });
+
+  it('keeps authority-like request paths on the configured headless origin', async () => {
+    const response = await rawGet(presentation.url, '//attacker.invalid/api/health');
+
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({ ok: true, token: 'test-token' });
   });
 
   it('relays the browser protocol WebSocket without owning session state', async () => {

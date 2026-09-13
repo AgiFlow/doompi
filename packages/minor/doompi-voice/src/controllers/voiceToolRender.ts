@@ -1,7 +1,6 @@
+import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '@agimon-ai/doompi-core/voice-tools';
 import { DoomToolCall, DoomToolResult, renderToolHeading } from '@agimon-ai/doompi-ui/toolChrome';
 import type { Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
-
-import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '../constants/voiceTools';
 
 export type VoiceFacadeToolName = typeof VOICE_DESCRIBE_TOOL_NAME | typeof VOICE_USE_TOOL_NAME;
 

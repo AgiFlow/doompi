@@ -15,7 +15,7 @@ import {
   VoiceReloadHandoffSchema,
   type VoiceReloadHandoff,
 } from '../../schemas/voiceReloadHandoff';
-import { type VoiceToolSessionHandle } from '../voiceTools';
+import type { VoiceToolSessionHandle } from '../voiceToolsContract';
 
 /** The sole exact global allowed for Voice continuity across module reload. */
 

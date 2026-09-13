@@ -4,8 +4,6 @@ import {
   requireDoomCordisSession,
   type DoomCordisSessionService,
 } from '@agimon-ai/doompi-core/cordis-host';
-import type { Context, Fiber } from '@deepseek-ai/cordis';
-
 import {
   type DelegationCancel,
   type DelegationRequest,
@@ -19,7 +17,9 @@ import {
   DOOM_DELEGATION_STARTED_EVENT,
   DOOM_DELEGATION_UPDATED_EVENT,
   type DoomDelegationService,
-} from '../../schemas/delegationApi';
+} from '@agimon-ai/doompi-core/delegation';
+import type { Context, Fiber } from '@deepseek-ai/cordis';
+
 import { DOOM_FABLE_PLAN_SERVICE, type DoomFablePlanService } from '../../schemas/fablePlanApi';
 import { DOOM_SUBAGENT_POLICY_SERVICE, type DoomSubagentPolicyService } from '../../schemas/subagentPolicy';
 import type { SubagentCapabilityPolicyStore } from '../../schemas/team/capabilityCeiling';

@@ -45,16 +45,16 @@ export default defineConfig({
         replacement: `${doomExtensionContractsExports}contextContributions.ts`,
       },
       {
+        find: '@agimon-ai/doompi-core/delegation',
+        replacement: `${doomExtensionContractsExports}delegation.ts`,
+      },
+      {
         find: '@agimon-ai/doompi-core/background-work',
         replacement: `${doomExtensionContractsExports}backgroundWork.ts`,
       },
       {
         find: '@agimon-ai/doompi-core/child-process',
         replacement: `${doomExtensionContractsExports}childProcess.ts`,
-      },
-      {
-        find: '@agimon-ai/doompi-team/subagent-tool',
-        replacement: fileURLToPath(new URL('../../team/doompi-team/src/exports/subagentTool.ts', import.meta.url)),
       },
       {
         find: '@agimon-ai/doompi-core/ui-hub',

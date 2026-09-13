@@ -1,5 +1,5 @@
 export { COMMAND_NAME } from '../constants/task';
-import { InlineAgentSchema } from '@agimon-ai/doompi-team/subagent-tool';
+import { InlineAgentSchema } from '@agimon-ai/doompi-core/delegation';
 import { type Static, Type } from 'typebox';
 
 import type { TaskAction } from '../models/task';

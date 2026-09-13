@@ -1,5 +1,6 @@
 import { DOOM_BACKGROUND_WORK_SERVICE } from '@agimon-ai/doompi-core/background-work';
 import { readDoomChildSessionService } from '@agimon-ai/doompi-core/child';
+import { DOOM_DELEGATION_SERVICE } from '@agimon-ai/doompi-core/delegation';
 import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessTool,
@@ -13,7 +14,6 @@ import { Check } from 'typebox/value';
 import { createTeamSessionApi } from '../controllers/teamSessionApi';
 import { createSubagentCatalogChannel } from '../controllers/webSubagentCatalogChannel';
 import { createSubagentsChannel } from '../controllers/webSubagentsChannel';
-import { DOOM_DELEGATION_SERVICE } from '../schemas/delegationApi';
 import { DOOM_SUBAGENT_POLICY_SERVICE } from '../schemas/subagentPolicy';
 import { SUBAGENT_ACTIONS, SubagentParams, type SubagentToolParams } from '../schemas/subagentTool';
 import { resolveActiveTeamModelSpecs } from '../services/agentDiscovery';

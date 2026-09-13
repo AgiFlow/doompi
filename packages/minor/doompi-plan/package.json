@@ -102,13 +102,10 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/doompi-author": "workspace:*",
     "@agimon-ai/doompi-config": "workspace:*",
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-minor-mode": "workspace:*",
-    "@agimon-ai/doompi-team": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
-    "@agimon-ai/doompi-voice": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",

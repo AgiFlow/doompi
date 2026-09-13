@@ -1,7 +1,3 @@
-import { Context } from '@deepseek-ai/cordis';
-import { Type } from 'typebox';
-import { describe, expect, it, vi } from 'vitest';
-
 import {
   DOOM_VOICE_TOOLS_SERVICE,
   VOICE_FACADE_TOOL_NAMES,
@@ -11,7 +7,11 @@ import {
   VOICE_TOOL_MAX_INPUT_BYTES,
   VOICE_TOOL_MAX_JSON_DEPTH,
   VOICE_TOOL_MAX_SCHEMA_BYTES,
-} from '../../src/constants/voiceTools';
+} from '@agimon-ai/doompi-core/voice-tools';
+import { Context } from '@deepseek-ai/cordis';
+import { Type } from 'typebox';
+import { describe, expect, it, vi } from 'vitest';
+
 import {
   createDoomVoiceToolsService,
   readDoomVoiceToolsService,

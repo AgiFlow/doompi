@@ -96,8 +96,21 @@ describe('doompi core package boundary', () => {
     expect(publicEntries.length).toBeGreaterThan(0);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(exportsMap).not.toHaveProperty('./author-facade');
-    expect(exportsMap).not.toHaveProperty('./voice-tools');
-    expect(exportsMap).not.toHaveProperty('./voice-reload-handoff');
+    expect(exportsMap['./author-tools']).toEqual({
+      types: './dist/author-tools.d.mts',
+      import: './dist/author-tools.mjs',
+      require: './dist/author-tools.cjs',
+    });
+    expect(exportsMap['./voice-tools']).toEqual({
+      types: './dist/voice-tools.d.mts',
+      import: './dist/voice-tools.mjs',
+      require: './dist/voice-tools.cjs',
+    });
+    expect(exportsMap['./voice-reload-handoff']).toEqual({
+      types: './dist/voice-reload-handoff.d.mts',
+      import: './dist/voice-reload-handoff.mjs',
+      require: './dist/voice-reload-handoff.cjs',
+    });
     expect(exportsMap['./mcp-projection']).toEqual({
       types: './dist/mcp-projection.d.mts',
       import: './dist/mcp-projection.mjs',

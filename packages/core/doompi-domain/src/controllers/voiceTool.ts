@@ -1,6 +1,6 @@
 import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
-import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
-import { type DoomVoiceToolsService, type VoiceToolRegistrationHandle } from '@agimon-ai/doompi-voice/voice-tools';
+import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voice-reload-handoff';
+import { type DoomVoiceToolsService, type VoiceToolRegistrationHandle } from '@agimon-ai/doompi-core/voice-tools';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 

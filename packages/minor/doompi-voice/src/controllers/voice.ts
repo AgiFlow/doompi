@@ -12,6 +12,14 @@ import {
 } from '@agimon-ai/doompi-core/narration';
 import { definePiTool, type PiEventHandlers, type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import { type DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voice-reload-handoff';
+import {
+  DOOM_VOICE_AUTO_MODE_ID as AUTO_COMMAND_NAME,
+  DOOM_VOICE_SOURCE as VOICE_SOURCE,
+  DOOM_VOICE_TOOLS_SERVICE,
+  VOICE_MODE_TOOL_NAMES,
+  VOICE_NARRATE_TOOL_NAME,
+} from '@agimon-ai/doompi-core/voice-tools';
 import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
 import {
   defineMinorMode,
@@ -24,8 +32,6 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 
 import { COMMAND_NAME } from '../constants/voice';
 import {
-  VOICE_SOURCE,
-  TRANSFER_VOICE_SOURCE,
   STATUS_KEY,
   AUTO_LEADER_DETAIL,
   AUTO_MODE_LABEL,
@@ -33,8 +39,6 @@ import {
   ERROR_NOTIFICATION,
   VOICE_GROUP_SEGMENT,
 } from '../constants/voiceRuntime';
-import { DOOM_VOICE_AUTO_MODE_ID as AUTO_COMMAND_NAME } from '../constants/voiceTools';
-import { DOOM_VOICE_TOOLS_SERVICE, VOICE_MODE_TOOL_NAMES, VOICE_NARRATE_TOOL_NAME } from '../constants/voiceTools';
 import {
   formatVoiceActivity,
   formatAutoCaptureActivity,
@@ -73,7 +77,6 @@ import {
 } from '../services/transcriptAdmission';
 import type { VoiceDeliveryIntent } from '../services/voiceDelivery';
 import { createVoiceDependencies } from '../services/voiceDependencies';
-import { createVoiceReloadHandoffStore } from '../services/voiceReloadHandoff';
 import { createDoomVoiceToolsService, type VoiceToolSessionHandle } from '../services/voiceTools';
 import { VoiceWorkerAutoCaptureController } from '../services/voiceWorkerAutoCaptureController';
 import { type VoiceWorkerSessionClientFactory } from '../services/voiceWorkerSessionController';
@@ -98,6 +101,8 @@ import {
 import { collectVoiceCommandContext } from './voiceCommandContext';
 import { VoiceModeController } from './voiceModeController';
 import { createVoiceToolFacades } from './voiceTools';
+
+const TRANSFER_VOICE_SOURCE = `${VOICE_SOURCE}#transfer-voice`;
 
 export { MlxWhisperAdapter, OpenAiWhisperAdapter, TranscriberRegistry, WhisperCppAdapter } from '../services/whisper';
 

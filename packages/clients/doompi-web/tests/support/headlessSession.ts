@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { createAgentServerService, type HeadlessHub, type HeadlessSessionHost } from '@agimon-ai/doompi-core/server';
 import { DOOM_COCKPIT_SERVER_ID, DoomSessionManagementService } from '@agimon-ai/doompi-core/session-protocol';
 import { Client, type ByteTransportFactory } from '@earendil-works/pi-client';
@@ -70,7 +72,7 @@ function websocketTransport(url: string): ByteTransportFactory {
  * browser only sees the public protocol.
  */
 export async function startHeadlessSession(options: HeadlessSessionOptions): Promise<HeadlessSession> {
-  const id = options.id ?? `session-${Math.random().toString(36).slice(2)}`;
+  const id = options.id ?? `session-${randomUUID()}`;
   const name = options.name ?? 'untitled';
   const cwd = options.cwd ?? '/workspace';
   const received: Frame[] = [];

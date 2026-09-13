@@ -1,9 +1,19 @@
-import type { Context } from '@deepseek-ai/cordis';
+import {
+  type DoomVoiceToolsService,
+  type VoiceToolDefinition,
+  type VoiceToolDescriptor,
+  type VoiceToolExecuteOptions,
+  type VoiceToolRegistrationHandle,
+  type VoiceToolRegistrationOptions,
+  type VoiceToolSessionHandle,
+  VoiceToolError,
+} from '@agimon-ai/doompi-core/voice-tools';
 import { type TSchema } from 'typebox';
 import { Check, Errors } from 'typebox/value';
 
+export * from '@agimon-ai/doompi-core/voice-tools';
+
 import {
-  DOOM_VOICE_TOOLS_SERVICE,
   VOICE_TOOL_DEFAULT_TIMEOUT_MS,
   VOICE_TOOL_MAX_TIMEOUT_MS,
   VOICE_TOOL_MAX_BATCH_ITEMS,
@@ -18,11 +28,10 @@ import {
   VOICE_TOOL_MAX_ERROR_MESSAGE_LENGTH,
   SAFE_IDENTIFIER,
   SAFE_NAME,
-} from '../../constants/voiceTools';
+} from '@agimon-ai/doompi-core/voice-tools';
 import {
   VoiceToolDescriptorSchema,
   type VoiceToolBatchCall,
-  type VoiceToolDescribeInput,
   type VoiceToolUseInput,
   type VoiceToolErrorCode,
   type VoiceToolErrorPayload,
@@ -31,112 +40,7 @@ import {
   type VoiceToolCatalogSnapshot,
   type VoiceToolBatchItemResult,
   type VoiceToolBatchResult,
-} from '../../schemas/voiceTools';
-
-/** Voice-owned Cordis service for the live tool registrar and active session. */
-
-/** The two stable Pi tools that expose registered voice capabilities. */
-
-/** The standalone Pi tool owned by an active autonomous Voice session. */
-
-/** Every Pi tool whose availability is owned by autonomous Voice mode. */
-
-export interface VoiceToolDescriptor {
-  readonly source: string;
-  readonly id: string;
-  readonly name: string;
-  readonly label: string;
-  readonly description: string;
-  readonly order: number;
-  readonly inputSchema: TSchema;
-  readonly resultSchema: TSchema;
-  readonly timeoutMs?: number;
-}
-
-export interface VoiceToolExecutionContext<Context = unknown> {
-  readonly sessionId: string;
-  readonly hostGeneration: string;
-  readonly operationId: string;
-  readonly batchIndex: number;
-  readonly batchSize: number;
-  readonly signal: AbortSignal;
-  readonly context: Context;
-}
-
-export interface VoiceToolDefinition<Context = unknown> {
-  readonly descriptor: VoiceToolDescriptor;
-  execute(input: unknown, execution: VoiceToolExecutionContext<Context>): unknown;
-}
-
-export interface VoiceToolRegistrationHandle {
-  readonly source: string;
-  readonly id: string;
-  readonly registrationGeneration: string;
-  dispose(): void;
-}
-
-export interface VoiceToolSessionHandle<Context = unknown> {
-  readonly sessionId: string;
-  readonly hostGeneration: string;
-  readonly active: boolean;
-  setActive(active: boolean): void;
-  subscribe(listener: () => void): () => void;
-  describe(input?: VoiceToolDescribeInput): VoiceToolCatalogSnapshot;
-  executeBatch(
-    input: VoiceToolUseInput,
-    context: Context,
-    options?: VoiceToolExecuteOptions,
-  ): Promise<VoiceToolBatchResult>;
-  useVoiceTools(
-    input: VoiceToolUseInput,
-    context: Context,
-    options?: VoiceToolExecuteOptions,
-  ): Promise<VoiceToolBatchResult>;
-  dispose(): void;
-}
-
-export interface VoiceToolExecuteOptions {
-  readonly signal?: AbortSignal;
-  readonly operationId?: string;
-}
-
-export interface VoiceToolRegistrationOptions<Context = unknown> {
-  readonly sessionId?: string;
-  readonly context?: Context;
-}
-
-export interface DoomVoiceToolsService<SessionContext = unknown> {
-  readonly generation: string;
-  register<ContributionContext = SessionContext>(
-    definition: VoiceToolDefinition<ContributionContext>,
-    options?: VoiceToolRegistrationOptions<ContributionContext>,
-  ): VoiceToolRegistrationHandle;
-  bindSession(sessionId: string, context?: SessionContext): VoiceToolSessionHandle<SessionContext>;
-  readSession(sessionId: string): VoiceToolSessionHandle<SessionContext> | undefined;
-  subscribeSession(
-    sessionId: string,
-    listener: (session: VoiceToolSessionHandle<SessionContext> | undefined) => void,
-  ): () => void;
-  dispose(): void;
-}
-
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    'doom/voice-tools': DoomVoiceToolsService;
-  }
-}
-
-export class VoiceToolError extends Error {
-  readonly code: VoiceToolErrorCode;
-  readonly retryable: boolean;
-
-  constructor(code: VoiceToolErrorCode, message: string, retryable = false) {
-    super(message);
-    this.name = 'VoiceToolError';
-    this.code = code;
-    this.retryable = retryable;
-  }
-}
+} from '@agimon-ai/doompi-core/voice-tools';
 
 interface VoiceToolClaim<Context> {
   readonly descriptor: VoiceToolDescriptor;
@@ -966,14 +870,4 @@ export function createDoomVoiceToolsService<SessionContext = unknown>(
     },
   };
   return Object.freeze(service);
-}
-
-export function readDoomVoiceToolsService(context: Context): DoomVoiceToolsService | undefined {
-  return context.get(DOOM_VOICE_TOOLS_SERVICE) as DoomVoiceToolsService | undefined;
-}
-
-export function requireDoomVoiceToolsService(context: Context): DoomVoiceToolsService {
-  const service = readDoomVoiceToolsService(context);
-  if (!service) throw new Error('Doom voice tools are unavailable. Load @agimon-ai/doompi-voice.');
-  return service;
 }

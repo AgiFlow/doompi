@@ -1,9 +1,9 @@
 import { resolveVoiceConfig } from '@agimon-ai/doompi-config/config';
 import { type IDoomConfigLoader, type ResolvedVoiceConfig } from '@agimon-ai/doompi-config/types';
+import { DOOM_VOICE_SOURCE as VOICE_SOURCE } from '@agimon-ai/doompi-core/voice-tools';
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
 
 import {
-  VOICE_SOURCE,
   STATUS_KEY,
   MAX_RECORDING_MS,
   ACTIVITY_INTERVAL_MS,

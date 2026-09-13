@@ -1,7 +1,10 @@
+import {
+  VOICE_RELOAD_HANDOFF_REGISTRY_KEY,
+  VOICE_RELOAD_HANDOFF_TTL_MS,
+} from '@agimon-ai/doompi-core/voice-reload-handoff';
+import { createVoiceReloadHandoffStore, VoiceReloadHandoffError } from '@agimon-ai/doompi-core/voice-reload-handoff';
 import { describe, expect, it } from 'vitest';
 
-import { VOICE_RELOAD_HANDOFF_REGISTRY_KEY, VOICE_RELOAD_HANDOFF_TTL_MS } from '../../src/constants/voiceReloadHandoff';
-import { createVoiceReloadHandoffStore, VoiceReloadHandoffError } from '../../src/services/voiceReloadHandoff';
 import { createDoomVoiceToolsService } from '../../src/services/voiceTools';
 
 function runtime(token: string, clock: { now: number }) {

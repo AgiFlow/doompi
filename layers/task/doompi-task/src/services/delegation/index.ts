@@ -8,8 +8,8 @@ import {
   type DelegationResult,
   type DelegationStarted as DelegationStartedPayload,
   type DelegationUpdate,
-} from '@agimon-ai/doompi-team/delegation';
-import type { InlineAgent } from '@agimon-ai/doompi-team/subagent-tool';
+  type InlineAgent,
+} from '@agimon-ai/doompi-core/delegation';
 import type { Context } from '@deepseek-ai/cordis';
 
 import { isBlocked, isTaskListComplete } from '../../models/taskGraph';

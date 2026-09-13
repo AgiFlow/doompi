@@ -2,11 +2,11 @@ import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-core/ask-user';
 import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
 import { createNarrationRequest, readDoomNarrationService } from '@agimon-ai/doompi-core/narration';
 import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
+import { VOICE_MODE_TOOL_NAMES } from '@agimon-ai/doompi-core/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
-import { VOICE_MODE_TOOL_NAMES } from '../src/constants/voiceTools';
 import type { NarrationToolRuntime } from '../src/controllers/narrationTool';
 import {
   type AutoCapturePiEventController,

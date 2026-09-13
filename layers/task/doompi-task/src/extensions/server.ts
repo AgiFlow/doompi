@@ -1,7 +1,7 @@
+import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-core/delegation';
 import { type DoomHeadlessExecutionContext, type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
 import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
 import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
-import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-team/delegation';
 import type { Context } from '@deepseek-ai/cordis';
 import { Check } from 'typebox/value';
 

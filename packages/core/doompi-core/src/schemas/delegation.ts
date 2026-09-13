@@ -1,9 +1,13 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { type Static, Type } from 'typebox';
 
-import { InlineAgentSchema } from './subagentTool';
+export const InlineAgentSchema = Type.Object(
+  { systemPrompt: Type.String({ minLength: 1 }) },
+  { additionalProperties: false },
+);
+export type InlineAgent = Static<typeof InlineAgentSchema>;
 
-/** Team-owned Cordis service for one session's delegated runs. */
+/** Shared Cordis contract for an optional delegated-run provider. */
 export const DOOM_DELEGATION_SERVICE = 'doom/delegation';
 export const DOOM_DELEGATION_REQUESTED_EVENT = 'doom/delegation/requested';
 export const DOOM_DELEGATION_ACCEPTED_EVENT = 'doom/delegation/accepted';

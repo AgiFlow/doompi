@@ -68,6 +68,17 @@ function requestUrl(request: IncomingMessage): URL {
   return new URL(request.url ?? '/', 'http://doompi-web.local');
 }
 
+function upstreamRequestUrl(request: IncomingMessage, headlessUrl: URL): URL {
+  const incoming = requestUrl(request);
+  const target = new URL(headlessUrl);
+  target.pathname = incoming.pathname;
+  target.search = incoming.search;
+  target.hash = '';
+  if (target.origin !== headlessUrl.origin)
+    throw new Error('The headless request cannot change its configured origin.');
+  return target;
+}
+
 async function readBody(request: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let size = 0;
@@ -108,7 +119,7 @@ async function proxyHttp(
   token: string | undefined,
   notice: (message: string) => void,
 ): Promise<void> {
-  const target = new URL(requestUrl(request).pathname + requestUrl(request).search, headlessUrl);
+  const target = upstreamRequestUrl(request, headlessUrl);
   const body = request.method === 'GET' || request.method === 'HEAD' ? undefined : await readBody(request);
   try {
     const upstream = await fetch(target, {
@@ -214,7 +225,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     }
     webSockets.handleUpgrade(request, socket, head, (client) => {
       sockets.add(client);
-      const upstreamUrl = new URL(requestUrl(request).pathname + requestUrl(request).search, headlessUrl);
+      const upstreamUrl = upstreamRequestUrl(request, headlessUrl);
       upstreamUrl.protocol = upstreamUrl.protocol === 'https:' ? 'wss:' : 'ws:';
       const upstream = new WebSocket(upstreamUrl, { headers: wsHeaders(request, options.headlessToken) });
       const pending: RawData[] = [];

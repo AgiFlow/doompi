@@ -6,7 +6,7 @@ export default defineConfig({
     'fable-plan-api': 'src/schemas/fablePlanApi.ts',
     'runtime-subagent-policy': 'src/schemas/subagentPolicy.ts',
     'runtime-subagent-tool': 'src/schemas/subagentTool.ts',
-    'delegation-api': 'src/schemas/delegationApi.ts',
+    'delegation-api': 'src/exports/delegationApi.ts',
     'fable-plan': 'src/exports/fablePlanApi.ts',
     'subagent-policy': 'src/exports/subagentPolicy.ts',
     'subagent-tool': 'src/exports/subagentTool.ts',

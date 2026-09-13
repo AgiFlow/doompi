@@ -7,6 +7,7 @@ import {
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
   requireDoomContextContributions,
 } from '@agimon-ai/doompi-core/context-contributions';
+import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-core/delegation';
 import {
   createNarrationRequest,
   DOOM_NARRATION_SERVICE,
@@ -16,7 +17,6 @@ import {
 import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
 import { readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
-import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-team/delegation';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { KeyId } from '@earendil-works/pi-tui';

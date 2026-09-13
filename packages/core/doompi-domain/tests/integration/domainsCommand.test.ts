@@ -15,8 +15,9 @@ import type { TransitionOutcome } from '@agimon-ai/doompi-core/transition';
 import {
   createVoiceReloadHandoffStore,
   type VoiceReloadHandoffStore,
-} from '@agimon-ai/doompi-voice/voice-reload-handoff';
-import { createDoomVoiceToolsService, DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-voice/voice-tools';
+} from '@agimon-ai/doompi-core/voice-reload-handoff';
+import { DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-core/voice-tools';
+import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

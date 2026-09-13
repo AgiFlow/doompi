@@ -4,18 +4,18 @@ import { join } from 'node:path';
 import { loadDoomConfig, resolveVoiceConfig } from '@agimon-ai/doompi-config';
 import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
 import { defineServerMethod, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
-import { defineMinorMode, serverMinorModes, type MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
-import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
-import { Check } from 'typebox/value';
-
-import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_TOOLS_SERVICE } from '../constants/voiceTools';
-import { voiceControlMethod } from '../schemas/voiceControl';
+import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-core/voice-tools';
 import {
   VoiceToolDescribeInputSchema,
   VoiceToolUseInputSchema,
   type VoiceToolDescribeInput,
   type VoiceToolUseInput,
-} from '../schemas/voiceTools';
+} from '@agimon-ai/doompi-core/voice-tools';
+import { defineMinorMode, serverMinorModes, type MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
+import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
+import { Check } from 'typebox/value';
+
+import { voiceControlMethod } from '../schemas/voiceControl';
 import { ClientTtsAdapter } from '../services/clientMedia';
 import { VoiceCommandCorrector } from '../services/commandCorrection';
 import { VoiceTurnFallbackNarrator } from '../services/fallbackNarration';

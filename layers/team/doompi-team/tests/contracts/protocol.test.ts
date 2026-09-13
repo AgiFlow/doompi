@@ -5,7 +5,7 @@ import {
   DelegationAcceptedSchema,
   DelegationRequestSchema,
   DelegationResultSchema,
-} from '../../src/schemas/delegationApi';
+} from '../../src/exports/delegationApi';
 describe('delegation protocol', () => {
   it('strictly validates typed delegation requests and results', () => {
     expect(

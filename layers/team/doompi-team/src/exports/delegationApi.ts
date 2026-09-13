@@ -7,7 +7,7 @@ export type {
   DelegationStarted,
   DelegationUpdate,
   DoomDelegationService,
-} from '../schemas/delegationApi';
+} from '@agimon-ai/doompi-core/delegation';
 export {
   DelegationAcceptedSchema,
   DelegationCancelSchema,
@@ -24,4 +24,4 @@ export {
   DOOM_DELEGATION_UPDATED_EVENT,
   DOOM_DELEGATION_REQUESTED_EVENT,
   readDoomDelegationService,
-} from '../schemas/delegationApi';
+} from '@agimon-ai/doompi-core/delegation';

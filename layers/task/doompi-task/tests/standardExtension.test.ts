@@ -7,10 +7,10 @@ import {
   createDoomContextContributionsService,
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
 } from '@agimon-ai/doompi-core/context-contributions';
+import { DOOM_DELEGATION_SERVICE, type DoomDelegationService } from '@agimon-ai/doompi-core/delegation';
 import { DOOM_NARRATION_SERVICE, type DoomNarrationService } from '@agimon-ai/doompi-core/narration';
 import { createDoomReadinessCoordinator, DOOM_READINESS_SERVICE } from '@agimon-ai/doompi-core/readiness';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
-import { DOOM_DELEGATION_SERVICE, type DoomDelegationService } from '@agimon-ai/doompi-team/delegation';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

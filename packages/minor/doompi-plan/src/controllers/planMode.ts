@@ -4,9 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-author/author-facade';
 import { globalDoomConfigPath } from '@agimon-ai/doompi-config';
 import { setDoomConfigValue, unsetDoomConfigValue } from '@agimon-ai/doompi-config/configWriter';
+import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-core/author-tools';
 import { CONFIG_ACTION, type DoomConfigContributionHandle } from '@agimon-ai/doompi-core/config';
 import type { LeaderBinding, DoomLeaderContributionHandle } from '@agimon-ai/doompi-core/leader';
 import {
@@ -24,6 +24,14 @@ import {
 } from '@agimon-ai/doompi-core/tool-surface';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import {
+  DOOM_VOICE_AUTO_MODE_ID,
+  DOOM_VOICE_SOURCE,
+  DOOM_VOICE_TOOLS_SERVICE,
+  requireDoomVoiceToolsService,
+  VOICE_MODE_TOOL_NAMES,
+  type VoiceToolDefinition,
+} from '@agimon-ai/doompi-core/voice-tools';
+import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   MINOR_MODE_TOOL_NAME,
   type MinorModeCatalogService,
@@ -32,26 +40,6 @@ import {
   registerMinorModeOwner,
   requireMinorModeCatalog,
 } from '@agimon-ai/doompi-minor-mode';
-import {
-  DOOM_FABLE_PLAN_SERVICE,
-  FABLE_PLAN_REQUESTER as CONTRACT_FABLE_PLAN_REQUESTER,
-  type DoomFablePlanService,
-  readDoomFablePlanService,
-} from '@agimon-ai/doompi-team/fable-plan';
-import {
-  DOOM_SUBAGENT_POLICY_SERVICE,
-  type DoomSubagentPolicyService,
-  readDoomSubagentPolicyService,
-  type SubagentPolicyHandle,
-} from '@agimon-ai/doompi-team/subagent-policy';
-import { isSubagentAction, subagentActionAcceptsField } from '@agimon-ai/doompi-team/subagent-tool';
-import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
-import {
-  DOOM_VOICE_TOOLS_SERVICE,
-  requireDoomVoiceToolsService,
-  VOICE_MODE_TOOL_NAMES,
-  type VoiceToolDefinition,
-} from '@agimon-ai/doompi-voice/voice-tools';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ToolCallEvent } from '@earendil-works/pi-coding-agent';
 
@@ -68,11 +56,21 @@ import { type PlanModelChoice, planConfigSections, planSettingByFieldId } from '
 import {
   createFablePlanFlow,
   FABLE_PLAN_PROFILE,
+  FABLE_PLAN_REQUESTER,
   type FablePlanBroker,
   type FablePlanResult,
   type FableStage,
 } from '../services/fableFlow';
 import { createPlanTelemetry, PLAN_EVENT, type PlanTelemetry } from '../services/logSinkTelemetry';
+import {
+  DOOM_FABLE_PLAN_SERVICE,
+  DOOM_SUBAGENT_POLICY_SERVICE,
+  type DoomFablePlanService,
+  type DoomSubagentPolicyService,
+  readDoomFablePlanService,
+  readDoomSubagentPolicyService,
+  type SubagentPolicyHandle,
+} from '../services/optionalTeamServices';
 import { PlanPointerService } from '../services/planPointer';
 import { buildFlavorPlanningPrompt, type DebugEvidencePacket, type PlanningFlavor } from '../services/prompts';
 import {
@@ -607,9 +605,7 @@ function disableStepOutput(step: MutableSubagentStep): void {
 
 export function constrainSubagentInput(input: MutableSubagentInput): void {
   if (input.action !== undefined) {
-    if (isSubagentAction(input.action) && subagentActionAcceptsField(input.action, 'artifacts')) {
-      input.artifacts = false;
-    }
+    if (input.action === 'run') input.artifacts = false;
     return;
   }
 
@@ -793,7 +789,7 @@ export function createPlanModeRuntime(
       return service.start(request, signal);
     },
     cancel: (operationId, reason) => {
-      fablePlanService?.cancel({ requester: CONTRACT_FABLE_PLAN_REQUESTER, operationId, reason });
+      fablePlanService?.cancel({ requester: FABLE_PLAN_REQUESTER, operationId, reason });
     },
   };
   const isFableBrokerAvailable = (): boolean => options.fableBroker !== undefined || fablePlanService !== undefined;

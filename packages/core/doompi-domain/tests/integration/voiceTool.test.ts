@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
+import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voice-reload-handoff';
 import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';

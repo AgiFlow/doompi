@@ -1,13 +1,13 @@
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
 import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
+import type { VoiceReloadHandoff, VoiceReloadHandoffStore } from '@agimon-ai/doompi-core/voice-reload-handoff';
+import { readDoomVoiceToolsService } from '@agimon-ai/doompi-core/voice-tools';
 import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import {
   type MinorModeReloadHandoffHandle,
   prepareMinorModeReloadHandoff,
 } from '@agimon-ai/doompi-minor-mode/reload-handoff';
-import type { VoiceReloadHandoff, VoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
-import { readDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 

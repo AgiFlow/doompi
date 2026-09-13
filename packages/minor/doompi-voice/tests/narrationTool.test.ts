@@ -1,7 +1,11 @@
+import {
+  VOICE_FACADE_TOOL_NAMES,
+  VOICE_MODE_TOOL_NAMES,
+  VOICE_NARRATE_TOOL_NAME,
+} from '@agimon-ai/doompi-core/voice-tools';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
-import { VOICE_FACADE_TOOL_NAMES, VOICE_MODE_TOOL_NAMES, VOICE_NARRATE_TOOL_NAME } from '../src/constants/voiceTools';
 import {
   createNarrationTool,
   type NarrationToolOutcome,
