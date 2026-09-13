@@ -354,10 +354,15 @@ describe('reduceSession', () => {
       messageCount: 3,
       isStreaming: true,
     });
+    expect(state).toMatchObject({ streaming: true, settled: false });
   });
 
-  it('survives a get_state with no model', () => {
-    const state = reduceSession(initialSessionState, { type: 'response', command: 'get_state', data: {} });
+  it('uses the authoritative get_state lifecycle without adding a transcript entry', () => {
+    const active = { ...initialSessionState, streaming: true, settled: false };
+    const state = reduceSession(active, { type: 'response', command: 'get_state', data: { isStreaming: false } });
+
+    expect(state).toMatchObject({ streaming: false, settled: true });
+    expect(state.entries).toEqual([]);
     expect(state.agent?.model).toBe('unknown');
   });
 

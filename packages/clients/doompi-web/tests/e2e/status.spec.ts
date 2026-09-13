@@ -25,19 +25,13 @@ test('shows the model and thinking level the session reports', async ({ page, co
 });
 
 test('shows context usage and cost the session reports', async ({ page, cockpit }) => {
+  cockpit.session.setSessionStats({
+    tokens: { input: 50_000, output: 10_000, total: 105_000 },
+    cost: 0.84,
+    contextUsage: { tokens: 82_400, contextWindow: 200_000 },
+  });
   await page.goto(cockpit.url);
   await cockpit.session.waitForCommand('get_session_stats');
-
-  cockpit.session.emit({
-    type: 'response',
-    command: 'get_session_stats',
-    success: true,
-    data: {
-      tokens: { input: 50_000, output: 10_000, total: 105_000 },
-      cost: 0.84,
-      contextUsage: { tokens: 82_400, contextWindow: 200_000, percent: 41.245 },
-    },
-  });
 
   // The gauge rounds what Pi reports as a raw float.
   await expect(page.getByTestId('top-context')).toHaveText('ctx 41%');
@@ -45,15 +39,9 @@ test('shows context usage and cost the session reports', async ({ page, cockpit 
 });
 
 test('raises the cost while a message is still streaming', async ({ page, cockpit }) => {
+  cockpit.session.setSessionStats({ tokens: { total: 105_000 }, cost: 0.84 });
   await page.goto(cockpit.url);
   await cockpit.session.waitForCommand('get_session_stats');
-
-  cockpit.session.emit({
-    type: 'response',
-    command: 'get_session_stats',
-    success: true,
-    data: { tokens: { total: 105_000 }, cost: 0.84 },
-  });
   await expect(page.getByTestId('top-cost')).toHaveText('$0.84');
 
   // Pi reports the in-progress message's own usage, so the chip has to add it
@@ -75,15 +63,9 @@ test('asks for the usage figures once a message lands', async ({ page, cockpit }
 });
 
 test('folds subagent spend into one cost figure', async ({ page, cockpit }) => {
+  cockpit.session.setSessionStats({ tokens: { total: 105_000 }, cost: 1.84 });
   await page.goto(cockpit.url);
   await cockpit.session.waitForCommand('get_session_stats');
-
-  cockpit.session.emit({
-    type: 'response',
-    command: 'get_session_stats',
-    success: true,
-    data: { tokens: { total: 105_000 }, cost: 1.84 },
-  });
   await expect(page.getByTestId('top-cost')).toHaveText('$1.84');
 
   // Subagents bill to sessions of their own; the team package reports their

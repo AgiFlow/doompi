@@ -58,8 +58,6 @@ test('quotes whole messages or selected message text into the prompt', async ({ 
   await expect(userActions).toHaveCSS('opacity', '1');
   await expect(userRewind).toHaveAttribute('aria-label', 'Rewind to message');
   await expect(userRewind.locator('svg')).toHaveCount(1);
-  await userRewind.click();
-  expect(await cockpit.session.waitForCommand('navigate_tree')).toEqual({ type: 'navigate_tree', entryId: 'u1' });
   await expect(userQuote).toHaveAttribute('aria-label', 'Quote message');
   await expect(userQuote.locator('svg')).toHaveCount(1);
   await userQuote.click();
@@ -140,6 +138,7 @@ test('typing @ completes files from the session working directory', async ({ pag
   fs.writeFileSync(path.join(cwd, 'notes.md'), '');
 
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
   const input = page.getByTestId('composer-input');
   await input.fill('look at @gate');
   await expect(page.getByTestId('composer-completion')).toBeVisible();

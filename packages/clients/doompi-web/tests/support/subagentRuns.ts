@@ -11,10 +11,13 @@ const SCOPE_KEY_HASH_LENGTH = 16;
 const RUN_STATUS_FILE_NAME = 'status.json';
 
 let teamTempRoot = os.tmpdir();
+let publishRuns: ((sessionId: string, payload: unknown) => void) | undefined;
+const statuses = new Map<string, Map<string, Record<string, unknown>>>();
 
 /** Points test run fixtures at the same isolated temporary root as the spawned hub. */
-export function setTeamRunsTempRoot(root: string): void {
+export function setTeamRunsTempRoot(root: string, publish?: (sessionId: string, payload: unknown) => void): void {
   teamTempRoot = root;
+  publishRuns = publish;
 }
 
 /** The doom-team runs directory a hub will watch for this session id. */
@@ -25,16 +28,31 @@ export function runsDirFor(sessionId: string): string {
   return path.join(teamTempRoot, `${TEMP_ROOT_PREFIX}-uid-${String(uid)}`, 'sessions', scopeKey, 'runs');
 }
 
+export function publishRunStatuses(sessionId: string): void {
+  const runs = [...(statuses.get(sessionId)?.values() ?? [])].map((status) => {
+    const rawState = String(status.state ?? 'queued');
+    const state = rawState === 'completed' ? 'done' : rawState;
+    return { ...status, state, rawState, tail: Array.isArray(status.tail) ? status.tail : [] };
+  });
+  publishRuns?.(sessionId, { runs });
+}
+
 /** Writes one run status the way doom-team's status writer would. */
 export function writeRunStatus(sessionId: string, status: Record<string, unknown>): void {
   const runDir = path.join(runsDirFor(sessionId), String(status.runId));
   fs.mkdirSync(runDir, { recursive: true });
   fs.writeFileSync(path.join(runDir, RUN_STATUS_FILE_NAME), JSON.stringify(status));
+  const sessionStatuses = statuses.get(sessionId) ?? new Map<string, Record<string, unknown>>();
+  sessionStatuses.set(String(status.runId), status);
+  statuses.set(sessionId, sessionStatuses);
+  publishRunStatuses(sessionId);
 }
 
 /** Removes the whole scope a test polluted, session dir included. */
 export function removeRunsScope(sessionId: string): void {
   fs.rmSync(path.dirname(runsDirFor(sessionId)), { recursive: true, force: true });
+  statuses.delete(sessionId);
+  publishRunStatuses(sessionId);
 }
 
 const JOURNAL_DIR_NAME = 'journals';

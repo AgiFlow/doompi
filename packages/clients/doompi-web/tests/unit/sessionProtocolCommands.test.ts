@@ -80,6 +80,28 @@ describe('session protocol command lifecycle', () => {
     expect(receive).not.toHaveBeenCalled();
   });
 
+  it('starts queue clearing before abort without waiting for another short RPC', async () => {
+    const order: string[] = [];
+    const release = bindSessionProtocol(
+      's1',
+      service({
+        getState: () => new Promise(() => undefined),
+        clearQueue: async () => {
+          order.push('clear_queue');
+        },
+        abort: async () => {
+          order.push('abort');
+        },
+      }),
+      vi.fn(),
+    );
+    releases.push(release);
+
+    sendSessionProtocolFrame('s1', { type: 'get_state' });
+    sendSessionProtocolFrame('s1', { type: 'abort' });
+    await vi.waitFor(() => expect(order).toEqual(['clear_queue', 'abort']));
+  });
+
   it('omits absent optional fields from serialized command arguments', async () => {
     const steer = vi.fn(async () => undefined);
     const followUp = vi.fn(async () => undefined);

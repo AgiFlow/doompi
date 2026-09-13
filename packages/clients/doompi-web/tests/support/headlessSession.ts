@@ -19,11 +19,25 @@ import WebSocket from 'ws';
 type Frame = Record<string, unknown>;
 export type { Frame };
 
+export interface HeadlessSessionStats {
+  readonly tokens: {
+    readonly input?: number;
+    readonly output?: number;
+    readonly cacheRead?: number;
+    readonly cacheWrite?: number;
+    readonly total: number;
+  };
+  readonly cost: number;
+  readonly contextUsage?: { readonly tokens: number; readonly contextWindow: number };
+}
+
 export interface HeadlessSession {
   readonly id: string;
   readonly cwd: string;
   readonly received: Frame[];
   emit(frame: Frame): void;
+  setSessionStats(stats: HeadlessSessionStats): void;
+  clearReceived(): void;
   waitForAttach(timeoutMs?: number): Promise<void>;
   waitForCommand(type: string, timeoutMs?: number): Promise<Frame>;
   dropClient(): void;
@@ -95,6 +109,20 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
   const commandWaiters: Array<{ type: string; resolve: (frame: Frame) => void }> = [];
   const pending = new Map<string, PendingResult[]>();
   const entries: unknown[] = [];
+  let usageEntries: unknown[] = [];
+  let availableModels: unknown[] = [];
+  let stats: Frame = {
+    messageCount: 0,
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+  };
+  let assistantDraft: { id: string; text: string } | undefined;
   let commands = [
     { name: 'mode', description: 'switch the major mode' },
     { name: 'model', description: 'pick the agent model' },
@@ -110,13 +138,18 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     messageCount: 0,
   };
   let closed = false;
+  let reconnecting = false;
+  let restarting: Promise<void> | undefined;
+  const reconnectFrames: Frame[] = [];
   let exitResolve!: (code: number) => void;
   const exited = new Promise<number>((resolve) => {
     exitResolve = resolve;
   });
 
   const record = (frame: Frame): void => {
-    const { id: _id, ...command } = frame;
+    const { id: protocolId, ...payload } = frame;
+    const command = frame.type === 'extension_ui_response' ? frame : payload;
+    void protocolId;
     received.push(command);
     for (let index = commandWaiters.length - 1; index >= 0; index -= 1) {
       const waiter = commandWaiters[index];
@@ -140,10 +173,20 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       }, 0);
     });
 
-  const readEntries = async (): Promise<{ entries: unknown[]; leafId: null }> => {
+  const flushReconnectFrames = (): void => {
+    if (!reconnecting) return;
+    reconnecting = false;
+    for (const frame of reconnectFrames.splice(0)) session.emit(frame);
+  };
+
+  const readEntries = async (): Promise<{ entries: unknown[]; leafId: string | null }> => {
+    flushReconnectFrames();
     record({ type: 'get_entries' });
-    const result = (await answer('get_entries', { entries, leafId: null })) as { entries: unknown[]; leafId: null };
-    return { entries: result.entries, leafId: null };
+    const result = (await answer('get_entries', { entries, leafId: null })) as {
+      entries: unknown[];
+      leafId: string | null;
+    };
+    return { entries: result.entries, leafId: result.leafId };
   };
 
   const runtime = {
@@ -153,7 +196,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     session: {} as never,
     harness: {} as never,
     lane: {
-      findEntries: async () => entries.toReversed(),
+      findEntries: async () => (usageEntries.length > 0 ? usageEntries : entries.toReversed()),
       getTipId: async () => {
         const tip = entries.at(-1);
         if (typeof tip !== 'object' || tip === null || !('id' in tip) || typeof tip.id !== 'string') return null;
@@ -174,12 +217,15 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     },
     readState: async () => {
       record({ type: 'get_state' });
-      return (await answer('get_state', state)) as Frame;
+      const result = (await answer('get_state', state)) as Frame;
+      flushReconnectFrames();
+      return result;
     },
     readEntries,
-    listCommands: () => {
+    listCommands: async () => {
       record({ type: 'get_commands' });
-      return commands;
+      const response = (await answer('get_commands', { commands })) as { commands?: typeof commands };
+      return response.commands ?? commands;
     },
     setModel: async (model: { provider: string; id: string }) => {
       record({ type: 'set_model', provider: model.provider, modelId: model.id });
@@ -187,7 +233,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     },
     availableModels: async () => {
       record({ type: 'get_available_models' });
-      const response = (await answer('get_available_models', { models: [] })) as { models?: unknown[] };
+      const response = (await answer('get_available_models', { models: availableModels })) as { models?: unknown[] };
       return response.models ?? [];
     },
     setThinkingLevel: async (level: string) => {
@@ -217,38 +263,28 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     },
     getSessionStats: async () => {
       record({ type: 'get_session_stats' });
-      return (await answer('get_session_stats', {
-        messageCount: 0,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-      })) as Frame;
+      return (await answer('get_session_stats', stats)) as Frame;
     },
     replaceTools: async () => undefined,
     replaceResources: async () => undefined,
     readResources: async () => ({}) as never,
     appendCustomEntry: async () => '',
     recordUsage: async () => '',
-    submitPrompt: async (message: string) => {
-      record({ type: 'prompt', message });
+    submitPrompt: async (message: string, images?: unknown[]) => {
+      record({ type: 'prompt', message, ...(images === undefined ? {} : { images }) });
       await answer('prompt', undefined);
       return { settled: Promise.resolve() };
     },
-    prompt: async (message: string) => {
-      record({ type: 'prompt', message });
+    prompt: async (message: string, images?: unknown[]) => {
+      record({ type: 'prompt', message, ...(images === undefined ? {} : { images }) });
       await answer('prompt', undefined);
     },
-    steer: async (message: string) => {
-      record({ type: 'steer', message });
+    steer: async (message: string, images?: unknown[]) => {
+      record({ type: 'steer', message, ...(images === undefined ? {} : { images }) });
       await answer('steer', undefined);
     },
-    followUp: async (message: string) => {
-      record({ type: 'follow_up', message });
+    followUp: async (message: string, images?: unknown[]) => {
+      record({ type: 'follow_up', message, ...(images === undefined ? {} : { images }) });
       await answer('follow_up', undefined);
     },
     abort: async () => {
@@ -359,13 +395,13 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
   const injectResponse = (frame: Frame): void => {
     const command = typeof frame.command === 'string' ? frame.command : undefined;
     if (command === undefined) return;
-    const waiters = pending.get(command);
-    const waiter = waiters?.shift();
-    if (waiters?.length === 0) pending.delete(command);
-    if (waiter === undefined) return;
-    if (frame.success === false)
-      waiter.reject(new Error(typeof frame.error === 'string' ? frame.error : 'The command failed.'));
-    else waiter.resolve(frame.data);
+    const waiters = pending.get(command) ?? [];
+    pending.delete(command);
+    for (const waiter of waiters) {
+      if (frame.success === false)
+        waiter.reject(new Error(typeof frame.error === 'string' ? frame.error : 'The command failed.'));
+      else waiter.resolve(frame.data);
+    }
   };
 
   const session: HeadlessSession = {
@@ -373,9 +409,16 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     cwd,
     received,
     emit(frame) {
+      if (reconnecting) {
+        reconnectFrames.push(frame);
+        return;
+      }
       if (frame.type === 'response') {
-        if (frame.command === 'get_state' && frame.success === true && typeof frame.data === 'object')
+        let confirmedSessionName: string | undefined;
+        if (frame.command === 'get_state' && frame.success === true && typeof frame.data === 'object') {
           state = frame.data as Frame;
+          if (typeof state.sessionName === 'string') confirmedSessionName = state.sessionName;
+        }
         if (frame.command === 'get_entries' && frame.success === true && typeof frame.data === 'object') {
           const data = frame.data as Frame;
           entries.splice(0, entries.length, ...(Array.isArray(data.entries) ? data.entries : []));
@@ -385,15 +428,101 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
           if (Array.isArray(data.commands)) commands = data.commands as typeof commands;
         }
         injectResponse(frame);
+        for (const listener of listeners) listener(frame);
+        if (confirmedSessionName !== undefined)
+          queueMicrotask(() => {
+            for (const listener of listeners) listener({ type: 'session_info_changed', name: confirmedSessionName });
+          });
         return;
       }
+      const assistantEvent =
+        typeof frame.assistantMessageEvent === 'object' && frame.assistantMessageEvent !== null
+          ? (frame.assistantMessageEvent as Frame)
+          : undefined;
+      if (frame.type === 'message_update' && assistantEvent !== undefined) {
+        if (assistantDraft === undefined) {
+          assistantDraft = { id: `assistant-${randomUUID()}`, text: '' };
+          for (const listener of listeners)
+            listener({
+              type: 'message_start',
+              message: { id: assistantDraft.id, role: 'assistant', content: [] },
+            });
+        }
+        if (assistantEvent.type === 'text_delta' && typeof assistantEvent.delta === 'string')
+          assistantDraft.text += assistantEvent.delta;
+        const message = {
+          id: assistantDraft.id,
+          role: 'assistant',
+          content: [{ type: 'text', text: assistantDraft.text }],
+        };
+        for (const listener of listeners)
+          listener({
+            ...frame,
+            assistantMessageEvent: { ...assistantEvent, contentIndex: assistantEvent.contentIndex ?? 0 },
+            message,
+          });
+        return;
+      }
+      if (frame.type === 'agent_settled' && assistantDraft !== undefined) {
+        const draft = assistantDraft;
+        assistantDraft = undefined;
+        const message = { id: draft.id, role: 'assistant', content: [{ type: 'text', text: draft.text }] };
+        if (!entries.some((entry) => JSON.stringify(entry).includes(draft.text)))
+          entries.push({ id: draft.id, seq: entries.length + 1, type: 'message', message });
+        for (const listener of listeners) listener({ type: 'message_end', message });
+      }
       for (const listener of listeners) listener(frame);
+    },
+    setSessionStats(next) {
+      const input = next.tokens.input ?? 0;
+      const output = next.tokens.output ?? 0;
+      const cacheRead = next.tokens.cacheRead ?? 0;
+      const cacheWrite = next.tokens.cacheWrite ?? 0;
+      stats = {
+        messageCount: state.messageCount ?? 0,
+        usage: {
+          input,
+          output,
+          cacheRead,
+          cacheWrite,
+          totalTokens: next.tokens.total,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: next.cost },
+        },
+      };
+      const contextUsage = next.contextUsage;
+      if (contextUsage === undefined) {
+        usageEntries = [];
+        availableModels = [];
+        return;
+      }
+      const model = { provider: 'fixture', id: 'fixture', contextWindow: contextUsage.contextWindow };
+      state = { ...state, model };
+      availableModels = [model];
+      usageEntries = [
+        {
+          type: 'message',
+          message: {
+            role: 'assistant',
+            usage: {
+              input: contextUsage.tokens,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: contextUsage.tokens,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+          },
+        },
+      ];
+    },
+    clearReceived() {
+      received.splice(0);
     },
     waitForAttach: async (timeoutMs = 5000) => {
       if (timeoutMs <= 0) throw new Error('Timed out waiting for the cockpit to attach.');
       activation ??= activateFacets?.() ?? Promise.resolve();
       await activation;
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await session.waitForCommand('get_state', timeoutMs);
     },
     waitForCommand(type, timeoutMs = 5000) {
       const seen = received.find((frame) => frame.type === type);
@@ -410,7 +539,10 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       });
     },
     dropClient() {
-      void options.restartHeadless();
+      reconnecting = true;
+      restarting ??= options.restartHeadless().finally(() => {
+        restarting = undefined;
+      });
     },
     async holdFromAnotherClient() {
       await options.restartHeadless();
@@ -429,6 +561,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     async close() {
       if (closed) return;
       closed = true;
+      await restarting;
       await options.hub.closeSession(id);
       exitResolve(0);
     },

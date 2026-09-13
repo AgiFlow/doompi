@@ -9,7 +9,14 @@ import { BACKGROUND_CONTEXT, withCancel } from '@earendil-works/chord/context';
 type Frame = Record<string, unknown>;
 const senders = new Map<string, (frame: Frame) => void>();
 const releases = new Map<string, () => void>();
-const PARALLEL_COMMANDS = new Set(['compact', 'abort', 'extension_ui_response']);
+const PARALLEL_COMMANDS = new Set([
+  'compact',
+  'abort',
+  'extension_ui_response',
+  'get_commands',
+  'get_available_models',
+  'get_available_thinking_levels',
+]);
 
 export function bindSessionProtocol(
   sessionId: string,
@@ -58,6 +65,7 @@ export function bindSessionProtocol(
       case 'follow_up':
         return service.followUp(messageArgs(frame), context);
       case 'abort':
+        await service.clearQueue(context);
         return service.abort(context);
       case 'clear_queue':
         return service.clearQueue(context);
@@ -104,10 +112,10 @@ export function bindSessionProtocol(
       if (!active) return;
       try {
         const data = await invoke(frame, context);
-        if (active && senders.get(sessionId) === sender)
+        if (active || PARALLEL_COMMANDS.has(String(frame.type)))
           receive({ type: 'response', id: frame.id, command: frame.type, success: true, data });
       } catch (error) {
-        if (active && senders.get(sessionId) === sender)
+        if (active || PARALLEL_COMMANDS.has(String(frame.type)))
           receive({
             type: 'response',
             id: frame.id,

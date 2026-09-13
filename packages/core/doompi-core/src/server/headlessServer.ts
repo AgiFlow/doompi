@@ -585,9 +585,11 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       unsubscribe();
       for (const response of sse) response.end();
       sse.clear();
-      await protocol.close();
+      for (const client of clients) client.socket.terminate();
       clients.clear();
+      await protocol.close();
       webSockets.close();
+      server.closeAllConnections();
       await new Promise<void>((resolve, reject) =>
         server.close((error) => (error === undefined ? resolve() : reject(error))),
       );

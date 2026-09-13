@@ -33,6 +33,28 @@ describe('session presentation replay', () => {
       }),
     ).toBeUndefined();
   });
+
+  it('keeps in-flight usage while removing the full assistant message', () => {
+    const projection = createSessionPresentation();
+    const state = projection.record({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', partial: { private: true }, delta: 'hello' },
+      message: { content: [{ text: 'full transcript' }] },
+      usage: { cost: { total: 0.07 } },
+    });
+
+    expect(state?.events[0]?.frame).toEqual({
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'hello' },
+      usage: { cost: { total: 0.07 } },
+    });
+    expect(
+      projection.record({ type: 'message_update', usage: { cost: { total: 0.08 } } })?.events.at(-1)?.frame,
+    ).toEqual({
+      type: 'message_update',
+      usage: { cost: { total: 0.08 } },
+    });
+  });
   it('invalidates abandoned branch events while preserving live non-journal projections', () => {
     const projection = createSessionPresentation();
     projection.record({ type: 'extension_ui_request', method: 'setStatus', statusKey: 'mode', statusText: 'active' });

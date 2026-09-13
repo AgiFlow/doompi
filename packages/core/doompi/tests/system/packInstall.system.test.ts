@@ -1732,7 +1732,13 @@ describe('DPI installed experiment runtime', () => {
       expect(fs.readFileSync(userSettingsPath, 'utf8')).toBe(userSettings);
 
       const syncOptions = ['--major-mode', 'minimal', '--no-domains', '--no-mcp', '--agents', '--preset', 'ollama'];
-      const sync = await runCommand(process.execPath, [executable, 'sync', ...syncOptions], fixture.root, environment);
+      const sync = await runCommand(
+        process.execPath,
+        [executable, 'sync', ...syncOptions],
+        fixture.root,
+        environment,
+        COLD_SYNC_TIMEOUT_MS,
+      );
       expect(sync.code, sync.stderr || sync.stdout).toBe(0);
       expect(sync.stdout).toContain('Run dpi from the repository root to use it.');
       const check = await runCommand(
@@ -1740,6 +1746,7 @@ describe('DPI installed experiment runtime', () => {
         [executable, 'sync', '--check', ...syncOptions],
         fixture.root,
         environment,
+        COLD_SYNC_TIMEOUT_MS,
       );
       expect(check.code, `${check.stderr}\n${check.stdout}`).toBe(0);
       expect(fs.readFileSync(projectSettingsPath, 'utf8')).toBe(projectSettings);

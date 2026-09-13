@@ -107,6 +107,19 @@ afterEach(async () => {
 });
 
 describe('serveHeadlessServer', () => {
+  it('closes active Pi clients before waiting for the HTTP server', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0 });
+    servers.push(server);
+    const client = await Client.connect({
+      serverId: DOOM_COCKPIT_SERVER_ID,
+      transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}/api/pi`),
+    });
+
+    await server.close();
+    await client.dispose();
+  });
+
   it('serves mentioned files only from the session working directory', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-session-file-'));
     temporaryDirectories.push(root);

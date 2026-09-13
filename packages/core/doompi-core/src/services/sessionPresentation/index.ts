@@ -43,17 +43,25 @@ export function createSessionPresentation() {
         return undefined;
       if (raw.type === 'message_update') {
         const event = raw.assistantMessageEvent as Record<string, unknown> | undefined;
-        if (!event) return undefined;
-        const { partial: _partial, ...delta } = event;
-        if (delta.type === 'toolcall_start') {
-          const message = raw.message as { content?: Array<{ id?: string; name?: string }> } | undefined;
-          const tool = message?.content?.[Number(delta.contentIndex)];
-          if (tool) {
-            delta.id = tool.id;
-            delta.toolName = tool.name;
+        if (!event) {
+          if (raw.usage === undefined) return undefined;
+          raw = { type: 'message_update', usage: raw.usage };
+        } else {
+          const { partial: _partial, ...delta } = event;
+          if (delta.type === 'toolcall_start') {
+            const message = raw.message as { content?: Array<{ id?: string; name?: string }> } | undefined;
+            const tool = message?.content?.[Number(delta.contentIndex)];
+            if (tool) {
+              delta.id = tool.id;
+              delta.toolName = tool.name;
+            }
           }
+          raw = {
+            type: 'message_update',
+            assistantMessageEvent: delta,
+            ...(raw.usage === undefined ? {} : { usage: raw.usage }),
+          };
         }
-        raw = { type: 'message_update', assistantMessageEvent: delta };
       }
       const encoded = JSON.stringify(raw);
       const frame: ProtocolEvent['frame'] = JSON.parse(encoded);

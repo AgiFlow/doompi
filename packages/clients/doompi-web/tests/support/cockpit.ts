@@ -28,6 +28,8 @@ export interface CockpitFixture {
   agentDir: string;
   /** Isolated temporary root shared by filesystem-backed plugin fixtures. */
   teamTemp: string;
+  /** Publishes fixture-owned session channel state through the hub event bus. */
+  publishSessionEvent(type: string, sessionId: string, payload: unknown): void;
   /** Publishes the current shell bytes as a fresh synchronized generation. */
   republishShell(): void;
   url: string;
@@ -51,7 +53,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         const root = document.documentElement;
         root.style.pointerEvents = 'none';
         const releaseWhenReady = (): boolean => {
-          if (!document.querySelector('link[data-doompi-plugin-composition][media="all"]')) return false;
+          if (document.querySelectorAll('link[data-doompi-plugin-composition][media="all"]').length < 3) return false;
           root.style.removeProperty('pointer-events');
           return true;
         };
@@ -66,11 +68,22 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     }
     await page.goto(cockpit.url);
     await page.getByTestId('cockpit').waitFor();
+    await Promise.all(cockpit.sessions.map(async (session) => await session.waitForCommand('get_state')));
     await page.goto('about:blank');
     for (const session of cockpit.sessions) {
+      session.clearReceived();
       const waitForAttach = session.waitForAttach.bind(session);
       session.waitForAttach = async (timeoutMs = 5000): Promise<void> => {
         await waitForAttach(timeoutMs);
+        if (assets === 'synced') {
+          await page
+            .locator('link[data-doompi-plugin-composition][media="all"]')
+            .nth(2)
+            .waitFor({ state: 'attached', timeout: timeoutMs });
+          await page.evaluate(
+            () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+          );
+        }
         await page.locator('[data-testid="composer-input"]:not([disabled])').waitFor({ timeout: timeoutMs });
       };
     }
@@ -281,6 +294,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         runnerStore,
         agentDir,
         teamTemp,
+        publishSessionEvent: (type, sessionId, payload) => hub.directEvents.publish(type, sessionId, payload),
         republishShell,
         url: web.url,
       });

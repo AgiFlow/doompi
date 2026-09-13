@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import path from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
@@ -91,13 +93,12 @@ async function readBody(request: IncomingMessage): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-function responseHeaders(headers: Headers, bodyLength: number): Record<string, string> {
+function responseHeaders(headers: Headers): Record<string, string> {
   const copied: Record<string, string> = {};
   for (const [name, value] of headers) {
     if (HOP_BY_HOP_HEADERS.has(name) || name === 'content-encoding' || name === 'content-length') continue;
     copied[name] = value;
   }
-  copied['content-length'] = String(bodyLength);
   return copied;
 }
 
@@ -127,10 +128,9 @@ async function proxyHttp(
       headers: proxyHeaders(request, token),
       ...(body === undefined ? {} : { body: body as unknown as BodyInit, duplex: 'half' as const }),
     });
-    const bytes = Buffer.from(await upstream.arrayBuffer());
-    response.writeHead(upstream.status, responseHeaders(upstream.headers, bytes.byteLength));
-    if (request.method === 'HEAD') response.end();
-    else response.end(bytes);
+    response.writeHead(upstream.status, responseHeaders(upstream.headers));
+    if (request.method === 'HEAD' || upstream.body === null) response.end();
+    else await pipeline(Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream), response);
   } catch (error) {
     notice(`headless request failed (${error instanceof Error ? error.message : String(error)})`);
     if (!response.headersSent) {

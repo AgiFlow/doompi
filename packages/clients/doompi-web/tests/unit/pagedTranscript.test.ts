@@ -98,6 +98,27 @@ it('deduplicates a commit also returned by the page and recovers a missing live 
   }
 });
 
+it('rereads the authoritative page when an assistant message commits', async () => {
+  const { transcript, read } = fixture();
+  try {
+    await transcript.initialize();
+    transcript.publish({
+      snapshot: { phase: 'idle' },
+      progress: null,
+      presentation: {
+        revision: 1,
+        events: [{ sequence: 1, frame: { type: 'message_end', message: { role: 'assistant' } } }],
+        projections: [],
+        dropped: 0,
+      },
+    } as unknown as SessionServiceState);
+
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+  } finally {
+    transcript.dispose();
+  }
+});
+
 it('rolls a full live page forward, keeps profile context, and ignores duplicate commits', async () => {
   const { transcript, read, entries } = fixture();
   const originalRead = read.getMockImplementation()!;

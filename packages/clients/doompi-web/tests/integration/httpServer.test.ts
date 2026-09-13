@@ -52,6 +52,9 @@ describe('the web presentation server', () => {
   let presentation: WebServer;
   let upstreamSockets: WebSocketServer;
   let registration: { origin: string; token: string | undefined; proof: string | undefined } | undefined;
+  let streamStarted: Promise<void>;
+  let markStreamStarted: (() => void) | undefined;
+  let finishStream: (() => void) | undefined;
 
   beforeEach(async () => {
     assetsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-assets-'));
@@ -59,6 +62,10 @@ describe('the web presentation server', () => {
     fs.mkdirSync(path.join(assetsDir, 'assets'));
     fs.writeFileSync(path.join(assetsDir, 'assets', 'app.js'), 'globalThis.cockpit = true;');
     registration = undefined;
+    streamStarted = new Promise<void>((resolve) => {
+      markStreamStarted = resolve;
+    });
+    finishStream = undefined;
     upstream = createServer((request, response) => {
       if (request.url === '/api/remote/frontend' && request.method === 'POST') {
         const chunks: Buffer[] = [];
@@ -72,6 +79,13 @@ describe('the web presentation server', () => {
           response.writeHead(200, { 'content-type': 'application/json' });
           response.end(JSON.stringify({ ok: true }));
         });
+        return;
+      }
+      if (request.url === '/api/stream') {
+        response.writeHead(200, { 'content-type': 'text/plain' });
+        response.write('first\n');
+        finishStream = () => response.end('second\n');
+        markStreamStarted?.();
         return;
       }
       if (request.url !== '/api/health') {
@@ -102,6 +116,7 @@ describe('the web presentation server', () => {
   });
 
   afterEach(async () => {
+    finishStream?.();
     await presentation.close();
     upstreamSockets.close();
     await closeServer(upstream);
@@ -129,6 +144,21 @@ describe('the web presentation server', () => {
     }
   });
 
+  it('streams headless HTTP responses without waiting for the upstream body to end', async () => {
+    const pending = fetch(`${presentation.url}/api/stream`);
+    await streamStarted;
+    const streamed = await Promise.race([
+      pending,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('The proxy buffered the stream.')), 1_000)),
+    ]);
+    const reader = streamed.body!.getReader();
+    const first = await reader.read();
+    expect(Buffer.from(first.value ?? []).toString('utf8')).toBe('first\n');
+
+    finishStream?.();
+    const second = await reader.read();
+    expect(Buffer.from(second.value ?? []).toString('utf8')).toBe('second\n');
+  });
   it('keeps authority-like request paths on the configured headless origin', async () => {
     const response = await rawGet(presentation.url, '//attacker.invalid/api/health');
 

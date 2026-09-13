@@ -541,7 +541,7 @@ export function renameSession(name: string, sessionId: string | null = activeSes
 
 export function abortRun(sessionId: string | null = activeSessionId()): void {
   if (sessionId === null) return;
-  clearQueuedMessages(sessionId);
+  sessionStoreFor(sessionId).setState(clearQueuedEntries);
   sendFrame(sessionId, abortCommand());
 }
 

@@ -432,8 +432,11 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
   if (command === 'get_state') {
     const model = isRecord(data.model) ? asString(data.model.id ?? data.model.name, 'unknown') : 'unknown';
     const provider = isRecord(data.model) ? asString(data.model.provider) : '';
+    const streaming = data.isStreaming === true;
     return {
       ...state,
+      streaming,
+      settled: !streaming,
       agent: {
         model,
         provider,
@@ -441,7 +444,7 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
         sessionId: asString(data.sessionId),
         sessionName: asString(data.sessionName),
         messageCount: asNumber(data.messageCount) ?? 0,
-        isStreaming: data.isStreaming === true,
+        isStreaming: streaming,
       },
     };
   }
