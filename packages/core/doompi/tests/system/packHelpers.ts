@@ -32,6 +32,12 @@ const UTF8_ENCODING = 'utf8';
 const NEWLINE = '\n';
 const PNPM_WORKSPACE_FILE = 'pnpm-workspace.yaml';
 const INSTALL_BUILD_DEPENDENCIES = ['better-sqlite3', 'protobufjs'] as const;
+const INSTALL_BUILD_POLICIES: Readonly<Record<string, boolean>> = {
+  '@google/genai': false,
+  'better-sqlite3': true,
+  esbuild: true,
+  protobufjs: true,
+};
 const PUBLIC_HOST_DEPENDENCIES: Readonly<Record<string, string>> = {
   '@earendil-works/pi-agent-core': '0.85.1',
   '@earendil-works/pi-ai': '0.85.1',
@@ -275,9 +281,12 @@ export async function installLocalPackages(
     ([name, tarball]) => `  ${JSON.stringify(name)}: ${JSON.stringify(`file:${tarball}`)}`,
   );
   const allowedBuilds = INSTALL_BUILD_DEPENDENCIES.map((name) => `  - ${name}`).join(NEWLINE);
+  const buildPolicies = Object.entries(INSTALL_BUILD_POLICIES)
+    .map(([name, allowed]) => `  ${JSON.stringify(name)}: ${allowed}`)
+    .join(NEWLINE);
   fs.writeFileSync(
     workspacePath,
-    `packages:${NEWLINE}  - '.'${NEWLINE}overrides:${NEWLINE}${overrides.join(NEWLINE)}${NEWLINE}onlyBuiltDependencies:${NEWLINE}${allowedBuilds}${NEWLINE}`,
+    `packages:${NEWLINE}  - '.'${NEWLINE}overrides:${NEWLINE}${overrides.join(NEWLINE)}${NEWLINE}allowBuilds:${NEWLINE}${buildPolicies}${NEWLINE}onlyBuiltDependencies:${NEWLINE}${allowedBuilds}${NEWLINE}`,
   );
   try {
     // Reuse pnpm's content-addressed cache; resolution and node_modules remain isolated in the consumer root.
@@ -286,6 +295,7 @@ export async function installLocalPackages(
       [
         'install',
         '--lockfile=false',
+        '--no-frozen-lockfile',
         '--prefer-offline',
         '--config.auto-install-peers=false',
         '--config.strict-dep-builds=false',
@@ -295,7 +305,7 @@ export async function installLocalPackages(
     if (install.code !== 0) return install;
     return runCommand(
       PNPM_COMMAND,
-      ['rebuild', ...INSTALL_BUILD_DEPENDENCIES, '--config.strict-dep-builds=false'],
+      ['rebuild', ...INSTALL_BUILD_DEPENDENCIES, '--config.frozen-lockfile=false', '--config.strict-dep-builds=false'],
       consumer.root,
     );
   } finally {

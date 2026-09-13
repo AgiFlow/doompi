@@ -144,7 +144,14 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     harnessId: id,
     session: {} as never,
     harness: {} as never,
-    lane: {} as never,
+    lane: {
+      findEntries: async () => entries.toReversed(),
+      getTipId: async () => {
+        const tip = entries.at(-1);
+        if (typeof tip !== 'object' || tip === null || !('id' in tip) || typeof tip.id !== 'string') return null;
+        return tip.id;
+      },
+    } as never,
     exited,
     storageQuarantined: false,
     onPresentationFrame(listener: (frame: Frame) => void) {
@@ -202,7 +209,17 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     },
     getSessionStats: async () => {
       record({ type: 'get_session_stats' });
-      return (await answer('get_session_stats', {})) as Frame;
+      return (await answer('get_session_stats', {
+        messageCount: 0,
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+      })) as Frame;
     },
     replaceTools: async () => undefined,
     replaceResources: async () => undefined,

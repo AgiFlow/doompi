@@ -150,6 +150,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       port: 0,
       token: 'e2e-headless-token',
       requestAsset: (request) => webCompositions.request(request),
+      onNotice: (message) => console.error(`[headless] ${message}`),
       compositions: () => ({
         global: globalComposition,
         publicKey: webCompositions.publicKey(),
@@ -166,6 +167,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         port,
         token: 'e2e-headless-token',
         requestAsset: (request) => webCompositions.request(request),
+        onNotice: (message) => console.error(`[headless] ${message}`),
         compositions: () => ({
           global: globalComposition,
           publicKey: webCompositions.publicKey(),
