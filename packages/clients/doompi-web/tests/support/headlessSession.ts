@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
 import {
+  DOOM_HEADLESS_HOST_SERVICE,
+  type DoomHeadlessActivity,
+  type DoomHeadlessExecutionContext,
+  type DoomHeadlessHostService,
+} from '@agimon-ai/doompi-core/headless';
+import {
   createAgentServerService,
   type HeadlessHub,
   type HeadlessHubSession,
@@ -31,6 +37,8 @@ export interface HeadlessSessionOptions {
   cwd?: string;
   workspaceId: string;
   webComposition: NonNullable<HeadlessHubSession['webComposition']>;
+  environment: Readonly<Record<string, string | undefined>>;
+  repoRoot: string;
   hub: HeadlessHub;
   headlessUrl: () => string;
   restartHeadless: () => Promise<void>;
@@ -259,18 +267,83 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     },
   } as unknown as AgentRuntime;
 
+  const activities = new Set<DoomHeadlessActivity>();
+  const activityStops = new Map<DoomHeadlessActivity, () => void | Promise<void>>();
+  let activateFacets: (() => Promise<void>) | undefined;
+  let activation: Promise<void> | undefined;
+  const selection = { majorMode: 'minimal', activeLayers: [], domains: [], state: {} } as const;
+  const executionContext: DoomHeadlessExecutionContext = {
+    cwd,
+    repoRoot: options.repoRoot,
+    sessionId: id,
+    environment: options.environment,
+    selection,
+    client: {
+      notify: () => undefined,
+      request: async () => {
+        throw new Error('The Playwright headless fixture does not answer package prompts.');
+      },
+      setStatus: () => undefined,
+    },
+    session: {
+      entries: async (query) =>
+        (await runtime.lane.findEntries({ ...query, order: 'newestFirst' } as never, {} as never)) as unknown as Record<
+          string,
+          unknown
+        >[],
+      appendCustomEntry: async (type, data) => {
+        await runtime.appendCustomEntry(type, data);
+      },
+      prompt: (text, delivery) =>
+        delivery === 'steer'
+          ? runtime.steer(text)
+          : delivery === 'followUp'
+            ? runtime.followUp(text)
+            : runtime.prompt(text),
+      abort: () => runtime.abort(),
+      compact: (instructions) => runtime.compact(instructions),
+      activity: async () => ({ hasPendingMessages: false, isIdle: true }),
+    },
+    shutdown: () => runtime.stop(),
+  };
+  const registration = { dispose: () => undefined };
+  const headlessHost = {
+    context: executionContext,
+    changeSelection: async () => undefined,
+    assertActive: () => undefined,
+    subscribeSelection: () => () => undefined,
+    registerToolRestriction: () => registration,
+    registerTool: () => registration,
+    registerResource: () => registration,
+    registerCommand: () => registration,
+    registerHook: () => registration,
+    registerActivity(activity: DoomHeadlessActivity) {
+      activities.add(activity);
+      return { dispose: () => activities.delete(activity) };
+    },
+  } as DoomHeadlessHostService;
   const host: HeadlessSessionHost = {
     runtime,
     host: undefined,
-    prepareFacets: () => undefined,
-    activateFacets: async () => undefined,
+    prepareFacets: (root) => {
+      root.provide(DOOM_HEADLESS_HOST_SERVICE, headlessHost);
+    },
+    activateFacets: async () => {
+      activateFacets = async () => {
+        for (const activity of activities) activityStops.set(activity, await activity.start(executionContext));
+      };
+    },
     canDispatch: () => true,
     onPresentationFrame: runtime.onPresentationFrame,
     respondToExtensionUi(frame) {
       record({ ...frame, type: 'extension_ui_response' });
       return true;
     },
-    dispose: () => runtime.dispose(),
+    dispose: async () => {
+      for (const stop of [...activityStops.values()].reverse()) await stop();
+      activityStops.clear();
+      await runtime.dispose();
+    },
   };
   options.onHost?.(id, host);
   options.hub.register({
@@ -318,6 +391,8 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     },
     waitForAttach: async (timeoutMs = 5000) => {
       if (timeoutMs <= 0) throw new Error('Timed out waiting for the cockpit to attach.');
+      activation ??= activateFacets?.() ?? Promise.resolve();
+      await activation;
       await new Promise((resolve) => setTimeout(resolve, 10));
     },
     waitForCommand(type, timeoutMs = 5000) {

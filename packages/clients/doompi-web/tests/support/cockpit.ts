@@ -3,7 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { type PackageApiServer, serveSessionApis } from '@agimon-ai/doompi-core/package-api-server';
 import { createHeadlessHub, serveHeadlessServer, type HeadlessSessionHost } from '@agimon-ai/doompi-core/server';
+import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/server-facet';
 import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
 import { createWebCompositions } from '@agimon-ai/doompi-core/web-compositions';
 import { test as base } from '@playwright/test';
@@ -11,7 +13,6 @@ import { test as base } from '@playwright/test';
 import { serveWeb } from '../../src/adapters/httpServer';
 import { SYNCED_DIST_ENV, SYNCED_HOME_ENV } from './bundleSetup';
 import { type HeadlessSession, startHeadlessSession } from './headlessSession';
-import { startRunnerApiServer, type RunnerApiServer } from './runnerRuns';
 const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
 
 export interface CockpitFixture {
@@ -73,7 +74,11 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         await page.locator('[data-testid="composer-input"]:not([disabled])').waitFor({ timeout: timeoutMs });
       };
     }
-    await use(page);
+    try {
+      await use(page);
+    } finally {
+      await page.close();
+    }
   },
   cockpit: async ({ sessionCount, assets, assetPackageRoot }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-e2e-'));
@@ -110,11 +115,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       });
     };
     republishShell();
-    const globalComposition = webCompositions.publish({ scope: 'global' }, registration, []);
-    const workspaceComposition = webCompositions.publish({ scope: 'workspace', workspaceId }, registration, []);
-    if (globalComposition === undefined || workspaceComposition === undefined)
-      throw new Error('global setup did not publish the E2E web compositions');
-    const runnerServers = new Map<string, RunnerApiServer>();
+    const sessionApis = new Map<string, PackageApiServer>();
     const hosts = new Map<string, HeadlessSessionHost>();
     const manager = {
       async create(): Promise<HeadlessSessionHost> {
@@ -134,16 +135,46 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const hub = createHeadlessHub({
       manager,
       requestSessionApi: async (scope, request) => {
-        const server = runnerServers.get(scope.sessionId);
+        const server = sessionApis.get(scope.sessionId);
         if (server === undefined) return Response.json({ error: 'Session API unavailable.' }, { status: 404 });
-        const target = new URL(`/api/plugin/${request.basePath}${request.path}`, server.url);
-        const body = request.body === undefined || request.body === null ? undefined : Buffer.from(request.body);
-        return fetch(target, {
-          method: request.method,
-          ...(body === undefined ? {} : { body: body as unknown as BodyInit, duplex: 'half' as const }),
-        });
+        const body = request.body === undefined || request.body === null ? undefined : request.body;
+        return server.request(
+          new Request(`http://session.local/api/plugin/${request.basePath}${request.path}`, {
+            method: request.method,
+            headers: request.headers,
+            ...(body === undefined ? {} : { body }),
+            ...(request.signal === undefined ? {} : { signal: request.signal }),
+          }),
+        );
       },
     });
+    const source = resolveServerBundleSource({ registration });
+    if (source.kind !== 'descriptor') throw new Error('global setup did not publish a synchronized server bundle');
+    const loadOptions = { ...source, majorMode: 'minimal', activeLayers: [] };
+    const [globalBundle, sessionBundle] = await Promise.all([
+      loadServerBundle('global', loadOptions),
+      loadServerBundle('session', loadOptions),
+    ]);
+    const environment = Object.freeze({
+      ...process.env,
+      HOME: root,
+      USERPROFILE: root,
+      PI_CODING_AGENT_DIR: agentDir,
+      WORKFLOW_MCP_HOME: workflowHome,
+    });
+    await hub.mountFacets(globalBundle.facets, {
+      scope: 'global',
+      homeDirectory: root,
+      environment,
+      sessionService: hub.sessionService,
+      directEvents: hub.directEvents,
+      onNotice: (message) => console.error(`[global] ${message}`),
+    });
+    const channels = hub.channelTypes();
+    const globalComposition = webCompositions.publish({ scope: 'global' }, registration, channels);
+    const workspaceComposition = webCompositions.publish({ scope: 'workspace', workspaceId }, registration, channels);
+    if (globalComposition === undefined || workspaceComposition === undefined)
+      throw new Error('global setup did not publish the E2E web compositions');
 
     let headless = await serveHeadlessServer({
       headlessHub: hub,
@@ -178,24 +209,59 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     };
 
     const sessions: HeadlessSession[] = [];
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    const previousWorkflowHome = process.env.WORKFLOW_MCP_HOME;
+    const previousHome = process.env.HOME;
+    const previousUserProfile = process.env.USERPROFILE;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    process.env.WORKFLOW_MCP_HOME = workflowHome;
+    process.env.HOME = root;
+    process.env.USERPROFILE = root;
     for (let index = 0; index < sessionCount; index += 1) {
       const id = `s${index + 1}`;
-      runnerServers.set(id, await startRunnerApiServer(runnerStore, id));
-      sessions.push(
-        await startHeadlessSession({
-          id,
-          name: `session-${index + 1}`,
-          cwd: path.join(workRoot, id),
+      const cwd = path.join(workRoot, id);
+      fs.mkdirSync(cwd, { recursive: true });
+      const session = await startHeadlessSession({
+        id,
+        name: `session-${index + 1}`,
+        cwd,
+        repoRoot: workspaceRoot,
+        environment,
+        workspaceId,
+        webComposition:
+          webCompositions.publish({ scope: 'session', sessionId: id }, registration, channels) ??
+          (() => {
+            throw new Error(`global setup did not publish the '${id}' web composition`);
+          })(),
+        hub,
+        headlessUrl,
+        restartHeadless,
+        onHost: (sessionId, host) => hosts.set(sessionId, host),
+      });
+      sessions.push(session);
+      const host = hosts.get(id);
+      if (host === undefined) throw new Error(`The '${id}' fixture host was not registered.`);
+      sessionApis.set(
+        id,
+        await serveSessionApis({
+          sessionId: id,
           workspaceId,
-          webComposition:
-            webCompositions.publish({ scope: 'session', sessionId: id }, registration, []) ??
-            (() => {
-              throw new Error(`global setup did not publish the '${id}' web composition`);
-            })(),
-          hub,
-          headlessUrl,
-          restartHeadless,
-          onHost: (sessionId, host) => hosts.set(sessionId, host),
+          workspaceRoot,
+          homeDirectory: root,
+          cwd: session.cwd,
+          environment,
+          directEvents: hub.directEvents,
+          sessionService: hub.sessionService,
+          apis: [],
+          facets: sessionBundle.facets,
+          mountChannel: (channel) => {
+            const dispose = hub.registerChannel(channel, { scope: 'session', sessionId: id });
+            return { mounted: true, dispose };
+          },
+          prepareFacets: host.prepareFacets,
+          activateFacets: host.activateFacets,
+          canDispatch: host.canDispatch,
+          onNotice: (message) => console.error(`[session] ${message}`),
         }),
       );
     }
@@ -220,11 +286,19 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       });
     } finally {
       await web.close();
+      for (const server of sessionApis.values()) await server.close();
       await headless.close();
       for (const session of sessions) await session.close();
-      for (const server of runnerServers.values()) await server.close();
       webCompositions.close();
       fs.rmSync(root, { recursive: true, force: true });
+      if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      if (previousWorkflowHome === undefined) delete process.env.WORKFLOW_MCP_HOME;
+      else process.env.WORKFLOW_MCP_HOME = previousWorkflowHome;
+      if (previousHome === undefined) delete process.env.HOME;
+      else process.env.HOME = previousHome;
+      if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = previousUserProfile;
     }
   },
 });

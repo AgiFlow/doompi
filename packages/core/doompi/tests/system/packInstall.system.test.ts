@@ -52,9 +52,10 @@ import {
 } from './packHelpers';
 
 const SYSTEM_HOOK_TIMEOUT_MS = 120_000;
-// Cold sync builds both the global and workspace generations.
-const COLD_SYNC_TIMEOUT_MS = 180_000;
-const RUNTIME_TEST_TIMEOUT_MS = 240_000;
+// Cold sync builds both the global and workspace generations. CI runners can
+// spend about 90 seconds compiling each generation's server facets.
+const COLD_SYNC_TIMEOUT_MS = 300_000;
+const RUNTIME_TEST_TIMEOUT_MS = 600_000;
 const STARTUP_TEST_TIMEOUT_MS = 600_000;
 const STARTUP_RUN_TIMEOUT_MS = 8_000;
 const STARTUP_EXIT_TIMEOUT_MS = 10_000;
@@ -1666,6 +1667,7 @@ describe('consumer ownership boundaries', () => {
         ],
         root,
         environment,
+        COLD_SYNC_TIMEOUT_MS,
       );
       expect(sync.code, sync.stderr || sync.stdout).toBe(0);
 
