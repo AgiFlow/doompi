@@ -105,7 +105,13 @@ function responseHeaders(headers: Headers): Record<string, string> {
 function proxyHeaders(request: IncomingMessage, token: string | undefined): Record<string, string> {
   const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(request.headers)) {
-    if (value === undefined || HOP_BY_HOP_HEADERS.has(name) || name === 'host' || name === 'x-doompi-web-registration')
+    if (
+      value === undefined ||
+      HOP_BY_HOP_HEADERS.has(name) ||
+      name === 'host' ||
+      name === 'content-length' ||
+      name === 'x-doompi-web-registration'
+    )
       continue;
     headers[name] = Array.isArray(value) ? value.join(', ') : value;
   }
@@ -132,7 +138,11 @@ async function proxyHttp(
     if (request.method === 'HEAD' || upstream.body === null) response.end();
     else await pipeline(Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream), response);
   } catch (error) {
-    notice(`headless request failed (${error instanceof Error ? error.message : String(error)})`);
+    const reason =
+      error instanceof Error
+        ? `${error.message}${error.cause instanceof Error ? `: ${error.cause.message}` : ''}`
+        : String(error);
+    notice(`headless request failed (${reason})`);
     if (!response.headersSent) {
       const message = JSON.stringify({ error: 'The headless server is unavailable.' });
       response.writeHead(502, {
