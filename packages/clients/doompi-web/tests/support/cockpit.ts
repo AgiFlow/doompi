@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { DoomHubSessionCreateRequest } from '@agimon-ai/doompi-core/hub-channel';
 import { type PackageApiServer, serveSessionApis } from '@agimon-ai/doompi-core/package-api-server';
 import { createHeadlessHub, serveHeadlessServer, type HeadlessSessionHost } from '@agimon-ai/doompi-core/server';
 import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/server-facet';
@@ -130,6 +131,9 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     republishShell();
     const sessionApis = new Map<string, PackageApiServer>();
     const hosts = new Map<string, HeadlessSessionHost>();
+    let createSession = async (_request: DoomHubSessionCreateRequest): Promise<{ sessionId: string; cwd: string }> => {
+      throw new Error('The Playwright headless fixture is not ready to create sessions.');
+    };
     const manager = {
       async create(): Promise<HeadlessSessionHost> {
         throw new Error('The Playwright headless fixture does not create sessions through HTTP.');
@@ -137,6 +141,8 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       get: (id: string) => hosts.get(id),
       sessions: () => [...hosts.values()],
       async closeSession(id: string): Promise<void> {
+        await sessionApis.get(id)?.close();
+        sessionApis.delete(id);
         await hosts.get(id)?.dispose();
         hosts.delete(id);
       },
@@ -147,6 +153,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     };
     const hub = createHeadlessHub({
       manager,
+      createSession: (request) => createSession(request),
       requestSessionApi: async (scope, request) => {
         const server = sessionApis.get(scope.sessionId);
         if (server === undefined) return Response.json({ error: 'Session API unavailable.' }, { status: 404 });
@@ -223,24 +230,19 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     };
 
     const sessions: HeadlessSession[] = [];
-    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-    const previousWorkflowHome = process.env.WORKFLOW_MCP_HOME;
-    const previousHome = process.env.HOME;
-    const previousUserProfile = process.env.USERPROFILE;
-    process.env.PI_CODING_AGENT_DIR = agentDir;
-    process.env.WORKFLOW_MCP_HOME = workflowHome;
-    process.env.HOME = root;
-    process.env.USERPROFILE = root;
-    for (let index = 0; index < sessionCount; index += 1) {
-      const id = `s${index + 1}`;
-      const cwd = path.join(workRoot, id);
+    const registerFixtureSession = async (
+      id: string,
+      name: string,
+      cwd: string,
+      countPluginStyles: boolean,
+    ): Promise<HeadlessSession> => {
       fs.mkdirSync(cwd, { recursive: true });
       const webComposition = webCompositions.publish({ scope: 'session', sessionId: id }, registration, channels);
       if (webComposition === undefined) throw new Error(`global setup did not publish the '${id}' web composition`);
-      if (index === 0) pluginStyleCount += webComposition.stylePaths.length;
+      if (countPluginStyles) pluginStyleCount += webComposition.stylePaths.length;
       const session = await startHeadlessSession({
         id,
-        name: `session-${index + 1}`,
+        name,
         cwd,
         repoRoot: workspaceRoot,
         environment,
@@ -276,6 +278,28 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
           canDispatch: host.canDispatch,
           onNotice: (message) => console.error(`[session] ${message}`),
         }),
+      );
+      return session;
+    };
+    createSession = async (request) => {
+      const sessionId = crypto.randomUUID();
+      await registerFixtureSession(sessionId, request.name, request.cwd, false);
+      return { sessionId, cwd: request.cwd };
+    };
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    const previousWorkflowHome = process.env.WORKFLOW_MCP_HOME;
+    const previousHome = process.env.HOME;
+    const previousUserProfile = process.env.USERPROFILE;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    process.env.WORKFLOW_MCP_HOME = workflowHome;
+    process.env.HOME = root;
+    process.env.USERPROFILE = root;
+    for (let index = 0; index < sessionCount; index += 1) {
+      await registerFixtureSession(
+        `s${index + 1}`,
+        `session-${index + 1}`,
+        path.join(workRoot, `s${index + 1}`),
+        index === 0,
       );
     }
 
