@@ -55,6 +55,11 @@
       "import": "./dist/background-work.mjs",
       "require": "./dist/background-work.cjs"
     },
+    "./bundle-asset-policy": {
+      "types": "./dist/bundle-asset-policy.d.mts",
+      "import": "./dist/bundle-asset-policy.mjs",
+      "require": "./dist/bundle-asset-policy.cjs"
+    },
     "./child-process": {
       "types": "./dist/child-process.d.mts",
       "import": "./dist/child-process.mjs",

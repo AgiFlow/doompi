@@ -2,7 +2,7 @@ import {
   BUNDLE_ASSET_POLICY_PATH,
   BUNDLE_ASSET_POLICY_VERSION,
   type BundleAssetPolicy,
-} from '@agimon-ai/doompi-core/web';
+} from '@agimon-ai/doompi-core/bundle-asset-policy';
 import type { Plugin } from 'vite';
 
 const OPTIONAL_PACKAGES = ['/node_modules/mermaid/', '/node_modules/pdfjs-dist/'] as const;
