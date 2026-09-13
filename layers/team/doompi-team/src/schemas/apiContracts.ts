@@ -64,6 +64,26 @@ export const apiContracts = defineApiContract({
       description: 'Discover the active session agent catalog.',
       responses: jsonApiResponses(TeamCatalogSchema),
     },
+    {
+      id: 'team.run',
+      scope: 'session',
+      basePath: 'team',
+      path: '/run',
+      method: 'POST',
+      authentication: 'owner',
+      description: 'Launch an agent in the selected headless session.',
+      body: {
+        required: true,
+        contentType: 'application/json',
+        schema: Type.Object({
+          agent: Type.String({ minLength: 1 }),
+          task: S,
+          fork: Type.Boolean(),
+          model: O(Type.String({ minLength: 1 })),
+        }),
+      },
+      responses: jsonApiResponses(Type.Object({ runId: S }), 201),
+    },
   ],
   sockets: (['global', 'workspace'] as const).flatMap((scope) => [
     {

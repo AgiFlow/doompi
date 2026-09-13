@@ -1,23 +1,13 @@
 import type { SubagentCatalogAgent, SubagentCatalogSource } from '../../types/webSubagents';
 
-/** The session's own verb, whose parser takes agent[model=x], then the rest as the task, then a trailing --fork. */
-const RUN_VERB = '/run';
-const FORK_FLAG = '--fork';
 const META_TOOL_LIMIT = 3;
 
 export interface LaunchRequest {
   agent: string;
   task: string;
-  /** A pinned model becomes the inline model=… config; absent keeps the agent's own. */
+  /** A pinned model overrides the agent's default; absent keeps the agent's own. */
   model?: string;
   fork: boolean;
-}
-
-/** The slash line to send as a prompt; no quoting, since /run reads everything after the agent as the task. */
-export function launchCommand({ agent, task, model, fork }: LaunchRequest): string {
-  const target = model ? `${agent}[model=${model}]` : agent;
-  const body = task.trim();
-  return [RUN_VERB, target, ...(body ? [body] : []), ...(fork ? [FORK_FLAG] : [])].join(' ');
 }
 
 /** Rows whose name, source, package, description or a tool contains the filter, case-insensitively. */

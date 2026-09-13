@@ -54,6 +54,7 @@ import type {
   DoomChildSessionSource,
   DoomChildSessionServiceProvider,
   DoomChildSessionTerminalPiForkSource,
+  DoomChildSessionV4ForkSource,
 } from '@agimon-ai/doompi-core/child';
 import type { SessionManager } from '@earendil-works/pi-coding-agent';
 
@@ -198,8 +199,8 @@ export interface SpawnPlanRequest {
   environment?: Readonly<Record<string, string | undefined>>;
   /** Parent identity retained for delegation correlation. */
   parentSessionId?: string;
-  /** Immutable terminal Pi branch used by native fork children. */
-  parentForkSource?: DoomChildSessionTerminalPiForkSource;
+  /** Immutable parent branch used by native fork children. */
+  parentForkSource?: DoomChildSessionTerminalPiForkSource | DoomChildSessionV4ForkSource;
   /** External-runtime parent source fields. */
   parentSessionFile?: string;
   parentLeafId?: string;
@@ -231,7 +232,7 @@ interface SpawnOneChildInput {
   fanout: boolean;
   fallbackCwd: string;
   parentSessionId: string | undefined;
-  parentForkSource: DoomChildSessionTerminalPiForkSource | undefined;
+  parentForkSource: DoomChildSessionTerminalPiForkSource | DoomChildSessionV4ForkSource | undefined;
   sessionScope: DoomChildSessionScope;
   environment: Readonly<Record<string, string | undefined>>;
   parentSessionFile: string | undefined;

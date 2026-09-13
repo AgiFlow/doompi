@@ -1,6 +1,7 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
 import type { SubagentCatalogAgent, SubagentCatalogPayload } from '../../types/webSubagents';
+import type { LaunchRequest } from '../lib/launchCommand';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -51,4 +52,24 @@ export async function fetchCatalog(sessionId: string, signal: AbortSignal): Prom
     throw new Error('The server returned an invalid agent catalog.');
   }
   return { cwd: body.cwd, agents: body.agents, models: body.models };
+}
+
+/** Launch on the selected session host, without submitting a parent prompt. */
+export async function launchAgent(sessionId: string, request: LaunchRequest): Promise<string> {
+  const response = await sealedTransport.fetch(`/api/sessions/${encodeURIComponent(sessionId)}/plugin/team/run`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  const body: unknown = await response.json();
+  if (!response.ok) {
+    throw new Error(
+      isRecord(body) && typeof body.error === 'string'
+        ? body.error
+        : `Agent could not be launched (${response.status}).`,
+    );
+  }
+  if (!isRecord(body) || typeof body.runId !== 'string' || body.runId === '')
+    throw new Error('The server returned an invalid run ID.');
+  return body.runId;
 }

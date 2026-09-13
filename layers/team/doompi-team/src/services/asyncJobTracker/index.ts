@@ -3,7 +3,7 @@ import type { ExternalRunProjection } from '../externalProcessIpc';
 import type { SessionScope } from '../sessionPaths';
 
 export const TERMINAL_ASYNC_JOB_STATES = new Set(['complete', 'completed', 'failed', 'paused', 'stopped']);
-const DEFAULT_RETENTION_MS = 10_000;
+const DEFAULT_RETENTION_MS = 10 * 60_000;
 
 type ExternalResult = Record<string, unknown>;
 

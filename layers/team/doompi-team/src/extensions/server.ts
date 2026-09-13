@@ -10,7 +10,7 @@ import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { Check } from 'typebox/value';
 
-import { api } from '../controllers/teamCatalogApi';
+import { createTeamSessionApi } from '../controllers/teamSessionApi';
 import { createSubagentCatalogChannel } from '../controllers/webSubagentCatalogChannel';
 import { createSubagentsChannel } from '../controllers/webSubagentsChannel';
 import { DOOM_DELEGATION_SERVICE } from '../schemas/delegationApi';
@@ -390,7 +390,7 @@ export const teamServerFacet = defineServerPlugin({
     };
     const channel = runtime.teamChannel.createHeadlessRuntime(transport);
     return {
-      api: [api],
+      api: [createTeamSessionApi(runtime, execution)],
       services: [(ctx: Context) => headlessTeamServicesPlugin(ctx, { bridge, runtime, execution })],
       async onDispose() {
         for (const cleanup of directEventCleanups.splice(0).reverse()) cleanup();

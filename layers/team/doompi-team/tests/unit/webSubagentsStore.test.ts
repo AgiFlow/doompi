@@ -117,9 +117,7 @@ describe('subagents plugin channel', () => {
     subagents.reset();
     subagentRunsChannel.apply('s1', fleet(['r1', 'reviewer']));
 
-    const sent: Array<{ sessionId: string; frame: Record<string, unknown> }> = [];
-    requestLaunch((sessionId, frame) => sent.push({ sessionId, frame }), 's1', '/run reviewer do it', 'reviewer');
-    expect(sent).toEqual([{ sessionId: 's1', frame: { type: 'prompt', message: '/run reviewer do it' } }]);
+    requestLaunch('s1', 'reviewer');
     expect(session('s1').pendingLaunch).toEqual({ agent: 'reviewer', knownRunIds: ['r1'] });
 
     // Another agent's run, and the run already known, leave the launch pending.

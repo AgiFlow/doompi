@@ -70,6 +70,8 @@ export interface DoomHeadlessSession {
   abort(): Promise<void>;
   compact(instructions?: string): Promise<void>;
   activity(): Promise<{ hasPendingMessages: boolean; isIdle: boolean }>;
+  /** Capture the current persisted branch for an in-process child fork. */
+  forkSource?(): Promise<{ kind: 'v4-fork'; sessionFile: string; branch: string; entryId?: string }>;
 }
 
 export interface DoomHeadlessExecutionContext {

@@ -70,6 +70,8 @@ describe('AsyncJobTracker event-fed state', () => {
     expect(jobs.get('run-1')).toBeDefined();
 
     vi.advanceTimersByTime(10_001);
+    expect(jobs.get('run-1')).toBeDefined();
+    vi.advanceTimersByTime(10 * 60_000 - 10_000);
     expect(jobs.get('run-1')).toBeUndefined();
   });
 

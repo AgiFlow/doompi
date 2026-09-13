@@ -624,6 +624,17 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       },
     },
     session: {
+      async forkSource() {
+        const metadata = runtime.session.metadata as unknown as { path?: unknown };
+        if (typeof metadata.path !== 'string') throw new Error('The parent session has no persisted journal.');
+        const { leafId } = await runtime.readEntries();
+        return {
+          kind: 'v4-fork' as const,
+          sessionFile: metadata.path,
+          branch: runtime.laneName,
+          ...(leafId === null ? {} : { entryId: leafId }),
+        };
+      },
       entries: async (query) =>
         (await runtime.lane.findEntries(
           { ...query, order: query?.limit === undefined ? 'oldestFirst' : 'newestFirst' },

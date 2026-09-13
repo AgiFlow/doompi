@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { api as teamApi, createTeamCatalogApi } from '../../src/controllers/teamCatalogApi';
+import { createTeamApiHandler } from '../../src/controllers/teamSessionApi';
 import type { SubagentCatalogPayload } from '../../src/types/webSubagents';
 
 const pluginAgent = {
@@ -17,7 +17,7 @@ const pluginAgent = {
 describe('the Team session catalog API', () => {
   it('discovers from the session cwd and returns plugin agents', async () => {
     const read = vi.fn(() => ({ agents: [pluginAgent], models: ['team/model'] }));
-    const api = createTeamCatalogApi({ cwd: '/workspace/project', read });
+    const api = createTeamApiHandler({ cwd: '/workspace/project', read });
 
     const response = await api.fetch(new Request('http://session/catalog'));
 
@@ -31,7 +31,7 @@ describe('the Team session catalog API', () => {
   });
 
   it('keeps discovery failures visible to the hub', async () => {
-    const api = createTeamCatalogApi({
+    const api = createTeamApiHandler({
       cwd: '/workspace/project',
       read: () => {
         throw new Error('bad projected agent');
@@ -44,9 +44,48 @@ describe('the Team session catalog API', () => {
     await expect(response.json()).resolves.toEqual({ error: 'bad projected agent' });
   });
 
+  it('validates and dispatches a direct run request', async () => {
+    const launch = vi.fn(async () => ({ runId: 'run-1' }));
+    const handler = createTeamApiHandler({ cwd: '/workspace/project', launch });
+    const request = (body: unknown) =>
+      new Request('http://session/run', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+    const accepted = await handler.fetch(request({ agent: 'reviewer', task: 'Review', fork: false }));
+    expect(accepted.status).toBe(201);
+    await expect(accepted.json()).resolves.toEqual({ runId: 'run-1' });
+    expect(launch).toHaveBeenCalledWith({ agent: 'reviewer', task: 'Review', fork: false });
+
+    const invalid = await handler.fetch(request({ agent: '', task: 'Review', fork: false }));
+    expect(invalid.status).toBe(400);
+    expect(launch).toHaveBeenCalledOnce();
+  });
+
+  it('rejects malformed input and reports a failed server launch', async () => {
+    const launch = vi.fn(async () => {
+      throw new Error('Agent is unavailable.');
+    });
+    const handler = createTeamApiHandler({ cwd: '/workspace/project', launch });
+    const malformed = await handler.fetch(new Request('http://session/run', { method: 'POST', body: '{' }));
+    expect(malformed.status).toBe(400);
+    expect(launch).not.toHaveBeenCalled();
+
+    const failed = await handler.fetch(
+      new Request('http://session/run', {
+        method: 'POST',
+        body: JSON.stringify({ agent: 'reviewer', task: 'Review', fork: true }),
+      }),
+    );
+    expect(failed.status).toBe(409);
+    await expect(failed.json()).resolves.toEqual({ error: 'Agent is unavailable.' });
+  });
+
   it('rejects unsupported methods and paths without reading the catalog', async () => {
     const read = vi.fn(() => ({ agents: [], models: [] }));
-    const api = createTeamCatalogApi({ cwd: '/workspace/project', read });
+    const api = createTeamApiHandler({ cwd: '/workspace/project', read });
     for (const request of [
       new Request('http://session/other'),
       new Request('http://session/catalog', { method: 'POST' }),
@@ -59,7 +98,7 @@ describe('the Team session catalog API', () => {
   });
 
   it('reports non-Error failures', async () => {
-    const api = createTeamCatalogApi({
+    const api = createTeamApiHandler({
       cwd: '/workspace/project',
       read: () => {
         throw 'catalog unavailable';
@@ -114,7 +153,7 @@ majorMode:
           DOOMPI_ROOT: root,
           DOOMPI_LAYERS: name,
         };
-        return teamApi.start({ scope: 'session', cwd: root, environment, onNotice: vi.fn() });
+        return createTeamApiHandler({ cwd: root, environment });
       };
       const first = mount('first');
       const second = mount('second');

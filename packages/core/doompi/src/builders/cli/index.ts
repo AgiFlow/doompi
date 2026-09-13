@@ -35,6 +35,8 @@ export interface SyncedRuntimeBuildOptions {
   state?: SyncState;
   /** Generation root for cache and compiled outputs. */
   directory?: string;
+  /** Starts dependent target builds as soon as composition planning finishes. */
+  onCompositionsResolved?: (compositions: readonly ExtensionComposition[]) => void;
 }
 
 function mergedEnvironment(recorded: Record<string, string>, current: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -140,6 +142,7 @@ export async function buildSyncedRuntime(
       });
     }
   }
+  options.onCompositionsResolved?.(compositions);
   const results = await Promise.allSettled(builds.map(({ options }) => compileModeExtension(options)));
   for (const [index, result] of results.entries()) {
     const { composition, majorMode, mute } = builds[index]!;

@@ -8,11 +8,12 @@ import {
   type DoomHeadlessTool,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
+import type { DoomApi } from '@agimon-ai/doompi-core/package-api';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { api } from '../../../src/controllers/teamCatalogApi';
+import { TEAM_API_BASE_PATH } from '../../../src/controllers/teamSessionApi';
 import { teamServerFacet as teamHeadlessFacet } from '../../../src/extensions/server';
 import { sessionScopeDir } from '../../../src/services/sessionPaths';
 import * as runtimeModule from '../../../src/services/teamRuntime';
@@ -34,6 +35,11 @@ async function fixture(options: { serverHost?: unknown } = {}) {
       prompt: vi.fn(),
       abort: vi.fn(),
       compact: vi.fn(),
+      forkSource: vi.fn(async () => ({
+        kind: 'v4-fork' as const,
+        sessionFile: '/sessions/parent.sqlite',
+        branch: 'main',
+      })),
     },
     selection: { majorMode: 'test', activeLayers: ['team'], domains: [], minorModes: [] },
     shutdown: vi.fn(),
@@ -143,7 +149,7 @@ describe('teamHeadlessFacet', () => {
   it('retains tracked jobs across optional activity disable and re-enable', async () => {
     vi.useFakeTimers();
     const test = await fixture();
-    expect(test.serverHost.registerApi).toHaveBeenCalledWith(api);
+    expect(test.serverHost.registerApi).toHaveBeenCalledWith(expect.objectContaining({ basePath: TEAM_API_BASE_PATH }));
     const scope = TEST_SESSION_SCOPE;
     let activityStop: (() => void | Promise<void>) | undefined;
 
@@ -183,10 +189,45 @@ describe('teamHeadlessFacet', () => {
     }
   });
 
+  it('launches a catalog agent through the session API without prompting the parent', async () => {
+    const test = await fixture();
+    const spawn = vi.spyOn(test.runtime.spawnPlanner, 'spawn').mockResolvedValue({
+      outcomes: [{ agent: 'mock-agent', task: 'Review', childIndex: 0, runId: 'web-run' }],
+    });
+    const registered = (test.serverHost.registerApi.mock.calls[0] as unknown as [DoomApi] | undefined)?.[0];
+    if (!registered) throw new Error('Team session API was not registered');
+    const handler = registered.start({
+      scope: 'session',
+      cwd: test.execution.cwd,
+      environment: test.execution.environment,
+      onNotice: vi.fn(),
+    });
+    try {
+      const response = await handler.fetch(
+        new Request('http://session/run', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ agent: 'mock-agent', task: 'Review', fork: true }),
+        }),
+      );
+      expect(response.status).toBe(201);
+      await expect(response.json()).resolves.toEqual({ runId: 'web-run' });
+      expect(spawn.mock.calls[0]?.[0]).toMatchObject({
+        single: { agent: 'mock-agent', task: 'Review', context: 'fork' },
+        parentForkSource: { kind: 'v4-fork', sessionFile: '/sessions/parent.sqlite', branch: 'main' },
+      });
+      expect(test.execution.session.prompt).not.toHaveBeenCalled();
+    } finally {
+      handler.close();
+      spawn.mockRestore();
+      await test.dispose();
+    }
+  });
+
   it('detaches intercom on activity stop and stops every runtime worker on final disposal', async () => {
     vi.useFakeTimers();
     const test = await fixture();
-    expect(test.serverHost.registerApi).toHaveBeenCalledWith(api);
+    expect(test.serverHost.registerApi).toHaveBeenCalledWith(expect.objectContaining({ basePath: TEAM_API_BASE_PATH }));
     const scope = TEST_SESSION_SCOPE;
     let activityStop: (() => void | Promise<void>) | undefined;
     const intercom = test.tools.find((tool) => tool.name === 'intercom');
@@ -219,7 +260,7 @@ describe('teamHeadlessFacet', () => {
 
   it('dispatches headless subagent actions without a Pi ExtensionAPI', async () => {
     const test = await fixture();
-    expect(test.serverHost.registerApi).toHaveBeenCalledWith(api);
+    expect(test.serverHost.registerApi).toHaveBeenCalledWith(expect.objectContaining({ basePath: TEAM_API_BASE_PATH }));
     const scope = TEST_SESSION_SCOPE;
     const subagent = test.tools.find((tool) => tool.name === 'subagent');
     if (!subagent) throw new Error('subagent headless tool was not registered');
