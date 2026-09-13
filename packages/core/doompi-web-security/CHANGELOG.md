@@ -1,3 +1,13 @@
+## 0.0.1-alpha.31 (2026-09-13)
+
+### 🚀 Features
+
+- **doompi:** complete headless server migration ([0ce9b863](https://github.com/AgiFlow/doompi/commit/0ce9b863))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.30 (2026-09-09)
 
 This was a version bump only for @agimon-ai/doompi-web-security to align it with other projects, there were no code changes.

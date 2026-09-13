@@ -1,3 +1,27 @@
+## 0.0.1-alpha.70 (2026-09-13)
+
+### 🚀 Features
+
+- add API contracts and expand voice runtime ([99940bd1](https://github.com/AgiFlow/doompi/commit/99940bd1))
+- refactor DoomPi kernel and server packages ([59fca629](https://github.com/AgiFlow/doompi/commit/59fca629))
+- **doompi:** add scoped mounts and SQLite transcripts ([10ce0acb](https://github.com/AgiFlow/doompi/commit/10ce0acb))
+- **doompi:** checkpoint bundle and headless host migration ([b01c4a75](https://github.com/AgiFlow/doompi/commit/b01c4a75))
+
+### 🩹 Fixes
+
+- stabilize server and web integration tests ([5bdc3c8c](https://github.com/AgiFlow/doompi/commit/5bdc3c8c))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.29
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.69 (2026-09-09)
 
 ### 🧱 Updated Dependencies

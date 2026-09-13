@@ -1,3 +1,13 @@
+## 0.0.1-alpha.40 (2026-09-13)
+
+### 🚀 Features
+
+- refactor DoomPi kernel and server packages ([59fca629](https://github.com/AgiFlow/doompi/commit/59fca629))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.39 (2026-09-09)
 
 This was a version bump only for @agimon-ai/doompi-hashline to align it with other projects, there were no code changes.

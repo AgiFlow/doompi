@@ -1,3 +1,49 @@
+## 0.0.1-alpha.71 (2026-09-13)
+
+### 🚀 Features
+
+- **doompi-team:** integrate session API ([71f04498](https://github.com/AgiFlow/doompi/commit/71f04498))
+- add API contracts and expand voice runtime ([99940bd1](https://github.com/AgiFlow/doompi/commit/99940bd1))
+- refactor DoomPi kernel and server packages ([59fca629](https://github.com/AgiFlow/doompi/commit/59fca629))
+- **doompi:** add scoped mounts and SQLite transcripts ([10ce0acb](https://github.com/AgiFlow/doompi/commit/10ce0acb))
+- **doompi:** complete headless interaction support ([06f151a4](https://github.com/AgiFlow/doompi/commit/06f151a4))
+- **doompi:** complete headless server migration ([0ce9b863](https://github.com/AgiFlow/doompi/commit/0ce9b863))
+- **doompi:** checkpoint bundle and headless host migration ([b01c4a75](https://github.com/AgiFlow/doompi/commit/b01c4a75))
+- **server-facet:** land the server facet contract, hosts, pilots and lockdown ([d170e54c](https://github.com/AgiFlow/doompi/commit/d170e54c))
+
+### 🩹 Fixes
+
+- stabilize server and web integration tests ([5bdc3c8c](https://github.com/AgiFlow/doompi/commit/5bdc3c8c))
+- **doompi-web:** preserve streamed session metadata ([36a15fd0](https://github.com/AgiFlow/doompi/commit/36a15fd0))
+- **doompi:** preserve run state across reloads ([b7ae4d90](https://github.com/AgiFlow/doompi/commit/b7ae4d90))
+- stabilize runtime and web test cleanup ([b9b0454a](https://github.com/AgiFlow/doompi/commit/b9b0454a))
+- stabilize CI runtime checks ([2590e66d](https://github.com/AgiFlow/doompi/commit/2590e66d))
+- keep active sessions alive ([d810f4c6](https://github.com/AgiFlow/doompi/commit/d810f4c6))
+- **doompi:** parallelize sync build phases ([a76fec51](https://github.com/AgiFlow/doompi/commit/a76fec51))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.47
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.36
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.47
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.70
+- Updated @agimon-ai/vibe-lint-plugin-doom-cli to 0.0.1-alpha.2
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.70 (2026-09-09)
 
 ### 🚀 Features
