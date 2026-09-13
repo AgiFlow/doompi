@@ -1,6 +1,8 @@
 import fs from 'node:fs';
-import { describe, expect, it } from 'vitest';
+
 import * as ort from 'onnxruntime-web/wasm';
+import { describe, expect, it } from 'vitest';
+
 import { SILERO_STATE_SAMPLES, SileroVadFrames } from '../src/web/lib/sileroVadFrames';
 
 function readScaledFixture(): Uint8Array {

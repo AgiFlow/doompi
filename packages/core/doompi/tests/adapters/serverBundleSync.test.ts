@@ -4,12 +4,14 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
 import { loadServerBundle } from '@agimon-ai/doompi-core/server-facet';
 import { afterEach, describe, expect, it } from 'vitest';
-import { compileExtensionModule } from '../../src/compiler';
-import { syncServerBundle, type ServerBundleSyncInput } from '../../src/builders/server';
+
 import type { ExtensionComposition } from '../../src/builders/cli/extensionAssembler';
+import { syncServerBundle, type ServerBundleSyncInput } from '../../src/builders/server';
+import { compileExtensionModule } from '../../src/compiler';
 import { serverBundleIsFresh } from '../../src/composition/syncDrift';
 import { computeServerSourcesHash } from '../../src/composition/syncState';
 

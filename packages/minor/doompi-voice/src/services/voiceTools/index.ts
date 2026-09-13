@@ -1,16 +1,7 @@
-import {
-  VoiceToolDescriptorSchema,
-  type VoiceToolBatchCall,
-  type VoiceToolDescribeInput,
-  type VoiceToolUseInput,
-  type VoiceToolErrorCode,
-  type VoiceToolErrorPayload,
-  type VoiceToolConflictDiagnostic,
-  type VoiceToolCatalogEntry,
-  type VoiceToolCatalogSnapshot,
-  type VoiceToolBatchItemResult,
-  type VoiceToolBatchResult,
-} from '../../schemas/voiceTools';
+import type { Context } from '@deepseek-ai/cordis';
+import { type TSchema } from 'typebox';
+import { Check, Errors } from 'typebox/value';
+
 import {
   DOOM_VOICE_TOOLS_SERVICE,
   VOICE_TOOL_DEFAULT_TIMEOUT_MS,
@@ -28,9 +19,19 @@ import {
   SAFE_IDENTIFIER,
   SAFE_NAME,
 } from '../../constants/voiceTools';
-import type { Context } from '@deepseek-ai/cordis';
-import { type TSchema } from 'typebox';
-import { Check, Errors } from 'typebox/value';
+import {
+  VoiceToolDescriptorSchema,
+  type VoiceToolBatchCall,
+  type VoiceToolDescribeInput,
+  type VoiceToolUseInput,
+  type VoiceToolErrorCode,
+  type VoiceToolErrorPayload,
+  type VoiceToolConflictDiagnostic,
+  type VoiceToolCatalogEntry,
+  type VoiceToolCatalogSnapshot,
+  type VoiceToolBatchItemResult,
+  type VoiceToolBatchResult,
+} from '../../schemas/voiceTools';
 
 /** Voice-owned Cordis service for the live tool registrar and active session. */
 

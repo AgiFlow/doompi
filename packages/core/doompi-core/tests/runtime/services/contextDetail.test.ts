@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { ContextSkillInventory as SkillEntry } from '../../../src/services/contextProjection';
+
 import type { ToolSource } from '@agimon-ai/doompi-core/tool-inventory';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { buildContextDetail } from '../../../src/services/contextDetail';
 import {
   contextDetailPath,
@@ -12,6 +13,7 @@ import {
   removeContextDetail,
   writeContextDetail,
 } from '../../../src/services/contextDetailStore';
+import type { ContextSkillInventory as SkillEntry } from '../../../src/services/contextProjection';
 
 const countTokens = (text: string): number => Math.ceil(text.length / 4);
 

@@ -1,7 +1,7 @@
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 export async function readVoicePrompt(): Promise<string> {
   let directory = dirname(fileURLToPath(import.meta.url));
   while (!existsSync(join(directory, 'package.json'))) {

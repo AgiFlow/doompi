@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { DoomHubChannel, DoomHubChannelHost } from '../../../src/schemas/hubChannel';
 import { doomHubChannelHarness } from '../../../src/services/hubChannelHarness';
 

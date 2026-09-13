@@ -5,6 +5,7 @@
   "useTabs": false,
   "semi": true,
   "singleQuote": true,
+  "sortImports": true,
   "trailingComma": "all",
   "overrides": [
     {

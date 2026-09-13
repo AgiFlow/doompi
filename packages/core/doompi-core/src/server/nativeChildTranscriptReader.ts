@@ -1,9 +1,11 @@
 import path from 'node:path';
+
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
+
 import type { TranscriptPage, TranscriptPageRequest } from '../exports/sessionProtocol';
 import { readSqliteTranscript } from '../services/sqliteTranscriptReader';
-import { readJsonlTranscript } from './jsonlTranscriptReader';
 import { nativeChildRuntime } from '../systems/child/adapters/nativeChildRuntimes';
+import { readJsonlTranscript } from './jsonlTranscriptReader';
 
 /** Dispatches an already-authorized child journal to its live runtime or completed read-only backend. */
 export async function readNativeChildTranscript(

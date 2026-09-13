@@ -1,5 +1,3 @@
-import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
-import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/goal';
 import {
   type DoomHeadlessHostService,
   type DoomHeadlessToolResult,
@@ -7,9 +5,14 @@ import {
   type DoomHeadlessCommand,
 } from '@agimon-ai/doompi-core/headless';
 import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
-import { readGoalSkill } from '../services/packageResources';
+import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';
+
+import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/goal';
+import { decodeGoalStateEntries } from '../models/stateCodec';
 import { createGoal, goalSummary, isContradictoryCompletionSummary, transitionGoal } from '../models/stateMachine';
+import { readGoalSkill } from '../services/packageResources';
 import { parseGoalCommand, validateObjective } from '../services/parser';
 import {
   goalToolNamesForState,
@@ -18,9 +21,7 @@ import {
   type GoalBlockedInput,
   type GoalCompleteInput,
 } from '../services/tools';
-import { decodeGoalStateEntries } from '../models/stateCodec';
 import type { ActiveGoal } from '../types/goal';
-import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';
 
 const COMPLETE_TOOL = 'goal_complete';
 const BLOCKED_TOOL = 'goal_blocked';

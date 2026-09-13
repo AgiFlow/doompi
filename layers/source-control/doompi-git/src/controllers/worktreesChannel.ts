@@ -10,13 +10,14 @@ import type {
   DoomHubSessionScope,
   DoomHubSessionService,
 } from '@agimon-ai/doompi-core/hub-channel';
+
 import { DoomGitExpectedError, HubUnavailableError } from '../services/errors';
-import { GIT_WORKTREE_LIFECYCLE_EVENT, isWorktreeLifecycleEvent } from '../services/worktreeEvents';
-import { GIT_WORKTREES_TYPE, type GitWorktreesCommand, type WorktreeView } from '../types/webWorktrees';
-import { registryFile } from '../services/paths';
 import { createWorktreeGit } from '../services/gitCli';
+import { registryFile } from '../services/paths';
+import { GIT_WORKTREE_LIFECYCLE_EVENT, isWorktreeLifecycleEvent } from '../services/worktreeEvents';
 import { createWorktreeOperations, type WorktreeOperations } from '../services/worktreeOperations';
 import { createWorktreeRegistry } from '../services/worktreeRegistry';
+import { GIT_WORKTREES_TYPE, type GitWorktreesCommand, type WorktreeView } from '../types/webWorktrees';
 
 interface SessionState {
   worktrees: WorktreeView[];

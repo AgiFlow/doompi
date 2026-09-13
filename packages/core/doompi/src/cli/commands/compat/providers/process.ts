@@ -3,8 +3,9 @@ import fs from 'node:fs';
 import { constants as osConstants } from 'node:os';
 import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import spawn from 'cross-spawn';
+
 import { readJson, writeJson } from '@agimon-ai/doompi-core/runtime-json';
+import spawn from 'cross-spawn';
 
 /**
  * Child process and cross-repository locking primitives.

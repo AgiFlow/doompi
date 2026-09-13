@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
-import { parseUseAuthorToolInput } from '../schemas/authorTools';
+
 import { AuthorBridgeError, type AuthorBridgeState } from '../models/authorBridgeState';
-import { AUTHOR_BRIDGE_ROUTES } from '../types/authorApi';
+import { parseUseAuthorToolInput } from '../schemas/authorTools';
 import type { AuthorViewportCapabilityDescriptor } from '../types/author';
+import { AUTHOR_BRIDGE_ROUTES } from '../types/authorApi';
 
 function record(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value))

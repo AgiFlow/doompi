@@ -1,11 +1,12 @@
 import path from 'node:path';
-import { lineDiff, lineDiffFromEmpty } from '../lineDiff';
+
 import type { FileEditTool, TimelineEvent } from '../../types/domain';
 import type { IEditTracker } from '../../types/editTracker';
 import type { GitStatusPort } from '../../types/gitStatus';
 import type { SnapshotStorePort } from '../../types/snapshotStore';
 import type { ITimelineStore } from '../../types/timelineStore';
 import type { TreeManifest, TreeManifestPort } from '../../types/treeManifest';
+import { lineDiff, lineDiffFromEmpty } from '../lineDiff';
 
 const EDIT_TOOL = 'edit';
 const WRITE_TOOL = 'write';

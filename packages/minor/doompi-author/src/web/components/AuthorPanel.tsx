@@ -1,14 +1,15 @@
-import { Button } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { Button } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
-import { authorCaptureContext, createAuthorCapturePacket, multiRegionCaptureProvider } from '../stores/authorCapture';
+
 import { authorGrid } from '../lib/authorGrid';
-import { autonomousVoiceGridVisible } from './AuthorGridOverlay';
+import { authorCaptureContext, createAuthorCapturePacket, multiRegionCaptureProvider } from '../stores/authorCapture';
 import { authorWorkspace } from '../stores/authorWorkspaceStore';
-import { AuthorToolPalette } from './AuthorToolPalette';
+import { autonomousVoiceGridVisible } from './AuthorGridOverlay';
 import { AuthorRegionDrafts } from './AuthorRegionDrafts';
 import { AuthorRequestLog } from './AuthorRequestLog';
+import { AuthorToolPalette } from './AuthorToolPalette';
 
 export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, statuses }: WebPluginSlotProps) {
   const [captureStatus, setCaptureStatus] = useState<string>();

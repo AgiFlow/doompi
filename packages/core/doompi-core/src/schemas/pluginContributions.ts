@@ -1,4 +1,5 @@
 import type { Static, TSchema } from 'typebox';
+
 import type { DoomNotificationRequest } from './notification';
 
 /** Capabilities available to portable commands on both agent hosts. */

@@ -1,6 +1,8 @@
 import { basename, resolve } from 'node:path';
-import { computeFileTag, decodeUtf8, displayPath, resolveInputPath } from '@agimon-ai/doompi-hashline/files';
+
 import { formatFileHeader, formatTaggedLine, splitLines } from '@agimon-ai/doompi-hashline';
+import { computeFileTag, decodeUtf8, displayPath, resolveInputPath } from '@agimon-ai/doompi-hashline/files';
+
 import type { GrepParams } from '../../schemas/grepTool';
 
 const MATCH_DELIMITER = /:(\d+): /gu;

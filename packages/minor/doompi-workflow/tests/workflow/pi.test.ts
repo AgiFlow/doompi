@@ -1,22 +1,13 @@
-import type { WorkflowPiToolDependencies } from '../../src/services/workflowExecution';
-import { WORKFLOW_PI_TOOL_NAMES } from '../../src/constants/workflow';
-import { workflowExtension } from '../../src/extensions/pi';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+
 import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProvider,
   type DoomBackgroundWorkService,
 } from '@agimon-ai/doompi-core/background-work';
 import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
-import {
-  DOOM_MINOR_MODE_CATALOG_SERVICE,
-  type MinorModeCatalogService,
-  type MinorModeOwnerDefinition,
-  type MinorModeOwnerHandle,
-  type MinorModeState,
-} from '@agimon-ai/doompi-minor-mode';
 import {
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
@@ -30,22 +21,33 @@ import {
 import { createDoomToolSurface, DOOM_TOOL_SURFACE_SERVICE } from '@agimon-ai/doompi-core/tool-surface';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import {
+  DOOM_MINOR_MODE_CATALOG_SERVICE,
+  type MinorModeCatalogService,
+  type MinorModeOwnerDefinition,
+  type MinorModeOwnerHandle,
+  type MinorModeState,
+} from '@agimon-ai/doompi-minor-mode';
+import {
   createEmbeddedWorkflowFeature,
   type EmbeddedWorkflowFeature,
   type Workflow,
   type WorkflowRunRecord,
 } from '@agimon-ai/workflow-mcp';
+import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
-import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { WORKFLOW_PI_TOOL_NAMES } from '../../src/constants/workflow';
+import { workflowExtension } from '../../src/extensions/pi';
+import type { WorkflowPiToolDependencies } from '../../src/services/workflowExecution';
+import { createWorkflowTools } from '../../src/tools/workflowTools';
 import {
   compatibleRunners,
   panelHint,
   parseWorkflowCommandArguments,
   shortcutLabel,
 } from '../../src/tui/workflowRuntime';
-import { createWorkflowTools } from '../../src/tools/workflowTools';
 
 type CommandOptions = {
   description?: string;

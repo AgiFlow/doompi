@@ -8,6 +8,7 @@ import type {
   WebPluginContextInventoryItem,
 } from '@agimon-ai/doompi-core/web';
 import { createElement, type ReactNode } from 'react';
+
 import { fileTabForPath } from './composition';
 import { pluginContextActions, slotFills } from './pluginRegistry';
 import { renderThread } from './threadRenderer';

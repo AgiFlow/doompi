@@ -1,10 +1,11 @@
-import type { Context } from '@deepseek-ai/cordis';
 import type {
   DoomHeadlessCommand,
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
 } from '@agimon-ai/doompi-core/headless';
+import type { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
+
 import { notificationServerFacet as notificationHeadlessFacet } from '../../src/extensions/server';
 
 describe('notification headless command', () => {

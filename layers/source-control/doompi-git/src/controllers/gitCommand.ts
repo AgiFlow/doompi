@@ -1,6 +1,7 @@
-import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/git';
 // @scaffold-generated
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
+import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/git';
 import type { GitExtensionService } from '../types/extension';
 
 export function createGitCommand(

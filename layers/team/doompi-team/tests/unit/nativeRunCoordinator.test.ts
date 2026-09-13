@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import type {
   DoomChildSessionEvent,
   DoomChildSessionHandle,
@@ -6,12 +5,14 @@ import type {
   DoomChildSessionService,
   DoomChildSessionServiceProvider,
 } from '@agimon-ai/doompi-core/child';
+import { describe, expect, it } from 'vitest';
+
 import { AsyncJobTracker, type NativeAsyncJobProjection } from '../../src/services/asyncJobTracker';
 import { NativeRunCoordinator } from '../../src/services/nativeRunCoordinator';
-import { createSessionScope } from '../../src/services/sessionPaths';
 import type { NativeRunProjectionSink } from '../../src/services/nativeRunProjection';
 import type { CompletionNotifierContract } from '../../src/services/notify';
 import type { RunResultFile } from '../../src/services/resultWatcher';
+import { createSessionScope } from '../../src/services/sessionPaths';
 
 class FakeHandle implements DoomChildSessionHandle {
   readonly runId: string;

@@ -1,10 +1,11 @@
+import { Check } from 'typebox/value';
+
 import {
   type DoomSubagentPolicyService,
   type SubagentPolicy,
   type SubagentPolicyHandle,
   SubagentPolicySchema,
 } from '../../schemas/subagentPolicy';
-import { Check } from 'typebox/value';
 import type { SubagentCapabilityPolicyStore } from '../../schemas/team/capabilityCeiling';
 
 function assertPolicy(policy: SubagentPolicy): void {

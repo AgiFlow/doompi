@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
 import type { WorkflowProgressEvent, WorkflowRunRecord } from '@agimon-ai/workflow-mcp';
+import { describe, expect, it } from 'vitest';
+
 import {
   foldWorkflowProgress,
   MAX_PRESENTED_WORKFLOW_RUNS_PER_GROUP,

@@ -1,5 +1,6 @@
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context';
 import { describe, expect, it, vi } from 'vitest';
+
 import { createAgentSessionRuntime } from '../../../../../src/pi/piSessionRuntime';
 import type { ServerTelemetry } from '../../../../../src/services/serverTelemetry';
 import type { DirectHarnessFrame, DirectHarnessRuntime } from '../../../../../src/types/server/directHarnessRuntime';

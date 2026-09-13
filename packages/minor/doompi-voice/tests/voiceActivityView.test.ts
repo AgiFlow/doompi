@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { voiceActivityView } from '../src/web/lib/voiceActivityView';
 
 describe('reading the voice status line', () => {

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+
 import { TARGETS } from './fetch-runner-binaries.mjs';
 
 const root = process.cwd();

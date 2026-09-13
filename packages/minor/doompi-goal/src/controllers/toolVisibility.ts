@@ -1,4 +1,5 @@
 import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+
 import type { ActiveGoal } from '../types/goal';
 
 const GOAL_COMPLETE = 'goal_complete';

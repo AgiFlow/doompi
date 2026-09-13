@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import { DOOM_PACKAGE_NAME, isDoomPackagePath } from '@agimon-ai/doompi-core/doom-package';
 import { isRecord, readJson, writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
 import type { JsonObject } from '@agimon-ai/doompi-core/runtime-json';
-import { DOOM_PACKAGE_NAME, isDoomPackagePath } from '@agimon-ai/doompi-core/doom-package';
+
 import { piExtensionAliasPath } from './piExtensionAlias';
 
 /**

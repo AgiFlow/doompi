@@ -1,4 +1,5 @@
 import type { SettingsFieldContribution } from '@agimon-ai/doompi-core/web';
+
 import type { SettingsScope, SettingsValueView, SettingsWriteRequest } from '../../types/settings';
 
 /**

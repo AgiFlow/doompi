@@ -1,20 +1,5 @@
-import { createSubagentTool } from '../tools/subagent';
-import { createIntercomTool } from '../tools/intercom';
-import { validateParams as validateSubagentParams } from '../services/subagentTool';
-import { renderSubagentCall, renderSubagentResult } from '../tui/subagentToolRender';
-import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
-/**
- * Install the Team feature into one package-local Cordis root.
- *
- * The standard Pi factory owns that root and disposes it when Pi emits
- * `session_shutdown`. Each factory invocation therefore creates fresh session
- * state; no process-global container or replacement-root handshake participates
- * in reload. Long-lived services are registered as Cordis effects, and stale
- * asynchronous session-start continuations are fenced by a generation token.
- */
-
-import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
 import { readDoomChildSessionService } from '@agimon-ai/doompi-core/child';
+import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
 import {
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
   requireDoomContextContributions,
@@ -25,6 +10,16 @@ import {
   type DoomCordisSessionService,
 } from '@agimon-ai/doompi-core/cordis-host';
 import { DOOM_MCP_TOOL_RESOLVER_SERVICE, requireDoomMcpToolResolver } from '@agimon-ai/doompi-core/mcp-tool-resolver';
+/**
+ * Install the Team feature into one package-local Cordis root.
+ *
+ * The standard Pi factory owns that root and disposes it when Pi emits
+ * `session_shutdown`. Each factory invocation therefore creates fresh session
+ * state; no process-global container or replacement-root handshake participates
+ * in reload. Long-lived services are registered as Cordis effects, and stale
+ * asynchronous session-start continuations are fenced by a generation token.
+ */
+import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
 import {
   createDoomReadinessCoordinator,
   type DoomReadinessCoordinator,
@@ -36,38 +31,43 @@ import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context, Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import {
   createSlashCommands,
   startSingleAgentRun,
   type SlashCommandDeps,
   type SlashCommandState,
 } from '../controllers/slashCommands';
+import type { SkillDiscoveryContract } from '../services/agentSkills';
+import type { AsyncJobTrackerContract } from '../services/asyncJobTracker';
 import { loadConfig } from '../services/config';
 import { createDelegationBridge } from '../services/delegationBridge';
 import { createFablePlanBridge } from '../services/fablePlanBridge';
 import type { ManagementActionsContract } from '../services/managementActions';
-import { appendOrchestratorPrompt, shouldInjectOrchestratorPrompt } from '../services/orchestratorPrompt';
-import { captureSessionForkSource, type SpawnPlannerContract } from '../services/spawnPlan';
-import type { SkillDiscoveryContract } from '../services/agentSkills';
-import type { AgentDiscoveryContract } from '../types/agent';
-import { formatTeamContextSnapshot, readActiveTeamSnapshot } from '../services/teamSnapshot';
-import type { AsyncJobTrackerContract } from '../services/asyncJobTracker';
-import { openScopeAsync, suspendScopeRuns } from '../services/sessionLifecycle';
-import { formatSuspendedRunsAsync } from '../services/suspendedRuns';
 import { normalizeParentModel } from '../services/modelFallback';
 import { authenticatedModelInfos } from '../services/modelResolution';
-import { createSessionScope, type SessionScope } from '../services/sessionPaths';
+import { appendOrchestratorPrompt, shouldInjectOrchestratorPrompt } from '../services/orchestratorPrompt';
 import type { PollSchedulerContract } from '../services/pollScheduler';
+import { openScopeAsync, suspendScopeRuns } from '../services/sessionLifecycle';
+import { createSessionScope, type SessionScope } from '../services/sessionPaths';
+import { captureSessionForkSource, type SpawnPlannerContract } from '../services/spawnPlan';
+import { validateParams as validateSubagentParams } from '../services/subagentTool';
+import { formatSuspendedRunsAsync } from '../services/suspendedRuns';
+import { createTeamCollaborationMount, type TeamDelegationObservation } from '../services/teamCollaboration';
+import { createTeamExtensionRuntime } from '../services/teamRuntime';
+import { formatTeamContextSnapshot, readActiveTeamSnapshot } from '../services/teamSnapshot';
+import { createIntercomTool } from '../tools/intercom';
+import { createSubagentTool } from '../tools/subagent';
 import { createCompletionRenderer } from '../tui/completionNotice';
-import { createSlashRunRenderer } from '../tui/slashRunNotice';
 import {
   createAgentListCommand,
   createAgentStatus,
   createFleetCommand,
   registerSubagentLeaderContribution,
 } from '../tui/contributions';
-import { createTeamCollaborationMount, type TeamDelegationObservation } from '../services/teamCollaboration';
-import { createTeamExtensionRuntime } from '../services/teamRuntime';
+import { createSlashRunRenderer } from '../tui/slashRunNotice';
+import { renderSubagentCall, renderSubagentResult } from '../tui/subagentToolRender';
+import type { AgentDiscoveryContract } from '../types/agent';
 
 const SESSION_SHUTDOWN_REASON_FALLBACK = 'unknown';
 const PACKAGE_SOURCE = '@agimon-ai/doompi-team';

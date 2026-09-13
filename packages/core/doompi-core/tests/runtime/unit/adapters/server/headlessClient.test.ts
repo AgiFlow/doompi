@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createHeadlessClient } from '../../../../../src/services/headlessClient';
 
 function setup() {

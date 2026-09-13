@@ -1,5 +1,6 @@
 import type { DoomHelpContribution, DoomHelpSkill } from '@agimon-ai/doompi-core/help';
 import { describe, expect, it, vi } from 'vitest';
+
 import { DefaultHelpActivationService, HelpActivationError } from '../../../src/services/helpActivation';
 import type { HelpActivationDependencies, ResolvedHelpIndex } from '../../../src/types/help';
 

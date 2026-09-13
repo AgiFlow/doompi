@@ -1,7 +1,7 @@
 import type { QuestionData, QuestionParams } from '../../schemas/questionnaire';
-import { readAnswerEnvelope } from '../answerEnvelope';
 import { decodeAnswerEnvelope } from '../../types/askUserWire';
 import type { QuestionAnswer, QuestionnaireResult } from '../../types/questionnaire';
+import { readAnswerEnvelope } from '../answerEnvelope';
 
 const CUSTOM_LABEL = 'Type something.';
 const DONE_LABEL = 'Next';

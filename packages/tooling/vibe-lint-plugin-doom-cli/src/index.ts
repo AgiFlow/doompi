@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import ts from 'typescript';
+
 import type { RuleDefinition, VibeLintPlugin } from '@agimon-ai/vibe-lint';
+import ts from 'typescript';
 const folders = new Set(['bin', 'cli', 'composition', 'builders', 'compiler', 'extensions', 'exports', 'prompts']);
 export const architecture: RuleDefinition = {
   preflight: true,

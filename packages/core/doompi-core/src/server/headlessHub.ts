@@ -1,4 +1,3 @@
-import type { DoomWebComposition } from '../exports/packageApi';
 import type {
   DoomDirectEventBus,
   DoomHubChannel,
@@ -9,6 +8,9 @@ import type {
   DoomHubSessionScope,
   DoomHubSessionService,
 } from '../exports/hubChannel';
+import type { DoomWebComposition } from '../exports/packageApi';
+import type { DoomApiContext, DoomApiMount } from '../exports/packageApi';
+import { createDoomPluginRegistry, type DoomPluginCaller, type DoomPluginDirection } from '../exports/pluginProtocol';
 import {
   createDoomServerHost,
   installServerFacets,
@@ -17,8 +19,6 @@ import {
   type InstalledServerFacets,
   type LoadedServerFacet,
 } from '../exports/serverFacet';
-import type { DoomApiContext, DoomApiMount } from '../exports/packageApi';
-import { createDoomPluginRegistry, type DoomPluginCaller, type DoomPluginDirection } from '../exports/pluginProtocol';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../systems/main/types/headlessSessionHost';
 import type { HeadlessSessionManager } from '../systems/main/types/headlessSessionManager';
 
@@ -344,6 +344,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
         type !== 'agent_start' &&
         type !== 'agent_settled' &&
         type !== 'message_end' &&
+        type !== 'session_info_changed' &&
         type !== 'extension_ui_request' &&
         type !== 'extension_ui_answered'
       )
@@ -360,6 +361,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
             : current.awaitingInput;
       current = {
         ...current,
+        name: type === 'session_info_changed' && typeof frame.name === 'string' ? frame.name : current.name,
         updatedAt: now,
         phase,
         phaseSince: phaseChanged ? now : current.phaseSince,

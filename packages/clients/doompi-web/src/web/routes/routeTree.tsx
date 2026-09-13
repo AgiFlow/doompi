@@ -1,4 +1,5 @@
 import { createRootRoute, createRoute, Outlet } from '@tanstack/react-router';
+
 import { CockpitPage } from './CockpitPage';
 import { SettingsPage } from './SettingsPage';
 

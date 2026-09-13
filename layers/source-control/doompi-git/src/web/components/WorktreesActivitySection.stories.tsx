@@ -6,6 +6,7 @@
  * session id, which is exactly where the hub channel puts them.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import type { WorktreeView } from '../../types/webWorktrees';
 import { worktreeActivity } from '../stores/worktreesActivityStore';
 import { WorktreesActivitySection } from './WorktreesActivitySection';

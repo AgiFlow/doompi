@@ -1,4 +1,5 @@
 import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
+
 import { createServerIdleShutdown } from '../services/serverIdleShutdown';
 export const autoStopServerFacet = defineServerPlugin({
   name: '@agimon-ai/doompi-autostop',

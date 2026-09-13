@@ -1,5 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   type DoomFablePlanService,
   FABLE_PLAN_MODEL,
@@ -8,16 +11,15 @@ import {
   FABLE_PLAN_RUNTIME,
   type FablePlanStartPayload,
 } from '../../src/exports/fablePlanApi';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createFablePlanBridge } from '../../src/services/fablePlanBridge';
 import { SubagentCapabilityPolicyStore } from '../../src/schemas/team/capabilityCeiling';
 import {
   fableProfileResultPathFor,
   type AsyncSubagentSpawnInput,
   type AsyncSubagentSpawnerContract,
 } from '../../src/services/asyncExecution';
-import type { SubagentWaiterContract, WaitOutcome, WaitRequest } from '../../src/services/subagentWait';
+import { createFablePlanBridge } from '../../src/services/fablePlanBridge';
 import type { ManagementActionsContract } from '../../src/services/managementActions';
+import type { SubagentWaiterContract, WaitOutcome, WaitRequest } from '../../src/services/subagentWait';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 const REQUEST: FablePlanStartPayload = {

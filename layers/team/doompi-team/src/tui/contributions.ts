@@ -6,22 +6,23 @@
  *   `fleetStatus.ts`; this file connects those surfaces to host services.
  */
 
-import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
-import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
-import type { ManagementActionsContract } from '../services/managementActions';
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import type { SubagentCapabilityPolicyStore } from '../schemas/team/capabilityCeiling';
 import { resolveActiveTeamPackageConfig } from '../services/agentDiscovery';
 import type { SkillDiscoveryContract } from '../services/agentSkills';
-import type { AgentDiscoveryContract } from '../types/agent';
 import {
   type AsyncJobTrackerContract,
   type TrackedAsyncJobsContract,
   resolveTrackedRunId,
 } from '../services/asyncJobTracker';
+import type { ManagementActionsContract } from '../services/managementActions';
 import type { PollSchedulerContract } from '../services/pollScheduler';
 import { createSessionScope, type SessionScope } from '../services/sessionPaths';
+import type { AgentDiscoveryContract } from '../types/agent';
 import { type AgentLaunchRequest, openAgentCatalog } from './agentCatalog';
 import { buildAgentCatalogEntries } from './agentResourceProjection';
 import { type FleetActionDispatcher, openSubagentFleet } from './fleet';

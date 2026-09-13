@@ -1,15 +1,17 @@
-import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { mirrorComposition } from '../compositionMirror';
+import fs from 'node:fs';
+
 import type { DoomHubSessionService } from '@agimon-ai/doompi-core/hub-channel';
+
+import { WORKTREE_RECORD_VERSION } from '../../types/worktreeRegistry';
+import type { WorktreeGit, WorktreeRecord } from '../../types/worktreeRegistry';
+import { mirrorComposition } from '../compositionMirror';
+import { DoomGitExpectedError, HubUnavailableError } from '../errors';
 import { registryFile, worktreesRoot } from '../paths';
 import { repositoryId, repositoryLabel, shortId } from '../repositoryIdentity';
 import { MAX_WORKTREE_MESSAGE_BYTES, type WorktreeMessageInbox, type WorktreeMessageParty } from '../worktreeEvents';
-import { createWorktreeRegistry } from '../worktreeRegistry';
-import { WORKTREE_RECORD_VERSION } from '../../types/worktreeRegistry';
-import type { WorktreeGit, WorktreeRecord } from '../../types/worktreeRegistry';
 import { planPrune, reconcile, refuseClose, refuseSpawn, worktreeDirectory } from '../worktreeNaming';
-import { DoomGitExpectedError, HubUnavailableError } from '../errors';
+import { createWorktreeRegistry } from '../worktreeRegistry';
 
 export interface WorktreeContext {
   /** Where the calling session is working, used to find the repository. */

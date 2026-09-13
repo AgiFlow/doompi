@@ -1,3 +1,4 @@
+import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   Badge,
   Breadcrumb,
@@ -11,15 +12,12 @@ import {
   KebabIcon,
   Markdown,
 } from '@agimon-ai/doompi-web-components';
-import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
+
 import type { FileEditsVersionView } from '../../types/fileEditsApi';
-import { SessionMediaPreview as MediaPreview } from './SessionMediaPreview';
-import { CommentDraft } from './CommentDraft';
-import { DeleteFileDialog } from './DeleteFileDialog';
-import { DiffView } from './DiffView';
 import { deleteFile, fetchFileDetail, saveFileContent, sessionFileUrl } from '../api/filesApi';
+import { buildReviewPrompt, commentAnchor, fileTabId, previewModeOf, TOOL_LABEL } from '../lib/fileView';
 import {
   addComment,
   clearComments,
@@ -29,7 +27,10 @@ import {
   storeDetail,
   storeError,
 } from '../stores/filesStore';
-import { buildReviewPrompt, commentAnchor, fileTabId, previewModeOf, TOOL_LABEL } from '../lib/fileView';
+import { CommentDraft } from './CommentDraft';
+import { DeleteFileDialog } from './DeleteFileDialog';
+import { DiffView } from './DiffView';
+import { SessionMediaPreview as MediaPreview } from './SessionMediaPreview';
 
 /**
  * One file's tab: what this session did to it, and what the reader wants done

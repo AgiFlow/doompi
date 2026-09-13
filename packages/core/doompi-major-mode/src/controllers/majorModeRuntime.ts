@@ -3,15 +3,16 @@ import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
 import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import { DOOM_TRANSITION_SERVICE } from '@agimon-ai/doompi-core/transition';
-import { DOOM_VOICE_TOOLS_SERVICE, requireDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
+import { DOOM_VOICE_TOOLS_SERVICE, requireDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { createMajorModeCommand } from './majorModeCommand';
-import { requestSupervisedRelaunch, supervisedRelaunchAvailable } from './relaunchRequest';
+
 import { colorStatus, STATUS_KEY } from '../services/statusLine';
 import { type MajorModeView } from '../types/majorMode';
 import { MAJOR_MODE_EVENT, type MajorModeTelemetry } from '../types/telemetry';
+import { createMajorModeCommand } from './majorModeCommand';
+import { requestSupervisedRelaunch, supervisedRelaunchAvailable } from './relaunchRequest';
 import { registerMajorModeVoiceCapability } from './voiceTool';
 
 /**

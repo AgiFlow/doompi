@@ -1,4 +1,5 @@
 import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
+
 import { createSkillServer } from '../controllers/skillServer';
 import { LEADER_SOURCE } from '../types/skills';
 export const skillServerFacet = defineServerPlugin({

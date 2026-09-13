@@ -1,4 +1,7 @@
 import type { ToolDefinition, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
+import { DEFAULT_PROMPT_GUIDELINES } from '../constants/promptGuidelines';
+import type { TaskAction, TaskAssignment, TaskMutationParams } from '../models/task';
 import {
   MSG_UPSERT_FIELD_MISPLACED,
   TaskParamsSchema,
@@ -6,13 +9,9 @@ import {
   TOOL_NAME,
   taskActionAcceptsField,
 } from '../schemas/task';
+import { DEFAULT_MAX_TASKS } from '../services/config';
 import type { AssignOptions, DelegationManager, DelegationOutcome } from '../services/delegation';
 import { applyTaskMutation, isCommittingOp, type ReducerAction } from '../services/reducer';
-import type { TaskStore } from '../services/taskStore';
-import type { TaskAction, TaskAssignment, TaskMutationParams } from '../models/task';
-import { DEFAULT_MAX_TASKS } from '../services/config';
-import { TASK_EVENT, type TaskFailureReporter } from '../types/telemetry';
-import { DEFAULT_PROMPT_GUIDELINES } from '../constants/promptGuidelines';
 import {
   type AssignmentItemResult,
   buildAssignmentResult,
@@ -22,6 +21,8 @@ import {
   formatUpsertFailureText,
   type ToolResult,
 } from '../services/taskResult';
+import type { TaskStore } from '../services/taskStore';
+import { TASK_EVENT, type TaskFailureReporter } from '../types/telemetry';
 
 export { DEFAULT_PROMPT_GUIDELINES } from '../constants/promptGuidelines';
 

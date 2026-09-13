@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createTeamCatalogApi } from '../../src/controllers/teamCatalogApi';
 
 const pluginAgent = {

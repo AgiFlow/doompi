@@ -7,6 +7,7 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto';
+
 import type {
   DoomChildSessionIntercom,
   DoomChildSessionRuntime,
@@ -16,6 +17,7 @@ import type {
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { TSchema } from 'typebox';
+
 import { BoundedKeySet } from '../boundedKeySet';
 import { DoomTeamExpectedError, invalidRequest } from '../errors';
 

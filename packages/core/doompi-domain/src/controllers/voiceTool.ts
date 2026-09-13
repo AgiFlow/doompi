@@ -1,9 +1,9 @@
 import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
-import { type DoomVoiceToolsService, type VoiceToolRegistrationHandle } from '@agimon-ai/doompi-voice/voice-tools';
 import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { type DoomVoiceToolsService, type VoiceToolRegistrationHandle } from '@agimon-ai/doompi-voice/voice-tools';
 import type { Context } from '@deepseek-ai/cordis';
-import type { DomainCatalogPort } from './domainsCommand';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import {
   EMPTY_DOMAIN_INPUT_SCHEMA,
   LIST_DOMAINS_RESULT_SCHEMA,
@@ -14,6 +14,7 @@ import {
 import { DOMAIN_COMMAND, VOICE_SWITCH_TOKEN_PREFIX } from '../services/domainText';
 import { DOMAIN_SOURCE } from '../types/domains';
 import type { DomainSwitchHandoff, DomainSwitchHandoffStore } from '../types/handoff';
+import type { DomainCatalogPort } from './domainsCommand';
 
 const LIST_DOMAINS_ID = 'domains-list';
 const SWITCH_DOMAINS_ID = 'domains-switch';

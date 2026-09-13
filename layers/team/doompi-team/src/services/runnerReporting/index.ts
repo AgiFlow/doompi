@@ -104,11 +104,12 @@
  */
 
 import * as path from 'node:path';
-import { writeAtomicJson } from '../atomicJson';
-import { scopeResultsDir, type SessionScope } from '../sessionPaths';
+
 import type { AcceptanceLedger } from '../../types/runs';
 import type { AsyncRunStatus } from '../asyncExecution';
+import { writeAtomicJson } from '../atomicJson';
 import { RESULT_FILE_SUFFIX, type RunResultFile } from '../resultWatcher';
+import { scopeResultsDir, type SessionScope } from '../sessionPaths';
 import { type CoalescedStatusWriterContract } from '../statusWriter';
 import type { TerminalTrigger } from '../terminalPersistence';
 

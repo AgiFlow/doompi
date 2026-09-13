@@ -1,14 +1,16 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { Context } from '@deepseek-ai/cordis';
+
 import type {
   DoomHeadlessCommand,
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-core/headless';
+import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { skillServerFacet as skillHeadlessFacet } from '../../src/extensions/server';
 
 const temporaryDirectories: string[] = [];

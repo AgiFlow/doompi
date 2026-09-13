@@ -1,5 +1,5 @@
-import { api } from '../../../src/controllers/teamCatalogApi';
 import * as fs from 'node:fs';
+
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
@@ -11,6 +11,8 @@ import {
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { api } from '../../../src/controllers/teamCatalogApi';
 import { teamServerFacet as teamHeadlessFacet } from '../../../src/extensions/server';
 import { sessionScopeDir } from '../../../src/services/sessionPaths';
 import * as runtimeModule from '../../../src/services/teamRuntime';

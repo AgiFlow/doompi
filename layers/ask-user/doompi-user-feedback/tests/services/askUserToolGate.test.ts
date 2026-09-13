@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { askUserToolRestriction } from '../../src/services/askUserToolGate';
 
 const TOOL = 'ask_user_question';

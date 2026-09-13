@@ -15,14 +15,14 @@ import {
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
+import { PACKAGE_SOURCE } from '../../constants/config';
 import { getHarnessState } from '../harnessStore';
 import {
   acknowledgeDoomConfigTransition,
   createDoomConfigContextAsync,
   provideDoomConfigContext,
 } from '../sessionConfig';
-
-import { PACKAGE_SOURCE } from '../../constants/config';
 import type { ConfigRuntime } from './type';
 
 function notify(cordis: Context, context: ExtensionContext, body: string, level: DoomNotificationLevel): void {

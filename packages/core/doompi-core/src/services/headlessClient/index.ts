@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+
 import { createDoomNotificationEntryData, DOOM_NOTIFICATION_ENTRY_TYPE } from '../../exports/notification';
 import type {
   HeadlessClientBridge,

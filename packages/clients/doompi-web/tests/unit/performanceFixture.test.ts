@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { performanceEntries, PERFORMANCE_MARKERS } from '../support/performanceFixture';
 
 describe('performanceEntries', () => {

@@ -1,10 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+
 import spawn from 'cross-spawn';
-import { expandEditorTemplate, splitCommandLine } from '../commandLine';
-import type { IEditorConfigService } from '../../types/editorConfigService';
+
 import type { ResolvedEditor } from '../../types/domain';
+import type { IEditorConfigService } from '../../types/editorConfigService';
 import type { EditorLaunchResult, EditorTui, IEditorLauncher } from '../../types/editorLauncher';
+import { expandEditorTemplate, splitCommandLine } from '../commandLine';
 
 export class EditorLauncher implements IEditorLauncher {
   constructor(private readonly config: IEditorConfigService) {}

@@ -23,6 +23,7 @@
 
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui';
+
 import {
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_OVERLAY_ACCENT,

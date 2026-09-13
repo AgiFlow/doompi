@@ -1,6 +1,7 @@
 import { Type, type Static } from 'typebox';
-import { VOICE_TOOL_MAX_DOMAIN_COUNT, VOICE_TOOL_MAX_IDENTIFIER_LENGTH } from '../constants/voiceTools';
+
 import { MAX_SESSION_ID_LENGTH, MAX_TOKEN_LENGTH } from '../constants/voiceReloadHandoff';
+import { VOICE_TOOL_MAX_DOMAIN_COUNT, VOICE_TOOL_MAX_IDENTIFIER_LENGTH } from '../constants/voiceTools';
 export const VoiceReloadHandoffKindSchema = Type.Union([
   Type.Literal('domain-switch'),
   Type.Literal('major-mode-switch'),

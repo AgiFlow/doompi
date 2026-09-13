@@ -1,5 +1,6 @@
 import { defineSessionChannel, defineSlot, defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { leaderGroup } from '../../src/web/lib/leaderTree';
 import {
   activateWebPluginSession,

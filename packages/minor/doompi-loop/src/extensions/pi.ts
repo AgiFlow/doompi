@@ -1,8 +1,9 @@
-import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
-import { createLoopPiRuntime } from '../tui/loopRuntime';
-import { createLoopCommands } from '../controllers/loopCommand';
+import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
+
 import { PACKAGE_SOURCE } from '../constants/piLoop';
+import { createLoopCommands } from '../controllers/loopCommand';
+import { createLoopPiRuntime } from '../tui/loopRuntime';
 export const loopExtension = definePiExtension(PACKAGE_SOURCE, ({ pi }) => {
   const runtime = createLoopPiRuntime(pi);
   return {

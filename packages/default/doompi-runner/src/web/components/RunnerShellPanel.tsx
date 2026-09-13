@@ -1,7 +1,8 @@
-import { Button, StatusBadge, type TerminalHandle, TerminalView } from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { Button, StatusBadge, type TerminalHandle, TerminalView } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
+
 import type { RunnerRunView } from '../../types/webRunners';
 import { decodeChunk, sendRunnerInput, watchRunnerScreen } from '../api/screenApi';
 import { runners } from '../stores/runnersStore';

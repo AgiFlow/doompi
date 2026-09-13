@@ -1,4 +1,5 @@
 import path from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -40,8 +41,9 @@ vi.mock('../../src/composition/syncState', () => ({
   writeSyncState: mocks.writeSyncState,
 }));
 
-import { buildSyncedRuntime } from '../../src/builders/cli';
 import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+
+import { buildSyncedRuntime } from '../../src/builders/cli';
 import { testMcpProjection } from '../helpers/mcpProjection';
 
 const state = {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { trustedNetworkPath } from '../../src/pwa/networkPaths';
 
 /**

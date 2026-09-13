@@ -1,4 +1,5 @@
 import path from 'node:path';
+
 import {
   createDoomNotificationEntryData,
   DOOM_NOTIFICATION_ENTRY_TYPE,
@@ -7,6 +8,7 @@ import {
   normalizeDoomNotificationRequest,
 } from '@agimon-ai/doompi-core/notification';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import { sendSystemNotification } from './systemNotification';
 
 const DEFAULT_TITLE = 'Pi';

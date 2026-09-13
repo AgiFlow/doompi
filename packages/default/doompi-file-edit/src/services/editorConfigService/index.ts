@@ -1,7 +1,9 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+
 import { globalDoomConfigPath } from '@agimon-ai/doompi-config';
+
 import type { IEditorConfigService } from '../../types/editorConfigService';
 
 const commandPattern = /^\s*command:\s*(.+?)\s*$/mu;

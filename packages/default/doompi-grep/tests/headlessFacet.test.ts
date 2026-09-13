@@ -1,8 +1,8 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { delimiter, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { delimiter, dirname } from 'node:path';
 import { join } from 'node:path';
-import { rgPath } from '@vscode/ripgrep';
+
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessExecutionContext,
@@ -11,7 +11,9 @@ import {
 } from '@agimon-ai/doompi-core/headless';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
+import { rgPath } from '@vscode/ripgrep';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { grepServerFacet } from '../src/extensions/server';
 
 const originalPath = process.env.PATH;

@@ -1,4 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
+
+import type { RemoteAccessSettings } from '../../types/remote';
 import {
   type DeviceRecord,
   deviceExpiryAt,
@@ -7,7 +9,6 @@ import {
   sanitizeUserAgent,
   touchDevice,
 } from '../deviceSessions';
-import type { RemoteAccessSettings } from '../../types/remote';
 
 /** 256 bits. The token is scanned or set by the server, never typed, so there is no reason to economise. */
 const TOKEN_BYTES = 32;

@@ -1,5 +1,6 @@
 import { Badge, FileIcon } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
+
 import type { FileMention } from '../../lib/fileMentions';
 import { loadSessionAsset, type SessionAsset } from '../../lib/sessionAsset';
 

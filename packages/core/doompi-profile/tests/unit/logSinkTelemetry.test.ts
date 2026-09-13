@@ -1,5 +1,6 @@
 import type { DoomTelemetryOptions } from '@agimon-ai/doompi-telemetry';
 import { describe, expect, it, vi } from 'vitest';
+
 import { createProfileTelemetry } from '../../src/services/logSinkTelemetry';
 import { PROFILE_EVENT } from '../../src/types/telemetry';
 

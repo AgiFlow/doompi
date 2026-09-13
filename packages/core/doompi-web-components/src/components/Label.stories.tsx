@@ -1,10 +1,10 @@
+import { Checkbox } from './Checkbox';
 /*
  * Plain CSF objects; see Badge.stories.tsx for why Storybook's types are not
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
 import { Label } from './Label';
-import { Checkbox } from './Checkbox';
 
 const meta = {
   title: 'Components/Label',

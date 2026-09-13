@@ -6,6 +6,7 @@ import {
   defineMinorMode,
 } from '@agimon-ai/doompi-minor-mode';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import { DefaultGoalExtensionService } from '../services/extensionService';
 import type { GoalExtensionDependencies } from '../types/extension';
 import { GoalPiManager } from './goalManager';

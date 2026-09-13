@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
+
 import type { WorktreeGit } from '../../types/worktreeRegistry';
 
 /**

@@ -1,5 +1,6 @@
 import { Avatar as AvatarPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
+
 import { cn } from '../lib/cn';
 
 /** A face or an initial; Radix only shows the fallback once the image has actually failed. */

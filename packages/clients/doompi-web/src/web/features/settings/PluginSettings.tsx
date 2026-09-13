@@ -1,5 +1,6 @@
-import { Panel, SectionLabel } from '@agimon-ai/doompi-web-components';
 import type { WebPluginDefinition } from '@agimon-ai/doompi-core/web';
+import { Panel, SectionLabel } from '@agimon-ai/doompi-web-components';
+
 import { installedWebPlugins, webPluginDiagnostics } from '../../lib/pluginRegistry';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 

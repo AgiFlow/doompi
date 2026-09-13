@@ -1,10 +1,11 @@
-import { Context } from '@deepseek-ai/cordis';
-import { DoomConfigService } from '../src/services/doomConfigService';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   acknowledgeDoomConfigTransition,
   createDoomConfigContext,
@@ -40,6 +41,7 @@ import {
   snapshotHarnessState,
   updateHarnessState,
 } from '../src/exports';
+import { DoomConfigService } from '../src/services/doomConfigService';
 
 const roots: string[] = [];
 const ACTIVE_COMPOSITION_FINGERPRINT = 'a'.repeat(64);

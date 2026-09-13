@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { deriveFindings } from '../src/services/findings';
 import { LogMetricsAggregator } from '../src/services/metrics';
 

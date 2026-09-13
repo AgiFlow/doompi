@@ -1,5 +1,6 @@
-import type { MinorModeCatalogSnapshot } from '../../src/exports';
 import { describe, expect, it } from 'vitest';
+
+import type { MinorModeCatalogSnapshot } from '../../src/exports';
 import { projectMinorModes } from '../../src/services/projection';
 
 const SNAPSHOT: MinorModeCatalogSnapshot = {

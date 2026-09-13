@@ -33,9 +33,9 @@ import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import type { JsonSchemaObject } from '../../types';
 import { PI_CODING_AGENT_PACKAGE_ROOT_ENV } from '../../types/environment';
 import { TEMP_ROOT_DIR } from '../sessionPaths';
-import type { JsonSchemaObject } from '../../types';
 
 export { STRUCTURED_OUTPUT_CAPTURE_ENV, STRUCTURED_OUTPUT_SCHEMA_ENV } from '../../types/environment';
 

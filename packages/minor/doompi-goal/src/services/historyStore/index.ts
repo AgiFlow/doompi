@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
+
+import type { GoalHistoryDocument, GoalHistoryEntry, RepositoryIdentity } from '../../types/history';
 import {
   decodeGoalHistoryDocument,
   emptyGoalHistoryDocument,
@@ -11,7 +14,6 @@ import {
   pruneGoalHistoryDocument,
   sortGoalHistoryNewestFirst,
 } from '../history/historyPolicy';
-import type { GoalHistoryDocument, GoalHistoryEntry, RepositoryIdentity } from '../../types/history';
 import { type HistoryLockOptions, withHistoryLock } from '../historyLock';
 import { type RepositoryIdentityOptions, resolveRepositoryIdentity } from '../repositoryIdentity';
 

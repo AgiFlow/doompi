@@ -1,12 +1,15 @@
+import fs from 'node:fs';
+
+import { doomConfigCandidates } from '@agimon-ai/doompi-config/layeredConfig';
+import { parse as parseYaml } from 'yaml';
+
 import {
   HOOKS_FILE,
   FILE_ENCODING,
   FILE_NOT_FOUND_ERROR,
   REGISTRY_SOURCE_ATTRIBUTE,
 } from '../../constants/hookDocuments';
-import { doomConfigCandidates } from '@agimon-ai/doompi-config/layeredConfig';
-import fs from 'node:fs';
-import { parse as parseYaml } from 'yaml';
+import { HOOK_TELEMETRY_EVENT } from '../../constants/telemetry';
 import type {
   HookDocumentReader,
   HookDocumentSource,
@@ -18,7 +21,6 @@ import type {
   RegistryEntry,
   RegistryRead,
 } from '../../types/hooks';
-import { HOOK_TELEMETRY_EVENT } from '../../constants/telemetry';
 import { type HookTelemetry } from '../../types/telemetry';
 import { registryCacheKey, registryEntries } from '../hookRegistry';
 

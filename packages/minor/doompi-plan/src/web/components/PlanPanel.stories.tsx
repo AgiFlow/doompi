@@ -9,8 +9,9 @@
  * route returns; anything else still goes to the page's own fetch.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
-import { PlanPanel } from './PlanPanel';
+
 import { currentUrl, type PlanDetailView } from '../../types/planApi';
+import { PlanPanel } from './PlanPanel';
 
 const PLAN: PlanDetailView = {
   path: '.doom/plans/story-coverage.md',

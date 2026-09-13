@@ -31,12 +31,13 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getProjectConfigDir } from '../configDir';
+
 import type { SystemPromptMode, ToolBudgetConfig } from '../../types';
+import type { AgentConfig, AgentDefaultContext, AgentSource } from '../../types/agent';
 import { parseFrontmatter, parseFrontmatterList } from '../agentFrontmatter';
 import { parseMemoryFrontmatter } from '../agentMemory';
 import { setAgentFrontmatterFields } from '../agentSettings';
-import type { AgentConfig, AgentDefaultContext, AgentSource } from '../../types/agent';
+import { getProjectConfigDir } from '../configDir';
 
 // ============================================================================
 // Builtin defaults

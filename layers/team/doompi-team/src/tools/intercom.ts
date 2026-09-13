@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
+
 import { NATIVE_TEAM_TOOL_NAME, TeamToolParamsSchema, type NativeTeamRuntime } from '../services/nativeTeamChannel';
 export function createIntercomTool(
   runtime: NativeTeamRuntime,

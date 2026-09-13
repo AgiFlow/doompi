@@ -1,11 +1,12 @@
-import { Button } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { Button } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
+
 import type { FilesItemView } from '../../types/webFiles';
+import { files } from '../stores/filesStore';
 import { fileTab } from './FilePanel';
 import { FileActivityRow, FilesBrowser } from './FilesBrowser';
-import { files } from '../stores/filesStore';
 
 /**
  * The files group's body in the activity dock: what this session has changed.

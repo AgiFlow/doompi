@@ -1,10 +1,10 @@
+import type { DoomTelemetry, DoomTelemetryOptions, DoomTelemetryRuntime } from '../../types/telemetry';
 import {
   createDoomTelemetryService,
   createTelemetryHeaders,
   sanitizeTelemetryAttributes,
   subscribeTelemetryRecords,
 } from '../telemetry';
-import type { DoomTelemetry, DoomTelemetryOptions, DoomTelemetryRuntime } from '../../types/telemetry';
 
 export type {
   DoomTelemetry,

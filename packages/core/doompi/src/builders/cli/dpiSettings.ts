@@ -1,11 +1,13 @@
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { SettingsManager, SettingsManagerCreateOptions } from '@earendil-works/pi-coding-agent';
+
 import { piCliPath } from '@agimon-ai/doompi-core/module-resolution';
 import { piAgentDirectory } from '@agimon-ai/doompi-core/runtime-pi-settings';
-import { findRepositoryRoot } from '../../composition/repository';
 import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
+import type { SettingsManager, SettingsManagerCreateOptions } from '@earendil-works/pi-coding-agent';
+
+import { findRepositoryRoot } from '../../composition/repository';
 
 const GLOBAL_SCOPE = 'global';
 const PROJECT_SCOPE = 'project';

@@ -1,5 +1,5 @@
-import type { ComputerScriptExecutor } from './computerScript';
 import type { ComputerUseSessionClient } from '../services/sessionApiClient';
+import type { ComputerScriptExecutor } from './computerScript';
 
 export type ComputerUseNotificationLevel = 'info' | 'error';
 

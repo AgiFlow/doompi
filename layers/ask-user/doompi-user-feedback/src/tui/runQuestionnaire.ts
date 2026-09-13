@@ -1,7 +1,8 @@
 import { getMarkdownTheme, type ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { editQuestionnaireText } from './externalEditor';
+
 import type { QuestionParams } from '../schemas/questionnaire';
 import type { QuestionnaireResult } from '../types/questionnaire';
+import { editQuestionnaireText } from './externalEditor';
 import { QuestionnaireComponent } from './questionnaireComponent';
 
 export async function runTuiQuestionnaire(

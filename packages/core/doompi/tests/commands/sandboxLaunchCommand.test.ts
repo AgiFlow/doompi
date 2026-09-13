@@ -1,9 +1,10 @@
+import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
 import { DOOMPI_SANDBOX_ENV } from '@agimon-ai/doompi-core/sandbox-harness';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+
 import { SandboxLaunchCommand } from '../../src/cli/commands/sandbox';
-import type { HarnessContext } from '../../src/exports/harnessContext';
 import type { HarnessOptions } from '../../src/composition/types/harness';
+import type { HarnessContext } from '../../src/exports/harnessContext';
 
 const adapterMocks = vi.hoisted(() => ({
   resolveSandboxHarnessEntry: vi.fn(),

@@ -6,6 +6,7 @@
  * contracts package's own testing fixture.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import type { SubagentCatalogAgent } from '../../types/webSubagents';
 import { LaunchAgentDialog } from './LaunchAgentDialog';
 

@@ -1,10 +1,11 @@
-import { askUserToolRender } from '../../src/tui/askUserToolRender';
 import { DOOM_ASK_USER_BLOCKED_EVENT, DOOM_ASK_USER_PROMPT_EVENT } from '@agimon-ai/doompi-core/ask-user';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { type AskUserQuestionToolDependencies, createAskUserQuestionTool } from '../../src/tools/askUserQuestion';
+
 import type { QuestionParams } from '../../src/schemas/questionnaire';
+import { type AskUserQuestionToolDependencies, createAskUserQuestionTool } from '../../src/tools/askUserQuestion';
+import { askUserToolRender } from '../../src/tui/askUserToolRender';
 import type { ToolTextResult } from '../../src/types/questionnaire';
 
 interface Renderable {

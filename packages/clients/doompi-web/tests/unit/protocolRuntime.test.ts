@@ -1,6 +1,6 @@
+import type { SessionServiceState } from '@agimon-ai/doompi-core/session-protocol';
 import { replicatedState } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import type { SessionServiceState } from '@agimon-ai/doompi-core/session-protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fake = vi.hoisted(() => ({

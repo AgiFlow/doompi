@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { mediaPreviewController } from '../../src/components/MediaPreview';
 
 function fixture(options: { context?: boolean; blob?: Blob | null } = {}) {

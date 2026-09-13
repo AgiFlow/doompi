@@ -1,3 +1,4 @@
+import type { SettingsFieldContribution, SettingsSectionContribution } from '@agimon-ai/doompi-core/web';
 import {
   Badge,
   Button,
@@ -11,8 +12,8 @@ import {
   SelectValue,
   Switch,
 } from '@agimon-ai/doompi-web-components';
-import type { SettingsFieldContribution, SettingsSectionContribution } from '@agimon-ai/doompi-core/web';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+
 import type {
   SettingsConfigView,
   SettingsModel,
@@ -27,8 +28,8 @@ import {
   settingsKeyOf as keyOf,
   settingsLockedReason as lockedReason,
 } from '../../lib/settingsDraft';
-import { refreshSessionFacts } from '../../stores/sessionStore';
 import { sessionsStore } from '../../stores/sessionsStore';
+import { refreshSessionFacts } from '../../stores/sessionStore';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 /**

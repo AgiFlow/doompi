@@ -1,6 +1,3 @@
-import { Context } from '@deepseek-ai/cordis';
-import { describe, expect, it, vi } from 'vitest';
-import { Type } from 'typebox';
 import {
   DOOM_HEADLESS_OWNER,
   requireDoomHeadlessHost,
@@ -8,8 +5,11 @@ import {
   type DoomHeadlessSelection,
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerBundleEntry } from '@agimon-ai/doompi-core/server-facet';
 import { HeadlessHost } from '@agimon-ai/doompi-core/main';
+import type { DoomServerBundleEntry } from '@agimon-ai/doompi-core/server-facet';
+import { Context } from '@deepseek-ai/cordis';
+import { Type } from 'typebox';
+import { describe, expect, it, vi } from 'vitest';
 
 const candidate: DoomServerBundleEntry = {
   packageName: '@test/tools',

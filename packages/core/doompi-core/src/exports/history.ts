@@ -19,4 +19,6 @@ export type {
   ProtectedHistoryImportResult,
 } from '../services/historyImport';
 export { exportV4ToV3 } from '../services/v3Export';
+export { listSavedSessions } from '../services/sqliteSessionHistory';
+export type { SavedSession } from '../services/sqliteSessionHistory';
 export type { V3ExportLoss, V3ExportLossReport, V3ExportOptions, V3ExportResult } from '../services/v3Export';

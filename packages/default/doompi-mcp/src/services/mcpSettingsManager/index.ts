@@ -2,8 +2,11 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { DoomOAuthRedirect, DoomRepositorySyncView } from '@agimon-ai/doompi-core/package-api';
 import type { McpServerStateChange, McpToolInfo, TokenStore } from '@agimon-ai/mcp-proxy';
+
+import type { McpConfigGroups, McpConfigSource, McpSessionConfig } from '../../types/mcpConfig';
 import type {
   McpAuthorizationFlow,
   McpRepositoryCatalog,
@@ -11,10 +14,9 @@ import type {
   McpRepositoryServerState,
   McpRepositoryTool,
 } from '../../types/webMcp';
-import type { McpConfigGroups, McpConfigSource, McpSessionConfig } from '../../types/mcpConfig';
-import { toPiToolName } from '../mcpCatalog';
 import { buildMcpConfigGroups } from '../configSources';
 import { createTokenStore } from '../keyringTokenStore';
+import { toPiToolName } from '../mcpCatalog';
 import { hubCallbackSink, McpRuntimeOwner, readCachedCatalog } from '../mcpRuntime';
 import { mcpSessionConfigFromProjection } from '../projection';
 

@@ -2,15 +2,17 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { SUBAGENT_ROOT_SESSION_ENV, SUBAGENT_RUN_ID_ENV } from '../../src/exports/env';
-import { createSessionScope, scopeResultsDir, sessionScopeDir } from '../../src/services/sessionPaths';
 import {
   makeExternalControlMessage,
   makeExternalLaunchMessage,
   parseExternalRunnerMessage,
   type ExternalRunnerMessage,
 } from '../../src/services/externalProcessIpc';
+import { createSessionScope, scopeResultsDir, sessionScopeDir } from '../../src/services/sessionPaths';
 
 const runnerEntry = path.resolve('dist/runs/background/cliRunnerEntry.mjs');
 const cleanup: string[] = [];

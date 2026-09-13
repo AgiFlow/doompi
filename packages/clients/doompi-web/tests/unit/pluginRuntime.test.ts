@@ -1,5 +1,6 @@
 import type { WebPluginDefinition, WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { SessionWebComposition } from '../../src/types/hub';
 
 const mocks = vi.hoisted(() => ({

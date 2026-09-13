@@ -31,6 +31,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
 import { getHarnessState, loadMajorModesConfig, resolvePackageConfigurations } from '@agimon-ai/doompi-config';
 
 import {
@@ -38,7 +39,13 @@ import {
   mergeTeamPackageConfigurations,
   type TeamPackageConfig,
 } from '../../schemas/team/packageConfig';
-import { LruCache } from '../lruCache';
+import type {
+  AgentConfig,
+  AgentDiscoveryResult,
+  AgentScope,
+  AgentDiscoveryContract,
+  SubagentSettings,
+} from '../../types/agent';
 import { loadAgentsFromDir, pluginAgentDirs } from '../agentLoader';
 import {
   canonicalizeDiscoveryCwd,
@@ -56,13 +63,7 @@ import {
   resolveSubagentDefaultModel,
   resolveSubagentDefaultThinking,
 } from '../agentSettings';
-import type {
-  AgentConfig,
-  AgentDiscoveryResult,
-  AgentScope,
-  AgentDiscoveryContract,
-  SubagentSettings,
-} from '../../types/agent';
+import { LruCache } from '../lruCache';
 
 /** How long a discovery result may be reused without revalidation. */
 const DISCOVERY_TTL_MS = 5_000;

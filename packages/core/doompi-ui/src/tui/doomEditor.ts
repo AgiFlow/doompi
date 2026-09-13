@@ -1,7 +1,8 @@
 import { type AppKeybinding, CustomEditor, type KeybindingsManager, type Theme } from '@earendil-works/pi-coding-agent';
 import { type EditorOptions, type EditorTheme, parseKey, type TUI } from '@earendil-works/pi-tui';
-import { type DoomLeaderAction, type DoomLeaderGroup, DoomLeaderRegistry } from '../services/leaderRegistry';
+
 import { type DoomUiState, type LeaderSnapshot } from '../models/uiState';
+import { type DoomLeaderAction, type DoomLeaderGroup, DoomLeaderRegistry } from '../services/leaderRegistry';
 import { readDoomHarnessMetadata } from '../types/harnessMetadata';
 import { alignLine, fitLine, frameLine, padLine } from './rendering';
 

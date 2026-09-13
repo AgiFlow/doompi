@@ -1,4 +1,5 @@
 import { Button, EmptyState, Kbd, PlusIcon } from '@agimon-ai/doompi-web-components';
+
 import { openNewSession } from '../../stores/newSessionStore';
 
 /**

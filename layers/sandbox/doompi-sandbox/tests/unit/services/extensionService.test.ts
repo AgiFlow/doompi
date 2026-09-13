@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { DefaultSandboxExtensionService } from '../../../src/services/extensionService';
 
 describe('DefaultSandboxExtensionService', () => {

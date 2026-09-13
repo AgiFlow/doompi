@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
+
+import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
 import { authorCaptureContext, createAuthorCapturePacket } from '../../src/web/stores/authorCapture';
 import { authorProfilesForDocument } from '../../src/web/stores/authorProfiles';
 import { recordAuthorCaptureStatus, recordAuthorComposerSubmission } from '../../src/web/stores/authorRequestLifecycle';
@@ -14,7 +16,6 @@ import {
   reviseAuthorDocument,
   updateAuthorRequest,
 } from '../../src/web/stores/authorWorkspaceStore';
-import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
 
 afterEach(() => authorWorkspace.reset());
 

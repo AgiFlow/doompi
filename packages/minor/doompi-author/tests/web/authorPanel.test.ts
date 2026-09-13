@@ -1,21 +1,22 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { ToolMessageRenderProps, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
+
+import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
 import {
   AuthorDocumentPanel,
   authorFileTab,
   displayedAuthorRegions,
 } from '../../src/web/components/AuthorDocumentPanel';
 import { AuthorRequestLog } from '../../src/web/components/AuthorRequestLog';
+import { OpenAuthoringFileToolCard, openAuthoringFileTab } from '../../src/web/components/OpenAuthoringFileToolCard';
 import type { AuthorRequestRecord } from '../../src/web/lib/authorViewportTypes';
 import {
   focusAuthorDocument,
   releaseAuthorDocumentFocus,
   dropAuthorSession,
 } from '../../src/web/stores/authorWorkspaceStore';
-import { OpenAuthoringFileToolCard, openAuthoringFileTab } from '../../src/web/components/OpenAuthoringFileToolCard';
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

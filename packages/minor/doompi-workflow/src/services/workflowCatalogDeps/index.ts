@@ -1,5 +1,7 @@
 import { statSync } from 'node:fs';
+
 import { readWorkflowCatalog, summarizeWorkflow } from '@agimon-ai/workflow-mcp';
+
 import type { WorkflowCatalogReaderDeps } from '../webWorkflowCatalog';
 
 /** Connect the pure catalog projection service to the workflow engine and filesystem. */

@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
+import { createSessionScope, scopeSuspendedDir, sessionScopeDir } from '../../src/services/sessionPaths';
 import {
   clearSuspendedRun,
   formatSuspendedRuns,
@@ -14,7 +17,6 @@ import {
   suspendRunAsync,
   type SuspendedRun,
 } from '../../src/services/suspendedRuns';
-import { createSessionScope, scopeSuspendedDir, sessionScopeDir } from '../../src/services/sessionPaths';
 
 const scopes: ReturnType<typeof createSessionScope>[] = [];
 afterEach(() => {

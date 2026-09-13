@@ -1,6 +1,7 @@
-import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { type DoomHeadlessCommand, type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
+
 import { DOOM_VOICE_AUTO_MODE_ID } from '../constants/voiceTools';
 import { readVoicePrompt } from '../services/voicePrompt';
 

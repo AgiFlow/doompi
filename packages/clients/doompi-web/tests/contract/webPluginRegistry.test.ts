@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import * as os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   ensureBuiltinWebPluginModules,
   renderBuiltinWebPluginModules,
@@ -11,6 +11,7 @@ import {
 } from '@agimon-ai/doompi/builders/web';
 import { scanWebPlugins } from '@agimon-ai/doompi/builders/web';
 import type { DeclaredWebPlugin } from '@agimon-ai/doompi/builders/web';
+import { afterEach, describe, expect, it } from 'vitest';
 
 const packageRoot = fileURLToPath(new URL('../..', import.meta.url));
 

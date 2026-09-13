@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest';
+
 import { createAuthorPiMode } from '../../src/controllers/authorPiMode';
 import type { AuthorCatalog } from '../../src/services/authorCatalog/type';
 

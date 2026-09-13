@@ -1,11 +1,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CliApp } from '../../src/exports/cliApp';
+
 import * as harnessContext from '../../src/builders/cli/harnessContext';
 import * as initCommand from '../../src/cli/commands/init';
 import * as syncCommand from '../../src/cli/commands/sync/workflow';
+import { CliApp } from '../../src/exports/cliApp';
 
 const findRepositoryRoot = vi.hoisted(() =>
   vi.fn(() => {

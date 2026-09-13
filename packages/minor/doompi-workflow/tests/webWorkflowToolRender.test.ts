@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { workflowCallSummary, workflowResultLines } from '../src/web/lib/workflowToolRender';
 
 const text = (value: string) => ({ content: [{ type: 'text', text: value }], details: undefined });

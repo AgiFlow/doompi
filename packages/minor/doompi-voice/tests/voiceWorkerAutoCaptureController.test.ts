@@ -1,19 +1,20 @@
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { IVoiceCommandCorrector, VoiceCommandContext } from '../src/services/commandCorrection';
+import type { IVoiceTurnFallbackNarrator } from '../src/services/fallbackNarration';
+import type { IVoiceTranscriptAdjudicator, VoiceTranscriptSignalEvidence } from '../src/services/transcriptAdmission';
 import {
   VoiceWorkerAutoCaptureController,
   type VoiceWorkerAutoCaptureTelemetrySink,
 } from '../src/services/voiceWorkerAutoCaptureController';
 import type { VoiceWorkerClientOptions } from '../src/services/voiceWorkerClient';
-import type { VoiceWorkerSessionClient } from '../src/services/voiceWorkerSessionController';
-import type { IVoiceCommandCorrector, VoiceCommandContext } from '../src/services/commandCorrection';
-import type { IVoiceTurnFallbackNarrator } from '../src/services/fallbackNarration';
-import type { IVoiceTranscriptAdjudicator, VoiceTranscriptSignalEvidence } from '../src/services/transcriptAdmission';
 import {
   VOICE_WORKER_PROTOCOL_VERSION,
   type VoiceCandidateOutcome,
   type VoiceWorkerEventPayload,
 } from '../src/services/voiceWorkerProtocol';
+import type { VoiceWorkerSessionClient } from '../src/services/voiceWorkerSessionController';
 import type { AutoCaptureUi, IClock, ITtsAdapter, TtsPlaybackResult } from '../src/types';
 
 const config: ResolvedVoiceConfig = {

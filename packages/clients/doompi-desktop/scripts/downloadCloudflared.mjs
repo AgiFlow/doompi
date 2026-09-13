@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { assertSupportedDesktopTarget } from './desktopTarget.mjs';
 
 const VERSION = '2026.8.3';

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { defineGlobalStore } from '../../src/web/models/globalStore';
 
 describe('defineGlobalStore', () => {

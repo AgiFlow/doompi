@@ -1,11 +1,9 @@
+import path from 'node:path';
+
 import {
   DOOM_HEADLESS_OWNER as TEST_OWNER,
   DOOM_HEADLESS_HOST_SERVICE as TEST_AGENT,
 } from '@agimon-ai/doompi-core/headless';
-import { DOOM_SERVER_HOST_SERVICE as TEST_SERVER, type DoomServerFacet } from '@agimon-ai/doompi-core/server-facet';
-import { DOOM_MINOR_MODE_CATALOG_SERVICE as TEST_CATALOG } from '@agimon-ai/doompi-minor-mode';
-import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
-import path from 'node:path';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
@@ -16,12 +14,16 @@ import {
   type DoomHeadlessResource,
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE as TEST_SERVER, type DoomServerFacet } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE as TEST_CATALOG } from '@agimon-ai/doompi-minor-mode';
+import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { computerUseServerFacet as computerUseHeadlessFacet } from '../../../src/extensions/server';
 import type { ComputerUseSessionClient } from '../../../src/services/sessionApiClient';
 import type { ComputerUseObservation } from '../../../src/types/computerUse';
 import type { ComputerUseSessionView } from '../../../src/types/computerUseApi';
-import { computerUseServerFacet as computerUseHeadlessFacet } from '../../../src/extensions/server';
 
 const clientState = vi.hoisted(() => ({ current: undefined as unknown }));
 const runnerState = vi.hoisted(() => ({

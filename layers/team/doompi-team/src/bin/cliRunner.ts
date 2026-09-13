@@ -10,9 +10,11 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
-import { SUBAGENT_ROOT_SESSION_ENV, SUBAGENT_RUN_ID_ENV } from '../types/environment';
+
+import type { AsyncRunStatus } from '../services/asyncExecution';
 import { writeAtomicJson, writePrivateAtomicJson } from '../services/atomicJson';
-import { adoptSessionScopeFromEnv, type SessionScope } from '../services/sessionPaths';
+import { CLAUDE_FABLE_PROFILE, cleanupClaudeFableLaunch, parseClaudeFableOutput } from '../services/claudeFableProfile';
+import type { CliLaunchConfig } from '../services/cliLaunchConfig';
 import {
   EXTERNAL_IPC_CHANNEL,
   EXTERNAL_IPC_VERSION,
@@ -21,10 +23,9 @@ import {
   type ExternalRunProjection,
   type ExternalRunnerMessage,
 } from '../services/externalProcessIpc';
-import { CLAUDE_FABLE_PROFILE, cleanupClaudeFableLaunch, parseClaudeFableOutput } from '../services/claudeFableProfile';
-import type { AsyncRunStatus } from '../services/asyncExecution';
-import type { CliLaunchConfig } from '../services/cliLaunchConfig';
+import { adoptSessionScopeFromEnv, type SessionScope } from '../services/sessionPaths';
 import { CoalescedStatusWriter } from '../services/statusWriter';
+import { SUBAGENT_ROOT_SESSION_ENV, SUBAGENT_RUN_ID_ENV } from '../types/environment';
 
 const MAX_RESULT_BYTES = 64 * 1024;
 const MAX_STDERR_BYTES = 8 * 1024;

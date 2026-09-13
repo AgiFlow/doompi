@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { applyStoredTheme, availableThemes, selectTheme, themeStore } from '../../src/web/stores/themeStore';
 
 interface FakeStorage extends Storage {

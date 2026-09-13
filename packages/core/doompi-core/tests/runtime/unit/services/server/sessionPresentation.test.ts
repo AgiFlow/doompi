@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { createSessionPresentation } from '../../../../../src/services/sessionPresentation';
 
 describe('session presentation replay', () => {

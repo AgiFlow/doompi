@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { createDoomIgnoreMatcher, filterDoomIgnoredFiles } from '../../../src/services/doomIgnore';
 import type { FilesItemView } from '../../../src/types/webFiles';
 

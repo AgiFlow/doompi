@@ -1,8 +1,9 @@
-import { hasPluginHelperCall } from './pluginWiring.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
 import type { RuleDefinition, RuleOptions } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
+
 import {
   type DoomPackageManifest,
   piDiscoveryEntryStems,
@@ -10,6 +11,7 @@ import {
   readPackageManifest,
   runtimeStem,
 } from './manifestEntries.js';
+import { hasPluginHelperCall } from './pluginWiring.js';
 
 const CANONICAL_ROOTS = new Set([
   'bin',

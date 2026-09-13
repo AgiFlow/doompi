@@ -1,9 +1,11 @@
-import { hasPluginHelperCall } from './pluginWiring.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
+
 import { piDiscoveryEntryStems, projectPath, sourceStem } from './manifestEntries.js';
+import { hasPluginHelperCall } from './pluginWiring.js';
 
 const PACKAGE_MANIFEST_NAME = 'package.json';
 const PI_VERSION = '0.85.1';

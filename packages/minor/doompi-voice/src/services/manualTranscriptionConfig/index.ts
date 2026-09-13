@@ -1,4 +1,5 @@
 import { loadDoomConfig, resolveVoiceConfig } from '@agimon-ai/doompi-config';
+
 import { ManualTranscriptionError, type IManualTranscriptionConfigLoader } from '../../types/manualTranscription';
 
 export class ManualTranscriptionConfigLoader implements IManualTranscriptionConfigLoader {

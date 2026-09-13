@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { RealtimeDelivery } from '../src/controllers/realtimeDelivery';
 
 function fixture() {

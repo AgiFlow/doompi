@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
 
 /** Doom's own repository configuration directory. */

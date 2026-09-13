@@ -1,4 +1,5 @@
 import { persistMcpConfig } from '@agimon-ai/doompi-domain/mcp';
+
 import type { HarnessContext } from '../../../builders/cli/harnessContext';
 import type { HarnessOptions } from '../../../composition/types/harness';
 import { BaseCommand } from '../baseCommand';

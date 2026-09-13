@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+
+import { writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
 import {
   DOOM_SERVER_BUNDLE_FILE,
   DOOM_SERVER_BUNDLE_VERSION,
@@ -12,14 +14,14 @@ import {
   orderServerFacets,
   parseDoomServerBundle,
 } from '@agimon-ai/doompi-core/server-facet';
-import type { ExtensionComposition } from '../cli/extensionAssembler';
+
 import {
   compileExtensionModule,
   extensionModuleManifestPath,
   type CompileExtensionResourceBinding,
   type CompileExtensionResourcePackage,
 } from '../../compiler';
-import { writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
+import type { ExtensionComposition } from '../cli/extensionAssembler';
 
 export interface ServerBundleSyncInput {
   readonly generation: string;

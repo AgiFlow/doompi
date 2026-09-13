@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parse as parseYaml } from 'yaml';
+
 import {
   DOOM_CONFIG_TEMPLATES,
   GLOBAL_DOOM_SEED_FILES,

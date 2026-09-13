@@ -1,3 +1,4 @@
+import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   AnsiLine,
   Button,
@@ -25,9 +26,9 @@ import {
   StatusBadge,
   StreamCursor,
 } from '@agimon-ai/doompi-web-components';
-import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+
 import type {
   WorkflowJobView,
   WorkflowProgressState,
@@ -35,15 +36,15 @@ import type {
   WorkflowStepView,
 } from '../../types/webWorkflows';
 import type { WorkflowTerminalCapabilitiesView } from '../../types/webWorkflowTerminal';
-import { ArtifactsPane, artifactTab } from './ArtifactsPane';
-import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from '../stores/catalogStore';
-import { LaunchWorkflowDialog } from './LaunchWorkflowDialog';
-import { formatRunDuration } from '../lib/runDuration';
-import { stepTerminalTab } from './StepTerminalPanel';
 import { deleteWorkflowRun, followScreen } from '../api/terminalApi';
-import { WorkflowCatalogDrawer } from './WorkflowCatalogDrawer';
+import { formatRunDuration } from '../lib/runDuration';
 import { workflowRunIdentity } from '../lib/workflowActivity';
+import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from '../stores/catalogStore';
 import { focusRun, removeRun, workflows } from '../stores/workflowsStore';
+import { ArtifactsPane, artifactTab } from './ArtifactsPane';
+import { LaunchWorkflowDialog } from './LaunchWorkflowDialog';
+import { stepTerminalTab } from './StepTerminalPanel';
+import { WorkflowCatalogDrawer } from './WorkflowCatalogDrawer';
 
 /** One workflows tab per session; the surface is singular, so the id needs nothing else. */
 export const WORKFLOWS_TAB_ID = 'workflows-runs';

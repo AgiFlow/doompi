@@ -1,3 +1,5 @@
+import { DoomProtocolError } from '@agimon-ai/doompi-core/runtime-protocol';
+
 import {
   MINOR_MODE_ERROR_CODE,
   type MinorModeActionDescriptor,
@@ -7,7 +9,6 @@ import {
   type MinorModeRegistrationRef,
   type MinorModeState,
 } from '../../schemas/mode';
-import { DoomProtocolError } from '@agimon-ai/doompi-core/runtime-protocol';
 
 export function minorModeKey(identity: Pick<MinorModeDescriptor, 'source' | 'id'>): string {
   return `${identity.source}\u0000${identity.id}`;

@@ -7,8 +7,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { AgentDiscoveryService } from '../agentDiscovery';
 import type { AgentConfig, AgentScope } from '../../types/agent';
+import { AgentDiscoveryService } from '../agentDiscovery';
 
 export interface SubagentLaunchContractInput {
   agent: string;

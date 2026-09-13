@@ -1,10 +1,12 @@
 import os from 'node:os';
 import path from 'node:path';
+
 import {
   DOOM_MCP_SESSION_ENV_VAR,
   doomMcpSessionEnvironment,
   readDoomMcpSessionConfig,
 } from '@agimon-ai/doompi-core/mcp-session';
+
 import type { McpAllowlist, McpSessionConfig } from '../../types/mcpConfig';
 
 function asStringArray(value: unknown): string[] | undefined {

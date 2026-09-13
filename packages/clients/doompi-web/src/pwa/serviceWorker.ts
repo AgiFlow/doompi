@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { BUNDLE_ASSET_POLICY_PATH, parseBundleAssetPolicy } from '@agimon-ai/doompi-core/web';
 import {
   BUNDLE_MANIFEST_ROUTE,
   type BundleAsset,
@@ -9,6 +10,7 @@ import {
   verifyBundleAsset,
   verifySignedBundleManifest,
 } from '@agimon-ai/doompi-web-security/browser';
+
 import { BUNDLE_UPDATED_MESSAGE, type BundleUpdatedMessage } from '../types/bundle';
 import {
   clearActiveBundle,
@@ -21,7 +23,6 @@ import {
   type ActiveBundleState,
   type VerifiedPluginCompositionState,
 } from './bundleCache';
-import { BUNDLE_ASSET_POLICY_PATH, parseBundleAssetPolicy } from '@agimon-ai/doompi-core/web';
 import { RAW_BUNDLE_PREFIX, trustedNetworkPath } from './networkPaths';
 
 const worker = self as unknown as ServiceWorkerGlobalScope;

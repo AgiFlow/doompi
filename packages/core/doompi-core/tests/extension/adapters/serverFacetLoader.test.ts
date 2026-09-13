@@ -1,16 +1,24 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { defineServerPlugin } from '../../../src/extensions/serverPlugin';
+import {
+  DOOM_HEADLESS_HOST_SERVICE,
+  type DoomHeadlessActivity,
+  type DoomHeadlessHostService,
+} from '../../../src/schemas/headless';
+import type { DoomApi, DoomApiContext } from '../../../src/schemas/packageApi';
 import {
   DOOM_SERVER_BUNDLE_FILE,
   type DoomServerBundleEntry,
   parseDoomServerBundle,
 } from '../../../src/schemas/serverBundle';
-import type { DoomApi, DoomApiContext } from '../../../src/schemas/packageApi';
 import { DOOM_SERVER_HOST_SERVICE, type DoomServerFacet } from '../../../src/schemas/serverFacet';
-import { createDoomServerHost } from '../../../src/services/serverFacet';
 import { installServerFacets, type LoadedServerFacet, loadServerBundle } from '../../../src/server/serverFacetLoader';
+import { createDoomServerHost } from '../../../src/services/serverFacet';
 
 const directories: string[] = [];
 afterEach(() => {
@@ -69,6 +77,35 @@ describe('installServerFacets', () => {
       expect(apply).not.toHaveBeenCalled();
       expect(host.mounted()).toEqual([]);
     } finally {
+      host.dispose();
+    }
+  });
+
+  it('accepts a retained session API before selection mounts its activity', async () => {
+    const host = hostFor();
+    const activities: DoomHeadlessActivity[] = [];
+    const facet = defineServerPlugin({ name: 'deferred', session: { api: [apiNamed('deferred')] } });
+    const installed = await installServerFacets({
+      host,
+      facets: [{ ...loadedFacet('deferred', facet), retained: true, initiallyEligible: true }],
+      prepare(root) {
+        root.provide(DOOM_HEADLESS_HOST_SERVICE, {
+          registerActivity(activity: DoomHeadlessActivity) {
+            activities.push(activity);
+            return { dispose: () => undefined };
+          },
+        } as DoomHeadlessHostService);
+      },
+    });
+    try {
+      expect(installed.installedPackages).toEqual(['deferred']);
+      expect(host.mounted()).toEqual([]);
+      const stop = await activities[0].start({} as DoomHeadlessHostService['context']);
+      expect(host.mounted()).toEqual(['deferred']);
+      await stop();
+      expect(host.mounted()).toEqual([]);
+    } finally {
+      await installed.dispose();
       host.dispose();
     }
   });

@@ -1,5 +1,6 @@
-import { RECENT_VALUE_PREFIX, SAVED_VALUE_PREFIX } from '../../constants/promptItems';
 import type { SelectItem } from '@earendil-works/pi-tui';
+
+import { RECENT_VALUE_PREFIX, SAVED_VALUE_PREFIX } from '../../constants/promptItems';
 import type { SavedPrompt } from '../../types/prompt';
 import { describePrompt } from '../savedPromptDocument';
 

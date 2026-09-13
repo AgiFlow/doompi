@@ -2,6 +2,7 @@ import { requireHarnessRoot } from '@agimon-ai/doompi-config/harnessStore';
 import { readDoomConfigSelection, requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import { normalizeDomainNames } from '../services/domainText';
 import type { DomainCompletion, DomainListing } from '../types/domains';
 

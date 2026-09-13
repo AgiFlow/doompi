@@ -1,10 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { Context } from '@deepseek-ai/cordis';
-import { Type } from 'typebox';
-import { describe, expect, it, vi } from 'vitest';
-import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import {
   createAssistantMessageEventStream,
@@ -13,10 +11,14 @@ import {
   type Model,
   type Models,
 } from '@earendil-works/pi-ai';
+import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
+import { Type } from 'typebox';
+import { describe, expect, it, vi } from 'vitest';
+
 import { DOOM_HEADLESS_HOST_SERVICE, requireDoomHeadlessHost } from '../../../../../src/exports/headless';
 import type { LoadedServerFacet } from '../../../../../src/exports/serverFacet';
-import { createHeadlessSessionHost } from '../../../../../src/systems/main/adapters/headlessSessionHost';
 import { serveSessionApis } from '../../../../../src/server/packageApiServer';
+import { createHeadlessSessionHost } from '../../../../../src/systems/main/adapters/headlessSessionHost';
 
 const model: Model<Api> = {
   id: 'test',

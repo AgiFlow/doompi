@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import type { SessionWebComposition } from '../../src/types/hub';
 
 const worker = vi.hoisted(() => ({

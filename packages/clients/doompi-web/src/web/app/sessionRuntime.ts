@@ -1,4 +1,6 @@
 import { batch } from '@tanstack/store';
+
+import { parseBundleUpdatedMessage } from '../../types/bundle';
 import {
   HISTORY_PAGE_TYPE,
   SESSION_BACKLOG_TYPE,
@@ -13,21 +15,30 @@ import {
   THREAD_FRAME_TYPE,
   unsubscribeFrame,
 } from '../../types/hub';
-import { parseBundleUpdatedMessage } from '../../types/bundle';
 import { parseDoomNotificationEntry } from '../../types/notification';
 import { REMOTE_PAIRING_REQUEST_TYPE, REMOTE_STATE_TYPE, type RemoteAccessStateView } from '../../types/remoteAccess';
-import { dispatchChannelFrame } from '../lib/pluginRegistry';
-import { focusSessionWebPlugins, removeSessionWebPluginRuntime } from '../lib/pluginRuntime';
-import { startProtocolRuntime } from './protocolRuntime';
-import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } from '../lib/transport';
-import { applyCaptureFrame, disconnectCaptures, pendingCaptureSessions } from '../stores/captureStore';
-import { bindSessionFileLinkModes } from '../stores/fileLinkModesStore';
-import { createProtocolHubSocket } from '../lib/protocolHubSocket';
 import { deliverBrowserNotification } from '../lib/browserNotifications';
 import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry';
+import { dispatchChannelFrame } from '../lib/pluginRegistry';
+import { focusSessionWebPlugins, removeSessionWebPluginRuntime } from '../lib/pluginRuntime';
+import { createProtocolHubSocket } from '../lib/protocolHubSocket';
+import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } from '../lib/transport';
+import { applyCaptureFrame, disconnectCaptures, pendingCaptureSessions } from '../stores/captureStore';
 import { dropComposerState, restoreComposerDrafts, saveComposerDrafts } from '../stores/composerStore';
+import { bindSessionFileLinkModes } from '../stores/fileLinkModesStore';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore';
 import { applyRemoteState } from '../stores/remoteAccessStore';
+import {
+  applySessionBacklog,
+  applySessionRemoved,
+  applySessionsSnapshot,
+  applySessionUpsert,
+  beginSessionTransfer,
+  completeSessionTransfer,
+  markSocketClosed,
+  sessionsStore,
+  setActiveSession,
+} from '../stores/sessionsStore';
 import {
   applyHistoryPage,
   applySessionFrame,
@@ -42,17 +53,7 @@ import {
 } from '../stores/sessionStore';
 import { applyThreadTranscriptFrame, dropThreads, resubscribeThreads, threadStoreKey } from '../stores/threadStore';
 import { dropTransientTabs } from '../stores/transientTabsStore';
-import {
-  applySessionBacklog,
-  applySessionRemoved,
-  applySessionsSnapshot,
-  applySessionUpsert,
-  beginSessionTransfer,
-  completeSessionTransfer,
-  markSocketClosed,
-  sessionsStore,
-  setActiveSession,
-} from '../stores/sessionsStore';
+import { startProtocolRuntime } from './protocolRuntime';
 
 const VOICE_OWNERSHIP_FRAME_TYPE = 'voice_ownership';
 

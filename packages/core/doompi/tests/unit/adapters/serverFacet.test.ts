@@ -1,23 +1,24 @@
-import { headlessMinorModeCommand } from '@agimon-ai/doompi-minor-mode';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessCommand,
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHostService,
 } from '@agimon-ai/doompi-core/headless';
+import { machineApi } from '@agimon-ai/doompi-core/machine-api';
+import { remoteApi } from '@agimon-ai/doompi-core/remote-api';
+import { api } from '@agimon-ai/doompi-core/runtime-context-api';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
+import { sessionFilesApi } from '@agimon-ai/doompi-core/session-files-api';
+import { headlessMinorModeCommand } from '@agimon-ai/doompi-minor-mode';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   type MinorModeActionRequest,
   type MinorModeCatalogService,
   type MinorModeRecord,
 } from '@agimon-ai/doompi-minor-mode';
-import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
-import { api } from '@agimon-ai/doompi-core/runtime-context-api';
-import { machineApi } from '@agimon-ai/doompi-core/machine-api';
-import { remoteApi } from '@agimon-ai/doompi-core/remote-api';
-import { sessionFilesApi } from '@agimon-ai/doompi-core/session-files-api';
+
 import { doompiServerFacet } from '../../../src/extensions/server';
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 

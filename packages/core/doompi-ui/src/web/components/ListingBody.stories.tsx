@@ -6,6 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import { ListingBody } from './ListingBody';
 
 /** Past the twenty-line collapsed budget, so the collapsed body reports what it hid. */

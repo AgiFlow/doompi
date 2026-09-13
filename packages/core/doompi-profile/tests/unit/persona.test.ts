@@ -1,11 +1,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
+
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
+import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createPersonaEvents } from '../../src/controllers/personaRuntime';
 import type { ProfileTelemetry } from '../../src/types/telemetry';
 

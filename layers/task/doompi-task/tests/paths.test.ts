@@ -2,8 +2,10 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { SUBAGENT_CHILD_ENV, SUBAGENT_PARENT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   COLLAPSE_KEY_ENV,
   COLLAPSE_KEY_OFF,

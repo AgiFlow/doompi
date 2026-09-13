@@ -1,4 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
+
 import { TasksActivitySection } from '../web/components/TasksActivitySection';
 import { TaskToolMessage } from '../web/components/TaskToolMessage';
 import { tasksChannel } from '../web/stores/tasksStore';

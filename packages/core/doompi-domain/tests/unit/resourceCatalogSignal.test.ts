@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createResourceCatalogSignal } from '../../src/controllers/domainRuntime';
 
 interface Harness {

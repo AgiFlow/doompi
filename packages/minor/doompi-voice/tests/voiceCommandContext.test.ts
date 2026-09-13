@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { collectVoiceCommandContext } from '../src/controllers/voiceCommandContext';
 
 function message(messageValue: Record<string, unknown>): Record<string, unknown> {

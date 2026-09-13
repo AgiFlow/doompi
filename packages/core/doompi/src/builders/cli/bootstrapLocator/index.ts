@@ -1,12 +1,14 @@
-import { inputsAreFresh, parseInputFingerprint, type InputFingerprint } from '../../../compiler/inputs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ownEntry } from '../entryResolution';
-import { resolveDoomConfigurationRoot } from '../../../composition/repository';
+
 import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
-import { readSyncState } from '../../../composition/syncState';
 import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+
+import { inputsAreFresh, parseInputFingerprint, type InputFingerprint } from '../../../compiler/inputs';
+import { resolveDoomConfigurationRoot } from '../../../composition/repository';
+import { readSyncState } from '../../../composition/syncState';
+import { ownEntry } from '../entryResolution';
 
 const BOOTSTRAP_ENTRY_ENV = 'DOOMPI_BOOTSTRAP_ENTRY';
 

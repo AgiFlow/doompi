@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+
 import { renderMermaid } from '../lib/mermaidDiagram';
 import { SyntaxText } from './SyntaxText';
 

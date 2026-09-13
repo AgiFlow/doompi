@@ -1,21 +1,7 @@
-import { formatVoiceActivity } from '../../models/voiceActivity';
 import { resolveVoiceConfig } from '@agimon-ai/doompi-config/config';
 import { type IDoomConfigLoader, type ResolvedVoiceConfig } from '@agimon-ai/doompi-config/types';
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
-import {
-  type IAudioAnalyzer,
-  type IAudioRecorder,
-  type IClock,
-  type ITemporaryWorkspace,
-  type ITranscriberRegistry,
-  type IVoiceSessionController,
-  type RecordingHandle,
-  type SelectedTranscriber,
-  type TimerHandle,
-  type VoiceActivityUpdate,
-  type VoiceState,
-  type VoiceUi,
-} from '../../types';
+
 import {
   VOICE_SOURCE,
   STATUS_KEY,
@@ -34,6 +20,21 @@ import {
   RECORDING_STATE,
   TRANSCRIBING_STATE,
 } from '../../constants/voiceRuntime';
+import { formatVoiceActivity } from '../../models/voiceActivity';
+import {
+  type IAudioAnalyzer,
+  type IAudioRecorder,
+  type IClock,
+  type ITemporaryWorkspace,
+  type ITranscriberRegistry,
+  type IVoiceSessionController,
+  type RecordingHandle,
+  type SelectedTranscriber,
+  type TimerHandle,
+  type VoiceActivityUpdate,
+  type VoiceState,
+  type VoiceUi,
+} from '../../types';
 
 export class VoiceSessionController implements IVoiceSessionController {
   private currentState: VoiceState = IDLE_STATE;

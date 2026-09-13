@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   assistantUsageTokens,
   cumulativeAssistantTokens,
   formatDuration,
   formatTokenCount,
 } from '../../src/models/accounting';
-import { parseGoalCommand, parseTokenBudget, validateObjective } from '../../src/services/parser';
-import { buildGoalPrompt, buildGoalSystemPrompt } from '../../src/services/prompts';
 import { nextToolFreeRepeatState, resetGoalSafetyEpoch, safetyLimitReached } from '../../src/models/safety';
-import { normalizeGoalSettings } from '../../src/services/settings';
 import { decodeGoalStateEntries, serializeGoalState } from '../../src/models/stateCodec';
 import {
   createGoal,
@@ -16,6 +14,9 @@ import {
   isContradictoryCompletionSummary,
   transitionGoal,
 } from '../../src/models/stateMachine';
+import { parseGoalCommand, parseTokenBudget, validateObjective } from '../../src/services/parser';
+import { buildGoalPrompt, buildGoalSystemPrompt } from '../../src/services/prompts';
+import { normalizeGoalSettings } from '../../src/services/settings';
 import {
   addGoalTools,
   filterGoalTools,

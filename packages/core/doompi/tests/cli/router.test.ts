@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { informationalRequest, KNOWN_COMMANDS, routeCommand, wantsHelp } from '../../src/cli/router';
 
 describe('routeCommand', () => {

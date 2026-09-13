@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { normalizePcm16, summarizePcm16 } from '../src/services/transcriptionCoordinator';
 
 describe('PCM transcription normalization', () => {

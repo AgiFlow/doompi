@@ -101,8 +101,8 @@
  */
 
 import type { ActivityState } from '../../types';
-import type { SessionScope } from '../sessionPaths';
 import type { AsyncJobTrackerContract, TrackedAsyncJobsContract } from '../asyncJobTracker';
+import type { SessionScope } from '../sessionPaths';
 
 /** States `AsyncJobTracker` (mirroring `staleRunReconciler.ts`) treats as finished. */
 const TERMINAL_STATES: ReadonlySet<string> = new Set(['complete', 'completed', 'failed', 'paused', 'stopped']);

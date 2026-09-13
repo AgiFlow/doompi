@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { author, authorChannel } from '../../src/web/stores/authorStore';
 
 const session = (sessionId: string | null) => author.select(author.store.state, sessionId);

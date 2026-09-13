@@ -3,9 +3,10 @@ import fs from 'node:fs';
 import { builtinModules, createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { LogLevel, LogOrStringHandler, OutputAsset, OutputChunk, RolldownLog, RolldownOutput } from 'rolldown';
-import { fingerprintInput, inputsAreFresh, type InputFingerprint } from './inputs';
+
 import { optionalPackageEntry } from '@agimon-ai/doompi-core/module-resolution';
+import type { LogLevel, LogOrStringHandler, OutputAsset, OutputChunk, RolldownLog, RolldownOutput } from 'rolldown';
+
 import {
   contentSha256,
   findSharedBuild,
@@ -16,6 +17,7 @@ import {
   type SharedBuildInput,
   withSharedBuildLock,
 } from './cache';
+import { fingerprintInput, inputsAreFresh, type InputFingerprint } from './inputs';
 
 /**
  * Compiles TypeScript extensions into plain ESM ahead of the session.

@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { readLauncherComposition, writeLauncherComposition } from '../../src/builders/cli/launcherComposition';
+
 import { LAUNCHER_COMPOSITION_ENV, LAUNCHER_COMPOSITION_VERSION } from '../../src/builders/cli/constants';
+import { readLauncherComposition, writeLauncherComposition } from '../../src/builders/cli/launcherComposition';
 import { type LauncherCompositionState } from '../../src/builders/cli/types';
 
 let workDir: string;

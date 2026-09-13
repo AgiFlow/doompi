@@ -14,10 +14,11 @@ import {
   StreamCursor,
   UserIcon,
 } from '@agimon-ai/doompi-web-components';
-import { Fragment, memo, type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@tanstack/react-store';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Store } from '@tanstack/store';
+import { Fragment, memo, type ReactNode, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+
 import { fileTabForPath, useActivityGroups, useFileLinks } from '../../lib/composition';
 import { parseFileMentions } from '../../lib/fileMentions';
 import { pluginToolRenderer, pluginUserMessageActions } from '../../lib/pluginRegistry';
@@ -31,6 +32,7 @@ import {
 } from '../../lib/sessionModel';
 import { groupSummary, groupTone, timelineUnits } from '../../lib/timelineGroups';
 import { appendComposerQuote } from '../../stores/composerStore';
+import { sessionsStore } from '../../stores/sessionsStore';
 import {
   requestOlderHistory,
   requestNewerHistory,
@@ -40,7 +42,6 @@ import {
   submitMessage,
   useActiveSession,
 } from '../../stores/sessionStore';
-import { sessionsStore } from '../../stores/sessionsStore';
 import { openTransientTab } from '../../stores/transientTabsStore';
 import { useOpenTab } from '../../stores/useOpenTab';
 import { usePluginSlotProps } from '../../stores/usePluginSlotProps';

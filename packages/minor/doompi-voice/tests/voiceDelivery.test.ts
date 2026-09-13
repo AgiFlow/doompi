@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { applyTranscriptPolicy } from '../src/services/transcriptPolicy';
 import { VoiceDelivery, type VoiceDeliveryResult } from '../src/services/voiceDelivery';
 

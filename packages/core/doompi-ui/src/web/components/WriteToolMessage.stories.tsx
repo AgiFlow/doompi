@@ -6,6 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import { WriteToolMessage } from './WriteToolMessage';
 
 /** Past the ten-line collapsed budget, so the preview reports what it hid. */

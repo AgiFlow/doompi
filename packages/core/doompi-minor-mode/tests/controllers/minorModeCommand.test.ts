@@ -1,7 +1,8 @@
-import type { MinorModeActionRequest, MinorModeCatalogService, MinorModeRecord } from '../../src/exports';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
 import { actionsFor, matchMinorMode, registerMinorModeCommand } from '../../src/controllers/minorModeCommand';
+import type { MinorModeActionRequest, MinorModeCatalogService, MinorModeRecord } from '../../src/exports';
 
 function record(overrides: {
   id: string;

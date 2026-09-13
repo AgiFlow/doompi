@@ -1,5 +1,7 @@
 import { buildSessionContext, type SessionEntry } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
+
+import { CHECKPOINT_MESSAGE_TYPE, CONTEXT_MESSAGE_TYPE } from '../src/constants/autocompact';
 import {
   baselineUsageIsSettled,
   checkpointSummaryFromEntry,
@@ -19,7 +21,6 @@ import {
   thresholdTokens,
   withCanonicalFileSections,
 } from '../src/services/compactionPolicy';
-import { CHECKPOINT_MESSAGE_TYPE, CONTEXT_MESSAGE_TYPE } from '../src/constants/autocompact';
 
 const STRUCTURED_CHECKPOINT = `## Goal
 Ship staged compaction.

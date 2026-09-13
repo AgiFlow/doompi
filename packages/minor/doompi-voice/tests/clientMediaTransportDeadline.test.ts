@@ -1,5 +1,6 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { BrowserVoiceMediaTransport } from '../src/web/stores/clientMediaTransport';
 import { voiceMediaWakes } from '../src/web/stores/voiceMediaWakeStore';
 

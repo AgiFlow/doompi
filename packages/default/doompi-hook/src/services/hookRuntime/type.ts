@@ -1,6 +1,7 @@
 import type { DoomConfigContext } from '@agimon-ai/doompi-config/types';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import type { HookDocumentReader, HookRunner } from '../../types/hooks';
 import type { HookTelemetry } from '../../types/telemetry';
 export interface HookExtensionOptions {

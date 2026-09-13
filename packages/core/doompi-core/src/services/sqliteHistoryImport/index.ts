@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import { branchTip, value, type Write } from '@earendil-works/pi-agent-core/harness/session';
 import {
@@ -8,8 +9,9 @@ import {
   SqliteStorage,
   createNodeSqliteFactory,
 } from '@earendil-works/pi-session-backend-sqlite-node';
-import { contentHash, importV3WithPinnedUpstream } from '../jsonlSessionRepo';
+
 import type { HistoryImportVerification, HistoryStagingImportInput } from '../historyImport';
+import { contentHash, importV3WithPinnedUpstream } from '../jsonlSessionRepo';
 
 type RecordValue = Record<string, unknown>;
 

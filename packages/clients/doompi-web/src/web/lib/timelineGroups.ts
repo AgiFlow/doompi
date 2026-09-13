@@ -1,4 +1,5 @@
 import type { StatusTone } from '@agimon-ai/doompi-web-components';
+
 import type { TimelineEntry, ToolEntry } from './sessionModel';
 
 /**

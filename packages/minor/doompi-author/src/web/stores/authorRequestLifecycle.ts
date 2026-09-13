@@ -1,6 +1,7 @@
 import type { CaptureStatusEvent, ComposerSubmission } from '@agimon-ai/doompi-core/web';
-import type { AuthorCapturePacket } from './authorCapture';
+
 import type { AuthorRegionDraft } from '../lib/authorViewportTypes';
+import type { AuthorCapturePacket } from './authorCapture';
 import {
   authorSessionWorkspace,
   putAuthorRequest,

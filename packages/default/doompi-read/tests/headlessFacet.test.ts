@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { computeFileTag } from '@agimon-ai/doompi-hashline/files';
+
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessExecutionContext,
@@ -9,8 +9,10 @@ import {
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
+import { computeFileTag } from '@agimon-ai/doompi-hashline/files';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { readServerFacet } from '../src/extensions/server';
 
 let directory: string;

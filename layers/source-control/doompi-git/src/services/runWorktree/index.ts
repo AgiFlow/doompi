@@ -5,9 +5,9 @@ import {
   type WorktreeAction,
   type RunWorktreeToolParams,
 } from '../../schemas/runWorktreeTool';
+import type { WorktreeRecord } from '../../types/worktreeRegistry';
 import { invalidRequest } from '../errors';
 import type { WorktreeOperations } from '../worktreeOperations';
-import type { WorktreeRecord } from '../../types/worktreeRegistry';
 
 export { RunWorktreeParams };
 export type { RunWorktreeToolParams, WorktreeAction };

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import type { WorkflowCatalogEntryView } from '../src/types/webWorkflows';
 import { initialInputs, initialRunner, launchProblems } from '../src/web/lib/launchLine';
 import {
@@ -18,8 +19,8 @@ import { requestLaunch, workflowRunsChannel, workflows } from '../src/web/stores
 function workflowsApply(runs: WorkflowRunView[]): void {
   workflowRunsChannel.apply('s1', { runs });
 }
-import { workflowActivityGroups, workflowActivityRows } from '../src/web/lib/workflowActivity';
 import type { WorkflowRunView } from '../src/types/webWorkflows';
+import { workflowActivityGroups, workflowActivityRows } from '../src/web/lib/workflowActivity';
 
 function entry(overrides: Partial<WorkflowCatalogEntryView> = {}): WorkflowCatalogEntryView {
   return {

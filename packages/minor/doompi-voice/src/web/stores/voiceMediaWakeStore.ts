@@ -1,4 +1,5 @@
 import { defineGlobalStore, defineSessionStore, type GlobalStore, type SessionStore } from '@agimon-ai/doompi-core/web';
+
 import { VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../../types/clientMedia';
 import type { RealtimeBrowserState } from '../../types/realtime';
 import {

@@ -1,4 +1,5 @@
 import { createDoomTelemetry, type DoomTelemetry, type DoomTelemetryOptions } from '@agimon-ai/doompi-telemetry';
+
 import type { ProfileTelemetry } from '../../types/telemetry';
 
 const SERVICE_NAME = 'doom-pi-profile';

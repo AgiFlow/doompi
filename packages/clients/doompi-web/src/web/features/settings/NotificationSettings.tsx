@@ -1,5 +1,6 @@
 import { Button } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
+
 import {
   browserNotificationPermission,
   type BrowserNotificationPermissionStatus,

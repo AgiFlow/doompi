@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import type { DoomHubChannel } from '../../../../../src/exports/hubChannel';
 import {
   DOOM_SERVER_HOST_SERVICE,
   requireDoomServerHost,
   type DoomServerFacet,
 } from '../../../../../src/exports/serverFacet';
+import { createHeadlessHub } from '../../../../../src/server/headlessHub';
 import type { HeadlessSessionHost } from '../../../../../src/systems/main/types/headlessSessionHost';
 import type { DirectHarnessFrame } from '../../../../../src/types/server/directHarnessRuntime';
-import { createHeadlessHub } from '../../../../../src/server/headlessHub';
 
 function host() {
   let resolveExit: ((code: number) => void) | undefined;
@@ -70,6 +71,8 @@ describe('createHeadlessHub', () => {
     session.emitFrame({ type: 'message_end', message: { role: 'assistant' } });
     expect(hub.session('one')?.phase).toBe('retry');
     expect(hub.session('one')?.awaitingInput).toBe(true);
+    session.emitFrame({ type: 'session_info_changed', name: 'Renamed' });
+    expect(hub.session('one')?.name).toBe('Renamed');
     session.emitFrame({ type: 'extension_ui_answered' });
     expect(hub.session('one')?.awaitingInput).toBe(false);
     session.emitFrame({ type: 'agent_start' });

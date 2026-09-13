@@ -1,18 +1,20 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { createRemoteServiceBinding } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { Client, createClientServiceTransport, type ByteTransportFactory } from '@earendil-works/pi-client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import WebSocket from 'ws';
+
+import type { DoomHubChannel } from '../../../../../src/exports/hubChannel';
 import {
   DOOM_COCKPIT_SERVER_ID,
   DoomHubService,
   DoomSessionManagementService,
   DoomSessionService,
 } from '../../../../../src/exports/sessionProtocol';
-import type { DoomHubChannel } from '../../../../../src/exports/hubChannel';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import WebSocket from 'ws';
 import { createHeadlessHub } from '../../../../../src/server/headlessHub';
 import { serveHeadlessServer, type HeadlessServer } from '../../../../../src/server/headlessServer';
 import type { HeadlessSessionHost } from '../../../../../src/systems/main/types/headlessSessionHost';
@@ -98,6 +100,48 @@ afterEach(async () => {
 });
 
 describe('serveHeadlessServer', () => {
+  it('routes restart, history, and resume through the live session lifecycle', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({ id: 'current', name: 'Current', cwd: '/repo', createdAt: '2025-01-01', host: host().host });
+    const sessionHistory = vi.fn(async () => [
+      {
+        id: 'saved',
+        firstMessage: 'hello',
+        createdAt: '2025-01-01',
+        updatedAt: '2025-01-02',
+        messageCount: 1,
+      },
+    ]);
+    const restartSession = vi.fn(async () => undefined);
+    const resumeSession = vi.fn(async () => 'saved');
+    const server = await serveHeadlessServer({
+      headlessHub: hub,
+      port: 0,
+      sessionHistory,
+      restartSession,
+      resumeSession,
+    });
+    servers.push(server);
+    expect(await (await fetch(`${server.url}/api/sessions/current/history`)).json()).toEqual({
+      sessions: await sessionHistory.mock.results[0]?.value,
+    });
+    expect((await fetch(`${server.url}/api/sessions/current/restart`, { method: 'POST' })).status).toBe(200);
+    expect(restartSession).toHaveBeenCalledWith(expect.objectContaining({ id: 'current' }));
+    const invalid = await fetch(`${server.url}/api/sessions/current/resume`, {
+      method: 'POST',
+      body: JSON.stringify({ targetSessionId: '../other' }),
+    });
+    expect(invalid.status).toBe(400);
+    expect(resumeSession).not.toHaveBeenCalled();
+    const resumed = await fetch(`${server.url}/api/sessions/current/resume`, {
+      method: 'POST',
+      body: JSON.stringify({ targetSessionId: 'saved' }),
+    });
+    expect(await resumed.json()).toEqual({ sessionId: 'saved' });
+    expect(resumeSession).toHaveBeenCalledWith(expect.objectContaining({ id: 'current' }), 'saved');
+    await hub.close();
+  });
+
   it('serves compositions, assets, remote requests, and directory suggestions', async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-directories-'));
     temporaryDirectories.push(directory);

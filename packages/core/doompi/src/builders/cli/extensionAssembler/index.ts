@@ -4,8 +4,6 @@ import {
   type MajorModesConfig,
 } from '@agimon-ai/doompi-config/majorModes';
 import type { PackageAttribution } from '@agimon-ai/doompi-config/types';
-import { extensionPackageName } from '@agimon-ai/doompi-ui/extensionName';
-import { ownEntry } from '../entryResolution';
 import {
   consumerPackageEntries,
   consumerPackageEntry,
@@ -19,6 +17,9 @@ import {
   packageEntry as resolvePackageEntry,
 } from '@agimon-ai/doompi-core/module-resolution';
 import { canonicalModulePath, sha256 } from '@agimon-ai/doompi-core/runtime-identity';
+import { extensionPackageName } from '@agimon-ai/doompi-ui/extensionName';
+
+import { ownEntry } from '../entryResolution';
 
 export interface ExtensionLayerResolvers extends LayerResolvers {
   /** Resolves a path authored under packages through its standard Pi manifest. */

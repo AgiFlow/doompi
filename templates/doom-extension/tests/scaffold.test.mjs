@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 // Use the scaffold tool's own template dependencies and strict rendering.
 const require = createRequire(import.meta.resolve('@agiflowai/scaffold-mcp'));

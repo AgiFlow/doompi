@@ -5,6 +5,7 @@ import type {
   DoomHubSessionScope,
   DoomHubChannel,
 } from '@agimon-ai/doompi-core/hub-channel';
+
 import { API_BASE_PATH, AUTHOR_BRIDGE_ROUTES } from '../types/authorApi';
 import { authorChannelType, type AuthorBrowserMessage, type AuthorHubMessage } from '../types/webAuthor';
 

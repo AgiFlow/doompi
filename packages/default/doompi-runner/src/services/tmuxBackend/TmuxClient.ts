@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+
 import type { ITmuxClient, TmuxResult } from '../../types/tmuxClient';
 
 const TMUX_BINARY = 'tmux';

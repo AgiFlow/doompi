@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+
 import { readPackageResource } from '../../src/services/packageResources';
 
 it('resolves the profile authoring skill from source and compiled module locations', async () => {

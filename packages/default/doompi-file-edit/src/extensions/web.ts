@@ -1,8 +1,9 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
+
+import { filesStatusKey } from '../types/webFiles';
 import { fileLinks } from '../web/components/fileLinks';
 import { FilesActivitySection } from '../web/components/FilesActivitySection';
 import { filesChannel } from '../web/stores/filesStore';
-import { filesStatusKey } from '../types/webFiles';
 
 /**
  * This package's cockpit presence: the files this session changed, in the

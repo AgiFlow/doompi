@@ -1,8 +1,10 @@
 import os from 'node:os';
 import path from 'node:path';
+
 import { loadDomains } from '@agimon-ai/doompi-config/domains';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+
 import { buildPreparedRuntime, type BuildResult } from '../../../builders/cli/prepare';
 import { DUPLICATE_REGISTRATION_DRIFT } from '../../../builders/cli/projectSettings';
 import { resolveDoomConfigurationRoot } from '../../../composition/repository';

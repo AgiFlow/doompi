@@ -1,6 +1,6 @@
 import { DOOMPI_SANDBOX_ENV } from '@agimon-ai/doompi-core/sandbox-harness';
+
 import type { BrokerEndpoint, SandboxEngine, SandboxHostFacts } from '../../types/sandboxHarness';
-import { filterSandboxEnvironment, isCredentialEnvName } from '../sandboxEnvironment';
 import { OAUTH_CALLBACK_HOST_ENV, OAUTH_CONTAINER_BIND, oauthPublishArgs } from '../oauthCallback';
 import {
   BRIDGE_CONTAINER_PATH,
@@ -12,6 +12,7 @@ import {
   BROKER_SOCKET_CONTAINER_PATH,
   BROKER_SOCKET_ENV,
 } from '../sandboxBridge';
+import { filterSandboxEnvironment, isCredentialEnvName } from '../sandboxEnvironment';
 
 const CONTAINER_HOME = '/doompi-home';
 const REPOSITORY_LABEL = 'doompi.sandbox.repo';

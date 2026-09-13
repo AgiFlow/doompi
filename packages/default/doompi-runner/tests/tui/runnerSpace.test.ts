@@ -1,9 +1,10 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import type { PtyRun } from '../../src/types/ptyHost';
-import type { RunnerRecord } from '../../src/types/runnerRegistry';
+
 import { formatWidgetHeading, formatWidgetLine, toRunnerRows } from '../../src/tui/format';
 import { RunnerSpaceComponent } from '../../src/tui/runnerSpace';
+import type { PtyRun } from '../../src/types/ptyHost';
+import type { RunnerRecord } from '../../src/types/runnerRegistry';
 
 const NOW = Date.parse('2026-08-01T12:00:00.000Z');
 

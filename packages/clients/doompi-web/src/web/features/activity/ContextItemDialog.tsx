@@ -9,6 +9,7 @@ import {
   Spinner,
 } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
+
 import { fetchContextItemDetail } from '../../lib/contextDetailApi';
 
 /**

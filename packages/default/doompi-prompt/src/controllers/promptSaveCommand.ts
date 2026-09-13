@@ -1,9 +1,10 @@
-import { WARNING, INFO } from '../constants/promptSaveCommand';
-import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/promptSave';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
+import { COMMAND_NAME as PROMPTS_COMMAND_NAME } from '../constants/prompts';
+import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/promptSave';
+import { WARNING, INFO } from '../constants/promptSaveCommand';
 import { PROMPT_NAME_RULE } from '../constants/savedPromptDocument';
 import { describePrompt, hasArgumentTokens, isValidPromptName } from '../services/savedPromptDocument';
-import { COMMAND_NAME as PROMPTS_COMMAND_NAME } from '../constants/prompts';
 import type { PromptExtensionDependencies } from '../types/prompt';
 
 /**

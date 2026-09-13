@@ -4,6 +4,7 @@
  */
 
 import { createHash } from 'node:crypto';
+
 import type { RealtimeAuth, RealtimeCredentials } from '../../types/realtime';
 
 export const CODEX_OAUTH_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';

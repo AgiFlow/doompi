@@ -3,25 +3,26 @@ import {
   installDoomCordisHost,
   type DoomCordisSessionService,
 } from '@agimon-ai/doompi-core/cordis-host';
-import {
-  DOOM_LOOP_LAUNCHERS_SERVICE,
-  type DoomLoopLaunchersService,
-  type LoopLauncherDefinition,
-  requireDoomLoopLaunchers,
-} from '../src/schemas/loopLaunchers';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   type MinorModeArguments,
   type MinorModeCatalogService,
   type MinorModeOwnerDefinition,
 } from '@agimon-ai/doompi-minor-mode';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { Context, type Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { loopExtension } from '../src/extensions/pi';
-import { STATUS_KEY } from '../src/constants/piLoop';
+
 import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../src/constants/loop';
+import { STATUS_KEY } from '../src/constants/piLoop';
+import { loopExtension } from '../src/extensions/pi';
+import {
+  DOOM_LOOP_LAUNCHERS_SERVICE,
+  type DoomLoopLaunchersService,
+  type LoopLauncherDefinition,
+  requireDoomLoopLaunchers,
+} from '../src/schemas/loopLaunchers';
 import { LOOP_VIEW_STATUS_KEY, parseLoopStatusView } from '../src/types/loopView';
 
 type CommandDefinition = { handler: (args: string, ctx: ExtensionContext) => Promise<void> };

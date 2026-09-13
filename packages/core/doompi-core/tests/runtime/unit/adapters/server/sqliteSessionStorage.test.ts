@@ -1,13 +1,8 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, expect, it } from 'vitest';
+
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import { openSqliteSessionStorage } from '../../../../../src/services/sqliteSessionStorage';
-import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
-import { createDirectHarnessRuntime } from '../../../../../src/server/directHarnessRuntime';
-import { registerNativeChild } from '../../../../../src/systems/child/adapters/nativeChildRuntimes';
-import { createThreadJournals } from '../../../../../src/server/threadJournals';
 import {
   createAssistantMessageEventStream,
   type AssistantMessage,
@@ -15,6 +10,13 @@ import {
   type Model,
   type Api,
 } from '@earendil-works/pi-ai';
+import { afterEach, expect, it } from 'vitest';
+
+import { createDirectHarnessRuntime } from '../../../../../src/server/directHarnessRuntime';
+import { createThreadJournals } from '../../../../../src/server/threadJournals';
+import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
+import { openSqliteSessionStorage } from '../../../../../src/services/sqliteSessionStorage';
+import { registerNativeChild } from '../../../../../src/systems/child/adapters/nativeChildRuntimes';
 
 const directories: string[] = [];
 afterEach(async () => {

@@ -1,16 +1,23 @@
-import { restoreMinorModeSelection } from '@agimon-ai/doompi-minor-mode/projection';
-import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
-import minorModeServerFacet from '@agimon-ai/doompi-minor-mode/extensions/server';
-import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
-import { publishHeadlessSelectionStatus } from '../../../../src/builders/server/selectionStatus';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
-import { Type } from 'typebox';
-import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
+
 import { loadMajorModesConfig, resolveLayers, filterHookDisabledLayers } from '@agimon-ai/doompi-config/majorModes';
+import { readContextDetail } from '@agimon-ai/doompi-core/context-detail-store';
+import { DOOM_HEADLESS_HOST_SERVICE, requireDoomHeadlessHost } from '@agimon-ai/doompi-core/headless';
+import {
+  createHeadlessSessionHost,
+  restoreHeadlessSelection as restoreCoreSelection,
+  validateDirectHeadlessArgs,
+} from '@agimon-ai/doompi-core/main';
+import { serveSessionApis } from '@agimon-ai/doompi-core/package-api-server';
+import type { LoadedServerFacet } from '@agimon-ai/doompi-core/server-facet';
+import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
+import minorModeServerFacet from '@agimon-ai/doompi-minor-mode/extensions/server';
+import { restoreMinorModeSelection } from '@agimon-ai/doompi-minor-mode/projection';
 import { profileServerFacet } from '@agimon-ai/doompi-profile/extensions/server';
+import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import {
   createAssistantMessageEventStream,
   type AssistantMessage,
@@ -18,16 +25,11 @@ import {
   type Model,
   type Api,
 } from '@earendil-works/pi-ai';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import { DOOM_HEADLESS_HOST_SERVICE, requireDoomHeadlessHost } from '@agimon-ai/doompi-core/headless';
-import type { LoadedServerFacet } from '@agimon-ai/doompi-core/server-facet';
-import {
-  createHeadlessSessionHost,
-  restoreHeadlessSelection as restoreCoreSelection,
-  validateDirectHeadlessArgs,
-} from '@agimon-ai/doompi-core/main';
-import { readContextDetail } from '@agimon-ai/doompi-core/context-detail-store';
-import { serveSessionApis } from '@agimon-ai/doompi-core/package-api-server';
+import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
+import { Type } from 'typebox';
+import { describe, expect, it, vi } from 'vitest';
+
+import { publishHeadlessSelectionStatus } from '../../../../src/builders/server/selectionStatus';
 
 function restoreHeadlessSelection(
   entries: Parameters<typeof restoreCoreSelection>[0],

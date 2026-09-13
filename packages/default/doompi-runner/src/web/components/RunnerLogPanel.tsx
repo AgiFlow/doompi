@@ -1,11 +1,12 @@
-import { AnsiLine, Button, Input, SearchIcon, StatusBadge, type StatusTone } from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { AnsiLine, Button, Input, SearchIcon, StatusBadge, type StatusTone } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { RunnerRunView } from '../../types/webRunners';
+
 import type { RunnerLogResponse } from '../../types/webRunnerLog';
-import { formatRunnerUptime, isFollowingLive, logViewLines, tailLineNumbers } from '../lib/format';
+import type { RunnerRunView } from '../../types/webRunners';
 import { fetchRunnerLog, followRunnerLog } from '../api/logApi';
+import { formatRunnerUptime, isFollowingLive, logViewLines, tailLineNumbers } from '../lib/format';
 import { requestRunnerStop, runners } from '../stores/runnersStore';
 
 const TICK_MS = 10_000;

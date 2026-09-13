@@ -1,7 +1,8 @@
-import { SEED_FILE_GUIDANCE } from './constants';
 import { GLOBAL_DOOM_SEED_FILES, type GlobalDoomInitResult } from '@agimon-ai/doompi-config';
 import { AMBIENT_EXTENSION_FILTER, DOOM_EXTENSION } from '@agimon-ai/doompi-core/runtime-pi-settings';
 import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
+
+import { SEED_FILE_GUIDANCE } from './constants';
 
 const FORCE_COLOR_ENV = 'FORCE_COLOR';
 const NO_COLOR_ENV = 'NO_COLOR';

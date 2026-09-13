@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createCockpitHarness } from '../../../src/services/cockpitHarness';
 import { cockpitImageTag } from '../../../src/services/sandboxImageTag';
 import type { EngineCaptureResult, EngineProcessRunner } from '../../../src/types/sandboxHarness';

@@ -1,5 +1,3 @@
-import { isTransitionValid } from '../invariants';
-import { detectCycle } from '../../models/taskGraph';
 import {
   DELETED_STATUS,
   type DepToken,
@@ -12,6 +10,8 @@ import {
   type TaskStatus,
   type UpsertItemOutcome,
 } from '../../models/task';
+import { detectCycle } from '../../models/taskGraph';
+import { isTransitionValid } from '../invariants';
 
 /** Default board capacity when a caller does not provide a configured limit. */
 const DEFAULT_REDUCER_MAX_TASKS = 15;

@@ -1,27 +1,29 @@
 import { createHash, randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
+
 import { readDoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
-import {
-  DOOM_DELEGATION_FINISHED_EVENT,
-  DOOM_DELEGATION_STARTED_EVENT,
-  type DelegationResult,
-  readDoomDelegationService,
-} from '../../src/exports/delegationApi';
 import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
 import {
   createDoomReadinessCoordinator,
   DOOM_READINESS_SERVICE,
   type DoomReadinessCoordinator,
 } from '@agimon-ai/doompi-core/readiness';
-import { readDoomSubagentPolicyService } from '../../src/exports/subagentPolicy';
 import { subscribeTelemetryRecords } from '@agimon-ai/doompi-telemetry';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  DOOM_DELEGATION_FINISHED_EVENT,
+  DOOM_DELEGATION_STARTED_EVENT,
+  type DelegationResult,
+  readDoomDelegationService,
+} from '../../src/exports/delegationApi';
+import { readDoomSubagentPolicyService } from '../../src/exports/subagentPolicy';
 import { activateTeamExtension } from '../../src/extensions/pi';
+import { createSessionScope } from '../../src/services/sessionPaths';
 import * as runtimeModule from '../../src/services/teamRuntime';
 import type { TeamExtensionRuntime } from '../../src/services/teamRuntime';
-import { createSessionScope } from '../../src/services/sessionPaths';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-team';

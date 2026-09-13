@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import {
   JsonlSessionRepo,
@@ -17,12 +18,13 @@ import {
 } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it, vi, type MockInstance } from 'vitest';
-import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../../src/services/historyOwnership';
+
 import {
   createDirectHarnessRuntime,
   promptForAssistantText,
   readDirectHarnessSessionMetadata,
 } from '../../../../../src/server/directHarnessRuntime';
+import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../../src/services/historyOwnership';
 
 const model: Model<Api> = {
   id: 'test-model',

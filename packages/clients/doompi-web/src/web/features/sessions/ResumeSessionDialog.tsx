@@ -12,6 +12,7 @@ import {
 import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useMemo, useState } from 'react';
+
 import type { PiSessionHistoryItem } from '../../../types/hub';
 import { listSessionHistory, resumeSession } from '../../lib/hubApi';
 import { sessionsStore, waitForSession } from '../../stores/sessionsStore';

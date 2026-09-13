@@ -15,6 +15,7 @@
  * - Ctrl+R deliberately clears render caches without changing live run state
  */
 
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
 import {
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_NAVIGATION_KEYS,
@@ -24,7 +25,6 @@ import {
   type DoomOverlayTui,
 } from '@agimon-ai/doompi-ui/doom-overlay';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
-import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
 import { type ExtensionContext, getMarkdownTheme } from '@earendil-works/pi-coding-agent';
 import {
   Key,
@@ -34,15 +34,16 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from '@earendil-works/pi-tui';
+
 import type { AsyncRunStatus } from '../services/asyncExecution';
 import type { TrackedAsyncJobsContract, TrackedAsyncJob } from '../services/asyncJobTracker';
-import type { SessionScope } from '../services/sessionPaths';
 import { formatDuration, formatModelThinking, formatTokens } from '../services/displayFormat';
-import type { PollSchedulerContract } from '../services/pollScheduler';
-import { agentSystemPromptFingerprint, fieldRow, readAgentSystemPrompt, renderAgentView } from './fleetAgentView';
-import { type FleetTranscriptRender, type FleetTranscriptVerbosity, renderFleetTranscript } from './fleetTranscript';
 import { type FleetTranscriptTail, readFleetTranscriptTail } from '../services/fleetTranscript';
 import { nativeTranscriptTail } from '../services/nativeFleetTranscript';
+import type { PollSchedulerContract } from '../services/pollScheduler';
+import type { SessionScope } from '../services/sessionPaths';
+import { agentSystemPromptFingerprint, fieldRow, readAgentSystemPrompt, renderAgentView } from './fleetAgentView';
+import { type FleetTranscriptRender, type FleetTranscriptVerbosity, renderFleetTranscript } from './fleetTranscript';
 
 const DEFAULT_REFRESH_INTERVAL_MS = 750;
 const MIN_DETAIL_BODY_LINES = 15;

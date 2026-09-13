@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { VOICE_TOOL_NAMES, voiceCallSummary, voiceResultLines } from '../src/web/lib/voiceToolRender';
 
 const text = (value: string, details?: unknown) => ({ content: [{ type: 'text', text: value }], details });

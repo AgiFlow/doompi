@@ -1,6 +1,4 @@
 import { ClientCaptureActivityLifecycle, type SpeechPresenceDetector } from '../../types/clientCaptureActivity';
-import type { BrowserRealtimeOptions, RealtimeBrowserState } from '../../types/realtime';
-import { BrowserRealtimeSession } from './browserRealtimeSession';
 import {
   type VoiceMediaCapabilities,
   type VoiceMediaCapture,
@@ -10,6 +8,8 @@ import {
   type VoiceMediaPlaybackResult,
   type VoiceMediaTransport,
 } from '../../types/clientMedia';
+import type { BrowserRealtimeOptions, RealtimeBrowserState } from '../../types/realtime';
+import { BrowserRealtimeSession } from './browserRealtimeSession';
 
 const RECONNECT_DELAY_MS = 2_000;
 const MAX_CONNECTION_ID_LENGTH = 200;

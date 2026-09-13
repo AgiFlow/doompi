@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { machineApi } from '../../../../../src/server/machineApi';
 
 const auth = vi.hoisted(() => ({

@@ -1,7 +1,6 @@
 import { Store } from '@tanstack/store';
+
 import type { RemoteAccessSettings, RemoteAccessStateView } from '../../types/remoteAccess';
-import { passkeysAvailable, registerPasskey } from '../lib/webauthnClient';
-import { sealedHttpSession } from '../lib/sealedSession';
 import {
   approvePairing,
   denyPairing,
@@ -12,6 +11,8 @@ import {
   revokeDevice,
   saveRemoteSettings,
 } from '../lib/remoteApi';
+import { sealedHttpSession } from '../lib/sealedSession';
+import { passkeysAvailable, registerPasskey } from '../lib/webauthnClient';
 
 /** Which panel of the dialog is showing. Options first, then the code to scan. */
 export type RemoteStep = 'closed' | 'options' | 'handover' | 'pairing';

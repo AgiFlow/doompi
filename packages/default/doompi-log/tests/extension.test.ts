@@ -6,6 +6,7 @@ import type {
 } from '@agimon-ai/log-sink-mcp/telemetry/node';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { installLogTestRuntime, installTelemetryTestRuntime } from './helpers/extensionRuntime';
 
 type Handler = (event: Record<string, unknown>, context: ExtensionContext) => Promise<void>;

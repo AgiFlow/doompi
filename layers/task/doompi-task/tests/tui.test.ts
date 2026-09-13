@@ -2,6 +2,7 @@ import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import type { ExtensionUIContext, Theme } from '@earendil-works/pi-coding-agent';
 import { type TUI, visibleWidth } from '@earendil-works/pi-tui';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import type { Task } from '../src/exports/storeTypes';
 import {
   formatCommandTaskLine,

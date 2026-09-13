@@ -1,4 +1,5 @@
 import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
+
 import { createProfileServerCommand, profileIdentityHook, readSelectedPersona } from '../controllers/profileServer';
 import { readPackageResource } from '../services/packageResources';
 export const profileServerFacet = defineServerPlugin({

@@ -5,8 +5,8 @@
  * direct child events. No process ids or durable files participate in liveness.
  */
 
-import type { SessionScope } from '../sessionPaths';
 import type { ConcurrencyEventReporter } from '../runWithConcurrency';
+import type { SessionScope } from '../sessionPaths';
 
 /** How often a waiting spawn re-checks for a free slot. */
 export const DEFAULT_ADMISSION_POLL_INTERVAL_MS = 250;

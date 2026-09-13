@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
 import type { DoomChildSessionRuntime } from '@agimon-ai/doompi-core/child';
+import { describe, expect, it } from 'vitest';
+
 import { NativeTeamChannelService } from '../../src/services/nativeTeamChannel';
 
 interface FakeTool {

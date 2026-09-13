@@ -1,3 +1,4 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 /*
  * Plain CSF objects; the style-system renderer resolves the default export by
  * looking for a bare `const meta`. The panel reads the focused document out of
@@ -5,9 +6,9 @@
  * store's public mutations rather than faking the state shape.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
-import type { AuthorDocumentInput } from '../lib/authorViewportTypes';
+
 import { updateAuthorGridGeometry } from '../lib/authorGrid';
+import type { AuthorDocumentInput } from '../lib/authorViewportTypes';
 import { addAuthorRegion, focusAuthorDocument, putAuthorDocument } from '../stores/authorWorkspaceStore';
 import { AuthorPanel } from './AuthorPanel';
 

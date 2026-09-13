@@ -1,7 +1,6 @@
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentConfig } from '../../src/types/agent';
 import {
   AgentCatalogComponent,
   type AgentCatalogOptions,
@@ -14,6 +13,7 @@ import type {
   ProjectedResource,
   ResourceTabProjection,
 } from '../../src/tui/agentResourceProjection';
+import type { AgentConfig } from '../../src/types/agent';
 
 const KEY_ENTER = '\r';
 const KEY_ESCAPE = '\x1b';

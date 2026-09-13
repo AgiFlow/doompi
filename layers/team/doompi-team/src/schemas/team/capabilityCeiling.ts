@@ -7,6 +7,7 @@
  */
 
 import { Buffer } from 'node:buffer';
+
 import type { SubagentPolicy } from '../../schemas/subagentPolicy';
 import { SUBAGENT_CAPABILITY_CEILING_ENV } from '../../types/environment';
 

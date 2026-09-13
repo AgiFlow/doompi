@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext, ToolDefinition, ToolInfo } from '@earendil-works/pi-coding-agent';
 import type { TSchema } from 'typebox';
+
 import { connectDoomCordisHost, installDoomCordisHost, type DoomCordisHostConnection } from '../../pi/cordisHost';
 
 /**

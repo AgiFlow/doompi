@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { defineMinorMode } from '../src/services/modeDefinition';
 
 interface Runtime {

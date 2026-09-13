@@ -1,8 +1,9 @@
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { Context } from '@deepseek-ai/cordis';
-import { skillInvocation } from '../services/skillText';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import type { SkillCatalog, SkillCatalogOptions } from '../services/skillCatalog';
+import { skillInvocation } from '../services/skillText';
 import type { SkillsOverlayResult } from '../tui/skillsOverlay';
 import { SKILLS_COMMAND } from '../types/skills';
 

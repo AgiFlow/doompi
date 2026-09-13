@@ -23,13 +23,15 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
+
 import { PluginSurface } from '../../components/PluginSurface';
-import { HOST_SLOTS } from '../../lib/pluginRegistry';
 import { minorModes, type MinorMode, selectionAxes } from '../../lib/composition';
-import type { AgentInfo, DialogRequest, ModelChoice } from '../../lib/sessionModel';
+import { HOST_SLOTS } from '../../lib/pluginRegistry';
 import { focusPrompt } from '../../lib/promptFocus';
+import type { AgentInfo, DialogRequest, ModelChoice } from '../../lib/sessionModel';
 import { parseSelection } from '../../lib/statusLine';
 import { menuStore, setPendingMenu } from '../../stores/menuStore';
+import { sessionsStore } from '../../stores/sessionsStore';
 import {
   answerDialogValue,
   cancelDialog,
@@ -40,7 +42,6 @@ import {
   useActiveSession,
 } from '../../stores/sessionStore';
 import { setDockOpen, setDockTab } from '../../stores/uiStore';
-import { sessionsStore } from '../../stores/sessionsStore';
 
 // The known axes keep their mockup styling; a plugin-declared axis the host
 // has no entry for reads in the neutral tone.

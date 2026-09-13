@@ -1,8 +1,8 @@
+import type { GitExtensionDependencies } from '../../types/extension';
+import { DefaultGitExtensionService } from '../extensionService';
 // @scaffold-generated
 import { createWorktreeGit } from '../gitCli';
-import { DefaultGitExtensionService } from '../extensionService';
 import { createWorktreeOperations } from '../worktreeOperations';
-import type { GitExtensionDependencies } from '../../types/extension';
 
 export function createGitDependencies(overrides: Partial<GitExtensionDependencies> = {}): GitExtensionDependencies {
   return {

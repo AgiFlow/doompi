@@ -1,15 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
-import { resolveMcpAllowlist } from '@agimon-ai/doompi-domain/mcp';
-import { materializePluginEntries } from '@agimon-ai/doompi-domain/plugins';
-import { collectResources, type HarnessResources } from '@agimon-ai/doompi-domain/resources';
-import {
-  createHarnessTelemetry,
-  HARNESS_EVENT,
-  type HarnessTelemetry,
-} from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
 import { resolvePluginEntries, resolveSharedSkills } from '@agimon-ai/doompi-config/domains';
 import type { DomainMcpAllowlist, PluginEntry } from '@agimon-ai/doompi-config/domains';
 import {
@@ -22,12 +15,21 @@ import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { applyProfileEnvironment, buildPersonaPrompt, resolveProfile } from '@agimon-ai/doompi-config/profiles';
 import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
 import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-core/mcp-session';
-import { DEFAULT_THEME_NAME, writeDefaultTheme } from '@agimon-ai/doompi-ui/theme';
-import { createHarnessSession } from '../../composition/harnessState';
-import { PERSONA_ENTRY } from './extensionAssembler';
-import type { HarnessOptions } from '../../composition/types/harness';
 import { packageEntry } from '@agimon-ai/doompi-core/module-resolution';
+import {
+  createHarnessTelemetry,
+  HARNESS_EVENT,
+  type HarnessTelemetry,
+} from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
 import { resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
+import { resolveMcpAllowlist } from '@agimon-ai/doompi-domain/mcp';
+import { materializePluginEntries } from '@agimon-ai/doompi-domain/plugins';
+import { collectResources, type HarnessResources } from '@agimon-ai/doompi-domain/resources';
+import { DEFAULT_THEME_NAME, writeDefaultTheme } from '@agimon-ai/doompi-ui/theme';
+
+import { createHarnessSession } from '../../composition/harnessState';
+import type { HarnessOptions } from '../../composition/types/harness';
+import { PERSONA_ENTRY } from './extensionAssembler';
 
 const OLLAMA_PRESET = 'ollama';
 const PRIVATE_FILE_MODE = 0o600;

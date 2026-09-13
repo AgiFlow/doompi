@@ -1,6 +1,7 @@
 import type { Store } from '@tanstack/store';
-import type { ModelContextBinding } from './modelContext';
 import type { ComponentType, ReactNode } from 'react';
+
+import type { ModelContextBinding } from './modelContext';
 
 /**
  * The client half of the DoomPi web plugin contract.

@@ -3,17 +3,18 @@ import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
 import { type PiPluginContributions, type PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
-import { DOOM_TRANSITION_SERVICE } from '@agimon-ai/doompi-core/transition';
-import { DOOM_VOICE_TOOLS_SERVICE, requireDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
-import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
-import type { Context } from '@deepseek-ai/cordis';
 import { DOOM_RESOURCE_CATALOG_ENTRY_TYPE, type ResourceCatalogProjection } from '@agimon-ai/doompi-core/skills';
+import { DOOM_TRANSITION_SERVICE } from '@agimon-ai/doompi-core/transition';
+import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
+import { DOOM_VOICE_TOOLS_SERVICE, requireDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
+import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { createDomainsCommand } from './domainsCommand';
+
+import { createDomainSwitchHandoffStore } from '../models/domainSwitchHandoff';
 import { DOMAIN_STATUS_KEY, domainStatus } from '../services/domainText';
 import type { DomainTelemetry } from '../types/telemetry';
 import { createDomainCatalog } from './domainCatalog';
-import { createDomainSwitchHandoffStore } from '../models/domainSwitchHandoff';
+import { createDomainsCommand } from './domainsCommand';
 import { registerDomainVoiceCapabilities } from './voiceTool';
 
 /**

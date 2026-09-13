@@ -1,13 +1,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import type { RemoteAccessSettings } from '../../types/remote';
 import {
   DEFAULT_REMOTE_SETTINGS,
   parseRemoteAccessSettings,
   serializeRemoteAccessSettings,
 } from '../remoteAccessSettings';
 import type { StoredCredential } from '../webauthnPolicy';
-import type { RemoteAccessSettings } from '../../types/remote';
 
 /** Where the cockpit keeps machine-local state; `doompi sync` already writes its bundle here. */
 const STATE_SEGMENTS = ['.doompi', 'web'];

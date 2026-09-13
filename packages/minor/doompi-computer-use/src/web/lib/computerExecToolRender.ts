@@ -1,5 +1,5 @@
-import type { MessageLine } from '@agimon-ai/doompi-web-components';
 import { type ToolResultView, toolResultTextLines } from '@agimon-ai/doompi-core/web';
+import type { MessageLine } from '@agimon-ai/doompi-web-components';
 
 export const computerExecToolName = 'computer_exec' as const;
 export const computerExecCollapsedLines = 8;

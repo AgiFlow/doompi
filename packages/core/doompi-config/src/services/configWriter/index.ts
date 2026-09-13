@@ -26,7 +26,9 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+
 import { parseDocument } from 'yaml';
+
 import { parseDoomConfig } from '../configPolicy';
 
 /**

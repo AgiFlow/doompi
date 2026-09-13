@@ -1,5 +1,6 @@
 import type { WorkflowStage } from '@agimon-ai/workflow-mcp';
 import { describe, expect, it, vi } from 'vitest';
+
 import { narrateWorkflowTransition, type WorkflowNarrationSink } from '../../src/services/workflowNarration';
 
 function requester() {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import standardPiExtension, { activatePlanExtension } from '../src/extensions/pi';
 
 describe('Doom Plan Pi entry', () => {

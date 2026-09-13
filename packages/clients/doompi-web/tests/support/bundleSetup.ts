@@ -2,11 +2,13 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config';
 import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
 import { bundleCockpitWeb } from '@agimon-ai/doompi/builders/web';
+
 import { pluginPackageRoots } from './pluginRoots';
 
 /** A fixture plugin whose tool renderer throws on demand, so the timeline's fallback can be proved. */

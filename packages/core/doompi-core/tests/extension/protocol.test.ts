@@ -1,6 +1,3 @@
-import { Type } from 'typebox';
-import { Check } from 'typebox/value';
-import { describe, expect, it, vi } from 'vitest';
 import {
   childProcessContextEnvironment,
   DOOM_CHILD_PROCESS_CONTEXT_ENV,
@@ -18,6 +15,9 @@ import {
   defineRequestReply,
   type EventBusLike,
 } from '@agimon-ai/doompi-core/protocol';
+import { Type } from 'typebox';
+import { Check } from 'typebox/value';
+import { describe, expect, it, vi } from 'vitest';
 
 class TestBus implements EventBusLike {
   private readonly handlers = new Map<string, Set<(data: unknown) => void>>();

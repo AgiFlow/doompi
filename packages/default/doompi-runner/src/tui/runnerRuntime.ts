@@ -15,6 +15,7 @@ import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import {
   BACKGROUND_WORK_PROVIDER,
   COMPLETED_STATE,
@@ -33,24 +34,22 @@ import {
   STOPPED_REASON,
 } from '../constants/runnerRuntime';
 import { COMMAND_DESCRIPTION, COMMAND_NAME } from '../constants/runners';
+import { RUNNER_SETTINGS_FILE } from '../constants/runnerSettings';
 import { createRunnerCompactionRecovery } from '../services/compaction';
 import { summarizeLog } from '../services/logReader';
 import { cleanupLegacyRunnerStore, reconcileActiveRunners, stopRunnerProcess } from '../services/reconcile';
 import { getLogTtlMs } from '../services/runnerConfig';
+import { setRunnerSettings } from '../services/runnerConfig';
 import { createRunnerDependencies } from '../services/runnerDependencies';
 import type { RunnerDependencies } from '../services/runnerDependencies/type';
 import { parseRunnersCommand } from '../services/runnersCommand';
+import { RunnerSettingsLoader } from '../services/runnerSettings';
 import type { IBashRunService } from '../types/bashRunService';
 import type { RunnerRecord } from '../types/runnerRegistry';
+/** After doom-task's `t` (65) and before the core help group (70). */
 import { formatRunnerFooterContribution, formatRunnerStatus } from './format';
 import type { RunnerRuntime } from './runnerRuntimeType';
 import { openRunnerSpace } from './runnerSpace';
-
-/** After doom-task's `t` (65) and before the core help group (70). */
-
-import { RUNNER_SETTINGS_FILE } from '../constants/runnerSettings';
-import { setRunnerSettings } from '../services/runnerConfig';
-import { RunnerSettingsLoader } from '../services/runnerSettings';
 
 /**
  * How often a live session revisits its own runner history. Retention only

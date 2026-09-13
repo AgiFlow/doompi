@@ -2,10 +2,8 @@ import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-exten
 import { DOOM_SKILL_SOURCES_SERVICE, requireDoomSkillSourcesService } from '@agimon-ai/doompi-core/skills';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
-import { createWorkflowPiRuntime, type WorkflowPiExtensionOptions } from '../tui/workflowRuntime';
-import { registerLeaderContribution } from '../tui/leader';
-import { renderWorkflowToolCall, renderWorkflowToolResult } from '../tui/workflow/workflowToolRender';
-import { createWorkflowTools } from '../tools/workflowTools';
+
+import { PACKAGE_SOURCE } from '../constants/workflow';
 import {
   createWorkflowFence,
   dispatcherTools,
@@ -14,7 +12,10 @@ import {
   resolveDispatcherParentSession,
 } from '../services/workflowFence';
 import { workflowSkillDirectory } from '../services/workflowResource';
-import { PACKAGE_SOURCE } from '../constants/workflow';
+import { createWorkflowTools } from '../tools/workflowTools';
+import { registerLeaderContribution } from '../tui/leader';
+import { renderWorkflowToolCall, renderWorkflowToolResult } from '../tui/workflow/workflowToolRender';
+import { createWorkflowPiRuntime, type WorkflowPiExtensionOptions } from '../tui/workflowRuntime';
 
 export const workflowExtension = definePiExtension<Partial<WorkflowPiExtensionOptions>>(
   PACKAGE_SOURCE,

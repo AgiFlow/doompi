@@ -1,5 +1,7 @@
 import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
+
 import {
   DEFAULT_HEADLESS_PORT,
   DEFAULT_PORT,

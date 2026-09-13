@@ -17,6 +17,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
 import type { ArtifactDirPreference, ArtifactPaths } from '../../types';
 import { writeAtomicJson } from '../atomicJson';
 import { getAgentDir } from '../configDir';

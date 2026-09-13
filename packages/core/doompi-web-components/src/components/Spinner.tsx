@@ -1,4 +1,5 @@
 import type { ComponentProps } from 'react';
+
 import { LoaderIcon } from '../icons/icons';
 import { cn } from '../lib/cn';
 

@@ -1,13 +1,11 @@
 import { randomBytes } from 'node:crypto';
+
 import type { Context, Hono, MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { getCookie, setCookie } from 'hono/cookie';
 import { HTTPException } from 'hono/http-exception';
 import { timeout } from 'hono/timeout';
-import { sanitizeEdgeIp, sanitizeUserAgent } from '../services/deviceSessions';
-import { pairingPageHeaders, pairingPageHtml } from '../services/pairingPage';
-import type { GuardListener } from '../services/remoteGuardPolicy';
-import { isStepUpAction } from '../services/webauthnPolicy';
+
 import {
   DEVICE_COOKIE,
   PAIRING_CLAIM_ROUTE,
@@ -21,8 +19,12 @@ import {
   REMOTE_API_ROUTE,
   REMOTE_CHANNEL_ROUTE,
 } from '../constants/remote';
-import { type RemoteChannelScope } from '../types/remote';
+import { sanitizeEdgeIp, sanitizeUserAgent } from '../services/deviceSessions';
+import { pairingPageHeaders, pairingPageHtml } from '../services/pairingPage';
 import type { RemoteAccess } from '../services/remoteAccess';
+import type { GuardListener } from '../services/remoteGuardPolicy';
+import { isStepUpAction } from '../services/webauthnPolicy';
+import { type RemoteChannelScope } from '../types/remote';
 
 const NONCE_BYTES = 16;
 const BAD_REQUEST = 400;

@@ -1,10 +1,11 @@
-import { renderBashResult } from '../../src/tui/bashRender';
 import type { ExtensionAPI, Theme } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BashRunResult, IBashRunService } from '../../src/types/bashRunService';
-import { createBashTool } from '../../src/exports/bashTool';
+
 import { BashParamsSchema } from '../../src/exports/bashSchema';
 import type { BashParams } from '../../src/exports/bashSchema';
+import { createBashTool } from '../../src/exports/bashTool';
+import { renderBashResult } from '../../src/tui/bashRender';
+import type { BashRunResult, IBashRunService } from '../../src/types/bashRunService';
 
 interface RegisteredTool {
   description: string;

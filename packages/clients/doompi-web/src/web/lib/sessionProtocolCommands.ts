@@ -1,10 +1,10 @@
-import { BACKGROUND_CONTEXT, withCancel } from '@earendil-works/chord/context';
 import type {
   ImageContentPart,
   SessionMessageArgs,
   SessionService,
   ThinkingLevel,
 } from '@agimon-ai/doompi-core/session-protocol';
+import { BACKGROUND_CONTEXT, withCancel } from '@earendil-works/chord/context';
 
 type Frame = Record<string, unknown>;
 const senders = new Map<string, (frame: Frame) => void>();

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DoomChildSessionRequest, DoomChildSessionRuntime } from '../../../src/systems/child/types/childSession';
+
 import { createDoomChildSessionService } from '../../../src/systems/child/services/childSession';
+import type { DoomChildSessionRequest, DoomChildSessionRuntime } from '../../../src/systems/child/types/childSession';
 
 function deferred<T = void>(): {
   readonly promise: Promise<T>;

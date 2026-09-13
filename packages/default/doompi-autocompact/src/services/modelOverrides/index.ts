@@ -17,8 +17,9 @@
  *   the separator, so the subject has to follow the pattern's own shape.
  */
 
-import { minimatch } from 'minimatch';
 import type { AutocompactOverrideConfig } from '@agimon-ai/doompi-config';
+import { minimatch } from 'minimatch';
+
 import type { AutocompactTokenOverrides } from '../../types/autocompact';
 
 /** The parts of a resolved model the rules match on. */

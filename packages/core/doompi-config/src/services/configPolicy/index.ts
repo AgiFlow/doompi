@@ -1,4 +1,5 @@
 import { parse as parseYaml } from 'yaml';
+
 import type {
   AutocompactModeConfig,
   AutocompactOverrideConfig,

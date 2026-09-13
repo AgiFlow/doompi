@@ -1,5 +1,6 @@
 import { Accordion as AccordionPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
+
 import { ChevronDownIcon } from '../icons/icons';
 import { cn } from '../lib/cn';
 

@@ -1,5 +1,6 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import type { FileEditsDetailView } from '../../src/types/fileEditsApi';
 import { FilePanel } from '../../src/web/components/FilePanel';
 import { files, storeDetail } from '../../src/web/stores/filesStore';

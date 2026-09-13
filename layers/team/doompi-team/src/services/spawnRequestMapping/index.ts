@@ -33,8 +33,8 @@
  *   call site instead of the shared list below
  */
 
-import type { SpawnPlanTaskInput } from '../spawnPlan';
 import type { InlineConfig, ParsedStep } from '../chainExpression';
+import type { SpawnPlanTaskInput } from '../spawnPlan';
 
 interface NotYetSupportedKey {
   key: keyof InlineConfig;

@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { loadDoomConfigLayers } from '../src/services/config';
-import { setDoomConfigValue, unsetDoomConfigValue } from '../src/services/configWriter';
 import {
   configLeafKeys,
   configScopeOf,
@@ -11,6 +12,7 @@ import {
   parseDoomConfig,
   resolveVoiceConfig,
 } from '../src/services/configPolicy';
+import { setDoomConfigValue, unsetDoomConfigValue } from '../src/services/configWriter';
 
 /**
  * Scope, made answerable.

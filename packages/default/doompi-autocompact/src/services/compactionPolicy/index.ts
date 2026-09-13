@@ -4,6 +4,7 @@ import {
   type SessionEntry,
   sessionEntryToContextMessages,
 } from '@earendil-works/pi-coding-agent';
+
 import {
   CHECKPOINT_HEADINGS,
   CHECKPOINT_MESSAGE_TYPE,

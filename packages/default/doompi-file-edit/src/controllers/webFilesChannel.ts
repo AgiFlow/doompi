@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import type { DoomHubChannel, DoomHubChannelSource } from '@agimon-ai/doompi-core/hub-channel';
+
 import { filterDoomIgnoredFiles } from '../services/doomIgnore';
 import { confirmedChanges, foldEntries, foldVersions, isDiffable, parseTimeline } from '../services/fileChanges';
-import { filesChannelType, type FilesItemView } from '../types/webFiles';
 import { FileEditPaths } from '../services/fileEditPaths';
+import { filesChannelType, type FilesItemView } from '../types/webFiles';
 
 /**
  * The changed-files channel consumes snapshots emitted by the owning session

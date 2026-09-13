@@ -1,4 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
+
 import { GOAL_VIEW_STATUS_KEY } from '../types/goalView';
 import { GoalActivitySection } from '../web/components/GoalActivitySection';
 import { GoalToolMessage } from '../web/components/GoalToolMessage';

@@ -21,6 +21,12 @@ const loadDoomConfig = vi.hoisted(() => vi.fn(() => ({ modes: {} }) as unknown))
 const getHarnessState = vi.hoisted(() => vi.fn(() => ({}) as unknown));
 vi.mock('@agimon-ai/doompi-config', () => ({ loadDoomConfig, getHarnessState }));
 
+import {
+  CHECKPOINT_MESSAGE_TYPE,
+  CONTEXT_MESSAGE_TYPE,
+  RUNTIME_STATE_MESSAGE_TYPE,
+  STATE_CUSTOM_TYPE,
+} from '../src/constants/autocompact';
 import { autocompactExtension } from '../src/extensions/pi';
 import {
   AUTOCOMPACT_EVENT,
@@ -28,12 +34,6 @@ import {
   type AutocompactTelemetry,
 } from '../src/services/autocompactTelemetry';
 import { createInitialState } from '../src/services/compactionPolicy';
-import {
-  CHECKPOINT_MESSAGE_TYPE,
-  CONTEXT_MESSAGE_TYPE,
-  RUNTIME_STATE_MESSAGE_TYPE,
-  STATE_CUSTOM_TYPE,
-} from '../src/constants/autocompact';
 
 const STRUCTURED_CHECKPOINT = `## Goal
 Retain important context.

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { parseDoomNotificationEntry } from '../../src/types/notification';
 import {
   browserNotificationPermission,

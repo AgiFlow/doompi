@@ -1,4 +1,5 @@
 import { Store } from '@tanstack/store';
+
 import type { GlobalStore } from '../types/webPlugin';
 
 /** Page-wide plugin state shared by every contribution from the plugin. */

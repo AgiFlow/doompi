@@ -1,4 +1,5 @@
 import type { ComponentProps } from 'react';
+
 import { cn } from '../lib/cn';
 
 /** The blinking block that marks text still arriving. */

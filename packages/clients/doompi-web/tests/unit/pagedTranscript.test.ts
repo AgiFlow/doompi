@@ -1,10 +1,11 @@
-import { afterEach, expect, it, vi } from 'vitest';
-import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type {
   SessionServiceState,
   TranscriptPage,
   TranscriptPageRequest,
 } from '@agimon-ai/doompi-core/session-protocol';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
+import { afterEach, expect, it, vi } from 'vitest';
+
 import { createPagedTranscript } from '../../src/web/stores/pagedTranscriptStore';
 import {
   applySessionFrame,

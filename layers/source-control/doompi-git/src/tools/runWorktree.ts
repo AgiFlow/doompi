@@ -1,5 +1,7 @@
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+
+import { RunWorktreeParams, type RunWorktreeToolParams } from '../schemas/runWorktreeTool';
 import {
   executeRunWorktreeTool,
   RUN_WORKTREE_DESCRIPTION,
@@ -7,7 +9,6 @@ import {
   validateParams,
   type RunWorktreeToolDetails,
 } from '../services/runWorktree';
-import { RunWorktreeParams, type RunWorktreeToolParams } from '../schemas/runWorktreeTool';
 import type { WorktreeOperations } from '../services/worktreeOperations';
 
 export { RUN_WORKTREE_TOOL_NAME, validateParams };

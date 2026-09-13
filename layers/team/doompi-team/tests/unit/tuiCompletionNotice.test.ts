@@ -1,6 +1,5 @@
-import { describe, expect, it } from 'vitest';
-
 import type { ExtensionAPI, MessageRenderOptions, Theme } from '@earendil-works/pi-coding-agent';
+import { describe, expect, it } from 'vitest';
 
 import type { CompletionNotifyDetails } from '../../src/services/notify';
 import { SUBAGENT_NOTIFY_MESSAGE_TYPE } from '../../src/services/notify';

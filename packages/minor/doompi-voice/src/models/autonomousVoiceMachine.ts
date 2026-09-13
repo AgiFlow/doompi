@@ -1,7 +1,8 @@
 import { assign, cancel, emit, raise, type SnapshotFrom, setup } from 'xstate';
-import { type NarrationBargeInEvidence, narrationBargeInIsActionable } from './narrationBargeIn';
+
 import type { VoiceTranscriptSignalEvidence } from '../services/transcriptAdmission';
 import type { VoiceCompositionState } from '../services/transcriptPolicy';
+import { type NarrationBargeInEvidence, narrationBargeInIsActionable } from './narrationBargeIn';
 
 /** The failure code reported when no more specific one is available. */
 const GENERIC_FAILURE_CODE = 'autonomous_voice_failed';

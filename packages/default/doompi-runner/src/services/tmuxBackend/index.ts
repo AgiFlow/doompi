@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+
 import {
   LOG_DRAIN_POLL_MS,
   LOG_DRAIN_TIMEOUT_MS,
@@ -13,6 +14,13 @@ import {
   SOCKET_PREFIX,
   STOP_GRACE_MS,
 } from '../../constants/tmuxBackend';
+import type { RunHandle } from '../../types/launcher';
+import type { PtyRun } from '../../types/ptyHost';
+import type { IRmuxBackend, RmuxLaunchRequest } from '../../types/rmuxBackend';
+import type { ExitResult } from '../../types/spawner';
+import type { ITmuxClient } from '../../types/tmuxClient';
+import { getLogMaxBytes, getResultMaxBytes } from '../runnerConfig';
+import type { IRunnerPaths } from '../runnerPaths/type';
 import {
   type CommandSpec,
   type SupervisorPaths,
@@ -24,13 +32,6 @@ import {
   supervisorPaths,
   writeCommandSpec,
 } from '../runnerSupervisor';
-import type { RunHandle } from '../../types/launcher';
-import type { PtyRun } from '../../types/ptyHost';
-import type { IRmuxBackend, RmuxLaunchRequest } from '../../types/rmuxBackend';
-import type { ExitResult } from '../../types/spawner';
-import type { ITmuxClient } from '../../types/tmuxClient';
-import { getLogMaxBytes, getResultMaxBytes } from '../runnerConfig';
-import type { IRunnerPaths } from '../runnerPaths/type';
 import { TmuxClient } from './TmuxClient';
 
 /** Pane liveness, its exit status, and whether the session still exists, in one read. */

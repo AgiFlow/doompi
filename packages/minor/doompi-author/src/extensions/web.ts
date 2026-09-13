@@ -1,12 +1,13 @@
 import { defineWebPlugin, type WebPluginRuntime } from '@agimon-ai/doompi-core/web';
+
+import { startAuthorBrowserBridge } from '../web/api/authorBrowserBridge';
 import { authorFileLinks } from '../web/components/AuthorDocumentPanel';
 import { AuthorPanel } from '../web/components/AuthorPanel';
-import { startAuthorBrowserBridge } from '../web/api/authorBrowserBridge';
-import { authorChannel } from '../web/stores/authorStore';
 import { DescribeAuthorToolsToolCard } from '../web/components/DescribeAuthorToolsToolCard';
 import { OpenAuthoringFileToolCard } from '../web/components/OpenAuthoringFileToolCard';
 import { UseAuthorToolsToolCard } from '../web/components/UseAuthorToolsToolCard';
 import { recordAuthorCaptureStatus, recordAuthorComposerSubmission } from '../web/stores/authorRequestLifecycle';
+import { authorChannel } from '../web/stores/authorStore';
 import { authorWorkspace } from '../web/stores/authorWorkspaceStore';
 
 /**

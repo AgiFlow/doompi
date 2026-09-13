@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { NativeTeamChannelService } from '../../src/services/nativeTeamChannel';
-import { createTeamExtensionRuntime } from '../../src/services/teamRuntime';
-import { PollScheduler } from '../../src/services/pollScheduler';
-import { SubagentToolService } from '../../src/services/subagentTool';
+
 import { AgentDiscoveryService } from '../../src/services/agentDiscovery';
 import { ExternalProcessIpc, type ExternalProcessEventListener } from '../../src/services/externalProcessIpc';
+import { NativeTeamChannelService } from '../../src/services/nativeTeamChannel';
+import { PollScheduler } from '../../src/services/pollScheduler';
 import { createSessionScope } from '../../src/services/sessionPaths';
+import { SubagentToolService } from '../../src/services/subagentTool';
+import { createTeamExtensionRuntime } from '../../src/services/teamRuntime';
 
 const ENVIRONMENT = Object.freeze({ PATH: '/test/bin' });
 

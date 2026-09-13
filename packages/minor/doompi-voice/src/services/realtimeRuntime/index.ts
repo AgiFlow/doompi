@@ -1,9 +1,10 @@
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { constants, promises as fs } from 'node:fs';
 import { createServer, type Server } from 'node:http';
-import { isAbsolute, join } from 'node:path';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { setTimeout as sleep } from 'node:timers/promises';
 import type { AddressInfo } from 'node:net';
+import { isAbsolute, join } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
+
 import type { RealtimeAuth, RealtimeProvider } from '../../types/realtime';
 import { CodexRealtimeAuthError, createCodexRealtimeAuth, isRecord } from '../codexAuth';
 import { createDoomPiCodexFileAuthStorage, type DoomPiAuthFileIo } from '../codexAuthStorage';

@@ -1,5 +1,6 @@
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { describe, expect, it } from 'vitest';
+
 import {
   applySummary,
   errorMessage,

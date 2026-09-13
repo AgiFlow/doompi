@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { computerUseRestriction, modeState } from '../../src/models/computerUseMode';
 import type { ComputerUseSessionView } from '../../src/types/computerUseApi';
 

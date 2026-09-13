@@ -1,10 +1,11 @@
-import { Breadcrumb, Button, CodeEditor, Markdown } from '@agimon-ai/doompi-web-components';
-import { SessionMediaPreview as MediaPreview } from './SessionMediaPreview';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { Breadcrumb, Button, CodeEditor, Markdown } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
+
 import type { FileEditsPreviewView } from '../../types/fileEditsApi';
 import { fetchFilePreview, sessionFileUrl } from '../api/filesApi';
 import { fileTabId, previewModeOf } from '../lib/fileView';
+import { SessionMediaPreview as MediaPreview } from './SessionMediaPreview';
 
 /**
  * A file the session never changed, opened read-only.

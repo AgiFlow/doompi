@@ -1,6 +1,7 @@
-import { AUTHOR_FACADE_TOOL_NAMES } from '../../src/constants/author';
 import { Check } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
+
+import { AUTHOR_FACADE_TOOL_NAMES } from '../../src/constants/author';
 import { AuthorDescribeToolsInputSchema, AuthorUseToolsInputSchema } from '../../src/schemas/authorFacade';
 
 describe('Author facade contracts', () => {

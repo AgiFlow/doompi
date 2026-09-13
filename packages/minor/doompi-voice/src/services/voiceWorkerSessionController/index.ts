@@ -5,13 +5,7 @@ import { resolveVoiceConfig } from '@agimon-ai/doompi-config/config';
 import { getHarnessState } from '@agimon-ai/doompi-config/harnessStore';
 import { type IDoomConfigLoader, type ResolvedVoiceConfig } from '@agimon-ai/doompi-config/types';
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
-import { DEFAULT_TRANSCRIPTION_TIMEOUT_MS } from '../turnTranscriber';
-import type {
-  VoiceCandidateOutcome,
-  VoiceFinalizeReason,
-  VoiceWorkerCaptureConfiguration,
-  VoiceWorkerEvent,
-} from '../voiceWorkerProtocol';
+
 import type {
   IClock,
   IVoiceSessionController,
@@ -20,7 +14,14 @@ import type {
   VoiceState,
   VoiceUi,
 } from '../../types';
+import { DEFAULT_TRANSCRIPTION_TIMEOUT_MS } from '../turnTranscriber';
 import { type BeginVoiceCaptureInput, VoiceWorkerClient, type VoiceWorkerClientOptions } from '../voiceWorkerClient';
+import type {
+  VoiceCandidateOutcome,
+  VoiceFinalizeReason,
+  VoiceWorkerCaptureConfiguration,
+  VoiceWorkerEvent,
+} from '../voiceWorkerProtocol';
 
 const STATUS_KEY = 'doom-voice';
 const ACTIVITY_INTERVAL_MS = 120;

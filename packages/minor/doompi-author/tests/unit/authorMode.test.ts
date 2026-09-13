@@ -1,9 +1,10 @@
-import type { MinorModeOwnerDefinition, MinorModeOwnerHandle } from '@agimon-ai/doompi-minor-mode';
 import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
+import type { MinorModeOwnerDefinition, MinorModeOwnerHandle } from '@agimon-ai/doompi-minor-mode';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { authorToolRestriction, createAuthorCatalogMonitor } from '../../src/services/authorCatalog/monitor';
+
 import { authorMinorMode } from '../../src/models/authorMode';
+import { authorToolRestriction, createAuthorCatalogMonitor } from '../../src/services/authorCatalog/monitor';
 import type { AuthorCatalog } from '../../src/services/authorCatalog/type';
 
 function fixture() {

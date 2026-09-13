@@ -1,6 +1,7 @@
-import { trace, type Context } from '@opentelemetry/api';
 import type { NodeTelemetryHandle, NodeTelemetryOptions } from '@agimon-ai/log-sink-mcp/telemetry/node';
+import { trace, type Context } from '@opentelemetry/api';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   createDoomTelemetry,
   createTelemetryHeaders,

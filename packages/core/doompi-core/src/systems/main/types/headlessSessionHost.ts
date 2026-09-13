@@ -1,11 +1,12 @@
-import type { ContextProjectionInput } from '../../../services/contextProjection';
-import type { DoomWebComposition } from '../../../exports/packageApi';
 import type { Context } from '@deepseek-ai/cordis';
-import type { InstalledServerFacets } from '../../../exports/serverFacet';
+
 import type { DoomHeadlessSelection } from '../../../exports/headless';
+import type { DoomWebComposition } from '../../../exports/packageApi';
+import type { InstalledServerFacets } from '../../../exports/serverFacet';
 import type { DoomServerBundleEntry } from '../../../exports/serverFacet';
-import type { HeadlessHost } from '../adapters/headlessHost';
+import type { ContextProjectionInput } from '../../../services/contextProjection';
 import type { DirectHarnessRuntime } from '../../../types/server/directHarnessRuntime';
+import type { HeadlessHost } from '../adapters/headlessHost';
 import type { HeadlessHostOptions } from './headlessHost';
 
 export interface HeadlessSessionHostOptions {

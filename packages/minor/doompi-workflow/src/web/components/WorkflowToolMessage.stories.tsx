@@ -6,6 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import { WorkflowToolMessage } from './WorkflowToolMessage';
 
 /** The tools answer in JSON text blocks, so the fixtures are the payloads themselves. */

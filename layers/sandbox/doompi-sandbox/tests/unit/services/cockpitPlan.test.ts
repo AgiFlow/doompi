@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   COCKPIT_HOME_VOLUME,
   COCKPIT_LABEL,

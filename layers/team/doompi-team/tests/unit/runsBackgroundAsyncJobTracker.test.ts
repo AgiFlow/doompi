@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AsyncJobTracker } from '../../src/services/asyncJobTracker';
+import type { ExternalRunProjection } from '../../src/services/externalProcessIpc';
 import { createSessionScope } from '../../src/services/sessionPaths';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
-import type { ExternalRunProjection } from '../../src/services/externalProcessIpc';
 
 const scopeA = TEST_SESSION_SCOPE;
 const scopeB = createSessionScope('tracker-session-b');

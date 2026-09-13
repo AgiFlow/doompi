@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import { StringDecoder } from 'node:string_decoder';
+
 import { DEFAULT_LINES, READ_CHUNK_BYTES } from '../../constants/logReader';
 import { type Excerpt, type LogSummary, type TruncatedOutput } from '../../types/bashResult';
 import type { ILogReader, LogQuery, LogSlice } from '../../types/logReader';

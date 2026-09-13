@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { PiVoiceConfigService } from '../src/services/voiceConfig';
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));

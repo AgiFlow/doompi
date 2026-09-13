@@ -3,6 +3,8 @@ import path from 'node:path';
 
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
+
+import type { AutoCaptureActivationState, AutoCaptureUi, IClock, ITtsAdapter } from '../../types';
 import type { AutonomousTurnNonceFactory } from '../autonomousTurn';
 import { AutonomousVoiceSession } from '../autonomousVoiceSession';
 import { AutonomousVoiceTelemetry, type AutonomousVoiceTelemetrySink } from '../autonomousVoiceTelemetry';
@@ -12,7 +14,6 @@ import type { NarrationPlaybackOutcome } from '../narration';
 import { VoiceNarrationPlayback, type VoiceNarrationPlaybackLogger } from '../narrationPlayback';
 import type { IVoiceTranscriptAdjudicator } from '../transcriptAdmission';
 import type { VoiceDeliveryIntent } from '../voiceDelivery';
-import type { AutoCaptureActivationState, AutoCaptureUi, IClock, ITtsAdapter } from '../../types';
 import { VoiceWorkerClient, type VoiceWorkerClientOptions } from '../voiceWorkerClient';
 import type { VoiceWorkerSessionClientFactory } from '../voiceWorkerSessionController';
 

@@ -17,8 +17,8 @@
 
 import type { DoomHubChannel, DoomHubChannelHost, DoomHubChannelSource } from '../../schemas/hubChannel';
 import type { DoomApi, DoomApiContext, DoomApiHandler, DoomApiScope } from '../../schemas/packageApi';
-import type { DoomServerHostService, DoomServerRegistration } from '../../schemas/serverFacet';
 import type { DoomPluginRegistry } from '../../schemas/pluginProtocol';
+import type { DoomServerHostService, DoomServerRegistration } from '../../schemas/serverFacet';
 
 interface MountedApi {
   readonly basePath: string;

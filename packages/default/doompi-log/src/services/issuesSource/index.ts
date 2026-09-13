@@ -1,7 +1,9 @@
 import { execFile } from 'node:child_process';
-import path from 'node:path';
 import { createRequire } from 'node:module';
+import path from 'node:path';
+
 import { resolveLogSinkInstance } from '@agimon-ai/log-sink-mcp';
+
 import type { AgentIssueSample, IssuesQueryParams, IssuesReport, IssuesSource } from '../../types/issuesSource';
 
 /**

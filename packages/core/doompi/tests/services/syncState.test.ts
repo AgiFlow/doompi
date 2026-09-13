@@ -1,9 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { afterEach, describe, expect, it } from 'vitest';
-import { computeWebSourcesHash } from '../../src/composition/syncState';
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
   publishSyncRegistration,
@@ -11,6 +10,9 @@ import {
   syncStateSha256,
 } from '@agimon-ai/doompi-core/sync-registration';
 import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { computeWebSourcesHash } from '../../src/composition/syncState';
 import {
   computeInputsHash,
   createMapResolvers,

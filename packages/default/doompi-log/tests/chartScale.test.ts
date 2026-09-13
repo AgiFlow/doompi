@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { barFraction, evenPositions, formatTokens, seriesMax } from '../src/web/lib/chartScale';
 
 /**

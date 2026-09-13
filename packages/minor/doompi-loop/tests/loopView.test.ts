@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { formatLoopStatusView, parseLoopStatusView } from '../src/types/loopView';
 
 const instances = [

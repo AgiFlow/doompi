@@ -1,7 +1,9 @@
-import { EventEmitter } from 'node:events';
 import type { ChildProcess } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+
 import spawn from 'cross-spawn';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { expandEditorTemplate, splitCommandLine } from '../src/services/commandLine';
 import { EditorLauncher } from '../src/services/editorLauncher';
 import type { IEditorConfigService } from '../src/types/editorConfigService';

@@ -2,19 +2,21 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { findSyncedRoot, readBootstrapPointer, readBootstrapStatus } from '../../src/builders/cli/bootstrapLocator';
+
+import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
 } from '@agimon-ai/doompi-core/sync-registration';
-import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
   BUNDLED_PRECOMPILE_STRATEGY,
   PRECOMPILE_STATE_VERSION,
   SYNC_STATE_VERSION,
 } from '@agimon-ai/doompi-core/sync-state-contract';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { findSyncedRoot, readBootstrapPointer, readBootstrapStatus } from '../../src/builders/cli/bootstrapLocator';
 import { testMcpProjection } from '../helpers/mcpProjection';
 
 /** Digest a compiler manifest must now record so freshness is judged by content. */

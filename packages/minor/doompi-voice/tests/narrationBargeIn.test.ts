@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { analyzeNarrationBargeIn, NarrationBargeInMonitor } from '../src/services/narrationBargeIn';
+
 import { narrationBargeInIsActionable, rankNarrationBargeInEvidence } from '../src/models/narrationBargeIn';
+import { analyzeNarrationBargeIn, NarrationBargeInMonitor } from '../src/services/narrationBargeIn';
 import { PCM_FRAME_BYTES } from '../src/services/pcm';
 
 function pcmFrame(sample: number): Buffer {

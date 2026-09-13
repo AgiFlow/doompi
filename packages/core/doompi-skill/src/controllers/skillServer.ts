@@ -1,7 +1,8 @@
 import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
 import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
-import { discoverServerSkills } from '../services/serverInventory';
+
 import { readPackageResource } from '../services/packageResources';
+import { discoverServerSkills } from '../services/serverInventory';
 import { createSkillCommands } from './skillCommands';
 export async function createSkillServer(
   agent: DoomHeadlessHostService,

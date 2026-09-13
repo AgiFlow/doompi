@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+
 import type { DelegationPlatform } from '../delegation';
 
 function formatBriefPath(entry: string, cwd: string): string {

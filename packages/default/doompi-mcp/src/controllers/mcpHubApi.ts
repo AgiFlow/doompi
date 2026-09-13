@@ -1,6 +1,7 @@
 import type { DoomApi, DoomApiContext } from '@agimon-ai/doompi-core/package-api';
-import { MCP_AUTHORIZATION_API_PATH, MCP_DISCOVERY_API_PATH, MCP_REPOSITORY_API_PATH } from '../types/webMcp';
+
 import { McpSettingsManager } from '../services/mcpSettingsManager';
+import { MCP_AUTHORIZATION_API_PATH, MCP_DISCOVERY_API_PATH, MCP_REPOSITORY_API_PATH } from '../types/webMcp';
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
 const REPOSITORY_ID = /^(?:[a-f0-9]{32}|repo-[A-Za-z0-9_-]{24})$/u;

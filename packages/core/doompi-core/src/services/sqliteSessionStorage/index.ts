@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { SqliteSessionRepo, createNodeSqliteFactory } from '@earendil-works/pi-session-backend-sqlite-node';
+
 import type { Context } from '@earendil-works/pi-agent-core/harness/context';
+import { SqliteSessionRepo, createNodeSqliteFactory } from '@earendil-works/pi-session-backend-sqlite-node';
+
 import type { DirectHarnessRuntimeOptions, SqliteSessionStorage } from '../../types/server/directHarnessRuntime';
 
 /** Opens the one SQLite container owned by a server session. */

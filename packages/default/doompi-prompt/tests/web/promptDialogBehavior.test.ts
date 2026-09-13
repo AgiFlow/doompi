@@ -1,6 +1,7 @@
 import { renderPlugin } from '@agimon-ai/doompi-core/web/testing';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { SavedPromptView } from '../../src/types/webPrompts';
 import { PromptsDialog } from '../../src/web/components/PromptsDialog';
 

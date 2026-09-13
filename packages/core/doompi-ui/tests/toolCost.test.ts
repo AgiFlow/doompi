@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { type ToolEntry, type ToolSource, tokensForSource, tokensForTool } from '../src/exports/toolInventory';
 
 // One token per character keeps the arithmetic checkable by hand; the real

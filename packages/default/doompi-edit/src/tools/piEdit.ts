@@ -1,5 +1,6 @@
 import { renderHashlineCall, renderHashlineEditResult } from '@agimon-ai/doompi-ui/hashlineRendering';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+
 import { EditParamsSchema, type EditParams } from '../schemas/editTool';
 import { executeHashlineEdit } from '../services/editTool';
 

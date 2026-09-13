@@ -9,11 +9,12 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useMemo, useState } from 'react';
+
 import type { SettingsRepository } from '../../../types/settings';
 import { focusWorkspaceWebPlugins } from '../../lib/pluginRuntime';
+import { sealedHttpSession } from '../../lib/sealedSession';
 import { listSettingsRepositories } from '../../lib/settingsApi';
 import type { SettingsSection } from '../../lib/settingsSections';
-import { sealedHttpSession } from '../../lib/sealedSession';
 import { fetchWithStepUp } from '../../lib/stepUp';
 import { sessionsStore } from '../../stores/sessionsStore';
 import { ContributedSettings } from './ContributedSettings';

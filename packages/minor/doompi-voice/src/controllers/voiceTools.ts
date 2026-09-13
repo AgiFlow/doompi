@@ -1,4 +1,11 @@
 import { definePiTool, type PiToolCollection } from '@agimon-ai/doompi-core/pi-extension';
+import type {
+  AgentToolResult,
+  AgentToolUpdateCallback,
+  ExtensionContext,
+  ToolDefinition,
+} from '@earendil-works/pi-coding-agent';
+
 import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '../constants/voiceTools';
 import {
   type VoiceToolBatchResult,
@@ -7,14 +14,8 @@ import {
   type VoiceToolErrorPayload,
   VoiceToolUseInputSchema,
 } from '../schemas/voiceTools';
-import { VoiceToolError, type VoiceToolSessionHandle } from '../services/voiceTools';
-import type {
-  AgentToolResult,
-  AgentToolUpdateCallback,
-  ExtensionContext,
-  ToolDefinition,
-} from '@earendil-works/pi-coding-agent';
 import { formatBatch, formatCatalog, formatCatalogDigest, formatError } from '../services/voiceToolPrompt';
+import { VoiceToolError, type VoiceToolSessionHandle } from '../services/voiceTools';
 import { renderVoiceToolCall, renderVoiceToolResult } from './voiceToolRender';
 
 const DESCRIBE_LABEL = 'Describe voice tools';

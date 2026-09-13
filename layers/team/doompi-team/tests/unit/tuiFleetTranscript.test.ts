@@ -1,15 +1,16 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { renderFleetTranscript, type FleetTranscriptRenderable } from '../../src/tui/fleetTranscript';
 import {
   MAX_RETAINED_EVENTS,
   readFleetTranscript,
   readFleetTranscriptTail,
   type FleetTranscriptEvent,
 } from '../../src/services/fleetTranscript';
+import { renderFleetTranscript, type FleetTranscriptRenderable } from '../../src/tui/fleetTranscript';
 
 let tempDir: string;
 let transcriptPath: string;

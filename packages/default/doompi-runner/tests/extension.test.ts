@@ -1,12 +1,13 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanupLegacyRunnerStore, reconcileActiveRunners } from '../src/exports/reconcile';
-import { formatRunnerFooterContribution, formatRunnerStatus } from '../src/tui/format';
+
 import {
   activeRunnerRecovery,
   appendActiveRunnersToSummary,
   createRunnerCompactionRecovery,
 } from '../src/exports/compaction';
+import { cleanupLegacyRunnerStore, reconcileActiveRunners } from '../src/exports/reconcile';
+import { formatRunnerFooterContribution, formatRunnerStatus } from '../src/tui/format';
 import type { RunnerRecord } from '../src/types/runnerRegistry';
 
 beforeEach(() => {

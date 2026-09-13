@@ -14,6 +14,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+
 import {
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_OVERLAY_ACCENT,
@@ -24,6 +25,7 @@ import {
 import { fitStyledLine, formatTokens } from '@agimon-ai/doompi-ui/rendering';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+
 import type { SkillCatalog, SkillEntry } from '../services/skillCatalog';
 
 type ThemeColor = Parameters<Theme['fg']>[0];

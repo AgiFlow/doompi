@@ -1,7 +1,7 @@
 import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 import { readDoomHelpService, type DoomHelpService } from '@agimon-ai/doompi-core/help';
-import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-minor-mode';
 import { DOOM_UI_HUB_SERVICE } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-minor-mode';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

@@ -32,9 +32,10 @@
  */
 
 import * as fs from 'node:fs';
+
+import type { AgentScope, AgentSource, AgentDiscoveryContract } from '../../types/agent';
 import { SUBAGENT_CHILD_ENV, SUBAGENT_PARENT_SESSION_ENV } from '../../types/environment';
 import type { DiscoveredSkill, SkillDiscoveryContract, SkillSource } from '../agentSkills';
-import type { AgentScope, AgentSource, AgentDiscoveryContract } from '../../types/agent';
 import { diagnoseIntercomBridge, type IntercomBridgeConfigInput } from '../intercomBridge';
 import { TEMP_ROOT_DIR, scopeResultsDir, scopeRunsDir, type SessionScope } from '../sessionPaths';
 

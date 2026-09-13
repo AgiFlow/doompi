@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createProtocolTransport, protocolSocketUrl } from '../../src/web/lib/piTransport';
 import { sealedProtocolSession } from '../../src/web/lib/sealedSession';
 

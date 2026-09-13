@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import { COMMAND_NAME, ERR_REQUIRES_INTERACTIVE } from '../schemas/task';
 import type { TaskStore } from '../services/taskStore';
 

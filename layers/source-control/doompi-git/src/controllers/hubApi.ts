@@ -1,8 +1,9 @@
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
-import { createWorktreeGit } from '../services/gitCli';
-import { createWorktreeOperations } from '../services/worktreeOperations';
+
 import { DoomGitExpectedError } from '../services/errors';
+import { createWorktreeGit } from '../services/gitCli';
 import { GIT_WORKTREE_LIFECYCLE_EVENT } from '../services/worktreeEvents';
+import { createWorktreeOperations } from '../services/worktreeOperations';
 
 /**
  * The worktree surface the cockpit panel calls.

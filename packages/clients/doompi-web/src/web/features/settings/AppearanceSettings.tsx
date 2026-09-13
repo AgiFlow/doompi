@@ -1,6 +1,7 @@
 import { CheckIcon, RadioGroup, RadioGroupCard } from '@agimon-ai/doompi-web-components';
 import type { ThemeConfig } from '@agimon-ai/doompi-web-components/theme';
 import { useStore } from '@tanstack/react-store';
+
 import { availableThemes, selectTheme, themeStore } from '../../stores/themeStore';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 

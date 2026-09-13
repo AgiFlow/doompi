@@ -1,4 +1,5 @@
 import { Type, type Static } from 'typebox';
+
 import {
   VOICE_TOOL_MAX_TIMEOUT_MS,
   VOICE_TOOL_MAX_BATCH_ITEMS,

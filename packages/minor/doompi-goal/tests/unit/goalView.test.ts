@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { formatGoalStatusView, parseGoalStatusView } from '../../src/types/goalView';
 
 /**

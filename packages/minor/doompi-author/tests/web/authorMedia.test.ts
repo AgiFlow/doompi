@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { loadAuthorMedia } from '../../src/web/api/authorMedia';
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fetch: vi.fn() } }));

@@ -52,6 +52,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { writeAtomicJson } from '../atomicJson';
 import { scopeRunsDir, type SessionScope } from '../sessionPaths';
 import type { CoalescedStatusWriterContract, StatusWithRecentEntries } from '../statusWriter';

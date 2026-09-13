@@ -1,7 +1,7 @@
 import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
-import { readPackageResource, selectionMetadata } from '../services/configResources';
 
 import { settingsApi } from '../controllers/settingsApi';
+import { readPackageResource, selectionMetadata } from '../services/configResources';
 
 export const configServerFacet = defineServerPlugin({
   name: '@agimon-ai/doompi-config',

@@ -1,9 +1,10 @@
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
+
 import { definePiExtension, type PiToolCollection, type PiToolContribution } from '../../src/extensions/piExtension';
-import { createPiTestHost } from '../../src/testing/pi/testHost';
-import { defineTool } from '../../src/schemas/pluginContributions';
 import { definePiTool } from '../../src/schemas/piTool';
+import { defineTool } from '../../src/schemas/pluginContributions';
+import { createPiTestHost } from '../../src/testing/pi/testHost';
 
 function collection(initial: readonly PiToolContribution[] = []) {
   let tools = initial;

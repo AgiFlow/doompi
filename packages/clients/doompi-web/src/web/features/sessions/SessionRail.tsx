@@ -30,18 +30,19 @@ import {
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
+
 import { MascotMark } from '../../components/MascotMark';
-import { RemoteAccessButton } from '../../components/RemoteAccessButton';
 import { PluginSurface } from '../../components/PluginSurface';
-import { HOST_SLOTS } from '../../lib/pluginRegistry';
+import { RemoteAccessButton } from '../../components/RemoteAccessButton';
 import { restartSession, stopSession } from '../../lib/hubApi';
+import { HOST_SLOTS } from '../../lib/pluginRegistry';
 import { abbreviateCwd, sessionStatusLine } from '../../lib/sessionSummary';
 import { DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections';
 import { closeNewSession, openNewSession, newSessionStore } from '../../stores/newSessionStore';
 import { paletteStore } from '../../stores/paletteStore';
-import { renameSession, sessionStoreFor } from '../../stores/sessionStore';
-import { resolveParentId, sessionsStore, type SessionMeta } from '../../stores/sessionsStore';
 import { openRemoteDialog, remoteAccessStore, turnRemoteAccessOff } from '../../stores/remoteAccessStore';
+import { resolveParentId, sessionsStore, type SessionMeta } from '../../stores/sessionsStore';
+import { renameSession, sessionStoreFor } from '../../stores/sessionStore';
 import { NewSessionDialog } from './NewSessionDialog';
 import { ResumeSessionDialog } from './ResumeSessionDialog';
 const STATUS_REFRESH_MS = 30_000;

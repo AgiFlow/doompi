@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/mcp';
 import type { McpCommandTarget } from '../types/mcp';
 

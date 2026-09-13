@@ -1,8 +1,9 @@
-import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { createSkillReadiness } from '../../src/controllers/skillReadiness';
 
 type Handler = (event: never, ctx: ExtensionContext) => unknown;

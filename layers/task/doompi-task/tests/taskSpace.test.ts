@@ -1,14 +1,16 @@
-import { openTaskSpace } from '../src/tui/taskSpace';
-import type { Theme } from '@earendil-works/pi-coding-agent';
-import type { TUI } from '@earendil-works/pi-tui';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import type { Theme } from '@earendil-works/pi-coding-agent';
+import type { TUI } from '@earendil-works/pi-tui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createTasksCommand } from '../src/exports/commands';
 import { TaskStore } from '../src/exports/storeTaskStore';
 import { STORE_SCHEMA_VERSION, type Task } from '../src/exports/storeTypes';
 import { ERR_REQUIRES_INTERACTIVE, TASK_STATUSES } from '../src/exports/toolSchema';
+import { openTaskSpace } from '../src/tui/taskSpace';
 import { TASK_SPACE_OVERLAY_OPTIONS, TaskSpaceComponent, type TaskSpaceOptions } from '../src/tui/taskSpace';
 
 const WIDTH = 120;

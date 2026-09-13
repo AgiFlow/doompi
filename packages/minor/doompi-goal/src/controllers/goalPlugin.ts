@@ -1,19 +1,20 @@
-import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
-import type { Context } from '@deepseek-ai/cordis';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import type { GoalPiManager } from './goalManager';
 import {
   DOOM_BACKGROUND_WORK_CHANGED_EVENT,
   DOOM_BACKGROUND_WORK_SERVICE,
   readDoomBackgroundWorkService,
 } from '@agimon-ai/doompi-core/background-work';
+import { type LeaderBinding } from '@agimon-ai/doompi-core/leader';
 import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import { DOOM_TOOL_SURFACE_SERVICE, requireDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
-import { type LeaderBinding } from '@agimon-ai/doompi-core/leader';
+import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
+import type { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { createGoalRuntime, isRetainedGoalStatus, createGoalMinorMode } from './runtimeActivation';
+
 import type { GoalExtensionDependencies } from '../types/extension';
+import type { GoalPiManager } from './goalManager';
+import { createGoalRuntime, isRetainedGoalStatus, createGoalMinorMode } from './runtimeActivation';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-goal';
 const LEADER_ORDER = 100;

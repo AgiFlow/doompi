@@ -1,19 +1,18 @@
 import type { ExtensionContext, ReadonlyFooterDataProvider, Theme } from '@earendil-works/pi-coding-agent';
 import { type TUI, visibleWidth } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { DoomFooter, type DoomFooterStatusView } from '../../src/exports/doomFooter';
 import { DoomHeader } from '../../src/exports/doomHeader';
-import { LeaderHints, MAX_WIDGET_LINES as LEADER_WIDGET_MAX_LINES } from '../../src/exports/leaderHints';
 import type { DoomFooterStatus } from '../../src/exports/footer';
+import { LeaderHints, MAX_WIDGET_LINES as LEADER_WIDGET_MAX_LINES } from '../../src/exports/leaderHints';
 import { fitStyledLine } from '../../src/exports/rendering';
-
 /**
  * The widget's self-imposed height budget: Pi's setWidget takes no line cap, so
  * this is what the package chooses to occupy above the editor. Imported rather
  * than restated, because a copy of the number here drifted from the component's
  * own and stopped catching anything.
  */
-
 import { DoomUiState } from '../../src/exports/uiState';
 
 const theme = {

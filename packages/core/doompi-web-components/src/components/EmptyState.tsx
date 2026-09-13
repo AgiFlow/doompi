@@ -1,5 +1,6 @@
 import { Slot } from 'radix-ui';
 import type { ComponentProps, ReactNode } from 'react';
+
 import { cn } from '../lib/cn';
 
 export interface EmptyStateProps extends Omit<ComponentProps<'div'>, 'title'> {

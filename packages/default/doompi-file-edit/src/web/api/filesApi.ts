@@ -1,3 +1,5 @@
+import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
+
 import {
   contentUrl,
   deleteUrl,
@@ -7,7 +9,6 @@ import {
   type FileEditsSaveView,
   previewUrl,
 } from '../../types/fileEditsApi';
-import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
 /**
  * The page's half of this package's session API: one file's history, the

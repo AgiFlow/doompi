@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+
 import { ToolPathLink } from '../../src/components/ToolPathLink';
 
 describe('tool path links', () => {

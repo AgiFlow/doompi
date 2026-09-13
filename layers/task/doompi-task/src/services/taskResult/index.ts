@@ -1,5 +1,3 @@
-import type { Op } from '../reducer';
-import { deriveBlocks, isTaskListComplete } from '../../models/taskGraph';
 import type {
   AssignmentSummary,
   Task,
@@ -9,6 +7,8 @@ import type {
   TaskMutationParams,
   UpsertItemOutcome,
 } from '../../models/task';
+import { deriveBlocks, isTaskListComplete } from '../../models/taskGraph';
+import type { Op } from '../reducer';
 
 export const MSG_ALL_COMPLETE_CLEAR =
   'All tasks are completed. Review the full task list once more, then close it with task {"action":"clear"}.';

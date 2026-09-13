@@ -1,6 +1,7 @@
 import type { DoomApi, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
-import type { CatalogAgentInput } from '../services/webSubagentCatalog';
+
 import { AgentDiscoveryService, resolveActiveTeamModelSpecs } from '../services/agentDiscovery';
+import type { CatalogAgentInput } from '../services/webSubagentCatalog';
 
 export const TEAM_API_BASE_PATH = 'team';
 export const TEAM_CATALOG_ROUTE = '/catalog';

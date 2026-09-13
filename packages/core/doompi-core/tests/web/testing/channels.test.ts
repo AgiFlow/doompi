@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { defineSessionStore } from '../../../src/web/models/sessionStore';
 import { driveChannel } from '../../../src/web/services/testing/channels';
 

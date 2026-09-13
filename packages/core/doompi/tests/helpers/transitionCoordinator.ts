@@ -1,10 +1,11 @@
 import { filterHookDisabledLayers, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
-import { extensionLayers } from '../../src/composition/transitionLayers';
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { DOOM_TRANSITION_SERVICE, type DoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
-import { Context } from '@deepseek-ai/cordis';
-import { createDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition-coordinator';
 import type { TransitionSelectionSnapshot, TransitionSynchronization } from '@agimon-ai/doompi-core/transition';
+import { createDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition-coordinator';
+import { Context } from '@deepseek-ai/cordis';
+
+import { extensionLayers } from '../../src/composition/transitionLayers';
 
 interface TestCoordinatorOptions {
   readonly current: TransitionSelectionSnapshot;

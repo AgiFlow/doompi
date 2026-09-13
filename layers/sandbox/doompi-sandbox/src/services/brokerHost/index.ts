@@ -3,8 +3,9 @@ import fs from 'node:fs';
 import type http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { resolveBrokeredCredentials } from '../brokerRoutes';
+
 import type { BrokerEndpoint } from '../../types/sandboxHarness';
+import { resolveBrokeredCredentials } from '../brokerRoutes';
 import { createBrokerServer } from '../brokerServer';
 
 const SOCKET_DIRECTORY_PREFIX = 'doompi-broker-';

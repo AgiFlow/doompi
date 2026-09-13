@@ -1,13 +1,14 @@
-import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
 import { createDoomHelpService, DOOM_HELP_SERVICE, type DoomHelpService } from '@agimon-ai/doompi-core/help';
-import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
+import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
-import { createHelpCommand } from './helpCommand';
-import { registerHelpModeIntegration, registerHelpUiIntegration } from './helpMode';
+
 import { createHelpRuntime, type HelpRuntimeOptions } from '../services/helpRuntime';
 import type { HelpActivationService } from '../types/help';
+import { createHelpCommand } from './helpCommand';
+import { registerHelpModeIntegration, registerHelpUiIntegration } from './helpMode';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-help';
 

@@ -1,7 +1,8 @@
 import type { DoomTelemetryOptions } from '@agimon-ai/doompi-telemetry';
 import { describe, expect, it, vi } from 'vitest';
-import { createHookTelemetry } from '../../src/services/hookTelemetry';
+
 import { HOOK_TELEMETRY_EVENT } from '../../src/constants/telemetry';
+import { createHookTelemetry } from '../../src/services/hookTelemetry';
 
 type TelemetryHandle = Awaited<ReturnType<NonNullable<DoomTelemetryOptions['telemetryFactory']>>>;
 

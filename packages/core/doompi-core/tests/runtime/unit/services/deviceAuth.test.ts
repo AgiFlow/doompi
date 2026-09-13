@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createDeviceAuth } from '../../../../src/services/deviceAuth';
 import { DEFAULT_REMOTE_SETTINGS } from '../../../../src/services/remoteAccessSettings';
 

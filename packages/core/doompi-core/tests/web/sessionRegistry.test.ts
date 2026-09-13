@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   HUB_ADVERTISEMENT_VERSION,
   hubAdvertisementPath,

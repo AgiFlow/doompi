@@ -1,8 +1,9 @@
 import type { DoomTelemetryOptions } from '@agimon-ai/doompi-telemetry';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import type { LogMetricsRecorder } from '../services/metrics';
-import type { SinkStatus } from './sinkStatus';
 import type { MetricsSource } from './metricsSource';
+import type { SinkStatus } from './sinkStatus';
 export type TelemetryFactory = NonNullable<DoomTelemetryOptions['telemetryFactory']>;
 export type TelemetryAttributes = Record<string, string | number | boolean>;
 export type RecordLevel = 'debug' | 'info' | 'warn' | 'error';

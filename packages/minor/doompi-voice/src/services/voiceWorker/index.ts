@@ -1,6 +1,7 @@
 import type { MessagePort } from 'node:worker_threads';
 import { isMainThread, parentPort } from 'node:worker_threads';
 
+import { VoiceWorkerPipeline } from '../voiceWorkerPipeline';
 import {
   parseVoiceWorkerCommand,
   type VoiceWorkerCommand,
@@ -8,7 +9,6 @@ import {
   type VoiceWorkerEventPayload,
   VOICE_WORKER_PROTOCOL_VERSION,
 } from '../voiceWorkerProtocol';
-import { VoiceWorkerPipeline } from '../voiceWorkerPipeline';
 
 const HEARTBEAT_INTERVAL_MS = 1_000;
 

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { onComposerSubmitted, publishComposerSubmission } from '../../src/web/lib/composerSubmissions';
 
 describe('composer submission publisher', () => {

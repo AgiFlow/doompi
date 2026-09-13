@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { doctorHelp, syncHelp } from '../../src/cli/help';
+
 import { CompatibilityCommand } from '../../src/cli/commands/compat';
 import { DoctorCommand } from '../../src/cli/commands/doctor';
 import { InitCommand } from '../../src/cli/commands/init';
 import { runSync } from '../../src/cli/commands/sync/workflow';
+import { doctorHelp, syncHelp } from '../../src/cli/help';
 
 /** Collects what a command wrote so a help run can be checked for side effects. */
 function recorder(): { write: (chunk: string) => boolean; text: () => string } {

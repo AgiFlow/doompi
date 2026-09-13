@@ -1,27 +1,28 @@
-import type { Context } from '@deepseek-ai/cordis';
-import { COMMAND_NAME } from '../constants/task';
-import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
-import { createTasksChannel } from '../controllers/webTasksChannel';
 import { type DoomHeadlessExecutionContext, type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
+import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-team/delegation';
+import type { Context } from '@deepseek-ai/cordis';
 import { Check } from 'typebox/value';
-import { TaskParamsSchema, type TaskParams, type TaskAssignmentParams } from '../schemas/task';
-import { TaskStore } from '../services/taskStore';
-import { resolveSessionKey } from '../services/paths';
-import { createNodeDelegationPlatform } from '../services/delegationPlatform';
-import { DelegationManager } from '../services/delegation';
-import { applyTaskMutation, isCommittingOp, type ReducerAction } from '../services/reducer';
+
+import { COMMAND_NAME } from '../constants/task';
+import { createTasksChannel } from '../controllers/webTasksChannel';
 import type { TaskMutationParams } from '../models/task';
+import { TaskParamsSchema, type TaskParams, type TaskAssignmentParams } from '../schemas/task';
+import { getMaxTasks, getDelegationTimeoutMs, getStoreTtlMs } from '../services/config';
+import { DelegationManager } from '../services/delegation';
+import { createNodeDelegationPlatform } from '../services/delegationPlatform';
+import { resolveSessionKey } from '../services/paths';
+import { removeLegacyStoreDirectoryAsync, sweepStoreFilesAsync } from '../services/paths';
+import { applyTaskMutation, isCommittingOp, type ReducerAction } from '../services/reducer';
 import {
   buildAssignmentResult,
   buildTextResult,
   buildToolResult,
   formatAssignmentResults,
 } from '../services/taskResult';
-import { getMaxTasks, getDelegationTimeoutMs, getStoreTtlMs } from '../services/config';
-import { removeLegacyStoreDirectoryAsync, sweepStoreFilesAsync } from '../services/paths';
+import { TaskStore } from '../services/taskStore';
 import { TASKS_CHANNEL_TYPE } from '../types/webTasks';
-import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
 
 const SOURCE = '@agimon-ai/doompi-task';
 

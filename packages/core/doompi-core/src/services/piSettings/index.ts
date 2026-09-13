@@ -1,8 +1,9 @@
 import os from 'node:os';
 import path from 'node:path';
+
+import { DOOM_PACKAGE_NAME } from '../doomPackage';
 import { isRecord, readJson, writeFileAtomic } from '../json';
 import type { JsonObject } from '../json';
-import { DOOM_PACKAGE_NAME } from '../doomPackage';
 
 /**
  * Pi's user settings, as `doompi sync` maintains them.

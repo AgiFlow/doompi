@@ -1,5 +1,6 @@
 import { VOICE_TOOL_MAX_DOMAIN_COUNT, VOICE_TOOL_MAX_IDENTIFIER_LENGTH } from '@agimon-ai/doompi-voice/voice-tools';
 import { type Static, Type } from 'typebox';
+
 import { SAFE_DOMAIN_NAME } from '../types/domains';
 
 export const DOMAIN_NAMES_SCHEMA = Type.Array(

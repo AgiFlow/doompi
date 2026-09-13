@@ -1,6 +1,7 @@
 import type { DoomFooterContributionValue, FooterTextSegment } from '@agimon-ai/doompi-core/footer';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import {
   type TrackedAsyncJobsContract,
   TERMINAL_ASYNC_JOB_STATES,

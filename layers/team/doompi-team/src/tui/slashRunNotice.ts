@@ -23,6 +23,7 @@
 import type { ExtensionAPI, MessageRenderOptions, Theme } from '@earendil-works/pi-coding-agent';
 import type { Component } from '@earendil-works/pi-tui';
 import { Text } from '@earendil-works/pi-tui';
+
 import { SLASH_RESULT_CUSTOM_TYPE, type SlashRunDetail } from '../models/slashResult';
 
 /** A concise prefix that remains usable by session-scoped management resolution. */

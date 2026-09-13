@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { createHostHandshake } from '../../src/services/nodeSealedChannel';
 import { createSealedTransport } from '../../src/services/sealedTransport';
 import {

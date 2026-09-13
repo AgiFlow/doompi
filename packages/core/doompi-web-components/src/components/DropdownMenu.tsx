@@ -1,6 +1,7 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
 import type { ComponentProps, ReactNode } from 'react';
+
 import { CheckIcon, ChevronRightIcon } from '../icons/icons';
 import { cn } from '../lib/cn';
 

@@ -1,25 +1,27 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+
+import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordis-host';
 import {
   createDoomMcpProjectionService,
   DOOM_MCP_PROJECTION_SERVICE,
   type DoomMcpProjection,
   type DoomMcpProjectionService,
 } from '@agimon-ai/doompi-core/mcp-projection';
-import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordis-host';
 import { readDoomMcpStatus } from '@agimon-ai/doompi-core/mcp-status';
 import { readDoomMcpToolResolver } from '@agimon-ai/doompi-core/mcp-tool-resolver';
 import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import type { McpServerStateChange } from '@agimon-ai/mcp-proxy';
 import { Context, type Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import type { McpServerStateChange } from '@agimon-ai/mcp-proxy';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mcpExtension } from '../src/extensions/pi';
-import { LEADER_GROUP, LEADER_KEY, PACKAGE_SOURCE } from '../src/constants/piMcp';
+
 import { COMMAND_NAME } from '../src/constants/mcp';
+import { LEADER_GROUP, LEADER_KEY, PACKAGE_SOURCE } from '../src/constants/piMcp';
+import { mcpExtension } from '../src/extensions/pi';
 import { SESSION_ENV_VAR } from '../src/schemas/sessionConfig';
 
 const SESSION_ID = 'session-1';

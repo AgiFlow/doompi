@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { DOOM_PACKAGE_NAME, manifestName } from '@agimon-ai/doompi-core/doom-package';
 import { writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
 import { SYNC_REGISTRATION_VERSION } from '@agimon-ai/doompi-core/sync-registration';

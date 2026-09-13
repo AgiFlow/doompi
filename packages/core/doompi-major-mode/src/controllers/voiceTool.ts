@@ -1,8 +1,9 @@
 import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
-import type { DoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { DoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import type { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import {
   MAJOR_MODE_VOICE_INPUT_SCHEMA,
   MAJOR_MODE_VOICE_RESULT_SCHEMA,
@@ -12,8 +13,8 @@ import {
 } from '../schemas/majorModeVoiceTools';
 import { MAJOR_MODE_COMMAND, VOICE_SWITCH_TOKEN_PREFIX } from '../services/majorModeText';
 import { MAJOR_MODE_SWITCH_HANDOFF_KIND } from '../types/majorMode';
-import { clearPendingSelection } from './pendingSelection';
 import { MAJOR_MODE_SOURCE, type MajorModeView } from '../types/majorMode';
+import { clearPendingSelection } from './pendingSelection';
 
 type VoiceMessageSender = (
   content: string,

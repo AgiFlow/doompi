@@ -1,16 +1,17 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { BashRunService } from '../../src/services/bashRunService';
 import { Launcher } from '../../src/services/launcher';
 import { RmuxBackend } from '../../src/services/rmuxBackend';
-import type { RunHandle } from '../../src/types/launcher';
 import type { IRunnerNamer } from '../../src/services/runnerNamer/type';
+import type { IRunnerPaths } from '../../src/services/runnerPaths/type';
+import type { RunHandle } from '../../src/types/launcher';
 import type { IRmuxBackend } from '../../src/types/rmuxBackend';
 import type { IRtkProcessor } from '../../src/types/rtkProcessor';
-
-import type { IRunnerPaths } from '../../src/services/runnerPaths/type';
 import type { IRunnerRegistry, RegisterRunnerInput, RunnerRecord } from '../../src/types/runnerRegistry';
 import type { ExitResult } from '../../src/types/spawner';
 import { FakeClock, FakeLogFile, FakeProcessControl, FakeRtkProcessor, FakeRunnerPaths, FakeSpawner } from '../doubles';

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { PcmFrameAssembler } from '../pcm';
+
+import type { ResolvedVoiceConfig, VoiceTtsConfig } from '@agimon-ai/doompi-config';
+
 import type {
   IClock,
   IPcmAudioRecorder,
@@ -14,7 +16,7 @@ import type {
   TtsSpeakRequest,
 } from '../../types';
 import type { VoiceMediaPlaybackDelivery, VoiceMediaPlaybackResult } from '../../types/clientMedia';
-import type { ResolvedVoiceConfig, VoiceTtsConfig } from '@agimon-ai/doompi-config';
+import { PcmFrameAssembler } from '../pcm';
 
 const CAPTURE_ID_PREFIX = 'client-capture';
 const PLAYBACK_ID_PREFIX = 'client-playback';

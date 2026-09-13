@@ -1,5 +1,6 @@
 // @scaffold-generated
 import { describe, expect, it } from 'vitest';
+
 import {
   computerStateCallSummary,
   computerStateResultLines,

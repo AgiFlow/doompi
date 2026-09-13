@@ -1,4 +1,5 @@
 import { parse as parseYaml } from 'yaml';
+
 import type { PersonaDocument, PersonaFrontMatter, PersonaVoiceOverride } from '../../types/profiles';
 
 /**

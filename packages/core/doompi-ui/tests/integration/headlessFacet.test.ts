@@ -1,11 +1,12 @@
-import { Context } from '@deepseek-ai/cordis';
 import type {
   DoomHeadlessCommand,
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-core/headless';
+import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
+
 import { uiServerFacet } from '../../src/extensions/server';
 
 describe('UI headless inventory', () => {

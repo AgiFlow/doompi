@@ -1,9 +1,9 @@
-import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
-import { requireHarnessRoot } from '@agimon-ai/doompi-config/harnessStore';
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config';
+import { requireHarnessRoot } from '@agimon-ai/doompi-config/harnessStore';
 import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
 import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
 import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-core/help';
+import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import {
   createDoomSkillSourcesService,
   DOOM_SKILL_SOURCES_SERVICE,
@@ -12,10 +12,11 @@ import {
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { createSkillsCommand, type SkillsCommandDependencies } from './skillsCommand';
-import { SKILLS_LEADER_CONTRIBUTION } from '../types/skills';
+
 import { createActiveHelpSkillView } from '../services/helpSkills';
+import { SKILLS_LEADER_CONTRIBUTION } from '../types/skills';
 import { createSkillReadiness, skillInventory } from './skillReadiness';
+import { createSkillsCommand, type SkillsCommandDependencies } from './skillsCommand';
 
 /**
  * The catalogue and the overlay load on first use.

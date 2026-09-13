@@ -4,6 +4,7 @@ import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { registerProfileVoiceCapability, type ProfileVoiceView } from '../../src/controllers/voiceTool';
 import { bindStubCoordinator } from '../helpers/coordinator';
 

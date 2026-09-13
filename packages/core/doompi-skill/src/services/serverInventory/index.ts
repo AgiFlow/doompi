@@ -1,8 +1,10 @@
-import { formatSkillsForPrompt } from '@earendil-works/pi-coding-agent';
+import path from 'node:path';
+
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
+import { formatSkillsForPrompt } from '@earendil-works/pi-coding-agent';
+
 import { DeferredSkillLoader, type DeferredSkillSnapshot } from '../deferredSkills';
-import path from 'node:path';
 export interface ServerSkillInventory {
   readonly inventory: DeferredSkillSnapshot;
   readonly catalog: string;

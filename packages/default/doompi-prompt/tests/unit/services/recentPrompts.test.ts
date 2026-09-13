@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { RECENT_PROMPT_LIMIT } from '../../../src/constants/recentPrompts';
 import { createRecentPrompts } from '../../../src/models/recentPrompts';
 

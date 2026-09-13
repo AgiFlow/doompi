@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
+
 import { packageEntry } from '../../src/services/moduleResolution';
 
 describe('host package entry resolution', () => {

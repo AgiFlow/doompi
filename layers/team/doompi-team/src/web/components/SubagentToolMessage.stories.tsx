@@ -6,6 +6,7 @@
  * the slot contract breaks this story at the type level.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import { SubagentToolMessage } from './SubagentToolMessage';
 
 const props = (overrides: Omit<Parameters<typeof toolMessagePropsFixture>[0], 'toolName'>) =>

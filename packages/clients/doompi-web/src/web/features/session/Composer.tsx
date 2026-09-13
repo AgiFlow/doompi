@@ -16,11 +16,13 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { PluginSurface } from '../../components/PluginSurface';
 import { publishComposerSubmission } from '../../lib/composerSubmissions';
 import { searchSessionFiles } from '../../lib/hubApi';
-import type { QueuedEntry } from '../../lib/sessionModel';
 import { HOST_SLOTS } from '../../lib/pluginRegistry';
 import { registerPromptInput } from '../../lib/promptFocus';
+import type { QueuedEntry } from '../../lib/sessionModel';
 import {
   clearComposerState,
   type ComposerAttachment,
@@ -33,6 +35,8 @@ import {
   updateComposerState,
   useComposerState,
 } from '../../stores/composerStore';
+import { openPalette } from '../../stores/paletteStore';
+import { sessionsStore, useActiveSessionMeta } from '../../stores/sessionsStore';
 import {
   abortRun,
   clearQueuedMessages,
@@ -41,10 +45,7 @@ import {
   submitMessage,
   useActiveSession,
 } from '../../stores/sessionStore';
-import { sessionsStore, useActiveSessionMeta } from '../../stores/sessionsStore';
-import { openPalette } from '../../stores/paletteStore';
 import { useToolPrompt } from '../../stores/useToolPrompt';
-import { PluginSurface } from '../../components/PluginSurface';
 import { ComposerPrompt } from './ComposerPrompt';
 import { QueueSheet } from './QueueSheet';
 

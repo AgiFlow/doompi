@@ -1,4 +1,5 @@
 import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+
 import { DEFAULT_AUTO_STOP_DELAYS } from '../constants/idlePolicy';
 import type { AutoStopDelays } from '../services/idlePolicy/type';
 import { createIdleShutdown } from '../services/idleShutdown';

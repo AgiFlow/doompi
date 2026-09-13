@@ -1,13 +1,7 @@
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
-import { LogMetricsAggregator } from '../services/metrics';
-import { createMetricsSource } from '../services/metricsSource';
-import { isEnabled } from '../services/telemetryEnabled';
-import { LogMetricsOverlayComponent, type LogMetricsView } from './logMetricsOverlay';
-import type { SinkStatus } from '../types/sinkStatus';
-import type { PiTelemetryExtensionOptions } from '../types/piTelemetry';
-import type { MetricsSource, MetricsQuery } from '../types/metricsSource';
+
 import {
   PACKAGE_NAME,
   SERVICE_NAME,
@@ -18,6 +12,13 @@ import {
   HELP_GROUP_ORDER,
   HELP_GROUP_DETAIL,
 } from '../constants/telemetry';
+import { LogMetricsAggregator } from '../services/metrics';
+import { createMetricsSource } from '../services/metricsSource';
+import { isEnabled } from '../services/telemetryEnabled';
+import type { MetricsSource, MetricsQuery } from '../types/metricsSource';
+import type { PiTelemetryExtensionOptions } from '../types/piTelemetry';
+import type { SinkStatus } from '../types/sinkStatus';
+import { LogMetricsOverlayComponent, type LogMetricsView } from './logMetricsOverlay';
 export function registerLogMetricsLeaderBinding(hub: DoomUiHubService, options: { source?: string } = {}): () => void {
   const contribution = hub.registerLeader({
     source: options.source ?? LEADER_SOURCE,

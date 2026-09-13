@@ -1,6 +1,5 @@
-import { describe, expect, it } from 'vitest';
-
 import type { ExtensionAPI, MessageRenderOptions, Theme } from '@earendil-works/pi-coding-agent';
+import { describe, expect, it } from 'vitest';
 
 import { SLASH_RESULT_CUSTOM_TYPE, type SlashRunDetail } from '../../src/models/slashResult';
 import { createSlashRunRenderer, renderSlashRunNotice } from '../../src/tui/slashRunNotice';

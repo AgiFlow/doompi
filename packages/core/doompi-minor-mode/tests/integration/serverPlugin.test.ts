@@ -1,22 +1,23 @@
-import { serverMinorModes } from '../../src/services/serverRegistration';
-import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '../../src/schemas/mode';
-import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
-import type { MinorModeOwner } from '../../src/services/modeDefinition';
-import { Type } from 'typebox';
-import { defineTool, defineCommand } from '@agimon-ai/doompi-core/pi-extension';
 import {
   DOOM_HEADLESS_OWNER,
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessHostService,
 } from '@agimon-ai/doompi-core/headless';
-import { Context } from '@deepseek-ai/cordis';
-import { describe, expect, it, vi } from 'vitest';
+import { defineTool, defineCommand } from '@agimon-ai/doompi-core/pi-extension';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import {
   defineServerMethod,
   type DoomServerPluginDefinition,
   DOOM_SERVER_HOST_SERVICE,
   type DoomServerHostService,
 } from '@agimon-ai/doompi-core/server-facet';
+import { Context } from '@deepseek-ai/cordis';
+import { Type } from 'typebox';
+import { describe, expect, it, vi } from 'vitest';
+
+import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '../../src/schemas/mode';
+import type { MinorModeOwner } from '../../src/services/modeDefinition';
+import { serverMinorModes } from '../../src/services/serverRegistration';
 
 function fixture() {
   const events: string[] = [];

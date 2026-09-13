@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { CompletionBatchConfig } from '../../src/services/completionBatcher';
 import {
   buildCompletionDetails,
   type CompletionNotifyDetails,
@@ -10,7 +11,6 @@ import {
   SUBAGENT_NOTIFY_MESSAGE_TYPE,
 } from '../../src/services/notify';
 import type { RunResultFile } from '../../src/services/resultWatcher';
-import type { CompletionBatchConfig } from '../../src/services/completionBatcher';
 
 /**
  * Exposes the protected `sendMessage` seam, recording every call instead of

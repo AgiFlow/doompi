@@ -1,6 +1,7 @@
 import { DOOM_AGENT_MODEL_ENTRY_TYPE } from '@agimon-ai/doompi-core/agent-model';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
 import { agentModelExtension, publishAgentModel } from '../../src/extensions/agentModel';
 
 describe('publishAgentModel', () => {

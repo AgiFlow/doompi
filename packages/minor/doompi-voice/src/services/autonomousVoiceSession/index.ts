@@ -1,15 +1,16 @@
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { type ActorRefFrom, createActor, waitFor } from 'xstate';
-import type { AutoCaptureActivationState, AutoCaptureUi, IClock } from '../../types';
-import { AutonomousTurnIdentityFactory, type AutonomousTurnNonceFactory } from '../autonomousTurn';
+
 import {
   type AutonomousTurnIdentity,
   type AutonomousVoiceEffect,
   type AutonomousVoiceSnapshot,
   autonomousVoiceMachine,
 } from '../../models/autonomousVoiceMachine';
-import { AutonomousVoiceTelemetry } from '../autonomousVoiceTelemetry';
 import { projectAutonomousVoiceUi } from '../../models/autonomousVoiceUi';
+import type { AutoCaptureActivationState, AutoCaptureUi, IClock } from '../../types';
+import { AutonomousTurnIdentityFactory, type AutonomousTurnNonceFactory } from '../autonomousTurn';
+import { AutonomousVoiceTelemetry } from '../autonomousVoiceTelemetry';
 import {
   assessVoiceTranscript,
   type RecentVoiceTranscript,

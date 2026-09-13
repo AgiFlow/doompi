@@ -1,6 +1,7 @@
 import type { ExtensionContext, ReadonlyFooterDataProvider, Theme } from '@earendil-works/pi-coding-agent';
 import { visibleWidth, type TUI } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { DoomFooter, type DoomFooterStatusView } from '../src/exports/doomFooter';
 import { DoomHeader } from '../src/exports/doomHeader';
 import { LeaderHints } from '../src/exports/leaderHints';

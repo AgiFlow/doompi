@@ -2,12 +2,13 @@ import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { scopeRunsDir, type SessionScope } from '../../src/services/sessionPaths';
-import { TEST_SESSION_SCOPE } from '../support/sessionScope';
-import { TerminalPersistenceService, type TerminalTrigger } from '../../src/services/terminalPersistence';
 import type { CoalescedStatusWriterContract, StatusWithRecentEntries } from '../../src/services/statusWriter';
+import { TerminalPersistenceService, type TerminalTrigger } from '../../src/services/terminalPersistence';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 /**
  * A status writer that records what was flushed instead of touching disk.

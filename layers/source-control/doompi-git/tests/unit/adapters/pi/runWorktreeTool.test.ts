@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { validateParams } from '../../../../src/tools/runWorktree';
 
 describe('validateParams', () => {

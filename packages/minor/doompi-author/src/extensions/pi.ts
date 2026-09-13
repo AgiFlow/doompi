@@ -1,10 +1,11 @@
-import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
-import { createAuthorCommand } from '../controllers/doomAuthorCommand';
-import { createAuthorPiMode } from '../controllers/authorPiMode';
-import { createAuthorTools } from '../tools/authorTools';
-import { createAuthorCatalog } from '../services/authorCatalog';
+import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
+
 import { AUTHOR_PACKAGE_SOURCE, AUTHOR_PI_GUIDANCE } from '../constants/author';
+import { createAuthorPiMode } from '../controllers/authorPiMode';
+import { createAuthorCommand } from '../controllers/doomAuthorCommand';
+import { createAuthorCatalog } from '../services/authorCatalog';
+import { createAuthorTools } from '../tools/authorTools';
 import type { AuthorExtensionDependencies } from '../types/extension';
 
 const authorPiExtension = definePiExtension<Partial<AuthorExtensionDependencies>>(

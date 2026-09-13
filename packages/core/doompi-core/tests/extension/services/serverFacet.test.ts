@@ -1,6 +1,9 @@
+import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
+
 import type { DoomHubChannelHost } from '../../../src/schemas/hubChannel';
 import type { DoomApi, DoomApiContext } from '../../../src/schemas/packageApi';
+import { createDoomPluginRegistry, defineDoomPluginMethod } from '../../../src/schemas/pluginProtocol';
 import {
   DoomServerFacetManifestError,
   declaredServerFacetsOf,
@@ -8,8 +11,6 @@ import {
   orderServerFacets,
 } from '../../../src/schemas/serverFacet';
 import { createDoomServerHost } from '../../../src/services/serverFacet';
-import { createDoomPluginRegistry, defineDoomPluginMethod } from '../../../src/schemas/pluginProtocol';
-import { Type } from 'typebox';
 
 function contextWith(onNotice: (message: string) => void): DoomApiContext {
   return { scope: 'session', sessionId: 'session-1', cwd: '/repo', onNotice };

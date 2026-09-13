@@ -1,5 +1,6 @@
 import { ScrollArea as ScrollAreaPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
+
 import { cn } from '../lib/cn';
 
 /**

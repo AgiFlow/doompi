@@ -4,6 +4,7 @@ import type { VoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-relo
 import type { DoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import {
   PROFILE_VOICE_INPUT_SCHEMA,
   PROFILE_VOICE_RESULT_SCHEMA,

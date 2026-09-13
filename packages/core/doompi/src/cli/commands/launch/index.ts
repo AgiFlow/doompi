@@ -1,14 +1,15 @@
-import spawn from 'cross-spawn';
-import { forwardSignals, waitForExit } from '../compat/providers/process';
-import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
-import { hasProjectTrustOption } from '../../../composition/projectTrust';
-import type { HarnessContext } from '../../../builders/cli/harnessContext';
-import type { HarnessOptions } from '../../../composition/types/harness';
-import { resolveLaunchPlan } from '../../../builders/cli/launchPlan';
-import { LAUNCHER_COMPOSITION_REQUEST_ENV } from '../../../builders/cli/constants';
 import { piCliPath } from '@agimon-ai/doompi-core/module-resolution';
 import { isRecord } from '@agimon-ai/doompi-core/runtime-json';
+import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+import spawn from 'cross-spawn';
+
+import { LAUNCHER_COMPOSITION_REQUEST_ENV } from '../../../builders/cli/constants';
+import type { HarnessContext } from '../../../builders/cli/harnessContext';
+import { resolveLaunchPlan } from '../../../builders/cli/launchPlan';
+import { hasProjectTrustOption } from '../../../composition/projectTrust';
+import type { HarnessOptions } from '../../../composition/types/harness';
 import { BaseCommand } from '../baseCommand';
+import { forwardSignals, waitForExit } from '../compat/providers/process';
 
 const VIBE_LINT_FORMAT = 'vibe-lint';
 const PRINT_OPTION = '--print';

@@ -1,3 +1,5 @@
+import { spawn as spawnProcess } from 'node:child_process';
+
 import {
   HOOK_SHELL,
   HOOK_SHELL_COMMAND_FLAG,
@@ -10,7 +12,7 @@ import {
   JSON_LINE_START,
   LINE_BREAK,
 } from '../../constants/hookRunner';
-import { spawn as spawnProcess } from 'node:child_process';
+import { HOOK_TELEMETRY_EVENT } from '../../constants/telemetry';
 import type {
   HookCommand,
   HookDecision,
@@ -19,7 +21,6 @@ import type {
   HookRunOptions,
   HookRunner,
 } from '../../types/hooks';
-import { HOOK_TELEMETRY_EVENT } from '../../constants/telemetry';
 import { type HookTelemetry } from '../../types/telemetry';
 
 export interface BashHookRunnerOptions {

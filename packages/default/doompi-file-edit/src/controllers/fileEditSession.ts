@@ -1,19 +1,21 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessActivity,
   type DoomHeadlessHook,
 } from '@agimon-ai/doompi-core/headless';
 import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+
 import { createDoomIgnoreMatcher } from '../services/doomIgnore';
-import { filesChannelType } from '../types/webFiles';
 import { EditTracker } from '../services/editTracker';
 import { FileEditPaths } from '../services/fileEditPaths';
 import { NodeGitStatusAdapter } from '../services/gitStatus';
 import { NodeSnapshotStoreAdapter } from '../services/snapshotStore';
-import { NodeTreeManifestAdapter } from '../services/treeManifest';
 import { TimelineStore } from '../services/timelineStore';
+import { NodeTreeManifestAdapter } from '../services/treeManifest';
+import { filesChannelType } from '../types/webFiles';
 import { api } from './fileEditsApi';
 import { readSessionFiles } from './webFilesChannel';
 

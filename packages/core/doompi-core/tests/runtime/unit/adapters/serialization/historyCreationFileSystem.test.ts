@@ -1,14 +1,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { FileError, type Result } from '@earendil-works/pi-agent-core';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import { BACKGROUND_CONTEXT as context } from '@earendil-works/pi-agent-core/harness/context';
 import { JsonlSessionRepo } from '@earendil-works/pi-agent-core/harness/session';
+import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { createHistoryCreationFileSystem } from '../../../../../src/services/historyCreationFileSystem';
-import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../../src/services/historyOwnership';
 import type { HistoryOwnershipLease } from '../../../../../src/services/historyImport';
+import { createHistoryOwnership, historyOwnershipLockPath } from '../../../../../src/services/historyOwnership';
 
 const roots: string[] = [];
 afterEach(() => {

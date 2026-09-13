@@ -1,5 +1,5 @@
-import type { IClock } from '../../types';
 import type { AutonomousTurnIdentity } from '../../models/autonomousVoiceMachine';
+import type { IClock } from '../../types';
 
 export type AutonomousTurnNonceFactory = () => string;
 

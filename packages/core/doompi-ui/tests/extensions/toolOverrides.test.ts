@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import {
   createEditToolDefinition,
   createFindToolDefinition,
@@ -15,6 +16,7 @@ import {
   type WriteToolInput,
 } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
 import { createBuiltinTools } from '../../src/tui/builtinTools';
 
 const CWD = '/repo/project';

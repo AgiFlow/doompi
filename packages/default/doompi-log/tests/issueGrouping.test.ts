@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { groupIssues, groupingKey } from '../src/types/issueGrouping';
 import type { IssueSample } from '../src/types/webMetrics';
 

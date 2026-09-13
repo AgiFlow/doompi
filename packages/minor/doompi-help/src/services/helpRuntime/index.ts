@@ -1,8 +1,9 @@
 import type { DoomHelpContribution, DoomHelpService } from '@agimon-ai/doompi-core/help';
+
+import type { HelpFetch } from '../../types/help';
+import { DefaultHelpActivationService } from '../helpActivation';
 import { DefaultHelpSkillMaterializer, defaultHelpCacheRoot, HelpIndexCache } from '../helpStorage';
 import { DefaultHelpIndexResolver } from '../llmsResolver';
-import { DefaultHelpActivationService } from '../helpActivation';
-import type { HelpFetch } from '../../types/help';
 
 export interface HelpRuntimeOptions {
   cacheRoot?: string;

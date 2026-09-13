@@ -1,14 +1,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
+
 import type { TranscriptPage } from '@agimon-ai/doompi-core/session-protocol';
+import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
+import { readFleetTranscriptTail } from '../../src/services/fleetTranscript';
 import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
 import { collectFleetSnapshot, SubagentFleetComponent } from '../../src/tui/fleet';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
-import { readFleetTranscriptTail } from '../../src/services/fleetTranscript';
 
 /**
  * `fleet.ts`'s cache is keyed on the transcript file's disk fingerprint

@@ -1,17 +1,19 @@
 import path from 'node:path';
+
+import { loadDomains } from '@agimon-ai/doompi-config/domains';
+import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import {
   createHarnessTelemetry,
   HARNESS_EVENT,
   type HarnessTelemetry,
 } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
-import { loadDomains } from '@agimon-ai/doompi-config/domains';
-import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { launchCompatibility } from './providers';
-import { buildCompatibilityContext } from './context';
+
 import { findRepositoryRoot } from '../../../composition/repository';
-import { isCompatibilityProvider, parseCompatibilityArgs, parseCompatibilityProvider } from './options';
-import { compatHelp } from './help';
 import { wantsHelp } from '../../router';
+import { buildCompatibilityContext } from './context';
+import { compatHelp } from './help';
+import { isCompatibilityProvider, parseCompatibilityArgs, parseCompatibilityProvider } from './options';
+import { launchCompatibility } from './providers';
 
 const COMPAT_COMMAND = 'compat';
 const HARNESS_ROOT_ENV = 'DOOMPI_ROOT';

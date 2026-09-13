@@ -33,6 +33,7 @@ import {
 } from '@agimon-ai/doompi-ui/doom-overlay';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { Key, matchesKey, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+
 import type { McpOverlayTarget, McpResourceView, McpServerView } from '../types/mcp';
 
 const TITLE = 'MCP';

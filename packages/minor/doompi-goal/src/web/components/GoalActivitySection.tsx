@@ -1,3 +1,4 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   Button,
   DropdownMenu,
@@ -6,11 +7,11 @@ import {
   DropdownMenuTrigger,
   KebabIcon,
 } from '@agimon-ai/doompi-web-components';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useState } from 'react';
+
 import { GOAL_VIEW_STATUS_KEY, parseGoalStatusView } from '../../types/goalView';
-import { EditGoalDialog } from './EditGoalDialog';
 import { budgetHintOf, CLEAR_GOAL_COMMAND } from '../lib/goalCommands';
+import { EditGoalDialog } from './EditGoalDialog';
 import { RemoveGoalDialog } from './RemoveGoalDialog';
 
 /**

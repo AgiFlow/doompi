@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { brokerRoutes, findBrokerRoute, resolveBrokeredCredentials } from '../../../src/services/brokerRoutes';
 
 describe('brokerRoutes', () => {

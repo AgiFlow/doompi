@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
-import { COMMAND_NAME } from '../../../src/constants/prompts';
 import { describe, expect, it, vi } from 'vitest';
+
+import { COMMAND_NAME } from '../../../src/constants/prompts';
 import { createPromptsCommand } from '../../../src/controllers/promptsCommand';
 import { createRecentPrompts } from '../../../src/models/recentPrompts';
 import type { PromptExtensionDependencies } from '../../../src/types/prompt';

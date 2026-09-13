@@ -1,5 +1,6 @@
 import type { LogMetricsReport } from '@agimon-ai/log-sink-mcp';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createMetricsSource } from '../src/services/metricsSource';
 
 const { resolveLogSinkPort, resolveLogSinkInstance, execFile } = vi.hoisted(() => ({

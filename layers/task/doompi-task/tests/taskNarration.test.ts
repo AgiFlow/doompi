@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { narrateTaskCommit, type TaskNarrationSink } from '../src/services/taskNarration';
+
 import { emptyDocument, type Task, type TaskDocument } from '../src/exports/storeTypes';
+import { narrateTaskCommit, type TaskNarrationSink } from '../src/services/taskNarration';
 
 function document(tasks: Task[]): TaskDocument {
   return { ...emptyDocument(), nextId: tasks.length + 1, tasks };

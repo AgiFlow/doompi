@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import {
   createHarnessSession,
   disposeHarnessState,
@@ -11,20 +12,21 @@ import {
 } from '@agimon-ai/doompi-config/harnessStore';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import type { TransitionOutcome } from '@agimon-ai/doompi-core/transition';
-import { createDoomVoiceToolsService, DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-voice/voice-tools';
 import {
   createVoiceReloadHandoffStore,
   type VoiceReloadHandoffStore,
 } from '@agimon-ai/doompi-voice/voice-reload-handoff';
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { createDoomVoiceToolsService, DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-voice/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDomainSwitchHandoffStore } from '../../src/models/domainSwitchHandoff';
+
 import {
   type DomainCatalogPort,
   type DomainsCommandDependencies,
   createDomainsCommand,
 } from '../../src/controllers/domainsCommand';
+import { createDomainSwitchHandoffStore } from '../../src/models/domainSwitchHandoff';
 import { DOMAIN_EVENT, type DomainTelemetry } from '../../src/types/telemetry';
 import { bindStubCoordinator } from '../helpers/coordinator';
 import { bindConfig, harnessContext } from '../helpers/session';

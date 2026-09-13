@@ -1,15 +1,16 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import type { DoomMcpToolResolverService } from '@agimon-ai/doompi-core/mcp-tool-resolver';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { formatTeamContextSnapshot } from '../../src/services/teamSnapshot';
 import {
   McpDirectToolResolverBinding,
   resolveMcpDirectToolNames,
   resolveMcpDirectToolSelections,
 } from '../../src/services/mcpDirectToolAllowlist';
+import { formatTeamContextSnapshot } from '../../src/services/teamSnapshot';
 import {
   formatChildToolDiagnostic,
   readChildToolDiagnostic,

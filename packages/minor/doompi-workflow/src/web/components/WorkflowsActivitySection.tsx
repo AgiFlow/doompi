@@ -1,7 +1,8 @@
-import { Button, ChevronDownIcon, ChevronRightIcon, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { Button, ChevronDownIcon, ChevronRightIcon, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
+
 import {
   type WorkflowActivityGroupName,
   type WorkflowActivityRow,
@@ -10,8 +11,8 @@ import {
   workflowActivityRows,
 } from '../lib/workflowActivity';
 import { openCatalog } from '../stores/catalogStore';
-import { workflowsTab } from './WorkflowsPanel';
 import { focusRun, workflows } from '../stores/workflowsStore';
+import { workflowsTab } from './WorkflowsPanel';
 
 const TICK_MS = 10_000;
 

@@ -1,10 +1,10 @@
+import { UserIcon } from '../icons/icons';
 /*
  * Plain CSF objects; see Badge.stories.tsx for why Storybook's types are not
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
 import { Avatar, AvatarFallback } from './Avatar';
-import { UserIcon } from '../icons/icons';
 
 /** Avatar declares no variants; the size is whatever the caller hands it. */
 const SIZES = [

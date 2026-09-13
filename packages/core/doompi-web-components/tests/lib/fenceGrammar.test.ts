@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { fenceGrammarOf, fenceLanguageOf, MERMAID_LANGUAGE } from '../../src/lib/fenceGrammar';
 
 describe('fence language', () => {

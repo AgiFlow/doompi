@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+
 import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
 import type { Alias, Plugin } from 'vite';
+
 import { devPluginRoots, PLUGIN_ROOTS_ENV, PLUGIN_ROOTS_FILE } from './webDevRoots';
 import type { SyncGeneratedModules } from './webPluginGenerate';
 

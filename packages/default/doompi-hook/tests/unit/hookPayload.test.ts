@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { sessionHookPayload, toolHookPayload } from '../../src/services/hookPayload';
 
 describe('hook payloads', () => {

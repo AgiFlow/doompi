@@ -6,14 +6,6 @@ import {
 } from '@agimon-ai/doompi-core/ask-user';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ToolDefinition, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { type QuestionParams, QuestionParamsSchema } from '../schemas/questionnaire';
-import type { QuestionnaireRunner } from '../services/questionnaireCoordinator';
-import { buildQuestionnaireResponse, buildToolResult } from '../services/responseService';
-import { validateQuestionnaire } from '../services/validationService';
-import type { QuestionnaireResult } from '../types/questionnaire';
-import { loadUserFeedbackConfig, resolveCollapseKey } from '../services/config';
-import { buildVoiceToolResult } from '../services/voiceQuestionHandoff';
-import { runRpcQuestionnaire } from '../services/rpcQuestionnaire';
 
 import {
   ASK_USER_QUESTION_TOOL_NAME,
@@ -24,6 +16,14 @@ import {
   ERROR_SESSION_LOAD_FAILED,
   ERROR_SESSION_INACTIVE,
 } from '../constants/tool';
+import { type QuestionParams, QuestionParamsSchema } from '../schemas/questionnaire';
+import { loadUserFeedbackConfig, resolveCollapseKey } from '../services/config';
+import type { QuestionnaireRunner } from '../services/questionnaireCoordinator';
+import { buildQuestionnaireResponse, buildToolResult } from '../services/responseService';
+import { runRpcQuestionnaire } from '../services/rpcQuestionnaire';
+import { validateQuestionnaire } from '../services/validationService';
+import { buildVoiceToolResult } from '../services/voiceQuestionHandoff';
+import type { QuestionnaireResult } from '../types/questionnaire';
 export interface AskUserQuestionToolDependencies {
   enqueue: (runner: QuestionnaireRunner, signal?: AbortSignal) => Promise<QuestionnaireResult>;
   isActive?: (context: ExtensionContext, signal?: AbortSignal) => boolean;

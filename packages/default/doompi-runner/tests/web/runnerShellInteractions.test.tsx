@@ -1,10 +1,11 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RunnerShellPanel } from '../../src/web/components/RunnerShellPanel';
-import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore';
+
 import type { RunnerRunView } from '../../src/types/webRunners';
 import { sendRunnerInput } from '../../src/web/api/screenApi';
+import { RunnerShellPanel } from '../../src/web/components/RunnerShellPanel';
+import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore';
 
 vi.mock('../../src/web/api/screenApi', () => ({
   decodeChunk: vi.fn(),

@@ -1,18 +1,18 @@
-import type { PiToolDeclaration } from '../schemas/piTool';
-import { createPluginLifecycle, type PluginLifecycleHooks } from '../services/pluginLifecycle';
-import type { DoomPluginTool, DoomPluginCommand } from '../schemas/pluginContributions';
-import type { DoomToolRestrictionDefinition } from '../schemas/toolSurface';
-
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
 import { connectDoomCordisHost, type DoomCordisRuntimeService } from '../pi/cordisHost';
 import { DOOM_HELP_SERVICE, requireDoomHelpService, type DoomHelpService } from '../schemas/help';
-import { DOOM_TOOL_SURFACE_SERVICE, requireDoomToolSurface } from '../schemas/toolSurface';
+import type { PiToolDeclaration } from '../schemas/piTool';
+import type { DoomPluginTool, DoomPluginCommand } from '../schemas/pluginContributions';
 import {
   DOOM_TOOL_OVERRIDES_SERVICE,
   requireDoomToolOverrides,
   type DoomToolOverrideClaim,
 } from '../schemas/toolOverrides';
+import type { DoomToolRestrictionDefinition } from '../schemas/toolSurface';
+import { DOOM_TOOL_SURFACE_SERVICE, requireDoomToolSurface } from '../schemas/toolSurface';
+import { createPluginLifecycle, type PluginLifecycleHooks } from '../services/pluginLifecycle';
 
 /** Extract native overloads without copying Pi event payload or result contracts. */
 type NativeEventOverloads = ExtensionAPI['on'] extends {

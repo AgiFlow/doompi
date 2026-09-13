@@ -1,5 +1,8 @@
 import { Buffer } from 'node:buffer';
 import * as fs from 'node:fs';
+
+import { Check } from 'typebox/value';
+
 import {
   type DoomFablePlanService,
   FABLE_PLAN_MODEL,
@@ -12,16 +15,15 @@ import {
   FablePlanStartSchema,
   type FablePlanStartPayload,
 } from '../../schemas/fablePlanApi';
-import { Check } from 'typebox/value';
 import type {
   ResolvedSubagentCapabilityCeiling,
   SubagentCapabilityPolicyStore,
 } from '../../schemas/team/capabilityCeiling';
 import type { AsyncSubagentSpawnInput, AsyncSubagentSpawnerContract } from '../asyncExecution';
 import { fableProfileResultPathFor } from '../asyncExecution';
+import type { ManagementActionsContract } from '../managementActions';
 import type { SessionScope } from '../sessionPaths';
 import type { SubagentWaiterContract } from '../subagentWait';
-import type { ManagementActionsContract } from '../managementActions';
 
 const FABLE_DRAFT_TIMEOUT_MS = 25 * 60 * 1_000;
 const FABLE_RESULT_MAX_BYTES = 16 * 1_024;

@@ -1,9 +1,10 @@
 import type { WebPluginRuntime } from '@agimon-ai/doompi-core/web';
+
 import type { RealtimeBrowserState } from '../../types/realtime';
-import { browserVoiceMediaClientId } from '../lib/browserMediaIdentity';
 import { BrowserVoiceMediaDevice } from '../api/browserMediaDevice';
-import { BrowserVoiceMediaTransport } from '../stores/clientMediaTransport';
 import { VoiceMediaClient, type VoiceMediaClientConnectionState } from '../api/voiceMediaClient';
+import { browserVoiceMediaClientId } from '../lib/browserMediaIdentity';
+import { BrowserVoiceMediaTransport } from '../stores/clientMediaTransport';
 import {
   activeVoiceSession,
   voiceMediaBrowserState,

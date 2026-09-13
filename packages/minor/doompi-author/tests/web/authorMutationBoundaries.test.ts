@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
+
+import { authorGrid, registerAuthorGridResolver, updateAuthorGridGeometry } from '../../src/web/lib/authorGrid';
+import type { AuthorDocumentInput, AuthorNativeAnchor, AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
 import { authorGridTools } from '../../src/web/stores/authorGridTools';
 import { AUTHOR_TEXT_PROFILE, authorProfilesForDocument } from '../../src/web/stores/authorProfiles';
-import { authorGrid, registerAuthorGridResolver, updateAuthorGridGeometry } from '../../src/web/lib/authorGrid';
 import * as workspace from '../../src/web/stores/authorWorkspaceStore';
-import type { AuthorDocumentInput, AuthorNativeAnchor, AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
 const signal = new AbortController().signal;
 const region: AuthorRegionDraft = {
   id: 'r',

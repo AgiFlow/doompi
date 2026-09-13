@@ -1,7 +1,8 @@
-import { AUTHOR_FACADE_TOOL_NAMES } from '../../constants/author';
 import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
-import type { AuthorCatalog } from './type';
+
+import { AUTHOR_FACADE_TOOL_NAMES } from '../../constants/author';
 import { OPEN_AUTHORING_FILE_TOOL_NAME, type AuthorViewportCatalogSnapshot } from '../../types/author';
+import type { AuthorCatalog } from './type';
 
 const CATALOG_POLL_MS = 500;
 

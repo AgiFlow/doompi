@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import type { IExecutableResolver, IProcessSpawner } from '../../types';
 import {
   MANUAL_TRANSCRIPTION_DECODE_TIMEOUT_MS,

@@ -1,13 +1,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { ClientPcmAudioRecorder } from '../src/services/clientMedia';
-import { createTestVoiceMediaApi as createVoiceMediaApi } from './support';
 import { NodeTurnSpool } from '../src/services/fileTurnSpool';
-import { VoiceWorkerPipeline } from '../src/services/voiceWorkerPipeline';
 import { PCM_FRAME_BYTES, PCM_FRAME_MS } from '../src/services/pcm';
+import { VoiceWorkerPipeline } from '../src/services/voiceWorkerPipeline';
 import {
   VOICE_WORKER_INTENTIONAL_BARGE_IN_CAPABILITY,
   VOICE_WORKER_PROTOCOL_VERSION,
@@ -38,6 +39,7 @@ import {
   VOICE_MEDIA_ROUTES,
   type VoiceMediaCaptureActivity,
 } from '../src/types/clientMedia';
+import { createTestVoiceMediaApi as createVoiceMediaApi } from './support';
 
 const directories: string[] = [];
 const AMBIENT_REBASE_EXERCISE_MS = 1_600;

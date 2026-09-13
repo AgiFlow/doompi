@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   DOOM_RELAUNCH_FILE_ENV,
   parseRelaunchHandoff,

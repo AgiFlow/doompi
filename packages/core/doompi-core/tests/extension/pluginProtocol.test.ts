@@ -1,5 +1,6 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+
 import {
   createDoomPluginRegistry,
   defineDoomPluginMethod,

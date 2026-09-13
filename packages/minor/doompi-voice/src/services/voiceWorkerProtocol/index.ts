@@ -1,5 +1,5 @@
-import type { AsrDecodingEvidence } from '../../types';
 import type { NarrationBargeInEvidence } from '../../models/narrationBargeIn';
+import type { AsrDecodingEvidence } from '../../types';
 import type { VoiceTranscriptSignalEvidence } from '../transcriptAdmission';
 
 export const VOICE_WORKER_PROTOCOL_VERSION = 1 as const;

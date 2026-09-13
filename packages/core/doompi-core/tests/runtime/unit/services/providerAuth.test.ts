@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createProviderAuth } from '../../../../src/services/providerAuth';
 import type { AuthRuntime, LoginInteraction } from '../../../../src/types/server/auth';
 

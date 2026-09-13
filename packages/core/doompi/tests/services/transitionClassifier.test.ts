@@ -1,14 +1,15 @@
 import { resolveLayers } from '@agimon-ai/doompi-config/majorModes';
-import { extensionLayers } from '../../src/composition/transitionLayers';
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { describe, expect, it } from 'vitest';
-import { classifyTransition, type TransitionClassifierContext } from '@agimon-ai/doompi-core/transition-classifier';
 import type {
   DoomTransitionRequest,
   TransitionSelectionSnapshot,
   TransitionSynchronization,
   TransitionTarget,
 } from '@agimon-ai/doompi-core/transition';
+import { classifyTransition, type TransitionClassifierContext } from '@agimon-ai/doompi-core/transition-classifier';
+import { describe, expect, it } from 'vitest';
+
+import { extensionLayers } from '../../src/composition/transitionLayers';
 
 const config: MajorModesConfig = {
   layers: {

@@ -1,13 +1,15 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { expect, it } from 'vitest';
+
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import type { Write } from '@earendil-works/pi-agent-core/harness/session';
+import { expect, it } from 'vitest';
+
+import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
 import { openSqliteSessionStorage } from '../../../../../src/services/sqliteSessionStorage';
 import { readSqliteTranscript } from '../../../../../src/services/sqliteTranscriptReader';
 import { readTranscriptPage } from '../../../../../src/services/transcriptPages';
-import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
 
 it('keeps indexed pages bounded at 1k, 10k and 100k entries, with bidirectional cursors and read-only child access', async () => {
   const sessionsRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-pages-'));

@@ -1,13 +1,14 @@
-import { Button, Dot } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { Button, Dot } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
+
 import type { RunnerRunView } from '../../types/webRunners';
+import { useRunnerTail } from '../hooks/runnerTail';
 import { formatRunnerUptime } from '../lib/format';
+import { requestRunnerStop, runners } from '../stores/runnersStore';
 import { runnerLogTab } from './RunnerLogPanel';
 import { runnersTab } from './RunnersPanel';
-import { requestRunnerStop, runners } from '../stores/runnersStore';
-import { useRunnerTail } from '../hooks/runnerTail';
 
 const TICK_MS = 10_000;
 

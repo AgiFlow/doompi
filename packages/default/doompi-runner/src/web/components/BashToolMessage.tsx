@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   AnsiText,
   Button,
@@ -10,8 +11,8 @@ import {
   SyntaxText,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
+
 import {
   type BashStatusTone,
   bashResultDetails,
@@ -19,8 +20,8 @@ import {
   formatBashCommand,
   formatBashFlags,
 } from '../lib/bashToolFormat';
-import { runnerLogTab } from './RunnerLogPanel';
 import { requestRunnerStop, runners } from '../stores/runnersStore';
+import { runnerLogTab } from './RunnerLogPanel';
 
 const STATUS_TONE: Record<BashStatusTone, StatusTone> = {
   running: 'running',

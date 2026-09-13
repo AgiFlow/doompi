@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { canonicalizeTasks } from '../invariants';
-import { isProcessAlive } from '../processLiveness';
+
 import { emptyDocument, STORE_SCHEMA_VERSION, type Task, type TaskDocument } from '../../models/task';
 import { TASK_EVENT, type TaskFailureReporter } from '../../types/telemetry';
+import { canonicalizeTasks } from '../invariants';
 import { lockPathFor, resolveStorePath, STORE_PATH_ENV, tempPathFor } from '../paths';
+import { isProcessAlive } from '../processLiveness';
 
 const LOCK_TIMEOUT_MS = 2000;
 const LOCK_STALE_MS = 10_000;

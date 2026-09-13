@@ -1,8 +1,3 @@
-import { createMinorModeCatalogHost } from '@agimon-ai/doompi-minor-mode/catalog';
-import { DOOM_MINOR_MODE_CATALOG_SERVICE, type MinorModeCatalogService } from '@agimon-ai/doompi-minor-mode';
-import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
-import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
-import { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_HEADLESS_OWNER,
   type DoomHeadlessActivity,
@@ -11,11 +6,16 @@ import {
   type DoomHeadlessTool,
   requireDoomHeadlessHost,
 } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerBundleEntry } from '@agimon-ai/doompi-core/server-facet';
-import { describe, expect, it, vi } from 'vitest';
-import { Type } from 'typebox';
 import { HeadlessHost } from '@agimon-ai/doompi-core/main';
 import type { HeadlessHostOptions, ResolvedHeadlessResource } from '@agimon-ai/doompi-core/main';
+import type { DoomServerBundleEntry } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE, type MinorModeCatalogService } from '@agimon-ai/doompi-minor-mode';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
+import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
+import { createMinorModeCatalogHost } from '@agimon-ai/doompi-minor-mode/catalog';
+import { Context } from '@deepseek-ai/cordis';
+import { Type } from 'typebox';
+import { describe, expect, it, vi } from 'vitest';
 
 const baseCandidate: DoomServerBundleEntry = {
   packageName: '@test/base-facet',

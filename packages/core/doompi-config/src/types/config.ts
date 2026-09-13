@@ -1,5 +1,6 @@
 import type { IDoomConfigService as DoomConfigServiceContract } from '@agimon-ai/doompi-core/config';
 import type { DoomMcpProjection } from '@agimon-ai/doompi-core/mcp-projection';
+
 import type { PersonaIdentity, PersonaVoiceOverride } from './profiles';
 
 export { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';

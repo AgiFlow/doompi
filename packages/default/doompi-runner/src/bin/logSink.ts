@@ -1,6 +1,8 @@
-import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
+
+import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
+
 import { scrubTerminalOutput } from '../services/ansiScrub';
 
 export async function main(argv: readonly string[] = process.argv.slice(2)): Promise<number> {

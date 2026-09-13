@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+
 import {
   GATE_MODE,
   LIVENESS_POLL_MS,
@@ -7,6 +8,13 @@ import {
   TERM_GRACE_MS,
 } from '../../constants/launcher';
 import { PI_SESSION_ID_ENV } from '../../constants/session';
+import type { IClock } from '../../types/clock';
+import type { ILauncher, LaunchRequest, RunHandle } from '../../types/launcher';
+import type { ILogFile } from '../../types/logFile';
+import type { IProcessControl } from '../../types/processControl';
+import type { ExitResult, ISpawner } from '../../types/spawner';
+import { getResultMaxBytes } from '../runnerConfig';
+import type { IRunnerPaths } from '../runnerPaths/type';
 import {
   cleanupSupervisorFiles,
   NO_TERMINAL_INPUT_ENV,
@@ -15,14 +23,6 @@ import {
   supervisorPaths,
   writeCommandSpec,
 } from '../runnerSupervisor';
-import type { IClock } from '../../types/clock';
-import type { ILogFile } from '../../types/logFile';
-import type { IProcessControl } from '../../types/processControl';
-import { getResultMaxBytes } from '../runnerConfig';
-import type { IRunnerPaths } from '../runnerPaths/type';
-
-import type { ILauncher, LaunchRequest, RunHandle } from '../../types/launcher';
-import type { ExitResult, ISpawner } from '../../types/spawner';
 
 /**
  * Prompts belong on a screen, not in a log file, so `CI` stays set.

@@ -1,5 +1,6 @@
-import { SERVICE_NAME, PACKAGE_NAME } from '../../constants/hookTelemetry';
 import { createDoomTelemetry, type DoomTelemetry, type DoomTelemetryOptions } from '@agimon-ai/doompi-telemetry';
+
+import { SERVICE_NAME, PACKAGE_NAME } from '../../constants/hookTelemetry';
 import type { HookTelemetry } from '../../types/telemetry';
 
 export interface HookTelemetryOptions {

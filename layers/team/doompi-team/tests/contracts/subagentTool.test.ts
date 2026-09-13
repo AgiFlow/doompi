@@ -1,6 +1,3 @@
-import { Check } from 'typebox/value';
-import { describe, expect, it } from 'vitest';
-
 import {
   isSubagentAction,
   SUBAGENT_ACTION_FIELDS,
@@ -8,6 +5,8 @@ import {
   SubagentParams,
   subagentActionAcceptsField,
 } from '@agimon-ai/doompi-team/runtime-subagent-tool';
+import { Check } from 'typebox/value';
+import { describe, expect, it } from 'vitest';
 
 interface VariantSchema {
   additionalProperties?: boolean;

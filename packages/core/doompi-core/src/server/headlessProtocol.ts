@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+
 import {
   createRemoteServiceEndpoint,
   RemoteServiceProvider,
@@ -9,6 +10,8 @@ import {
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { RoutedServerServiceHost, RoutedSessionHandle, ServerHost } from '@earendil-works/pi-server';
 import { Server, SessionNotFoundError } from '@earendil-works/pi-server';
+
+import { DoomPluginService } from '../exports/pluginProtocol';
 import {
   DOOM_COCKPIT_SERVER_ID,
   DoomHubService,
@@ -16,11 +19,10 @@ import {
   type HubService,
   type ProtocolEvent,
 } from '../exports/sessionProtocol';
-import { DoomPluginService } from '../exports/pluginProtocol';
-import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
 import { createAgentServerService, type DoomSessionMetadata } from '../pi/piSessionRuntime';
 import { createPiWebSocketListener, type PiListenerSocket } from '../pi/piWebSocketListener';
 import type { ServerTelemetry } from '../services/serverTelemetry';
+import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
 import { createThreadJournals, type ThreadJournals } from './threadJournals';
 
 const MAX_HUB_EVENTS = 1_024;

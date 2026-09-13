@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+
 import type { EngineCaptureResult, EngineProcessRunner, EngineRunOptions } from '../../types/sandboxHarness';
 
 const INHERIT = 'inherit';

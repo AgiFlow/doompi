@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { encodePcm16Wav, PCM_BYTES_PER_SAMPLE } from '../pcm';
 import type { ITurnSpool, TurnSnapshot, TurnSpoolIdentity, TurnSpoolManifest } from '../../types/turnSpool';
+import { encodePcm16Wav, PCM_BYTES_PER_SAMPLE } from '../pcm';
 
 const MANIFEST_VERSION = 1 as const;
 const MANIFEST_FILE = 'manifest.json';

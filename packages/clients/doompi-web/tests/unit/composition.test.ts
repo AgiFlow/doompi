@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
 import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
+import { describe, expect, it } from 'vitest';
+
 import {
   activityGroups,
   bindFileLinkModes,

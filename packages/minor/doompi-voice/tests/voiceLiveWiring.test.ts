@@ -6,10 +6,11 @@ import {
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { voiceRuntime } from './helpers/voiceRuntime';
-import type { VoiceDependencies } from '../src/types';
+
 import type { RealtimeHost } from '../src/services/realtimeHost';
 import type { RealtimeSignInAttempt } from '../src/services/realtimeRuntime';
+import type { VoiceDependencies } from '../src/types';
+import { voiceRuntime } from './helpers/voiceRuntime';
 
 const disposers: Array<() => Promise<void>> = [];
 afterEach(async () => {

@@ -1,5 +1,6 @@
 import { cva } from 'class-variance-authority';
 import type { ComponentProps } from 'react';
+
 import { cn } from '../lib/cn';
 import type { MessageLineTone as Tone } from '../types/tone';
 

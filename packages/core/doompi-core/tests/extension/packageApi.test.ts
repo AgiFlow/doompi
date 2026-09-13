@@ -1,5 +1,7 @@
 import fs from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
+
 import {
   doomApiCallerFrom,
   DOOM_API_CALLER_DEVICE_ID_HEADER,

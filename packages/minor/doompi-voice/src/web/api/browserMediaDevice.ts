@@ -1,4 +1,3 @@
-import sileroVadModelUrl from '../models/silero_vad_v6.2.1.onnx?url';
 import type { SpeechPresenceDetector } from '../../types/clientCaptureActivity';
 import type {
   VoiceMediaCapabilities,
@@ -13,6 +12,7 @@ import { VOICE_MEDIA_SAMPLE_RATE } from '../../types/clientMedia';
 import browserCaptureWorkletUrl from '../lib/browserCaptureWorklet.js?url';
 import { BrowserNarrationEchoDiscriminator } from '../lib/browserNarrationEchoDiscriminator';
 import { BrowserSpeechPresenceDetector, type SpeechWorker } from '../lib/browserSpeechPresenceDetector';
+import sileroVadModelUrl from '../models/silero_vad_v6.2.1.onnx?url';
 import sileroVadWorkerUrl from './sileroVadWorker.ts?worker&url';
 
 const AUDIO_BUFFER_SIZE = 4_096;

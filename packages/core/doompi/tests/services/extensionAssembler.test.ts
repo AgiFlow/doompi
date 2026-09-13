@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { loadMajorModesConfig, type MajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { describe, expect, it } from 'vitest';
+
 import {
   assembleChildExtensions,
   assembleExtensions,

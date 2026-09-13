@@ -1,7 +1,8 @@
 import { Button, Input, Switch } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
-import { readImageSettings, writeImageSettings } from '../../lib/settingsApi';
+
 import type { SettingsImagesView } from '../../../types/settings';
+import { readImageSettings, writeImageSettings } from '../../lib/settingsApi';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 /**

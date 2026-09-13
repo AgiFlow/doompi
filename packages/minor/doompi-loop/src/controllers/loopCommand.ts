@@ -1,7 +1,7 @@
-import { START_COMMAND_DESCRIPTION, LIST_COMMAND_DESCRIPTION } from '../constants/loop';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../constants/loop';
 
+import { START_COMMAND_DESCRIPTION, LIST_COMMAND_DESCRIPTION } from '../constants/loop';
+import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../constants/loop';
 import type { LoopCommandHandlers } from '../types/loopCommand';
 export function createLoopCommands(
   handlers: LoopCommandHandlers,

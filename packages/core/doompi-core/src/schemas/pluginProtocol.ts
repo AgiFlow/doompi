@@ -1,6 +1,7 @@
 import { defineService, type Context, type JsonValue } from '@earendil-works/chord';
 import { type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
+
 import type { DoomApiMount, DoomApiScope } from './packageApi';
 
 /** The address is always exact. A workspace call never resolves to a global service. */

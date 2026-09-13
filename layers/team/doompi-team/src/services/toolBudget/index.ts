@@ -19,8 +19,8 @@
  * - Reading the environment variable name from anywhere but `src/env.ts`
  */
 
-import { TOOL_BUDGET_ENV } from '../../types/environment';
 import type { ToolBudgetConfig } from '../../types';
+import { TOOL_BUDGET_ENV } from '../../types/environment';
 
 /** A tool budget with its block list settled. */
 export interface ResolvedToolBudget {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { normalizedAuthorRectangle } from '../../src/web/lib/authorRegions';
 
 describe('source-normalized Author rectangles', () => {

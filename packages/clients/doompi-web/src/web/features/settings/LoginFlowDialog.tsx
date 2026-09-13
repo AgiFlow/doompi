@@ -10,6 +10,7 @@ import {
   Spinner,
 } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
+
 import type { AuthMethodType, LoginEvent, LoginFlowSnapshot, LoginPromptView } from '../../../types/auth';
 
 export const METHOD_LABEL: Readonly<Record<AuthMethodType, string>> = { api_key: 'api key', oauth: 'oauth' };

@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 interface SocketHandlers {
@@ -71,8 +72,8 @@ vi.mock('../../src/web/stores/menuStore', () => ({
 
 import { startSessionRuntime } from '../../src/web/app/sessionRuntime';
 import { onHubConnected } from '../../src/web/lib/transport';
-import { resetSessions, sessionsStore, setActiveSession } from '../../src/web/stores/sessionsStore';
 import { onCaptureStatus, pendingCaptureSessions, submitCapture } from '../../src/web/stores/captureStore';
+import { resetSessions, sessionsStore, setActiveSession } from '../../src/web/stores/sessionsStore';
 import {
   applyProtocolTranscript,
   applySessionFrame,

@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis';
+
 import type { DoomConfigContributionHandle, DoomConfigContributionOptions, DoomExtensionContext } from './config';
 import type { DoomFooterContributionDefinition, DoomFooterContributionHandle } from './footer';
 import type { DoomLeaderActionHandlerOptions, DoomLeaderContributionHandle, LeaderContribution } from './leader';

@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import { SqliteSessionRepo, createNodeSqliteFactory } from '@earendil-works/pi-session-backend-sqlite-node';
+import type { Models, MutableModels } from '@earendil-works/pi-ai';
 import {
   createBashTool,
   createEditTool,
@@ -12,7 +13,8 @@ import {
   createReadTool,
   createWriteTool,
 } from '@earendil-works/pi-coding-agent';
-import type { Models, MutableModels } from '@earendil-works/pi-ai';
+import { SqliteSessionRepo, createNodeSqliteFactory } from '@earendil-works/pi-session-backend-sqlite-node';
+
 import {
   createDoomChildSessionService,
   type DoomChildSessionIntercom,
@@ -21,15 +23,15 @@ import {
   type DoomChildSessionService,
   type DoomChildSessionServiceProvider,
 } from '../../../exports/childSession';
-import { createHistoryOwnership } from '../../../services/historyOwnership';
-import type { HistoryOwnership } from '../../../services/historyImport';
-import { readNativeChildTranscript } from '../../../server/nativeChildTranscriptReader';
 import {
   createDirectHarnessRuntime,
   promptForAssistantText,
   type DirectHarnessRuntime,
   type DirectHarnessRuntimeOptions,
 } from '../../../server/directHarnessRuntime';
+import { readNativeChildTranscript } from '../../../server/nativeChildTranscriptReader';
+import type { HistoryOwnership } from '../../../services/historyImport';
+import { createHistoryOwnership } from '../../../services/historyOwnership';
 import type { DirectHarnessModel } from '../../../types/server/directHarnessRuntime';
 import { registerNativeChild } from './nativeChildRuntimes';
 

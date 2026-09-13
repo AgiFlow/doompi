@@ -1,4 +1,5 @@
 import { type Static, Type } from 'typebox';
+
 import type { DoomExtensionContext } from './config';
 
 /**

@@ -1,10 +1,11 @@
-import type { Context } from '@deepseek-ai/cordis';
-import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
-import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
-import { DOOM_MCP_STATUS_SERVICE, readDoomMcpStatus } from '@agimon-ai/doompi-core/mcp-status';
-import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-core/help';
-import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import { removeContextDetail, writeContextDetail } from '@agimon-ai/doompi-core/context-detail-store';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_HELP_SERVICE, requireDoomHelpService } from '@agimon-ai/doompi-core/help';
+import { DOOM_MCP_STATUS_SERVICE, readDoomMcpStatus } from '@agimon-ai/doompi-core/mcp-status';
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
+import type { Context } from '@deepseek-ai/cordis';
+
 import { createContextPublisher, type ContextPublisher } from '../builders/cli/contextCatalog';
 const HELP_CONTRIBUTION_SOURCE = '@agimon-ai/doompi';
 export default definePiExtension('@agimon-ai/doompi/context-catalog', ({ pi }) => {

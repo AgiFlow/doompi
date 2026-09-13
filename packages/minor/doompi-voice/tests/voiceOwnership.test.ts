@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createTestVoiceMediaApi as createVoiceMediaApi } from './support';
+
 import { voiceOwnershipState } from '../src/models/voiceMode';
 import {
   SessionVoiceOwnership,
@@ -7,6 +7,7 @@ import {
   voiceOwnershipLabel,
 } from '../src/services/sessionVoiceOwnership';
 import { VoiceOwnershipCoordinator } from '../src/services/voiceOwnershipCoordinator';
+import type { VoiceState } from '../src/types';
 import {
   VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS,
   VOICE_OWNERSHIP_PROTOCOL_VERSION,
@@ -23,7 +24,7 @@ import {
   type VoiceOwnershipRegistration,
   type VoiceOwnershipSessionSnapshot,
 } from '../src/types/voiceOwnership';
-import type { VoiceState } from '../src/types';
+import { createTestVoiceMediaApi as createVoiceMediaApi } from './support';
 
 function registration(leaseId: string, label: string, active: boolean): VoiceOwnershipRegistration {
   return {

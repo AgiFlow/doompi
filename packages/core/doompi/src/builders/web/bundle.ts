@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PLUGIN_ROOTS_FILE } from './webDevRoots';
+
 import { bundleAssetPolicyPlugin } from './bundleAssetPolicy';
+import { PLUGIN_ROOTS_FILE } from './webDevRoots';
 import { writeSyncWebPluginModules } from './webPluginGenerate';
 import { scanWebPlugins } from './webPluginScan';
 import {

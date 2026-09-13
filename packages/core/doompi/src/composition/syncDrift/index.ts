@@ -1,9 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { parseDoomServerBundle } from '@agimon-ai/doompi-core/server-facet';
-import { inputsAreFresh, parseInputFingerprint } from '../../compiler/inputs';
+import { readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
+
 import { readBootstrapStatus } from '../../builders/cli/bootstrapLocator';
+import { inputsAreFresh, parseInputFingerprint } from '../../compiler/inputs';
 import {
   computeInputsHash,
   computeWebSourcesHash,
@@ -11,7 +14,6 @@ import {
   readSyncState,
   type SyncState,
 } from '../syncState';
-import { readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
 
 export type SyncDriftReason =
   | 'never-synced'

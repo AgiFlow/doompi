@@ -1,5 +1,5 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
-import { REALTIME_ROUTES, type RealtimeBrowserState } from '../../types/realtime';
+
 import {
   VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
@@ -21,6 +21,7 @@ import {
   type VoiceMediaTransport,
   voiceMediaClientUrl,
 } from '../../types/clientMedia';
+import { REALTIME_ROUTES, type RealtimeBrowserState } from '../../types/realtime';
 import { parseVoiceMediaWakePayload, waitForVoiceMediaWake } from './voiceMediaWakeStore';
 
 const JSON_CONTENT_TYPE = 'application/json';

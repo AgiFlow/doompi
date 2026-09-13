@@ -1,5 +1,6 @@
-import { minorModeKey, validateMinorModeActionArguments, validateMinorModeDefinition } from '../validation';
 import type { DoomExtensionContext } from '@agimon-ai/doompi-core/config';
+import { DoomProtocolError } from '@agimon-ai/doompi-core/protocol';
+
 import {
   MINOR_MODE_ACTION_TIMEOUT_MS,
   MINOR_MODE_CATALOG_SOURCE,
@@ -15,7 +16,7 @@ import {
   type MinorModeRegistrationRef,
   type MinorModeSessionKind,
 } from '../../schemas/mode';
-import { DoomProtocolError } from '@agimon-ai/doompi-core/protocol';
+import { minorModeKey, validateMinorModeActionArguments, validateMinorModeDefinition } from '../validation';
 
 export interface MinorModeCatalogHostOptions<ExtensionContext extends DoomExtensionContext = DoomExtensionContext> {
   sessionKind: MinorModeSessionKind;

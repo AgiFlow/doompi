@@ -1,8 +1,9 @@
 import type { ToolPromptRenderProps } from '@agimon-ai/doompi-core/web';
 import { useEffect } from 'react';
+
 import { ToolRendererBoundary } from '../../components/ToolRendererBoundary';
-import type { ToolPromptClaim } from '../../lib/toolPrompt';
 import { toolMessageProps } from '../../lib/toolMessageProps';
+import type { ToolPromptClaim } from '../../lib/toolPrompt';
 import { answerDialogValue, cancelDialog, useActiveSession } from '../../stores/sessionStore';
 import { markToolPromptFailed } from '../../stores/toolPromptStore';
 import { usePluginSlotProps } from '../../stores/usePluginSlotProps';

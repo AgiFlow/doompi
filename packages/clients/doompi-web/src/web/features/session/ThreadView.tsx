@@ -1,6 +1,7 @@
 import type { ThreadViewOptions } from '@agimon-ai/doompi-core/web';
 import { EmptyState } from '@agimon-ai/doompi-web-components';
 import { useEffect } from 'react';
+
 import { sessionStoreFor } from '../../stores/sessionStore';
 import { subscribeThread, threadStoreKey, unsubscribeThread } from '../../stores/threadStore';
 import { Transcript } from './Timeline';

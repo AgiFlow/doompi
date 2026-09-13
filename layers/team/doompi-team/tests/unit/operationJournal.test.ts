@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import { completeOperation, startOperation } from '../../src/services/operationJournal';

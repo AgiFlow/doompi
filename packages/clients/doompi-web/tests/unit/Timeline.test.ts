@@ -3,9 +3,10 @@ import { Store } from '@tanstack/store';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { Transcript } from '../../src/web/features/session/Timeline';
-import { initialSessionState } from '../../src/web/lib/sessionModel';
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry';
+import { initialSessionState } from '../../src/web/lib/sessionModel';
 import { sessionStoreFor } from '../../src/web/stores/sessionStore';
 
 vi.mock('../../src/web/features/session/MessageMarkdown', () => ({

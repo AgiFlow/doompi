@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import type { TimelineEntry, ToolEntry } from '../../src/web/lib/sessionModel';
 import { groupSummary, groupTone, timelineUnits } from '../../src/web/lib/timelineGroups';
 

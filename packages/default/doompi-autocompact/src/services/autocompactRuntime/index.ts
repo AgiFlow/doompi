@@ -4,7 +4,6 @@ import {
   type AutocompactOverrideConfig,
   type PlanningAgentConfig,
 } from '@agimon-ai/doompi-config';
-import type { AutocompactRuntime } from './type';
 import {
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
   requireDoomContextContributions,
@@ -23,6 +22,32 @@ import {
   generateSummary,
   sessionEntryToContextMessages,
 } from '@earendil-works/pi-coding-agent';
+
+import {
+  CHECKPOINT_MESSAGE_TYPE,
+  CONTEXT_MESSAGE_TYPE,
+  MAX_INVALID_CHECKPOINT_ATTEMPTS,
+  RESUME_MESSAGE_TYPE,
+  RUNTIME_STATE_MESSAGE_TYPE,
+  STATE_CUSTOM_TYPE,
+  STATE_VERSION,
+} from '../../constants/autocompact';
+import {
+  ROOT_WORKING_LEAF,
+  PLAN_DOCUMENT_ENTRY,
+  FOOTER_SOURCE,
+  FOOTER_ORDER,
+  STATUS_KEY,
+  STATE_PHASE,
+} from '../../constants/runtime';
+import type {
+  AutocompactContextDetails,
+  AutocompactPass,
+  AutocompactRatioOverrides,
+  AutocompactState,
+} from '../../types/autocompact';
+import type { AutocompactEventAttributes, AutocompactTelemetry } from '../autocompactTelemetry';
+import { AUTOCOMPACT_EVENT, createAutocompactTelemetry } from '../autocompactTelemetry';
 import {
   baselineUsageIsSettled,
   checkpointRequestDetails,
@@ -43,33 +68,7 @@ import {
 } from '../compactionPolicy';
 import { resolveModelTokenOverrides } from '../modelOverrides';
 import { parseModelReference, type SummarizationModel } from '../summarizationModel';
-import {
-  CHECKPOINT_MESSAGE_TYPE,
-  CONTEXT_MESSAGE_TYPE,
-  MAX_INVALID_CHECKPOINT_ATTEMPTS,
-  RESUME_MESSAGE_TYPE,
-  RUNTIME_STATE_MESSAGE_TYPE,
-  STATE_CUSTOM_TYPE,
-  STATE_VERSION,
-} from '../../constants/autocompact';
-import type { AutocompactEventAttributes, AutocompactTelemetry } from '../autocompactTelemetry';
-import { AUTOCOMPACT_EVENT, createAutocompactTelemetry } from '../autocompactTelemetry';
-
-import type {
-  AutocompactContextDetails,
-  AutocompactPass,
-  AutocompactRatioOverrides,
-  AutocompactState,
-} from '../../types/autocompact';
-
-import {
-  ROOT_WORKING_LEAF,
-  PLAN_DOCUMENT_ENTRY,
-  FOOTER_SOURCE,
-  FOOTER_ORDER,
-  STATUS_KEY,
-  STATE_PHASE,
-} from '../../constants/runtime';
+import type { AutocompactRuntime } from './type';
 type CheckpointCapture = 'none' | 'pass1' | 'committed' | 'deferred' | 'invalid';
 type CheckpointMessages = ReturnType<typeof buildSessionContext>['messages'];
 

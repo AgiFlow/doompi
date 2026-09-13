@@ -1,13 +1,14 @@
 import * as fs from 'node:fs';
+
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 
-import type { AgentConfig, AgentDiscoveryContract } from '../../src/types/agent';
-import type { ExtensionConfig } from '../../src/services/config';
-import type { SpawnPlannerContract, SpawnPlanRequest, SpawnPlanResult } from '../../src/services/spawnPlan';
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
-import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
 import { createSlashCommands, type SlashCommandDeps, startSingleAgentRun } from '../../src/controllers/slashCommands';
+import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
+import type { ExtensionConfig } from '../../src/services/config';
+import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
+import type { SpawnPlannerContract, SpawnPlanRequest, SpawnPlanResult } from '../../src/services/spawnPlan';
+import type { AgentConfig, AgentDiscoveryContract } from '../../src/types/agent';
 
 interface FakeHost {
   pi: ExtensionAPI;

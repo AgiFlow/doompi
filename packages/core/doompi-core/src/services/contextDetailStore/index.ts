@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { ContextDetailFile, ContextItemDetail, ContextItemKind } from '../../types/contextApi';
+
 import { CONTEXT_DETAIL_VERSION } from '../../constants/contextApi';
+import type { ContextDetailFile, ContextItemDetail, ContextItemKind } from '../../types/contextApi';
 
 /**
  * Where the agent leaves the composition's detail for the session API to find.

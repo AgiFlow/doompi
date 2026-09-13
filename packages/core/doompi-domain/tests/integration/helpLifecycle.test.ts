@@ -2,6 +2,7 @@ import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-
 import { DOOM_HELP_SERVICE, type DoomHelpContribution, type DoomHelpService } from '@agimon-ai/doompi-core/help';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { domainsExtension } from '../../src/extensions/pi';
 import type { DomainTelemetry } from '../../src/types/telemetry';
 

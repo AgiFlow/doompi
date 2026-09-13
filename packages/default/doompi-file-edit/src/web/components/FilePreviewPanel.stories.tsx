@@ -7,6 +7,7 @@
  * story answers the preview route and each variant is a different file.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import type { FileEditsPreviewView } from '../../types/fileEditsApi';
 import { FilePreviewPanel } from './FilePreviewPanel';
 

@@ -1,5 +1,6 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { contentUrl, currentUrl } from '../src/types/planApi';
 import { fetchPlan, savePlan } from '../src/web/api/planApi';
 

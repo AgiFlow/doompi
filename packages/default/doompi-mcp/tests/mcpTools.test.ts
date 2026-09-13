@@ -1,11 +1,12 @@
-import { renderMcpCall, renderMcpResult } from '../src/tui/mcpToolRender';
 import type { McpClientManagerService, McpToolInfo } from '@agimon-ai/mcp-proxy';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMcpTool } from '../src/tools/mcpTools';
-import { mcpToolRestriction } from '../src/services/toolVisibility';
+
 import { McpCatalog } from '../src/services/mcpCatalog';
+import { mcpToolRestriction } from '../src/services/toolVisibility';
+import { createMcpTool } from '../src/tools/mcpTools';
+import { renderMcpCall, renderMcpResult } from '../src/tui/mcpToolRender';
 
 function mcpTool(name: string, inputSchema: Record<string, unknown> = { type: 'object' }): McpToolInfo {
   return { name, inputSchema };

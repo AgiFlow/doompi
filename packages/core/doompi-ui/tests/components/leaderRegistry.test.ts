@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { DoomLeaderBinding } from '../../src/exports/leader';
 import { DoomLeaderRegistry } from '../../src/exports/leaderRegistry';
 import { TASK_LEADER_BINDING, TASK_LEADER_SOURCE } from '../helpers/leader';

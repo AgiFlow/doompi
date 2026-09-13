@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
+
 import type { DoomHubChannelSource, DoomHubSessionScope, DoomHubChannel } from '@agimon-ai/doompi-core/hub-channel';
+
+import { computerUseSessionApiError, MissingComputerUseApiError } from '../services/webComputerUseAvailability';
 import {
   API_BASE_PATH,
   computerUseChannelType,
@@ -10,7 +13,6 @@ import {
   type ComputerUseChannelPayload,
   type ComputerUseSessionView,
 } from '../types/computerUseApi';
-import { computerUseSessionApiError, MissingComputerUseApiError } from '../services/webComputerUseAvailability';
 export { computerUseChannelType };
 
 function record(value: unknown): Record<string, unknown> | undefined {

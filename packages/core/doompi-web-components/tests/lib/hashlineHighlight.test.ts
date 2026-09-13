@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { hashlineGroups, hashlineGroupsKey } from '../../src/lib/hashlineHighlight';
 import type { PresentedLine } from '../../src/lib/hashlineView';
 

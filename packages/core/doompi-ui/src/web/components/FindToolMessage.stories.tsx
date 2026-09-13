@@ -6,6 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import { FindToolMessage } from './FindToolMessage';
 
 const MATCHES = [

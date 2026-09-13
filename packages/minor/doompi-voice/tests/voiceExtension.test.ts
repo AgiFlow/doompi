@@ -2,11 +2,12 @@ import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-core/ask-user';
 import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
 import { createNarrationRequest, readDoomNarrationService } from '@agimon-ai/doompi-core/narration';
 import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
-import { createDoomVoiceToolsService } from '../src/services/voiceTools';
-import { VOICE_MODE_TOOL_NAMES } from '../src/constants/voiceTools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
+import { VOICE_MODE_TOOL_NAMES } from '../src/constants/voiceTools';
+import type { NarrationToolRuntime } from '../src/controllers/narrationTool';
 import {
   type AutoCapturePiEventController,
   createVoiceNarrationService,
@@ -17,8 +18,8 @@ import {
   type VoiceTurnFallbackRuntime,
   voiceToolRestriction,
 } from '../src/controllers/voice';
-import type { NarrationToolRuntime } from '../src/controllers/narrationTool';
 import { deliverAutoCaptureInput } from '../src/controllers/voice';
+import { createDoomVoiceToolsService } from '../src/services/voiceTools';
 describe('autonomous prompt delivery', () => {
   it('queues composed prompts as follow-ups without changing ordinary idle or steer delivery', () => {
     const sendUserMessage = vi.fn();

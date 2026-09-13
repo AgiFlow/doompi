@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import type { DoomHarnessContext, HarnessState } from '../../types/config';
 import { requireHarnessPaths, updateHarnessState } from '../harnessStore';
 import { filterHookDisabledLayers, layerHookGroups, type MajorModesConfig, resolveLayers } from '../majorModes';

@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { findVoiceWorkerUrl, VoiceWorkerClient } from '../src/services/voiceWorkerClient';
 import {
   VOICE_WORKER_INTENTIONAL_BARGE_IN_CAPABILITY,

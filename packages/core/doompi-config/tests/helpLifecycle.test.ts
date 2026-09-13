@@ -1,8 +1,9 @@
-import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
+import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it } from 'vitest';
-import { registerConfigExtension } from '../src/extensions/pi';
+
 import { CONFIG_HELP_SKILL, PACKAGE_SOURCE } from '../src/constants/config';
+import { registerConfigExtension } from '../src/extensions/pi';
 
 describe('Config Help lifecycle', () => {
   it('declares Help, follows provider replacement, and removes contributions on shutdown', async () => {

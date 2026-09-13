@@ -1,7 +1,8 @@
-import { Button, StatusBadge, Textarea } from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { Button, StatusBadge, Textarea } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { type FormEvent, useEffect, useState } from 'react';
+
 import type { SubagentRun } from '../../types/webSubagents';
 import { isTerminalRun, requestRunSteer, subagents } from '../stores/subagentsStore';
 import { elapsedRun, RUN_BADGE, RunControl } from './RunControl';

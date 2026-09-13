@@ -1,6 +1,7 @@
-import { Button, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { Button, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
+
 import { type VoiceTone, voiceActivityView } from '../lib/voiceActivityView';
 import { voiceMediaBrowserState, voiceRealtimeBrowserControls } from '../stores/voiceMediaWakeStore';
 

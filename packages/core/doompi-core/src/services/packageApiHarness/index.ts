@@ -1,3 +1,4 @@
+import type { DoomDirectEventBus } from '../../schemas/hubChannel';
 import {
   type DoomApi,
   type DoomApiContext,
@@ -5,7 +6,6 @@ import {
   DOOM_API_ROUTE_PREFIX,
   type DoomApiScope,
 } from '../../schemas/packageApi';
-import type { DoomDirectEventBus } from '../../schemas/hubChannel';
 
 /**
  * A package's HTTP surface, mounted the way a host mounts it.

@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
 import { notificationBody } from '../services/notificationText';
 import type { DesktopNotification } from '../types/notifications';
 

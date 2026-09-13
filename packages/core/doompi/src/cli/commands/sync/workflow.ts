@@ -1,16 +1,18 @@
 import os from 'node:os';
 import path from 'node:path';
+
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { ensureLayerPackages, type LayerPackageResult } from '../../../composition/layerPackageInstaller';
-import { resolveDoomConfigurationRoot } from '../../../composition/repository';
 import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
 import { acquireSyncLocationLock, resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
+
+import { ensureLayerPackages, type LayerPackageResult } from '../../../composition/layerPackageInstaller';
+import { resolveDoomConfigurationRoot } from '../../../composition/repository';
 import { readSyncDrift } from '../../../composition/syncDrift';
-import { prepareSync } from './prepare';
-import { synchronize, type SyncSettingsMode } from './index';
-import { SyncProgress, type SyncProgressOutput } from './presenter';
-import { syncHelp } from './help';
 import { wantsHelp } from '../../router';
+import { syncHelp } from './help';
+import { synchronize, type SyncSettingsMode } from './index';
+import { prepareSync } from './prepare';
+import { SyncProgress, type SyncProgressOutput } from './presenter';
 
 const CHECK_OPTION = '--check';
 /** Rebuilds and republishes even when nothing drifted. */

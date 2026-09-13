@@ -1,4 +1,5 @@
 import path from 'node:path';
+
 import { createDisabledDoomMcpProjection, type DoomMcpProjection } from '@agimon-ai/doompi-core/mcp-projection';
 
 /** Minimal valid projection for persisted-state tests that do not exercise MCP discovery. */

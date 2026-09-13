@@ -1,7 +1,8 @@
-import { AnsiLine, Badge, Button, StatusBadge, StreamCursor } from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { AnsiLine, Badge, Button, StatusBadge, StreamCursor } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
+
 import type { WorkflowRunView } from '../../types/webWorkflows';
 import type { WorkflowTerminalCapabilitiesView } from '../../types/webWorkflowTerminal';
 import { followScreen, releaseControl, sendKeys, takeControl } from '../api/terminalApi';

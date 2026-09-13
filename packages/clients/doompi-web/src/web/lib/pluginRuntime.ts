@@ -1,16 +1,17 @@
-import * as TanstackReactStore from '@tanstack/react-store';
-import * as TanstackStore from '@tanstack/store';
-import * as WebComponents from '@agimon-ai/doompi-web-components';
 import * as WebContracts from '@agimon-ai/doompi-core/web';
-import * as WebSecurityBrowser from '@agimon-ai/doompi-web-security/browser';
 import type { WebPluginDefinition, WebPluginRuntime, WebPluginMount } from '@agimon-ai/doompi-core/web';
+import * as WebComponents from '@agimon-ai/doompi-web-components';
+import * as WebSecurityBrowser from '@agimon-ai/doompi-web-security/browser';
 import * as CodeMirrorState from '@codemirror/state';
 import * as CodeMirrorView from '@codemirror/view';
+import * as TanstackReactStore from '@tanstack/react-store';
+import * as TanstackStore from '@tanstack/store';
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import * as ReactDomClient from 'react-dom/client';
 import * as ReactJsxDevRuntime from 'react/jsx-dev-runtime';
 import * as ReactJsxRuntime from 'react/jsx-runtime';
+
 import { activateVerifiedPluginComposition } from '../../pwa/workerClient';
 import type { SessionWebComposition } from '../../types/hub';
 import {
@@ -25,10 +26,9 @@ import {
   startPluginDefinitions,
   webPluginDiagnostics,
 } from './pluginRegistry';
-
-import { verifiedDevComposition } from './verifiedDevComposition';
 import { pluginsAtScope } from './pluginScopes';
 import { sealedHttpSession } from './sealedSession';
+import { verifiedDevComposition } from './verifiedDevComposition';
 
 export const WEB_PLUGIN_RUNTIME_GLOBAL = 'DoomPiWebPluginRuntime';
 export const WEB_PLUGIN_COMPOSITION_GLOBAL = 'DoomPiWebPluginComposition';

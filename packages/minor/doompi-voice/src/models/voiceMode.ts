@@ -1,6 +1,7 @@
 import { type MinorModeState } from '@agimon-ai/doompi-minor-mode';
-import { type AutoCaptureActivationState, type VoiceState } from '../types';
+
 import { AUTO_MODE_COLOR } from '../constants/voiceRuntime';
+import { type AutoCaptureActivationState, type VoiceState } from '../types';
 
 export function canRunVoice(context: { hasUI?: boolean } | undefined): boolean {
   return context?.hasUI === true;

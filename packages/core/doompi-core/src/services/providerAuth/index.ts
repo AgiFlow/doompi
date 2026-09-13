@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { createLoginFlow, type LoginFlow } from '../loginFlow';
+
 import type {
   AuthMethodType,
   AuthRuntime,
@@ -8,6 +8,7 @@ import type {
   ProviderAuthMethod,
   ProviderAuthSummary,
 } from '../../types/server/auth';
+import { createLoginFlow, type LoginFlow } from '../loginFlow';
 interface SettingsModel {
   value: string;
   label: string;

@@ -1,23 +1,25 @@
+import path from 'node:path';
+
 import type { DoomCordisRuntimeService } from '@agimon-ai/doompi-core/cordis-host';
-import type { Context } from '@deepseek-ai/cordis';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_MCP_PROJECTION_SERVICE, readDoomMcpProjectionService } from '@agimon-ai/doompi-core/mcp-projection';
 import { DOOM_MCP_STATUS_SERVICE, type DoomMcpStatusService } from '@agimon-ai/doompi-core/mcp-status';
 import {
   DOOM_MCP_TOOL_RESOLVER_SERVICE,
   type DoomMcpToolResolverService,
 } from '@agimon-ai/doompi-core/mcp-tool-resolver';
-import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
-import { DOOM_MCP_PROJECTION_SERVICE, readDoomMcpProjectionService } from '@agimon-ai/doompi-core/mcp-projection';
 import { DOOM_TOOL_SURFACE_SERVICE, requireDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
-import path from 'node:path';
-import type { McpSessionConfig } from '../types/mcpConfig';
-import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../types/webMcp';
-import { mcpSessionConfigFromProjection } from '../services/projection';
-import { readSessionConfig } from '../services/sessionConfig';
-import { registerLeaderContribution } from './leader';
+
 import { MCP_STATUS_KEY } from '../constants/piMcp';
 import { McpSession } from '../services/mcpSession';
+import { mcpSessionConfigFromProjection } from '../services/projection';
+import { readSessionConfig } from '../services/sessionConfig';
+import type { McpSessionConfig } from '../types/mcpConfig';
+import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../types/webMcp';
+import { registerLeaderContribution } from './leader';
 
 const INFO = 'info';
 const WARNING = 'warning';

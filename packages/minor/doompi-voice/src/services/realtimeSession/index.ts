@@ -1,4 +1,5 @@
 import { assign, createActor, setup } from 'xstate';
+
 import type { IClock, TimerHandle } from '../../types';
 import {
   REALTIME_LIMITS,

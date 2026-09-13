@@ -1,6 +1,7 @@
+import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
-import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
+
 import { definePiTool } from '../../src/schemas/piTool';
 
 describe('definePiTool', () => {

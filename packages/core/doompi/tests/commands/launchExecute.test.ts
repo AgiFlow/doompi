@@ -3,10 +3,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
+
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LaunchCommand } from '../../src/cli/commands/launch';
 import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/log-sink-telemetry';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { LaunchCommand } from '../../src/cli/commands/launch';
 import type { HarnessContext } from '../../src/exports/harnessContext';
 
 const spawnMock = vi.hoisted(() => vi.fn());

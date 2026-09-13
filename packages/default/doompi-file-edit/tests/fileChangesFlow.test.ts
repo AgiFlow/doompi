@@ -1,15 +1,17 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EditTracker } from '../src/services/editTracker';
+
 import { createFileEditsApi } from '../src/controllers/fileEditsApi';
+import { readSessionFiles } from '../src/controllers/webFilesChannel';
+import { createDoomIgnoreMatcher } from '../src/services/doomIgnore';
+import { EditTracker } from '../src/services/editTracker';
 import { FileEditPaths } from '../src/services/fileEditPaths';
 import { NodeSnapshotStoreAdapter } from '../src/services/snapshotStore';
-import { NodeTreeManifestAdapter } from '../src/services/treeManifest';
-import { readSessionFiles } from '../src/controllers/webFilesChannel';
 import { TimelineStore } from '../src/services/timelineStore';
-import { createDoomIgnoreMatcher } from '../src/services/doomIgnore';
+import { NodeTreeManifestAdapter } from '../src/services/treeManifest';
 import type { FileEditsDetailView } from '../src/types/fileEditsApi';
 import { detailUrl } from '../src/types/fileEditsApi';
 import type { GitStatusPort } from '../src/types/gitStatus';

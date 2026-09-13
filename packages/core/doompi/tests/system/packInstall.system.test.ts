@@ -3,12 +3,14 @@ import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import type { DoomHelpService } from '@agimon-ai/doompi-core/help';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
+
 import {
   FORBIDDEN_PACK_CONTENT,
   PACKAGE_MATRIX,

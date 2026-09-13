@@ -1,6 +1,7 @@
-import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '../src/constants/voiceTools';
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
+
+import { VOICE_DESCRIBE_TOOL_NAME, VOICE_USE_TOOL_NAME } from '../src/constants/voiceTools';
 import {
   renderNarrationToolCall,
   renderNarrationToolResult,

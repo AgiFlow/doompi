@@ -1,13 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isValidElement, type ReactNode, type ReactElement } from 'react';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { isValidElement, type ReactNode, type ReactElement } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { focusAuthorViewport } from '../../src/web/api/authorBrowserBridge';
+import { loadAuthorDocument, saveAuthorDocument } from '../../src/web/api/authorFiles';
 import { AuthorDocumentPanel, authorFileLinks, authorFileTab } from '../../src/web/components/AuthorDocumentPanel';
-import { AuthorTextView } from '../../src/web/components/AuthorTextView';
 import { AuthorMediaView } from '../../src/web/components/AuthorMediaView';
 import { AuthorStructuredView } from '../../src/web/components/AuthorStructuredView';
+import { AuthorTextView } from '../../src/web/components/AuthorTextView';
 import * as workspace from '../../src/web/stores/authorWorkspaceStore';
-import { loadAuthorDocument, saveAuthorDocument } from '../../src/web/api/authorFiles';
-import { focusAuthorViewport } from '../../src/web/api/authorBrowserBridge';
 const hooks = vi.hoisted(() => ({
   values: [] as unknown[],
   setters: [] as ReturnType<typeof vi.fn>[],

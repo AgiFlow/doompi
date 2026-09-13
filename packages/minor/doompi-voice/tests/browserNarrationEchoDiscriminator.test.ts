@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { BrowserNarrationEchoDiscriminator } from '../src/web/lib/browserNarrationEchoDiscriminator';
 
 const SAMPLE_RATE = 16_000;

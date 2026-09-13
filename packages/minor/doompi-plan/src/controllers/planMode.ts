@@ -3,16 +3,26 @@ import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-author/author-facade';
 import { globalDoomConfigPath } from '@agimon-ai/doompi-config';
 import { setDoomConfigValue, unsetDoomConfigValue } from '@agimon-ai/doompi-config/configWriter';
-import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-author/author-facade';
 import { CONFIG_ACTION, type DoomConfigContributionHandle } from '@agimon-ai/doompi-core/config';
+import type { LeaderBinding, DoomLeaderContributionHandle } from '@agimon-ai/doompi-core/leader';
 import {
-  DOOM_FABLE_PLAN_SERVICE,
-  FABLE_PLAN_REQUESTER as CONTRACT_FABLE_PLAN_REQUESTER,
-  type DoomFablePlanService,
-  readDoomFablePlanService,
-} from '@agimon-ai/doompi-team/fable-plan';
+  createNarrationRequest,
+  DOOM_NARRATION_SERVICE,
+  type DoomNarrationService,
+  requireDoomNarrationService,
+} from '@agimon-ai/doompi-core/narration';
+import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import {
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolRestriction,
+  type DoomToolRestrictionHandle,
+  readDoomToolSurface,
+} from '@agimon-ai/doompi-core/tool-surface';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   MINOR_MODE_TOOL_NAME,
@@ -23,13 +33,11 @@ import {
   requireMinorModeCatalog,
 } from '@agimon-ai/doompi-minor-mode';
 import {
-  createNarrationRequest,
-  DOOM_NARRATION_SERVICE,
-  type DoomNarrationService,
-  requireDoomNarrationService,
-} from '@agimon-ai/doompi-core/narration';
-import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
-import type { LeaderBinding, DoomLeaderContributionHandle } from '@agimon-ai/doompi-core/leader';
+  DOOM_FABLE_PLAN_SERVICE,
+  FABLE_PLAN_REQUESTER as CONTRACT_FABLE_PLAN_REQUESTER,
+  type DoomFablePlanService,
+  readDoomFablePlanService,
+} from '@agimon-ai/doompi-team/fable-plan';
 import {
   DOOM_SUBAGENT_POLICY_SERVICE,
   type DoomSubagentPolicyService,
@@ -37,24 +45,16 @@ import {
   type SubagentPolicyHandle,
 } from '@agimon-ai/doompi-team/subagent-policy';
 import { isSubagentAction, subagentActionAcceptsField } from '@agimon-ai/doompi-team/subagent-tool';
+import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
 import {
   DOOM_VOICE_TOOLS_SERVICE,
   requireDoomVoiceToolsService,
   VOICE_MODE_TOOL_NAMES,
   type VoiceToolDefinition,
 } from '@agimon-ai/doompi-voice/voice-tools';
-import {
-  DOOM_TOOL_SURFACE_SERVICE,
-  type DoomToolRestriction,
-  type DoomToolRestrictionHandle,
-  readDoomToolSurface,
-} from '@agimon-ai/doompi-core/tool-surface';
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
-import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import type { ExtensionAPI, ExtensionContext, ToolCallEvent } from '@earendil-works/pi-coding-agent';
-import { PlanPointerService } from '../services/planPointer';
-import { createPlanTelemetry, PLAN_EVENT, type PlanTelemetry } from '../services/logSinkTelemetry';
+
 import {
   getHarnessState,
   loadDoomConfig,
@@ -66,6 +66,16 @@ import {
 } from '../schemas/plan/config';
 import { type PlanModelChoice, planConfigSections, planSettingByFieldId } from '../schemas/plan/planConfig';
 import {
+  createFablePlanFlow,
+  FABLE_PLAN_PROFILE,
+  type FablePlanBroker,
+  type FablePlanResult,
+  type FableStage,
+} from '../services/fableFlow';
+import { createPlanTelemetry, PLAN_EVENT, type PlanTelemetry } from '../services/logSinkTelemetry';
+import { PlanPointerService } from '../services/planPointer';
+import { buildFlavorPlanningPrompt, type DebugEvidencePacket, type PlanningFlavor } from '../services/prompts';
+import {
   CONTINUE_PLANNING_CHOICE,
   EXIT_PLAN_MODE_CHOICE,
   formatPlanStatus,
@@ -74,14 +84,6 @@ import {
   PLAN_STATUS_KEY,
 } from '../types/planApi';
 import type { PlanPointerPort } from '../types/planPointer';
-import {
-  createFablePlanFlow,
-  FABLE_PLAN_PROFILE,
-  type FablePlanBroker,
-  type FablePlanResult,
-  type FableStage,
-} from '../services/fableFlow';
-import { buildFlavorPlanningPrompt, type DebugEvidencePacket, type PlanningFlavor } from '../services/prompts';
 
 const PLAN_MODE_ENTRY = 'agent-harness-plan-mode';
 const PLAN_MODE_CONTEXT = 'agent-harness-plan-mode-context';

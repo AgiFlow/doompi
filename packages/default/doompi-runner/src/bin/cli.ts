@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
-import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { pathToFileURL } from 'node:url';
+
+import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
+
 import { runCli } from '../controllers/cliApp';
 import { createRunnerDependencies } from '../services/runnerDependencies';
 

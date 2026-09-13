@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createDoomKernel } from '../../src/exports/kernel';
 
 /** Collects every list a slot receives, which is the whole observable contract. */

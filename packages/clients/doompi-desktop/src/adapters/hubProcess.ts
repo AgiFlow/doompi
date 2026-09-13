@@ -2,8 +2,9 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
-import { headlessArguments, hubArguments, hubEnvironment } from '../services/hubLaunch';
+
 import type { ComputerUseHost } from '../services/computerUseHost';
+import { headlessArguments, hubArguments, hubEnvironment } from '../services/hubLaunch';
 import type { HubLaunchPlan, RunningHub } from '../types/hub';
 import { attachComputerUseHostBridge } from './computerUseHostBridge';
 

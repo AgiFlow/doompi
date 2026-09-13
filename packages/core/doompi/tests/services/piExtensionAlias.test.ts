@@ -2,8 +2,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
+import {
+  publishSyncRegistration,
+  SYNC_REGISTRATION_VERSION,
+  syncStateSha256,
+} from '@agimon-ai/doompi-core/sync-registration';
 import { DefaultPackageManager, SettingsManager } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   doomPiPackageRoot,
   piExtensionAliasIsCurrent,
@@ -15,12 +23,6 @@ import {
   piExtensionDispatcherIsUpgradeable,
   piExtensionDispatcherVersion,
 } from '../../src/builders/cli/piExtensionDispatcher';
-import {
-  publishSyncRegistration,
-  SYNC_REGISTRATION_VERSION,
-  syncStateSha256,
-} from '@agimon-ai/doompi-core/sync-registration';
-import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 
 const temporaryRoots: string[] = [];
 

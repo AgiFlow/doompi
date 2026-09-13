@@ -1,5 +1,6 @@
 import type { ExtensionUIContext, Theme } from '@earendil-works/pi-coding-agent';
 import { type TUI, truncateToWidth } from '@earendil-works/pi-tui';
+
 import { WIDGET_KEY } from '../constants/format';
 import { ELLIPSIS, MAX_LINES } from '../constants/runnerWidget';
 import type { RunnerRecord } from '../types/runnerRegistry';

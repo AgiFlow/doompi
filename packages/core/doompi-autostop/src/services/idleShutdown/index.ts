@@ -1,4 +1,5 @@
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import { AUTO_STOP_ACTION } from '../../constants/idlePolicy';
 import { decideOnRecheck, decideOnSettled } from '../idlePolicy';
 import type { AutoStopDelays, SessionActivity } from '../idlePolicy/type';

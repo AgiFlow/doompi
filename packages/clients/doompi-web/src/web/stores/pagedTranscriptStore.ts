@@ -1,10 +1,12 @@
-import { type Context } from '@earendil-works/chord';
 import type {
   ProtocolEvent,
   SessionService,
   SessionServiceState,
   TranscriptPage,
 } from '@agimon-ai/doompi-core/session-protocol';
+import { type Context } from '@earendil-works/chord';
+
+import { recordBrowserPerformance } from '../lib/browserTelemetry';
 import {
   bindHistoryReader,
   resetSessionStore,
@@ -13,7 +15,6 @@ import {
   releaseProtocolTranscript,
   setHasNewerHistory,
 } from './sessionStore';
-import { recordBrowserPerformance } from '../lib/browserTelemetry';
 
 const MAX_PAGES = 5;
 const PAGE_SIZE = 100;

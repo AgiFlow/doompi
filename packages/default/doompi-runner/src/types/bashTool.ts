@@ -1,4 +1,5 @@
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
+
 import type { BashParamsSchema } from '../schemas/bashTool';
 import type { LogSummarizer, ToolResult } from './bashResult';
 import type { IBashRunService } from './bashRunService';

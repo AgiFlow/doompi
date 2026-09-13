@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { qrMatrix } from '../../src/web/lib/qrMatrix';
 
 describe('qrMatrix', () => {

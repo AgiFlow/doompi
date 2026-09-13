@@ -1,8 +1,9 @@
 import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
+
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, DOOM_MINOR_MODE_ENTRY_TYPE } from '../schemas/mode';
 import { createMinorModeCatalogHost } from '../services/catalog';
-import { projectMinorModes, restoreMinorModeSelection } from '../services/projection';
 import { headlessMinorModeCommand } from '../services/headlessCommand';
+import { projectMinorModes, restoreMinorModeSelection } from '../services/projection';
 
 export default defineServerPlugin({
   name: '@agimon-ai/doompi-minor-mode',

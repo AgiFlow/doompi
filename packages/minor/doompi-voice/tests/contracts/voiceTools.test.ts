@@ -1,15 +1,7 @@
 import { Context } from '@deepseek-ai/cordis';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createDoomVoiceToolsService,
-  readDoomVoiceToolsService,
-  requireDoomVoiceToolsService,
-  VoiceToolError,
-  type DoomVoiceToolsService,
-  type VoiceToolDefinition,
-  type VoiceToolSessionHandle,
-} from '../../src/services/voiceTools';
+
 import {
   DOOM_VOICE_TOOLS_SERVICE,
   VOICE_FACADE_TOOL_NAMES,
@@ -20,6 +12,15 @@ import {
   VOICE_TOOL_MAX_JSON_DEPTH,
   VOICE_TOOL_MAX_SCHEMA_BYTES,
 } from '../../src/constants/voiceTools';
+import {
+  createDoomVoiceToolsService,
+  readDoomVoiceToolsService,
+  requireDoomVoiceToolsService,
+  VoiceToolError,
+  type DoomVoiceToolsService,
+  type VoiceToolDefinition,
+  type VoiceToolSessionHandle,
+} from '../../src/services/voiceTools';
 import './voiceReloadHandoff.cases';
 const emptySchema = Type.Object({}, { additionalProperties: false });
 

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import type { SpeechPresenceDetector, SpeechPresenceWindow } from '../src/types/clientCaptureActivity';
 import type {
   VoiceMediaCapabilities,

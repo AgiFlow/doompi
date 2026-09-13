@@ -1,7 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+
 import type { JsonObject } from '@agimon-ai/doompi-core/runtime-json';
+
 import type { CompatibilityContext } from '../context';
 import { runCaptured, runChecked, runInteractive } from './process';
 import {

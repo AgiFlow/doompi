@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createDoomToolSurface } from '../../../src/services/toolSurface';
 
 function harness(tools: string[] = ['read', 'write', 'bash', 'task']) {

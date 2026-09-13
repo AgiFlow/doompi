@@ -2,9 +2,12 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import type { ResolvedPaths } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import type { ExtensionLayerResolvers } from '../../src/builders/cli/extensionAssembler';
 import {
   effectivePackageManagerCommand,
   ensureLayerPackages,
@@ -13,7 +16,6 @@ import {
   packageManagerCommandWithStderr,
   SAFE_TRANSITIVE_OVERRIDES,
 } from '../../src/composition/layerPackageInstaller';
-import type { ExtensionLayerResolvers } from '../../src/builders/cli/extensionAssembler';
 
 const EMPTY_RESOLVED_PATHS: ResolvedPaths = {
   extensions: [],

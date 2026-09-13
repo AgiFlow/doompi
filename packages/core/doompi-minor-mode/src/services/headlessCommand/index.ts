@@ -1,6 +1,7 @@
 import type { DoomHeadlessCommand } from '@agimon-ai/doompi-core/headless';
-import { executeMinorModeCommand, MINOR_MODE_COMMAND, MINOR_MODE_COMMAND_DESCRIPTION } from '../command';
+
 import type { MinorModeCatalogService } from '../../schemas/mode';
+import { executeMinorModeCommand, MINOR_MODE_COMMAND, MINOR_MODE_COMMAND_DESCRIPTION } from '../command';
 export function headlessMinorModeCommand(catalog: MinorModeCatalogService): DoomHeadlessCommand {
   return {
     name: MINOR_MODE_COMMAND,

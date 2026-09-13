@@ -1,5 +1,6 @@
 import { useStore } from '@tanstack/react-store';
 import { Store } from '@tanstack/store';
+
 import type { SessionSummary } from '../../types/hub';
 import type { AttachPhase } from '../lib/sessionSummary';
 

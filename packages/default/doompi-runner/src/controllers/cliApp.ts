@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+
 import {
   COMPLETED_STATE,
   DEFAULT_LOG_LINES,

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import {
   type DelegationAccepted,
   type DelegationCancel,
@@ -18,6 +19,7 @@ import {
 } from '@agimon-ai/doompi-team/delegation';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
+
 import {
   DelegationManager,
   type DelegationManagerOptions,
@@ -29,13 +31,13 @@ import {
   MAX_BRIEF_FILES,
 } from '../src/exports/delegationManager';
 import { TASK_EVENT, type TaskErrorSink, type TaskEventSink } from '../src/exports/logSinkTelemetry';
-import { narrateTaskCommit } from '../src/services/taskNarration';
 import { resolveSessionKey, resolveStorePath } from '../src/exports/storePaths';
 import { applyTaskMutation } from '../src/exports/storeReducer';
 import { TaskStore } from '../src/exports/storeTaskStore';
 import type { Task } from '../src/exports/storeTypes';
 import { DEFAULT_PROMPT_GUIDELINES } from '../src/exports/toolPromptGuidelines';
 import { TaskParamsSchema } from '../src/schemas/task';
+import { narrateTaskCommit } from '../src/services/taskNarration';
 
 /** Minimal Team service mounted on a real Cordis root. */
 class FakeBus {

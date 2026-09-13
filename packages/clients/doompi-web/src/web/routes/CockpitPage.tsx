@@ -1,25 +1,26 @@
 import { Button } from '@agimon-ai/doompi-web-components';
-import { useStore } from '@tanstack/react-store';
 import { useNavigate, useParams } from '@tanstack/react-router';
+import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
+
 import { PluginSurface } from '../components/PluginSurface';
-import { usePluginSlotProps } from '../stores/usePluginSlotProps';
 import { ActivityDock } from '../features/activity/ActivityDock';
 import { RefusedCard } from '../features/connection/RefusedCard';
 import { DialogOverlay } from '../features/dialogs/DialogOverlay';
 import { CommandPalette } from '../features/leader/CommandPalette';
 import { SelectionBar } from '../features/selection/SelectionBar';
 import { Composer } from '../features/session/Composer';
+import { Timeline } from '../features/session/Timeline';
 import { SessionRail } from '../features/sessions/SessionRail';
 import { WelcomePanel } from '../features/sessions/WelcomePanel';
-import { Timeline } from '../features/session/Timeline';
 import { TopBar } from '../features/status/TopBar';
 import { HOST_SLOTS, pluginActivityGroups, webTabs } from '../lib/pluginRegistry';
-import { useActiveSession } from '../stores/sessionStore';
 import { sessionsStore, setActiveSession, useNoSessions } from '../stores/sessionsStore';
-import { useWebPluginRegistry } from '../stores/useWebPluginRegistry';
+import { useActiveSession } from '../stores/sessionStore';
 import { findTransientTab, transientTabsStore } from '../stores/transientTabsStore';
 import { setDockOpen, uiStore } from '../stores/uiStore';
+import { usePluginSlotProps } from '../stores/usePluginSlotProps';
+import { useWebPluginRegistry } from '../stores/useWebPluginRegistry';
 
 export function CockpitPage() {
   useWebPluginRegistry();

@@ -1,8 +1,9 @@
 import type { WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 import { Store } from '@tanstack/store';
+
 import type { AuthorBrowserMessage, AuthorHubMessage } from '../../types/webAuthor';
-import { AuthorRuntime } from './authorRuntime';
 import type { AuthorTrustedProfile } from '../lib/authorViewportTypes';
+import { AuthorRuntime } from './authorRuntime';
 
 interface ActiveViewport {
   sessionId: string;

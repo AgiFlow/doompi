@@ -1,18 +1,19 @@
-import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
-import { COMPUTER_USE_GUIDANCE } from '../constants/computerUse';
 import { type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
-import { defineMinorMode, type MinorModeOwner, type MinorModeOwnerActionContext } from '@agimon-ai/doompi-minor-mode';
 import { type DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
+import { defineMinorMode, type MinorModeOwner, type MinorModeOwnerActionContext } from '@agimon-ai/doompi-minor-mode';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { createComputerUseCommand } from './computerUseCommand';
+
+import { COMPUTER_USE_GUIDANCE } from '../constants/computerUse';
+import type { ComputerUseAction } from '../types/computerUse';
 import {
   COMPUTER_USE_MODE_ID,
   COMPUTER_USE_MODE_STATUS_KEY,
   COMPUTER_USE_STATUS_KEY,
   type ComputerUseSessionView,
 } from '../types/computerUseApi';
-import type { ComputerUseAction } from '../types/computerUse';
 import type { ComputerUseExtensionDependencies } from '../types/extension';
+import { createComputerUseCommand } from './computerUseCommand';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-computer-use';
 export { COMPUTER_USE_MODE_ID };

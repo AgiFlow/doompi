@@ -1,6 +1,8 @@
 import { webcrypto } from 'node:crypto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { BundleManifest } from '@agimon-ai/doompi-web-security/browser';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { ActiveBundleState, VerifiedPluginCompositionState } from '../../src/pwa/bundleCache';
 
 const mocks = vi.hoisted(() => ({

@@ -1,4 +1,5 @@
 import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+
 import { createGoalPlugin } from '../controllers/goalPlugin';
 import type { GoalExtensionDependencies } from '../types/extension';
 const PACKAGE_SOURCE = '@agimon-ai/doompi-goal';

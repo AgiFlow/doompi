@@ -1,3 +1,4 @@
+import { buildPersonaPrompt, loadProfiles, resolveProfile } from '@agimon-ai/doompi-config/profiles';
 import {
   type DoomHeadlessCommand,
   type DoomHeadlessExecutionContext,
@@ -5,7 +6,7 @@ import {
   type DoomHeadlessHook,
 } from '@agimon-ai/doompi-core/headless';
 import { DOOM_PROFILE_IDENTITY_ENTRY_TYPE } from '@agimon-ai/doompi-core/profile-identity';
-import { buildPersonaPrompt, loadProfiles, resolveProfile } from '@agimon-ai/doompi-config/profiles';
+
 import { PROFILE_COMMAND, profileItems, profileTitle } from '../services/profileText';
 
 export async function readSelectedPersona(execution: {

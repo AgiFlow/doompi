@@ -1,4 +1,5 @@
 import * as ort from 'onnxruntime-web/wasm';
+
 import { SileroVadFrames } from '../lib/sileroVadFrames';
 
 type WorkerCommand =

@@ -1,35 +1,46 @@
-import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
-import {
-  formatVoiceActivity,
-  formatAutoCaptureActivity,
-  type VoiceFooterContributionValue,
-} from '../models/voiceActivity';
-import { definePiTool, type PiEventHandlers, type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
-import { COMMAND_NAME } from '../constants/voice';
 import path from 'node:path';
+
 import { globalDoomConfigPath, resolveVoiceConfig } from '@agimon-ai/doompi-config/config';
 import { getHarnessState } from '@agimon-ai/doompi-config/harnessStore';
 import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-core/ask-user';
 import { DOOM_CORDIS_SESSION_SERVICE, requireDoomCordisSession } from '@agimon-ai/doompi-core/cordis-host';
 import type { LeaderBinding } from '@agimon-ai/doompi-core/leader';
 import {
+  DOOM_NARRATION_SERVICE,
+  type DoomNarrationService,
+  isNarrationRequest,
+} from '@agimon-ai/doompi-core/narration';
+import { definePiTool, type PiEventHandlers, type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
+import { type DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
+import {
   defineMinorMode,
   type MinorModeOwner,
   type MinorModeOwnerActionContext,
   type MinorModeState,
 } from '@agimon-ai/doompi-minor-mode';
-import {
-  DOOM_NARRATION_SERVICE,
-  type DoomNarrationService,
-  isNarrationRequest,
-} from '@agimon-ai/doompi-core/narration';
-import { DOOM_VOICE_AUTO_MODE_ID as AUTO_COMMAND_NAME } from '../constants/voiceTools';
-import { createDoomVoiceToolsService, type VoiceToolSessionHandle } from '../services/voiceTools';
-import { DOOM_VOICE_TOOLS_SERVICE, VOICE_MODE_TOOL_NAMES, VOICE_NARRATE_TOOL_NAME } from '../constants/voiceTools';
-import { createVoiceReloadHandoffStore } from '../services/voiceReloadHandoff';
-import { type DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
+import { COMMAND_NAME } from '../constants/voice';
+import {
+  VOICE_SOURCE,
+  TRANSFER_VOICE_SOURCE,
+  STATUS_KEY,
+  AUTO_LEADER_DETAIL,
+  AUTO_MODE_LABEL,
+  INFO_NOTIFICATION,
+  ERROR_NOTIFICATION,
+  VOICE_GROUP_SEGMENT,
+} from '../constants/voiceRuntime';
+import { DOOM_VOICE_AUTO_MODE_ID as AUTO_COMMAND_NAME } from '../constants/voiceTools';
+import { DOOM_VOICE_TOOLS_SERVICE, VOICE_MODE_TOOL_NAMES, VOICE_NARRATE_TOOL_NAME } from '../constants/voiceTools';
+import {
+  formatVoiceActivity,
+  formatAutoCaptureActivity,
+  type VoiceFooterContributionValue,
+} from '../models/voiceActivity';
+import { canRunVoice, voiceOwnershipState, voiceModeState } from '../models/voiceMode';
 import type { AutonomousTurnNonceFactory } from '../services/autonomousTurn';
 import {
   type IVoiceCommandCorrectionModelClient,
@@ -45,6 +56,15 @@ import {
   VoiceTurnFallbackNarrator,
 } from '../services/fallbackNarration';
 import type { NarrationPlaybackOutcome } from '../services/narration';
+import { realtimeHostConnection, type RealtimeHost } from '../services/realtimeHost';
+import { createRealtimeRuntime, type RealtimeSignInAttempt } from '../services/realtimeRuntime';
+import {
+  registerSessionVoiceOwnership,
+  SessionVoiceOwnershipBridge,
+  sessionVoiceOwnership,
+  type VoiceOwnershipSessionHost,
+  voiceOwnershipLabel,
+} from '../services/sessionVoiceOwnership';
 import {
   type IVoiceTranscriptAdmissionModelClient,
   type IVoiceTranscriptAdjudicator,
@@ -52,6 +72,11 @@ import {
   VoiceTranscriptAdjudicator,
 } from '../services/transcriptAdmission';
 import type { VoiceDeliveryIntent } from '../services/voiceDelivery';
+import { createVoiceDependencies } from '../services/voiceDependencies';
+import { createVoiceReloadHandoffStore } from '../services/voiceReloadHandoff';
+import { createDoomVoiceToolsService, type VoiceToolSessionHandle } from '../services/voiceTools';
+import { VoiceWorkerAutoCaptureController } from '../services/voiceWorkerAutoCaptureController';
+import { type VoiceWorkerSessionClientFactory } from '../services/voiceWorkerSessionController';
 import {
   type AutoCaptureActivationState,
   type AutoCaptureUi,
@@ -60,42 +85,19 @@ import {
   type VoiceDependencies,
   type VoiceUi,
 } from '../types';
-import { VoiceWorkerAutoCaptureController } from '../services/voiceWorkerAutoCaptureController';
+import { VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS } from '../types/voiceOwnership';
 import { LiveVoiceController } from './liveVoiceController';
-import { VoiceModeController } from './voiceModeController';
-import { buildRealtimeContext } from './realtimeContext';
-import { realtimeHostConnection, type RealtimeHost } from '../services/realtimeHost';
-import { createRealtimeRuntime, type RealtimeSignInAttempt } from '../services/realtimeRuntime';
-import { type VoiceWorkerSessionClientFactory } from '../services/voiceWorkerSessionController';
 import { createMinorModeVoiceTool, createVoiceMinorModeCatalog } from './minorModeCatalog';
 import { isNarrationRuntimeActive, type NarrationToolRuntime, createNarrationTool } from './narrationTool';
-import { collectVoiceCommandContext } from './voiceCommandContext';
-import { createVoiceToolFacades } from './voiceTools';
+import { buildRealtimeContext } from './realtimeContext';
 import {
   createTransferVoiceToolLifecycle,
   transferVoiceToolRestriction,
   transferVoiceToolVisible,
 } from './transferVoiceTool';
-import {
-  registerSessionVoiceOwnership,
-  SessionVoiceOwnershipBridge,
-  sessionVoiceOwnership,
-  type VoiceOwnershipSessionHost,
-  voiceOwnershipLabel,
-} from '../services/sessionVoiceOwnership';
-import { VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS } from '../types/voiceOwnership';
-import { createVoiceDependencies } from '../services/voiceDependencies';
-import { canRunVoice, voiceOwnershipState, voiceModeState } from '../models/voiceMode';
-import {
-  VOICE_SOURCE,
-  TRANSFER_VOICE_SOURCE,
-  STATUS_KEY,
-  AUTO_LEADER_DETAIL,
-  AUTO_MODE_LABEL,
-  INFO_NOTIFICATION,
-  ERROR_NOTIFICATION,
-  VOICE_GROUP_SEGMENT,
-} from '../constants/voiceRuntime';
+import { collectVoiceCommandContext } from './voiceCommandContext';
+import { VoiceModeController } from './voiceModeController';
+import { createVoiceToolFacades } from './voiceTools';
 
 export { MlxWhisperAdapter, OpenAiWhisperAdapter, TranscriberRegistry, WhisperCppAdapter } from '../services/whisper';
 

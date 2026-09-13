@@ -5,6 +5,7 @@
  * message contract breaks this story at the type level.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import { DescribeAuthorToolsToolCard } from './DescribeAuthorToolsToolCard';
 
 const SHORT = ['author viewport tools', '- annotate_region', '- revise_fragment'].join('\n');

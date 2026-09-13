@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { sandboxImageTag } from '../../../src/services/sandboxImageTag';
+
 import { formatImageTag, sandboxDockerfile } from '../../../src/services/sandboxImage';
+import { sandboxImageTag } from '../../../src/services/sandboxImageTag';
 
 describe('formatImageTag', () => {
   it('joins the repository, version, and digest', () => {

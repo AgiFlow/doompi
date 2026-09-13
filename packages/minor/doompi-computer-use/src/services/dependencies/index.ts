@@ -1,9 +1,11 @@
 import path from 'node:path';
+
 import { loadDoomConfig } from '@agimon-ai/doompi-config';
-import { createComputerUseSessionClient } from '../sessionApiClient';
+
+import type { ComputerUseExtensionDependencies } from '../../types/extension';
 import { ComputerScriptRunner } from '../computerScriptRunner';
 import { DefaultComputerUseExtensionService } from '../extensionService';
-import type { ComputerUseExtensionDependencies } from '../../types/extension';
+import { createComputerUseSessionClient } from '../sessionApiClient';
 
 export const COMPUTER_USE_SCRIPT_PATHS_ENV = 'DOOMPI_COMPUTER_USE_SCRIPT_PATHS';
 export function createComputerUseDependencies(

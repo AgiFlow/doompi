@@ -1,5 +1,5 @@
-import type { CompatibilityProvider, ParsedCompatibilityArgs } from './types';
 import { defaultDomainsForMajorMode } from '@agimon-ai/doompi-config/domains';
+
 import {
   DOMAIN_OPTION,
   DOMAINS_OPTION,
@@ -17,6 +17,7 @@ import {
   resolveInheritedMajorMode,
   resolveInheritedProfile,
 } from '../../matrixOptions';
+import type { CompatibilityProvider, ParsedCompatibilityArgs } from './types';
 
 const COMPATIBILITY_PROVIDERS = new Set<CompatibilityProvider>(['antigravity', 'claude', 'codex']);
 

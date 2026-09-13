@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   order: [] as string[],
@@ -19,8 +19,8 @@ vi.mock('@agimon-ai/doompi-core/pi-extension', () => ({
     return mocks.mount;
   },
 }));
-import { PromptCacheTelemetry } from '../../src/models/promptCacheTelemetry';
 import { activateCacheExtension } from '../../src/extensions/pi';
+import { PromptCacheTelemetry } from '../../src/models/promptCacheTelemetry';
 
 const pi = {} as ExtensionAPI;
 afterEach(() => {

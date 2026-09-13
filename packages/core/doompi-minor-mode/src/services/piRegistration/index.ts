@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
-import type { MinorModeOwner } from '../modeDefinition';
+
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   requireMinorModeCatalog,
@@ -8,6 +8,7 @@ import {
   type MinorModeOwnerDefinition,
   type MinorModeOwnerHandle,
 } from '../../schemas/mode';
+import type { MinorModeOwner } from '../modeDefinition';
 import { registerMinorModeOwner } from '../owner';
 
 type ModeRegistrar = (definition: MinorModeOwnerDefinition<ExtensionContext>) => MinorModeOwnerHandle;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_ANSWER_TEXT_LENGTH, readAnswerEnvelope } from '../../src/services/answerEnvelope';
+
 import type { QuestionParams } from '../../src/schemas/questionnaire';
+import { MAX_ANSWER_TEXT_LENGTH, readAnswerEnvelope } from '../../src/services/answerEnvelope';
 
 const params: QuestionParams = {
   questions: [

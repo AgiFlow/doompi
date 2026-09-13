@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createRemoteAccessStore, defaultRemoteStateDir } from '../../../../src/services/remoteAccessStore';
+
 import { DEFAULT_REMOTE_SETTINGS } from '../../../../src/services/remoteAccessSettings';
+import { createRemoteAccessStore, defaultRemoteStateDir } from '../../../../src/services/remoteAccessStore';
 import type { StoredCredential } from '../../../../src/services/webauthnPolicy';
 
 const directories: string[] = [];

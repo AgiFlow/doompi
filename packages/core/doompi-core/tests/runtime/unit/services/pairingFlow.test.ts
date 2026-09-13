@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createPairingFlow } from '../../../../src/services/pairingFlow';
+
 import { PAIRING_CODE_TTL_MS, PAIRING_REQUEST_TTL_MS } from '../../../../src/constants/remote';
+import { createPairingFlow } from '../../../../src/services/pairingFlow';
 
 function fixture() {
   let time = 1000;

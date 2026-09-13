@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   collapseLines,
   MessageItem,
@@ -7,7 +8,7 @@ import {
   MessageLines,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
+
 import {
   describeAuthorToolsCallSummary,
   describeAuthorToolsCollapsedLines,

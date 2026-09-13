@@ -1,4 +1,5 @@
 import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+
 import { createPlanModeRuntime } from '../controllers/planMode';
 
 export const activatePlanExtension = definePiExtension('@agimon-ai/doompi-plan', ({ pi }) => ({

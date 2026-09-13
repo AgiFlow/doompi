@@ -6,14 +6,15 @@ import type {
   DoomToolSurfaceService,
 } from '@agimon-ai/doompi-core/tool-surface';
 import type { McpClientManagerService, McpServerStateChange, TokenStore } from '@agimon-ai/mcp-proxy';
-import { type CatalogTool, McpCatalog } from '../mcpCatalog';
+
+import { PACKAGE_SOURCE } from '../../constants/piMcp';
 import type { McpResourceView, McpServerView } from '../../types/mcp';
 import type { McpConfigGroups, McpConfigSource, McpSessionConfig } from '../../types/mcpConfig';
 import { buildMcpConfigGroups } from '../configSources';
-import { type McpRuntimeOwner, readCachedCatalog } from '../mcpRuntime';
 import { readDirectToolFilter } from '../directToolsEnvironment';
+import { type CatalogTool, McpCatalog } from '../mcpCatalog';
+import { type McpRuntimeOwner, readCachedCatalog } from '../mcpRuntime';
 import { readSessionConfig } from '../sessionConfig';
-import { PACKAGE_SOURCE } from '../../constants/piMcp';
 import { mcpToolRestriction } from '../toolVisibility';
 
 /** Raised by anything needing a live container before one has been built. */

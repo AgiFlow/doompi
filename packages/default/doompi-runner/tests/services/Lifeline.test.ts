@@ -1,8 +1,10 @@
-import net from 'node:net';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { NodeLifeline } from '../../src/services/lifeline';
 import { LIFELINE_ENV, watchOwner } from '../../src/services/lifeline/client';
 import { FakeRunnerPaths } from '../doubles';

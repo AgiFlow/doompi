@@ -1,7 +1,8 @@
-import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-core/testing';
 import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
+import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it, vi } from 'vitest';
+
 import { COMMAND_NAME } from '../../../src/controllers/doomAuthorCommand';
 import { activateAuthorExtension } from '../../../src/extensions/pi';
 import type { AuthorExtensionService } from '../../../src/types/extension';

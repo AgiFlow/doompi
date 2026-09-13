@@ -1,4 +1,5 @@
 import { createDoomTelemetry, type DoomTelemetry, type DoomTelemetryOptions } from '@agimon-ai/doompi-telemetry';
+
 import type { MajorModeTelemetry } from '../../types/telemetry';
 
 const SERVICE_NAME = 'doom-pi-major-mode';

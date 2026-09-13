@@ -1,7 +1,7 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RUNNER_LOG_STREAM_EVENT, RUNNER_SCREEN_EVENT } from '../../src/constants/webRunnerLog';
 
+import { RUNNER_LOG_STREAM_EVENT, RUNNER_SCREEN_EVENT } from '../../src/constants/webRunnerLog';
 import { fetchRunnerLog, followRunnerLog } from '../../src/web/api/logApi';
 import { decodeChunk, sendRunnerInput, watchRunnerScreen } from '../../src/web/api/screenApi';
 

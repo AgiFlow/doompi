@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HarnessContext } from '../../src/builders/cli/harnessContext';
 import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { HarnessContext } from '../../src/builders/cli/harnessContext';
 import { CliApp } from '../../src/cli/cliApp';
 import type { HarnessOptions } from '../../src/composition/types/harness';
 

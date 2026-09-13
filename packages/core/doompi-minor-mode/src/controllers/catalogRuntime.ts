@@ -1,22 +1,23 @@
-import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
-import {
-  DOOM_MINOR_MODE_CATALOG_SERVICE,
-  DOOM_MINOR_MODE_ENTRY_TYPE,
-  type MinorModeActionResponse,
-  type MinorModeCatalogService,
-} from '../schemas/mode';
 import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
 import { type DoomNotificationLevel, readDoomNotificationService } from '@agimon-ai/doompi-core/notification';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { consumeMinorModeReloadHandoff, discardMinorModeReloadHandoff } from '../services/reloadHandoff';
+import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import {
   DOOM_TRANSITION_SERVICE,
   requireDoomTransitionCoordinator,
   type TransitionSource,
 } from '@agimon-ai/doompi-core/transition';
 import type { Context } from '@deepseek-ai/cordis';
-import { projectMinorModes } from '../services/projection';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
+import {
+  DOOM_MINOR_MODE_CATALOG_SERVICE,
+  DOOM_MINOR_MODE_ENTRY_TYPE,
+  type MinorModeActionResponse,
+  type MinorModeCatalogService,
+} from '../schemas/mode';
 import { createMinorModeCatalogHost } from '../services/catalog';
+import { projectMinorModes } from '../services/projection';
+import { consumeMinorModeReloadHandoff, discardMinorModeReloadHandoff } from '../services/reloadHandoff';
 import { registerMinorModeCommand } from './minorModeCommand';
 
 /** Registrations and state flips arrive in bursts; one entry covers a burst. */

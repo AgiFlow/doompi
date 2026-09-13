@@ -1,8 +1,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { describeTunnelFailure, extractTunnelUrl, mentionsRegisteredConnection, tunnelArgs } from '../tunnelOutput';
-import { PAIRING_PAGE_MARKER } from '../pairingPage';
+
 import { PAIRING_PAGE_ROUTE } from '../../constants/remote';
 import {
   type TunnelConfig,
@@ -10,6 +9,8 @@ import {
   type TunnelStartInput,
   type TunnelStartResult,
 } from '../../types/remote';
+import { PAIRING_PAGE_MARKER } from '../pairingPage';
+import { describeTunnelFailure, extractTunnelUrl, mentionsRegisteredConnection, tunnelArgs } from '../tunnelOutput';
 
 /** Explicit binary path, ahead of a PATH scan. */
 export const CLOUDFLARED_ENV = 'DOOMPI_CLOUDFLARED';

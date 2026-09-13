@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { BrowserSpeechPresenceDetector } from '../src/web/lib/browserSpeechPresenceDetector';
 
 class FakeWorker {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { resolvePdfViewportRegion } from '../../src/components/PdfPreview';
 
 describe('PDF page geometry', () => {

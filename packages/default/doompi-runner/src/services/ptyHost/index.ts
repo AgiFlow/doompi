@@ -1,4 +1,5 @@
 import headless, { type Terminal } from '@xterm/headless';
+
 import {
   DEFAULT_COLS,
   DEFAULT_ROWS,
@@ -9,16 +10,15 @@ import {
   TERM_GRACE_MS,
 } from '../../constants/ptyHost';
 import { PI_SESSION_ID_ENV } from '../../constants/session';
-import { NO_TERMINAL_INPUT_ENV } from '../runnerSupervisor';
 import type { IClock } from '../../types/clock';
 import type { ILogFile } from '../../types/logFile';
 import type { IProcessControl } from '../../types/processControl';
+import type { IPtyHost, PtyLaunchRequest, PtyRun } from '../../types/ptyHost';
 import type { IPtySpawner, PtyProcess } from '../../types/ptySpawner';
+import type { ExitResult } from '../../types/spawner';
 import { scrubTerminalOutput } from '../ansiScrub';
 import { getResultMaxBytes } from '../runnerConfig';
-
-import type { IPtyHost, PtyLaunchRequest, PtyRun } from '../../types/ptyHost';
-import type { ExitResult } from '../../types/spawner';
+import { NO_TERMINAL_INPUT_ENV } from '../runnerSupervisor';
 
 /** Enough history for the overlay to scroll without holding a whole build. */
 

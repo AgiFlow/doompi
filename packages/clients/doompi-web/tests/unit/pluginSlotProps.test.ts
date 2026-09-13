@@ -8,6 +8,7 @@ import {
 } from '@agimon-ai/doompi-core/web';
 import { createElement, isValidElement, type ReactElement } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry';
 import { pluginSlotProps } from '../../src/web/lib/pluginSlotProps';
 import { bindThreadRenderer, releaseThreadRenderer } from '../../src/web/lib/threadRenderer';

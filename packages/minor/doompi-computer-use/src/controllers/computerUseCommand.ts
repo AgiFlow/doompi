@@ -1,6 +1,7 @@
-import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/computerUse';
 // @scaffold-generated
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
+import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/computerUse';
 import type { ComputerUseExtensionService } from '../types/extension';
 
 export function createComputerUseCommand(

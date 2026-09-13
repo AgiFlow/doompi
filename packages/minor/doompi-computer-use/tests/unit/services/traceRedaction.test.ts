@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { redactComputerUseTrace } from '../../../src/services/traceRedaction';
 
 function serializedRecord(value: string) {

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,8 +9,8 @@ const findSyncedRoot = vi.hoisted(() => vi.fn());
 const readStartupBootstrapStatus = vi.hoisted(() => vi.fn());
 vi.mock('../src/builders/cli/bootstrapLocator', () => ({ findSyncedRoot, readStartupBootstrapStatus }));
 
-import doomPiPackageExtension from '../src/extensions/pi';
 import * as publicApi from '../src/exports';
+import doomPiPackageExtension from '../src/extensions/pi';
 
 /** Enough of Pi's surface for the bootstrap to park its release handler on. */
 const pi = { on: vi.fn() } as unknown as ExtensionAPI;

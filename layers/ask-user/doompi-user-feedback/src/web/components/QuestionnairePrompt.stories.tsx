@@ -10,6 +10,7 @@
  */
 import type { ToolPromptDialog } from '@agimon-ai/doompi-core/web';
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import { QuestionnairePrompt } from './QuestionnairePrompt';
 
 const TOOL_NAME = 'ask_user_question';

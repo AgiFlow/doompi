@@ -1,6 +1,6 @@
 import { Check } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
-import { type QuestionParams, QuestionParamsSchema } from '../../src/schemas/questionnaire';
+
 import {
   MAX_HEADER_LENGTH,
   MAX_LABEL_LENGTH,
@@ -8,6 +8,7 @@ import {
   MAX_QUESTIONS,
   MIN_OPTIONS,
 } from '../../src/constants/questionnaire';
+import { type QuestionParams, QuestionParamsSchema } from '../../src/schemas/questionnaire';
 import {
   buildQuestionnaireResponse,
   DECLINE_MESSAGE,

@@ -1,5 +1,5 @@
-import type { AuthorCatalog } from './type';
 import type { AuthorOpenFileResult, AuthorToolResult, AuthorViewportCatalogSnapshot } from '../../types/author';
+import type { AuthorCatalog } from './type';
 
 class UnavailableAuthorCatalog implements AuthorCatalog {
   public open(): Promise<AuthorOpenFileResult> {

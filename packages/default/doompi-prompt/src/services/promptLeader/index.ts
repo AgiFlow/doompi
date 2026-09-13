@@ -1,7 +1,7 @@
-import type { Context } from '@deepseek-ai/cordis';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
-import { COMMAND_NAME } from '../../constants/prompts';
+import type { Context } from '@deepseek-ai/cordis';
+
 import {
   LEADER_BINDING_PREFIX,
   LEADER_DETAIL,
@@ -10,6 +10,7 @@ import {
   LEADER_LABEL,
   PACKAGE_SOURCE,
 } from '../../constants/prompt';
+import { COMMAND_NAME } from '../../constants/prompts';
 
 /** Puts the picker on the leader map, and takes it back off on dispose. */
 export function registerLeaderContribution(hub: DoomUiHubService): () => void {

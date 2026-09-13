@@ -1,19 +1,20 @@
 import { TooltipProvider } from '@agimon-ai/doompi-web-components';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { useEffect } from 'react';
+
 import { PairingApprovalDialog } from '../features/remote/PairingApprovalDialog';
 import { RemoteAccessDialog } from '../features/remote/RemoteAccessDialog';
 import { ThreadView } from '../features/session/ThreadView';
 import { onComposerSubmitted } from '../lib/composerSubmissions';
-import { onCaptureStatus } from '../stores/captureStore';
+import { restoreLivePushRegistration } from '../lib/livePush';
 import { acquireModelContext, disposeModelContextAdapter } from '../lib/modelContextAdapter';
 import { installWebPlugins, webPluginDiagnostics, webPluginsInstalled } from '../lib/pluginRegistry';
 import { startSessionWebPluginRuntime } from '../lib/pluginRuntime';
+import { restoreSealedSession } from '../lib/sealedSession';
 import { bindThreadRenderer } from '../lib/threadRenderer';
 import { invokeServerMethod, onHubConnected, sendFrame, sendHubFrame } from '../lib/transport';
 import { routeTree } from '../routes/routeTree';
-import { restoreSealedSession } from '../lib/sealedSession';
-import { restoreLivePushRegistration } from '../lib/livePush';
+import { onCaptureStatus } from '../stores/captureStore';
 import { refreshRemoteState } from '../stores/remoteAccessStore';
 import { startSessionRuntime } from './sessionRuntime';
 import { webPlugins } from './webPlugins.generated';

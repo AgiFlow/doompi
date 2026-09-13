@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { TokenStore } from '@agimon-ai/mcp-proxy';
 import { afterEach, describe, expect, it } from 'vitest';
-import { McpSettingsManager } from '../src/services/mcpSettingsManager';
+
 import { mcpHubApi } from '../src/controllers/mcpHubApi';
+import { McpSettingsManager } from '../src/services/mcpSettingsManager';
 
 const temporaryDirectories: string[] = [];
 const REPOSITORY_ID = `repo-${'a'.repeat(24)}`;

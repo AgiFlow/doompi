@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   collapseLines,
   MessageItem,
@@ -9,7 +10,7 @@ import {
   toolTone,
   useSyntaxLines,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
+
 import { type DiffRow, editCallView, editResultView, resultTextLines } from '../lib/editToolView';
 
 /** Diff rows shown until the item expands; about what the old scroll box held. */

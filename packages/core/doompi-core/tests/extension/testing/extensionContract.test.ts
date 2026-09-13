@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
+
 import { standardExtensionScenarios } from '../../../src/testing/pi/extensionScenarios';
 import { createPiTestHost } from '../../../src/testing/pi/testHost';
 

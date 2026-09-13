@@ -1,5 +1,6 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
+
 import { colorStatus, statusText } from '../../src/services/statusLine';
 
 const theme = {

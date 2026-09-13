@@ -1,4 +1,5 @@
 import type { TranscriptItem, TranscriptPage } from '@agimon-ai/doompi-core/session-protocol';
+
 import type { FleetTranscriptEvent, FleetTranscriptTail } from '../fleetTranscript';
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

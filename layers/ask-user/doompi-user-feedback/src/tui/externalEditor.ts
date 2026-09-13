@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { ExternalEditResult } from '../types/questionnaire';
 
 const UTF8_ENCODING = 'utf8';

@@ -4,6 +4,7 @@
  */
 
 import { createHash, timingSafeEqual } from 'node:crypto';
+
 import {
   CODEX_OAUTH_CLIENT_ID,
   CODEX_OAUTH_ORIGIN,

@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NodeTurnSpool } from '../src/services/fileTurnSpool';
+
 import { CaptureSession } from '../src/services/captureSession';
+import { NodeTurnSpool } from '../src/services/fileTurnSpool';
 import { PCM_FRAME_BYTES } from '../src/services/pcm';
 import type {
   IClock,

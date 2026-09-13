@@ -1,8 +1,9 @@
 import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { computerUseExtension as activateComputerUseExtension } from '../../../src/extensions/pi';
+
 import { COMPUTER_USE_TOOL_NAMES } from '../../../src/constants/computerUse';
 import { COMMAND_NAME } from '../../../src/controllers/computerUseCommand';
+import { computerUseExtension as activateComputerUseExtension } from '../../../src/extensions/pi';
 import type { ComputerUseSessionClient } from '../../../src/services/sessionApiClient';
 import {
   COMPUTER_USE_MODE_STATUS_KEY,

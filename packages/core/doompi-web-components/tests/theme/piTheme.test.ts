@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
+
 import { DEFAULT_THEME, themeFromPiTheme } from '../../src/exports/theme';
 
 const TUI_THEME = fileURLToPath(new URL('../../../doompi-ui/themes/doom-pi-dark.json', import.meta.url));

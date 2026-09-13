@@ -1,7 +1,7 @@
 import { Context, Service } from '@deepseek-ai/cordis';
-import { createDoomKernel } from '../../../exports/kernel';
 import { formatSkillsForSystemPrompt } from '@earendil-works/pi-agent-core';
 import type { TSchema } from 'typebox';
+
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   readDoomHeadlessOwner,
@@ -19,8 +19,14 @@ import {
   type DoomHeadlessCondition,
   type DoomHeadlessToolRestriction,
 } from '../../../exports/headless';
+import { createDoomKernel } from '../../../exports/kernel';
 import type { DoomServerBundleEntry } from '../../../exports/serverFacet';
 import type { PackageAttribution } from '../../../services/contextProjection';
+import type {
+  ContextConditionalAttribution,
+  ContextToolInventory,
+  ContextToolSource,
+} from '../../../services/contextProjection';
 import type { CountTokens } from '../../../services/toolInventory';
 import type {
   HeadlessContextInventory,
@@ -28,11 +34,6 @@ import type {
   HeadlessSelectionStatus,
   ResolvedHeadlessResource,
 } from '../types/headlessHost';
-import type {
-  ContextConditionalAttribution,
-  ContextToolInventory,
-  ContextToolSource,
-} from '../../../services/contextProjection';
 
 type Owned<T> = { source: string; value: T };
 type StopActivity = () => void | Promise<void>;

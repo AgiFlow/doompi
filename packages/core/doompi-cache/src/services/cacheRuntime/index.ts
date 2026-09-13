@@ -1,6 +1,4 @@
 import { getHarnessState } from '@agimon-ai/doompi-config/harnessStore';
-import type { CacheRuntime, OptimizerModule } from './type';
-import { KEY_SUFFIX_LENGTH } from '../../constants/cache';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   readMinorModeCatalog,
@@ -8,18 +6,8 @@ import {
 } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { OwnedEnvironmentValue } from '../environment';
-import { sha256Base64Url } from '../digest';
-import {
-  createParentPromptCacheNamespace,
-  createPromptCacheKey,
-  createPromptCacheModelFingerprint,
-  createRootSessionIdentity,
-} from '../namespace';
-import { optimizerAllowsPromptCacheKey } from '../optimizerPolicy';
-import { classifyPromptCacheCapability, requestedPromptCacheRetention, rewritePromptCacheKey } from '../providerPolicy';
-import { normalizePromptCacheUsage } from '../promptCacheUsage';
-import type { PromptCacheMinorModeState, PromptCacheModelIdentity } from '../../types/cache';
+
+import { KEY_SUFFIX_LENGTH } from '../../constants/cache';
 import {
   DOOMPI_PROMPT_CACHE_CHILD_PROJECTION_ENV,
   DOOMPI_PROMPT_CACHE_PARENT_NAMESPACE_ENV,
@@ -27,7 +15,20 @@ import {
   PI_CACHE_RETENTION_ENV,
   PI_CACHE_RETENTION_LONG,
 } from '../../constants/environment';
+import type { PromptCacheMinorModeState, PromptCacheModelIdentity } from '../../types/cache';
 import type { CacheExtensionDependencies } from '../../types/extension';
+import { sha256Base64Url } from '../digest';
+import { OwnedEnvironmentValue } from '../environment';
+import {
+  createParentPromptCacheNamespace,
+  createPromptCacheKey,
+  createPromptCacheModelFingerprint,
+  createRootSessionIdentity,
+} from '../namespace';
+import { optimizerAllowsPromptCacheKey } from '../optimizerPolicy';
+import { normalizePromptCacheUsage } from '../promptCacheUsage';
+import { classifyPromptCacheCapability, requestedPromptCacheRetention, rewritePromptCacheKey } from '../providerPolicy';
+import type { CacheRuntime, OptimizerModule } from './type';
 
 type BeforeProviderEvent = { readonly payload?: unknown };
 type MessageEndEvent = { readonly message?: unknown };

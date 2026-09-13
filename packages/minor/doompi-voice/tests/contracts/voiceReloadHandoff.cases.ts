@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createDoomVoiceToolsService } from '../../src/services/voiceTools';
-import { createVoiceReloadHandoffStore, VoiceReloadHandoffError } from '../../src/services/voiceReloadHandoff';
+
 import { VOICE_RELOAD_HANDOFF_REGISTRY_KEY, VOICE_RELOAD_HANDOFF_TTL_MS } from '../../src/constants/voiceReloadHandoff';
+import { createVoiceReloadHandoffStore, VoiceReloadHandoffError } from '../../src/services/voiceReloadHandoff';
+import { createDoomVoiceToolsService } from '../../src/services/voiceTools';
 
 function runtime(token: string, clock: { now: number }) {
   return { now: () => clock.now, createToken: () => token };

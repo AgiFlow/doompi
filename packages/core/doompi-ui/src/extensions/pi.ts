@@ -5,6 +5,7 @@ import {
   createMinorModeCatalogClient,
   requireMinorModeCatalog,
 } from '@agimon-ai/doompi-minor-mode';
+
 import { PACKAGE_SOURCE } from '../constants/ui';
 import { projectMinorModeRecords } from '../models/uiState';
 import { createUiTelemetry, type UiTelemetry } from '../services/telemetry';

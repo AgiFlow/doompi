@@ -3,13 +3,13 @@ import { DOOM_CONFIG_SERVICE } from '@agimon-ai/doompi-core/config';
 import { type DoomReadinessCoordinator, readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+
+import { PACKAGE_SOURCE } from '../../constants/hook';
 import type { HookTelemetry } from '../../types/telemetry';
 import { createHookDocumentReader } from '../hookDocuments';
 import { createBashHookRunner } from '../hookRunner';
 import { createHookTelemetry } from '../hookTelemetry';
 import { type HookReadinessGate, type HookSession } from './type';
-
-import { PACKAGE_SOURCE } from '../../constants/hook';
 import type { HookBinding, HookExtensionOptions, HookRuntimeBinding } from './type';
 
 function hookSession(cordis: Context, options: HookExtensionOptions): HookSession {

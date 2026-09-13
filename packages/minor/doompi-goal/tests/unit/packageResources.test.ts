@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest';
+
 import { readPackageResource } from '../../src/services/packageResources';
 it('resolves the Goal skill from source and compiled paths and preserves read errors', async () => {
   const name = 'src/prompts/doompi-use-goal/SKILL.md';

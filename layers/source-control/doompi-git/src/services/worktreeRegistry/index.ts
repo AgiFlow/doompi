@@ -1,10 +1,10 @@
-import { readJson, writeJsonAtomic } from '../atomicJson';
 import {
   WORKTREE_RECORD_VERSION,
   type WorktreeRecord,
   type WorktreeRegistryFile,
   type WorktreeRegistryStore,
 } from '../../types/worktreeRegistry';
+import { readJson, writeJsonAtomic } from '../atomicJson';
 
 function isRecord(value: unknown): value is WorktreeRecord {
   if (typeof value !== 'object' || value === null) return false;

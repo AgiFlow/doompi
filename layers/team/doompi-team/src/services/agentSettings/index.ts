@@ -30,10 +30,11 @@
  */
 
 import * as fs from 'node:fs';
-import { writeAtomicJson } from '../atomicJson';
-import { readSettingsFileStrict } from '../configDir';
+
 import type { ModelScopeConfig, ToolBudgetConfig } from '../../types';
 import { getProjectAgentSettingsPath, getUserAgentSettingsPath } from '../agentProjectRoot';
+import { writeAtomicJson } from '../atomicJson';
+import { readSettingsFileStrict } from '../configDir';
 
 export { readSettingsFileStrict } from '../configDir';
 

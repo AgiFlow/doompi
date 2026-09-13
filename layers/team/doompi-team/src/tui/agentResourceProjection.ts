@@ -1,8 +1,8 @@
 import type { ResolvedSubagentCapabilityCeiling } from '../schemas/team/capabilityCeiling';
-import { DOOMPI_CHILD_EXTENSIONS_ENV } from '../types/environment';
 import { buildSkillInjection, type SkillDiscoveryContract } from '../services/agentSkills';
-import type { AgentConfig } from '../types/agent';
 import { isPiRuntime } from '../services/runtimeRegistry';
+import type { AgentConfig } from '../types/agent';
+import { DOOMPI_CHILD_EXTENSIONS_ENV } from '../types/environment';
 
 const CONDITIONAL_TOOLS = 'Request-specific internal tools';
 const HOST_DEFAULT_TOOLS = 'Pi host-default tool set';

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { realpath } from 'node:fs/promises';
+
 import type { ComputerScriptExecutionResult, ComputerScriptRunnerOptions } from '../../types/computerScript';
 import type { ComputerUseAction } from '../../types/computerUse';
 import type { ComputerUseSessionClient } from '../sessionApiClient';

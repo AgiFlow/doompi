@@ -1,4 +1,5 @@
 import type { SettingsSectionContribution } from '@agimon-ai/doompi-core/web';
+
 import {
   pluginRepositorySettingsPanels,
   pluginSettingsPanels,

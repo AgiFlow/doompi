@@ -1,8 +1,9 @@
 export { COMMAND_NAME } from '../constants/task';
 import { InlineAgentSchema } from '@agimon-ai/doompi-team/subagent-tool';
 import { type Static, Type } from 'typebox';
-import { MAX_BRIEF_FILES } from '../types/delegation';
+
 import type { TaskAction } from '../models/task';
+import { MAX_BRIEF_FILES } from '../types/delegation';
 
 export const TASK_ACTIONS = ['upsert', 'list', 'get', 'delete', 'clear', 'assign', 'cancel'] as const;
 export const TASK_STATUSES = ['pending', 'in_progress', 'completed', 'failed', 'deleted'] as const;

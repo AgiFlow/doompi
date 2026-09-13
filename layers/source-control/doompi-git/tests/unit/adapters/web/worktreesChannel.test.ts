@@ -1,11 +1,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createWorktreesChannel } from '../../../../src/controllers/worktreesChannel';
-import { registryFile } from '../../../../src/services/paths';
-import { DoomGitExpectedError } from '../../../../src/services/errors';
+
 import type { DoomDirectEventBus, DoomHubChannelHost, DoomHubChannelSource } from '@agimon-ai/doompi-core/hub-channel';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createWorktreesChannel } from '../../../../src/controllers/worktreesChannel';
+import { DoomGitExpectedError } from '../../../../src/services/errors';
+import { registryFile } from '../../../../src/services/paths';
 import { GIT_WORKTREE_LIFECYCLE_EVENT } from '../../../../src/services/worktreeEvents';
 import type { WorktreeOperations } from '../../../../src/services/worktreeOperations';
 import { WORKTREE_RECORD_VERSION, type WorktreeRecord } from '../../../../src/types/worktreeRegistry';

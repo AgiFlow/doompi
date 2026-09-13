@@ -1,4 +1,6 @@
 import { readFile, stat } from 'node:fs/promises';
+
+import { isWritableFile } from '@agimon-ai/doompi-hashline/files';
 import { renderHashlineCall, renderHashlineResult } from '@agimon-ai/doompi-ui/hashlineRendering';
 import {
   DEFAULT_MAX_BYTES,
@@ -9,7 +11,7 @@ import {
   type AgentToolResult,
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
-import { isWritableFile } from '@agimon-ai/doompi-hashline/files';
+
 import { GrepParamsSchema, type GrepParams } from '../schemas/grepTool';
 import {
   assertNotAborted,

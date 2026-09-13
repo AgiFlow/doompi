@@ -2,13 +2,13 @@ import { EditorConfigService } from '../services/editorConfigService';
 import { EditorLauncher } from '../services/editorLauncher';
 import { EditTracker } from '../services/editTracker';
 import { FileEditPaths } from '../services/fileEditPaths';
+import { GitDiffService } from '../services/gitDiffService';
 import { NodeGitStatusAdapter } from '../services/gitStatus';
 import { NodeSnapshotStoreAdapter } from '../services/snapshotStore';
-import { NodeTreeManifestAdapter } from '../services/treeManifest';
-import { FileEditWorkflow } from './fileEditWorkflow';
-import { GitDiffService } from '../services/gitDiffService';
 import { TimelineStore } from '../services/timelineStore';
+import { NodeTreeManifestAdapter } from '../services/treeManifest';
 import type { FileEditDependencies } from '../types';
+import { FileEditWorkflow } from './fileEditWorkflow';
 
 /**
  * Compose the file-edit runtime.

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+
+import type { Task } from '../src/models/task';
 import {
   createTaskContextContribution,
   TASK_CONTEXT_CONTRIBUTION_ID,
@@ -6,7 +8,6 @@ import {
   TASK_CONTEXT_CONTRIBUTION_ORDER,
   TASK_CONTEXT_CONTRIBUTION_SOURCE,
 } from '../src/services/contextContribution';
-import type { Task } from '../src/models/task';
 
 describe('Task context contribution', () => {
   it('renders only active coordination fields from the current in-memory snapshot', () => {

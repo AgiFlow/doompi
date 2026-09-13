@@ -1,4 +1,3 @@
-import { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_TRANSITION_SERVICE,
   type DoomTransitionCoordinator,
@@ -7,6 +6,7 @@ import {
   type TransitionOutcome,
   type TransitionSelectionSnapshot,
 } from '@agimon-ai/doompi-core/transition';
+import { Context } from '@deepseek-ai/cordis';
 
 /**
  * A coordinator stub on a real cordis registry.

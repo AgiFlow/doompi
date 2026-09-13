@@ -1,5 +1,6 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
 import { McpOverlayComponent } from '../src/tui/mcpOverlay';
 import type { McpOverlayTarget, McpServerView } from '../src/types/mcp';
 

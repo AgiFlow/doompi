@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { createSandboxLauncher } from '../../../src/services/harness';
 import { sandboxImageTag } from '../../../src/services/sandboxImageTag';
 import type { EngineCaptureResult, EngineProcessRunner } from '../../../src/types/sandboxHarness';

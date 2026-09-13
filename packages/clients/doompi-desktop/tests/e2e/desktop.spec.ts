@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { _electron as electron, expect, test as base, type ElectronApplication, type Page } from '@playwright/test';
 
 const packageRoot = fileURLToPath(new URL('../../', import.meta.url));

@@ -1,5 +1,6 @@
 import type { ModelContext, ModelContextTool, WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import type { AuthorBrowserMessage, AuthorHubMessage } from '../../src/types/webAuthor';
 import {
   applyAuthorHubMessage,

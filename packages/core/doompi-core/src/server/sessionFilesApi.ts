@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+
 import type { DoomApi } from '../exports/packageApi';
 
 /** Bounded, read-only file completion rooted in the owning session. */

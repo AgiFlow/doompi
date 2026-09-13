@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+
 import type { ILogFile, LogWriter } from '../../types/logFile';
 import { getLogMaxBytes } from '../runnerConfig';
 import type { IRunnerPaths } from '../runnerPaths/type';

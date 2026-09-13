@@ -1,7 +1,8 @@
 import { CodeEditor, Markdown, type CodeEditorController } from '@agimon-ai/doompi-web-components';
 import { useEffect, useRef } from 'react';
-import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes';
+
 import { registerAuthorGridResolver } from '../lib/authorGrid';
+import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes';
 import {
   authorDocument,
   reviseAuthorDocument,

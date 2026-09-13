@@ -1,6 +1,7 @@
 import type { PackageAttribution } from '@agimon-ai/doompi-core/context-projection';
-import type { ContextSkillInventory as SkillEntry } from '../../../src/services/contextProjection';
 import { describe, expect, it } from 'vitest';
+
+import type { ContextSkillInventory as SkillEntry } from '../../../src/services/contextProjection';
 import { projectContext, type ContextToolSource } from '../../../src/services/contextProjection';
 
 // One token per character, so every figure below is checkable by hand.

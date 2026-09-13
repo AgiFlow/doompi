@@ -1,7 +1,8 @@
 import type { DoomHeadlessCommand } from '@agimon-ai/doompi-core/headless';
 import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
-import { toolNames } from '../services/sessionToolInventory';
+
 import { TOOLS_COMMAND } from '../constants/ui';
+import { toolNames } from '../services/sessionToolInventory';
 
 /**
  * The TUI shell itself stays Pi-only. Inventory is the shared part and is exposed

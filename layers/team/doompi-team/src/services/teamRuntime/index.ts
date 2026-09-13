@@ -6,25 +6,26 @@
  * TypeScript objects with constructor-declared dependencies.
  */
 
-import { SubagentCapabilityPolicyStore } from '../../schemas/team/capabilityCeiling';
 import type { DoomChildSessionServiceProvider } from '@agimon-ai/doompi-core/child';
+
+import { SubagentCapabilityPolicyStore } from '../../schemas/team/capabilityCeiling';
+import { AdmissionGate } from '../admissionGate';
 import { AgentDiscoveryService } from '../agentDiscovery';
 import { SkillDiscoveryService } from '../agentSkills';
-import { NativeTeamChannelService } from '../nativeTeamChannel';
 import { AsyncSubagentSpawner } from '../asyncExecution';
 import { AsyncJobTracker, TERMINAL_ASYNC_JOB_STATES } from '../asyncJobTracker';
+import { ExternalProcessIpc, type ExternalProcessEvent } from '../externalProcessIpc';
+import { ManagementActions } from '../managementActions';
+import { McpDirectToolResolverBinding } from '../mcpDirectToolAllowlist';
 import { NativeRunCoordinator } from '../nativeRunCoordinator';
 import type { NativeRunProjectionSink } from '../nativeRunProjection';
+import { NativeTeamChannelService } from '../nativeTeamChannel';
 import { CompletionNotifier } from '../notify';
-import { SubagentWaiter } from '../subagentWait';
-import { AdmissionGate } from '../admissionGate';
-import { McpDirectToolResolverBinding } from '../mcpDirectToolAllowlist';
+import { PollScheduler } from '../pollScheduler';
 import type { ConcurrencyEventReporter } from '../runWithConcurrency';
-import { ManagementActions } from '../managementActions';
 import { SpawnPlanner } from '../spawnPlan';
 import { SubagentToolService } from '../subagentTool';
-import { PollScheduler } from '../pollScheduler';
-import { ExternalProcessIpc, type ExternalProcessEvent } from '../externalProcessIpc';
+import { SubagentWaiter } from '../subagentWait';
 
 const ignoreConcurrencyEvent: ConcurrencyEventReporter = () => undefined;
 

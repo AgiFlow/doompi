@@ -2,7 +2,9 @@ import { Buffer } from 'node:buffer';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { EXTRA_SKILL_DIRS_ENV } from '../../src/exports/env';
 import {
   AGENT_MEMORY_FILE,
@@ -34,8 +36,8 @@ import {
   SkillDiscoveryService,
   stripSkillFrontmatter,
 } from '../../src/services/agentSkills';
-import type { AgentConfig } from '../../src/types/agent';
 import { getAgentDir, getProjectConfigDir } from '../../src/services/configDir';
+import type { AgentConfig } from '../../src/types/agent';
 
 const temporaryDirs: string[] = [];
 

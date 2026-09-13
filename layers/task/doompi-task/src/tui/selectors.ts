@@ -1,5 +1,5 @@
-import { canonicalizeTasks } from '../services/invariants';
 import type { Task } from '../models/task';
+import { canonicalizeTasks } from '../services/invariants';
 
 export interface TaskCounts {
   total: number;

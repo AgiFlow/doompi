@@ -1,6 +1,7 @@
 import { Badge, Button, CloseIcon, Input, Kbd } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+
 import type { SubagentCatalogAgent } from '../../types/webSubagents';
 import { agentMeta, filterCatalog, groupCatalog } from '../lib/launchCommand';
 import { catalog, selectAgent, setCatalogFilter, toggleInspect } from '../stores/catalogStore';

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import {
   type DoomHeadlessCommand,
   type DoomHeadlessExecutionContext,
@@ -10,6 +11,7 @@ import {
 } from '@agimon-ai/doompi-core/headless';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import profileHeadlessFacet from '../../src/extensions/server';
 
 const roots: string[] = [];

@@ -1,5 +1,6 @@
 import type { LeaderBinding } from '@agimon-ai/doompi-core/leader';
 import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+
 import {
   LEADER_CATALOG_ACTION,
   LEADER_DETAIL,

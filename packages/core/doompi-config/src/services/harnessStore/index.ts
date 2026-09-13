@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { harnessCache, type CachedHarnessState, type LoadedHarnessState } from '../../models/harnessCache';
 import type { HarnessState } from '../../types/config';
 import { writePrivateAtomicJson } from '../atomicJson';

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { loadAuthorDocument, saveAuthorDocument } from '../../src/web/api/authorFiles';
 
 const SOURCE_SHA = 'a'.repeat(64);

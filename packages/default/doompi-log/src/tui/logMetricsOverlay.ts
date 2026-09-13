@@ -15,12 +15,12 @@
 import type { LogMetricsGroupBy, LogMetricsPeriod, LogMetricsReport } from '@agimon-ai/log-sink-mcp';
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+
 import { deriveFindings, type LogMetricsFinding, type LogMetricsFindingSeverity } from '../services/findings';
 import type { LogMetricsSnapshot, LogMetricsToolCost } from '../services/metrics';
 import type { MetricsInstance, MetricsQuery, MetricsTransport } from '../types/metricsSource';
-import { DOOM_OVERLAY_ACCENT, DoomOverlay, type DoomOverlayChrome, type DoomOverlayTui } from './doomOverlay';
-
 import type { SinkStatus } from '../types/sinkStatus';
+import { DOOM_OVERLAY_ACCENT, DoomOverlay, type DoomOverlayChrome, type DoomOverlayTui } from './doomOverlay';
 export type { SinkStatus } from '../types/sinkStatus';
 
 export interface LogMetricsView {

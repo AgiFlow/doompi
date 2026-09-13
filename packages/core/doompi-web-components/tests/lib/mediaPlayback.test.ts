@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { boundedMediaTime } from '../../src/lib/mediaPlayback';
 
 describe('boundedMediaTime', () => {

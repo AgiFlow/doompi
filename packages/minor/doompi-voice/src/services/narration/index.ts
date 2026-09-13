@@ -1,4 +1,5 @@
 import type { VoiceTtsConfig } from '@agimon-ai/doompi-config';
+
 import type { ITtsAdapter, NarrationKind, TtsPlayback, TtsPlaybackReference, TtsPlaybackResult } from '../../types';
 
 const LIFECYCLE_ERROR_OBSERVER_WARNING = 'Narration lifecycle observer error reporting failed';

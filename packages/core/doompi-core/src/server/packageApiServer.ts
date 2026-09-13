@@ -1,5 +1,7 @@
-import { DOOM_API_ROUTE_PREFIX, type DoomApi, type DoomApiContext } from '../exports/packageApi';
+import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
+
 import type { DoomDirectEventBus, DoomHubSessionService } from '../exports/hubChannel';
+import { DOOM_API_ROUTE_PREFIX, type DoomApi, type DoomApiContext } from '../exports/packageApi';
 import { createDoomServerHost, type CreateDoomServerHostOptions, type DoomServerFacet } from '../exports/serverFacet';
 import {
   installServerFacets,
@@ -7,9 +9,8 @@ import {
   type InstalledServerFacets,
   type InstallServerFacetsOptions,
 } from '../exports/serverFacet';
-import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
-import { validatedTraceContext } from '../services/traceContext';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
+import { validatedTraceContext } from '../services/traceContext';
 
 /**
  * A body that keeps streaming well after its headers went out is worth its own span. A fast

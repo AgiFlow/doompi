@@ -1,18 +1,20 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { createHarnessSession, getHarnessState, resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
-import type { HarnessState } from '@agimon-ai/doompi-config/types';
+
 import { HARNESS_STATE_KEYS, readHarnessState } from '@agimon-ai/doompi-config/harnessState';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { createHarnessSession, getHarnessState, resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
+import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
+import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import {
   createVoiceReloadHandoffStore,
   type VoiceReloadHandoffStore,
 } from '@agimon-ai/doompi-voice/voice-reload-handoff';
 import { DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-voice/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createProfileCommand } from '../../src/controllers/profileCommand';
 import type { ProfileTelemetry } from '../../src/types/telemetry';
 import { bindStubCoordinator } from '../helpers/coordinator';

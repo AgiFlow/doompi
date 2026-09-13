@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { preflightSubagentDepth, resolveCurrentSubagentDepth } from '../../src/services/depthGuard';
 import { SUBAGENT_PARENT_DEPTH_ENV } from '../../src/exports/env';
+import { preflightSubagentDepth, resolveCurrentSubagentDepth } from '../../src/services/depthGuard';
 
 describe('resolveCurrentSubagentDepth', () => {
   it('resolves to depth 0 when the env var is entirely absent (a root session)', () => {

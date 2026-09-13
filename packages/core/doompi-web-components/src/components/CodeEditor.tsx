@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+
 import { cn } from '../lib/cn';
 import type { CodeEditorProps } from '../types/editor';
 import { Skeleton } from './Skeleton';

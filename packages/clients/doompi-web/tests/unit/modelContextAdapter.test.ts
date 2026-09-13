@@ -1,5 +1,6 @@
 import type { ModelContext } from '@agimon-ai/doompi-core/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { acquireModelContext, disposeModelContextAdapter } from '../../src/web/lib/modelContextAdapter';
 
 function nativeContext(): ModelContext {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   createDomainSwitchHandoffStore,
   DOMAIN_SWITCH_HANDOFF_MAX_DOMAINS,

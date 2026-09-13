@@ -1,3 +1,4 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   Button,
   ChevronDownIcon,
@@ -13,12 +14,12 @@ import {
   TrashIcon,
   type DotTone,
 } from '@agimon-ai/doompi-web-components';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
+
 import type { WebTask } from '../../types/webTasks';
-import { TaskDetailDialog, type TaskDialogMode } from './TaskDetailDialog';
 import { requestTaskRemoval, tasks } from '../stores/tasksStore';
+import { TaskDetailDialog, type TaskDialogMode } from './TaskDetailDialog';
 
 const STATUS_TONE: Readonly<Record<WebTask['status'], DotTone>> = {
   pending: 'muted',

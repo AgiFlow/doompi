@@ -1,7 +1,8 @@
-import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
-import { readHelpResource } from '../services/helpResources';
 import { type DoomHeadlessCommand, type DoomHeadlessResource } from '@agimon-ai/doompi-core/headless';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
+
+import { readHelpResource } from '../services/helpResources';
 
 const HELP_MODE_ID = 'help';
 

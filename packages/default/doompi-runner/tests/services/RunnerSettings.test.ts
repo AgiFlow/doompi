@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { CONFIG_DIR_NAME } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { RunnerSettingsLoader } from '../../src/services/runnerSettings';
+
 import { parseResultPragma } from '../../src/exports/responseEnvelope';
+import { RunnerSettingsLoader } from '../../src/services/runnerSettings';
 
 let directory: string;
 

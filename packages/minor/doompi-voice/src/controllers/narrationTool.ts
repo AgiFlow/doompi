@@ -3,16 +3,17 @@ import {
   NarrationRequestSchema,
   normalizeNarrationText,
 } from '@agimon-ai/doompi-core/narration';
-import { VOICE_NARRATE_TOOL_NAME } from '../constants/voiceTools';
-import { type VoiceToolErrorPayload } from '../schemas/voiceTools';
-import { type VoiceToolSessionHandle } from '../services/voiceTools';
 import type {
   AgentToolResult,
   AgentToolUpdateCallback,
   ExtensionContext,
   ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
+
+import { VOICE_NARRATE_TOOL_NAME } from '../constants/voiceTools';
+import { type VoiceToolErrorPayload } from '../schemas/voiceTools';
 import type { NarrationPlaybackOutcome } from '../services/narration';
+import { type VoiceToolSessionHandle } from '../services/voiceTools';
 import type { VoiceWorkerAutoCaptureController } from '../services/voiceWorkerAutoCaptureController';
 import { renderNarrationToolCall, renderNarrationToolResult } from './voiceToolRender';
 import type { VoiceToolReadinessWaiter } from './voiceTools';

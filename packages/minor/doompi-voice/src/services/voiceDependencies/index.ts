@@ -1,4 +1,5 @@
 import { type VoiceDependencies } from '../../types';
+import { ClientPcmAudioRecorder, ClientTtsAdapter, voiceMediaHostConnection } from '../clientMedia';
 import {
   ExecutableResolver,
   FfmpegAudioRecorder,
@@ -10,10 +11,9 @@ import {
   PcmWavAnalyzer,
   SystemClock,
 } from '../infrastructure';
-import { ClientPcmAudioRecorder, ClientTtsAdapter, voiceMediaHostConnection } from '../clientMedia';
+import { PiVoiceConfigService } from '../voiceConfig';
 import { VoiceWorkerSessionController } from '../voiceWorkerSessionController';
 import { MlxWhisperAdapter, OpenAiWhisperAdapter, TranscriberRegistry, WhisperCppAdapter } from '../whisper';
-import { PiVoiceConfigService } from '../voiceConfig';
 
 export function createVoiceDependencies(overrides: Partial<VoiceDependencies> = {}): VoiceDependencies {
   const clock = overrides.clock ?? new SystemClock();

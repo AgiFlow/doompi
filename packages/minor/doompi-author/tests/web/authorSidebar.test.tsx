@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { isValidElement, type ReactElement, type ReactNode } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { AuthorPanel } from '../../src/web/components/AuthorPanel';
 import { AuthorRegionDrafts } from '../../src/web/components/AuthorRegionDrafts';
 import { AuthorToolPalette } from '../../src/web/components/AuthorToolPalette';

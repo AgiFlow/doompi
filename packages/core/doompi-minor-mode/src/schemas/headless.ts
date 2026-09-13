@@ -1,3 +1,5 @@
+import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
+
 import type {
   MinorModeArguments,
   MinorModeDescriptor,
@@ -5,7 +7,6 @@ import type {
   MinorModeOwnerActionResult,
   MinorModeSessionKind,
 } from './mode';
-import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
 export interface DoomHeadlessMinorMode {
   descriptor: MinorModeDescriptor;
   initialState: MinorModeState;

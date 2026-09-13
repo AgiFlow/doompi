@@ -1,6 +1,3 @@
-import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-minor-mode';
-import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
-import { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   DOOM_HEADLESS_OWNER,
@@ -13,7 +10,11 @@ import {
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
 import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-minor-mode';
+import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
+import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
+
 import { goalServerFacet } from '../../src/extensions/server';
 
 async function fixture() {

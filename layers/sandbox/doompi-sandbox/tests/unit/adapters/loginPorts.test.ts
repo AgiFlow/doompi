@@ -1,5 +1,7 @@
 import net from 'node:net';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { availableLoginPorts } from '../../../src/services/loginPorts';
 
 const servers: net.Server[] = [];

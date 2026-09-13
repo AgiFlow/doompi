@@ -1,5 +1,6 @@
 import type { SettingsFieldContribution } from '@agimon-ai/doompi-core/web';
 import { describe, expect, it } from 'vitest';
+
 import {
   canSaveSettings,
   plannedSettingsWrites,

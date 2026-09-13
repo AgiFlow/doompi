@@ -1,4 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
+
 import { McpRepositorySettingsPanel } from '../web/components/McpRepositorySettingsPanel';
 import { McpSessionAuthSection } from '../web/components/McpSessionAuthSection';
 import { McpToolMessage } from '../web/components/McpToolMessage';

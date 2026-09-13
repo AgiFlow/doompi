@@ -1,4 +1,5 @@
 import { MAX_NARRATION_TEXT_CHARACTERS } from '@agimon-ai/doompi-core/narration';
+
 import type { QuestionParams } from '../../schemas/questionnaire';
 
 const MAX_QUESTION_CHARACTERS = 240;

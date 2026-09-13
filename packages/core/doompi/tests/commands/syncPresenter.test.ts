@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { formatProgressLine, SyncProgress } from '../../src/cli/commands/sync/presenter';
 
 const CLEAR_LINE = `${String.fromCharCode(0x1b)}[2K\r`;

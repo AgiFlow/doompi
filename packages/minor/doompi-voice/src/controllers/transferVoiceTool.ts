@@ -1,7 +1,8 @@
 import { definePiTool, type PiToolCollection } from '@agimon-ai/doompi-core/pi-extension';
 import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
-import { VoiceToolDescribeInputSchema } from '../schemas/voiceTools';
 import type { AgentToolResult, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
+
+import { VoiceToolDescribeInputSchema } from '../schemas/voiceTools';
 import { sessionVoiceOwnership } from '../services/sessionVoiceOwnership';
 
 export const TRANSFER_VOICE_TOOL_NAME = 'transfer_voice';

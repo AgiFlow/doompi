@@ -1,6 +1,7 @@
-import type { DoomLoopLaunchersService, LoopLauncherRegistration, StoppableLoop } from '../../schemas/loopLaunchers';
 import type { ExtensionAPI, ExtensionContext, ExtensionUIContext } from '@earendil-works/pi-coding-agent';
+
 import { NOTIFY_WARNING_LEVEL, PACKAGE_SOURCE } from '../../constants/piLoop';
+import type { DoomLoopLaunchersService, LoopLauncherRegistration, StoppableLoop } from '../../schemas/loopLaunchers';
 
 const DEFAULT_LAUNCHER_ID = 'doompi.default';
 const DEFAULT_INTERVAL_SECONDS = 300;

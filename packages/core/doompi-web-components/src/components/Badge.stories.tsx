@@ -1,3 +1,4 @@
+import { CHIP_TONES } from '../types/tone';
 /*
  * Story fixtures are plain CSF objects rather than `Meta`/`StoryObj` from
  * Storybook: the renderer parses these files statically and mounts the exported
@@ -8,7 +9,6 @@
  * when a story file is written or edited.
  */
 import { Badge } from './Badge';
-import { CHIP_TONES } from '../types/tone';
 
 const SIZES = ['xs', 'sm', 'md', 'lg'] as const;
 

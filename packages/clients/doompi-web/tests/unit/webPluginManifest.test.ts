@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+
 import { scanWebPlugins } from '@agimon-ai/doompi/builders/web';
 import { declaredPluginsOf, orderDeclaredPlugins, pluginBlocksOf } from '@agimon-ai/doompi/builders/web';
+import { afterEach, describe, expect, it } from 'vitest';
 
 let cleanups: Array<() => void> = [];
 

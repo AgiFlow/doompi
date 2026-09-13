@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { HeadlessSessionHost } from '../../../../../src/systems/main/types/headlessSessionHost';
 
 const { createHeadlessSessionHost } = vi.hoisted(() => ({ createHeadlessSessionHost: vi.fn() }));

@@ -1,7 +1,8 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { ToolsOverlayComponent } from '../../src/exports/toolsOverlay';
+
 import type { ToolSource } from '../../src/exports/toolInventory';
+import { ToolsOverlayComponent } from '../../src/exports/toolsOverlay';
 
 const theme = {
   fg: (_color: string, text: string) => text,

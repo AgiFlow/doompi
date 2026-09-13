@@ -1,42 +1,29 @@
-import { openTaskSpace } from '../tui/taskSpace';
-import { renderTaskCall, renderTaskResult } from '../tui/format';
-import type { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProviderHandle,
   readDoomBackgroundWorkService,
 } from '@agimon-ai/doompi-core/background-work';
-import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
 import {
   DOOM_CONTEXT_CONTRIBUTIONS_SERVICE,
   requireDoomContextContributions,
 } from '@agimon-ai/doompi-core/context-contributions';
-import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-team/delegation';
 import {
   createNarrationRequest,
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
   requireDoomNarrationService,
 } from '@agimon-ai/doompi-core/narration';
+import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
 import { readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_DELEGATION_SERVICE, readDoomDelegationService } from '@agimon-ai/doompi-team/delegation';
+import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { KeyId } from '@earendil-works/pi-tui';
 import { Text } from '@earendil-works/pi-tui';
+
 import { createTasksCommand } from '../controllers/tasksCommand';
-import { createTaskTool } from '../tools/task';
 import { COMMAND_NAME, TOOL_NAME } from '../schemas/task';
-import { BACKGROUND_WORK_PROVIDER, DelegationManager, NOTIFY_CUSTOM_TYPE } from '../services/delegation';
-import { createTaskContextContribution, TASK_CONTEXT_CONTRIBUTION_SOURCE } from '../services/contextContribution';
-import { narrateTaskCommit, type TaskNarrationSink } from '../services/taskNarration';
-import {
-  hasStorePathOverride,
-  removeLegacyStoreDirectoryAsync,
-  resolveSessionKey,
-  sweepStoreFilesAsync,
-} from '../services/paths';
-import { TaskStore } from '../services/taskStore';
-import { TaskOverlay } from '../tui/taskOverlay';
 import {
   COLLAPSE_KEY_OFF,
   getDelegationTimeoutMs,
@@ -44,8 +31,22 @@ import {
   getStoreTtlMs,
   resolveCollapseKey,
 } from '../services/config';
+import { createTaskContextContribution, TASK_CONTEXT_CONTRIBUTION_SOURCE } from '../services/contextContribution';
+import { BACKGROUND_WORK_PROVIDER, DelegationManager, NOTIFY_CUSTOM_TYPE } from '../services/delegation';
 import { createNodeDelegationPlatform } from '../services/delegationPlatform';
 import { createTaskErrorReporter, TASK_EVENT, toFailureReporter } from '../services/logSinkTelemetry';
+import {
+  hasStorePathOverride,
+  removeLegacyStoreDirectoryAsync,
+  resolveSessionKey,
+  sweepStoreFilesAsync,
+} from '../services/paths';
+import { narrateTaskCommit, type TaskNarrationSink } from '../services/taskNarration';
+import { TaskStore } from '../services/taskStore';
+import { createTaskTool } from '../tools/task';
+import { renderTaskCall, renderTaskResult } from '../tui/format';
+import { TaskOverlay } from '../tui/taskOverlay';
+import { openTaskSpace } from '../tui/taskSpace';
 
 interface SessionContextLike {
   hasUI: boolean;

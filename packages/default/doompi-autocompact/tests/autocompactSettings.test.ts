@@ -1,12 +1,13 @@
 import { DOOM_PLANNING_THINKING_LEVELS, parseAutocompactModeConfig } from '@agimon-ai/doompi-config';
 import { describe, expect, it } from 'vitest';
+
+import { webPlugin as scopedWebPlugin } from '../src/extensions/web';
 import {
   AUTOCOMPACT_CONFIG_SECTION_ID,
   AUTOCOMPACT_SETTING_SHAPES,
   AUTOCOMPACT_THINKING_LEVELS,
 } from '../src/types/autocompactSettings';
 import { autocompactSettingsSection } from '../src/web/lib/autocompactSettings';
-import { webPlugin as scopedWebPlugin } from '../src/extensions/web';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

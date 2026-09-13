@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import { laneConfig, laneState } from '@earendil-works/pi-agent-core/harness/session';
 import { SqliteSessionRepo, createNodeSqliteFactory } from '@earendil-works/pi-session-backend-sqlite-node';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { DoomChildSessionRequest } from '../../../../../src/exports/childSession';
 import type { DirectHarnessRuntime, DirectHarnessRuntimeOptions } from '../../../../../src/server/directHarnessRuntime';
 import {

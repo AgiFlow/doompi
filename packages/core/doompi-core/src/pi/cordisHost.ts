@@ -1,5 +1,6 @@
 import { Context, type Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, SessionStartEvent } from '@earendil-works/pi-coding-agent';
+
 import { DOOM_CONTEXT_CONTRIBUTIONS_SERVICE } from '../schemas/contextContributions';
 import { DOOM_TOOL_OVERRIDES_SERVICE } from '../schemas/toolOverrides';
 import { DOOM_TOOL_SURFACE_SERVICE } from '../schemas/toolSurface';

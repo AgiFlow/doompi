@@ -1,5 +1,6 @@
 import { Dialog as SheetPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
+
 import { CloseIcon } from '../icons/icons';
 import { cn } from '../lib/cn';
 import { Button } from './Button';

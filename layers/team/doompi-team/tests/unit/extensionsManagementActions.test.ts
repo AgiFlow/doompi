@@ -1,8 +1,7 @@
+import type { DoomChildSessionHandle } from '@agimon-ai/doompi-core/child';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AsyncJobTracker } from '../../src/services/asyncJobTracker';
-import { ManagementActions } from '../../src/services/managementActions';
-import type { NativeRunCoordinatorContract } from '../../src/services/nativeRunCoordinator';
 import {
   EXTERNAL_IPC_CHANNEL,
   EXTERNAL_IPC_VERSION,
@@ -11,9 +10,10 @@ import {
   type ExternalControlMessage,
   type ExternalRunProjection,
 } from '../../src/services/externalProcessIpc';
+import { ManagementActions } from '../../src/services/managementActions';
+import type { NativeRunCoordinatorContract } from '../../src/services/nativeRunCoordinator';
 import { createSessionScope, type SessionScope } from '../../src/services/sessionPaths';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
-import type { DoomChildSessionHandle } from '@agimon-ai/doompi-core/child';
 
 const trackers: AsyncJobTracker[] = [];
 const externalIpcs: ExternalProcessIpc[] = [];

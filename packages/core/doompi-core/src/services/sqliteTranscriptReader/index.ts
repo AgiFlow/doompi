@@ -1,11 +1,13 @@
 import path from 'node:path';
+
+import type { Context } from '@earendil-works/chord';
+import { branchTip } from '@earendil-works/pi-agent-core/harness/session';
 import {
   SqliteSessionRepo,
   SqliteStorage,
   createNodeSqliteFactory,
 } from '@earendil-works/pi-session-backend-sqlite-node';
-import { branchTip } from '@earendil-works/pi-agent-core/harness/session';
-import type { Context } from '@earendil-works/chord';
+
 import type { TranscriptPageRequest, TranscriptPage } from '../../exports/sessionProtocol';
 import { readTranscriptPage } from '../transcriptPages';
 

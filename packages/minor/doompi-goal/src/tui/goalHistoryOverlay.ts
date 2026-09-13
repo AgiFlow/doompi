@@ -8,6 +8,7 @@ import {
 } from '@agimon-ai/doompi-ui/doom-overlay';
 import type { ExtensionContext, Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
+
 import type { GoalHistoryEntry, GoalHistoryStatus } from '../types/history';
 
 interface GoalHistoryManager {

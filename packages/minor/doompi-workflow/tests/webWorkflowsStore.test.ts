@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { workflowRunsChannel, workflows } from '../src/web/stores/workflowsStore';
 
 describe('the workflows web store channel', () => {

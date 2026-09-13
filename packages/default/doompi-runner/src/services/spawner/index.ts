@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+
 import { SHELL } from '../../constants/spawner';
 import type { ExitResult, ISpawner, OutputStream, SpawnedProcess, SpawnRequest } from '../../types/spawner';
 

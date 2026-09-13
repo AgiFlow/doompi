@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HarnessContext } from '../../src/builders/cli/harnessContext';
+
 import type { HarnessTelemetry } from '@agimon-ai/doompi-core/log-sink-telemetry';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { LAUNCHER_COMPOSITION_ENV } from '../../src/builders/cli/constants';
+import type { HarnessContext } from '../../src/builders/cli/harnessContext';
 
 const runtimeBundleMocks = vi.hoisted(() => ({
   buildRuntimeBundle: vi.fn(),

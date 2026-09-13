@@ -2,9 +2,11 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import { normalizeAgentPluginMcpSource } from '@agimon-ai/doompi-config/agentPluginMcp';
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
 import type { PluginEntry, PluginSkillDiscovery } from '@agimon-ai/doompi-config/domains';
-import { normalizeAgentPluginMcpSource } from '@agimon-ai/doompi-config/agentPluginMcp';
+import type { PluginHookSource } from '@agimon-ai/doompi-config/types';
 import {
   AGENT_PLUGIN_MCP_SCHEMA_URL,
   DOOM_MCP_PROJECTION_VERSION,
@@ -12,7 +14,7 @@ import {
   type DoomMcpProjectionSource,
 } from '@agimon-ai/doompi-core/mcp-projection';
 import { parse, stringify } from 'yaml';
-import { toPiToolName } from '../toolNames';
+
 import type {
   HarnessResourceOptions,
   HarnessResources,
@@ -21,9 +23,9 @@ import type {
   NamedResource,
   StagedMcpResources,
 } from '../../types/resources';
-import type { PluginHookSource } from '@agimon-ai/doompi-config/types';
 import { applyMcpAllowlist } from '../mcpFilter';
 import { resolveSkillCacheDirectory } from '../skillCacheLocation';
+import { toPiToolName } from '../toolNames';
 
 export const DISPATCHER_AGENT_NAME = 'agiflow-dispatcher';
 const DISPATCHER_TOOLS = ['read', 'grep', 'find', 'ls', 'bash', 'launch_workflow', 'list_workflows'];

@@ -1,8 +1,8 @@
 import type { AuthorJsonSchema } from '../../types/author';
+import { AUTHOR_RUNTIME_BINDING_IDS } from '../api/authorRuntime';
 import type { AuthorDocumentKind, AuthorTrustedProfile } from '../lib/authorViewportTypes';
 import { authorGridTools } from './authorGridTools';
 import { addAuthorAnnotation } from './authorWorkspaceStore';
-import { AUTHOR_RUNTIME_BINDING_IDS } from '../api/authorRuntime';
 
 function record(input: unknown): Record<string, unknown> {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) throw new Error('Expected an object');

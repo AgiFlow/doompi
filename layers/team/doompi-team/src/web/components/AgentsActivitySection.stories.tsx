@@ -6,6 +6,7 @@
  * seeded at module scope, which is the only input this component reads.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import type { SubagentRun } from '../../types/webSubagents';
 import { subagents } from '../stores/subagentsStore';
 import { AgentsActivitySection } from './AgentsActivitySection';

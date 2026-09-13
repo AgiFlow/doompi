@@ -1,12 +1,13 @@
 import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+
+import { PACKAGE_SOURCE, PROMPT_HELP_SKILL } from '../constants/prompt';
+import { createInputCapture } from '../controllers/inputCapture';
 import { createPromptSaveCommand } from '../controllers/promptSaveCommand';
 import { createPromptsCommand } from '../controllers/promptsCommand';
-import { createInputCapture } from '../controllers/inputCapture';
 import { createRecentPrompts } from '../models/recentPrompts';
-import { createNodeSavedPromptStore } from '../services/promptStore';
 import { promptLeaderService } from '../services/promptLeader';
+import { createNodeSavedPromptStore } from '../services/promptStore';
 import type { PromptExtensionDependencies } from '../types/prompt';
-import { PACKAGE_SOURCE, PROMPT_HELP_SKILL } from '../constants/prompt';
 export const activatePromptExtension = definePiExtension<PromptExtensionDependencies>(PACKAGE_SOURCE, ({ options }) => {
   const dependencies = options ?? { store: createNodeSavedPromptStore(), recent: createRecentPrompts() };
   return {

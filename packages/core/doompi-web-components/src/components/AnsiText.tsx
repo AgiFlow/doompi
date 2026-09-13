@@ -1,4 +1,5 @@
 import { type ComponentProps, Fragment, useMemo } from 'react';
+
 import { type AnsiSpan, ansiSpans } from '../lib/ansiSpans';
 import { cn } from '../lib/cn';
 

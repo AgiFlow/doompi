@@ -1,4 +1,5 @@
 import type { SettingsSectionContribution } from '@agimon-ai/doompi-core/web';
+
 import { AUTOCOMPACT_CONFIG_SECTION_ID, AUTOCOMPACT_SETTING_SHAPES } from '../../types/autocompactSettings';
 
 /**

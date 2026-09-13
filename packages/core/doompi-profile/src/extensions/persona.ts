@@ -1,4 +1,5 @@
 import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+
 import { createPersonaRuntime } from '../controllers/personaRuntime';
 import { createProfileTelemetry } from '../services/logSinkTelemetry';
 import type { ProfileTelemetry } from '../types/telemetry';

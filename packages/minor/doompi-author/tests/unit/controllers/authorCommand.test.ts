@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createAuthorCommand } from '../../../src/controllers/doomAuthorCommand';
 
 describe('Author command', () => {

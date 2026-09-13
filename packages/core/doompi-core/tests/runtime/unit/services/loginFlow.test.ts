@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { createLoginFlow } from '../../../../src/services/loginFlow';
 
 const input = { id: 'flow-1', providerId: 'provider', providerName: 'Provider', type: 'oauth' as const };

@@ -1,15 +1,16 @@
-import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
+
 import { AUTHOR_PACKAGE_SOURCE, AUTHOR_FACADE_TOOL_NAMES, AUTHOR_GUIDANCE } from '../constants/author';
-import { createAuthorChannel } from '../controllers/webAuthorChannel';
+import { api } from '../controllers/authorApi';
 import { createAuthorBridgeMethod } from '../controllers/authorBridgeMethod';
 import { createAuthorCommand } from '../controllers/doomAuthorCommand';
-import { api } from '../controllers/authorApi';
+import { createAuthorChannel } from '../controllers/webAuthorChannel';
+import { authorMinorMode } from '../models/authorMode';
 import { createAuthorCatalog } from '../services/authorCatalog';
 import { readAuthorPrompt } from '../services/authorPrompt';
 import { createAuthorTools } from '../tools/authorTools';
 import { OPEN_AUTHORING_FILE_TOOL_NAME } from '../types/author';
-import { authorMinorMode } from '../models/authorMode';
 
 export const authorServerFacet = defineServerPlugin({
   name: AUTHOR_PACKAGE_SOURCE,

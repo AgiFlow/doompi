@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import {
   AgentHarness,
   HarnessFault,
@@ -8,7 +9,6 @@ import {
   type HarnessEvent,
 } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT, type Context } from '@earendil-works/pi-agent-core/harness/context';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import {
   JSONL_STORAGE_VERSION,
   JsonlSessionRepo,
@@ -16,6 +16,7 @@ import {
   type JsonlSessionMetadata,
   type Session,
 } from '@earendil-works/pi-agent-core/harness/session';
+import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import {
   createModels,
   createAssistantMessageEventStream,
@@ -28,8 +29,11 @@ import {
   type MutableModels,
   type Usage,
 } from '@earendil-works/pi-ai';
-import { preserveHistoryBeforeOpen } from '../services/historyImport';
+
 import { createHistoryCreationFileSystem } from '../services/historyCreationFileSystem';
+import { preserveHistoryBeforeOpen } from '../services/historyImport';
+import type { HistoryOwnershipLease } from '../services/historyImport';
+import { openSqliteSessionStorage } from '../services/sqliteSessionStorage';
 import type {
   DirectHarnessEventListener,
   DirectHarnessFrame,
@@ -37,8 +41,6 @@ import type {
   DirectHarnessRuntime,
   DirectHarnessRuntimeOptions,
 } from '../types/server/directHarnessRuntime';
-import type { HistoryOwnershipLease } from '../services/historyImport';
-import { openSqliteSessionStorage } from '../services/sqliteSessionStorage';
 
 const DEFAULT_LANE = 'main';
 const DEFAULT_SESSION_ROOT = '.pi/sessions';

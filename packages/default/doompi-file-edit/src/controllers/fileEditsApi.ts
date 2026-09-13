@@ -1,11 +1,17 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import { Hono } from 'hono';
+
 import { baselineOf } from '../services/fileChanges';
+import { FileEditPaths } from '../services/fileEditPaths';
 import { lineDiff, lineDiffFromEmpty } from '../services/lineDiff';
+import { NodeSnapshotStoreAdapter } from '../services/snapshotStore';
+import { TimelineStore } from '../services/timelineStore';
 import type { FileEditVersion } from '../types/domain';
+import type { IFileEditPaths } from '../types/fileEditPaths';
 import {
   API_BASE_PATH,
   type FileEditsCumulativeView,
@@ -17,12 +23,8 @@ import {
   type FileEditsWorkingView,
   PATH_QUERY_PARAM,
 } from '../types/fileEditsApi';
-import type { IFileEditPaths } from '../types/fileEditPaths';
 import type { SnapshotStorePort } from '../types/snapshotStore';
 import type { ITimelineStore } from '../types/timelineStore';
-import { FileEditPaths } from '../services/fileEditPaths';
-import { NodeSnapshotStoreAdapter } from '../services/snapshotStore';
-import { TimelineStore } from '../services/timelineStore';
 
 /**
  * This package's HTTP surface: one file's history, and the manual save.

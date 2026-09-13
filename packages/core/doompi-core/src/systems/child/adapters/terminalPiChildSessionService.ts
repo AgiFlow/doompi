@@ -2,8 +2,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { getAgentDir } from '@earendil-works/pi-coding-agent';
+
 import type { Models, MutableModels, Provider } from '@earendil-works/pi-ai';
+import { getAgentDir } from '@earendil-works/pi-coding-agent';
+
 import {
   createDoomChildSessionService,
   type DoomChildSessionIntercom,
@@ -13,23 +15,23 @@ import {
   type DoomChildSessionTerminalPiForkSource,
   type DoomChildSessionRequest,
 } from '../../../exports/childSession';
-import { importV3WithPinnedUpstream } from '../../../services/jsonlSessionRepo';
-import type { HistoryOwnership, HistoryOwnershipLease } from '../../../services/historyImport';
-import { createHistoryOwnership } from '../../../services/historyOwnership';
-import { readNativeChildTranscript } from '../../../server/nativeChildTranscriptReader';
-import { registerNativeChild } from './nativeChildRuntimes';
 import {
   createDirectHarnessRuntime,
   promptForAssistantText,
   type DirectHarnessRuntime,
   type DirectHarnessRuntimeOptions,
 } from '../../../server/directHarnessRuntime';
+import { readNativeChildTranscript } from '../../../server/nativeChildTranscriptReader';
+import type { HistoryOwnership, HistoryOwnershipLease } from '../../../services/historyImport';
+import { createHistoryOwnership } from '../../../services/historyOwnership';
+import { importV3WithPinnedUpstream } from '../../../services/jsonlSessionRepo';
+import type { DirectHarnessModel } from '../../../types/server/directHarnessRuntime';
 import {
   composeDirectHarnessRequestOptions,
   createHeadlessChildSessionService,
   type HeadlessChildSessionServiceOptions,
 } from './headlessChildSessionService';
-import type { DirectHarnessModel } from '../../../types/server/directHarnessRuntime';
+import { registerNativeChild } from './nativeChildRuntimes';
 
 export interface TerminalPiChildSessionServiceOptions {
   readonly cwd: string;

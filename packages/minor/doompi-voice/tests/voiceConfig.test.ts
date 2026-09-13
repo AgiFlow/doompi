@@ -2,9 +2,12 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { parseDoomConfig } from '@agimon-ai/doompi-config';
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { VoiceConfigController } from '../src/controllers/voiceConfig';
 import {
   catalogEntryById,
   ENGINE_TOOLING,
@@ -17,7 +20,6 @@ import {
 import { downloadModelFile, isDownloaded } from '../src/services/download';
 import { planBlocker, planInstall, UNSUPPORTED_PLATFORM } from '../src/services/install';
 import type { IExecutableResolver, IProcessSpawner, ProcessResult, RunningProcess } from '../src/types';
-import { VoiceConfigController } from '../src/controllers/voiceConfig';
 
 const WHISPER_CPP_TURBO = 'whisper-cpp/large-v3-turbo';
 const MLX_TURBO = 'mlx-community/whisper-large-v3-turbo';

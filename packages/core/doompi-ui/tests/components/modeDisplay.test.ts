@@ -9,6 +9,7 @@
 import type { KeybindingsManager as CodingKeybindingsManager } from '@earendil-works/pi-coding-agent';
 import { type EditorTheme, KeybindingsManager, type TUI, TUI_KEYBINDINGS } from '@earendil-works/pi-tui';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { DoomEditor } from '../../src/exports/doomEditor';
 import { LeaderHints } from '../../src/exports/leaderHints';
 import { DoomUiState, type UiMinorModeStatus } from '../../src/exports/uiState';

@@ -1,8 +1,9 @@
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
+
 import type { IClock, IPcmAudioRecorder, LiveRecordingHandle, TimerHandle } from '../../types';
 import type { VoiceMediaCaptureActivity, VoiceMediaCaptureConfiguration } from '../../types/clientMedia';
-import { PCM_BYTES_PER_SAMPLE } from '../pcm';
 import type { ITurnSpool, TurnSnapshot } from '../../types/turnSpool';
+import { PCM_BYTES_PER_SAMPLE } from '../pcm';
 
 const DEFAULT_FIRST_FRAME_TIMEOUT_MS = 8_000;
 const DEFAULT_LIVENESS_CHECK_MS = 1_000;

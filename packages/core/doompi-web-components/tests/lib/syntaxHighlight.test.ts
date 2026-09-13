@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { detectGrammar, highlightToLines, type SyntaxSpan, syntaxStyleOf } from '../../src/lib/syntaxHighlight';
 
 /** The text of a highlighted line, so a case can assert the split without the styles. */

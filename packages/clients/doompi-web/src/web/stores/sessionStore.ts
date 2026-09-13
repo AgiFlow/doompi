@@ -1,5 +1,7 @@
 import { useStore } from '@tanstack/react-store';
 import { Store } from '@tanstack/store';
+
+import { HISTORY_REQUEST_TYPE } from '../../types/hub';
 import {
   abortCommand,
   builtinCommandFrame,
@@ -36,7 +38,6 @@ import {
   type SessionState,
   type TimelineEntry,
 } from '../lib/sessionModel';
-import { HISTORY_REQUEST_TYPE } from '../../types/hub';
 import { sendFrame, sendHubFrame } from '../lib/transport';
 import { activeSessionId, sessionsStore } from './sessionsStore';
 

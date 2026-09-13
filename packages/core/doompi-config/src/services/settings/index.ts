@@ -1,4 +1,6 @@
 import type { DoomApiContext } from '@agimon-ai/doompi-core/package-api';
+
+import { KEY_SEPARATOR, SELECTION_KEYS } from '../../constants/settings';
 import type {
   RepositoryCatalogOption,
   RepositorySelectionChanges,
@@ -15,8 +17,6 @@ import { configScopeOf } from '../configPolicy';
 import { defaultDomainsForMajorMode, loadDomains } from '../domains';
 import { loadMajorModesConfig } from '../majorModes';
 import { loadProfiles } from '../profiles';
-
-import { KEY_SEPARATOR, SELECTION_KEYS } from '../../constants/settings';
 
 type SelectionKey = keyof typeof SELECTION_KEYS;
 

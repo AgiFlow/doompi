@@ -1,5 +1,6 @@
 import type { LeaderBindingContribution } from '@agimon-ai/doompi-core/web';
 import { describe, expect, it } from 'vitest';
+
 import { leaderConflicts, leaderGroup } from '../../src/web/lib/leaderTree';
 
 const WORKFLOWS = { key: 'w', label: 'workflows', detail: 'multi-step agent runs' };

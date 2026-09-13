@@ -1,7 +1,9 @@
 import path from 'node:path';
+
 import type { FooterStatusPlacement, FooterTextSegment } from '@agimon-ai/doompi-core/footer';
 import type { ExtensionContext, ReadonlyFooterDataProvider, Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
 import { type Component, type TUI, visibleWidth } from '@earendil-works/pi-tui';
+
 import type { DoomUiState } from '../models/uiState';
 import { fitLine, padLine } from './rendering';
 

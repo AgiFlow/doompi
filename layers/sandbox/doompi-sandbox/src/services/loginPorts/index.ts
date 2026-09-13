@@ -1,4 +1,5 @@
 import net from 'node:net';
+
 import { OAUTH_CALLBACK_PORTS } from '../oauthCallback';
 
 const LOOPBACK = '127.0.0.1';

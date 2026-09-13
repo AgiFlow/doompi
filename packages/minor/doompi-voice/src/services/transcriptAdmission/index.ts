@@ -22,7 +22,6 @@ export type {
   IVoiceTranscriptAdjudicator,
 } from './type';
 import type { AsrDecodingEvidence, IClock } from '../../types';
-
 import { alignNarrationSpan, extractNovelNarrationResidual, normalizeEchoText } from '../semanticEcho';
 
 const DUPLICATE_WINDOW_MS = 2_500;

@@ -6,6 +6,7 @@ import {
 } from '@agimon-ai/doompi-core/help';
 import { createSyntheticSourceInfo, type Skill } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
+
 import { createActiveHelpSkillView, mergeActiveHelpSkills } from '../../src/services/helpSkills';
 
 function skill(name: string, source = 'normal'): Skill {

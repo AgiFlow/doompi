@@ -1,25 +1,18 @@
-import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
-import { workflowSkillDirectory } from '../services/workflowResource';
-import type { PiPluginContributions, PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { basename, extname, resolve } from 'node:path';
+
 import { resolveRootSessionId, SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
-import {
-  defineMinorMode,
-  type MinorModeOwner,
-  type MinorModeOwnerActionContext,
-  type MinorModeState,
-} from '@agimon-ai/doompi-minor-mode';
 import {
   createNarrationRequest,
   DOOM_NARRATION_SERVICE,
   type DoomNarrationService,
   requireDoomNarrationService,
 } from '@agimon-ai/doompi-core/narration';
+import type { PiPluginContributions, PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
 import {
   createDoomReadinessCoordinator,
   type DoomReadinessCoordinator,
@@ -27,10 +20,15 @@ import {
   type DoomReadinessNotification,
   readDoomReadinessCoordinator,
 } from '@agimon-ai/doompi-core/readiness';
-
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import { piMinorModes } from '@agimon-ai/doompi-minor-mode';
+import {
+  defineMinorMode,
+  type MinorModeOwner,
+  type MinorModeOwnerActionContext,
+  type MinorModeState,
+} from '@agimon-ai/doompi-minor-mode';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
-import type { Context } from '@deepseek-ai/cordis';
 import {
   createEmbeddedWorkflowFeature,
   type EmbeddedWorkflowFeature,
@@ -44,23 +42,10 @@ import {
   type WorkflowStage,
   WorkflowTerminalService,
 } from '@agimon-ai/workflow-mcp';
+import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { type OverlayHandle, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
-import { type RunProviderHandle, registerRunProvider } from '../services/backgroundWork';
-import { narrateWorkflowTransition, type WorkflowNarrationSink } from '../services/workflowNarration';
-import { WorkflowInspectorComponent, type WorkflowInspectorSelection } from './workflow/workflowInspector';
-import { TerminalInputBatcher } from './workflow/workflowOverlay';
-import {
-  createWorkflowFinishedRenderer,
-  type WorkflowFinishedRun,
-  WORKFLOW_FINISHED_MESSAGE,
-} from './workflow/workflowFinishedMessage';
-import { openWorkflowCatalogOverlay } from './workflow/workflowCatalog';
-import { openWorkflowPickerOverlay } from './workflow/workflowPicker';
-import { WorkflowProgressOverlay, workflowProgressRow } from './workflow/workflowProgressOverlay';
-import { openWorkflowChoice, openWorkflowInput } from './workflow/workflowPrompt';
-import { runPanelUiOptions, WorkflowRunPanelComponent } from './workflow/workflowRunPanel';
-import { isWorkflowStepMessageDetails, renderWorkflowStepMessage } from './workflow/workflowStepMessage';
+
 import {
   LEADER_DISABLE_ACTION,
   LEADER_ENABLE_ACTION,
@@ -69,6 +54,7 @@ import {
   LEADER_RECOVER_ACTION,
   PACKAGE_SOURCE,
 } from '../constants/workflow';
+import { type RunProviderHandle, registerRunProvider } from '../services/backgroundWork';
 import {
   finishedRunSummary,
   isSessionRun,
@@ -85,18 +71,33 @@ import {
   type WorkflowLaunchInput,
 } from '../services/workflowExecution';
 import {
-  launchWorkflowEntry,
-  loadWorkflowCatalog,
-  summarizeWorkflowFile,
-  type WorkflowLauncherUi,
-} from '../services/workflowLauncher';
-import {
   isLaunchParseFailure,
   parseWorkflowLaunchCommand,
   resolveWorkflowEntry,
   validateWorkflowLaunch,
 } from '../services/workflowLaunchCommand';
+import {
+  launchWorkflowEntry,
+  loadWorkflowCatalog,
+  summarizeWorkflowFile,
+  type WorkflowLauncherUi,
+} from '../services/workflowLauncher';
+import { narrateWorkflowTransition, type WorkflowNarrationSink } from '../services/workflowNarration';
+import { workflowSkillDirectory } from '../services/workflowResource';
 import { createWorkflowTerminalService } from '../services/workflowTerminal';
+import { openWorkflowCatalogOverlay } from './workflow/workflowCatalog';
+import {
+  createWorkflowFinishedRenderer,
+  type WorkflowFinishedRun,
+  WORKFLOW_FINISHED_MESSAGE,
+} from './workflow/workflowFinishedMessage';
+import { WorkflowInspectorComponent, type WorkflowInspectorSelection } from './workflow/workflowInspector';
+import { TerminalInputBatcher } from './workflow/workflowOverlay';
+import { openWorkflowPickerOverlay } from './workflow/workflowPicker';
+import { WorkflowProgressOverlay, workflowProgressRow } from './workflow/workflowProgressOverlay';
+import { openWorkflowChoice, openWorkflowInput } from './workflow/workflowPrompt';
+import { runPanelUiOptions, WorkflowRunPanelComponent } from './workflow/workflowRunPanel';
+import { isWorkflowStepMessageDetails, renderWorkflowStepMessage } from './workflow/workflowStepMessage';
 
 const DOOM_FULLSCREEN_UI_OPTIONS = {
   overlay: true,

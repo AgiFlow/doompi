@@ -1,6 +1,8 @@
 import path from 'node:path';
-import type { HarnessOutputFormat, HarnessPreset, ParsedHarnessArgs } from '../composition/types/harness';
+
 import { defaultDomainsForMajorMode } from '@agimon-ai/doompi-config/domains';
+
+import type { HarnessOutputFormat, HarnessPreset, ParsedHarnessArgs } from '../composition/types/harness';
 import {
   ADD_DIRECTORY_OPTION,
   DEFAULT_MAJOR_MODE,

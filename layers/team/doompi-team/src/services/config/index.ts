@@ -36,10 +36,11 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { CompletionBatchConfig } from '../completionBatcher';
-import type { RuntimeTable } from '../runtimeRegistry';
-import { getAgentDir } from '../configDir';
+
 import type { ArtifactDirPreference, ToolBudgetConfig } from '../../types';
+import type { CompletionBatchConfig } from '../completionBatcher';
+import { getAgentDir } from '../configDir';
+import type { RuntimeTable } from '../runtimeRegistry';
 
 const ARTIFACT_DIR_PREFERENCES = new Set<ArtifactDirPreference>(['project', 'session', 'temp']);
 

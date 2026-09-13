@@ -4,22 +4,13 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
+
+import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
+import { loadDomains } from '@agimon-ai/doompi-config/domains';
 import { filterHookDisabledLayers, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
-import { buildHarnessContext } from '../../../builders/cli/harnessContext';
-import { ensureLayerPackages, missingLayerPackageSpecifiers } from '../../../composition/layerPackageInstaller';
-import { readBootstrapStatus } from '../../../builders/cli/bootstrapLocator';
+import { loadMajorModesConfig, loadMajorModesConfigLenient } from '@agimon-ai/doompi-config/majorModes';
+import type { ConfigDiagnostic } from '@agimon-ai/doompi-config/types';
 import { DOOM_PACKAGE_NAME } from '@agimon-ai/doompi-core/doom-package';
-import {
-  doomPiPackageRoot,
-  piExtensionAliasIsCurrent,
-  writePiExtensionAlias,
-} from '../../../builders/cli/piExtensionAlias';
-import {
-  PI_DISPATCHER_VERSION,
-  piExtensionDispatcherIsUpgradeable,
-  piExtensionDispatcherVersion,
-} from '../../../builders/cli/piExtensionDispatcher';
 import {
   mergePiSettings,
   piAgentDirectory,
@@ -27,12 +18,7 @@ import {
   readPiSettings,
   serializePiSettings,
 } from '@agimon-ai/doompi-core/runtime-pi-settings';
-import {
-  DUPLICATE_REGISTRATION_DRIFT,
-  projectRegistersDoom,
-  writeProjectPiSettings,
-} from '../../../builders/cli/projectSettings';
-import { buildSyncedRuntime } from '../../../builders/cli';
+import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
 import {
   acquireSyncLocationLock,
   resolveSyncLocation,
@@ -44,9 +30,38 @@ import {
   syncStateSha256,
   type SyncPackageRegistration,
 } from '@agimon-ai/doompi-core/sync-registration';
-import { readSyncDrift } from '../../../composition/syncDrift';
+import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
+
+import { buildSyncedRuntime } from '../../../builders/cli';
+import { readBootstrapStatus } from '../../../builders/cli/bootstrapLocator';
+import {
+  createLayerResolvers,
+  PERSONA_ENTRY,
+  resolveExtensionComposition,
+} from '../../../builders/cli/extensionAssembler';
+import { buildHarnessContext } from '../../../builders/cli/harnessContext';
+import {
+  doomPiPackageRoot,
+  piExtensionAliasIsCurrent,
+  writePiExtensionAlias,
+} from '../../../builders/cli/piExtensionAlias';
+import {
+  PI_DISPATCHER_VERSION,
+  piExtensionDispatcherIsUpgradeable,
+  piExtensionDispatcherVersion,
+} from '../../../builders/cli/piExtensionDispatcher';
+import {
+  DUPLICATE_REGISTRATION_DRIFT,
+  projectRegistersDoom,
+  writeProjectPiSettings,
+} from '../../../builders/cli/projectSettings';
 import { syncServerBundle } from '../../../builders/server';
 import { syncWebBundle } from '../../../builders/web';
+import { HARNESS_STATE_POINTER, loadHarnessState } from '../../../composition/harnessState';
+import { ensureLayerPackages, missingLayerPackageSpecifiers } from '../../../composition/layerPackageInstaller';
+import { loadDoomConfigLenient } from '../../../composition/projectTrust';
+import { resolveDoomConfigurationRoot } from '../../../composition/repository';
+import { readSyncDrift } from '../../../composition/syncDrift';
 import {
   computeInputsHash,
   computeWebSourcesHash,
@@ -60,20 +75,7 @@ import {
   syncStateRootMatches,
   writeSyncState,
 } from '../../../composition/syncState';
-import { HARNESS_STATE_POINTER, loadHarnessState } from '../../../composition/harnessState';
-import { loadDomains } from '@agimon-ai/doompi-config/domains';
-import { loadMajorModesConfig, loadMajorModesConfigLenient } from '@agimon-ai/doompi-config/majorModes';
-import type { ConfigDiagnostic } from '@agimon-ai/doompi-config/types';
-import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
-import { loadDoomConfigLenient } from '../../../composition/projectTrust';
-import {
-  createLayerResolvers,
-  PERSONA_ENTRY,
-  resolveExtensionComposition,
-} from '../../../builders/cli/extensionAssembler';
 import type { HarnessOptions } from '../../../composition/types/harness';
-import { resolveDoomConfigurationRoot } from '../../../composition/repository';
-import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
 import { DOOMPI_DOMAINS_ENV, DOOMPI_MAJOR_MODE_ENV, DOOMPI_PROFILE_ENV } from '../../matrixOptions';
 import { parseHarnessArgs } from '../../options';
 import { SyncProgress, type SyncProgressOutput } from './presenter';

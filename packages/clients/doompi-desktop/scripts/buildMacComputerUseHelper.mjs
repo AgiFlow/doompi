@@ -1,8 +1,9 @@
-import { cp, mkdir, rm } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { cp, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+
 import { assertSupportedDesktopTarget } from './desktopTarget.mjs';
 
 assertSupportedDesktopTarget();

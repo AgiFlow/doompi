@@ -1,7 +1,8 @@
-import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
-import type { ComputerUseSessionView } from '../types/computerUseApi';
+import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';
+
 import { COMPUTER_USE_TOOL_NAMES } from '../constants/computerUse';
+import type { ComputerUseSessionView } from '../types/computerUseApi';
 export function modeState(state?: ComputerUseSessionView, enabled = false): MinorModeState {
   const phase = state?.phase ?? 'inactive';
   const running = phase !== 'inactive' && phase !== 'failed';

@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { loadDoomConfig } from '@agimon-ai/doompi-config';
 import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItem, shell } from 'electron';
-import { createMacOsComputerUseBackend } from '../adapters/macos/computerUseBackend';
+
 import { freePort, portIsFree, startHub } from '../adapters/hubProcess';
+import { createMacOsComputerUseBackend } from '../adapters/macos/computerUseBackend';
 import { createMainWindow, showCockpit } from '../adapters/mainWindow';
 import { ComputerUseHost } from '../services/computerUseHost';
 import { DEFAULT_HEADLESS_PORT, DEFAULT_PORT, headlessEntry, hubEntry, LOOPBACK_HOST } from '../services/hubLaunch';

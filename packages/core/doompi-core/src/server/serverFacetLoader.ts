@@ -1,21 +1,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { Context, Service, type Fiber } from '@deepseek-ai/cordis';
-import type { DoomApiScope } from '../schemas/packageApi';
+
 import { DOOM_HEADLESS_OWNER, readDoomHeadlessHost } from '../schemas/headless';
-import {
-  DOOM_SERVER_HOST_SERVICE,
-  type DoomServerFacet,
-  type DoomServerHostService,
-  isDoomServerFacet,
-} from '../schemas/serverFacet';
+import type { DoomApiScope } from '../schemas/packageApi';
 import {
   DOOM_SERVER_BUNDLE_FILE,
   type DoomServerBundle,
   type DoomServerBundleEntry,
   parseDoomServerBundle,
 } from '../schemas/serverBundle';
+import {
+  DOOM_SERVER_HOST_SERVICE,
+  type DoomServerFacet,
+  type DoomServerHostService,
+  isDoomServerFacet,
+} from '../schemas/serverFacet';
 
 export type ServerBundleSource =
   | {
@@ -172,7 +174,6 @@ class ScopedDoomServerHost extends Service<DoomServerHostService> implements Doo
   registerApi(api: Parameters<DoomServerHostService['registerApi']>[0]) {
     const headless = this.scope === 'session' ? readDoomHeadlessHost(this.ctx) : undefined;
     if (headless) {
-      let mounted: ReturnType<DoomServerHostService['registerApi']> | undefined;
       const activity = headless.registerActivity({
         name: `api:${api.basePath}`,
         start: () => {
@@ -181,17 +182,13 @@ class ScopedDoomServerHost extends Service<DoomServerHostService> implements Doo
             registration.dispose();
             throw new Error(`package API '${api.basePath}' did not mount.`);
           }
-          mounted = registration;
           return () => {
             registration.dispose();
-            mounted = undefined;
           };
         },
       });
       return {
-        get mounted() {
-          return mounted?.mounted === true;
-        },
+        mounted: true,
         dispose: () => activity.dispose(),
       };
     }

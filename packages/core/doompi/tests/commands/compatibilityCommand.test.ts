@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { CompatibilityCommand } from '../../src/cli/commands/compat';
-import { launchCompatibility } from '../../src/cli/commands/compat/providers';
 import { buildCompatibilityContext } from '../../src/cli/commands/compat/context';
 import type { CompatibilityContext } from '../../src/cli/commands/compat/context';
+import { launchCompatibility } from '../../src/cli/commands/compat/providers';
 
 vi.mock('@agimon-ai/doompi-config/domains', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

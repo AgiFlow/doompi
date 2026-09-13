@@ -1,12 +1,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { createRunnerLogApi } from '../src/controllers/runnerLogApi';
 import { runnerStateDirFor } from '../src/services/runnerPaths';
-import type { RunnerRecord } from '../src/types/runnerRegistry';
 import type { ILogTail, LogTailHandle, LogTailOptions } from '../src/types/logTail';
 import type { IRmuxBackend } from '../src/types/rmuxBackend';
+import type { RunnerRecord } from '../src/types/runnerRegistry';
 import type { RunnerLogResponse, RunnerLogStreamEvent } from '../src/types/webRunnerLog';
 
 const SESSION = 'session-a';

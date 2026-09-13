@@ -1,4 +1,5 @@
 import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+
 import type { HarnessOptions } from '../composition/types/harness';
 import type { BaseCommand } from './commands/baseCommand';
 import { HARNESS_VERSION, printHelp } from './help';

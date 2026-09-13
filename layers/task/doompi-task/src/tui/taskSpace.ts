@@ -13,6 +13,7 @@
  */
 
 import { homedir } from 'node:os';
+
 import {
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_OVERLAY_ACCENT,
@@ -23,11 +24,12 @@ import {
 import { fitStyledLine } from '@agimon-ai/doompi-ui/rendering';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+
+import type { Task, TaskItemMutation } from '../models/task';
+import { isBlocked } from '../models/taskGraph';
 import { MSG_NO_TASKS, TASK_STATUSES } from '../schemas/task';
 import { applyTaskMutation, isCommittingOp, type Op, singleItemOutcome } from '../services/reducer';
-import { isBlocked } from '../models/taskGraph';
 import type { TaskStore } from '../services/taskStore';
-import type { Task, TaskItemMutation } from '../models/task';
 import { overlayStatusGlyph, STATUS_LABEL } from './format';
 import { countTasks, visibleTasks } from './selectors';
 

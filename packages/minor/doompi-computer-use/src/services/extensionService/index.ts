@@ -1,5 +1,5 @@
-import type { ComputerUseSessionClient } from '../sessionApiClient';
 import type { ComputerUseExtensionResult, ComputerUseExtensionService } from '../../types/extension';
+import type { ComputerUseSessionClient } from '../sessionApiClient';
 
 export class DefaultComputerUseExtensionService implements ComputerUseExtensionService {
   public constructor(private readonly client?: ComputerUseSessionClient) {}

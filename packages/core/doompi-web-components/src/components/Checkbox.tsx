@@ -1,5 +1,6 @@
 import { Checkbox as CheckboxPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
+
 import { CheckIcon } from '../icons/icons';
 import { cn } from '../lib/cn';
 

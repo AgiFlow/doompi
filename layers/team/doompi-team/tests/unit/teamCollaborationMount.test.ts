@@ -1,5 +1,6 @@
 import type { Context, Fiber } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
+
 import { createTeamCollaborationMount, type TeamCollaborationPluginConfig } from '../../src/services/teamCollaboration';
 
 function fixture() {

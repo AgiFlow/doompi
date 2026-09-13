@@ -1,7 +1,8 @@
-import type { DoomLoopLaunchersService, LoopInstanceSnapshot, LoopLauncherSummary } from '../src/schemas/loopLaunchers';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import type { TUI } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { DoomLoopLaunchersService, LoopInstanceSnapshot, LoopLauncherSummary } from '../src/schemas/loopLaunchers';
 import { LoopListOverlay, openLoopListOverlay } from '../src/tui/loopListOverlay';
 import { openStartLoopOverlay, StartLoopOverlay } from '../src/tui/startLoopOverlay';
 

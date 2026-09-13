@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { lineDiff } from '../../../src/services/lineDiff';
 
 /** Every row of every hunk, flattened, for assertions that do not care where the gaps fell. */

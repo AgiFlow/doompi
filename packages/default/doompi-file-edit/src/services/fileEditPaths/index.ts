@@ -3,7 +3,9 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { SUBAGENT_CHILD_ENV, SUBAGENT_PARENT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
+
 import type { IFileEditPaths } from '../../types/fileEditPaths';
 
 /** The directory this package owns, under whichever root holds agent state. */

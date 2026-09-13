@@ -1,5 +1,5 @@
-import type { CompatibilityProvider } from '../types';
 import type { CompatibilityContext } from '../context';
+import type { CompatibilityProvider } from '../types';
 import { launchAntigravity } from './antigravity';
 import { CODEX_PROVIDER, launchCodex } from './codex';
 import { runInteractive } from './process';

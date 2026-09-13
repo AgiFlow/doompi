@@ -2,8 +2,9 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { ResolvedVoiceConfig, VoiceTtsConfig } from '@agimon-ai/doompi-config';
-import { encodePcm16Wav, PcmFrameAssembler } from '../pcm';
+
 import {
   type AudioAnalysis,
   type BinaryProcessStartOptions,
@@ -30,6 +31,7 @@ import {
   type TtsSpeakRequest,
 } from '../../types';
 import type { ClientNarrationSynthesizer } from '../clientMedia';
+import { encodePcm16Wav, PcmFrameAssembler } from '../pcm';
 
 const SAMPLE_RATE = '16000';
 const STOP_GRACE_MS = 1_500;

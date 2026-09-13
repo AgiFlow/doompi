@@ -54,7 +54,12 @@
  *   Register with `PollScheduler` instead
  */
 
+import type { AgentScope } from '../../types/agent';
+import { type TrackedAsyncJobsContract, TERMINAL_ASYNC_JOB_STATES, type TrackedAsyncJob } from '../asyncJobTracker';
 import type { ExtensionConfig } from '../config';
+import type { AvailableModelInfo, ParentModel } from '../modelFallback';
+import type { PollSchedulerContract } from '../pollScheduler';
+import type { SessionScope } from '../sessionPaths';
 import type {
   SessionForkSource,
   SpawnPlannerContract,
@@ -62,11 +67,6 @@ import type {
   SpawnPlanResult,
   SpawnPlanTaskInput,
 } from '../spawnPlan';
-import type { AgentScope } from '../../types/agent';
-import { type TrackedAsyncJobsContract, TERMINAL_ASYNC_JOB_STATES, type TrackedAsyncJob } from '../asyncJobTracker';
-import type { AvailableModelInfo, ParentModel } from '../modelFallback';
-import type { SessionScope } from '../sessionPaths';
-import type { PollSchedulerContract } from '../pollScheduler';
 
 export interface SlashSingleLaunchInput {
   agent: string;

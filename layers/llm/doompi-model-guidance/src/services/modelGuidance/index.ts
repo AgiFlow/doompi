@@ -1,6 +1,5 @@
-import type { ModelGuidanceDocument, ModelGuidanceMap } from '../../types/modelGuidance';
-
 import { DEFAULT_GUIDANCE, DEFAULT_MODEL_GUIDANCE_PRESET } from '../../constants/modelGuidance';
+import type { ModelGuidanceDocument, ModelGuidanceMap } from '../../types/modelGuidance';
 export { DEFAULT_MODEL_GUIDANCE_PRESET } from '../../constants/modelGuidance';
 Object.freeze(DEFAULT_GUIDANCE);
 Object.freeze(DEFAULT_MODEL_GUIDANCE_PRESET);

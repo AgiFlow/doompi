@@ -1,6 +1,7 @@
-import { Button, CodeEditor, Markdown } from '@agimon-ai/doompi-web-components';
 import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { Button, CodeEditor, Markdown } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
+
 import { PLAN_STATUS_KEY, type PlanDetailView } from '../../types/planApi';
 import { fetchPlan, savePlan } from '../api/planApi';
 

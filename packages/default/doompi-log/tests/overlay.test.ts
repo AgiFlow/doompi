@@ -1,6 +1,7 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { type TUI, visibleWidth } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { LogMetricsAggregator } from '../src/services/metrics';
 import { LogMetricsOverlayComponent, type LogMetricsView } from '../src/tui/logMetricsOverlay';
 

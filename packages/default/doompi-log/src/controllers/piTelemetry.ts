@@ -1,15 +1,9 @@
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import { type DoomReadinessCoordinator, readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
+import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext, TurnEndEvent } from '@earendil-works/pi-coding-agent';
-import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
-import { type DoomReadinessCoordinator, readDoomReadinessCoordinator } from '@agimon-ai/doompi-core/readiness';
-import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
-import type {
-  PiTelemetryExtensionOptions,
-  PiTelemetryRuntimeHandle,
-  TelemetryAttributes,
-  RecordLevel,
-} from '../types/piTelemetry';
-import type { SinkStatus } from '../types/sinkStatus';
+
 import {
   SERVICE_NAME,
   PACKAGE_NAME,
@@ -17,6 +11,13 @@ import {
   API_ERROR_STATUS,
   FAILURE_STOP_REASONS,
 } from '../constants/telemetry';
+import type {
+  PiTelemetryExtensionOptions,
+  PiTelemetryRuntimeHandle,
+  TelemetryAttributes,
+  RecordLevel,
+} from '../types/piTelemetry';
+import type { SinkStatus } from '../types/sinkStatus';
 interface PiTelemetryRuntime extends PiTelemetryRuntimeHandle {
   events: PiEventHandlers;
   onDispose(this: void): Promise<void>;

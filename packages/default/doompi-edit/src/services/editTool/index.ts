@@ -1,5 +1,6 @@
 import { constants } from 'node:fs';
 import { access, readFile, writeFile } from 'node:fs/promises';
+
 import {
   applyHashlineEdits,
   normalizeFileTag,
@@ -14,6 +15,7 @@ import {
   withFileMutationQueue,
   type EditToolDetails,
 } from '@earendil-works/pi-coding-agent';
+
 import type { EditParams } from '../../schemas/editTool';
 
 export function assertNotAborted(signal: AbortSignal | undefined): void {

@@ -48,38 +48,40 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
 import type {
   DoomChildSessionScope,
   DoomChildSessionSource,
   DoomChildSessionServiceProvider,
   DoomChildSessionTerminalPiForkSource,
 } from '@agimon-ai/doompi-core/child';
-import type { InlineAgent } from '../../schemas/subagentTool';
 import type { SessionManager } from '@earendil-works/pi-coding-agent';
-import { PI_RUNTIME_NAME } from '../../types/environment';
-import type { NativeRunCoordinatorContract } from '../nativeRunCoordinator';
-import type { NativeTeamChannelContract } from '../nativeTeamChannel';
+
+import type { InlineAgent } from '../../schemas/subagentTool';
 import {
   type ResolvedSubagentCapabilityCeiling,
   SubagentCapabilityPolicyStore,
 } from '../../schemas/team/capabilityCeiling';
+import type { AgentConfig, AgentScope, AgentDiscoveryContract } from '../../types/agent';
+import { PI_RUNTIME_NAME } from '../../types/environment';
+import { type AdmissionGateContract, type AdmissionTicket, DEFAULT_ADMISSION_TIMEOUT_MS } from '../admissionGate';
 import { resolveActiveTeamModelSpecs, resolveActiveTeamPackageConfig } from '../agentDiscovery';
 import { canonicalizeDiscoveryCwd } from '../agentProjectRoot';
 import { buildSkillInjection, type SkillDiscoveryContract } from '../agentSkills';
-import type { AgentConfig, AgentScope, AgentDiscoveryContract } from '../../types/agent';
 import type {
   AsyncSubagentSpawnInput,
   AsyncSubagentSpawnResult,
   AsyncSubagentSpawnerContract,
 } from '../asyncExecution';
+import type { ExtensionConfig } from '../config';
 import { preflightSubagentDepth, resolveCurrentSubagentDepth } from '../depthGuard';
-import { type AvailableModelInfo, type ParentModel, selectAvailableModel } from '../modelFallback';
+import { DoomTeamExpectedError } from '../errors';
 import type { McpDirectToolResolver } from '../mcpDirectToolAllowlist';
+import { type AvailableModelInfo, type ParentModel, selectAvailableModel } from '../modelFallback';
+import type { NativeRunCoordinatorContract } from '../nativeRunCoordinator';
+import type { NativeTeamChannelContract } from '../nativeTeamChannel';
 import { isPiRuntime, type RuntimeTable, resolveRuntimeLaunch, resolveRuntimeTable } from '../runtimeRegistry';
 import { type ConcurrencyEventReporter, runWithConcurrency } from '../runWithConcurrency';
-import { type AdmissionGateContract, type AdmissionTicket, DEFAULT_ADMISSION_TIMEOUT_MS } from '../admissionGate';
-import { DoomTeamExpectedError } from '../errors';
-import type { ExtensionConfig } from '../config';
 
 const CONTEXT_FRESH = 'fresh' as const;
 const CONTEXT_FORK = 'fork' as const;

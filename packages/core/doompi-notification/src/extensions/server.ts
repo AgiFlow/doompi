@@ -1,4 +1,5 @@
 import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
+
 import { notificationCommand } from '../controllers/notificationCommand';
 
 export const notificationServerFacet = defineServerPlugin({

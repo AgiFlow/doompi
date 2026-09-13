@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+
 import type { DoomApiMount, DoomWebComposition } from '../../exports/packageApi';
-import type { SyncRegistration } from '../syncRegistration';
 import { createPluginBundlePublication, type PublishedBundle } from '../bundlePublication';
+import type { SyncRegistration } from '../syncRegistration';
 
 /** Signs one immutable browser composition for each independently owned mount. */
 export function createWebCompositions(stateDirectory: string, onNotice: (message: string) => void) {

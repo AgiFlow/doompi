@@ -15,10 +15,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { globalDoomConfigDirectory, globalDoomConfigPath } from '@agimon-ai/doompi-config/config';
 import { type DoomConfigEdit, writeDoomConfigValues } from '@agimon-ai/doompi-config/configWriter';
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config/types';
 import { CONFIG_ACTION, type ConfigChoice, type ConfigSection, type ConfigStep } from '@agimon-ai/doompi-core/config';
+
 import {
   catalogEntryById,
   ENGINE_TOOLING,
@@ -27,7 +29,6 @@ import {
   VOICE_CATALOG,
   type VoiceCatalogEntry,
 } from '../services/catalog';
-import type { IExecutableResolver, IProcessSpawner } from '../types';
 import {
   downloadModelFile,
   ensureModelsDirectory,
@@ -36,6 +37,7 @@ import {
   modelsDirectory,
 } from '../services/download';
 import { type InstallPlan, type InstallStep, planBlocker, planInstall } from '../services/install';
+import type { IExecutableResolver, IProcessSpawner } from '../types';
 
 export const VOICE_CONFIG_SECTION_ID = 'voice';
 const SECTION_ORDER = 10;

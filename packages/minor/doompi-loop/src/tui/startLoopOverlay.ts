@@ -6,9 +6,10 @@ import {
   type DoomOverlayChrome,
   type DoomOverlayTui,
 } from '@agimon-ai/doompi-ui/doom-overlay';
-import type { LoopLauncherSummary } from '../schemas/loopLaunchers';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
+
+import type { LoopLauncherSummary } from '../schemas/loopLaunchers';
 
 const EMPTY_MESSAGE = 'No loop launchers are registered for this session.';
 

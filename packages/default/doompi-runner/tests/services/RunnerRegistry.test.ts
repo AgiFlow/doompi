@@ -1,12 +1,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { IProcessControl } from '../../src/types/processControl';
+
 import type { IRunnerPaths } from '../../src/services/runnerPaths/type';
 import { RunnerRegistry, createDefaultProcessRegistry } from '../../src/services/runnerRegistry';
 import type { ProcessRegistryPort } from '../../src/services/runnerRegistry';
+import type { IProcessControl } from '../../src/types/processControl';
 
 const REGISTRY_PATH_ENV = 'PROCESS_REGISTRY_PATH';
 const RETAINED_HISTORY_RECORDS = 500;

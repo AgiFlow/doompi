@@ -1,16 +1,18 @@
 import os from 'node:os';
 import path from 'node:path';
+
 import { loadDomains } from '@agimon-ai/doompi-config/domains';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
+
+import { createLayerResolvers } from '../../../builders/cli/extensionAssembler';
 import { missingLayerPackageSpecifiers } from '../../../composition/layerPackageInstaller';
+import { loadDoomConfig } from '../../../composition/projectTrust';
 import { resolveDoomConfigurationRoot } from '../../../composition/repository';
 import { readLocatedSyncState } from '../../../composition/syncState';
-import { loadDoomConfig } from '../../../composition/projectTrust';
-import { createLayerResolvers } from '../../../builders/cli/extensionAssembler';
-import { doctorHelp } from './help';
 import { parseHarnessArgs } from '../../options';
 import { wantsHelp } from '../../router';
 import { collectDrift, selectionCompositionFingerprint, selectionEnvironment, toSelection } from '../sync';
+import { doctorHelp } from './help';
 
 const DOCTOR_COMMAND = 'doctor';
 const HARNESS_ROOT_ENV = 'DOOMPI_ROOT';

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { readPackageResource } from '../../../src/services/packageResource';
 
 describe('published sandbox resources', () => {

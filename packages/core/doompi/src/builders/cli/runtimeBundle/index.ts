@@ -1,10 +1,12 @@
 import path from 'node:path';
-import { createLayerResolvers, type ExtensionComposition, resolveExtensionComposition } from '../extensionAssembler';
-import type { HarnessOptions } from '../../../composition/types/harness';
+
 import { writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
-import { compileExtensionSet, extensionSetManifestPath } from '../../../compiler';
-import type { HarnessContext } from '../harnessContext';
 import { resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
+
+import { compileExtensionSet, extensionSetManifestPath } from '../../../compiler';
+import type { HarnessOptions } from '../../../composition/types/harness';
+import { createLayerResolvers, type ExtensionComposition, resolveExtensionComposition } from '../extensionAssembler';
+import type { HarnessContext } from '../harnessContext';
 
 const EXTENSION_CACHE_DIRECTORY = 'cache';
 const MODE_DIST_DIRECTORY = 'dist';

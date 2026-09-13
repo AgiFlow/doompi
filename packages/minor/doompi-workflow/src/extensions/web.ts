@@ -1,8 +1,9 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
-import { openCatalog, openWorkflowCatalogForContext, workflowCatalogChannel } from '../web/stores/catalogStore';
+
 import { WorkflowsActivitySection } from '../web/components/WorkflowsActivitySection';
 import { workflowsTab } from '../web/components/WorkflowsPanel';
 import { WorkflowToolMessage } from '../web/components/WorkflowToolMessage';
+import { openCatalog, openWorkflowCatalogForContext, workflowCatalogChannel } from '../web/stores/catalogStore';
 import { workflowRunsChannel, workflows } from '../web/stores/workflowsStore';
 
 const WORKFLOWS_GROUP = { key: 'w', label: 'workflows', detail: 'multi-step agent runs' };

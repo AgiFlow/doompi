@@ -7,6 +7,7 @@
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import type { ReactNode } from 'react';
+
 import type { SubagentRun } from '../../types/webSubagents';
 import { subagents } from '../stores/subagentsStore';
 import { SubagentsPanel } from './SubagentsPanel';

@@ -1,11 +1,12 @@
-import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
-import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
 import { AsyncLocalStorage } from 'node:async_hooks';
+
 import {
   readChildProcessContext,
   resolveRootSessionId,
   SUBAGENT_PARENT_SESSION_ENV,
 } from '@agimon-ai/doompi-core/child-process';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 
 const DISPATCHER_AGENT_NAME = 'agiflow-dispatcher';

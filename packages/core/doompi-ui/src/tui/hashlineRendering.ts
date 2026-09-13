@@ -7,6 +7,7 @@ import {
   type ToolRenderResultOptions,
 } from '@earendil-works/pi-coding-agent';
 import { type Component, Text } from '@earendil-works/pi-tui';
+
 import { renderLineNumber } from './codeGutter';
 import { renderDoomDiff } from './diffRender';
 import { DoomToolCall, DoomToolResult, frameDoomToolResult, renderToolHeading } from './toolChrome';

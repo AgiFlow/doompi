@@ -1,3 +1,4 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 /*
  * Plain CSF objects; the style-system renderer resolves the default export by
  * looking for a bare `const meta`. The panel loads the document over HTTP when
@@ -5,7 +6,7 @@
  * inactive-mode branch is left to the fallback path.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+
 import type { AuthorDocumentInput } from '../lib/authorViewportTypes';
 import { putAuthorDocument, reviseAuthorDocument } from '../stores/authorWorkspaceStore';
 import { AuthorDocumentPanel } from './AuthorDocumentPanel';

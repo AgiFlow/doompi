@@ -1,15 +1,16 @@
 import { pathToFileURL } from 'node:url';
+
 import { isLocalPackageSpecifier, type MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import {
-  isSandboxHarnessModule,
-  SANDBOX_HARNESS_EXPORT_SUBPATH,
-  type SandboxHarnessModule,
-} from '@agimon-ai/doompi-core/sandbox-harness';
 import {
   consumerPackageEntry,
   localPackageExport,
   splitPackageSpecifier,
 } from '@agimon-ai/doompi-core/module-resolution';
+import {
+  isSandboxHarnessModule,
+  SANDBOX_HARNESS_EXPORT_SUBPATH,
+  type SandboxHarnessModule,
+} from '@agimon-ai/doompi-core/sandbox-harness';
 
 export interface SandboxHarnessResolution {
   /** Configured package specifier that answered for the sandbox subpath. */

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import type { QuestionParams } from '../../src/schemas/questionnaire';
 import { runQuestionnaire, type QuestionnaireInteraction } from '../../src/services/questionnaireService';
 import { encodeAnswerEnvelope } from '../../src/types/askUserWire';

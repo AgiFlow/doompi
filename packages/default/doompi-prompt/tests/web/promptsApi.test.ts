@@ -1,5 +1,6 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { deleteSavedPrompt, fetchSavedPrompts, saveSavedPrompt } from '../../src/web/api/promptsApi';
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fetch: vi.fn() } }));

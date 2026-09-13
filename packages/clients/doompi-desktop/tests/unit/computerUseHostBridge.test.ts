@@ -1,5 +1,7 @@
 import { EventEmitter } from 'node:events';
+
 import { describe, expect, it, vi } from 'vitest';
+
 import { attachComputerUseHostBridge } from '../../src/adapters/computerUseHostBridge';
 import { ComputerUseHost } from '../../src/services/computerUseHost';
 import type { ComputerUseBackend } from '../../src/types/computerUse';

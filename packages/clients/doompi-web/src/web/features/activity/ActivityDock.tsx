@@ -1,13 +1,14 @@
 import { Button, EmptyState, Kbd, StatusBadge } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef } from 'react';
+
 import { PluginSurface } from '../../components/PluginSurface';
 import { type ActivityGroup, useActivityGroups, useDockFaces } from '../../lib/composition';
 import { activityGroupSlot, HOST_SLOTS, slotFills } from '../../lib/pluginRegistry';
-import { usePluginSlotProps } from '../../stores/usePluginSlotProps';
-import { useActiveSession } from '../../stores/sessionStore';
 import { sessionsStore } from '../../stores/sessionsStore';
+import { useActiveSession } from '../../stores/sessionStore';
 import { setDockTab, uiStore } from '../../stores/uiStore';
+import { usePluginSlotProps } from '../../stores/usePluginSlotProps';
 import { ContextPanel } from './ContextPanel';
 import { DockTabs } from './DockTabs';
 

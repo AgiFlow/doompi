@@ -2,15 +2,16 @@ import { Button } from '@agimon-ai/doompi-web-components';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
+
 import { SessionRail } from '../features/sessions/SessionRail';
 import { AppearanceSettings } from '../features/settings/AppearanceSettings';
 import { ContributedSettings } from '../features/settings/ContributedSettings';
 import { ImageSettings } from '../features/settings/ImageSettings';
 import { NotificationSettings } from '../features/settings/NotificationSettings';
 import { PluginSettings } from '../features/settings/PluginSettings';
-import { RepositoryWorkspace } from '../features/settings/RepositoryWorkspace';
 import { ProviderSettings } from '../features/settings/ProviderSettings';
 import { RemoteControlSettings } from '../features/settings/RemoteControlSettings';
+import { RepositoryWorkspace } from '../features/settings/RepositoryWorkspace';
 import { SettingsMenu } from '../features/settings/SettingsMenu';
 import { SettingsPanelHost } from '../features/settings/SettingsPanelHost';
 import {

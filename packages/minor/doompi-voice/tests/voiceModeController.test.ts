@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { VoiceModeController, type ModeVoiceController } from '../src/controllers/voiceModeController';
-import type { AutoCaptureActivationState, AutoCaptureUi, IClock } from '../src/types';
+
 import { LiveVoiceController } from '../src/controllers/liveVoiceController';
+import { VoiceModeController, type ModeVoiceController } from '../src/controllers/voiceModeController';
 import type { RealtimeHost } from '../src/services/realtimeHost';
+import type { AutoCaptureActivationState, AutoCaptureUi, IClock } from '../src/types';
 
 function controller(): ModeVoiceController {
   let state: AutoCaptureActivationState = 'disabled';

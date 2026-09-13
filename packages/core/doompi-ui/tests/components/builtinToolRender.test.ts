@@ -1,6 +1,7 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { Text } from '@earendil-works/pi-tui';
 import { describe, expect, it } from 'vitest';
+
 import {
   type EditToolResult,
   frameBuiltinResult,

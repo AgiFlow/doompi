@@ -1,21 +1,42 @@
-import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
-import { createSubagentsChannel } from '../controllers/webSubagentsChannel';
-import { createSubagentCatalogChannel } from '../controllers/webSubagentCatalogChannel';
-import { api } from '../controllers/teamCatalogApi';
+import { DOOM_BACKGROUND_WORK_SERVICE } from '@agimon-ai/doompi-core/background-work';
+import { readDoomChildSessionService } from '@agimon-ai/doompi-core/child';
 import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessTool,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
-import { readDoomChildSessionService } from '@agimon-ai/doompi-core/child';
 import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
-import type { NativeAsyncJobProjection, TrackedAsyncJob } from '../services/asyncJobTracker';
-import { DOOM_BACKGROUND_WORK_SERVICE } from '@agimon-ai/doompi-core/background-work';
-import { DOOM_DELEGATION_SERVICE } from '../schemas/delegationApi';
-import { DOOM_SUBAGENT_POLICY_SERVICE } from '../schemas/subagentPolicy';
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { Check } from 'typebox/value';
+
+import { api } from '../controllers/teamCatalogApi';
+import { createSubagentCatalogChannel } from '../controllers/webSubagentCatalogChannel';
+import { createSubagentsChannel } from '../controllers/webSubagentsChannel';
+import { DOOM_DELEGATION_SERVICE } from '../schemas/delegationApi';
+import { DOOM_SUBAGENT_POLICY_SERVICE } from '../schemas/subagentPolicy';
 import { SUBAGENT_ACTIONS, SubagentParams, type SubagentToolParams } from '../schemas/subagentTool';
+import { resolveActiveTeamModelSpecs } from '../services/agentDiscovery';
+import type { NativeAsyncJobProjection, TrackedAsyncJob } from '../services/asyncJobTracker';
+import { resolveTrackedRunId } from '../services/asyncJobTracker';
+import { createBackgroundWorkService } from '../services/backgroundWorkService';
+import { loadConfig } from '../services/config';
+import { createDelegationBridge } from '../services/delegationBridge';
+import { DoomTeamExpectedError } from '../services/errors';
+import { toModelInfo } from '../services/modelInfo';
+import { subscribeNativeRunProjection } from '../services/nativeRunProjection';
+import { nativeRunProjection } from '../services/nativeRunProjection';
+import type { NativeTeamRuntime, NativeTeamTransport } from '../services/nativeTeamChannel';
+import { openScopeAsync, suspendScopeRuns } from '../services/sessionLifecycle';
+import { createSessionScope } from '../services/sessionPaths';
+import { createSubagentPolicyService } from '../services/subagentPolicyService';
+import {
+  clearSuspendedRun,
+  formatSuspendedRuns,
+  isSuspendedRunResumable,
+  listSuspendedRuns,
+} from '../services/suspendedRuns';
+import { createTeamExtensionRuntime } from '../services/teamRuntime';
 import { catalogModels, presentCatalog } from '../services/webSubagentCatalog';
 import {
   SUBAGENT_CATALOG_TYPE,
@@ -23,26 +44,6 @@ import {
   type SubagentRun,
   type SubagentRunState,
 } from '../types/webSubagents';
-import { createBackgroundWorkService } from '../services/backgroundWorkService';
-import { toModelInfo } from '../services/modelInfo';
-import { createSubagentPolicyService } from '../services/subagentPolicyService';
-import { resolveActiveTeamModelSpecs } from '../services/agentDiscovery';
-import { createTeamExtensionRuntime } from '../services/teamRuntime';
-import { subscribeNativeRunProjection } from '../services/nativeRunProjection';
-import { nativeRunProjection } from '../services/nativeRunProjection';
-import { createDelegationBridge } from '../services/delegationBridge';
-import { loadConfig } from '../services/config';
-import { resolveTrackedRunId } from '../services/asyncJobTracker';
-import {
-  clearSuspendedRun,
-  formatSuspendedRuns,
-  isSuspendedRunResumable,
-  listSuspendedRuns,
-} from '../services/suspendedRuns';
-import { createSessionScope } from '../services/sessionPaths';
-import { openScopeAsync, suspendScopeRuns } from '../services/sessionLifecycle';
-import type { NativeTeamRuntime, NativeTeamTransport } from '../services/nativeTeamChannel';
-import { DoomTeamExpectedError } from '../services/errors';
 
 const SOURCE = '@agimon-ai/doompi-team';
 const SUBAGENT_DESCRIPTION =

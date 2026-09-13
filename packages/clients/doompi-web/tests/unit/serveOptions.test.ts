@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { parseServeOptions, serveHelp } from '../../src/services/serveOptions';
 
 describe('doompi-web command options', () => {

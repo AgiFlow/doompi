@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordis-host';
 import {
   createDoomMcpProjectionService,
@@ -13,6 +14,7 @@ import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
 import type { Context, Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { mcpExtension } from '../src/extensions/pi';
 
 const DEFERRED_RUNTIME_TIMEOUT_MS = 5_000;

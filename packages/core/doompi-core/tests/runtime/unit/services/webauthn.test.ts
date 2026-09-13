@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createWebAuthn } from '../../../../src/services/webauthn';
 import {
   CEREMONY_TTL_MS,

@@ -1,6 +1,7 @@
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { useCallback, useMemo } from 'react';
+
 import { minorModes } from '../lib/composition';
 import { pluginSlotProps } from '../lib/pluginSlotProps';
 import { submitCapture } from './captureStore';

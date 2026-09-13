@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   NATIVE_INTERCOM_EXTENSION_DIR,
   diagnoseIntercomBridge,

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { HARNESS_STATE_KEYS } from '@agimon-ai/doompi-config/harnessState';
 import {
   createHarnessSession,
@@ -11,6 +12,7 @@ import {
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import { loadSkills } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { applyDomains } from '../../src/controllers/applyDomains';
 import { activeDomainSkillPaths } from '../../src/controllers/domainRuntime';
 import { DISPATCHER_AGENT_NAME } from '../../src/services/resourceCollector';

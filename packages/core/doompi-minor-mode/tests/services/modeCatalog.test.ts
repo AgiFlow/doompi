@@ -1,6 +1,7 @@
-import type { MinorModeDescriptor, MinorModeState } from '../../src/exports';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
+import type { MinorModeDescriptor, MinorModeState } from '../../src/exports';
 import { createMinorModeCatalogHost } from '../../src/services/catalog';
 
 const SOURCE = '@agimon-ai/test-mode';

@@ -1,5 +1,6 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   formatMcpSessionAuthStatus,
   MCP_SESSION_AUTH_STATUS_KEY,

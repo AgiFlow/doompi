@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
+
 import { ComputerUseHost } from '../services/computerUseHost';
 import {
   COMPUTER_USE_IPC_CANCEL,

@@ -17,8 +17,8 @@
  * - Comparing the raw model string; the thinking suffix is not part of identity
  */
 
-import { splitKnownThinkingSuffix } from '../modelInfo';
 import type { ModelScopeConfig } from '../../types';
+import { splitKnownThinkingSuffix } from '../modelInfo';
 
 /** Where a resolved model originated, deciding enforcement severity. */
 export type ModelSource = 'explicit' | 'inherited';

@@ -1,10 +1,12 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+
 import type { DoomHelpContribution } from '@agimon-ai/doompi-core/help';
-import { MAX_LLMS_BYTES, validateLlmsBytes } from '../llmsContent';
+
 import type { HelpFetch, HelpFetchResponse, HelpIndexResolver, ResolvedHelpIndex } from '../../types/help';
 import { HelpIndexCache, resolveHelpPackageIdentity, sha256Hex } from '../helpStorage';
+import { MAX_LLMS_BYTES, validateLlmsBytes } from '../llmsContent';
 
 const HELP_INDEX_PATH = 'llms.txt';
 const UNPKG_ORIGIN = 'https://unpkg.com';

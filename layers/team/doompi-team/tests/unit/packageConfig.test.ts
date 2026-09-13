@@ -10,6 +10,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+
 import { mergeTeamPackageConfigurations, parseTeamPackageConfig } from '../../src/schemas/team/packageConfig';
 
 const LOCATION = 'Package "@agimon-ai/doompi-team" config in layer "team" of .doom/modes.yaml';

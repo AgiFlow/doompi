@@ -32,8 +32,9 @@
 import type { ExtensionAPI, MessageRenderOptions, Theme } from '@earendil-works/pi-coding-agent';
 import type { Component } from '@earendil-works/pi-tui';
 import { Text } from '@earendil-works/pi-tui';
-import { type CompletionNotifyDetails, SUBAGENT_NOTIFY_MESSAGE_TYPE } from '../services/notify';
+
 import { formatDuration } from '../services/displayFormat';
+import { type CompletionNotifyDetails, SUBAGENT_NOTIFY_MESSAGE_TYPE } from '../services/notify';
 
 /** Status glyphs. Paused is distinct from failed: the run can still be resumed. */
 function statusIcon(status: CompletionNotifyDetails['status'], theme: Theme): string {

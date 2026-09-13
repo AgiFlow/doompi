@@ -1,5 +1,5 @@
-import type { GoalStatus } from '../../types/goal';
 import { formatTokenCount } from '../../models/accounting';
+import type { GoalStatus } from '../../types/goal';
 export interface GoalPromptContext {
   id: string;
   text: string;

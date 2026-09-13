@@ -1,4 +1,5 @@
 import type { ToolPromptContribution, ToolPromptDialog } from '@agimon-ai/doompi-core/web';
+
 import { pluginToolRenderer } from './pluginRegistry';
 import type { DialogRequest, SessionState, ToolEntry } from './sessionModel';
 

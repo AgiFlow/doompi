@@ -1,5 +1,6 @@
 import type { Client } from '@earendil-works/pi-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { createProtocolHubSocket } from '../../src/web/lib/protocolHubSocket';
 
 const fake = vi.hoisted(() => ({

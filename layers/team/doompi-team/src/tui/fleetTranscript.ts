@@ -1,4 +1,5 @@
 import { Markdown, type MarkdownTheme, truncateToWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui';
+
 import { formatDuration, shortenPath } from '../services/displayFormat';
 import type { FleetTranscriptEvent, FleetTranscriptTail } from '../services/fleetTranscript';
 export type FleetTranscriptVerbosity = 'compact' | 'full';

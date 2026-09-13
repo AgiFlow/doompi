@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { RunnerRunView } from '../../src/types/webRunners';
 import { decodeChunk, watchRunnerScreen } from '../../src/web/api/screenApi';
 import { RunnerShellPanel } from '../../src/web/components/RunnerShellPanel';
 import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore';
-import type { RunnerRunView } from '../../src/types/webRunners';
 
 const setEnded = vi.fn();
 const setLost = vi.fn();

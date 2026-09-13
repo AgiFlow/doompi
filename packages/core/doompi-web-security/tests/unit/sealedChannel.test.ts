@@ -1,11 +1,13 @@
 import { ECDH, createECDH } from 'node:crypto';
+
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createHostHandshake, type SealedChannel as ServerChannel } from '../../src/services/nodeSealedChannel';
+
 import {
   channelFromSecret,
   connectSealedChannel,
   type SealedChannel as ClientChannel,
 } from '../../src/services/browserSealedChannel';
+import { createHostHandshake, type SealedChannel as ServerChannel } from '../../src/services/nodeSealedChannel';
 import { NONCE_BYTES, NONCE_PREFIX_BYTES, SEALED_VERSION } from '../../src/types/sealedChannel';
 
 const text = new TextEncoder();

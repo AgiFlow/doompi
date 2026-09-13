@@ -1,3 +1,4 @@
+import type { SettingsPanelProps } from '@agimon-ai/doompi-core/web';
 import {
   Button,
   Select,
@@ -7,8 +8,8 @@ import {
   SelectValue,
   Spinner,
 } from '@agimon-ai/doompi-web-components';
-import type { SettingsPanelProps } from '@agimon-ai/doompi-core/web';
 import { useEffect, useState } from 'react';
+
 import {
   isMetricsUnavailable,
   METRICS_DIMENSIONS,
@@ -18,10 +19,10 @@ import {
   type MetricsReport,
   type MetricsResponse,
 } from '../../types/webMetrics';
+import { fetchMetrics } from '../api/metricsApi';
 import { EmptyForReason, FocusNotice } from './MetricsNotice';
 import { DIMENSION_LABELS } from './MetricsReportView';
 import { MetricsReportView } from './MetricsReportView';
-import { fetchMetrics } from '../api/metricsApi';
 
 /**
  * The metrics settings page.

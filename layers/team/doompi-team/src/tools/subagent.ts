@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
+
 import { SubagentParams } from '../schemas/subagentTool';
 import { DoomTeamExpectedError } from '../services/errors';
 import {

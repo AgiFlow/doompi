@@ -1,4 +1,5 @@
 import type { ByteTransport, ByteTransportFactory, ByteTransportHandlers } from '@earendil-works/pi-client';
+
 import { sealedProtocolSession } from './sealedSession';
 
 const PROTOCOL_PATH = '/api/pi';

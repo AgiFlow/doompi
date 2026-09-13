@@ -1,5 +1,6 @@
-import { DOOMPI_SANDBOX_ENV } from '@agimon-ai/doompi-core/sandbox-harness';
 import type { CockpitWorkspace } from '@agimon-ai/doompi-core/cockpit-container';
+import { DOOMPI_SANDBOX_ENV } from '@agimon-ai/doompi-core/sandbox-harness';
+
 import type { SandboxEngine, SandboxHostFacts } from '../../types/sandboxHarness';
 import { DEVCONTAINER_DISABLED_ENV } from '../devcontainer';
 import { containerEnvironment, type SandboxPlanBroker } from '../sandboxPlan';

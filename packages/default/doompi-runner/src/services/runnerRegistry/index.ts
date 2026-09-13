@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
 import {
   createProcessRegistryService,
@@ -6,8 +9,7 @@ import {
   type ProcessRegistryService,
   resolveProcessTags,
 } from '@agimon-ai/foundation-process-registry';
-import fs from 'node:fs';
-import path from 'node:path';
+
 import {
   COMMAND_SIDECAR_SUFFIX,
   EXIT_SIDECAR_SUFFIX,

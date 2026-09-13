@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   assistantUsageTokens,
   checkpointGoalActiveTime,
@@ -9,19 +10,6 @@ import {
   normalizeTokenBudget,
   updateGoalUsage,
 } from '../../src/models/accounting';
-import {
-  completeGoalArguments,
-  parseGoalCommand,
-  parseTokenBudget,
-  validateObjective,
-} from '../../src/services/parser';
-import {
-  buildContinuePrompt,
-  buildGoalPrompt,
-  buildGoalSystemPrompt,
-  buildObjectiveUpdatedPrompt,
-  buildResumePrompt,
-} from '../../src/services/prompts';
 import { GoalRuntimeModel } from '../../src/models/runtime';
 import {
   nextToolFreeRepeatState,
@@ -30,7 +18,6 @@ import {
   safetyLimitReached,
   shouldPauseForSafety,
 } from '../../src/models/safety';
-import { DEFAULT_GOAL_SETTINGS, decodeGoalSettings, normalizeGoalSettings } from '../../src/services/settings';
 import {
   decodeGoalStateEntries,
   isCanonicalGoalState,
@@ -54,6 +41,21 @@ import {
   nextGoalInstance,
   transitionGoal,
 } from '../../src/models/stateMachine';
+import { GoalHistoryService } from '../../src/services/history';
+import {
+  completeGoalArguments,
+  parseGoalCommand,
+  parseTokenBudget,
+  validateObjective,
+} from '../../src/services/parser';
+import {
+  buildContinuePrompt,
+  buildGoalPrompt,
+  buildGoalSystemPrompt,
+  buildObjectiveUpdatedPrompt,
+  buildResumePrompt,
+} from '../../src/services/prompts';
+import { DEFAULT_GOAL_SETTINGS, decodeGoalSettings, normalizeGoalSettings } from '../../src/services/settings';
 import {
   addGoalTools,
   filterGoalTools,
@@ -62,7 +64,6 @@ import {
   validateCompletionInput,
   validateGoalId,
 } from '../../src/services/tools';
-import { GoalHistoryService } from '../../src/services/history';
 import type { ActiveGoal } from '../../src/types/goal';
 import type { GoalHistoryEntry, GoalHistoryPort } from '../../src/types/history';
 

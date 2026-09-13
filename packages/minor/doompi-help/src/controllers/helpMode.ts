@@ -1,12 +1,13 @@
 import type { LeaderBinding } from '@agimon-ai/doompi-core/leader';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import {
   type MinorModeCatalogService,
   type MinorModeOwnerHandle,
   type MinorModeState,
   registerMinorModeOwner,
 } from '@agimon-ai/doompi-minor-mode';
-import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import type { HelpActivationService, HelpRuntimeState } from '../types/help';
 
 export const HELP_PACKAGE_SOURCE = '@agimon-ai/doompi-help';

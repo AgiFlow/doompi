@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   protectAndImportHistory,
   restoreProtectedHistory,
@@ -10,9 +12,8 @@ import {
   type HistoryEntryProof,
   type HistoryBranchProof,
 } from '../../../../../src/services/historyImport';
-import { exportV4ToV3 } from '../../../../../src/services/v3Export';
-
 import { importV3WithPinnedUpstream } from '../../../../../src/services/jsonlSessionRepo';
+import { exportV4ToV3 } from '../../../../../src/services/v3Export';
 
 type MutableHistoryProof = {
   entries: HistoryEntryProof[];

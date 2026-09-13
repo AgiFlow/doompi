@@ -1,4 +1,5 @@
 import { type ComponentProps, useEffect, useMemo, useState } from 'react';
+
 import { cn } from '../lib/cn';
 import { type HashlineGroup, hashlineGroups, hashlineGroupsKey } from '../lib/hashlineHighlight';
 import type { PresentedLine } from '../lib/hashlineView';

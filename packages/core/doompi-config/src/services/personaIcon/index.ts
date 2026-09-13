@@ -1,6 +1,7 @@
-import { PROFILE_ICON_MAX_DATA_URL_LENGTH, type ProfileIconMimeType } from '@agimon-ai/doompi-core/profile-identity';
 import fs from 'node:fs';
 import path from 'node:path';
+
+import { PROFILE_ICON_MAX_DATA_URL_LENGTH, type ProfileIconMimeType } from '@agimon-ai/doompi-core/profile-identity';
 
 /**
  * Reads a persona icon into a bounded `data:` URL.

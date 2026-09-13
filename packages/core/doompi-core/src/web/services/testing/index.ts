@@ -1,6 +1,6 @@
 import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import type { ComponentType } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 /**
  * One plugin component, rendered.

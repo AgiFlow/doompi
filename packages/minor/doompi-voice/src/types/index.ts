@@ -1,5 +1,6 @@
-import type { IDoomConfigLoader } from '@agimon-ai/doompi-config/types';
 import type { ResolvedVoiceConfig, VoiceAdapterConfig, VoiceEngine, VoiceTtsConfig } from '@agimon-ai/doompi-config';
+import type { IDoomConfigLoader } from '@agimon-ai/doompi-config/types';
+
 import type {
   VoiceMediaCaptureActivity,
   VoiceMediaCaptureConfiguration,

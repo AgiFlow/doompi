@@ -1,10 +1,10 @@
+import { DOT_TONES } from '../types/tone';
 /*
  * Plain CSF objects; see Badge.stories.tsx for why Storybook's types are not
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
 import { Dot } from './Dot';
-import { DOT_TONES } from '../types/tone';
 
 const SIZES = ['xs', 'sm', 'md', 'lg'] as const;
 

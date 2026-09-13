@@ -25,11 +25,11 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { InlineAgent } from '../../schemas/subagentTool';
 
+import type { InlineAgent } from '../../schemas/subagentTool';
+import { writeAtomicJson, writeAtomicJsonAsync } from '../atomicJson';
 import { type SessionScope, scopeSuspendedDir } from '../sessionPaths';
 import { parseVersioned } from '../versioned';
-import { writeAtomicJson, writeAtomicJsonAsync } from '../atomicJson';
 
 const SUSPENDED_RUN_VERSION = 1;
 const JSON_SUFFIX = '.json';

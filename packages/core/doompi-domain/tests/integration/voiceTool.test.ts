@@ -1,14 +1,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
+
 import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDomainSwitchHandoffStore } from '../../src/models/domainSwitchHandoff';
-import { registerDomainVoiceCapabilities } from '../../src/controllers/voiceTool';
+
 import type { DomainCatalogPort } from '../../src/controllers/domainsCommand';
+import { registerDomainVoiceCapabilities } from '../../src/controllers/voiceTool';
+import { createDomainSwitchHandoffStore } from '../../src/models/domainSwitchHandoff';
 import { bindStubCoordinator } from '../helpers/coordinator';
 import { bindConfig } from '../helpers/session';
 

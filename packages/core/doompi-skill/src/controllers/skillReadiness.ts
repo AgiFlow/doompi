@@ -1,10 +1,11 @@
-import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
 import { requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import type { ExtensionAPI, ExtensionContext, Skill } from '@earendil-works/pi-coding-agent';
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
 import type { Context } from '@deepseek-ai/cordis';
-import { SKILL_COMMAND_PREFIX, SKILL_INVOCATION_PREFIX } from '../types/skills';
+import type { ExtensionAPI, ExtensionContext, Skill } from '@earendil-works/pi-coding-agent';
+
 import type { DeferredSkillSnapshot } from '../services/deferredSkills';
 import type { createActiveHelpSkillView } from '../services/helpSkills';
+import { SKILL_COMMAND_PREFIX, SKILL_INVOCATION_PREFIX } from '../types/skills';
 
 const WARNING = 'warning';
 

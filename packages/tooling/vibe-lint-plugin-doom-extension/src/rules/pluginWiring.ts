@@ -1,6 +1,8 @@
 import * as fs from 'node:fs';
-import ts from 'typescript';
+
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
+import ts from 'typescript';
+
 import { projectPath, readPackageManifest } from './manifestEntries.js';
 
 const ENTRIES = new Map([

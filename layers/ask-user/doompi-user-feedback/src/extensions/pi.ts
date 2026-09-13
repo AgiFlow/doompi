@@ -1,19 +1,19 @@
-import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
-import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import { DOOM_NARRATION_SERVICE, requireDoomNarrationService } from '@agimon-ai/doompi-core/narration';
+import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
 import { type DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
+import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+
+import { PACKAGE_SOURCE } from '../constants/package';
+import { ASK_USER_QUESTION_TOOL_NAME } from '../constants/tool';
 import { askUserToolRestriction } from '../services/askUserToolGate';
 import { isAutonomousVoiceActive } from '../services/autonomousVoiceMode';
 import { QuestionnaireCoordinator, type QuestionnaireRunner } from '../services/questionnaireCoordinator';
-import type { QuestionnaireResult } from '../types/questionnaire';
 import { createVoiceQuestionHandoff, type VoiceQuestionHandoff } from '../services/voiceQuestionHandoff';
 import { createAskUserQuestionTool } from '../tools/askUserQuestion';
-import { ASK_USER_QUESTION_TOOL_NAME } from '../constants/tool';
 import { askUserToolRender } from '../tui/askUserToolRender';
-import type { Context } from '@deepseek-ai/cordis';
-
-import { PACKAGE_SOURCE } from '../constants/package';
+import type { QuestionnaireResult } from '../types/questionnaire';
 
 function cancelledResult(): QuestionnaireResult {
   return { answers: [], cancelled: true };

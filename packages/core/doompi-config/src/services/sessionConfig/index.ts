@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from '@earendil-works/pi-coding-agent';
+
 import type {
   DoomConfigSelection as ConfigSelection,
   DeepReadonly,

@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   MessageItem,
   MessageItemBody,
@@ -6,7 +7,7 @@ import {
   type StatusTone,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
+
 import {
   STATUS_LABEL,
   type TaskResultTone,

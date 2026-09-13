@@ -1,5 +1,5 @@
-import { EventEmitter } from 'node:events';
 import type { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 
 export interface FakeChildOutcome {
   stdout?: string;

@@ -22,6 +22,7 @@ import type {
   WebPluginSlotProps,
 } from '@agimon-ai/doompi-core/web';
 import type { ComponentType } from 'react';
+
 import { leaderConflicts } from './leaderTree';
 import { mergeScopedPlugins, pluginsAtScope } from './pluginScopes';
 

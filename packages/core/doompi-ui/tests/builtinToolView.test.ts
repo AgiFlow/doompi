@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   LIST_COLLAPSED_LINES,
   WRITE_COLLAPSED_LINES,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { computerUse, computerUseChannel } from '../../src/web/stores/computerUseStore';
 
 const payload = (sessionId: string, phase: 'inactive' | 'active') => ({

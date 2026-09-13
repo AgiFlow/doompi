@@ -1,5 +1,6 @@
 import { disposeHarnessState } from '@agimon-ai/doompi-config/harnessStore';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
 // Imported from the module rather than the barrel: Pi loads this file directly
 // and it is the first thing a synced session runs, so it pulls in nothing it
 // does not use.

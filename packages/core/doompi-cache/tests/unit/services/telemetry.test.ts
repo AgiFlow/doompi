@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { PromptCacheTelemetry } from '../../../src/models/promptCacheTelemetry';
 
 describe('provider-observed cache telemetry', () => {

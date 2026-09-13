@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { createFileEditDependencies } from '../src/tui/fileEditDependencies';
 import type { FileEditDependencies } from '../src/types';
 

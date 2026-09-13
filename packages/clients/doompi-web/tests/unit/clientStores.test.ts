@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands';
 
 vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({ sendSessionProtocolFrame: vi.fn() }));
@@ -29,23 +30,11 @@ import {
   sendHubFrame,
 } from '../../src/web/lib/transport';
 import {
-  dropThreads,
-  heldThreads,
-  resetThreads,
-  resubscribeThreads,
-  subscribeThread,
-  threadStoreKey,
-  unsubscribeThread,
-} from '../../src/web/stores/threadStore';
-import {
-  closeTransientTab,
-  dropTransientTabs,
-  findTransientTab,
-  openTransientTab,
-  resetTransientTabs,
-  transientTabsOf,
-  transientTabsStore,
-} from '../../src/web/stores/transientTabsStore';
+  closeNewSession,
+  newSessionStore,
+  openNewSession,
+  resetNewSessionStore,
+} from '../../src/web/stores/newSessionStore';
 import {
   closePalette,
   openPalette,
@@ -53,6 +42,20 @@ import {
   setPalettePath,
   togglePalette,
 } from '../../src/web/stores/paletteStore';
+import {
+  applySessionBacklog,
+  applySessionRemoved,
+  applySessionsSnapshot,
+  applySessionUpsert,
+  beginSessionTransfer,
+  completeSessionTransfer,
+  markSocketClosed,
+  noSessions,
+  resetSessions,
+  sessionsStore,
+  setActiveSession,
+  waitForSession,
+} from '../../src/web/stores/sessionsStore';
 import {
   abortRun,
   beginSessionReplay,
@@ -81,25 +84,23 @@ import {
   submitMessage,
 } from '../../src/web/stores/sessionStore';
 import {
-  applySessionBacklog,
-  applySessionRemoved,
-  applySessionsSnapshot,
-  applySessionUpsert,
-  beginSessionTransfer,
-  completeSessionTransfer,
-  markSocketClosed,
-  noSessions,
-  resetSessions,
-  sessionsStore,
-  setActiveSession,
-  waitForSession,
-} from '../../src/web/stores/sessionsStore';
+  dropThreads,
+  heldThreads,
+  resetThreads,
+  resubscribeThreads,
+  subscribeThread,
+  threadStoreKey,
+  unsubscribeThread,
+} from '../../src/web/stores/threadStore';
 import {
-  closeNewSession,
-  newSessionStore,
-  openNewSession,
-  resetNewSessionStore,
-} from '../../src/web/stores/newSessionStore';
+  closeTransientTab,
+  dropTransientTabs,
+  findTransientTab,
+  openTransientTab,
+  resetTransientTabs,
+  transientTabsOf,
+  transientTabsStore,
+} from '../../src/web/stores/transientTabsStore';
 
 type Frame = Record<string, unknown>;
 

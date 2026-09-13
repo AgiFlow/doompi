@@ -1,8 +1,9 @@
 import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
-import { mcpServerFacet } from '../../../src/extensions/server';
+
 import { mcpHubApi } from '../../../src/controllers/mcpHubApi';
+import { mcpServerFacet } from '../../../src/extensions/server';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 

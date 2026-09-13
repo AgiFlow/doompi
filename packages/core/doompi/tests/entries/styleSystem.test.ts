@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { createDoomConfigContext, provideDoomConfigContext } from '@agimon-ai/doompi-config';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ToolResultEvent } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { refreshHarnessState } from '../../src/exports/harnessState';
 import {
   copyImageToHarnessTemp,

@@ -10,6 +10,15 @@ import type {
   HookMap,
 } from '@earendil-works/pi-agent-core';
 import type {
+  CompactionSettings,
+  Entry,
+  EntryProjector,
+  Session,
+  SessionStats,
+  ThinkingLevel,
+  QueueMode,
+} from '@earendil-works/pi-agent-core';
+import type {
   Api,
   CredentialStore,
   ImageContent,
@@ -20,15 +29,7 @@ import type {
   RetryPolicy,
   Usage,
 } from '@earendil-works/pi-ai';
-import type {
-  CompactionSettings,
-  Entry,
-  EntryProjector,
-  Session,
-  SessionStats,
-  ThinkingLevel,
-  QueueMode,
-} from '@earendil-works/pi-agent-core';
+
 import type { HistoryOwnership, HistoryOwnershipLease } from '../../services/historyImport';
 
 export interface SqliteSessionStorage {

@@ -1,6 +1,7 @@
 import { Store } from '@tanstack/store';
-import type { SessionChannelContribution, SessionRecords, SessionStore, SessionStoreChannel } from '../types/webPlugin';
+
 import { defineSessionChannel } from '../../extensions/webPlugin';
+import type { SessionChannelContribution, SessionRecords, SessionStore, SessionStoreChannel } from '../types/webPlugin';
 
 /**
  * Per-session plugin state with the drop and reset bookkeeping built in.

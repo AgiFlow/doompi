@@ -23,9 +23,9 @@
 
 import type { AsyncRunStatus } from '../asyncExecution';
 import type { TrackedAsyncJob } from '../asyncJobTracker';
-import { isSuspendedRunResumable, type SuspendedRun } from '../suspendedRuns';
 import { formatDuration } from '../displayFormat';
 import { type FleetTranscriptEvent, readFleetTranscript } from '../fleetTranscript';
+import { isSuspendedRunResumable, type SuspendedRun } from '../suspendedRuns';
 
 /** Default transcript tail length. Matches the value the tool description has always advertised. */
 export const DEFAULT_TRANSCRIPT_LINES = 80;

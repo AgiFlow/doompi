@@ -2,6 +2,7 @@ import type { WorkflowProgressEvent, WorkflowRunRecord } from '@agimon-ai/workfl
 import type { ExtensionUIContext, Theme } from '@earendil-works/pi-coding-agent';
 import { type TUI, visibleWidth } from '@earendil-works/pi-tui';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   formatWorkflowDuration,
   formatWorkflowProgressRow,

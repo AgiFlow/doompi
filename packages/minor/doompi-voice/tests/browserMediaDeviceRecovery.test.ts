@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { BrowserVoiceMediaDevice, Pcm16Resampler } from '../src/web/api/browserMediaDevice';
 class FakeNode {
   public connect(): void {}

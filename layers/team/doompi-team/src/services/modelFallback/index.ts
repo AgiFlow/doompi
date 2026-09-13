@@ -25,9 +25,9 @@
  *   ids legitimately contain colons
  */
 
+import type { ModelScopeConfig, Usage } from '../../types';
 import { type ModelInfo as AvailableModelInfo, splitKnownThinkingSuffix } from '../modelInfo';
 import { PROVIDER_SEPARATOR, resolveModelCandidate } from '../modelResolution';
-import type { ModelScopeConfig, Usage } from '../../types';
 import { checkModelScope, type ModelScopeViolation, type ModelSource } from '../modelScope';
 
 // Re-exported so the runs domain still reads as the entry point for model

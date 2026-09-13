@@ -1,7 +1,9 @@
-import { EMPTY_STATE_GUIDANCE } from '../constants/header';
 import path from 'node:path';
+
 import { type ExtensionContext, type Theme, type ThemeColor } from '@earendil-works/pi-coding-agent';
 import { type Component, visibleWidth } from '@earendil-works/pi-tui';
+
+import { EMPTY_STATE_GUIDANCE } from '../constants/header';
 import { type DoomHarnessMetadata, readDoomHarnessMetadata } from '../types/harnessMetadata';
 import { alignLine, fitLine, padLine } from './rendering';
 

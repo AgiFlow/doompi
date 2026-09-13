@@ -1,24 +1,10 @@
+import path from 'node:path';
+
 import type { Context as CordisContext } from '@deepseek-ai/cordis';
-import type { InstalledServerFacets } from '../../../exports/serverFacet';
-import type {
-  DoomHeadlessEventName,
-  DoomHeadlessExecutionContext,
-  DoomHeadlessSelection,
-  DoomHeadlessTool,
-} from '../../../exports/headless';
-import { DOOM_CHILD_SESSION_SERVICE } from '../../../exports/childSession';
-import { createHeadlessClient } from '../../../services/headlessClient';
-import { HeadlessHost, headlessHarnessSkill } from './headlessHost';
-import { createDirectHarnessRuntime } from '../../../server/directHarnessRuntime';
-import { createHeadlessChildSessionServiceProvider } from '../../child/adapters/headlessChildSessionService';
-import { createHistoryOwnership } from '../../../services/historyOwnership';
-import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../types/headlessSessionHost';
-import type { SessionFrame } from '../../../types/server/session';
-import type { ResolvedHeadlessResource } from '../types/headlessHost';
-import type { DirectHarnessRuntime } from '../../../types/server/directHarnessRuntime';
-import { buildContextDetail } from '../../../services/contextDetail';
-import { DOOM_CONTEXT_ENTRY_TYPE, projectContext } from '../../../services/contextProjection';
-import { writeContextDetail } from '../../../services/contextDetailStore';
+import type { AgentHarnessResources, AgentHarnessTool, AgentMessage, HookMap } from '@earendil-works/pi-agent-core';
+import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
+import { value } from '@earendil-works/pi-agent-core/harness/session';
+import type { Model, Api, Usage } from '@earendil-works/pi-ai';
 import {
   getAgentDir,
   ModelRuntime,
@@ -28,10 +14,27 @@ import {
   SettingsManager,
   type Args,
 } from '@earendil-works/pi-coding-agent';
-import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import type { AgentHarnessResources, AgentHarnessTool, AgentMessage, HookMap } from '@earendil-works/pi-agent-core';
-import type { Model, Api, Usage } from '@earendil-works/pi-ai';
-import path from 'node:path';
+
+import { DOOM_CHILD_SESSION_SERVICE } from '../../../exports/childSession';
+import type {
+  DoomHeadlessEventName,
+  DoomHeadlessExecutionContext,
+  DoomHeadlessSelection,
+  DoomHeadlessTool,
+} from '../../../exports/headless';
+import type { InstalledServerFacets } from '../../../exports/serverFacet';
+import { createDirectHarnessRuntime } from '../../../server/directHarnessRuntime';
+import { buildContextDetail } from '../../../services/contextDetail';
+import { writeContextDetail } from '../../../services/contextDetailStore';
+import { DOOM_CONTEXT_ENTRY_TYPE, projectContext } from '../../../services/contextProjection';
+import { createHeadlessClient } from '../../../services/headlessClient';
+import { createHistoryOwnership } from '../../../services/historyOwnership';
+import type { DirectHarnessRuntime } from '../../../types/server/directHarnessRuntime';
+import type { SessionFrame } from '../../../types/server/session';
+import { createHeadlessChildSessionServiceProvider } from '../../child/adapters/headlessChildSessionService';
+import type { ResolvedHeadlessResource } from '../types/headlessHost';
+import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../types/headlessSessionHost';
+import { HeadlessHost, headlessHarnessSkill } from './headlessHost';
 
 type AnyRecord = Record<string, unknown>;
 type HeadlessTool = DoomHeadlessTool;
@@ -542,6 +545,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         throw new Error('Headless capability preparation is not ready.');
     },
   });
+  await runtime.session.setValue(value('doompi.session', 'workspaceRoot'), options.repoRoot, BACKGROUND_CONTEXT);
 
   let currentModel = await runtime.lane.getModel(BACKGROUND_CONTEXT);
   const entries = (

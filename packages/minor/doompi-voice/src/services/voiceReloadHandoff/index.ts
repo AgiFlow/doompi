@@ -1,3 +1,12 @@
+import { type TSchema } from 'typebox';
+import { Check, Errors } from 'typebox/value';
+
+import {
+  VOICE_RELOAD_HANDOFF_REGISTRY_KEY,
+  VOICE_RELOAD_HANDOFF_TTL_MS,
+  MAX_SESSION_ID_LENGTH,
+  MAX_TOKEN_LENGTH,
+} from '../../constants/voiceReloadHandoff';
 import {
   type VoiceReloadHandoffKind,
   VoiceReloadHandoffIdentitySchema,
@@ -6,15 +15,6 @@ import {
   VoiceReloadHandoffSchema,
   type VoiceReloadHandoff,
 } from '../../schemas/voiceReloadHandoff';
-import {
-  VOICE_RELOAD_HANDOFF_REGISTRY_KEY,
-  VOICE_RELOAD_HANDOFF_TTL_MS,
-  MAX_SESSION_ID_LENGTH,
-  MAX_TOKEN_LENGTH,
-} from '../../constants/voiceReloadHandoff';
-import { type TSchema } from 'typebox';
-import { Check, Errors } from 'typebox/value';
-
 import { type VoiceToolSessionHandle } from '../voiceTools';
 
 /** The sole exact global allowed for Voice continuity across module reload. */

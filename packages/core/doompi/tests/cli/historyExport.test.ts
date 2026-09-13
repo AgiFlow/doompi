@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { runHistoryExport } from '../../src/cli/commands/history-export';
+
 import { CliApp } from '../../src/cli/cliApp';
+import { runHistoryExport } from '../../src/cli/commands/history-export';
 
 function v4Source(): string {
   return `${JSON.stringify({

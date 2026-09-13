@@ -4,8 +4,9 @@
  * default export is a bare `const meta`.
  */
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
-import { ComputerActionToolCard } from './ComputerActionToolCard';
+
 import { computerActionToolName } from '../lib/computerActionToolRender';
+import { ComputerActionToolCard } from './ComputerActionToolCard';
 
 const props = (overrides: Parameters<typeof toolMessagePropsFixture>[0]) => toolMessagePropsFixture(overrides).props;
 

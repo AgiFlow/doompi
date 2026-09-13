@@ -1,7 +1,8 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { updateHarnessState } from '../composition/harnessState';
+
 import { loadComposedExtensions } from '../builders/cli/composition';
 import { readLauncherComposition, resolveLauncherLoadPlan } from '../builders/cli/launcherComposition';
+import { updateHarnessState } from '../composition/harnessState';
 
 const WARNING = 'warning';
 

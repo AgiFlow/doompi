@@ -1,12 +1,13 @@
-import { ActivityIcon, Button, CloseIcon, Input, NavTab, NavTabBadge } from '@agimon-ai/doompi-web-components';
 import type { TabContribution, TransientTab } from '@agimon-ai/doompi-core/web';
+import { ActivityIcon, Button, CloseIcon, Input, NavTab, NavTabBadge } from '@agimon-ai/doompi-web-components';
 import { Link } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
+
 import { useActivityGroups } from '../../lib/composition';
 import { webTabs } from '../../lib/pluginRegistry';
-import { renameSession, useActiveSession } from '../../stores/sessionStore';
 import { sessionsStore, useActiveSessionMeta, useNoSessions } from '../../stores/sessionsStore';
+import { renameSession, useActiveSession } from '../../stores/sessionStore';
 import { closeTransientTab, useTransientTabs } from '../../stores/transientTabsStore';
 /** One registry tab: the badge hook is stable per tab, so the call is unconditional. */
 function PluginTab({ tab, sessionId, active }: { tab: TabContribution; sessionId: string; active: boolean }) {

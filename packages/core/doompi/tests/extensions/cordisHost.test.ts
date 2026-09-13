@@ -6,6 +6,7 @@ import type {
   SessionStartEvent,
 } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
+
 import cordisFinalizerExtension from '../../src/extensions/cordisFinalizer';
 import cordisHostExtension from '../../src/extensions/cordisHost';
 

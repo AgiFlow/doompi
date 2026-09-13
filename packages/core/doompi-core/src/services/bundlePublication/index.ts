@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import type { SignedBundleManifest } from '@agimon-ai/doompi-web-security';
 import { createBundleSigner, type BundleSigner } from '@agimon-ai/doompi-web-security/node';
 

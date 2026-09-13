@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { BoundedTranscriptionQueue, UtteranceAssembler } from '../src/services/utterance';
 import type { IClock, TimerHandle } from '../src/types';
 

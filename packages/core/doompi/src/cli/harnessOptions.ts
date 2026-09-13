@@ -1,15 +1,17 @@
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
+
 import { loadDoomConfig } from '@agimon-ai/doompi-config/config';
-import { HARNESS_STATE_KEYS } from '@agimon-ai/doompi-config/harnessState';
 import { loadDomains } from '@agimon-ai/doompi-config/domains';
+import { HARNESS_STATE_KEYS } from '@agimon-ai/doompi-config/harnessState';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { loadProfileCatalog } from '@agimon-ai/doompi-config/profiles';
-import { parseHarnessArgs } from './options';
+import type { HarnessFailureReporter } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+
 import { readHarnessState } from '../composition/harnessState';
 import { findRepositoryRoot } from '../composition/repository';
-import type { HarnessFailureReporter } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
 import type { HarnessOptions } from '../composition/types/harness';
+import { parseHarnessArgs } from './options';
 
 export interface ResolveHarnessOptionsInput {
   /** Raw launcher arguments, as the binary received them. */

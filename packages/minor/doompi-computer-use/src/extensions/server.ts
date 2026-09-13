@@ -1,7 +1,8 @@
 import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
+
+import { api } from '../controllers/computerUseApi';
 import { createComputerUseServer } from '../controllers/computerUseServer';
 import { createComputerUseChannel } from '../controllers/webComputerUseChannel';
-import { api } from '../controllers/computerUseApi';
 export const computerUseServerFacet = defineServerPlugin({
   name: '@agimon-ai/doompi-computer-use',
   global: { channels: [createComputerUseChannel] },

@@ -1,8 +1,8 @@
 import { createHash, randomBytes, randomInt } from 'node:crypto';
-import { type OriginPolicy, tunnelOriginPolicy } from '../remoteGuardPolicy';
-import { createPairingFlow, type PairingFlow } from '../pairingFlow';
-import { parseRemoteAccessSettings, serializeRemoteAccessSettings } from '../remoteAccessSettings';
-import { cookieMaxAgeSeconds } from '../deviceSessions';
+
+import { SEALED_KEY_PARAM } from '@agimon-ai/doompi-web-security';
+import { createHostHandshake, type HostHandshake, type SealedChannel } from '@agimon-ai/doompi-web-security/node';
+
 import {
   BUNDLE_MINIMUM_REVISION_PARAM,
   BUNDLE_SIGNING_KEY_PARAM,
@@ -10,6 +10,7 @@ import {
   REMOTE_PAIRING_REQUEST_TYPE,
   REMOTE_STATE_TYPE,
 } from '../../constants/remote';
+import { COOKIE_CEILING_SECONDS } from '../../constants/remote';
 import {
   type BundlePairingTrust,
   type PairingStatus,
@@ -20,13 +21,14 @@ import {
   type TunnelLauncher,
   type TunnelStartResult,
 } from '../../types/remote';
-import { COOKIE_CEILING_SECONDS } from '../../constants/remote';
-import type { StepUpAction, StoredCredential } from '../webauthnPolicy';
 import { createDeviceAuth, type DeviceAuth, type EnrolledDevice } from '../deviceAuth';
-import { SEALED_KEY_PARAM } from '@agimon-ai/doompi-web-security';
-import { createHostHandshake, type HostHandshake, type SealedChannel } from '@agimon-ai/doompi-web-security/node';
-import { createWebAuthn, type PasskeySupport, type WebAuthn } from '../webauthn';
+import { cookieMaxAgeSeconds } from '../deviceSessions';
+import { createPairingFlow, type PairingFlow } from '../pairingFlow';
+import { parseRemoteAccessSettings, serializeRemoteAccessSettings } from '../remoteAccessSettings';
 import type { RemoteAccessStore } from '../remoteAccessStore';
+import { type OriginPolicy, tunnelOriginPolicy } from '../remoteGuardPolicy';
+import { createWebAuthn, type PasskeySupport, type WebAuthn } from '../webauthn';
+import type { StepUpAction, StoredCredential } from '../webauthnPolicy';
 
 const TOKEN_BYTES = 32;
 const SWEEP_INTERVAL_MS = 5 * 60_000;

@@ -15,6 +15,7 @@ import type {
 } from '@agimon-ai/doompi-core/footer';
 import type { DoomLeaderActionHandlerOptions, LeaderBinding } from '@agimon-ai/doompi-core/leader';
 import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+
 import type { DoomLeaderDiagnostic, DoomLeaderRegistry } from '../leaderRegistry';
 
 type Listener = () => void;

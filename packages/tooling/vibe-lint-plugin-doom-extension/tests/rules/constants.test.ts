@@ -1,9 +1,11 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { doomConstants } from '../../src/rules/constants.js';
+
 import { doomFolderLayout, doomLayerBoundary } from '../../src/rules/architecture.js';
+import { doomConstants } from '../../src/rules/constants.js';
 import { webPluginImportAllowlist } from '../../src/rules/webPlugin.js';
 
 describe('constants ownership', () => {

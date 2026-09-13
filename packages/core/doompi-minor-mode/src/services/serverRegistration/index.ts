@@ -1,12 +1,13 @@
-import type { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   requireDoomHeadlessHost,
   readDoomHeadlessOwner,
 } from '@agimon-ai/doompi-core/headless';
+import type { Context } from '@deepseek-ai/cordis';
+
 import type { DoomHeadlessMinorMode } from '../../schemas/headless';
-import type { MinorModeOwner } from '../modeDefinition';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '../../schemas/mode';
+import type { MinorModeOwner } from '../modeDefinition';
 
 export function serverMinorModes(
   modes: readonly (DoomHeadlessMinorMode | MinorModeOwner<Parameters<DoomHeadlessMinorMode['handleAction']>[2]>)[],

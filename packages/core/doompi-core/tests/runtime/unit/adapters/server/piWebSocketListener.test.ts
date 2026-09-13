@@ -1,5 +1,6 @@
 import type { Server } from '@earendil-works/pi-server';
 import { describe, expect, it, vi } from 'vitest';
+
 import { createPiWebSocketListener, type PiListenerSocket } from '../../../../../src/pi/piWebSocketListener';
 
 type ByteConnection = Parameters<Server['accept']>[0];

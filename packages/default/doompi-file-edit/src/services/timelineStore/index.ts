@@ -1,7 +1,8 @@
 import fs, { type FileHandle } from 'node:fs/promises';
-import { type AnyTimelineEvent, confirmedChanges, foldEntries, foldVersions, parseTimeline } from '../fileChanges';
+
 import type { FileEditEntry, FileEditVersion, TimelineEvent } from '../../types/domain';
 import type { ITimelineStore } from '../../types/timelineStore';
+import { type AnyTimelineEvent, confirmedChanges, foldEntries, foldVersions, parseTimeline } from '../fileChanges';
 
 const LOCK_RETRY_MS = 25;
 const LOCK_RETRIES = 400;

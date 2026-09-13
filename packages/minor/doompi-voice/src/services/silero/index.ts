@@ -3,8 +3,8 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { PCM_BYTES_PER_SAMPLE, PCM_FRAME_BYTES, PCM_SAMPLE_RATE } from '../pcm';
 import type { ISpeechPresenceDetector } from '../../types';
+import { PCM_BYTES_PER_SAMPLE, PCM_FRAME_BYTES, PCM_SAMPLE_RATE } from '../pcm';
 
 const SHERPA_ONNX_PACKAGE = 'sherpa-onnx-node';
 const SILERO_MODEL_FILE = 'silero_vad_v6.2.1.onnx';

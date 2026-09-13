@@ -23,6 +23,9 @@
  *   ledger
  */
 
+import type { Context } from '@deepseek-ai/cordis';
+import { Check } from 'typebox/value';
+
 import {
   DelegationCancelSchema,
   DOOM_DELEGATION_ACCEPTED_EVENT,
@@ -36,17 +39,14 @@ import {
   DelegationRequestSchema,
   type DelegationResult,
 } from '../../schemas/delegationApi';
-import type { Context } from '@deepseek-ai/cordis';
-import { Check } from 'typebox/value';
-
 import type { AsyncJobTrackerContract, TrackedAsyncJobsContract } from '../asyncJobTracker';
-import type { SessionScope } from '../sessionPaths';
-import type { SubagentWaiterContract } from '../subagentWait';
-import type { AvailableModelInfo, ParentModel } from '../modelFallback';
-import type { PollSchedulerContract } from '../pollScheduler';
 import type { ExtensionConfig } from '../config';
 import type { ManagementActionsContract } from '../managementActions';
+import type { AvailableModelInfo, ParentModel } from '../modelFallback';
+import type { PollSchedulerContract } from '../pollScheduler';
+import type { SessionScope } from '../sessionPaths';
 import type { SpawnPlannerContract, SessionForkSource } from '../spawnPlan';
+import type { SubagentWaiterContract } from '../subagentWait';
 
 const DEFAULT_DELEGATION_TIMEOUT_MS = 20 * 60 * 1000;
 const DELEGATION_PROGRESS_INTERVAL_MS = 250;

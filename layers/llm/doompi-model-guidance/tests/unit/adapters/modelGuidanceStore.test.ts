@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadModelGuidance } from '../../../src/services/modelGuidanceStore';
+
 import { DEFAULT_MODEL_GUIDANCE_PRESET, mergeModelGuidance } from '../../../src/services/modelGuidance';
+import { loadModelGuidance } from '../../../src/services/modelGuidanceStore';
 
 const defaultGuidance = mergeModelGuidance([DEFAULT_MODEL_GUIDANCE_PRESET]);
 let workspace: string;

@@ -1,4 +1,23 @@
 import {
+  DOOM_FULLSCREEN_UI_OPTIONS,
+  DOOM_NAVIGATION_KEYS,
+  DOOM_OVERLAY_ACCENT,
+  DoomOverlay,
+  type DoomOverlayChrome,
+  type DoomOverlayTui,
+} from '@agimon-ai/doompi-ui/doom-overlay';
+/**
+ * Runner Space: the `SPC r l` overlay.
+ *
+ * Two modes behind one component. The list shows every runner in this worktree
+ * and can stop them; attaching to an interactive runner renders its live
+ * terminal and forwards keystrokes to it, which is the whole reason PTY runs
+ * exist. Rendering is pure, so the surface can be asserted as text.
+ */
+import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
+import { matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
+
+import {
   ATTACH_FOOTER,
   ELLIPSIS,
   EMPTY_MESSAGE,
@@ -8,25 +27,6 @@ import {
   LOG_REFRESH_MS,
   TITLE,
 } from '../constants/runnerSpace';
-/**
- * Runner Space: the `SPC r l` overlay.
- *
- * Two modes behind one component. The list shows every runner in this worktree
- * and can stop them; attaching to an interactive runner renders its live
- * terminal and forwards keystrokes to it, which is the whole reason PTY runs
- * exist. Rendering is pure, so the surface can be asserted as text.
- */
-
-import {
-  DOOM_FULLSCREEN_UI_OPTIONS,
-  DOOM_NAVIGATION_KEYS,
-  DOOM_OVERLAY_ACCENT,
-  DoomOverlay,
-  type DoomOverlayChrome,
-  type DoomOverlayTui,
-} from '@agimon-ai/doompi-ui/doom-overlay';
-import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
-import { matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
 import type { PtyRun } from '../types/ptyHost';
 import type { RunnerRecord } from '../types/runnerRegistry';
 import { toRunnerRows } from './format';

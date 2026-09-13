@@ -1,7 +1,8 @@
-import { PICKER_TITLE, TUI_MODE, WARNING, INFO } from '../constants/promptsCommand';
-import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/prompts';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { SelectItem } from '@earendil-works/pi-tui';
+
+import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/prompts';
+import { PICKER_TITLE, TUI_MODE, WARNING, INFO } from '../constants/promptsCommand';
 import { promptItems, resolvePromptSelection, stagedEditorText } from '../services/promptItems';
 import type { PromptExtensionDependencies } from '../types/prompt';
 

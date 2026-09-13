@@ -1,11 +1,13 @@
 import { readFile } from 'node:fs/promises';
+
 import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership';
-import { browserVoiceMediaClientId } from '../src/web/lib/browserMediaIdentity';
 import { VoiceActivitySection } from '../src/web/components/VoiceActivitySection';
 import { VoiceComposerAction } from '../src/web/components/VoiceComposerAction';
 import { VoiceToolMessage } from '../src/web/components/VoiceToolMessage';
+import { browserVoiceMediaClientId } from '../src/web/lib/browserMediaIdentity';
 import {
   activeVoiceSession,
   voiceMediaBrowserState,

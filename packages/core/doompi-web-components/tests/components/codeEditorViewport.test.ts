@@ -1,5 +1,6 @@
 import { EditorState } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
+
 import { resolveEditorViewportRegion } from '../../src/components/CodeEditorView';
 
 describe('CodeEditor viewport geometry', () => {

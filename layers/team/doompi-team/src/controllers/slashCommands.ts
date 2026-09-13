@@ -50,16 +50,10 @@
 
 import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import type { ExtensionConfig } from '../services/config';
-import type { ManagementActionsContract } from '../services/managementActions';
-import { captureSessionForkSource, type SpawnPlannerContract, type SpawnPlanResult } from '../services/spawnPlan';
+
 import type { SkillDiscoveryContract } from '../services/agentSkills';
-import type { AgentScope, AgentDiscoveryContract } from '../types/agent';
 import type { AsyncJobTrackerContract, TrackedAsyncJobsContract, TrackedAsyncJob } from '../services/asyncJobTracker';
 import { resolveTrackedRunId, TERMINAL_ASYNC_JOB_STATES } from '../services/asyncJobTracker';
-import { normalizeParentModel } from '../services/modelFallback';
-import { authenticatedModelInfos } from '../services/modelResolution';
-import type { PollSchedulerContract } from '../services/pollScheduler';
 import {
   extractForkFlag,
   type InlineConfig,
@@ -68,14 +62,21 @@ import {
   parseSingleTaskToken,
   SlashParseError,
 } from '../services/chainExpression';
+import type { ExtensionConfig } from '../services/config';
 import { buildDoctorReport } from '../services/doctor';
-import { taskInputFromParsedStep, UnsupportedInlineConfigError } from '../services/spawnRequestMapping';
+import type { ManagementActionsContract } from '../services/managementActions';
+import { normalizeParentModel } from '../services/modelFallback';
+import { authenticatedModelInfos } from '../services/modelResolution';
+import type { PollSchedulerContract } from '../services/pollScheduler';
 import { createSessionScope } from '../services/sessionPaths';
+import { captureSessionForkSource, type SpawnPlannerContract, type SpawnPlanResult } from '../services/spawnPlan';
+import { taskInputFromParsedStep, UnsupportedInlineConfigError } from '../services/spawnRequestMapping';
 import {
   launchParallelSubagents,
   launchSingleSubagent,
   watchTrackedRunUntilTerminal,
 } from '../services/subagentLaunch';
+import type { AgentScope, AgentDiscoveryContract } from '../types/agent';
 
 export interface SlashCommandDeps {
   spawnPlanner: SpawnPlannerContract;

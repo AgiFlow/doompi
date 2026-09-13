@@ -1,13 +1,14 @@
-import { consumeMinorModeReloadHandoff, prepareMinorModeReloadHandoff } from '../../src/services/reloadHandoff';
+import type { DoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
+import { DOOM_TRANSITION_SERVICE, requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
+import { Context } from '@deepseek-ai/cordis';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import type { MinorModeCatalogSnapshot } from '../../src/exports';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE as MINOR_MODE_CATALOG_SERVICE,
   type MinorModeCatalogService as MinorModeCatalogHost,
 } from '../../src/schemas/mode';
-import { Context } from '@deepseek-ai/cordis';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MinorModeCatalogSnapshot } from '../../src/exports';
-import type { DoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
-import { DOOM_TRANSITION_SERVICE, requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
+import { consumeMinorModeReloadHandoff, prepareMinorModeReloadHandoff } from '../../src/services/reloadHandoff';
 
 const cleanup: Array<() => void> = [];
 

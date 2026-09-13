@@ -1,4 +1,5 @@
 import { context, isSpanContextValid, trace, type Context, type Span } from '@opentelemetry/api';
+
 import type {
   DoomTelemetry,
   DoomTelemetryAttributes,

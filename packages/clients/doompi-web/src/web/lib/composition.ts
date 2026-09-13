@@ -1,5 +1,6 @@
 import type { DockFaceContribution, SelectionAxisContribution, TransientTab } from '@agimon-ai/doompi-core/web';
 import { useCallback, useSyncExternalStore } from 'react';
+
 import type { MinorModeProjection, MinorModeRecordProjection } from '../../types/hub';
 import {
   pluginActivityGroups,

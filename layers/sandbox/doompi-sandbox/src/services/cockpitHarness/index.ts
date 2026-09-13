@@ -1,17 +1,19 @@
 import { execFileSync } from 'node:child_process';
+
 import type {
   CockpitContainerHandle,
   CockpitContainerHarnessModule,
   CockpitContainerRequest,
   CockpitContainerStart,
 } from '@agimon-ai/doompi-core/cockpit-container';
+
+import type { EngineProcessRunner, SandboxEngine } from '../../types/sandboxHarness';
 import { buildCockpitPlan, type CockpitGitIdentity } from '../cockpitPlan';
+import { SpawnEngineProcessRunner } from '../engineProcess';
+import { detectEngine, ensureImage } from '../harness';
 import { parseRunFlags, assertRunFlags } from '../runFlags';
 import { cockpitDockerfile } from '../sandboxImage';
-import type { EngineProcessRunner, SandboxEngine } from '../../types/sandboxHarness';
-import { detectEngine, ensureImage } from '../harness';
 import { cockpitImageTag } from '../sandboxImageTag';
-import { SpawnEngineProcessRunner } from '../engineProcess';
 
 /**
  * Runs the cockpit itself in a container, detached, holding the hub and every

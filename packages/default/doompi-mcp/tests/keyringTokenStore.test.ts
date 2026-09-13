@@ -1,5 +1,6 @@
 import type { AuthEntry, TokenStore } from '@agimon-ai/mcp-proxy';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { KEYRING_SERVICE, type KeyringEntry, KeyringTokenStore } from '../src/services/keyringTokenStore';
 
 const entry: AuthEntry = {

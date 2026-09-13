@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createBashHookRunner } from '../../src/services/hookRunner';
-import { HOOK_TELEMETRY_EVENT } from '../../src/constants/telemetry';
 
+import { HOOK_TELEMETRY_EVENT } from '../../src/constants/telemetry';
+import { createBashHookRunner } from '../../src/services/hookRunner';
 import { asSpawn, type FakeChild, fakeChild, type FakeChildOutcome } from '../helpers/childProcess';
 import { recordingTelemetry } from '../helpers/telemetry';
 

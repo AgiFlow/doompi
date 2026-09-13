@@ -1,21 +1,9 @@
-import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
-import {
-  DOOM_LOOP_LAUNCHERS_SERVICE,
-  type DoomLoopLaunchersService,
-  type LoopInstanceSnapshot,
-  type LoopLauncherRegistration,
-  type LoopLauncherSummary,
-} from '../schemas/loopLaunchers';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
+import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { createDoomLoopLaunchersService } from '../services/loopLaunchers';
-import { openLoopListOverlay } from './loopListOverlay';
-import { openStartLoopOverlay } from './startLoopOverlay';
-import { formatLoopStatusView, LOOP_VIEW_STATUS_KEY } from '../types/loopView';
-import { createDefaultLoopLauncher } from '../services/defaultLoopLauncher';
-import { registerLeaderContribution } from './leader';
+
 import {
   ACTIVE_MODE_COLOR,
   LOOPS_GROUP_ORDER,
@@ -24,6 +12,19 @@ import {
   PACKAGE_SOURCE,
   STATUS_KEY,
 } from '../constants/piLoop';
+import {
+  DOOM_LOOP_LAUNCHERS_SERVICE,
+  type DoomLoopLaunchersService,
+  type LoopInstanceSnapshot,
+  type LoopLauncherRegistration,
+  type LoopLauncherSummary,
+} from '../schemas/loopLaunchers';
+import { createDefaultLoopLauncher } from '../services/defaultLoopLauncher';
+import { createDoomLoopLaunchersService } from '../services/loopLaunchers';
+import { formatLoopStatusView, LOOP_VIEW_STATUS_KEY } from '../types/loopView';
+import { registerLeaderContribution } from './leader';
+import { openLoopListOverlay } from './loopListOverlay';
+import { openStartLoopOverlay } from './startLoopOverlay';
 
 const MODE_ACTION_START = 'start';
 const MODE_ACTION_STOP = 'stop';

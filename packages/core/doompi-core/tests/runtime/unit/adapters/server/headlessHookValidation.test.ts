@@ -1,11 +1,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { Context } from '@deepseek-ai/cordis';
-import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
-import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
-import type { Api, Model } from '@earendil-works/pi-ai';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
+import type { Api, Model } from '@earendil-works/pi-ai';
+import { ModelRuntime, SettingsManager } from '@earendil-works/pi-coding-agent';
+import { beforeAll, afterAll, describe, expect, it, vi } from 'vitest';
+
 import * as directRuntime from '../../../../../src/server/directHarnessRuntime';
 import { createHeadlessSessionHost } from '../../../../../src/systems/main/adapters/headlessSessionHost';
 import type { DirectHarnessRuntimeOptions } from '../../../../../src/types/server/directHarnessRuntime';

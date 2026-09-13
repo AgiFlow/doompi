@@ -10,6 +10,7 @@
  * so what is covered here is the preview the tab opens on.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import type { FileEditsDetailView } from '../../types/fileEditsApi';
 import { FilePanel } from './FilePanel';
 

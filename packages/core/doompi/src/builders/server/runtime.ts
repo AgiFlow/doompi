@@ -1,34 +1,38 @@
-import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
-import { publishHeadlessSelectionStatus } from './selectionStatus';
-
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { HARNESS_STATE_KEYS, HARNESS_STATE_POINTER } from '../../composition/harnessState';
-import { createWebCompositions } from '@agimon-ai/doompi-core/web-compositions';
+
 import { globalDoomConfigDirectory } from '@agimon-ai/doompi-config/config';
-import { resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
-import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/server-facet';
+import { filterHookDisabledLayers, loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
+import { createHeadlessHub, type HeadlessHub } from '@agimon-ai/doompi-core/headless-hub';
+import { serveHeadlessServer } from '@agimon-ai/doompi-core/headless-server';
+import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '@agimon-ai/doompi-core/headless-session-host';
+import { createHeadlessSessionManager } from '@agimon-ai/doompi-core/headless-session-manager';
+import { listSavedSessions } from '@agimon-ai/doompi-core/history';
 import type {
   DoomHubSessionApiRequest,
   DoomHubSessionCreateRequest,
   DoomHubSessionScope,
 } from '@agimon-ai/doompi-core/hub-channel';
-import { buildHarnessContext } from '../cli/harnessContext';
-import { filterHookDisabledLayers, loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
-import { createHarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
-import { findRepositoryRoot } from '../../composition/repository';
-import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
-import { createHeadlessHub, type HeadlessHub } from '@agimon-ai/doompi-core/headless-hub';
-import { createHeadlessSessionManager } from '@agimon-ai/doompi-core/headless-session-manager';
-import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '@agimon-ai/doompi-core/headless-session-host';
-import type { HeadlessSessionManager } from '@agimon-ai/doompi-core/runtime-headless-session-manager';
 import { serveSessionApis, type PackageApiServer } from '@agimon-ai/doompi-core/package-api-server';
-import { createServerTelemetry } from '@agimon-ai/doompi-core/server-telemetry';
-import { serveHeadlessServer } from '@agimon-ai/doompi-core/headless-server';
 import { createRemoteRuntime, type RemoteRuntime } from '@agimon-ai/doompi-core/remote-runtime';
+import type { HeadlessSessionManager } from '@agimon-ai/doompi-core/runtime-headless-session-manager';
+import { createHarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/server-facet';
+import { createServerTelemetry } from '@agimon-ai/doompi-core/server-telemetry';
+import { resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
+import { createWebCompositions } from '@agimon-ai/doompi-core/web-compositions';
+import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
+import { getAgentDir } from '@earendil-works/pi-coding-agent';
 import WebSocket from 'ws';
+
+import { runSync } from '../../cli/commands/sync/workflow';
+import { HARNESS_STATE_KEYS, HARNESS_STATE_POINTER } from '../../composition/harnessState';
+import { findRepositoryRoot } from '../../composition/repository';
+import { buildHarnessContext } from '../cli/harnessContext';
+import { publishHeadlessSelectionStatus } from './selectionStatus';
 import { resolveSessionIdentity } from './sessionArguments';
 import type { ServeOptions, ServerRuntimeEnvironment } from './types';
 const TELEMETRY_SHUTDOWN_TIMEOUT_MS = 2_000;
@@ -150,7 +154,10 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     scope: DoomHubSessionScope,
     request: DoomHubSessionApiRequest,
   ) => Promise<Response> = async () => Response.json({ error: 'Session API unavailable.' }, { status: 404 });
-  let createSession: (request: DoomHubSessionCreateRequest) => Promise<DoomHubSessionScope> = async () => {
+  let openSession: (
+    request: DoomHubSessionCreateRequest,
+    sessionId?: string,
+  ) => Promise<DoomHubSessionScope> = async () => {
     throw new Error('The cockpit session service is not ready.');
   };
   let admitWorkspace: (root: string) => Promise<{ id: string; root: string }> = async () => {
@@ -161,7 +168,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     manager: sessionManager,
     admitWorkspace: (root) => admitWorkspace(root),
     onWorkspaceRemoved: (workspaceId) => webCompositions?.remove({ scope: 'workspace', workspaceId }),
-    createSession: (request) => createSession(request),
+    createSession: (request) => openSession(request),
     onNotice: notice,
     requestSessionApi: (scope, request) => requestSessionApi(scope, request),
   });
@@ -427,9 +434,9 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         await bounded(harnessTelemetry.flush(), 'initial composition telemetry flush', notice);
       }
 
-      createSession = async (request) => {
+      openSession = async (request, sessionId) => {
         const identity = {
-          sessionId: crypto.randomUUID(),
+          sessionId: sessionId ?? crypto.randomUUID(),
           sessionName: request.name,
           parentSessionId: request.parentSessionId,
           sessionProvenance: request.sessionProvenance,
@@ -467,6 +474,48 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       port: options.webPort,
       headlessHub: hub,
       token: attachToken,
+      sessionHistory: (session) => {
+        const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
+        if (!workspaceRoot) throw new Error('Session workspace not found.');
+        return listSavedSessions(
+          path.join(getAgentDir(), 'server', 'sessions'),
+          workspaceRoot,
+          new Set(hub.snapshot().map((active) => active.id)),
+        );
+      },
+      restartSession: async (session) => {
+        const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
+        if (!workspaceRoot) throw new Error('Session workspace not found.');
+        const syncEnvironment = { ...baseEnvironment, DOOMPI_ROOT: workspaceRoot };
+        for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete syncEnvironment[key];
+        let syncOutput = '';
+        const code = await runSync(['sync'], syncEnvironment, workspaceRoot, {
+          write(chunk) {
+            syncOutput += String(chunk);
+            return true;
+          },
+        });
+        if (code !== 0) {
+          notice(`Workspace sync failed before restart: ${syncOutput.trim()}`);
+          throw new Error('Workspace sync failed; the session is still running.');
+        }
+        await hub.closeSession(session.id);
+        await openSession({ cwd: session.cwd, name: session.name }, session.id);
+      },
+      resumeSession: async (session, targetSessionId) => {
+        const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
+        if (!workspaceRoot) throw new Error('Session workspace not found.');
+        const saved = await listSavedSessions(
+          path.join(getAgentDir(), 'server', 'sessions'),
+          workspaceRoot,
+          new Set(hub.snapshot().map((active) => active.id)),
+        );
+        const target = saved.find((item) => item.id === targetSessionId);
+        if (!target) throw new Error('Saved Pi thread not found in this workspace.');
+        await hub.closeSession(session.id);
+        await openSession({ cwd: session.cwd, name: target.name ?? 'untitled' }, target.id);
+        return target.id;
+      },
       requestAsset: (request) => webCompositions?.request(request) ?? Promise.resolve(undefined),
       compositions: () => ({
         global: webCompositions?.get({ scope: 'global' }),

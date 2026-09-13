@@ -1,5 +1,6 @@
 import { isValidElement, type ReactNode, type ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { AuthorVideoControls, videoTimeLabel } from '../../src/web/components/AuthorVideoControls';
 import {
   authorSessionWorkspace,

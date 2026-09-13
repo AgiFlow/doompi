@@ -1,4 +1,4 @@
-import type { DoomToolRestrictionDefinition } from './toolSurface';
+import type { Context } from '@deepseek-ai/cordis';
 /**
  * The server facet a package installs into a headless host.
  *
@@ -11,15 +11,15 @@ import type { DoomToolRestrictionDefinition } from './toolSurface';
  * registers its API from inside that lifecycle, so server behaviour has a clear
  * owner and disposer.
  */
+import type { Static, TSchema } from 'typebox';
 
 import type { DoomHeadlessHostService, DoomHeadlessToolRestriction } from './headless';
-import type { Context } from '@deepseek-ai/cordis';
+import type { DoomHeadlessTool, DoomHeadlessCommand } from './headless';
 import type { DoomHubChannel } from './hubChannel';
 import type { DoomApi, DoomApiContext, DoomApiScope } from './packageApi';
-import type { Static, TSchema } from 'typebox';
 import type { DoomPluginTool, DoomPluginCommand } from './pluginContributions';
-import type { DoomHeadlessTool, DoomHeadlessCommand } from './headless';
 import type { DoomPluginCaller, DoomPluginMethod } from './pluginProtocol';
+import type { DoomToolRestrictionDefinition } from './toolSurface';
 
 /** The host a server facet contributes to. */
 export const DOOM_SERVER_HOST_SERVICE = 'doom/server-host';

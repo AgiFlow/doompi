@@ -1,4 +1,5 @@
 import { Worker } from 'node:worker_threads';
+
 import type { ShellTitleCommand, ShellTitleController, WriteTitle } from '../types/notifications';
 
 const BRAILLE_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];

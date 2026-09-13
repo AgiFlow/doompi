@@ -34,9 +34,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { EXTRA_SKILL_DIRS_ENV } from '../../types/environment';
+import { canonicalizeDiscoveryCwd } from '../agentProjectRoot';
 import { getAgentDir, getProjectConfigDir } from '../configDir';
 import { LruCache } from '../lruCache';
-import { canonicalizeDiscoveryCwd } from '../agentProjectRoot';
 
 /**
  * Where a skill file was found.

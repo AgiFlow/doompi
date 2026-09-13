@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
+import { describe, expect, it, vi } from 'vitest';
+
 import type { MinorModeCatalogService, MinorModeRecord } from '../../src/schemas/mode';
 import { headlessMinorModeCommand } from '../../src/services/headlessCommand';
 

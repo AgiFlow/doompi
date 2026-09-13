@@ -1,4 +1,3 @@
-import { RealtimeSession, type RealtimeSessionIdentity } from '../realtimeSession';
 import type { IClock, TimerHandle } from '../../types';
 import type {
   RealtimeBrowserState,
@@ -7,6 +6,7 @@ import type {
   RealtimeMediaCommand,
   RealtimeProvider,
 } from '../../types/realtime';
+import { RealtimeSession, type RealtimeSessionIdentity } from '../realtimeSession';
 
 type Command = RealtimeMediaCommand extends infer Event
   ? Event extends RealtimeMediaCommand

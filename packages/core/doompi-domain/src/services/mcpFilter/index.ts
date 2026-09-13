@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { type DomainMcpAllowlist, expandDomainNames, loadDomains } from '@agimon-ai/doompi-config/domains';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
+
 import type { JsonObject } from '../../types/resources';
 
 /** Server name in .mcp.json whose upstreams are declared in mcp-config.yaml. */

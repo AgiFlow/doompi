@@ -1,11 +1,13 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import fs from 'node:fs';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
-import { packagedVersion } from './packageVersion';
+
 import { contentTypeFor, resolveAssetPath } from '../services/staticAssets';
 import type { WebServer, WebServerOptions } from '../types/bridge';
+import { packagedVersion } from './packageVersion';
 
 const INDEX_FILE = 'index.html';
 const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';

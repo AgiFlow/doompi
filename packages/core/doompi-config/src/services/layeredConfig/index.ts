@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { parse as parseYaml } from 'yaml';
+
 import { globalDoomConfigDirectory } from '../config';
 
 /** Repository-local doom-pi configuration directory, committed to git. */

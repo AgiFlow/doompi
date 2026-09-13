@@ -1,16 +1,17 @@
-import contextCatalogExtension from '../../src/extensions/contextCatalog';
-import { DOOM_MCP_STATUS_SERVICE } from '@agimon-ai/doompi-core/mcp-status';
-import * as contextCatalog from '../../src/builders/cli/contextCatalog';
 import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
-import { DOOM_MINOR_MODE_ENTRY_TYPE, readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
+import { DOOM_MCP_STATUS_SERVICE } from '@agimon-ai/doompi-core/mcp-status';
 import { DOOM_NOTIFICATION_SERVICE, type DoomNotificationService } from '@agimon-ai/doompi-core/notification';
 import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
+import { DOOM_MINOR_MODE_ENTRY_TYPE, readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
+import modeCatalogExtension from '@agimon-ai/doompi-minor-mode/extensions/pi';
 import { prepareMinorModeReloadHandoff } from '@agimon-ai/doompi-minor-mode/reload-handoff';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
+import * as contextCatalog from '../../src/builders/cli/contextCatalog';
+import contextCatalogExtension from '../../src/extensions/contextCatalog';
 import cordisHostExtension from '../../src/extensions/cordisHost';
-import modeCatalogExtension from '@agimon-ai/doompi-minor-mode/extensions/pi';
 import { bindTestTransitionCoordinator } from '../helpers/transitionCoordinator';
 
 class TestBus implements EventBusLike {

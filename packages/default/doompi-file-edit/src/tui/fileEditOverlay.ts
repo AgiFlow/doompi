@@ -1,4 +1,5 @@
 import path from 'node:path';
+
 import {
   DOOM_OVERLAY_ACCENT,
   DoomOverlay,
@@ -7,6 +8,7 @@ import {
 } from '@agimon-ai/doompi-ui/doom-overlay';
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+
 import type { FileDiff, FileEditEntry, FileEditState, ResolvedEditor } from '../types/domain';
 
 export type FileEditOverlayAction = 'close' | 'copy' | 'refresh' | 'open';

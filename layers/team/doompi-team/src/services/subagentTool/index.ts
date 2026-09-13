@@ -1,31 +1,26 @@
 import { randomUUID } from 'node:crypto';
+
 import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { agentHasWriteTools } from '../agentMemory';
-import type { AgentConfig, AgentScope, AgentDiscoveryContract } from '../../types/agent';
-import { type AsyncJobTrackerContract, resolveTrackedRunId } from '../asyncJobTracker';
-import {
-  clearSuspendedRun,
-  formatSuspendedRuns,
-  isSuspendedRunResumable,
-  listSuspendedRuns,
-  type SuspendedRun,
-} from '../suspendedRuns';
-import { normalizeParentModel } from '../modelFallback';
-import { isPiRuntime } from '../runtimeRegistry';
-import { DoomTeamExpectedError, invalidRequest } from '../errors';
-import { authenticatedModelInfos } from '../modelResolution';
-import { createSessionScope, type SessionScope } from '../sessionPaths';
-import { loadConfig } from '../config';
-import type { ManagementActionsContract, StatusActionResult } from '../managementActions';
-import { completeOperation, startOperation } from '../operationJournal';
+
 import {
   SUBAGENT_ACTION_FIELDS,
   SUBAGENT_ACTIONS,
   type SubagentAction,
   type SubagentToolParams,
 } from '../../schemas/subagentTool';
+import type { AgentConfig, AgentScope, AgentDiscoveryContract } from '../../types/agent';
+import { agentHasWriteTools } from '../agentMemory';
+import { type AsyncJobTrackerContract, resolveTrackedRunId } from '../asyncJobTracker';
+import { loadConfig } from '../config';
+import { DoomTeamExpectedError, invalidRequest } from '../errors';
+import type { ManagementActionsContract, StatusActionResult } from '../managementActions';
+import { normalizeParentModel } from '../modelFallback';
+import { authenticatedModelInfos } from '../modelResolution';
+import { completeOperation, startOperation } from '../operationJournal';
+import { isPiRuntime } from '../runtimeRegistry';
+import { createSessionScope, type SessionScope } from '../sessionPaths';
 import {
   captureSessionForkSource,
   type SpawnPlannerContract,
@@ -33,6 +28,13 @@ import {
   type SpawnPlanResult,
 } from '../spawnPlan';
 import { DEFAULT_TRANSCRIPT_LINES, formatFleetView, formatRunTranscript } from '../statusViews';
+import {
+  clearSuspendedRun,
+  formatSuspendedRuns,
+  isSuspendedRunResumable,
+  listSuspendedRuns,
+  type SuspendedRun,
+} from '../suspendedRuns';
 
 export const SUBAGENT_TOOL_NAME = 'subagent';
 export const IMPLEMENTED_SUBAGENT_ACTIONS: ReadonlySet<string> = new Set(Object.values(SUBAGENT_ACTIONS));

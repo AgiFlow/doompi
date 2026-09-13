@@ -1,9 +1,11 @@
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BashRunRequest, BashRunResult, IBashRunService } from '../../src/types/bashRunService';
+
+import type { BashParams } from '../../src/exports/bashSchema';
 import { formatRunResult, createBashTool } from '../../src/exports/bashTool';
 import {
   boundExcerpt,
@@ -17,7 +19,7 @@ import {
   type ToolResult,
 } from '../../src/exports/responseEnvelope';
 import { estimateTokens } from '../../src/services/tokenEstimate';
-import type { BashParams } from '../../src/exports/bashSchema';
+import type { BashRunRequest, BashRunResult, IBashRunService } from '../../src/types/bashRunService';
 
 let directory: string;
 

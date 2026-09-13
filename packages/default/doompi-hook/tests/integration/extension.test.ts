@@ -1,14 +1,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
-import { createDoomReadinessCoordinator, DOOM_READINESS_SERVICE } from '@agimon-ai/doompi-core/readiness';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
+import { createDoomReadinessCoordinator, DOOM_READINESS_SERVICE } from '@agimon-ai/doompi-core/readiness';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHookDocumentReader } from '../../src/services/hookDocuments';
+
 import { hookExtension } from '../../src/extensions/pi';
+import { createHookDocumentReader } from '../../src/services/hookDocuments';
 import type { HookDocumentReader, HookOutcome } from '../../src/types/hooks';
 import { type PiHarness, piHarness, SESSION_ID, stubRunner, TEST_CORDIS_ROOT } from '../helpers/piSession';
 

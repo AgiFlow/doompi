@@ -1,9 +1,10 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
+
 import { PLAN_STATUS_KEY } from '../types/planApi';
 import { PlanActivitySection } from '../web/components/PlanActivitySection';
-import { planSettingsSection } from '../web/lib/planSettings';
 import { claimsPlanReviewPrompt, PlanReviewPrompt } from '../web/components/PlanReviewPrompt';
 import { PlanToolMessage } from '../web/components/PlanToolMessage';
+import { planSettingsSection } from '../web/lib/planSettings';
 import { PLAN_TOOL_NAMES } from '../web/lib/planToolRender';
 
 /**

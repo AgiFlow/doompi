@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { acquireSyncLocationLock, resolveSyncLocation, sanitizeSyncLabel } from '../../../src/services/syncLocation';
 
 const temporaryDirectories: string[] = [];

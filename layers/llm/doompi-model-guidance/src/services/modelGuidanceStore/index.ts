@@ -1,7 +1,8 @@
-import { DEFAULT_GUIDANCE } from '../../constants/modelGuidance';
 import { readDoomConfigSources } from '@agimon-ai/doompi-config/layeredConfig';
-import { DEFAULT_MODEL_GUIDANCE_PRESET, mergeModelGuidance } from '../modelGuidance';
+
+import { DEFAULT_GUIDANCE } from '../../constants/modelGuidance';
 import type { ModelGuidanceDocument, ModelGuidanceMap } from '../../types/modelGuidance';
+import { DEFAULT_MODEL_GUIDANCE_PRESET, mergeModelGuidance } from '../modelGuidance';
 
 /** Layered guidance document, read from the global then the repository `.doom` directory. */
 export const GUIDANCE_FILE = 'model-guidance.yaml';

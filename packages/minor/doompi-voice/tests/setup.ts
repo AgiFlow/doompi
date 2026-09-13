@@ -1,13 +1,18 @@
-import { voiceRuntime } from './helpers/voiceRuntime';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import {
   type DoomConfig,
   type IDoomConfigLoader,
   type ResolvedVoiceConfig,
   type VoiceAdapterConfig,
 } from '@agimon-ai/doompi-config';
+import {
+  createDoomToolSurface,
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolSurfaceService,
+} from '@agimon-ai/doompi-core/tool-surface';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   MINOR_MODE_TOOL_NAME,
@@ -16,22 +21,9 @@ import {
   type MinorModeCatalogService,
   type MinorModeRecord,
 } from '@agimon-ai/doompi-minor-mode';
-import {
-  createDoomToolSurface,
-  DOOM_TOOL_SURFACE_SERVICE,
-  type DoomToolSurfaceService,
-} from '@agimon-ai/doompi-core/tool-surface';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  analyzePcmWav,
-  ExecutableResolver,
-  FfmpegAudioRecorder,
-  NodeProcessSpawner,
-  PcmWavAnalyzer,
-  SystemClock,
-  TemporaryWorkspace,
-} from '../src/services/infrastructure';
+
 import {
   createVoiceDependencies,
   formatAutoCaptureActivity,
@@ -43,6 +35,15 @@ import {
   VoiceSessionController,
   WhisperCppAdapter,
 } from '../src/exports';
+import {
+  analyzePcmWav,
+  ExecutableResolver,
+  FfmpegAudioRecorder,
+  NodeProcessSpawner,
+  PcmWavAnalyzer,
+  SystemClock,
+  TemporaryWorkspace,
+} from '../src/services/infrastructure';
 import {
   type IAudioAnalyzer,
   type IClock,
@@ -60,6 +61,7 @@ import {
   type VoiceActivityUpdate,
   type VoiceUi,
 } from '../src/types';
+import { voiceRuntime } from './helpers/voiceRuntime';
 
 const roots: string[] = [];
 function temporaryRoot(): string {

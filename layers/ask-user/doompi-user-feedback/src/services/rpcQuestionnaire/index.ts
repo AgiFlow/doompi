@@ -1,7 +1,8 @@
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import type { QuestionParams } from '../../schemas/questionnaire';
-import { runQuestionnaire, type QuestionnaireInteraction } from '../questionnaireService';
 import type { QuestionnaireResult } from '../../types/questionnaire';
+import { runQuestionnaire, type QuestionnaireInteraction } from '../questionnaireService';
 
 export async function runRpcQuestionnaire(
   context: ExtensionContext,

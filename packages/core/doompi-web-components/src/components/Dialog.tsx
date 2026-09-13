@@ -1,6 +1,7 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import { createContext, type ComponentProps, useContext } from 'react';
+
 import { CloseIcon } from '../icons/icons';
 import { cn } from '../lib/cn';
 import { Button } from './Button';

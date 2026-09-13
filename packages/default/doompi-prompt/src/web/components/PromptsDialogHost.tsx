@@ -1,10 +1,11 @@
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useCallback, useEffect, useState } from 'react';
+
 import type { SavedPromptView } from '../../types/webPrompts';
-import { PromptsDialog } from './PromptsDialog';
 import { fetchSavedPrompts } from '../api/promptsApi';
 import { subscribePromptDialogRequest } from '../lib/messagePromptDraft';
 import type { DraftState } from '../lib/promptsActions';
+import { PromptsDialog } from './PromptsDialog';
 
 /**
  * The prompt library's dialog and the state behind it.

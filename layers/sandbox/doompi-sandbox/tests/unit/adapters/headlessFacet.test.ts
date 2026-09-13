@@ -1,4 +1,3 @@
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
@@ -6,8 +5,10 @@ import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessResource,
 } from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
+
 import { sandboxServerFacet as sandboxHeadlessFacet } from '../../../src/extensions/server';
 
 function fixture(environment: Readonly<Record<string, string | undefined>> = {}) {

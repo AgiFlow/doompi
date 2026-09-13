@@ -1,4 +1,3 @@
-import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import { restoreHarnessStateSnapshot, snapshotHarnessState } from '@agimon-ai/doompi-config/harnessStore';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import {
@@ -9,19 +8,21 @@ import {
 } from '@agimon-ai/doompi-config/piContext';
 import type { DoomConfigPendingSelection } from '@agimon-ai/doompi-config/types';
 import { alreadyComposed } from '@agimon-ai/doompi-core/child-process';
+import { type DoomTransitionResult, requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
+import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import {
   type MinorModeReloadHandoffHandle,
   prepareMinorModeReloadHandoff,
 } from '@agimon-ai/doompi-minor-mode/reload-handoff';
-import { type DoomTransitionResult, requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
-import { readDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import type {
   VoiceReloadHandoff,
   VoiceReloadHandoffIdentity,
   VoiceReloadHandoffStore,
 } from '@agimon-ai/doompi-voice/voice-reload-handoff';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { readDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import type { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import {
   applySummary,
   errorMessage,
@@ -33,9 +34,9 @@ import {
   voiceSwitchToken,
 } from '../services/majorModeText';
 import { colorStatus, STATUS_KEY } from '../services/statusLine';
+import { MAJOR_MODE_SWITCH_HANDOFF_KIND, type MajorModeView } from '../types/majorMode';
 import { MAJOR_MODE_EVENT, type MajorModeTelemetry } from '../types/telemetry';
 import { bindPendingSelection, clearPendingSelection, selectionFromSnapshot } from './pendingSelection';
-import { MAJOR_MODE_SWITCH_HANDOFF_KIND, type MajorModeView } from '../types/majorMode';
 
 function transitionError(result: DoomTransitionResult): Error {
   return new Error(`Major-mode transition was ${result.outcome}: ${result.diagnostics.join(', ')}`);

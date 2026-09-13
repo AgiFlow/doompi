@@ -1,13 +1,15 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { resetHarnessStore, updateHarnessState } from '@agimon-ai/doompi-config';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { resolveSubagentLaunchContract } from '../../src/exports';
 import { AgentDiscoveryService, mergeAgentsForScope } from '../../src/services/agentDiscovery';
 import { EXTRA_AGENT_DIRS_ENV } from '../../src/services/agentLoader';
-import type { AgentConfig } from '../../src/types/agent';
 import { resetConfigDirNameCache } from '../../src/services/configDir';
+import type { AgentConfig } from '../../src/types/agent';
 
 const CONFIG_DIR_NAME = '.pi';
 

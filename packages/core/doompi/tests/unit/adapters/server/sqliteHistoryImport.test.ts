@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { expect, it } from 'vitest';
-import { runHistoryImport } from '../../../../src/cli/commands/history-import';
-import { openSqliteSessionStorage } from '@agimon-ai/doompi-core/sqlite-session-storage';
+
 import { createHistoryOwnership } from '@agimon-ai/doompi-core/history-ownership';
+import { openSqliteSessionStorage } from '@agimon-ai/doompi-core/sqlite-session-storage';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
+import { expect, it } from 'vitest';
+
+import { runHistoryImport } from '../../../../src/cli/commands/history-import';
 
 it('imports v4 history without modifying the source and verifies a repeated offline import', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'doompi-sqlite-import-'));

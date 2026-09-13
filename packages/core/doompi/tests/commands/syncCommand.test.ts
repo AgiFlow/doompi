@@ -1,17 +1,10 @@
-import * as webSync from '../../src/builders/web';
-import * as webBundle from '../../src/builders/web/bundle';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
+import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '@agimon-ai/doompi-core/pi-settings';
 import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
-import { computeServerSourcesHash } from '../../src/composition/syncState';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { piExtensionAliasPath, writePiExtensionAlias } from '../../src/builders/cli/piExtensionAlias';
-import { PI_DISPATCHER_VERSION } from '../../src/builders/cli/piExtensionDispatcher';
-import { DUPLICATE_REGISTRATION_DRIFT } from '../../src/builders/cli/projectSettings';
-import * as projectPiSettings from '../../src/builders/cli/projectSettings';
-import * as serverBundleSync from '../../src/builders/server';
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
   publishSyncRegistration,
@@ -19,6 +12,17 @@ import {
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
 } from '@agimon-ai/doompi-core/sync-registration';
+import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { createLayerResolvers } from '../../src/builders/cli/extensionAssembler';
+import { piExtensionAliasPath, writePiExtensionAlias } from '../../src/builders/cli/piExtensionAlias';
+import { PI_DISPATCHER_VERSION } from '../../src/builders/cli/piExtensionDispatcher';
+import { DUPLICATE_REGISTRATION_DRIFT } from '../../src/builders/cli/projectSettings';
+import * as projectPiSettings from '../../src/builders/cli/projectSettings';
+import * as serverBundleSync from '../../src/builders/server';
+import * as webSync from '../../src/builders/web';
+import * as webBundle from '../../src/builders/web/bundle';
 import {
   collectDrift,
   formatSyncResult,
@@ -28,8 +32,7 @@ import {
   selectionEnvironment,
   toSelection,
 } from '../../src/cli/commands/sync';
-import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
-import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '@agimon-ai/doompi-core/pi-settings';
+import { computeServerSourcesHash } from '../../src/composition/syncState';
 import {
   computeInputsHash,
   readSyncState,
@@ -39,7 +42,6 @@ import {
   type SyncState,
   writeSyncState,
 } from '../../src/exports/syncState';
-import { createLayerResolvers } from '../../src/builders/cli/extensionAssembler';
 import { testMcpProjection } from '../helpers/mcpProjection';
 
 const mocks = vi.hoisted(() => ({

@@ -1,10 +1,12 @@
 import fs from 'node:fs';
+
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { createLayerResolvers, PERSONA_ENTRY, resolveExtensionComposition } from '../extensionAssembler';
+import { writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
+
 import { getHarnessState } from '../../../composition/harnessState';
 import { LAUNCHER_COMPOSITION_ENV, LAUNCHER_COMPOSITION_VERSION } from '../constants';
+import { createLayerResolvers, PERSONA_ENTRY, resolveExtensionComposition } from '../extensionAssembler';
 import { type LauncherCompositionState } from '../types';
-import { writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

@@ -1,6 +1,6 @@
-import type { SessionScope } from '../sessionPaths';
 import type { ActivityState } from '../../types';
 import type { ExternalRunProjection } from '../externalProcessIpc';
+import type { SessionScope } from '../sessionPaths';
 
 export const TERMINAL_ASYNC_JOB_STATES = new Set(['complete', 'completed', 'failed', 'paused', 'stopped']);
 const DEFAULT_RETENTION_MS = 10_000;

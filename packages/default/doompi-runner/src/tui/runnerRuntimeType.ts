@@ -1,6 +1,7 @@
 import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
 import type { BashToolDependencies } from '../types/bashTool';
 export interface RunnerRuntime {
   readonly plugin: (this: void, context: Context) => void;

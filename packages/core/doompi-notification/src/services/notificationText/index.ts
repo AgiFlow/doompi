@@ -1,4 +1,5 @@
 import path from 'node:path';
+
 import type { DesktopNotification } from '../../types/notifications';
 
 const ATTENTION_SUBTITLE = 'Approval or feedback required';

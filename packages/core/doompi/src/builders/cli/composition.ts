@@ -2,14 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { loadMajorModesConfig, type MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
+import { alreadyComposed } from '@agimon-ai/doompi-core/child-process';
 import { withExtensionSource } from '@agimon-ai/doompi-ui/extensionName';
 import { type ExtensionAPI, parseArgs } from '@earendil-works/pi-coding-agent';
-import { PERSONA_ENTRY, packageAttribution, resolveExtensionComposition } from './extensionAssembler';
-import type { HarnessPreset } from '../../composition/types/harness';
-import { findSyncedRoot, readBundleStatus } from './bootstrapLocator';
-import { alreadyComposed } from '@agimon-ai/doompi-core/child-process';
-import { COMPOSED_ENV, EXTERNAL_EXTENSIONS_ENV, MUTE_ENV } from './compositionState';
+
 import {
   createHarnessSession,
   getHarnessState,
@@ -18,7 +16,6 @@ import {
   readHarnessState,
   updateHarnessState,
 } from '../../composition/harnessState';
-import { configurePreset } from './harnessContext';
 import {
   computeInputsHash,
   createMapResolvers,
@@ -26,6 +23,11 @@ import {
   runDirectory,
   type SyncState,
 } from '../../composition/syncState';
+import type { HarnessPreset } from '../../composition/types/harness';
+import { findSyncedRoot, readBundleStatus } from './bootstrapLocator';
+import { COMPOSED_ENV, EXTERNAL_EXTENSIONS_ENV, MUTE_ENV } from './compositionState';
+import { PERSONA_ENTRY, packageAttribution, resolveExtensionComposition } from './extensionAssembler';
+import { configurePreset } from './harnessContext';
 
 export { findSyncedRoot } from './bootstrapLocator';
 export { alreadyComposed } from '@agimon-ai/doompi-core/child-process';

@@ -1,4 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
+
 import { EditToolMessage } from '../web/components/EditToolMessage';
 
 /**

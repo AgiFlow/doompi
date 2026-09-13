@@ -1,7 +1,8 @@
-import { Badge, Button } from '@agimon-ai/doompi-web-components';
 import type { RepositorySettingsPanelProps } from '@agimon-ai/doompi-core/web';
+import { Badge, Button } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
+
 import {
   authorizeMcpServer,
   cancelMcpFlow,

@@ -1,10 +1,12 @@
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AgentConfig } from '../../src/types/agent';
 import { SUBAGENT_CAPABILITY_CEILING_ENV } from '../../src/exports/env';
+import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
+import type { ManagementActionsContract } from '../../src/services/managementActions';
+import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
 import {
   createFleetActionDispatcher,
   createAgentListCommand,
@@ -15,10 +17,8 @@ import {
   SUBAGENT_LEADER_SOURCE,
   SUBAGENT_LIST_COMMAND,
 } from '../../src/tui/contributions';
-import type { ManagementActionsContract } from '../../src/services/managementActions';
 import { AGENT_PULSE_FRAMES, COST_STATUS_KEY, FLEET_STATUS_KEY } from '../../src/tui/fleetStatus';
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
-import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
+import type { AgentConfig } from '../../src/types/agent';
 
 const {
   footerDispose,

@@ -2,19 +2,12 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { loadDomains, resolvePluginEntries } from '@agimon-ai/doompi-config/domains';
 import type { LayerResolvers, MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { loadProfiles, PERSONA_FILES } from '@agimon-ai/doompi-config/profiles';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import { isDoomMcpProjection, type DoomMcpProjection } from '@agimon-ai/doompi-core/mcp-projection';
-import {
-  assembleChildExtensions,
-  assembleExtensions,
-  type ExtensionLayerResolvers,
-  LAYER_RESOLVERS,
-  OLLAMA_PRESET,
-  PERSONA_ENTRY,
-} from '../../builders/cli/extensionAssembler';
 import { isRecord } from '@agimon-ai/doompi-core/runtime-json';
 import type { JsonObject } from '@agimon-ai/doompi-core/runtime-json';
 import {
@@ -25,6 +18,15 @@ import {
 } from '@agimon-ai/doompi-core/sync-location';
 import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
 import { PRECOMPILE_STATE_VERSION, SYNC_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+
+import {
+  assembleChildExtensions,
+  assembleExtensions,
+  type ExtensionLayerResolvers,
+  LAYER_RESOLVERS,
+  OLLAMA_PRESET,
+  PERSONA_ENTRY,
+} from '../../builders/cli/extensionAssembler';
 
 export { SYNC_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
 

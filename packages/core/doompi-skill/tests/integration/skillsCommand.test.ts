@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { createDoomConfigContext, provideDoomConfigContext } from '@agimon-ai/doompi-config';
+import { getHarnessState, HARNESS_STATE_POINTER, resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
 import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
@@ -15,11 +17,11 @@ import type {
   Skill,
 } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getHarnessState, HARNESS_STATE_POINTER, resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
+
 import skillsExtension from '../../src/extensions/pi';
 import { skillInvocation } from '../../src/services/skillText';
-import { SKILLS_LEADER_CONTRIBUTION } from '../../src/types/skills';
 import type { SkillsOverlayOptions, SkillsOverlayResult } from '../../src/tui/skillsOverlay';
+import { SKILLS_LEADER_CONTRIBUTION } from '../../src/types/skills';
 
 const { registerLeaderContribution, openOverlay, helpState, mergeHelp, disposeHelp } = vi.hoisted(() => {
   const state = { skills: [] as Skill[], diagnostics: [] as string[], revision: 0 };

@@ -2,7 +2,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
+
 import {
   AUTHOR_DOCUMENT_MAX_BYTES,
   AUTHOR_DOCUMENT_OPEN_PATH,

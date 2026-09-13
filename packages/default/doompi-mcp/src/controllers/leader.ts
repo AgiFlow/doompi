@@ -1,4 +1,5 @@
 import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+
 import { COMMAND_NAME } from '../constants/mcp';
 import {
   LEADER_BINDING_PREFIX,

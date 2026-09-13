@@ -1,4 +1,5 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
+
 import { voiceMediaClientUrl } from '../../types/clientMedia';
 import {
   MANUAL_TRANSCRIPTION_DURATION_HEADER,

@@ -1,14 +1,15 @@
 import { resolveLayers } from '@agimon-ai/doompi-config/majorModes';
-import { extensionLayers } from '../../src/composition/transitionLayers';
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import type { MinorModeActionRequest } from '@agimon-ai/doompi-minor-mode';
-import { describe, expect, it, vi } from 'vitest';
-import type { MinorModeCatalogService as MinorModeCatalogHost } from '@agimon-ai/doompi-minor-mode';
+import type { DoomTransitionRequest, TransitionTarget } from '@agimon-ai/doompi-core/transition';
 import {
   createDoomTransitionCoordinator,
   type TransitionCoordinatorOptions,
 } from '@agimon-ai/doompi-core/transition-coordinator';
-import type { DoomTransitionRequest, TransitionTarget } from '@agimon-ai/doompi-core/transition';
+import type { MinorModeActionRequest } from '@agimon-ai/doompi-minor-mode';
+import type { MinorModeCatalogService as MinorModeCatalogHost } from '@agimon-ai/doompi-minor-mode';
+import { describe, expect, it, vi } from 'vitest';
+
+import { extensionLayers } from '../../src/composition/transitionLayers';
 
 const fingerprints = { copilot: 'a'.repeat(64), team: 'b'.repeat(64) } as const;
 

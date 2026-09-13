@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   LogMetricsAggregator,
   MAX_RETAINED_METRIC_NAMES,

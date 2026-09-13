@@ -66,9 +66,8 @@ export type RestartSessionResult = { ok: true } | { error: string };
 /**
  * Asks the hub to replace a session's server, keeping its id.
  *
- * A running server reads the composition once, so a rebuilt extension or a new
- * package API only reaches a session this way. The hub syncs first, so what
- * comes back is built from the source as it stands now.
+ * A running server reads the composition once, so a newly synced extension or
+ * package API reaches the session when the headless server reopens it.
  */
 export async function restartSession(sessionId: string): Promise<RestartSessionResult> {
   let response: Response;

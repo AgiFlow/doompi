@@ -1,6 +1,6 @@
-import { createSerialQueue } from '../serialQueue';
 import { describeSealedFailure, type SealedFailure } from '../../types/sealedChannel';
 import { connectSealedChannel, type SealedChannel } from '../browserSealedChannel';
+import { createSerialQueue } from '../serialQueue';
 
 /**
  * The one object the cockpit and every plugin use to talk over a sealed tunnel.

@@ -3,27 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
-import { AutonomousEndpoint } from '../autonomousEndpoint';
-import { CaptureSession } from '../captureSession';
-import { NarrationBargeInMonitor, type NarrationBargeInProbe } from '../narrationBargeIn';
+
 import { type NarrationBargeInEvidence } from '../../models/narrationBargeIn';
-import { PCM_FRAME_BYTES, PCM_FRAME_MS } from '../pcm';
-import { PlaybackGate } from '../playbackGate';
-import { analyzePcm16, normalizePcm16 } from '../transcriptionCoordinator';
-import type { VoiceTranscriptSignalEvidence } from '../transcriptAdmission';
-import { DEFAULT_TRANSCRIPTION_TIMEOUT_MS, TurnTranscriber, type TurnTranscriptionOutcome } from '../turnTranscriber';
-import {
-  AdaptiveVoiceActivityDetector,
-  calculatePcmFrameDbfs,
-  DEFAULT_VAD_CONFIGURATION,
-  type VadNoiseProfile,
-} from '../vad';
-import {
-  VOICE_WORKER_INTENTIONAL_BARGE_IN_CAPABILITY,
-  VOICE_WORKER_RANKED_BARGE_IN_CAPABILITY,
-  VOICE_WORKER_TRANSCRIPTION_TIMEOUT_CAPABILITY,
-  type VoiceWorkerCommand,
-} from '../voiceWorkerProtocol';
 import type {
   IClock,
   IPcmAudioRecorder,
@@ -35,6 +16,10 @@ import type {
   TranscriptionAdapterOutput,
 } from '../../types';
 import type { VoiceMediaCaptureActivity } from '../../types/clientMedia';
+import { AutonomousEndpoint } from '../autonomousEndpoint';
+import { CaptureSession } from '../captureSession';
+import { ClientPcmAudioRecorder } from '../clientMedia';
+import { NodeTurnSpool } from '../fileTurnSpool';
 import {
   ExecutableResolver,
   FfmpegPcmAudioRecorder,
@@ -43,11 +28,27 @@ import {
   SystemClock,
   writePrivatePcm16Wav,
 } from '../infrastructure';
-import { ClientPcmAudioRecorder } from '../clientMedia';
+import { NarrationBargeInMonitor, type NarrationBargeInProbe } from '../narrationBargeIn';
+import { PCM_FRAME_BYTES, PCM_FRAME_MS } from '../pcm';
+import { PlaybackGate } from '../playbackGate';
 import { SileroSpeechPresenceDetector } from '../silero';
-import { MlxWhisperAdapter, OpenAiWhisperAdapter, TranscriberRegistry, WhisperCppAdapter } from '../whisper';
-import { NodeTurnSpool } from '../fileTurnSpool';
+import type { VoiceTranscriptSignalEvidence } from '../transcriptAdmission';
+import { analyzePcm16, normalizePcm16 } from '../transcriptionCoordinator';
+import { DEFAULT_TRANSCRIPTION_TIMEOUT_MS, TurnTranscriber, type TurnTranscriptionOutcome } from '../turnTranscriber';
+import {
+  AdaptiveVoiceActivityDetector,
+  calculatePcmFrameDbfs,
+  DEFAULT_VAD_CONFIGURATION,
+  type VadNoiseProfile,
+} from '../vad';
 import type { VoiceWorkerPublish, VoiceWorkerRuntimeHooks } from '../voiceWorker';
+import {
+  VOICE_WORKER_INTENTIONAL_BARGE_IN_CAPABILITY,
+  VOICE_WORKER_RANKED_BARGE_IN_CAPABILITY,
+  VOICE_WORKER_TRANSCRIPTION_TIMEOUT_CAPABILITY,
+  type VoiceWorkerCommand,
+} from '../voiceWorkerProtocol';
+import { MlxWhisperAdapter, OpenAiWhisperAdapter, TranscriberRegistry, WhisperCppAdapter } from '../whisper';
 
 const MAX_SESSION_NOISE_PROFILES = 8;
 const BARGE_IN_PROBE_TIMEOUT_MS = 5_000;

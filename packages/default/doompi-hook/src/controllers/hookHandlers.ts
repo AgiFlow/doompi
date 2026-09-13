@@ -1,3 +1,6 @@
+import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+
 import {
   STATUS_PREFIX,
   FAILURE_MESSAGE_TYPE,
@@ -7,7 +10,7 @@ import {
   SUBAGENT_ENVIRONMENT_FLAG,
   CONTEXT_SEPARATOR,
 } from '../constants/hookHandlers';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { HOOK_EVENT } from '../constants/hooks';
 import {
   additionalContextsFrom,
   decisionReason,
@@ -19,8 +22,8 @@ import {
 } from '../services/hookDecisions';
 import { sessionHookPayload, toolHookPayload } from '../services/hookPayload';
 import { selectRegistryHooks } from '../services/hookRegistry';
+import type { HookRuntimeResolver, HookSession } from '../services/hookRuntime/type';
 import { selectPluginHooks } from '../services/pluginHooks';
-import { HOOK_EVENT } from '../constants/hooks';
 import {
   type HookFailure,
   type HookOutcome,
@@ -28,9 +31,6 @@ import {
   type HookToolEvent,
   type ResolvedHook,
 } from '../types/hooks';
-
-import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
-import type { HookRuntimeResolver, HookSession } from '../services/hookRuntime/type';
 
 /** Everything one dispatch resolved before it ran anything. */
 interface HookDispatch {

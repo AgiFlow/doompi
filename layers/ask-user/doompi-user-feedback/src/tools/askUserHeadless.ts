@@ -1,4 +1,6 @@
 import { type DoomHeadlessTool, type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
+
+import { ASK_USER_QUESTION_TOOL_NAME } from '../constants/tool';
 import type { QuestionParams } from '../schemas/questionnaire';
 import { QuestionParamsSchema } from '../schemas/questionnaire';
 import { QuestionnaireCoordinator } from '../services/questionnaireCoordinator';
@@ -6,8 +8,6 @@ import { runQuestionnaire, type QuestionnaireInteraction } from '../services/que
 import { buildQuestionnaireResponse, buildToolResult } from '../services/responseService';
 import { validateQuestionnaire } from '../services/validationService';
 import type { QuestionnaireResult } from '../types/questionnaire';
-
-import { ASK_USER_QUESTION_TOOL_NAME } from '../constants/tool';
 
 function output(result: {
   content: Array<{ type: 'text'; text: string }>;

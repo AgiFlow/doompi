@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { boundedEditorEdits, boundedEditorRanges } from '../../src/lib/editorController';
 
 describe('boundedEditorEdits', () => {

@@ -3,9 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import type { DoomHelpContribution, DoomHelpSkill } from '@agimon-ai/doompi-core/help';
-import { renderHelpSkillWrapper } from '../llmsContent';
+
 import type { HelpPackageIdentity, HelpSkillMaterializer, ResolvedHelpIndex } from '../../types/help';
+import { renderHelpSkillWrapper } from '../llmsContent';
 
 const PACKAGE_MANIFEST = 'package.json';
 const HELP_INDEX_PATH = 'llms.txt';

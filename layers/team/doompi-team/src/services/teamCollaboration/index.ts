@@ -1,9 +1,11 @@
+import { DOOM_BACKGROUND_WORK_SERVICE, type DoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
 import {
   DOOM_CORDIS_SESSION_SERVICE,
   requireDoomCordisSession,
   type DoomCordisSessionService,
 } from '@agimon-ai/doompi-core/cordis-host';
-import { DOOM_BACKGROUND_WORK_SERVICE, type DoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
+import type { Context, Fiber } from '@deepseek-ai/cordis';
+
 import {
   type DelegationCancel,
   type DelegationRequest,
@@ -20,13 +22,12 @@ import {
 } from '../../schemas/delegationApi';
 import { DOOM_FABLE_PLAN_SERVICE, type DoomFablePlanService } from '../../schemas/fablePlanApi';
 import { DOOM_SUBAGENT_POLICY_SERVICE, type DoomSubagentPolicyService } from '../../schemas/subagentPolicy';
-import type { Context, Fiber } from '@deepseek-ai/cordis';
+import type { SubagentCapabilityPolicyStore } from '../../schemas/team/capabilityCeiling';
 import type { AsyncJobTracker } from '../asyncJobTracker';
+import { createBackgroundWorkService } from '../backgroundWorkService';
 import type { DelegationBridge, DelegationSessionContext } from '../delegationBridge';
 import { registerDirectRunBackgroundWork } from '../directRunBackgroundWork';
 import type { FablePlanBridge } from '../fablePlanBridge';
-import type { SubagentCapabilityPolicyStore } from '../../schemas/team/capabilityCeiling';
-import { createBackgroundWorkService } from '../backgroundWorkService';
 import { createSubagentPolicyService } from '../subagentPolicyService';
 
 export interface TeamCollaborationPluginConfig {

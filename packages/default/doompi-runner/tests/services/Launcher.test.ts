@@ -3,10 +3,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { RESULT_MAX_BYTES_ENV } from '../../src/exports/config';
-import { runtimeEntry, supervisorPaths } from '../../src/services/runnerSupervisor';
 import { Launcher } from '../../src/services/launcher';
+import { runtimeEntry, supervisorPaths } from '../../src/services/runnerSupervisor';
 import { FakeClock, FakeLogFile, FakeProcessControl, FakeRunnerPaths, FakeSpawner } from '../doubles';
 
 let previousMaxBytes: string | undefined;

@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from 'react';
 import { describe, expect, it, vi } from 'vitest';
+
 import { handleOptionListKey, MAX_DIGIT_SHORTCUT, optionListHint, optionMarker } from '../../src/exports';
 
 /** A keyboard event with only the parts the handler touches. */

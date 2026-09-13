@@ -1,18 +1,19 @@
-import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import {
   type DoomHeadlessExecutionContext,
   type DoomHeadlessContent,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
-import { readWorkflowSkill as skill } from '../services/workflowResource';
 import { createEmbeddedWorkflowFeature } from '@agimon-ai/workflow-mcp';
 import { z } from 'zod';
-import { parseWorkflowLaunchCommand } from '../services/workflowLaunchCommand';
+
 import { createWorkflowCatalogReader, presentWorkflowCatalog } from '../services/webWorkflowCatalog';
 import { defaultCatalogDeps } from '../services/workflowCatalogDeps';
-import { readWorkflowRuns } from '../services/workflowWatcher';
+import { parseWorkflowLaunchCommand } from '../services/workflowLaunchCommand';
+import { readWorkflowSkill as skill } from '../services/workflowResource';
 import { presentWorkflowRuns, runBelongsToSession } from '../services/workflowRuns';
+import { readWorkflowRuns } from '../services/workflowWatcher';
 import { WORKFLOW_CATALOG_TYPE, WORKFLOW_RUNS_TYPE } from '../types/webWorkflows';
 
 const SOURCE = '@agimon-ai/doompi-workflow';

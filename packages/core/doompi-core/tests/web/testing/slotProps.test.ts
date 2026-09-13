@@ -1,5 +1,6 @@
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
+
 import { defineSlot } from '../../../src/extensions/webPlugin';
 import { renderPlugin } from '../../../src/web/services/testing';
 import { slotPropsFixture, toolMessagePropsFixture } from '../../../src/web/services/testing/slotProps';

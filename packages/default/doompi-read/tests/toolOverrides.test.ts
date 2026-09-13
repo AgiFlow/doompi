@@ -2,6 +2,7 @@ import { DOOM_TOOL_OVERRIDES_SERVICE, createDoomToolOverridesService } from '@ag
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
 import { activateDoomPiReadExtension } from '../src/extensions/pi';
 
 async function installWith(service: ReturnType<typeof createDoomToolOverridesService>): Promise<{

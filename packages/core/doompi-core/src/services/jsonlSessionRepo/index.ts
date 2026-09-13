@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import { JSONL_STORAGE_VERSION, JsonlSessionRepo } from '@earendil-works/pi-agent-core/harness/session';
+import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+
 import type { HistoryEntryProof, HistoryImportVerification, HistoryStagingImportInput } from '../historyImport';
 
 const PROJECTED_V3_TYPES = new Set([

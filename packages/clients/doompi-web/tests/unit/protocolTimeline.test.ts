@@ -1,5 +1,6 @@
 import type { TranscriptItem, UserTranscriptItem } from '@agimon-ai/doompi-core/session-protocol';
 import { describe, expect, it } from 'vitest';
+
 import { toQueuedEntries, toTimelineEntries } from '../../src/web/lib/protocolTimeline';
 
 const MODEL = { provider: 'anthropic', id: 'opus' };

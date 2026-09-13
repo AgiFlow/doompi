@@ -1,20 +1,22 @@
-import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { readFile } from 'node:fs/promises';
+
 import {
   type DoomHeadlessResource,
   type DoomHeadlessTool,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
-import { readFile } from 'node:fs/promises';
+import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+
 import { RunWorktreeParams, type RunWorktreeToolParams } from '../schemas/runWorktreeTool';
 import { createWorktreeGit } from '../services/gitCli';
-import { createWorktreeOperations } from '../services/worktreeOperations';
-import { createWorktreeMessageInbox } from '../services/worktreeEvents';
 import {
   executeRunWorktreeTool,
   RUN_WORKTREE_DESCRIPTION,
   RUN_WORKTREE_TOOL_NAME,
   validateParams,
 } from '../services/runWorktree';
+import { createWorktreeMessageInbox } from '../services/worktreeEvents';
+import { createWorktreeOperations } from '../services/worktreeOperations';
 
 const PACKAGE_ROOT = new URL('../../', import.meta.url);
 

@@ -1,5 +1,6 @@
 import { Label as LabelPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
+
 import { cn } from '../lib/cn';
 
 /** A field's name: clicking it focuses the control, which a bare span never does. */

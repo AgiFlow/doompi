@@ -1,5 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
+
 import type { ConfigDiagnostic } from '../../types/config';
 import { DOOM_DIR, type DoomConfigProvenance, readDoomConfigSources } from '../layeredConfig';
 

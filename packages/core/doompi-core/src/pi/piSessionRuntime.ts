@@ -9,10 +9,7 @@ import {
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { RoutedServerServiceHost, RoutedSessionHandle, ServerHost } from '@earendil-works/pi-server';
 import { SessionNotFoundError } from '@earendil-works/pi-server';
-import { createRpcTranscript, type RpcTranscript } from '../services/rpcTranscript';
-import { createAcpSessionUpdateProjection } from '../services/acpSessionUpdates';
-import { createSessionPresentation } from '../services/sessionPresentation';
-import type { DirectHarnessRuntime, DirectHarnessFrame } from '../types/server/directHarnessRuntime';
+
 import {
   DoomSessionManagementService,
   DoomSessionService,
@@ -31,8 +28,12 @@ import {
   type ModelRef,
   type ThinkingLevel,
 } from '../exports/sessionProtocol';
+import { createAcpSessionUpdateProjection } from '../services/acpSessionUpdates';
+import { createRpcTranscript, type RpcTranscript } from '../services/rpcTranscript';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
+import { createSessionPresentation } from '../services/sessionPresentation';
 import { readTranscriptPage, transcriptCursor } from '../services/transcriptPages';
+import type { DirectHarnessRuntime, DirectHarnessFrame } from '../types/server/directHarnessRuntime';
 
 const SETTLED = 'agent_settled';
 const PROMPT_LATENCY_EVENT = 'doompi_server.prompt_latency';

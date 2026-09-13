@@ -1,15 +1,15 @@
+import { Context } from '@deepseek-ai/cordis';
+import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   DOOM_DELEGATION_ACCEPTED_EVENT,
   DOOM_DELEGATION_FINISHED_EVENT,
   DOOM_DELEGATION_UPDATED_EVENT,
   type DelegationRequest,
 } from '../../src/exports/delegationApi';
-import { Context } from '@deepseek-ai/cordis';
-import { afterEach, describe, expect, it } from 'vitest';
-
+import type { TrackedAsyncJobsContract } from '../../src/services/asyncJobTracker';
 import { createDelegationBridge, type DelegationBridgeDeps } from '../../src/services/delegationBridge';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
-import type { TrackedAsyncJobsContract } from '../../src/services/asyncJobTracker';
 
 interface StoredEvent {
   name: string;

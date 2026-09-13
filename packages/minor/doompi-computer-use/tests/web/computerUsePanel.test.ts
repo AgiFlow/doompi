@@ -1,7 +1,8 @@
 import { driveChannel, renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it } from 'vitest';
-import { computerUse, computerUseChannel } from '../../src/web/stores/computerUseStore';
+
 import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { computerUse, computerUseChannel } from '../../src/web/stores/computerUseStore';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

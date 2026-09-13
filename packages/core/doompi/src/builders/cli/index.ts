@@ -1,13 +1,12 @@
 import os from 'node:os';
 import path from 'node:path';
+
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import { filterHookDisabledLayers, loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { PERSONA_ENTRY, resolveExtensionComposition, type ExtensionComposition } from './extensionAssembler';
-import { compileExtensionSet, extensionSetManifestPath } from '../../compiler';
-import { ownEntry } from './entryResolution';
-
-import { compileModeExtension, type ModeBuildSelection } from './runtimeBundle';
 import { resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+
+import { compileExtensionSet, extensionSetManifestPath } from '../../compiler';
 import {
   createMapResolvers,
   readSyncState,
@@ -15,7 +14,9 @@ import {
   syncDirectory,
   writeSyncState,
 } from '../../composition/syncState';
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+import { ownEntry } from './entryResolution';
+import { PERSONA_ENTRY, resolveExtensionComposition, type ExtensionComposition } from './extensionAssembler';
+import { compileModeExtension, type ModeBuildSelection } from './runtimeBundle';
 
 const EXTENSION_CACHE_DIRECTORY = 'cache';
 const MODE_DIST_DIRECTORY = 'dist';

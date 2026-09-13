@@ -1,10 +1,12 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import type { WebPluginDefinition, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+import { scanWebPlugins } from '@agimon-ai/doompi/builders/web';
 import type { ComponentType } from 'react';
 import { afterAll, describe, expect, it } from 'vitest';
-import { scanWebPlugins } from '@agimon-ai/doompi/builders/web';
+
 import { activityGroups, PACKAGED_MINOR_MODES, PACKAGED_SELECTION_AXES } from '../../src/web/lib/composition';
 import {
   installWebPlugins,

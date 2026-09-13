@@ -1,8 +1,9 @@
 import { Button } from '@agimon-ai/doompi-web-components';
 import { useEffect } from 'react';
+
 import type { DocumentFragment } from '../../types/structuredDocuments';
-import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes';
 import { registerAuthorGridResolver } from '../lib/authorGrid';
+import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes';
 import {
   reviseAuthorFragment,
   setAuthorRegionCandidate,

@@ -1,6 +1,6 @@
-import { createHeadlessSessionHost } from './headlessSessionHost';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../types/headlessSessionHost';
 import type { HeadlessSessionManager, HeadlessSessionManagerCreateOptions } from '../types/headlessSessionManager';
+import { createHeadlessSessionHost } from './headlessSessionHost';
 
 export function createHeadlessSessionManager(
   defaults: Pick<HeadlessSessionHostOptions, 'publishSelectionStatus' | 'contextGroups'> = {},

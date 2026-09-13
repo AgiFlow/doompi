@@ -1,16 +1,18 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import type { ResolvedVoiceConfig, VoiceAdapterConfig } from '@agimon-ai/doompi-config';
 import { describe, expect, it, vi } from 'vitest';
-import { FfmpegEncodedAudioDecoder } from '../src/services/encodedAudio';
-import { SystemClock } from '../src/services/infrastructure';
+
 import {
   ManualTranscriptionApi,
   normalizeManualTranscriptionMediaType,
 } from '../src/controllers/manualTranscriptionApi';
-import { createTestVoiceSessionApi as createVoiceSessionApi } from './support';
-import { encodePcm16Wav } from '../src/services/pcm';
+import { FfmpegEncodedAudioDecoder } from '../src/services/encodedAudio';
+import { SystemClock } from '../src/services/infrastructure';
 import { ManualTranscriptionService } from '../src/services/manualTranscription';
+import { encodePcm16Wav } from '../src/services/pcm';
 import type {
   IClock,
   IExecutableResolver,
@@ -32,7 +34,7 @@ import {
   type IManualTranscriptionService,
   ManualTranscriptionError,
 } from '../src/types/manualTranscription';
-import type { ResolvedVoiceConfig, VoiceAdapterConfig } from '@agimon-ai/doompi-config';
+import { createTestVoiceSessionApi as createVoiceSessionApi } from './support';
 
 const adapterConfig: VoiceAdapterConfig = { model: { id: 'test' } };
 const voiceConfig: ResolvedVoiceConfig = {

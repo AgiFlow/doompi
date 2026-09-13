@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { ansiSpans } from '../../src/lib/ansiSpans';
 
 const ESC = '\x1b';

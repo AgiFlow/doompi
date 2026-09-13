@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { ToolEntry } from '../../src/web/lib/sessionModel';
+
 import { pluginSlotProps } from '../../src/web/lib/pluginSlotProps';
+import type { ToolEntry } from '../../src/web/lib/sessionModel';
 import { toolMessageProps } from '../../src/web/lib/toolMessageProps';
 
 describe('toolMessageProps', () => {

@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHookDocumentReader } from '../../src/services/hookDocuments';
-import { HOOK_TELEMETRY_EVENT } from '../../src/constants/telemetry';
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { HOOK_TELEMETRY_EVENT } from '../../src/constants/telemetry';
+import { createHookDocumentReader } from '../../src/services/hookDocuments';
 import { recordingTelemetry } from '../helpers/telemetry';
 
 const REGISTRY = (command: string): string =>

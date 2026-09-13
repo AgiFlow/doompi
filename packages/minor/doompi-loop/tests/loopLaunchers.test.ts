@@ -1,5 +1,6 @@
-import type { LoopLaunchRequest, StoppableLoop } from '../src/schemas/loopLaunchers';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { LoopLaunchRequest, StoppableLoop } from '../src/schemas/loopLaunchers';
 import { createDoomLoopLaunchersService } from '../src/services/loopLaunchers';
 
 let sequence = 0;

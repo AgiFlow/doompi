@@ -1,5 +1,6 @@
-import { Button } from '@agimon-ai/doompi-web-components';
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
+import { Button } from '@agimon-ai/doompi-web-components';
+
 import { parsePlanStatus, PLAN_STATUS_KEY } from '../../types/planApi';
 import { planTab } from './PlanPanel';
 

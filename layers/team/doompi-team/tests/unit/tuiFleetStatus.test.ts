@@ -1,5 +1,6 @@
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import { describe, expect, it, vi } from 'vitest';
+
 import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
 import {
   AGENT_PULSE_FRAMES,

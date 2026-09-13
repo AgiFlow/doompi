@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { initialComputerUseState, reduceComputerUseState } from '../../../src/models/computerUseState';
 import type { ComputerUseGrant, ComputerUseTarget } from '../../../src/types/computerUse';
 

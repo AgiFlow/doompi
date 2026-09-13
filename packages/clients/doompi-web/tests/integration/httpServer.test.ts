@@ -1,9 +1,11 @@
-import { createServer, type Server } from 'node:http';
 import fs from 'node:fs';
+import { createServer, type Server } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import WebSocket, { WebSocketServer } from 'ws';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import WebSocket, { WebSocketServer } from 'ws';
+
 import { serveWeb } from '../../src/adapters/httpServer';
 import type { WebServer } from '../../src/types/bridge';
 

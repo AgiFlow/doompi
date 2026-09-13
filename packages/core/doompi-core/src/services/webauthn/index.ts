@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
+
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from '@simplewebauthn/server';
+
 import {
   CEREMONY_TTL_MS,
   STEP_UP_CHALLENGE_TTL_MS,

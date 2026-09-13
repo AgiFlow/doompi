@@ -1,8 +1,7 @@
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { Context } from '@deepseek-ai/cordis';
+
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessCommand,
@@ -10,7 +9,10 @@ import {
   type DoomHeadlessHostService,
   type DoomHeadlessResource,
 } from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
+import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { promptServerFacet as promptHeadlessFacet } from '../src/extensions/server';
 
 const roots: string[] = [];

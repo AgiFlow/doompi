@@ -1,13 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ComposerCapture } from '@agimon-ai/doompi-core/web';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { onComposerSubmitted } from '../../src/web/lib/composerSubmissions';
+import { sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands';
 import {
   applyCaptureFrame,
   disconnectCaptures,
   onCaptureStatus,
   submitCapture,
 } from '../../src/web/stores/captureStore';
-import { onComposerSubmitted } from '../../src/web/lib/composerSubmissions';
-import { sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands';
 
 vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({ sendSessionProtocolFrame: vi.fn() }));
 

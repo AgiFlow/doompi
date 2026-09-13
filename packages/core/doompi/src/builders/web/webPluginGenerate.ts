@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import type { DeclaredWebPlugin } from './webPluginManifest';
 import { scanWebPlugins } from './webPluginScan';
 

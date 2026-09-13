@@ -1,13 +1,14 @@
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
-import { Context } from '@deepseek-ai/cordis';
 import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessHook,
   DoomHeadlessHostService,
 } from '@agimon-ai/doompi-core/headless';
-import { describe, expect, it, vi } from 'vitest';
-import { cacheServerFacet } from '../../../src/extensions/server';
 import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
+import { Context } from '@deepseek-ai/cordis';
+import { describe, expect, it, vi } from 'vitest';
+
+import { cacheServerFacet } from '../../../src/extensions/server';
 
 async function fixture() {
   const hooks: DoomHeadlessHook[] = [];

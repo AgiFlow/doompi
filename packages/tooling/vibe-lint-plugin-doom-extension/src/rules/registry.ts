@@ -1,8 +1,5 @@
-import { compositionLayout } from './compositionLayout.js';
-import { pluginCompositionWiring } from './pluginWiring.js';
-import { doomConstants } from './constants.js';
-import { neutralExtensionContracts } from './neutralContracts.js';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
+
 import {
   cleanImportPath,
   compatibilityWrapperOnly,
@@ -25,6 +22,8 @@ import {
   schemaPlacement,
   serviceBoundary,
 } from './architecture.js';
+import { compositionLayout } from './compositionLayout.js';
+import { doomConstants } from './constants.js';
 import {
   disposeExternalSubscriptions,
   doomPackageShape,
@@ -38,9 +37,11 @@ import {
   providerOwnedPolicy,
   thinPiAdapter,
 } from './conventions.js';
-import { piExtensionDefaultFactory } from './piExtensionContract.js';
-import { doomPromptShape } from './prompts.js';
+import { neutralExtensionContracts } from './neutralContracts.js';
 import { packageApiManifest } from './packageApi.js';
+import { piExtensionDefaultFactory } from './piExtensionContract.js';
+import { pluginCompositionWiring } from './pluginWiring.js';
+import { doomPromptShape } from './prompts.js';
 import {
   webPluginEntry,
   webPluginImportAllowlist,

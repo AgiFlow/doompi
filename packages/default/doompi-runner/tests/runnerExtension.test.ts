@@ -8,12 +8,13 @@ import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-co
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { BashToolDependencies } from '../src/exports/bashTool';
 import { runnerExtension } from '../src/extensions/pi';
+import type { RunnerCompactionDependencies } from '../src/services/compaction';
+import type { RunnerSpaceOptions } from '../src/tui/runnerSpace';
 import type { BashRunResult } from '../src/types/bashRunService';
 import type { RunnerRecord } from '../src/types/runnerRegistry';
-import type { RunnerCompactionDependencies } from '../src/services/compaction';
-import type { BashToolDependencies } from '../src/exports/bashTool';
-import type { RunnerSpaceOptions } from '../src/tui/runnerSpace';
 
 const extensionMocks = vi.hoisted(() => {
   const leaderDispose = vi.fn();

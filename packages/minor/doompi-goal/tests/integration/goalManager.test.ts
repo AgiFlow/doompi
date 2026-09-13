@@ -1,7 +1,8 @@
 import type { DoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
+import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
+
 import { createGoalRuntime } from '../../src/controllers/runtimeActivation';
 import type { GoalHistoryPort } from '../../src/types/history';
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { readCallView } from '../src/web/lib/readToolView';
 
 describe('the read call view', () => {

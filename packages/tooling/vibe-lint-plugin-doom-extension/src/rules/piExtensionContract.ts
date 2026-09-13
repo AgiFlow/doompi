@@ -1,6 +1,8 @@
 import * as fs from 'node:fs';
+
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
+
 import { piDiscoveryEntryStems, projectPath, sourceStem } from './manifestEntries.js';
 
 const PI_CODING_AGENT_PACKAGE = '@earendil-works/pi-coding-agent';

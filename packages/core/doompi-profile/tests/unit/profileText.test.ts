@@ -1,5 +1,6 @@
 import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
 import { describe, expect, it } from 'vitest';
+
 import {
   PROFILE_STATUS_KEY,
   profileDescription,

@@ -1,15 +1,17 @@
-import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
-import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/computerUse';
+import path from 'node:path';
+
 import { type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
+import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
-import { COMPUTER_USE_MODE_ID } from '../types/computerUseApi';
+
+import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../constants/computerUse';
 import { COMPUTER_USE_TOOL_NAMES } from '../constants/computerUse';
 import { modeState } from '../models/computerUseMode';
-import path from 'node:path';
-import { createComputerUseSessionClient } from '../services/sessionApiClient';
 import { ComputerScriptRunner } from '../services/computerScriptRunner';
 import { DefaultComputerUseExtensionService } from '../services/extensionService';
+import { createComputerUseSessionClient } from '../services/sessionApiClient';
 import type { ComputerUseAction, ComputerUseObservation } from '../types/computerUse';
+import { COMPUTER_USE_MODE_ID } from '../types/computerUseApi';
 import type { ComputerUseSessionView } from '../types/computerUseApi';
 
 const SOURCE = '@agimon-ai/doompi-computer-use';

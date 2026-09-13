@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+
 import { bundleCockpitWeb } from '@agimon-ai/doompi/builders/web';
+import { afterEach, describe, expect, it } from 'vitest';
 
 const workflowRoot = fileURLToPath(new URL('../../../../minor/doompi-workflow', import.meta.url));
 const planRoot = fileURLToPath(new URL('../../../../minor/doompi-plan', import.meta.url));

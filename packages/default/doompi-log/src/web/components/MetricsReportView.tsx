@@ -1,9 +1,10 @@
 import { Badge } from '@agimon-ai/doompi-web-components';
+
 import type { MetricsDimension, MetricsReport } from '../../types/webMetrics';
-import { IssuesSection } from './IssuesSection';
+import { formatTokens } from '../lib/chartScale';
 import { GroupBars } from './charts/GroupBars';
 import { TimelineChart } from './charts/TimelineChart';
-import { formatTokens } from '../lib/chartScale';
+import { IssuesSection } from './IssuesSection';
 
 /**
  * One report, drawn.

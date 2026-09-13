@@ -1,3 +1,4 @@
+import type { ToolPromptRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   Badge,
   Button,
@@ -9,8 +10,8 @@ import {
   Separator,
   Textarea,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolPromptRenderProps } from '@agimon-ai/doompi-core/web';
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+
 import { encodeAnswerEnvelope } from '../../types/askUserWire';
 import {
   chooseOption,

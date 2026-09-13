@@ -11,11 +11,12 @@ import {
 } from '@agimon-ai/doompi-team/delegation';
 import type { InlineAgent } from '@agimon-ai/doompi-team/subagent-tool';
 import type { Context } from '@deepseek-ai/cordis';
+
+import { isBlocked, isTaskListComplete } from '../../models/taskGraph';
+import { MAX_BRIEF_FILES } from '../../types/delegation';
 import { TASK_EVENT, type TaskEventName, type TaskFailureReporter } from '../../types/telemetry';
 import { reconcileOrphanedDelegations } from '../reconcile';
-import { isBlocked, isTaskListComplete } from '../../models/taskGraph';
 import type { TaskStore } from '../taskStore';
-import { MAX_BRIEF_FILES } from '../../types/delegation';
 
 export { MAX_BRIEF_FILES };
 import { isDelegationActive, type Task, type TaskDelegation, type TaskDocument } from '../../models/task';

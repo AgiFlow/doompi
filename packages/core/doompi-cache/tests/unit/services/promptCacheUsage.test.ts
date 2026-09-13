@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { normalizePromptCacheUsage } from '../../../src/services/promptCacheUsage';
 
 describe('provider-reported prompt cache usage', () => {

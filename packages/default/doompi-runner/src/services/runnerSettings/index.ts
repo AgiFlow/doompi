@@ -1,6 +1,8 @@
-import { CONFIG_DIR_NAME } from '@earendil-works/pi-coding-agent';
 import fs from 'node:fs';
 import path from 'node:path';
+
+import { CONFIG_DIR_NAME } from '@earendil-works/pi-coding-agent';
+
 import {
   MAX_ERROR_ENTRIES_CEILING,
   MAX_PATTERNS,

@@ -1,6 +1,6 @@
 import type { ExtensionContext, ReadonlyFooterDataProvider, Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
-
 import type { Component } from '@earendil-works/pi-tui';
+
 import type { LeaderSnapshot, UiMinorModeStatus } from '../models/uiState';
 import { alignLine, fitStyledLine, formatTokens, packSegments, padLine } from './rendering';
 

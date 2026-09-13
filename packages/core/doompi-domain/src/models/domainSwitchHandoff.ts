@@ -1,10 +1,10 @@
+import { SAFE_DOMAIN_NAME } from '../types/domains';
 import type {
   DomainSwitchHandoff,
   DomainSwitchHandoffIdentity,
   DomainSwitchHandoffRequest,
   DomainSwitchHandoffStore,
 } from '../types/handoff';
-import { SAFE_DOMAIN_NAME } from '../types/domains';
 
 const DOMAIN_SWITCH_HANDOFF_REGISTRY_KEY = '@agimon-ai/doompi-domain.switch-handoff.v1';
 const DOMAIN_SWITCH_HANDOFF_SYMBOL = Symbol.for(DOMAIN_SWITCH_HANDOFF_REGISTRY_KEY);

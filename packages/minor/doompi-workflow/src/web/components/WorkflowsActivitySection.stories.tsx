@@ -6,6 +6,7 @@
  * story at the type level instead of silently drifting.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import type { WorkflowRunView } from '../../types/webWorkflows';
 import { workflows } from '../stores/workflowsStore';
 import { WorkflowsActivitySection } from './WorkflowsActivitySection';

@@ -9,8 +9,9 @@
  */
 import type { ToolPromptRenderProps } from '@agimon-ai/doompi-core/web';
 import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
-import { PlanReviewPrompt } from './PlanReviewPrompt';
+
 import { PLAN_REVIEW_OPTIONS, PLAN_REVIEW_TITLE } from '../../types/planApi';
+import { PlanReviewPrompt } from './PlanReviewPrompt';
 
 const noop = (): void => undefined;
 

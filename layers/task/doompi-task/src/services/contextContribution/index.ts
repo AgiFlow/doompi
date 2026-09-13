@@ -1,4 +1,5 @@
 import type { DoomContextContribution } from '@agimon-ai/doompi-core/context-contributions';
+
 import type { Task } from '../../models/task';
 
 export const TASK_CONTEXT_CONTRIBUTION_SOURCE = '@agimon-ai/doompi-task';

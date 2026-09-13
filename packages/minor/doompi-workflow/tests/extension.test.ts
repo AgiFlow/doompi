@@ -12,13 +12,13 @@ import { DoomLeaderRegistry } from '@agimon-ai/doompi-ui/leaderRegistry';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const TEST_ENVIRONMENT = Object.freeze({});
+import { workflowExtension } from '../src/extensions/pi';
 import {
   dispatcherTools,
   dispatcherToolRestriction,
   isWorkflowDispatcherProcess,
   resolveDispatcherParentSession,
 } from '../src/services/workflowFence';
-import { workflowExtension } from '../src/extensions/pi';
 import { registerLeaderContribution, workflowLeaderBindings } from '../src/tui/leader';
 
 beforeEach(() => {

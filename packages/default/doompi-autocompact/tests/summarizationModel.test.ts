@@ -1,6 +1,7 @@
-import { parseModelReference, resolveSummarizationModel } from '../src/services/summarizationModel';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { parseModelReference, resolveSummarizationModel } from '../src/services/summarizationModel';
 
 const loadDoomConfig = vi.hoisted(() => vi.fn());
 const harnessState = vi.hoisted(() => vi.fn(() => ({})));

@@ -1,4 +1,5 @@
 import path from 'node:path';
+
 import type { HarnessState, PluginHookSource } from '../../types/config';
 
 /**

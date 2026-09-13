@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { PersonaIdentity } from '../../types/profiles';
 import { type PersonaFrontMatter, type PersonaVoiceOverride } from '../../types/profiles';
 import { readDoomConfigSources } from '../layeredConfig';

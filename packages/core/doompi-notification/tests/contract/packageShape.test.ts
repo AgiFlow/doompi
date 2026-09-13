@@ -1,10 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
+
+import * as publicSurface from '../../src/exports';
 import { notificationExtension } from '../../src/extensions/pi';
 import piEntry, { notificationExtension as piNamedEntry } from '../../src/extensions/pi';
-import * as publicSurface from '../../src/exports';
 
 interface PackageManifest {
   name: string;

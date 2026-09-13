@@ -1,5 +1,6 @@
 import type { PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
 import { COMPACTION_RUNNERS_MARKER, RUNNER_COMPACTION_MESSAGE } from '../../constants/compaction';
 import type { RunnerRecord } from '../../types/runnerRegistry';
 

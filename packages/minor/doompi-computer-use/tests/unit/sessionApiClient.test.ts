@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { createComputerUseSessionClient, type ComputerUseSessionClient } from '../../src/services/sessionApiClient';
 
 const host: ComputerUseSessionClient = {

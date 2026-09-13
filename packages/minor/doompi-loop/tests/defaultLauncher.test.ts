@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { createDefaultLoopLauncher } from '../src/services/defaultLoopLauncher';
 import { createDoomLoopLaunchersService } from '../src/services/loopLaunchers';
 

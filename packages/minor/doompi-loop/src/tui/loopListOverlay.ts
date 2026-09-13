@@ -6,9 +6,10 @@ import {
   type DoomOverlayChrome,
   type DoomOverlayTui,
 } from '@agimon-ai/doompi-ui/doom-overlay';
-import type { DoomLoopLaunchersService, LoopInstanceSnapshot } from '../schemas/loopLaunchers';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
+
+import type { DoomLoopLaunchersService, LoopInstanceSnapshot } from '../schemas/loopLaunchers';
 
 const EMPTY_MESSAGE = 'No loop instances are active in this session.';
 const STOP_SCOPE_MESSAGE = 'Stopping a loop does not cancel detached work already launched.';

@@ -1,6 +1,8 @@
 import fs from 'node:fs';
+
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import type { Entry } from '@earendil-works/pi-agent-core/harness/session';
+
 import type { TranscriptPage, TranscriptPageRequest } from '../exports/sessionProtocol';
 import { readTranscriptPage } from '../services/transcriptPages';
 

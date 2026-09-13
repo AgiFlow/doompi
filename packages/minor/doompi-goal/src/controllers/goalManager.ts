@@ -1,5 +1,5 @@
-import type { PiEventHandlers, PiToolRestriction } from '@agimon-ai/doompi-core/pi-extension';
 import type { DoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
+import type { PiEventHandlers, PiToolRestriction } from '@agimon-ai/doompi-core/pi-extension';
 import type { DoomToolRestriction, DoomToolSurfaceService } from '@agimon-ai/doompi-core/tool-surface';
 import type {
   AgentToolResult,
@@ -9,18 +9,10 @@ import type {
   ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
+
 import { currentTokenTotal, updateGoalUsage } from '../models/accounting';
-import { parseGoalCommand, validateObjective } from '../services/parser';
-import {
-  buildContinuePrompt,
-  buildGoalPrompt,
-  buildGoalSystemPrompt,
-  buildObjectiveUpdatedPrompt,
-  buildResumePrompt,
-} from '../services/prompts';
 import { GoalRuntimeModel } from '../models/runtime';
 import { nextToolFreeRepeatState, resetGoalSafetyEpoch, safetyLimitReached } from '../models/safety';
-import { DEFAULT_GOAL_SETTINGS, normalizeGoalSettings } from '../services/settings';
 import { loadGoalStateFromSession } from '../models/stateCodec';
 import {
   createGoal,
@@ -30,13 +22,22 @@ import {
   isResumableGoalStatus,
   transitionGoal,
 } from '../models/stateMachine';
-import { validateBlockedInput, validateCompletionInput } from '../services/tools';
 import { GoalHistoryService } from '../services/history';
+import { GoalHistoryStore } from '../services/historyStore';
+import { parseGoalCommand, validateObjective } from '../services/parser';
+import {
+  buildContinuePrompt,
+  buildGoalPrompt,
+  buildGoalSystemPrompt,
+  buildObjectiveUpdatedPrompt,
+  buildResumePrompt,
+} from '../services/prompts';
+import { DEFAULT_GOAL_SETTINGS, normalizeGoalSettings } from '../services/settings';
+import { validateBlockedInput, validateCompletionInput } from '../services/tools';
 import type { GoalExtensionDependencies, GoalExtensionService } from '../types/extension';
 import type { ActiveGoal, GoalRuntimeSnapshot, GoalStateData } from '../types/goal';
 import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../types/goalView';
 import type { GoalHistoryEntry, GoalHistoryPort } from '../types/history';
-import { GoalHistoryStore } from '../services/historyStore';
 import { goalToolRestriction, goalToolsUsable } from './toolVisibility';
 
 const GOAL_TOOL_SOURCE = '@agimon-ai/doompi-goal';

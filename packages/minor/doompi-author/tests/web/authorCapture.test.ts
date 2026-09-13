@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+
+import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
 import {
   AUTHOR_PACKET_MAX_BYTES,
   attachAuthorCapture,
@@ -6,7 +8,6 @@ import {
   createAuthorCapturePacket,
   type AuthorCaptureProvider,
 } from '../../src/web/stores/authorCapture';
-import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
 import type { AuthorWorkspaceDocument } from '../../src/web/stores/authorWorkspaceStore';
 
 const document: AuthorWorkspaceDocument = {

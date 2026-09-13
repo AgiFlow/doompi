@@ -1,9 +1,10 @@
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
+
 import { doomComponentsLayerBoundary } from './componentLibrary.js';
 import { webFileNaming } from './conventions.js';
 import { noCrossFeatureImport } from './features.js';
-import { preferSharedPrimitive } from './primitives.js';
 import { doomWebLayerBoundary } from './layers.js';
+import { preferSharedPrimitive } from './primitives.js';
 import { noArbitraryStyleValue, noRawThemeColor } from './theming.js';
 
 export const rules: Record<string, RuleDefinition> = {

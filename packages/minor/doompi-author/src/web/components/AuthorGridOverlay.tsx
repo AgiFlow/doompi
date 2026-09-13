@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+
 import {
   AUTHOR_GRID_COLUMNS,
   AUTHOR_GRID_SIZE,

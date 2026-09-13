@@ -1,13 +1,15 @@
-import { relative } from 'node:path';
-import { readFile, stat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { readFile, stat } from 'node:fs/promises';
+import { relative } from 'node:path';
+
 import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessTool,
   DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
-import { DEFAULT_MAX_BYTES, formatSize, truncateHead, truncateLine } from '@earendil-works/pi-coding-agent';
 import { resolveInputPath, isWritableFile } from '@agimon-ai/doompi-hashline/files';
+import { DEFAULT_MAX_BYTES, formatSize, truncateHead, truncateLine } from '@earendil-works/pi-coding-agent';
+
 import { GrepParamsSchema, type GrepParams } from '../../schemas/grepTool';
 import {
   type GrepFileSystem,

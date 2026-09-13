@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 // @scaffold-generated
 import {
   collapseLines,
@@ -8,7 +9,7 @@ import {
   MessageLines,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
+
 import {
   computerActionCallSummary,
   computerActionCollapsedLines,

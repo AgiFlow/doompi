@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { observe } from '../../../../../src/services/serverTelemetry';
 import { validatedTraceContext } from '../../../../../src/services/traceContext';
 

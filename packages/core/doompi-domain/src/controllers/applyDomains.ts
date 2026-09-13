@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { resolvePluginEntries, resolveSharedSkills } from '@agimon-ai/doompi-config/domains';
 import { requireHarnessPaths, updateHarnessState } from '@agimon-ai/doompi-config/harnessStore';
 import type { DoomHarnessContext, HarnessState } from '@agimon-ai/doompi-config/types';
+
 import { resolveMcpAllowlist } from '../services/mcpFilter';
 import { materializePluginEntries } from '../services/pluginMaterializer';
 import { collectResources } from '../services/resourceCollector';

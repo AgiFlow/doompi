@@ -1,3 +1,4 @@
+import type { SessionFrameSender } from '@agimon-ai/doompi-core/web';
 import {
   Badge,
   Button,
@@ -15,8 +16,8 @@ import {
   SelectValue,
   Textarea,
 } from '@agimon-ai/doompi-web-components';
-import type { SessionFrameSender } from '@agimon-ai/doompi-core/web';
 import { type KeyboardEvent as ReactKeyboardEvent, useState } from 'react';
+
 import type { WorkflowCatalogEntryView, WorkflowCatalogInputView } from '../../types/webWorkflows';
 import {
   initialInputs,

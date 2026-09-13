@@ -27,9 +27,7 @@ import {
  * Env rather than a config file, matching doom-task: doom-pi already carries
  * per-launch state to Pi through env vars.
  */
-
 /** Unscoped override for the runner log directory. */
-
 import type { RunnerSettings } from '../../types/runnerSettings';
 
 /** A bash call still running at this point is promoted to a named runner. */

@@ -1,10 +1,10 @@
+import os from 'node:os';
+
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { buildHarnessContext } from './harnessContext';
-import { ensureLayerPackages } from '../../composition/layerPackageInstaller';
-import { projectRegistersDoom } from './projectSettings';
-import { buildRuntimeBundle } from './runtimeBundle';
-import type { SyncedRuntimeBuild } from './index';
+import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
 import { resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
+
+import { ensureLayerPackages } from '../../composition/layerPackageInstaller';
 import {
   computeInputsHash,
   readSyncState,
@@ -12,11 +12,12 @@ import {
   type SyncState,
   syncStateRootMatches,
 } from '../../composition/syncState';
-import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
-import { createLayerResolvers } from './extensionAssembler';
-
-import os from 'node:os';
 import type { HarnessOptions } from '../../composition/types/harness';
+import { createLayerResolvers } from './extensionAssembler';
+import { buildHarnessContext } from './harnessContext';
+import type { SyncedRuntimeBuild } from './index';
+import { projectRegistersDoom } from './projectSettings';
+import { buildRuntimeBundle } from './runtimeBundle';
 export interface BuildResult {
   bundle: string;
   manifest: string;

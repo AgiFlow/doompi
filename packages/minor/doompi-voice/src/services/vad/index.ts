@@ -169,7 +169,7 @@ export class AdaptiveVoiceActivityDetector {
       playbackOverlapMs,
     };
 
-    if (this.active) return this.pushActive(record);
+    if (this.active) return this.pushActive(metadata.speechDetected === false ? { ...record, voiced: false } : record);
 
     const hadProvisionalSpeech = this.consecutiveVoicedMs > 0;
     const thresholdDbfs = this.thresholdDbfs();

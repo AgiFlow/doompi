@@ -1,5 +1,6 @@
 import { Button, SectionLabel } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
+
 import { remoteAccessStore, revokePairedDevice } from '../../stores/remoteAccessStore';
 
 /** Every device currently holding a session, with the one way to take it back. */

@@ -1,6 +1,3 @@
-import { Context } from '@deepseek-ai/cordis';
-import { Check } from 'typebox/value';
-import { describe, expect, it, vi } from 'vitest';
 import {
   DOOM_FABLE_PLAN_SERVICE,
   type DoomFablePlanService,
@@ -12,6 +9,9 @@ import {
   FablePlanStartSchema,
   readDoomFablePlanService,
 } from '@agimon-ai/doompi-team/fable-plan-api';
+import { Context } from '@deepseek-ai/cordis';
+import { Check } from 'typebox/value';
+import { describe, expect, it, vi } from 'vitest';
 
 describe('Fable plan Cordis contract', () => {
   it('publishes and retracts a session-scoped named service with its provider fiber', async () => {

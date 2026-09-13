@@ -1,4 +1,5 @@
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
+
 import type { IClock, ITtsAdapter, NarrationKind } from '../../types';
 import type { IVoiceNarrationCompactor } from '../fallbackNarration';
 import {

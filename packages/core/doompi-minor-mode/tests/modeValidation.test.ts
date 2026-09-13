@@ -1,5 +1,6 @@
 import { Check } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
+
 import {
   MINOR_MODE_ERROR_CODE,
   type MinorModeActionDescriptor,

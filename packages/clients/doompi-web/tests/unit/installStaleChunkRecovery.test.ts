@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { installStaleChunkRecovery } from '../../src/web/lib/installStaleChunkRecovery';
 
 function preloadError(payload: unknown): Event {

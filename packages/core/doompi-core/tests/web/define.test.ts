@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { defineSessionChannel, defineWebPlugin } from '../../src/exports/web';
 import type {
   SessionChannelContribution,

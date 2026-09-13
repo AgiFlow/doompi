@@ -1,5 +1,6 @@
-import { displayPath, isWritableFile, resolveReadInputPath } from '@agimon-ai/doompi-hashline/files';
 import { readFile } from 'node:fs/promises';
+
+import { displayPath, isWritableFile, resolveReadInputPath } from '@agimon-ai/doompi-hashline/files';
 import { renderHashlineCall, renderHashlineResult } from '@agimon-ai/doompi-ui/hashlineRendering';
 import {
   createReadToolDefinition,
@@ -8,6 +9,7 @@ import {
   type AgentToolResult,
   type ToolDefinition,
 } from '@earendil-works/pi-coding-agent';
+
 import { ReadParamsSchema, type ReadParams } from '../schemas/readTool';
 import { applyImageLimits, imageLimits } from '../services/piReadImage';
 import { assertNotAborted, createTaggedReadResult, isImageRead } from '../services/readTool';

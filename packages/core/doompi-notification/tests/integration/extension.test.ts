@@ -8,8 +8,9 @@ import { DOOM_NOTIFICATION_ENTRY_TYPE, readDoomNotificationService } from '@agim
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { notificationExtension } from '../../src/extensions/pi';
+
 import { createMainThreadTitleController } from '../../src/controllers/shellTitleController';
+import { notificationExtension } from '../../src/extensions/pi';
 import { createPiHarness, type PiHarness } from '../helpers/piHarness';
 
 const COMMAND_TIMEOUT_MS = 3_000;

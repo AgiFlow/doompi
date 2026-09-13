@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
+
 import {
   type GlobalDoomInitResult,
   globalDoomConfigDirectory,
   initializeGlobalDoomConfig,
 } from '@agimon-ai/doompi-config';
-import { writePiExtensionAlias } from '../../../builders/cli/piExtensionAlias';
 import {
   piAgentDirectory,
   piThemeDirectory,
@@ -13,9 +13,11 @@ import {
   writePiSettings,
 } from '@agimon-ai/doompi-core/runtime-pi-settings';
 import { DEFAULT_THEME_NAME, writeDefaultTheme } from '@agimon-ai/doompi-ui/theme';
-import { InitPresenter, type InitOutput, type PiIntegrationSummary } from './presenter';
-import { initHelp } from './help';
+
+import { writePiExtensionAlias } from '../../../builders/cli/piExtensionAlias';
 import { wantsHelp } from '../../router';
+import { initHelp } from './help';
+import { InitPresenter, type InitOutput, type PiIntegrationSummary } from './presenter';
 
 const INIT_COMMAND = 'init';
 const FORCE_FLAG = '--force';

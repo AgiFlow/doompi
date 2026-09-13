@@ -9,6 +9,7 @@
  * WorkflowsActivitySection.stories.tsx does.
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
 import type { WorkflowRunView } from '../../types/webWorkflows';
 import { workflows } from '../stores/workflowsStore';
 import { WorkflowsPanel } from './WorkflowsPanel';

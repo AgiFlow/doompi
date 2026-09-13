@@ -1,9 +1,8 @@
-import { ownEntry } from '../../src/builders/cli/entryResolution';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { isRecord, readJson, writeFileAtomic, writeJson } from '@agimon-ai/doompi-core/json';
 import {
   consumerPackageEntries,
@@ -16,8 +15,11 @@ import {
   piCliPath,
   splitPackageSpecifier,
 } from '@agimon-ai/doompi-core/module-resolution';
-import { findRepositoryRoot, isRepositoryRoot } from '../../src/exports/repository';
 import { toClaudeToolName, toPiToolName } from '@agimon-ai/doompi-core/tool-names';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { ownEntry } from '../../src/builders/cli/entryResolution';
+import { findRepositoryRoot, isRepositoryRoot } from '../../src/exports/repository';
 
 /** The meta-package root, whose manifest declares the local Doom closure. */
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));

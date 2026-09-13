@@ -1,9 +1,10 @@
-import type { MinorModeCatalogService } from '@agimon-ai/doompi-minor-mode';
 import { createNarrationRequest, type DoomNarrationService } from '@agimon-ai/doompi-core/narration';
+import type { MinorModeCatalogService } from '@agimon-ai/doompi-minor-mode';
+
 import type { QuestionParams } from '../../schemas/questionnaire';
+import type { QuestionnaireResult, ToolTextResult } from '../../types/questionnaire';
 import { isAutonomousVoiceRecord } from '../autonomousVoiceMode';
 import { buildVoiceQuestionNarration } from '../voiceQuestionNarration';
-import type { QuestionnaireResult, ToolTextResult } from '../../types/questionnaire';
 
 export const VOICE_WAIT_MESSAGE =
   "The questions were spoken through autonomous voice. Stop now and wait for the user's next message; it will arrive as an ordinary user message.";

@@ -1,6 +1,7 @@
 import type { DoomTransitionResult } from '@agimon-ai/doompi-core/transition';
 import { VOICE_TOOL_MAX_DOMAIN_COUNT } from '@agimon-ai/doompi-voice/voice-tools';
 import { describe, expect, it } from 'vitest';
+
 import {
   DOMAIN_STATUS_KEY,
   domainItems,

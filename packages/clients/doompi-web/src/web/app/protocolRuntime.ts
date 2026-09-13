@@ -1,16 +1,17 @@
-import { createRemoteServiceBinding, type RemoteServiceBinding } from '@earendil-works/chord';
-import { BACKGROUND_CONTEXT, withCancel } from '@earendil-works/chord/context';
-import { Client, createClientServiceTransport } from '@earendil-works/pi-client';
 import {
   DOOM_COCKPIT_SERVER_ID,
   DoomSessionManagementService,
   DoomSessionService,
 } from '@agimon-ai/doompi-core/session-protocol';
-import { createProtocolTransport, protocolSocketUrl } from '../lib/piTransport';
+import { createRemoteServiceBinding, type RemoteServiceBinding } from '@earendil-works/chord';
+import { BACKGROUND_CONTEXT, withCancel } from '@earendil-works/chord/context';
+import { Client, createClientServiceTransport } from '@earendil-works/pi-client';
+
 import { recordBrowserPerformance } from '../lib/browserTelemetry';
+import { createProtocolTransport, protocolSocketUrl } from '../lib/piTransport';
+import { bindSessionProtocol } from '../lib/sessionProtocolCommands';
 import { createPagedTranscript } from '../stores/pagedTranscriptStore';
 import { releaseProtocolTranscript, applySessionFrame, refreshSessionFacts } from '../stores/sessionStore';
-import { bindSessionProtocol } from '../lib/sessionProtocolCommands';
 import { bindThreadReader } from '../stores/threadStore';
 
 /** How long to wait before dialling again after the protocol socket drops. */

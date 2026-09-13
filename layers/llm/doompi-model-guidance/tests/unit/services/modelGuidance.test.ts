@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { applyModelGuidance, guidanceForModel, mergeModelGuidance } from '../../../src/services/modelGuidance';
 import type { ModelGuidanceDocument } from '../../../src/types/modelGuidance';
 

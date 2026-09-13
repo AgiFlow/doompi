@@ -1,3 +1,4 @@
+import type { SessionFrameSender, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   Badge,
   Button,
@@ -19,9 +20,9 @@ import {
   STATUS_EDGE,
   StatusBadge,
 } from '@agimon-ai/doompi-web-components';
-import type { SessionFrameSender, TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from 'react';
+
 import type { SubagentRun } from '../../types/webSubagents';
 import { RUN_ACTIONS_SLOT } from '../api/runActionsSlot';
 import { abbreviateCwd } from '../lib/format';

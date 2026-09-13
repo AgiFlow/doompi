@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { mediaPlaybackState, mediaPreviewController } from '../../src/components/MediaPreview';
 
 function video(overrides: Partial<HTMLVideoElement> = {}): HTMLVideoElement {

@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
+
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import { Hono } from 'hono';
+
+import { PlanPointerService } from '../services/planPointer';
 import {
   API_BASE_PATH,
   contentPath,
@@ -11,7 +14,6 @@ import {
   type PlanSaveView,
 } from '../types/planApi';
 import type { PlanPointerPort } from '../types/planPointer';
-import { PlanPointerService } from '../services/planPointer';
 
 /**
  * This package's HTTP surface: the session's current plan, and the manual save.

@@ -1,7 +1,9 @@
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { expect, test } from 'vitest';
+
 import { architecture } from '../src/index';
 test('rejects opaque root folders and retired package imports', () => {
   const root = mkdtempSync(join(tmpdir(), 'doom-core-rules-'));

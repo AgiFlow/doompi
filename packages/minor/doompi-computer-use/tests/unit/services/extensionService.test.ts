@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { DefaultComputerUseExtensionService } from '../../../src/services/extensionService';
 
 describe('DefaultComputerUseExtensionService', () => {

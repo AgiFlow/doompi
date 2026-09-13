@@ -1,5 +1,5 @@
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { vi } from 'vitest';
 
 type Handler = (event: unknown, context: ExtensionContext) => Promise<void> | void;

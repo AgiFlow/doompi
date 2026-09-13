@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { alignLine, fitLine, formatTokens, frameLine, packSegments, padLine } from '../../src/tui/workflow/rendering';
 
 /**

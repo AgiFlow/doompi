@@ -1,15 +1,17 @@
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type {
   DoomHeadlessCommand,
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { domainServerFacet as domainHeadlessFacet } from '../../src/extensions/server';
 
 const roots: string[] = [];

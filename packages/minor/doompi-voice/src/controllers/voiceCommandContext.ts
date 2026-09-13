@@ -1,4 +1,5 @@
 import type { MinorModeRecord } from '@agimon-ai/doompi-minor-mode';
+
 import { compactVoiceCommandContext, type VoiceCommandContext } from '../services/commandCorrection';
 
 const ASK_USER_TOOL_NAME = 'ask_user_question';

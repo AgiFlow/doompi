@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import type { DoomApi } from '../exports/packageApi';
-import { createProviderAuth } from '../services/providerAuth';
 import { piAgentDirectory } from '../services/piSettings';
+import { createProviderAuth } from '../services/providerAuth';
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

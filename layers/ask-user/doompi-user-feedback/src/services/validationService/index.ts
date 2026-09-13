@@ -1,5 +1,5 @@
-import { type QuestionParams } from '../../schemas/questionnaire';
 import { MAX_QUESTIONS, MIN_OPTIONS, RESERVED_LABELS } from '../../constants/questionnaire';
+import { type QuestionParams } from '../../schemas/questionnaire';
 import type { QuestionnaireError } from '../../types/questionnaire';
 
 export const ERROR_NO_QUESTIONS = 'Error: At least one question is required';

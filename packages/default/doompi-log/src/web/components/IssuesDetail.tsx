@@ -1,4 +1,5 @@
 import { useState } from 'react';
+
 import { groupIssues, type IssueGroup } from '../../types/issueGrouping';
 import type { IssuesView, MetricsTool } from '../../types/webMetrics';
 import { barFraction } from '../lib/chartScale';

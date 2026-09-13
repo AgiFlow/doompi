@@ -1,14 +1,15 @@
-import { piMinorModes } from '../../src/services/piRegistration';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
+import { definePiExtension, type PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
+import { defineCommand, defineTool } from '@agimon-ai/doompi-core/pi-extension';
+import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
 import { Context } from '@deepseek-ai/cordis';
 import type { BeforeAgentStartEvent, ExtensionEvent } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
-import { definePiExtension, type PiEventHandlers } from '@agimon-ai/doompi-core/pi-extension';
-import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
-import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
+
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, type MinorModeCatalogService } from '../../src/schemas/mode';
 import { defineMinorMode } from '../../src/services/modeDefinition';
-import { defineCommand, defineTool } from '@agimon-ai/doompi-core/pi-extension';
+import { piMinorModes } from '../../src/services/piRegistration';
 
 describe('declarative Pi extension', () => {
   it('disposes the plugin when shutdown registration fails', async () => {

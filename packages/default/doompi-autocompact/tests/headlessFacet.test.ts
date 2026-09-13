@@ -1,16 +1,18 @@
-import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-core/headless';
-import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Context } from '@deepseek-ai/cordis';
+
+import { DOOM_HEADLESS_HOST_SERVICE } from '@agimon-ai/doompi-core/headless';
 import type {
   DoomHeadlessActivity,
   DoomHeadlessExecutionContext,
   DoomHeadlessHostService,
   DoomHeadlessResource,
 } from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
+import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { autocompactServerFacet as autocompactHeadlessFacet } from '../src/extensions/server';
 
 function contextFor(host: DoomHeadlessHostService): Context {

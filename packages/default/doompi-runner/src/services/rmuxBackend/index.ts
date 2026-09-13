@@ -1,8 +1,10 @@
-import { type Pane, RMUX, type Rmux } from '@rmux/sdk';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+
+import { type Pane, RMUX, type Rmux } from '@rmux/sdk';
+
 import {
   EXECUTABLE_MODE,
   LOG_DRAIN_POLL_MS,
@@ -17,6 +19,12 @@ import {
   STOP_CLOSE_TIMEOUT_MS,
   STOP_GRACE_MS,
 } from '../../constants/rmuxBackend';
+import type { RunHandle } from '../../types/launcher';
+import type { PtyRun } from '../../types/ptyHost';
+import type { IRmuxBackend, RmuxLaunchRequest } from '../../types/rmuxBackend';
+import type { ExitResult } from '../../types/spawner';
+import { getLogMaxBytes, getResultMaxBytes } from '../runnerConfig';
+import type { IRunnerPaths } from '../runnerPaths/type';
 import {
   cleanupSupervisorFiles,
   type CommandSpec,
@@ -28,12 +36,6 @@ import {
   supervisorPaths,
   writeCommandSpec,
 } from '../runnerSupervisor';
-import type { RunHandle } from '../../types/launcher';
-import type { PtyRun } from '../../types/ptyHost';
-import type { IRmuxBackend, RmuxLaunchRequest } from '../../types/rmuxBackend';
-import type { ExitResult } from '../../types/spawner';
-import { getLogMaxBytes, getResultMaxBytes } from '../runnerConfig';
-import type { IRunnerPaths } from '../runnerPaths/type';
 
 /** Pane liveness, its exit status, and whether the session still exists, in one read. */
 const PACKAGE_BY_PLATFORM: Readonly<Record<string, string>> = {

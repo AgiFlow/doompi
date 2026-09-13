@@ -1,18 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { SUBAGENT_CHILD_ENV } from '@agimon-ai/doompi-core/child-process';
-import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import type { LeaderContribution } from '@agimon-ai/doompi-core/leader';
+import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
-import type { FileEditDependencies } from '../types';
-import { sweepSessionState } from '../services/sessionStateSweep';
-import { createDoomIgnoreMatcher } from '../services/doomIgnore';
-import { filesStatusKey } from '../types/webFiles';
 
 import { FILES_COMMAND, PACKAGE_SOURCE, DOOM_IGNORE_FILE } from '../constants/package';
+import { createDoomIgnoreMatcher } from '../services/doomIgnore';
+import { sweepSessionState } from '../services/sessionStateSweep';
+import type { FileEditDependencies } from '../types';
+import { filesStatusKey } from '../types/webFiles';
 /**
  * The project's ignore rules as a test over absolute paths, or nothing when the
  * file is absent, empty, or unreadable.

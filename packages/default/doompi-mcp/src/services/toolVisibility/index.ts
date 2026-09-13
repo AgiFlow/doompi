@@ -1,4 +1,5 @@
 import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+
 import type { McpCatalog } from '../mcpCatalog';
 /**
  * Hides every wrapper this extension owns that the catalog does not currently offer.

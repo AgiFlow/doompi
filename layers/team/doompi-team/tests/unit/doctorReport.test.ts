@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { buildDoctorReport, type DoctorReportDeps } from '../../src/services/doctor';
 import { createSessionScope, scopeRunsDir, scopeResultsDir, sessionScopeDir } from '../../src/services/sessionPaths';
 

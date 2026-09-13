@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { realtimeHostConnection, type RealtimeHost } from '../src/services/realtimeHost';
 
 const host: RealtimeHost = {

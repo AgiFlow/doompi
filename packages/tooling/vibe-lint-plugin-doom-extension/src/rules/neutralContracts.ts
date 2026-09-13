@@ -1,9 +1,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import ts from 'typescript';
+
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
-import { readManifest } from './webPlugin.js';
+import ts from 'typescript';
+
 import { projectPath } from './manifestEntries.js';
+import { readManifest } from './webPlugin.js';
 
 const CONTRACTS = '@agimon-ai/doompi-core';
 const ALLOWED_DOOM_DEPENDENCIES = new Set([CONTRACTS, '@agimon-ai/doompi-core/kernel']);

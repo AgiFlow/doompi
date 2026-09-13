@@ -1,10 +1,12 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+
 import { Providers } from './app/Providers';
 import { installBrowserErrorReporting } from './lib/browserTelemetry';
 import { installStaleChunkRecovery } from './lib/installStaleChunkRecovery';
 import { activeSessionId } from './stores/sessionsStore';
 import { applyStoredTheme } from './stores/themeStore';
+
 import './styles/app.css';
 
 installStaleChunkRecovery();

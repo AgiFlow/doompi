@@ -1,6 +1,6 @@
-import { type CountTokens, type ToolSource, tokensForTool } from '../toolInventory';
-import type { ContextSkillInventory } from '../contextProjection';
 import type { ContextItemDetail, ContextToolDetail } from '../../types/contextApi';
+import type { ContextSkillInventory } from '../contextProjection';
+import { type CountTokens, type ToolSource, tokensForTool } from '../toolInventory';
 
 /**
  * The prose and schema behind the projection's figures.

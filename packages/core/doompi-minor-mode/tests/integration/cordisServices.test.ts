@@ -1,6 +1,3 @@
-import { Context } from '@deepseek-ai/cordis';
-import { Check } from 'typebox/value';
-import { describe, expect, it, vi } from 'vitest';
 import {
   DOOM_MCP_STATUS_SERVICE,
   type DoomMcpStatusService,
@@ -14,6 +11,16 @@ import {
   requireDoomMcpToolResolver,
 } from '@agimon-ai/doompi-core/mcp-tool-resolver';
 import {
+  DOOM_UI_HUB_SERVICE,
+  type DoomUiHubService,
+  readDoomUiHub,
+  requireDoomUiHub,
+} from '@agimon-ai/doompi-core/ui-hub';
+import { Context } from '@deepseek-ai/cordis';
+import { Check } from 'typebox/value';
+import { describe, expect, it, vi } from 'vitest';
+
+import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   type MinorModeActionRequest,
   type MinorModeActionResponse,
@@ -24,12 +31,6 @@ import {
   registerMinorModeOwner,
   requireMinorModeCatalog,
 } from '../../src/exports';
-import {
-  DOOM_UI_HUB_SERVICE,
-  type DoomUiHubService,
-  readDoomUiHub,
-  requireDoomUiHub,
-} from '@agimon-ai/doompi-core/ui-hub';
 
 const emptySnapshot: MinorModeCatalogSnapshot = { hostGeneration: 'mode-generation', revision: 0, modes: [] };
 

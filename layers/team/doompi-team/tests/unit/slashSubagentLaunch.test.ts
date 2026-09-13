@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ExtensionConfig } from '../../src/services/config';
-import type { SpawnPlannerContract, SpawnPlanRequest, SpawnPlanResult } from '../../src/services/spawnPlan';
 import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
+import type { ExtensionConfig } from '../../src/services/config';
 import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
+import type { SpawnPlannerContract, SpawnPlanRequest, SpawnPlanResult } from '../../src/services/spawnPlan';
 import {
   launchParallelSubagents,
   launchSingleSubagent,

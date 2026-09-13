@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { SessionMediaPreview } from '../../src/web/components/SessionMediaPreview';
 
 const hooks = vi.hoisted(() => ({

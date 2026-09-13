@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   BROKER_ADDRESS_ENV,
   BROKER_PORT_ENV,

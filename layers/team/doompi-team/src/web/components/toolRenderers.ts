@@ -1,4 +1,5 @@
 import type { ToolRendererContribution } from '@agimon-ai/doompi-core/web';
+
 import { IntercomToolMessage } from './IntercomToolMessage';
 import { SubagentToolMessage } from './SubagentToolMessage';
 

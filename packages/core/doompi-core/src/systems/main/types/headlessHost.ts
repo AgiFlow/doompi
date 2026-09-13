@@ -1,12 +1,12 @@
-import type { DoomServerBundleEntry } from '../../../exports/serverFacet';
-import type { PackageAttribution } from '../../../services/contextProjection';
-import type { ContextSkillInventory, ContextToolSource } from '../../../services/contextProjection';
 import type {
   DoomHeadlessExecutionContext,
   DoomHeadlessSelection,
   DoomHeadlessTool,
   DoomHeadlessResource,
 } from '../../../exports/headless';
+import type { DoomServerBundleEntry } from '../../../exports/serverFacet';
+import type { PackageAttribution } from '../../../services/contextProjection';
+import type { ContextSkillInventory, ContextToolSource } from '../../../services/contextProjection';
 
 export type ResolvedHeadlessResource = Pick<DoomHeadlessResource, 'name' | 'kind'> & {
   source: string;

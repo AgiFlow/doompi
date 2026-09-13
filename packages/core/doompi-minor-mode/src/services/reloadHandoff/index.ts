@@ -1,7 +1,8 @@
-import { readMinorModeCatalog } from '../../schemas/mode';
-import type { Context } from '@deepseek-ai/cordis';
-import type { MinorModeCatalogSnapshot } from '../../schemas/mode';
 import { readDoomTransitionCoordinator } from '@agimon-ai/doompi-core/runtime-transition';
+import type { Context } from '@deepseek-ai/cordis';
+
+import { readMinorModeCatalog } from '../../schemas/mode';
+import type { MinorModeCatalogSnapshot } from '../../schemas/mode';
 
 const MINOR_MODE_RELOAD_HANDOFF_SYMBOL = Symbol.for('@agimon-ai/doompi.minor-mode-reload-handoff.v1');
 const MINOR_MODE_RELOAD_HANDOFF_TTL_MS = 60_000;

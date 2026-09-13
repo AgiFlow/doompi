@@ -4,10 +4,11 @@ import type {
   DoomChildSessionRequest,
   DoomChildSessionServiceProvider,
 } from '@agimon-ai/doompi-core/child';
-import type { SessionScope } from '../sessionPaths';
+
 import type { AsyncJobTracker, NativeAsyncJobProjection } from '../asyncJobTracker';
 import type { NativeRunProjectionSink } from '../nativeRunProjection';
 import type { CompletionNotifierContract } from '../notify';
+import type { SessionScope } from '../sessionPaths';
 
 export interface NativeRunCoordinatorContract {
   start(sessionId: string, request: DoomChildSessionRequest): Promise<DoomChildSessionHandle>;

@@ -1,5 +1,5 @@
-import { isProcessAlive } from '../processLiveness';
 import { isDelegationActive, type Task, type TaskDocument } from '../../models/task';
+import { isProcessAlive } from '../processLiveness';
 
 export const ERR_ORPHANED_BY_RESTART = 'Delegation orphaned by harness restart';
 export const ERR_ORPHANED_BY_SESSION = 'Delegation orphaned by session restart';

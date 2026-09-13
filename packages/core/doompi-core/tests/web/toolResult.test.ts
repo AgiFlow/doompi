@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { toolResultText, toolResultTextLines } from '../../src/web/services/toolResult';
 
 describe('toolResultText', () => {

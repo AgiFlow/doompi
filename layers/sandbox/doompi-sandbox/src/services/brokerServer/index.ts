@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
+
 import type { ResolvedCredential } from '../brokerRoutes';
 
 /** Headers a provider SDK may carry its credential in. */

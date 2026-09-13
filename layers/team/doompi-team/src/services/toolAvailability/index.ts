@@ -21,6 +21,7 @@
  */
 
 import * as fs from 'node:fs';
+
 import { writePrivateAtomicJson } from '../atomicJson';
 
 export interface ChildToolDiagnostic {

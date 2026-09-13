@@ -3,6 +3,7 @@ import type { McpClientManagerService } from '@agimon-ai/mcp-proxy';
 import type { AgentToolResult, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { TSchema } from 'typebox';
+
 import type { CatalogTool } from '../services/mcpCatalog';
 import type { McpResultBlock, McpToolDetails } from '../types/webMcp';
 

@@ -1,4 +1,5 @@
 import ignore from 'ignore';
+
 import type { FilesItemView } from '../../types/webFiles';
 
 function matchablePath(relPath: string): string | undefined {

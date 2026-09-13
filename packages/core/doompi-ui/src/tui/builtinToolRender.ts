@@ -11,6 +11,7 @@ import {
   type WriteToolInput,
 } from '@earendil-works/pi-coding-agent';
 import { type Component, wrapTextWithAnsi } from '@earendil-works/pi-tui';
+
 import { gutterWidth, renderLineNumber } from './codeGutter';
 import { renderDoomDiff } from './diffRender';
 import { DoomToolCall, frameDoomToolResult, previousDoomToolResult, renderToolHeading } from './toolChrome';

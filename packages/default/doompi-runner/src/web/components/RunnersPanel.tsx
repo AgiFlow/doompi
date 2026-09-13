@@ -1,3 +1,4 @@
+import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   Button,
   Dot,
@@ -8,13 +9,13 @@ import {
   EmptyState,
   PlusIcon,
 } from '@agimon-ai/doompi-web-components';
-import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
+
 import type { RunnerRunView } from '../../types/webRunners';
+import { useRunnerTail } from '../hooks/runnerTail';
 import { formatRunnerUptime } from '../lib/format';
 import { RUNNER_SHELL_REQUEST } from '../lib/launchLine';
-import { useRunnerTail } from '../hooks/runnerTail';
 import { requestRunnerStart, requestRunnerStop, runners } from '../stores/runnersStore';
 import { LaunchRunnerDialog } from './LaunchRunnerDialog';
 import { runnerLogTab } from './RunnerLogPanel';

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { registryCacheKey, registryEntries, selectRegistryHooks } from '../../src/services/hookRegistry';
 import type { ParsedRegistrySource, RegistryEntry } from '../../src/types/hooks';
 

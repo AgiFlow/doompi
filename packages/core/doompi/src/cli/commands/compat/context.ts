@@ -1,14 +1,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { resolvePluginEntries, resolveSharedSkills } from '@agimon-ai/doompi-config/domains';
 import type { DomainMcpAllowlist, PluginEntry } from '@agimon-ai/doompi-config/domains';
 import { layerHookGroups, loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
+import { applyProfileEnvironment, buildPersonaPrompt, resolveProfile } from '@agimon-ai/doompi-config/profiles';
+import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
 import { PROXY_SERVER_NAME, resolveMcpAllowlist } from '@agimon-ai/doompi-domain/mcp';
 import { materializePluginEntries } from '@agimon-ai/doompi-domain/plugins';
 import { stageMcpResources } from '@agimon-ai/doompi-domain/resources';
-import { applyProfileEnvironment, buildPersonaPrompt, resolveProfile } from '@agimon-ai/doompi-config/profiles';
-import type { AgentProfile } from '@agimon-ai/doompi-config/profiles';
+
 import { projectHarnessEnvironment } from '../../../composition/harnessState';
 import type { CompatibilityOptions } from './types';
 

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { expect, test } from '../support/cockpit';
 
 test('sends a prompt and shows it in the timeline', async ({ page, cockpit }) => {

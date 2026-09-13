@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+
 import { POLL_MS } from '../../constants/logTail';
 import type { ILogTail, LogTailHandle, LogTailOptions } from '../../types/logTail';
 

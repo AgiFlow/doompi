@@ -1,4 +1,5 @@
 import { defineService, type Context, type ReplicatedState } from '@earendil-works/chord';
+
 import type { DoomSessionUpdateEvent } from './sessionUpdates';
 
 export const DOOM_SESSION_SERVICE_ID = 'doompi.session.v2';

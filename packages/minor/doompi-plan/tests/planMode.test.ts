@@ -1,9 +1,21 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { resetHarnessStore } from '@agimon-ai/doompi-config';
+
 import { AUTHOR_FACADE_TOOL_NAMES } from '@agimon-ai/doompi-author/author-facade';
+import { resetHarnessStore } from '@agimon-ai/doompi-config';
 import type { LeaderContribution } from '@agimon-ai/doompi-core/leader';
+import {
+  DOOM_NARRATION_SERVICE,
+  type DoomNarrationService,
+  type NarrationRequest,
+} from '@agimon-ai/doompi-core/narration';
+import {
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolSurfaceService,
+  createDoomToolSurface,
+} from '@agimon-ai/doompi-core/tool-surface';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   MINOR_MODE_TOOL_NAME,
@@ -13,18 +25,12 @@ import {
   type MinorModeState,
 } from '@agimon-ai/doompi-minor-mode';
 import {
-  DOOM_NARRATION_SERVICE,
-  type DoomNarrationService,
-  type NarrationRequest,
-} from '@agimon-ai/doompi-core/narration';
-import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
-import {
   DOOM_SUBAGENT_POLICY_SERVICE,
   type DoomSubagentPolicyService,
   type SubagentPolicy,
   type SubagentPolicyHandle,
 } from '@agimon-ai/doompi-team/subagent-policy';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_SOURCE } from '@agimon-ai/doompi-voice/voice-tools';
 import {
   createDoomVoiceToolsService,
   DOOM_VOICE_TOOLS_SERVICE,
@@ -32,16 +38,10 @@ import {
   VOICE_MODE_TOOL_NAMES,
 } from '@agimon-ai/doompi-voice/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
-import {
-  DOOM_TOOL_SURFACE_SERVICE,
-  type DoomToolSurfaceService,
-  createDoomToolSurface,
-} from '@agimon-ai/doompi-core/tool-surface';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
 import type { PlanningModeConfig, PlanningThinkingLevel } from '../src/exports/config';
-import type { PlanPointerRecord } from '../src/types/planApi';
-import type { PlanPointerPort } from '../src/types/planPointer';
 import type { FablePlanBroker, FablePlanPacket } from '../src/exports/fableFlow';
 import {
   configurePlanningSubagentInput,
@@ -60,6 +60,8 @@ import {
   visiblePlanForToolCall,
   WRITE_PLAN_TIMEOUT_MS,
 } from '../src/exports/planMode';
+import type { PlanPointerRecord } from '../src/types/planApi';
+import type { PlanPointerPort } from '../src/types/planPointer';
 
 let testPlansDirectory: string | undefined;
 const PLAN_TRIGGER_ATTRIBUTE = 'plan.trigger';

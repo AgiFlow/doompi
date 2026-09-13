@@ -1,4 +1,6 @@
+import { createHostHandshake } from '@agimon-ai/doompi-web-security/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   rememberHostChannelKey,
   rememberedHostChannelKey,
@@ -8,7 +10,6 @@ import {
   sealedProtocolSession,
   sealedSession,
 } from '../../src/web/lib/sealedSession';
-import { createHostHandshake } from '@agimon-ai/doompi-web-security/node';
 
 const originalFetch = globalThis.fetch;
 const store = new Map<string, string>();

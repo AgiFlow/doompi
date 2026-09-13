@@ -1,14 +1,17 @@
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import fs from 'node:fs';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import path from 'node:path';
-import type { WebSocket } from 'ws';
-import { WebSocketServer } from 'ws';
-import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
-import { createHeadlessProtocol } from './headlessProtocol';
-import { observe, type ServerTelemetry } from '../services/serverTelemetry';
-import { DOOM_API_CALLER_HEADERS, type DoomApiMount } from '../exports/packageApi';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+
+import type { WebSocket } from 'ws';
+import { WebSocketServer } from 'ws';
+
+import { DOOM_API_CALLER_HEADERS, type DoomApiMount } from '../exports/packageApi';
+import { observe, type ServerTelemetry } from '../services/serverTelemetry';
+import type { SavedSession } from '../services/sqliteSessionHistory';
+import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
+import { createHeadlessProtocol } from './headlessProtocol';
 
 const HEALTH_ROLE = 'hub';
 const PROTOCOL_VERSION = 1;
@@ -24,6 +27,9 @@ export interface HeadlessServerOptions {
   onNotice?: (message: string) => void;
   compositions?: () => unknown;
   requestAsset?: (request: Request) => Promise<Response | undefined>;
+  sessionHistory?: (session: HeadlessHubSession) => Promise<SavedSession[]>;
+  restartSession?: (session: HeadlessHubSession) => Promise<void>;
+  resumeSession?: (session: HeadlessHubSession, targetSessionId: string) => Promise<string>;
 }
 
 export interface HeadlessServer {
@@ -424,6 +430,26 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     if (suffix === '' && request.method === 'DELETE') {
       await options.headlessHub.closeSession(sessionId);
       json(response, 200, { ok: true });
+      return;
+    }
+    if (suffix === '/history' && request.method === 'GET' && options.sessionHistory) {
+      json(response, 200, { sessions: await options.sessionHistory(session) });
+      return;
+    }
+    if (suffix === '/restart' && request.method === 'POST' && options.restartSession) {
+      await options.restartSession(session);
+      json(response, 200, { ok: true });
+      return;
+    }
+    if (suffix === '/resume' && request.method === 'POST' && options.resumeSession) {
+      const body = parseJson(await readBody(request));
+      const targetSessionId =
+        body && typeof body === 'object' && 'targetSessionId' in body ? body.targetSessionId : undefined;
+      if (typeof targetSessionId !== 'string' || !/^[A-Za-z0-9_-]+$/u.test(targetSessionId)) {
+        json(response, 400, { error: 'Invalid target session id.' });
+        return;
+      }
+      json(response, 200, { sessionId: await options.resumeSession(session, targetSessionId) });
       return;
     }
     if (suffix === '/channels' && request.method === 'GET') {

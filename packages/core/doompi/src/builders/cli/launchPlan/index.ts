@@ -1,14 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-core/child-process';
-import { updateHarnessState } from '../../../composition/harnessState';
-import { writeLauncherComposition } from '../launcherComposition';
-import { ownEntry } from '../entryResolution';
 
+import { DOOMPI_EXTENSIONS_PROVIDED_ENV } from '@agimon-ai/doompi-core/child-process';
 import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+
+import { updateHarnessState } from '../../../composition/harnessState';
 import { applyProjectTrust, hasProjectTrustOption, loadDoomConfig } from '../../../composition/projectTrust';
 import type { DoomConfig } from '../../../composition/projectTrust';
 import { LAUNCHER_COMPOSITION_ENV, LAUNCHER_COMPOSITION_VERSION } from '../constants';
+import { ownEntry } from '../entryResolution';
 import type { HarnessContext } from '../harnessContext';
+import { writeLauncherComposition } from '../launcherComposition';
 
 const LAUNCHER_BOOTSTRAP_ENTRY = 'launcherBootstrap';
 

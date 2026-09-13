@@ -1,6 +1,6 @@
+import type { InstalledSettingsPanel } from '../../lib/pluginRegistry';
 import { sealedHttpSession } from '../../lib/sealedSession';
 import { fetchWithStepUp } from '../../lib/stepUp';
-import type { InstalledSettingsPanel } from '../../lib/pluginRegistry';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 /**

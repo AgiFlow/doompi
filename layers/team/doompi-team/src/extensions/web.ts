@@ -1,4 +1,5 @@
 import { defineWebPlugin } from '@agimon-ai/doompi-core/web';
+
 import { RUN_ACTIONS_SLOT } from '../web/api/runActionsSlot';
 import { AgentsActivitySection } from '../web/components/AgentsActivitySection';
 import { subagentsTab } from '../web/components/SubagentsPanel';

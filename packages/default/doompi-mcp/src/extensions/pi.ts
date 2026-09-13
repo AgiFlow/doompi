@@ -1,9 +1,10 @@
-import { renderMcpCall, renderMcpResult } from '../tui/mcpToolRender';
 import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
-import { createMcpPiRuntime } from '../controllers/piRuntime';
-import { createMcpCommand } from '../controllers/mcpCommand';
-import { createMcpToolCollection } from '../tools/mcpToolCollection';
+
 import { PACKAGE_SOURCE } from '../constants/piMcp';
+import { createMcpCommand } from '../controllers/mcpCommand';
+import { createMcpPiRuntime } from '../controllers/piRuntime';
+import { createMcpToolCollection } from '../tools/mcpToolCollection';
+import { renderMcpCall, renderMcpResult } from '../tui/mcpToolRender';
 export const mcpExtension = definePiExtension(PACKAGE_SOURCE, ({ runtime }) => {
   if (!runtime) throw new Error('MCP requires the Cordis runtime mode.');
   const state = createMcpPiRuntime(runtime);

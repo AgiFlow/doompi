@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { createRpcTranscript, type RpcTranscript } from '../../../../../src/services/rpcTranscript';
 import type { SessionFrame } from '../../../../../src/types/server/session';
 

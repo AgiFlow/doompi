@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { ResolvedVoiceConfig, VoiceAdapterConfig, VoiceEngine } from '@agimon-ai/doompi-config';
+
 import {
   type AsrDecodingEvidence,
   type IExecutableResolver,

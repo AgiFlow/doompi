@@ -1,5 +1,5 @@
-import type { VoiceActivityUpdate, AutoCaptureIndicatorState } from '../types';
 import { RECORDING_STATE, RECORDING_FRAMES, TRANSCRIBING_FRAMES } from '../constants/voiceRuntime';
+import type { VoiceActivityUpdate, AutoCaptureIndicatorState } from '../types';
 export interface VoiceFooterContributionValue {
   fullText: string;
   compactText: string;

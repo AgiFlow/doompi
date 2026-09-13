@@ -1,16 +1,18 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 import type { DoomConfigContext } from '@agimon-ai/doompi-config/types';
+import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import cordisHostExtension from '../../src/extensions/cordisHost';
 import transitionCoordinatorExtension, {
   currentTransitionSynchronization,
 } from '../../src/extensions/transitionCoordinator';
-import { requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
 
 const { createMapResolvers, loadMajorModesConfig, readSyncState } = vi.hoisted(() => ({
   createMapResolvers: vi.fn(),

@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react';
 import { Button, Input, SectionLabel } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
+import { useEffect, useState } from 'react';
+
+import { DEV_PROXY_PREFIX } from '../../../types/devProxy';
 import {
   createDevProxyTarget,
   deleteDevProxyTarget,
   devProxyStore,
   refreshDevProxyTargets,
 } from '../../stores/devProxyStore';
-import { DEV_PROXY_PREFIX } from '../../../types/devProxy';
 
 /**
  * Local dev servers reachable through the cockpit's own address.

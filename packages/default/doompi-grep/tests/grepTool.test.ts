@@ -1,10 +1,12 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
+
 import { computeFileTag } from '@agimon-ai/doompi-hashline/files';
 import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
 import { rgPath } from '@vscode/ripgrep';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
 import { createHashlineGrepTool } from '../src/tools/piGrep';
 
 interface CapturedTool {

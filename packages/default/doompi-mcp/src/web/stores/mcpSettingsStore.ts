@@ -1,4 +1,5 @@
 import { Store } from '@tanstack/store';
+
 import type { McpAuthorizationFlow, McpRepositoryCatalog } from '../../types/webMcp';
 import {
   cancelMcpAuthorization,

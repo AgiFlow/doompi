@@ -11,19 +11,20 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import type { InlineAgent } from '../../schemas/subagentTool';
-import { SUBAGENT_RUN_ID_ENV } from '../../types/environment';
-import { scopeResultsDir, sessionScopeEnvironment, scopeRunsDir, type SessionScope } from '../sessionPaths';
+import type { SubagentCapabilityCeiling } from '../../schemas/team/capabilityCeiling';
 import type { ActivityState, ArtifactDirPreference } from '../../types';
-import { childProcessEndpoint, ExternalProcessIpc, type ExternalProcessEndpoint } from '../externalProcessIpc';
+import { SUBAGENT_RUN_ID_ENV } from '../../types/environment';
 import {
   CLAUDE_FABLE_PROFILE,
   type ClaudeFableLaunch,
   cleanupClaudeFableLaunch,
   prepareClaudeFableLaunch,
 } from '../claudeFableProfile';
-import type { SubagentCapabilityCeiling } from '../../schemas/team/capabilityCeiling';
+import { childProcessEndpoint, ExternalProcessIpc, type ExternalProcessEndpoint } from '../externalProcessIpc';
 import { isPiRuntime, type RuntimeTable, resolveRuntimeLaunch } from '../runtimeRegistry';
+import { scopeResultsDir, sessionScopeEnvironment, scopeRunsDir, type SessionScope } from '../sessionPaths';
 import { type SpawnHandshakeContract, SpawnHandshake } from '../spawnHandshake';
 import type { StatusWithRecentEntries } from '../statusWriter';
 

@@ -2,8 +2,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { type MajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { assembleExtensions, createLayerResolvers } from '../../src/builders/cli/extensionAssembler';
 
 const WORKSPACE_ROOT = fileURLToPath(new URL('../../../../../', import.meta.url));

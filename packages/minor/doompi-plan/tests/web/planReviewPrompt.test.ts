@@ -1,6 +1,8 @@
-import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import type { ToolPromptDialog } from '@agimon-ai/doompi-core/web';
+import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it, vi } from 'vitest';
+
+import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
 import {
   CONTINUE_PLANNING_CHOICE,
   EXIT_PLAN_MODE_CHOICE,
@@ -8,7 +10,6 @@ import {
   PLAN_REVIEW_TITLE,
 } from '../../src/types/planApi';
 import { claimsPlanReviewPrompt, PlanReviewPrompt } from '../../src/web/components/PlanReviewPrompt';
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

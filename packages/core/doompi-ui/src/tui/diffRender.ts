@@ -1,5 +1,6 @@
 import { highlightCode, type Theme, type ThemeColor } from '@earendil-works/pi-coding-agent';
 import type { Component } from '@earendil-works/pi-tui';
+
 import { renderLineNumber } from './codeGutter';
 import { fitStyledLine } from './rendering';
 

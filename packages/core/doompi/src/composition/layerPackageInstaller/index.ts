@@ -2,11 +2,13 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
+
 import { isLocalPackageSpecifier, type MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { DefaultPackageManager, type PackageManager, SettingsManager } from '@earendil-works/pi-coding-agent';
-import { createLayerResolvers, type ExtensionLayerResolvers } from '../../builders/cli/extensionAssembler';
 import { splitPackageSpecifier } from '@agimon-ai/doompi-core/module-resolution';
 import { piAgentDirectory } from '@agimon-ai/doompi-core/runtime-pi-settings';
+import { DefaultPackageManager, type PackageManager, SettingsManager } from '@earendil-works/pi-coding-agent';
+
+import { createLayerResolvers, type ExtensionLayerResolvers } from '../../builders/cli/extensionAssembler';
 
 const NPM_SOURCE_PREFIX = 'npm:';
 const PI_MANAGED_NPM_DIRECTORY = path.join('.pi', 'npm');
