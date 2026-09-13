@@ -245,6 +245,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     storageQuarantined: false,
     onPresentationFrame(listener: (frame: Frame) => void) {
       listeners.add(listener);
+      if (reconnecting) queueMicrotask(flushReconnectFrames);
       return () => listeners.delete(listener);
     },
     onEvent: () => () => undefined,
@@ -254,7 +255,6 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       exitResolve(0);
     },
     readState: async () => {
-      console.error('[debug-reconnect] readState', reconnecting, reconnectFrames.length, listeners.size);
       record({ type: 'get_state' });
       const result = (await answer('get_state', state)) as Frame;
       flushReconnectFrames();
@@ -449,7 +449,6 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     cwd,
     received,
     emit(frame) {
-      console.error('[debug-reconnect] emit', frame.type, reconnecting, listeners.size);
       if (reconnecting) {
         reconnectFrames.push(frame);
         return;
@@ -579,7 +578,6 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       });
     },
     dropClient() {
-      console.error('[debug-reconnect] dropClient');
       reconnecting = true;
       restarting ??= options.restartHeadless().finally(() => {
         restarting = undefined;

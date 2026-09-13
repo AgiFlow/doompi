@@ -363,13 +363,13 @@ test('the catalog lists the agents the session can launch and launches one throu
   await expect(page.getByTestId('launch-dialog')).toBeVisible();
   await expect(page.getByTestId('launch-agent')).toHaveText('reviewer-e2e');
   await page.getByTestId('launch-task').fill('Review the diff.');
-  await page.getByTestId('launch-fork').click();
+  await page.getByTestId('launch-fresh').click();
   const requestPromise = page.waitForRequest(
     (request) => request.method() === 'POST' && request.url().endsWith('/api/sessions/s1/plugin/team/run'),
   );
   await page.getByTestId('launch-submit').click();
   const request = await requestPromise;
-  expect(request.postDataJSON()).toEqual({ agent: 'reviewer-e2e', task: 'Review the diff.', fork: true });
+  expect(request.postDataJSON()).toEqual({ agent: 'reviewer-e2e', task: 'Review the diff.', fork: false });
   await expect(page.getByTestId('launch-dialog')).toBeHidden();
   await expect(drawer).toBeHidden();
 
