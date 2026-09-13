@@ -36,6 +36,7 @@ import { buildSyncedRuntime } from '../../../builders/cli';
 import { readBootstrapStatus } from '../../../builders/cli/bootstrapLocator';
 import {
   createLayerResolvers,
+  type ExtensionComposition,
   PERSONA_ENTRY,
   resolveExtensionComposition,
 } from '../../../builders/cli/extensionAssembler';
@@ -615,54 +616,66 @@ async function stageSync(
       },
     };
 
-    // Each target owns its output directory. Await both branches before publishing
-    // or removing the generation, so a failed build cannot race another writer.
-    const [runtimeResult, webResult] = await Promise.allSettled([
-      (async () => {
-        const precompiled = progress.start(RUNTIME_LABEL, 'precompiling the mode bundles');
-        const synced = await buildSyncedRuntime(location.root, environment, homeDirectory, { state, directory });
-        precompiled(`${String(Object.keys(synced.bundles).length)} mode bundles`);
-
-        const apiProgress = progress.start(API_LABEL, 'compiling the server bundle');
-        const apiDirectory = path.join(directory, 'api');
-        const fingerprint = crypto
-          .createHash('sha256')
-          .update(JSON.stringify([...new Set(synced.compositions.map((composition) => composition.fingerprint))]))
-          .digest('hex');
-        const server = await syncServerBundle({
-          repositoryRoot: location.root,
-          generation,
-          fingerprint,
-          compositions: synced.compositions,
-          outputDirectory: apiDirectory,
-          cacheDirectory: path.join(directory, 'cache'),
-          sharedCacheDirectory: location.sharedCacheDirectory,
-        });
-        apiProgress(`${server.descriptor.entries.length} server facet(s) compiled`);
-        for (const gap of server.contractGaps) progress.line(API_LABEL, `API contract incomplete: ${gap}`);
-        return { synced, server, fingerprint, apiDirectory };
-      })(),
-      (async () => {
-        const webProgress = progress.start(WEB_LABEL, 'bundling the web cockpit plugins');
-        const web = await syncWebBundle({
-          repoRoot: location.root,
-          resolvedEntries: state.resolved,
-          environment,
-          outputDirectory: path.join(directory, 'web-bundle'),
-          onNotice: (message) => progress.line(WEB_LABEL, message),
-        });
-        if (web.status === 'failed') throw new Error(`Cockpit bundle failed: ${web.reason}`);
-        webProgress(
-          web.status === 'bundled' ? `cockpit bundled with plugins: ${web.pluginIds.join(', ')}` : web.reason,
-        );
-
-        return web;
-      })(),
-    ]);
+    // Runtime planning exposes the compositions before Pi compilation waits, so
+    // Pi, web, and server compilation can run together. All targets settle before
+    // publishing or removing the generation, so no writer races cleanup.
+    let resolveCompositions!: (compositions: readonly ExtensionComposition[]) => void;
+    let rejectCompositions!: (reason?: unknown) => void;
+    const compositionsReady = new Promise<readonly ExtensionComposition[]>((resolve, reject) => {
+      resolveCompositions = resolve;
+      rejectCompositions = reject;
+    });
+    const runtimeProgress = progress.start(RUNTIME_LABEL, 'precompiling the mode bundles');
+    const runtimeBuild = buildSyncedRuntime(location.root, environment, homeDirectory, {
+      state,
+      directory,
+      onCompositionsResolved: resolveCompositions,
+    }).then((synced) => {
+      runtimeProgress(`${String(Object.keys(synced.bundles).length)} mode bundles`);
+      return synced;
+    });
+    void runtimeBuild.catch(rejectCompositions);
+    const webBuild = (async () => {
+      const webProgress = progress.start(WEB_LABEL, 'bundling the web cockpit plugins');
+      const web = await syncWebBundle({
+        repoRoot: location.root,
+        resolvedEntries: state.resolved,
+        environment,
+        outputDirectory: path.join(directory, 'web-bundle'),
+        onNotice: (message) => progress.line(WEB_LABEL, message),
+      });
+      if (web.status === 'failed') throw new Error(`Cockpit bundle failed: ${web.reason}`);
+      webProgress(web.status === 'bundled' ? `cockpit bundled with plugins: ${web.pluginIds.join(', ')}` : web.reason);
+      return web;
+    })();
+    const serverBuild = (async () => {
+      const compositions = await compositionsReady;
+      const apiProgress = progress.start(API_LABEL, 'compiling the server bundle');
+      const apiDirectory = path.join(directory, 'api');
+      const fingerprint = crypto
+        .createHash('sha256')
+        .update(JSON.stringify([...new Set(compositions.map((composition) => composition.fingerprint))]))
+        .digest('hex');
+      const server = await syncServerBundle({
+        repositoryRoot: location.root,
+        generation,
+        fingerprint,
+        compositions,
+        outputDirectory: apiDirectory,
+        cacheDirectory: path.join(directory, 'cache'),
+        sharedCacheDirectory: location.sharedCacheDirectory,
+      });
+      apiProgress(`${server.descriptor.entries.length} server facet(s) compiled`);
+      for (const gap of server.contractGaps) progress.line(API_LABEL, `API contract incomplete: ${gap}`);
+      return { server, fingerprint, apiDirectory };
+    })();
+    const [runtimeResult, webResult, serverResult] = await Promise.allSettled([runtimeBuild, webBuild, serverBuild]);
     if (runtimeResult.status === 'rejected') throw runtimeResult.reason;
     if (webResult.status === 'rejected') throw webResult.reason;
-    const { synced, server, fingerprint, apiDirectory } = runtimeResult.value;
+    if (serverResult.status === 'rejected') throw serverResult.reason;
+    const synced = runtimeResult.value;
     const web = webResult.value;
+    const { server, fingerprint, apiDirectory } = serverResult.value;
     const descriptorPath = path.join(apiDirectory, DOOM_SERVER_BUNDLE_FILE);
     const finalState: SyncState = {
       ...synced.state,

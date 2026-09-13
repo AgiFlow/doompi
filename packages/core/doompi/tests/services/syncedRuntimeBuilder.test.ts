@@ -152,8 +152,9 @@ describe('buildSyncedRuntime', () => {
       expect.any(String),
     );
   });
-  it('starts all mode variants before waiting and preserves their declared order', async () => {
+  it('exposes every composition before waiting for parallel mode builds and preserves declared order', async () => {
     const pending: (() => void)[] = [];
+    const onCompositionsResolved = vi.fn();
     mocks.compileModeExtension.mockImplementation(
       ({ outputName }: { outputName: string }) =>
         new Promise((resolve) =>
@@ -162,8 +163,11 @@ describe('buildSyncedRuntime', () => {
           ),
         ),
     );
-    const building = buildSyncedRuntime('/repo');
+    const building = buildSyncedRuntime('/repo', process.env, process.env.HOME, { onCompositionsResolved });
     expect(pending).toHaveLength(4);
+    expect(onCompositionsResolved).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ fingerprint: 'fingerprint:copilot:loud' })]),
+    );
     expect(mocks.writeSyncState).not.toHaveBeenCalled();
     for (const complete of pending.toReversed()) complete();
     const result = await building;

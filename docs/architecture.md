@@ -57,11 +57,11 @@ The server bundle records the built server facet for each selected package, its 
 | `packages/core/*`    | Runtime foundations, shared contracts, the DoomPi distribution host, and kernel/server composition. |
 | `packages/default/*` | Default distribution features selected through configuration.                                       |
 | `packages/minor/*`   | Optional modes selected through configuration.                                                      |
-| `packages/clients/*` | Standalone presentation clients, currently the browser hub and desktop shell.                       |
+| `packages/clients/*` | Standalone presentation clients, currently the web presentation server and desktop shell.           |
 | `layers/<layer>/*`   | Selectable higher-level extensions.                                                                 |
 | `packages/tooling/*` | Repository-owned development tools that are not part of the runtime package graph.                  |
 
-The published `@agimon-ai/doompi` package owns the CLI, interactive host, headless server runtime, and their fixed core dependency set. There is no standalone `doompi-server` package under `packages/clients`; the server entry is built and published by `@agimon-ai/doompi`. Selectable packages remain outside that private dependency closure. This keeps the distribution hosts stable while allowing a repository to choose its features.
+The published `@agimon-ai/doompi` package owns the CLI, interactive host, headless server runtime, and their fixed core dependency set. There is no standalone server package under `packages/clients`; the server entry is built and published by `@agimon-ai/doompi`. Selectable packages remain outside that private dependency closure. This keeps the distribution hosts stable while allowing a repository to choose its features.
 
 `.doom/modes.yaml` defines an optional default package list, named layers, and major modes. Configuration is resolved with these rules:
 

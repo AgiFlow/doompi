@@ -51,14 +51,20 @@ const mocks = vi.hoisted(() => ({
       _repoRoot: string,
       _environment: NodeJS.ProcessEnv,
       _homeDirectory: string,
-      options: { state: SyncState },
-    ) => ({
-      bootstrap: '/generated/bootstrap.mjs',
-      bundles: {},
-      bundleManifests: {},
-      state: options.state,
-      compositions: [],
-    }),
+      options: {
+        state: SyncState;
+        onCompositionsResolved?: (compositions: readonly []) => void;
+      },
+    ) => {
+      options.onCompositionsResolved?.([]);
+      return {
+        bootstrap: '/generated/bootstrap.mjs',
+        bundles: {},
+        bundleManifests: {},
+        state: options.state,
+        compositions: [],
+      };
+    },
   ),
   ensureLayerPackages: vi.fn(async () => [] as string[]),
   missingLayerPackageSpecifiers: vi.fn(() => [] as string[]),
@@ -796,11 +802,13 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(await new SyncCommand().execute(['sync', '--check'], environmentFor(root), root, capture().output)).toBe(1);
   });
 
-  it('runs web beside runtime and waits for every target before cleaning up a failed generation', async () => {
+  it('runs Pi, web, and server compilation together and waits for every target before cleanup', async () => {
     const root = makeRepository();
     const environment = environmentFor(root);
     const location = resolveSyncLocation(root, homeFor(root));
+    let failRuntime!: () => void;
     let finishWeb!: () => void;
+    let failServer!: () => void;
     let webDirectory = '';
     const web = vi.spyOn(webSync, 'syncWebBundle').mockImplementation(({ outputDirectory }) => {
       webDirectory = outputDirectory;
@@ -808,9 +816,17 @@ describe('doompi sync', { timeout: 30_000 }, () => {
         finishWeb = () => resolve({ status: 'skipped', reason: 'test' });
       });
     });
-    mocks.buildSyncedRuntime.mockImplementationOnce(async () => {
-      await vi.waitFor(() => expect(web).toHaveBeenCalledOnce());
-      throw new Error('runtime compilation failed');
+    const server = vi.spyOn(serverBundleSync, 'syncServerBundle').mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          failServer = () => reject(new Error('server compilation stopped'));
+        }),
+    );
+    mocks.buildSyncedRuntime.mockImplementationOnce((_repoRoot, _environment, _homeDirectory, options) => {
+      options.onCompositionsResolved?.([]);
+      return new Promise((_resolve, reject) => {
+        failRuntime = () => reject(new Error('runtime compilation failed'));
+      });
     });
     let settled = false;
     const syncing = new SyncCommand().execute(['sync'], environment, root, capture().output);
@@ -824,14 +840,22 @@ describe('doompi sync', { timeout: 30_000 }, () => {
       },
     );
     try {
-      await vi.waitFor(() => expect(webDirectory).not.toBe(''));
+      await vi.waitFor(() => {
+        expect(mocks.buildSyncedRuntime).toHaveBeenCalledOnce();
+        expect(web).toHaveBeenCalledOnce();
+        expect(server).toHaveBeenCalledOnce();
+      });
       expect(fs.existsSync(path.dirname(webDirectory))).toBe(true);
+      failRuntime();
+      await new Promise((resolve) => setTimeout(resolve, 0));
       expect(settled).toBe(false);
       expect(fs.existsSync(location.registrationPath)).toBe(false);
     } finally {
       finishWeb();
+      failServer();
       await checked;
       web.mockRestore();
+      server.mockRestore();
     }
     expect(fs.existsSync(path.dirname(webDirectory))).toBe(false);
   });
