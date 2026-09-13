@@ -103,11 +103,23 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const workflowHome = path.join(root, 'workflow-mcp');
     const agentDir = path.join(root, 'pi-agent');
     const runnerStore = path.join(agentDir, 'doom-runner');
+    const processRegistryPath = path.join(root, 'process-registry');
     const teamTemp = path.join(root, 'tmp');
     const workRoot = path.join(root, 'workspaces');
     fs.mkdirSync(workRoot, { recursive: true });
     fs.mkdirSync(teamTemp, { recursive: true });
     fs.mkdirSync(agentDir, { recursive: true });
+
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    const previousWorkflowHome = process.env.WORKFLOW_MCP_HOME;
+    const previousProcessRegistryPath = process.env.PROCESS_REGISTRY_PATH;
+    const previousHome = process.env.HOME;
+    const previousUserProfile = process.env.USERPROFILE;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    process.env.WORKFLOW_MCP_HOME = workflowHome;
+    process.env.PROCESS_REGISTRY_PATH = processRegistryPath;
+    process.env.HOME = root;
+    process.env.USERPROFILE = root;
 
     const assetsDir = assets === 'synced' ? syncedDist! : path.join(assetPackageRoot ?? packageRoot, 'dist', 'web');
     const syncedHome = process.env[SYNCED_HOME_ENV];
@@ -182,6 +194,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       USERPROFILE: root,
       PI_CODING_AGENT_DIR: agentDir,
       WORKFLOW_MCP_HOME: workflowHome,
+      PROCESS_REGISTRY_PATH: processRegistryPath,
     });
     const repositories = () =>
       hub.workspaces().map((workspace) => ({
@@ -309,14 +322,6 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       await registerFixtureSession(sessionId, request.name, request.cwd, false);
       return { sessionId, cwd: request.cwd };
     };
-    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-    const previousWorkflowHome = process.env.WORKFLOW_MCP_HOME;
-    const previousHome = process.env.HOME;
-    const previousUserProfile = process.env.USERPROFILE;
-    process.env.PI_CODING_AGENT_DIR = agentDir;
-    process.env.WORKFLOW_MCP_HOME = workflowHome;
-    process.env.HOME = root;
-    process.env.USERPROFILE = root;
     for (let index = 0; index < sessionCount; index += 1) {
       await registerFixtureSession(
         `s${index + 1}`,
@@ -357,6 +362,8 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
       if (previousWorkflowHome === undefined) delete process.env.WORKFLOW_MCP_HOME;
       else process.env.WORKFLOW_MCP_HOME = previousWorkflowHome;
+      if (previousProcessRegistryPath === undefined) delete process.env.PROCESS_REGISTRY_PATH;
+      else process.env.PROCESS_REGISTRY_PATH = previousProcessRegistryPath;
       if (previousHome === undefined) delete process.env.HOME;
       else process.env.HOME = previousHome;
       if (previousUserProfile === undefined) delete process.env.USERPROFILE;
