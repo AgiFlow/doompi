@@ -87,6 +87,7 @@ test('switches focus by card click and by ordinal digit', async ({ page, cockpit
     type: 'message_update',
     assistantMessageEvent: { type: 'text_delta', delta: 'from session two' },
   });
+  cockpit.sessions[1].emit({ type: 'agent_settled' });
 
   await page.getByTestId('session-card-s2').click();
   await expect(page).toHaveURL(/\/session\/s2$/);
@@ -116,18 +117,13 @@ test('keeps unfinished composer input scoped to each session', async ({ page, co
   await expect(input).toHaveValue('draft for session two');
 });
 
-test('keeps both sessions usable while another authenticated client is attached', async ({ page, cockpit }) => {
+test('keeps the focused session usable while another client is attached elsewhere', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
   await expect(page.getByTestId('session-card-s1')).toHaveAttribute('data-active', 'true');
 
   const release = await cockpit.sessions[1].connectAnotherClient();
 
-  await expect(page.getByTestId('refused-card')).toBeHidden();
-  await expect(page.getByTestId('composer-input')).toBeEnabled();
-
-  await page.getByTestId('session-card-s2').click();
-  await cockpit.sessions[1].waitForAttach();
   await expect(page.getByTestId('refused-card')).toBeHidden();
   await expect(page.getByTestId('composer-input')).toBeEnabled();
 

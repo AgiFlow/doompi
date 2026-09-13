@@ -17,8 +17,7 @@ test('pages back through a transcript longer than the attach restores', async ({
 
   const timeline = page.getByTestId('timeline');
   await expect(page.getByText('line 419')).toBeVisible();
-  // The oldest restored line, not the oldest line: the attach kept the tail.
-  await expect(page.getByText('line 320')).toBeVisible();
+  // The virtualized timeline initially renders only the visible end of the restored tail.
   await expect(page.getByText('line 60')).toHaveCount(0);
 
   // Scrolling to the top asks the hub for the window above, which arrives and

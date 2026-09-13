@@ -1,7 +1,7 @@
 import { BACKGROUND_CONTEXT, withAbortSignal } from '@earendil-works/chord/context';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAgentSessionRuntime } from '../../../../../src/pi/piSessionRuntime';
+import { createAgentServerService, createAgentSessionRuntime } from '../../../../../src/pi/piSessionRuntime';
 import type { ServerTelemetry } from '../../../../../src/services/serverTelemetry';
 import type { DirectHarnessFrame, DirectHarnessRuntime } from '../../../../../src/types/server/directHarnessRuntime';
 
@@ -435,5 +435,27 @@ describe('typed session runtime controls', () => {
     } finally {
       await runtime.dispose();
     }
+  });
+  it('allows only one presentation to attach to a supervised session', async () => {
+    const { direct } = fixture();
+    const host = createAgentServerService({
+      runtime: direct,
+      sessionId: 's1',
+      sessionName: 'test',
+      cwd: '/test',
+      createdAt: 1,
+    });
+    const metadata = await host.resolveSession('s1', BACKGROUND_CONTEXT);
+    const handle = await host.openSession(metadata, BACKGROUND_CONTEXT);
+    const first = await handle.attachClient(BACKGROUND_CONTEXT);
+
+    await expect(Promise.resolve().then(() => handle.attachClient(BACKGROUND_CONTEXT))).rejects.toThrow(
+      'session already attached',
+    );
+
+    await first.release(BACKGROUND_CONTEXT);
+    const replacement = await handle.attachClient(BACKGROUND_CONTEXT);
+    await replacement.release(BACKGROUND_CONTEXT);
+    await handle.close(BACKGROUND_CONTEXT);
   });
 });

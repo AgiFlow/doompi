@@ -632,6 +632,7 @@ export function createAgentServerService(options: AgentServerServiceOptions): Se
   };
   const runtime = createAgentSessionRuntime(options);
   let closed = false;
+  let attached = false;
 
   return {
     serverServices: managementHost(),
@@ -645,9 +646,27 @@ export function createAgentServerService(options: AgentServerServiceOptions): Se
       const provider = new RemoteServiceProvider([{ service: DoomSessionService, mode: 'singleton' }]);
       provider.provide(DoomSessionService, runtime);
       const handle: RoutedSessionHandle = {
-        attachClient: () => endpointAttachment(createRemoteServiceEndpoint(provider)),
+        attachClient: () => {
+          if (attached) throw new Error('session already attached');
+          const attachment = endpointAttachment(createRemoteServiceEndpoint(provider));
+          attached = true;
+          let released = false;
+          return {
+            invokeService: attachment.invokeService,
+            release() {
+              if (released) return;
+              released = true;
+              try {
+                attachment.release();
+              } finally {
+                attached = false;
+              }
+            },
+          };
+        },
         async close() {
           if (closed) return;
+          attached = false;
           closed = true;
           provider.dispose();
           await runtime.dispose();
