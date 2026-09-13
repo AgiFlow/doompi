@@ -80,3 +80,13 @@ describe('headless client bridge', () => {
     await expect(bridge.client.request({ kind: 'input', title: 'After close' })).rejects.toThrow('closed');
   });
 });
+
+it('emits a distinct append request for native dictation and rejects it after disposal', () => {
+  const bridge = setup();
+  bridge.client.appendComposerText?.('dictated text');
+  expect(bridge.requests()).toEqual([
+    { type: 'extension_ui_request', method: 'append_composer_text', id: expect.any(String), text: 'dictated text' },
+  ]);
+  bridge.dispose();
+  expect(() => bridge.client.appendComposerText?.('late text')).toThrow('closed');
+});

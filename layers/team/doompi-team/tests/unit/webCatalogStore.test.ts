@@ -1,4 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { catalog, loadCatalog, openCatalog } from '../../src/web/stores/catalogStore';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  catalog.reset();
+});
 
 describe('the catalog store', () => {
   it('folds channel payloads and keeps the drawer state across a refresh', async () => {
@@ -96,5 +104,112 @@ describe('the catalog store', () => {
       throw new Error('a detached action must not build a tab');
     });
     catalog.reset();
+  });
+});
+
+describe('catalog HTTP loading', () => {
+  const payload = (name = 'reviewer') => ({
+    cwd: '/workspace',
+    models: ['model/first'],
+    agents: [
+      {
+        name,
+        source: 'plugin',
+        description: 'reviews',
+        filePath: '/agents/reviewer.md',
+        tools: [],
+        skills: [],
+        extensions: [],
+        fallbackModels: [],
+        defaultContext: 'fresh',
+      },
+    ],
+  });
+
+  it('loads directly from the encoded session API and refreshes on reopening', async () => {
+    const fetch = vi
+      .spyOn(sealedTransport, 'fetch')
+      .mockResolvedValueOnce(Response.json(payload()))
+      .mockResolvedValueOnce(Response.json(payload('updated')));
+    openCatalog('session/a', 'my task');
+    const cancel = loadCatalog('session/a');
+    expect(catalog.store.state['session/a']?.loading).toBe(true);
+    await vi.waitFor(() => expect(catalog.store.state['session/a']?.loading).toBe(false));
+    expect(fetch).toHaveBeenCalledWith('/api/sessions/session%2Fa/plugin/team/catalog', {
+      signal: expect.any(AbortSignal),
+      cache: 'no-store',
+    });
+    expect(catalog.store.state['session/a']).toMatchObject({
+      agents: [{ name: 'reviewer' }],
+      task: 'my task',
+      warning: undefined,
+    });
+    cancel();
+    const cancelNext = loadCatalog('session/a');
+    await vi.waitFor(() => expect(catalog.store.state['session/a']?.agents[0]?.name).toBe('updated'));
+    cancelNext();
+  });
+
+  it('distinguishes an empty catalog from server and malformed-response errors', async () => {
+    const fetch = vi
+      .spyOn(sealedTransport, 'fetch')
+      .mockResolvedValueOnce(Response.json({ cwd: '/workspace', agents: [], models: [] }));
+    const cancel = loadCatalog('empty');
+    await vi.waitFor(() => expect(catalog.store.state.empty?.loading).toBe(false));
+    expect(catalog.store.state.empty).toMatchObject({ agents: [], warning: undefined });
+    cancel();
+    fetch.mockResolvedValueOnce(Response.json({ error: 'Discovery unavailable' }, { status: 500 }));
+    const cancelFailure = loadCatalog('empty');
+    await vi.waitFor(() => expect(catalog.store.state.empty?.warning).toBe('Discovery unavailable'));
+    cancelFailure();
+    fetch.mockResolvedValueOnce(Response.json({ cwd: '/workspace', agents: [{}], models: [] }));
+    const cancelInvalid = loadCatalog('empty');
+    await vi.waitFor(() =>
+      expect(catalog.store.state.empty?.warning).toBe('The server returned an invalid agent catalog.'),
+    );
+    cancelInvalid();
+  });
+
+  it('cancels closed drawers and ignores responses after switching or dropping sessions', async () => {
+    let complete!: (value: Response) => void;
+    const fetch = vi
+      .spyOn(sealedTransport, 'fetch')
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(Response.json(payload('second')));
+    const cancel = loadCatalog('first');
+    cancel();
+    expect(fetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    catalog.reset();
+    const cancelNext = loadCatalog('second');
+    complete(Response.json(payload('late')));
+    await vi.waitFor(() => expect(catalog.store.state.second?.loading).toBe(false));
+    expect(catalog.store.state.first).toBeUndefined();
+    expect(catalog.store.state.second?.agents[0]?.name).toBe('second');
+    cancelNext();
+  });
+
+  it('does not let an older request overwrite a newer catalog', async () => {
+    let complete!: (value: Response) => void;
+    vi.spyOn(sealedTransport, 'fetch')
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(Response.json(payload('new')));
+    const cancelOld = loadCatalog('same');
+    const cancelNew = loadCatalog('same');
+    await vi.waitFor(() => expect(catalog.store.state.same?.loading).toBe(false));
+    complete(Response.json(payload('old')));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(catalog.store.state.same?.agents[0]?.name).toBe('new');
+    cancelOld();
+    cancelNew();
   });
 });

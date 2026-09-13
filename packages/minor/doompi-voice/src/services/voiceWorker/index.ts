@@ -1,6 +1,7 @@
 import type { MessagePort } from 'node:worker_threads';
-import { isMainThread, parentPort } from 'node:worker_threads';
+import { isMainThread, parentPort, workerData } from 'node:worker_threads';
 
+import { connectVoiceWorkerMedia } from '../voiceWorkerMedia';
 import { VoiceWorkerPipeline } from '../voiceWorkerPipeline';
 import {
   parseVoiceWorkerCommand,
@@ -169,4 +170,10 @@ export function startVoiceWorker(
   return { dispose };
 }
 
-if (!isMainThread) startVoiceWorker();
+if (!isMainThread) {
+  const mediaPort = (workerData as { mediaPort?: MessagePort } | undefined)?.mediaPort;
+  startVoiceWorker(
+    parentPort as MessagePort,
+    new VoiceWorkerPipeline(mediaPort ? { clientMedia: connectVoiceWorkerMedia(mediaPort) } : {}),
+  );
+}

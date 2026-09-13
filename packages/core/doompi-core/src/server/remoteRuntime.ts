@@ -371,6 +371,7 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
       headers.append(name, value);
     }
     const action = stepUpActionFor(inner.method, target.pathname);
+    let stepUpDenied = false;
     if (action && remote.stepUpRequired(action)) {
       const assertion = headers.get(STEP_UP_HEADER);
       let credential: unknown;
@@ -384,24 +385,28 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
         typeof ceremony?.ceremonyId !== 'string' ||
         !(await remote.passkeys().finishStepUp(ceremony.ceremonyId, `device:${device}`, action, ceremony.response))
       )
-        return context.json({ error: 'This action needs a fresh passkey gesture.', action }, 401);
+        stepUpDenied = true;
     }
     headers.delete(STEP_UP_HEADER);
-    const internal = new Request(target, {
-      method: inner.method,
-      headers,
-      ...(inner.method === 'GET' || inner.method === 'HEAD' ? {} : { body }),
-    });
     let response: Response;
-    if (target.pathname === '/api/remote' || target.pathname.startsWith('/api/remote/')) {
-      headers.set('cookie', context.req.header('cookie') ?? '');
-      headers.set('host', context.req.header('host') ?? '');
-      headers.set('origin', context.req.header('origin') ?? '');
-      response = await app.fetch(new Request(internal, { headers }), {
-        listener: 'tunnel',
-        sealedDeviceId: device,
+    if (stepUpDenied) {
+      response = context.json({ error: 'This action needs a fresh passkey gesture.', action }, 401);
+    } else {
+      const internal = new Request(target, {
+        method: inner.method,
+        headers,
+        ...(inner.method === 'GET' || inner.method === 'HEAD' ? {} : { body }),
       });
-    } else response = await options.forward(internal);
+      if (target.pathname === '/api/remote' || target.pathname.startsWith('/api/remote/')) {
+        headers.set('cookie', context.req.header('cookie') ?? '');
+        headers.set('host', context.req.header('host') ?? '');
+        headers.set('origin', context.req.header('origin') ?? '');
+        response = await app.fetch(new Request(internal, { headers }), {
+          listener: 'tunnel',
+          sealedDeviceId: device,
+        });
+      } else response = await options.forward(internal);
+    }
     const responseBody = Buffer.from(await response.arrayBuffer());
     const sealed = channel.seal(
       new TextEncoder().encode(
@@ -421,6 +426,14 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
     if (context.req.path.startsWith('/api/')) return context.json({ error: 'Not found.' }, 404);
     if (context.req.path === '/' && remote.authorize(getCookie(context, DEVICE_COOKIE, 'host')) === undefined)
       return context.redirect('/pair');
+    if (context.req.path === '/bundle-manifest.json' || context.req.path.startsWith('/bundle-assets/')) {
+      const from = new URL(context.req.url);
+      return await options.forward(
+        new Request(new URL(`${from.pathname}${from.search}`, 'http://doompi.local'), {
+          method: context.req.method,
+        }),
+      );
+    }
     if (!frontendOrigin) return context.json({ error: 'The web presentation server is unavailable.' }, 503);
     const from = new URL(context.req.url);
     const target = new URL(`${from.pathname}${from.search}`, frontendOrigin);

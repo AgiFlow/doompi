@@ -1,8 +1,9 @@
+import { DOOM_HEADLESS_HOST_SERVICE, type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
 import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
-import { api } from '../../../src/controllers/voiceSessionApi';
 import { voiceServerFacet } from '../../../src/extensions/server';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
@@ -14,7 +15,12 @@ function hostContext(scope: DoomServerHostService['scope']) {
   const state = { disposed: 0 };
   const host: DoomServerHostService = {
     scope,
-    context: { locality: 'local' } as unknown as DoomServerHostService['context'],
+    context: {
+      locality: 'local',
+      homeDirectory: '/tmp/voice-facet-test-home',
+      sessionId: 'fixture',
+      directEvents: { publish() {}, subscribe: () => () => undefined, close() {} },
+    } as unknown as DoomServerHostService['context'],
     registerApi(api) {
       registered.push(api);
       return {
@@ -39,6 +45,21 @@ function hostContext(scope: DoomServerHostService['scope']) {
   };
   const context = new Context();
   context.provide(DOOM_SERVER_HOST_SERVICE, host);
+  context.provide(DOOM_HEADLESS_HOST_SERVICE, {
+    context: {
+      cwd: '/tmp',
+      repoRoot: '/tmp',
+      sessionId: 'fixture',
+      environment: {},
+      selection: { state: {} },
+      client: { setStatus() {}, notify() {} },
+    },
+    registerCommand: () => ({ dispose() {} }),
+    registerResource: () => ({ dispose() {} }),
+    registerHook: () => ({ dispose() {} }),
+    assertActive() {},
+  } as unknown as DoomHeadlessHostService);
+  context.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, { registerOwner: () => ({ publish() {}, dispose() {} }) } as never);
   return { context, registered, channels, state };
 }
 
@@ -52,8 +73,9 @@ describe('voiceServerFacet', () => {
 
     const dispose = await voiceServerFacet.apply(harness.context);
 
-    expect(harness.registered).toEqual([api]);
+    expect(harness.registered.map((api) => api.basePath)).toEqual(['voice', 'voice-media']);
     expect(typeof dispose).toBe('function');
+    await dispose?.();
   });
 
   it('unregisters the API when the host disposes the facet', async () => {
@@ -63,7 +85,7 @@ describe('voiceServerFacet', () => {
       await voiceServerFacet.apply(harness.context)
     )?.();
 
-    expect(harness.state.disposed).toBe(1);
+    expect(harness.state.disposed).toBe(2);
   });
 
   it('registers voice wake and ownership channels on the hub scope', async () => {
@@ -71,10 +93,10 @@ describe('voiceServerFacet', () => {
 
     const dispose = await voiceServerFacet.apply(harness.context);
 
-    expect(harness.registered).toEqual([]);
+    expect(harness.registered.map((api) => api.basePath)).toEqual(['voice']);
     expect(harness.channels.map((channel) => channel.frameType)).toEqual(['voice_media_wake', 'voice_ownership']);
     expect(typeof dispose).toBe('function');
     await dispose?.();
-    expect(harness.state.disposed).toBe(2);
+    expect(harness.state.disposed).toBe(3);
   });
 });

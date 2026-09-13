@@ -2,6 +2,7 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: {
+    'api-contracts': 'src/exports/apiContracts.ts',
     index: 'src/exports/index.ts',
     'extensions/pi': 'src/extensions/pi.ts',
     'extensions/server': 'src/extensions/server.ts',

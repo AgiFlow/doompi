@@ -2,6 +2,7 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: {
+    'api-contracts': 'src/exports/apiContracts.ts',
     agentPluginMcp: 'src/exports/agentPluginMcp.ts',
     atomicJson: 'src/exports/atomicJson.ts',
     config: 'src/exports/config.ts',

@@ -27,6 +27,7 @@ publicHoistPattern:
 
 allowBuilds:
   "@google/genai": false
+  "@scarf/scarf": false
   better-sqlite3: true
   # The desktop shell's runtime is downloaded by its own postinstall; without
   # this there is no Electron binary to package or run.

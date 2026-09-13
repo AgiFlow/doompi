@@ -342,7 +342,7 @@ export const teamServerFacet = defineServerPlugin({
       directEvents.publish(SUBAGENT_CATALOG_TYPE, execution.sessionId, {
         cwd: execution.cwd,
         agents: presentCatalog(discovered),
-        models: catalogModels(discovered, resolveActiveTeamModelSpecs() ?? []),
+        models: catalogModels(discovered, resolveActiveTeamModelSpecs(serverHost.context.environment) ?? []),
       });
     } catch (error) {
       const warning = error instanceof Error ? error.message : String(error);

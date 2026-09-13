@@ -558,3 +558,15 @@ describe('VoiceWorkerClient', () => {
     expect(() => findVoiceWorkerUrl(pathToFileURL('/voice-worker-missing/client.mjs'))).toThrow('Cannot find');
   });
 });
+
+it('rejects a synchronous worker launch failure and can shut down without an unhandled startup promise', async () => {
+  const client = new VoiceWorkerClient({
+    spoolDirectory: '/fixture',
+    onEvent() {},
+    workerFactory: () => {
+      throw new Error('worker file missing');
+    },
+  });
+  await expect(client.start()).rejects.toThrow('worker file missing');
+  await expect(client.shutdown('session-shutdown')).resolves.toBeUndefined();
+});

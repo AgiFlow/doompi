@@ -31,12 +31,13 @@ export interface VoiceWorkerAutoCaptureTelemetrySink extends AutonomousVoiceTele
 
 export interface VoiceWorkerAutoCaptureDependencies {
   loadConfig(): ResolvedVoiceConfig;
+  spoolDirectory?: string;
   resolveCommandCorrector(reference: string): Promise<IVoiceCommandCorrector | undefined>;
   resolveTranscriptAdjudicator?(reference: string): Promise<IVoiceTranscriptAdjudicator | undefined>;
   resolveFallbackNarrator(reference: string): Promise<IVoiceTurnFallbackNarrator & Partial<IVoiceNarrationCompactor>>;
   tts: ITtsAdapter;
   clock: IClock;
-  deliver(text: string, intent?: VoiceDeliveryIntent): void;
+  deliver(text: string, intent?: VoiceDeliveryIntent): void | Promise<void>;
   manualState(): 'idle' | 'recording' | 'transcribing';
   commandContext?(): VoiceCommandContext | undefined;
   onActivationStateChange?(state: AutoCaptureActivationState): void;
@@ -198,6 +199,10 @@ export class VoiceWorkerAutoCaptureController {
     }
   }
 
+  public interruptSpeech(): void {
+    void this.narration.abortPlayback().catch((error: unknown) => this.ui?.notify(String(error), 'error'));
+  }
+
   public askUserBlocked(blocked: boolean): void {
     this.session?.setModalBlocked(blocked);
   }
@@ -239,7 +244,7 @@ export class VoiceWorkerAutoCaptureController {
       if (revision !== this.activationRevision || this.activationState !== 'starting') return;
       this.fallbackNarrator = fallbackNarrator;
       const clientOptions: VoiceWorkerClientOptions = {
-        spoolDirectory: spoolRoot(),
+        spoolDirectory: this.dependencies.spoolDirectory ?? spoolRoot(),
         onEvent: (event) => createdSession?.receive(event),
         onExhausted: (reason) => createdSession?.workerExhausted(`worker_${reason}`),
       };

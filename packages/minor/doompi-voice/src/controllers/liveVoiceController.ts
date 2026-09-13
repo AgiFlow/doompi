@@ -23,7 +23,7 @@ export interface LiveVoiceControllerDependencies {
   manualState(): VoiceState;
   contextText(): string;
   isBusy(): boolean;
-  send(text: string, intent: 'immediate' | 'follow-up'): void;
+  send(text: string, intent: 'immediate' | 'follow-up'): void | Promise<void>;
   onActivationStateChange?(state: AutoCaptureActivationState): void;
   createId?(): string;
 }
@@ -269,7 +269,7 @@ export class LiveVoiceController {
     delivery.observe(event);
 
     if (event.type === 'request') {
-      const outcome = delivery.submit(event);
+      const outcome = await delivery.submit(event);
       if (!waiting && outcome === 'busy') {
         return {
           request: event,
@@ -282,7 +282,7 @@ export class LiveVoiceController {
 
     const finalizedUser = event.type === 'transcript' && event.role === 'user' && event.complete;
     if (!waiting || !finalizedUser) return waiting;
-    const outcome = delivery.submit(waiting.request);
+    const outcome = await delivery.submit(waiting.request);
     if (outcome === 'busy') return waiting;
     await this.reportOutcome(activationKey, waiting.request, outcome, signal);
     return undefined;

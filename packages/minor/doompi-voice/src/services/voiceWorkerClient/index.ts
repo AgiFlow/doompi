@@ -1,8 +1,10 @@
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { Worker } from 'node:worker_threads';
+import { MessageChannel, Worker } from 'node:worker_threads';
 
+import type { IVoiceMediaHostConnection } from '../../types';
+import { serveVoiceWorkerMedia } from '../voiceWorkerMedia';
 import {
   VOICE_WORKER_INTENTIONAL_BARGE_IN_CAPABILITY,
   VOICE_WORKER_PROTOCOL_VERSION,
@@ -19,6 +21,8 @@ import { type VoiceWorkerHandle, VoiceWorkerSupervisor } from '../voiceWorkerSup
 
 export interface VoiceWorkerClientOptions {
   spoolDirectory: string;
+  clientMedia?: IVoiceMediaHostConnection;
+  environment?: Record<string, string | undefined>;
   activityHz?: number;
   shutdownTimeoutMs?: number;
   onEvent: (event: VoiceWorkerEvent) => void;
@@ -63,9 +67,24 @@ export function findVoiceWorkerUrl(importFileUrl: string | URL): URL {
   throw new Error(`Cannot find voiceWorker.mjs by walking from ${importFilePath}.`);
 }
 
-function createNodeWorker(importUrl?: string | URL): VoiceWorkerHandle {
+function createNodeWorker(
+  importUrl?: string | URL,
+  clientMedia?: IVoiceMediaHostConnection,
+  environment?: Record<string, string | undefined>,
+): VoiceWorkerHandle {
   const workerUrl = importUrl ? findVoiceWorkerUrl(importUrl) : findVoiceWorkerUrl(import.meta.url);
-  return new Worker(workerUrl, { name: 'doompi-voice' }) as VoiceWorkerHandle;
+  if (!clientMedia) return new Worker(workerUrl, { name: 'doompi-voice' }) as VoiceWorkerHandle;
+  const { port1, port2 } = new MessageChannel();
+  const close = serveVoiceWorkerMedia(port1, clientMedia);
+  const worker = new Worker(workerUrl, {
+    name: 'doompi-voice',
+    env: environment,
+    workerData: { mediaPort: port2 },
+    transferList: [port2],
+  });
+  worker.once('exit', close);
+  worker.once('error', close);
+  return worker as VoiceWorkerHandle;
 }
 
 export class VoiceWorkerClient {
@@ -92,7 +111,8 @@ export class VoiceWorkerClient {
   public constructor(options: VoiceWorkerClientOptions) {
     this.options = options;
     this.supervisor = new VoiceWorkerSupervisor({
-      createWorker: options.workerFactory ?? (() => createNodeWorker(options.importUrl)),
+      createWorker:
+        options.workerFactory ?? (() => createNodeWorker(options.importUrl, options.clientMedia, options.environment)),
       onEvent: (event) => this.receive(event),
       onSpawn: () => this.initializeWorker(),
       ...(options.onRestart ? { onRestart: options.onRestart } : {}),
@@ -119,8 +139,17 @@ export class VoiceWorkerClient {
       this.resolveReady = resolve;
       this.rejectReady = reject;
     });
-    this.supervisor.start();
-    return this.ready;
+    const ready = this.ready;
+    try {
+      this.supervisor.start();
+    } catch (error) {
+      this.started = false;
+      this.rejectReady?.(error instanceof Error ? error : new Error(String(error)));
+      this.ready = undefined;
+      this.resolveReady = undefined;
+      this.rejectReady = undefined;
+    }
+    return ready;
   }
 
   public beginCapture(input: BeginVoiceCaptureInput): void {

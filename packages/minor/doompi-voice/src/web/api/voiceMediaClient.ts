@@ -402,6 +402,14 @@ export class VoiceMediaClient {
           }
         });
       });
+      void this.capture.completion?.catch((error: unknown) =>
+        this.failActiveCapture(
+          captureId,
+          connectionId,
+          generation,
+          error instanceof Error ? error : new Error(String(error)),
+        ),
+      );
       this.resolveListening(true);
     } catch (error) {
       const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);

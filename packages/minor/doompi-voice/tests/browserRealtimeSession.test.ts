@@ -281,7 +281,7 @@ describe('BrowserRealtimeSession', () => {
       () => 'resolved',
       (error: unknown) => String(error),
     );
-    await flush();
+    await vi.waitFor(() => expect(FakePeer.instances).toHaveLength(1));
     const peer = FakePeer.instances[0]!;
 
     session.close();
@@ -405,7 +405,7 @@ describe('BrowserRealtimeSession', () => {
       onState: vi.fn(),
     });
     const started = session.start();
-    await flush();
+    await vi.waitFor(() => expect(FakePeer.instances).toHaveLength(1));
     const peer = FakePeer.instances[0]!;
     expect(peer.listenerCount('icegatheringstatechange')).toBe(1);
 

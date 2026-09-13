@@ -82,13 +82,7 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
   private generation = 0;
   private activityFrame = 0;
   private activityTimer: TimerHandle | undefined;
-  private readonly telemetry = createDoomTelemetry({
-    serviceName: 'doom-voice',
-    packageName: '@agimon-ai/doompi-voice',
-    env: process.env,
-    enableLogs: true,
-    enableTraces: true,
-  });
+  private readonly telemetry: ReturnType<typeof createDoomTelemetry>;
 
   private activeUi: VoiceUi | undefined;
 
@@ -96,7 +90,20 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
     private readonly configs: IDoomConfigLoader,
     private readonly clock: IClock,
     private readonly clientFactory: VoiceWorkerSessionClientFactory = (options) => new VoiceWorkerClient(options),
-  ) {}
+    private readonly options?: {
+      loadConfig(): ResolvedVoiceConfig;
+      spoolDirectory: string;
+      environment: Record<string, string | undefined>;
+    },
+  ) {
+    this.telemetry = createDoomTelemetry({
+      serviceName: 'doom-voice',
+      packageName: '@agimon-ai/doompi-voice',
+      env: options?.environment ?? process.env,
+      enableLogs: true,
+      enableTraces: true,
+    });
+  }
 
   public get state(): VoiceState {
     return this.currentState;
@@ -128,14 +135,17 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
     await this.telemetry.shutdown();
   }
 
+  private loadTerminalConfig(): ResolvedVoiceConfig {
+    const loaded = this.configs.load(process.env.PI_PROJECT_ROOT ?? process.cwd()).voice;
+    if (!loaded) throw new Error('Voice is not configured in the Pi agent configuration.');
+    return resolveVoiceConfig(loaded, getHarnessState().profileVoice);
+  }
+
   private async begin(ui: VoiceUi): Promise<void> {
     const generation = this.generation + 1;
     this.generation = generation;
     try {
-      const projectRoot = process.env.PI_PROJECT_ROOT ?? process.cwd();
-      const loaded = this.configs.load(projectRoot).voice;
-      if (!loaded) throw new Error('Voice is not configured in the Pi agent configuration.');
-      const config = resolveVoiceConfig(loaded, getHarnessState().profileVoice);
+      const config = this.options ? this.options.loadConfig() : this.loadTerminalConfig();
       const captureId = identifier('capture');
       const turnId = identifier('turn');
       const client = this.client ?? this.createClient();
@@ -186,7 +196,7 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
       if (this.activeUi !== undefined) action(this.activeUi);
     };
     return this.clientFactory({
-      spoolDirectory: spoolRoot(),
+      spoolDirectory: this.options?.spoolDirectory ?? spoolRoot(),
       onEvent: (event) => withUi((ui) => this.receive(event, ui)),
       onExhausted: () =>
         withUi((ui) => {
@@ -208,8 +218,11 @@ export class VoiceWorkerSessionController implements IVoiceSessionController {
     }
     if (event.kind === 'transcript-candidate') {
       if (event.turnId !== this.turnId || !event.final) return;
-      const draft = ui.getEditorText();
-      ui.setEditorText(`${draft}${draft && !/\s$/u.test(draft) ? ' ' : ''}${event.transcript}`);
+      if (ui.appendText) ui.appendText(event.transcript);
+      else {
+        const draft = ui.getEditorText?.() ?? '';
+        ui.setEditorText?.(`${draft}${draft && !/\s$/u.test(draft) ? ' ' : ''}${event.transcript}`);
+      }
       this.client?.acknowledgeCandidate(event.sessionId, event.turnId, event.revision, 'committed');
       void this.telemetry.recordEvent('doom_voice.transcription_finished', {
         engine: this.config?.engine ?? 'unknown',

@@ -1,4 +1,5 @@
 import type { SpeechPresenceDetector } from '../../types/clientCaptureActivity';
+import type { VoiceMicrophoneConstraints } from '../../types/clientMedia';
 import type {
   VoiceMediaCapabilities,
   VoiceMediaCapture,
@@ -277,7 +278,15 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
       typeof navigator !== 'undefined' &&
       navigator.mediaDevices?.getUserMedia !== undefined,
   };
-  public constructor(private readonly rebindProtocolSupported = false) {}
+  private captureGeneration = 0;
+  private captureDeviceId: string | undefined;
+  public constructor(
+    private readonly rebindProtocolSupported = false,
+    private readonly microphoneConstraints: () => Promise<VoiceMicrophoneConstraints> = async () => ({
+      audio: true,
+      video: false,
+    }),
+  ) {}
 
   /** Arms browser media while a real tap is still carrying mobile user activation. */
   public armUserGesture(): void {
@@ -328,10 +337,21 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
   ): Promise<VoiceMediaCapture> {
     if (!this.capabilities.capture) throw new Error('This browser cannot capture microphone audio.');
     if (this.activeCapture !== undefined) throw new Error('Browser microphone capture is already active.');
-    this.stream ??= await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      video: false,
-    });
+    const generation = this.captureGeneration;
+    const constraints = await this.microphoneConstraints();
+    if (generation !== this.captureGeneration) throw new Error('Microphone capture was cancelled.');
+    const deviceId = typeof constraints.audio === 'object' ? constraints.audio.deviceId.exact : undefined;
+    if (this.stream && this.captureDeviceId !== deviceId) {
+      for (const track of this.stream.getTracks()) track.stop();
+      this.stream = undefined;
+    }
+    this.stream ??= await navigator.mediaDevices.getUserMedia(constraints);
+    if (generation !== this.captureGeneration) {
+      for (const track of this.stream.getTracks()) track.stop();
+      this.stream = undefined;
+      throw new Error('Microphone capture was cancelled.');
+    }
+    this.captureDeviceId = deviceId;
     this.context ??= new AudioContext();
     await this.context.resume();
     if (this.context.state !== 'running')
@@ -426,10 +446,21 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     muted.connect(this.context.destination);
 
     let stopped = false;
+    let resolveCompletion!: () => void;
+    let rejectCompletion!: (error: Error) => void;
+    const completion = new Promise<void>((resolve, reject) => {
+      resolveCompletion = resolve;
+      rejectCompletion = reject;
+    });
+    for (const track of captureStream.getTracks())
+      track.onended = () => rejectCompletion(new Error('The selected microphone was disconnected.'));
     const capture: VoiceMediaCapture = {
+      completion,
       stop: async () => {
         if (stopped) return;
         stopped = true;
+        for (const track of captureStream.getTracks()) track.onended = null;
+        resolveCompletion();
         stopProcessor();
         if (pendingPcmBytes > 0) emitPcm(pendingPcmBytes);
         source.disconnect();
@@ -481,6 +512,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
   }
 
   public async close(): Promise<void> {
+    this.captureGeneration += 1;
     const speechDetector = this.speechDetector;
     const preparingSpeechDetector = this.preparingSpeechDetector;
     const speechPreparation = this.speechPreparation;

@@ -1,4 +1,5 @@
 import { runServerRuntime } from '../../builders/server/runtime';
+import { runSync } from '../commands/sync/workflow';
 import { resolveHarnessOptions } from '../harnessOptions';
 import { parseServeOptions } from './options';
 
@@ -15,6 +16,16 @@ export async function runServer(args: readonly string[]): Promise<number> {
       signal: controller.signal,
       resolveHarnessOptions,
       notice: (message) => void process.stderr.write(`[doompi-server] ${message}\n`),
+      syncWorkspace: async (root, environment) => {
+        let output = '';
+        const code = await runSync(['sync'], environment, root, {
+          write(chunk) {
+            output += String(chunk);
+            return true;
+          },
+        });
+        if (code !== 0) throw new Error(output.trim() || `Workspace sync exited with code ${code}`);
+      },
     });
   } finally {
     process.off('SIGINT', stop);

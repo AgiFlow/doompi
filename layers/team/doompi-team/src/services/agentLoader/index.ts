@@ -227,8 +227,8 @@ function isDirectory(target: string): boolean {
 }
 
 /** A directory that owns its own agent configuration is a separate project. */
-function isDiscoveryNestedProjectRoot(dir: string): boolean {
-  return isDirectory(getProjectConfigDir(dir)) || isDirectory(path.join(dir, LEGACY_AGENTS_DIR_NAME));
+function isDiscoveryNestedProjectRoot(dir: string, environment: Readonly<NodeJS.ProcessEnv>): boolean {
+  return isDirectory(getProjectConfigDir(dir, environment)) || isDirectory(path.join(dir, LEGACY_AGENTS_DIR_NAME));
 }
 
 /**
@@ -238,10 +238,15 @@ function isDiscoveryNestedProjectRoot(dir: string): boolean {
  * belong to that project, not to the one being scanned. The root itself is
  * exempt: scanning a project's own agent directory must not prune it.
  */
-function shouldPruneDiscoveryDir(rootDir: string, dir: string, dirName: string): boolean {
+function shouldPruneDiscoveryDir(
+  rootDir: string,
+  dir: string,
+  dirName: string,
+  environment: Readonly<NodeJS.ProcessEnv>,
+): boolean {
   if (DISCOVERY_PRUNED_DIR_NAMES.has(dirName)) return true;
   if (fs.existsSync(path.join(dir, GIT_DIR_NAME))) return true;
-  return path.resolve(dir) !== path.resolve(rootDir) && isDiscoveryNestedProjectRoot(dir);
+  return path.resolve(dir) !== path.resolve(rootDir) && isDiscoveryNestedProjectRoot(dir, environment);
 }
 
 /**
@@ -250,7 +255,12 @@ function shouldPruneDiscoveryDir(rootDir: string, dir: string, dirName: string):
  * Symlinked entries are followed as files, because staging an agent by symlink
  * is a supported way to share one definition across projects.
  */
-export function listFilesRecursive(dir: string, predicate: (fileName: string) => boolean, rootDir = dir): string[] {
+export function listFilesRecursive(
+  dir: string,
+  predicate: (fileName: string) => boolean,
+  rootDir = dir,
+  environment: Readonly<NodeJS.ProcessEnv> = process.env,
+): string[] {
   const files: string[] = [];
   if (!fs.existsSync(dir)) return files;
 
@@ -265,8 +275,8 @@ export function listFilesRecursive(dir: string, predicate: (fileName: string) =>
   for (const entry of entries) {
     const filePath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (!shouldPruneDiscoveryDir(rootDir, filePath, entry.name)) {
-        files.push(...listFilesRecursive(filePath, predicate, rootDir));
+      if (!shouldPruneDiscoveryDir(rootDir, filePath, entry.name, environment)) {
+        files.push(...listFilesRecursive(filePath, predicate, rootDir, environment));
       }
       continue;
     }
@@ -339,10 +349,14 @@ function isAgentFileName(fileName: string): boolean {
  * The returned configs carry only what the file itself declared. Settings
  * defaults, builtin overrides, and cross-source precedence are the caller's job.
  */
-export function loadAgentsFromDir(dir: string, source: AgentSource): AgentConfig[] {
+export function loadAgentsFromDir(
+  dir: string,
+  source: AgentSource,
+  environment: Readonly<NodeJS.ProcessEnv> = process.env,
+): AgentConfig[] {
   const agents: AgentConfig[] = [];
 
-  for (const filePath of listFilesRecursive(dir, isAgentFileName)) {
+  for (const filePath of listFilesRecursive(dir, isAgentFileName, dir, environment)) {
     if (isLegacyAgentSkillPath(dir, filePath)) continue;
 
     let content: string;
@@ -430,8 +444,8 @@ export const EXTRA_AGENT_DIRS_ENV = 'PI_SUBAGENT_EXTRA_AGENT_DIRS';
  * Read from the environment on every call rather than captured once, because a
  * host can stage a plugin directory after this module is first imported.
  */
-export function pluginAgentDirs(): string[] {
-  return (process.env[EXTRA_AGENT_DIRS_ENV] ?? '')
+export function pluginAgentDirs(environment: Readonly<NodeJS.ProcessEnv> = process.env): string[] {
+  return (environment[EXTRA_AGENT_DIRS_ENV] ?? '')
     .split(path.delimiter)
     .map((directory) => directory.trim())
     .filter((directory) => directory.length > 0);

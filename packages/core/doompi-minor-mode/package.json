@@ -143,7 +143,11 @@
     "scopes": [
       "session"
     ],
-    "required": true
+    "required": true,
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
+    }
   },
   "pi": {
     "extensions": [

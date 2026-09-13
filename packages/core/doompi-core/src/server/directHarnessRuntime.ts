@@ -1048,6 +1048,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     sessionId,
     laneName,
     harnessId,
+    completeModel: models.complete?.bind(models),
     session: storage.session,
     harness,
     lane,

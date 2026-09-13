@@ -159,6 +159,7 @@ export interface VoiceMediaTransport extends Partial<RealtimeMediaTransport> {
 }
 
 export interface VoiceMediaCapture {
+  completion?: Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -194,4 +195,17 @@ export interface VoiceMediaDevice {
 export function voiceMediaClientUrl(sessionId: string, route: string, params: Record<string, string> = {}): string {
   const search = new URLSearchParams({ session: sessionId, ...params });
   return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${VOICE_MEDIA_API_BASE_PATH}${route}?${search.toString()}`;
+}
+
+export interface VoiceMicrophoneConstraints {
+  audio:
+    | boolean
+    | {
+        deviceId: { exact: string };
+        channelCount: number;
+        echoCancellation: boolean;
+        noiseSuppression: boolean;
+        autoGainControl: boolean;
+      };
+  video: false;
 }

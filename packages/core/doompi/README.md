@@ -86,6 +86,8 @@ another target's registration or generation.
 `dpi` preserves Pi's normal global and repository settings, then applies DoomPi's extension and theme
 settings in memory. It never writes those values to `.pi/settings.json`.
 
+Export the published HTTP and socket contracts with `doompi api-export --out ./api-schema --strict`. See [compiled API export](docs/server/api-export.md) for artifact formats, CI checks, and package declarations.
+
 Run `doompi sync --check` to detect missing, invalid, or stale registered state. Unregistered legacy state
 is not loaded. Inside a repository, `doompi sync` publishes that repository and worktree. Outside every
 repository, it publishes the global composition from `~/.pi/.doom`.

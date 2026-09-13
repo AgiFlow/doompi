@@ -5,7 +5,7 @@ export interface RealtimeDeliveryOptions {
   isOwned(activationId: string): boolean;
   isBusy(): boolean;
   isBlocked(): boolean;
-  send(text: string, intent: 'immediate' | 'follow-up'): void;
+  send(text: string, intent: 'immediate' | 'follow-up'): void | Promise<void>;
 }
 
 export interface RealtimeDeliveryRequest {
@@ -65,7 +65,7 @@ export class RealtimeDelivery {
     };
   }
 
-  public submit(request: RealtimeDeliveryRequest): RealtimeDeliveryOutcome {
+  public submit(request: RealtimeDeliveryRequest): RealtimeDeliveryOutcome | Promise<RealtimeDeliveryOutcome> {
     if (
       !this.options.isOwned(this.options.activationId) ||
       !validIdentifier(request.requestId) ||
@@ -97,13 +97,32 @@ export class RealtimeDelivery {
     this.pending = undefined;
     this.dispatching = true;
     let outcome: RealtimeDeliveryOutcome;
+    let asynchronous = false;
     try {
-      this.options.send(pending.authorizedText, 'immediate');
+      const admission = this.options.send(pending.authorizedText, 'immediate');
+      if (admission) {
+        asynchronous = true;
+        return admission
+          .then(
+            () => {
+              const outcome = this.options.isOwned(this.options.activationId) ? 'submitted' : 'uncertain';
+              this.retain(request, outcome);
+              return outcome;
+            },
+            () => {
+              this.retain(request, 'uncertain');
+              return 'uncertain' as const;
+            },
+          )
+          .finally(() => {
+            this.dispatching = false;
+          });
+      }
       outcome = this.options.isOwned(this.options.activationId) ? 'submitted' : 'uncertain';
     } catch {
       outcome = 'uncertain';
     } finally {
-      this.dispatching = false;
+      if (!asynchronous) this.dispatching = false;
     }
     this.retain(request, outcome);
     return outcome;

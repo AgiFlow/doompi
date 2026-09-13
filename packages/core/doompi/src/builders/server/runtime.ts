@@ -28,7 +28,6 @@ import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
 import WebSocket from 'ws';
 
-import { runSync } from '../../cli/commands/sync/workflow';
 import { HARNESS_STATE_KEYS, HARNESS_STATE_POINTER } from '../../composition/harnessState';
 import { findRepositoryRoot } from '../../composition/repository';
 import { buildHarnessContext } from '../cli/harnessContext';
@@ -54,7 +53,7 @@ async function bounded(operation: Promise<unknown>, label: string, notice: (mess
 }
 
 export async function runServerRuntime(options: ServeOptions, runtime: ServerRuntimeEnvironment): Promise<number> {
-  const { cwd: baseCwd, environment: baseEnvironment, notice, resolveHarnessOptions, signal } = runtime;
+  const { cwd: baseCwd, environment: baseEnvironment, notice, resolveHarnessOptions, signal, syncWorkspace } = runtime;
   const telemetry = createServerTelemetry({ cwd: baseCwd, env: baseEnvironment, warn: notice });
   let nextEventLoopTick = performance.now() + 1_000;
   const eventLoopMonitor = setInterval(() => {
@@ -486,18 +485,13 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       restartSession: async (session) => {
         const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
         if (!workspaceRoot) throw new Error('Session workspace not found.');
-        const syncEnvironment = { ...baseEnvironment, DOOMPI_ROOT: workspaceRoot };
+        const syncEnvironment: NodeJS.ProcessEnv = { ...baseEnvironment, DOOMPI_ROOT: workspaceRoot };
         for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete syncEnvironment[key];
-        let syncOutput = '';
-        const code = await runSync(['sync'], syncEnvironment, workspaceRoot, {
-          write(chunk) {
-            syncOutput += String(chunk);
-            return true;
-          },
-        });
-        if (code !== 0) {
-          notice(`Workspace sync failed before restart: ${syncOutput.trim()}`);
-          throw new Error('Workspace sync failed; the session is still running.');
+        try {
+          await syncWorkspace(workspaceRoot, syncEnvironment);
+        } catch (error) {
+          notice(`Workspace sync failed before restart: ${error instanceof Error ? error.message : String(error)}`);
+          throw new Error('Workspace sync failed; the session is still running.', { cause: error });
         }
         await hub.closeSession(session.id);
         await openSession({ cwd: session.cwd, name: session.name }, session.id);

@@ -97,13 +97,14 @@ export class SystemClock implements IClock {
   }
 }
 export class ExecutableResolver implements IExecutableResolver {
+  public constructor(private readonly searchPath: string = process.env.PATH ?? '') {}
   resolve(configured: string | undefined, fallback: string): string {
     if (configured) {
       fs.accessSync(configured, fs.constants.X_OK);
       return configured;
     }
     let lastAccessError: unknown;
-    for (const directory of (process.env.PATH ?? '').split(path.delimiter)) {
+    for (const directory of this.searchPath.split(path.delimiter)) {
       const candidate = path.join(directory, fallback);
       try {
         fs.accessSync(candidate, fs.constants.X_OK);

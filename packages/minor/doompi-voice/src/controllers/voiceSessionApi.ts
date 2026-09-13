@@ -13,6 +13,8 @@ import { ManualTranscriptionApi } from './manualTranscriptionApi';
 export interface VoiceSessionApiOptions extends VoiceMediaApiOptions {
   manualTranscription?: IManualTranscriptionService;
   projectRoot?: string;
+  homeDirectory?: string;
+  media?: DoomApiHandler;
 }
 
 class VoiceSessionApi implements DoomApiHandler {
@@ -37,7 +39,10 @@ class VoiceSessionApi implements DoomApiHandler {
   }
 }
 
-function createDefaultManualTranscriptionService(projectRoot: string): IManualTranscriptionService {
+function createDefaultManualTranscriptionService(
+  projectRoot: string,
+  homeDirectory?: string,
+): IManualTranscriptionService {
   const executables = new ExecutableResolver();
   const spawner = new NodeProcessSpawner();
   const registry = new TranscriberRegistry(
@@ -46,7 +51,7 @@ function createDefaultManualTranscriptionService(projectRoot: string): IManualTr
     new MlxWhisperAdapter(executables, spawner),
   );
   return new ManualTranscriptionService(
-    new ManualTranscriptionConfigLoader(projectRoot),
+    new ManualTranscriptionConfigLoader(projectRoot, homeDirectory),
     new FfmpegEncodedAudioDecoder(executables, spawner),
     registry,
     new TemporaryWorkspace(),
@@ -55,10 +60,10 @@ function createDefaultManualTranscriptionService(projectRoot: string): IManualTr
 }
 
 export function createVoiceSessionApi(options: VoiceSessionApiOptions): DoomApiHandler {
-  const { manualTranscription, projectRoot = process.cwd(), ...mediaOptions } = options;
+  const { manualTranscription, projectRoot = process.cwd(), homeDirectory, media, ...mediaOptions } = options;
   return new VoiceSessionApi(
-    createVoiceMediaApi(mediaOptions),
-    manualTranscription ?? createDefaultManualTranscriptionService(projectRoot),
+    media ?? createVoiceMediaApi(mediaOptions),
+    manualTranscription ?? createDefaultManualTranscriptionService(projectRoot, homeDirectory),
   );
 }
 
@@ -67,7 +72,7 @@ export const api: DoomApi = {
   start(context: DoomApiContext): DoomApiHandler {
     return new VoiceSessionApi(
       voiceMediaApi.start(context),
-      createDefaultManualTranscriptionService(context.cwd ?? process.cwd()),
+      createDefaultManualTranscriptionService(context.cwd ?? process.cwd(), context.homeDirectory),
     );
   },
 };

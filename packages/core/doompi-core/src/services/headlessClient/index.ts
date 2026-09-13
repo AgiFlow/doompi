@@ -25,6 +25,10 @@ export function createHeadlessClient(options: HeadlessClientOptions): HeadlessCl
         if (disposed) throw new Error('Headless client is closed');
         options.emitFrame({ type: 'extension_ui_request', method: 'setStatus', statusKey: source, statusText: text });
       },
+      appendComposerText(text) {
+        if (disposed) throw new Error('Headless client is closed');
+        options.emitFrame({ type: 'extension_ui_request', method: 'append_composer_text', id: randomUUID(), text });
+      },
       request(request, signal) {
         if (disposed) return Promise.reject(new Error('Headless client is closed'));
         if (signal?.aborted) return Promise.resolve(undefined);

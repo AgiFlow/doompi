@@ -20,6 +20,7 @@ export interface ServerRuntimeEnvironment {
   environment: Readonly<NodeJS.ProcessEnv>;
   signal: AbortSignal;
   notice: (message: string) => void;
+  syncWorkspace: (root: string, environment: NodeJS.ProcessEnv) => Promise<void>;
   resolveHarnessOptions: (input: {
     args: readonly string[];
     cwd?: string;

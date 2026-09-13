@@ -4,6 +4,7 @@ export default defineConfig({
   // The web client is shipped as source and compiled into the cockpit bundle,
   // so this node build must not try to bundle React for a browser entry.
   entry: {
+    'api-contracts': 'src/exports/apiContracts.ts',
     index: 'src/exports/index.ts',
     metrics: 'src/exports/metrics.ts',
     metricsSource: 'src/exports/metricsSource.ts',

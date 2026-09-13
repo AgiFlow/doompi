@@ -639,6 +639,7 @@ async function stageSync(
           sharedCacheDirectory: location.sharedCacheDirectory,
         });
         apiProgress(`${server.descriptor.entries.length} server facet(s) compiled`);
+        for (const gap of server.contractGaps) progress.line(API_LABEL, `API contract incomplete: ${gap}`);
         return { synced, server, fingerprint, apiDirectory };
       })(),
       (async () => {

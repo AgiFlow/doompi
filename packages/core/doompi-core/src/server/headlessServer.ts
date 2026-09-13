@@ -16,6 +16,22 @@ import { createHeadlessProtocol } from './headlessProtocol';
 const HEALTH_ROLE = 'hub';
 const PROTOCOL_VERSION = 1;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
+const MAX_SESSION_FILE_BYTES = 25 * 1024 * 1024;
+const SESSION_FILE_CONTENT_TYPES: Readonly<Record<string, string>> = {
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.gif': 'image/gif',
+  '.jpeg': 'image/jpeg',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.m4v': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.pdf': 'application/pdf',
+};
 
 export interface HeadlessServerOptions {
   headlessHub: HeadlessHub;
@@ -89,6 +105,47 @@ function authorized(request: IncomingMessage, token: string | undefined): boolea
 
 function requestPath(request: IncomingMessage): URL {
   return new URL(request.url ?? '/', 'http://doompi.local');
+}
+
+async function sessionFile(session: HeadlessHubSession, relativePath: string | null): Promise<Response> {
+  if (!relativePath || relativePath.includes('\0') || path.isAbsolute(relativePath))
+    return Response.json({ error: 'Invalid session file path.' }, { status: 400 });
+  let root: string;
+  let filePath: string;
+  try {
+    root = await fs.promises.realpath(session.cwd);
+    filePath = await fs.promises.realpath(path.resolve(root, relativePath));
+  } catch {
+    return Response.json({ error: 'Session file not found.' }, { status: 404 });
+  }
+  const contained = path.relative(root, filePath);
+  if (contained === '..' || contained.startsWith(`..${path.sep}`) || path.isAbsolute(contained))
+    return Response.json({ error: 'Session file is outside the working directory.' }, { status: 403 });
+  let handle: fs.promises.FileHandle;
+  try {
+    handle = await fs.promises.open(filePath, 'r');
+  } catch {
+    return Response.json({ error: 'Session file not found.' }, { status: 404 });
+  }
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) return Response.json({ error: 'Session file not found.' }, { status: 404 });
+    if (stat.size > MAX_SESSION_FILE_BYTES)
+      return Response.json({ error: 'Session file is too large.' }, { status: 413 });
+    const bytes = await handle.readFile();
+    if (bytes.byteLength > MAX_SESSION_FILE_BYTES)
+      return Response.json({ error: 'Session file is too large.' }, { status: 413 });
+    return new Response(bytes, {
+      headers: {
+        'content-type': SESSION_FILE_CONTENT_TYPES[path.extname(filePath).toLowerCase()] ?? 'application/octet-stream',
+        'content-length': String(bytes.byteLength),
+        'cache-control': 'no-store',
+        'x-content-type-options': 'nosniff',
+      },
+    });
+  } finally {
+    await handle.close();
+  }
 }
 
 async function directorySuggestions(query: string, sessions: readonly HeadlessHubSession[]): Promise<string[]> {
@@ -434,6 +491,10 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     }
     if (suffix === '/history' && request.method === 'GET' && options.sessionHistory) {
       json(response, 200, { sessions: await options.sessionHistory(session) });
+      return;
+    }
+    if (suffix === '/file' && request.method === 'GET') {
+      await writeResponse(response, await sessionFile(session, url.searchParams.get('path')));
       return;
     }
     if (suffix === '/restart' && request.method === 'POST' && options.restartSession) {

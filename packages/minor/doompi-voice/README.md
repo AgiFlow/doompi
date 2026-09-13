@@ -1,5 +1,40 @@
 # @agimon-ai/doompi-voice
 
+## Server and browser configuration
+
+The web Settings page includes Voice under global and workspace settings. It uses the shared
+config API, including file hashes, atomic saves, numeric values, and scope validation. `voice.mode` and `voice.autoCapture`
+remain global settings. Browser input selection is separate from the host ffmpeg
+`voice.recorder.device` option.
+
+Choose a microphone beside the composer Voice button. The browser registers physical inputs
+after microphone permission and saves the choice under the server home's
+`.pi/.doom/voice/clients.json`. The preference identity survives browser reloads; each tab
+keeps its own media connection lease. If no choice is saved, the default alias is resolved only
+when it matches exactly one physical device. Manual dictation appends to the draft until Send.
+
+Voice owns these authenticated server endpoints:
+
+| Mount                                   | Endpoint                        | Purpose                                                  |
+| --------------------------------------- | ------------------------------- | -------------------------------------------------------- |
+| `/api/global/plugin/voice`              | `GET /readiness`                | Check configuration and local transcription dependencies |
+| same                                    | `GET /clients/:clientId`        | Read browser microphone preferences                      |
+| same                                    | `PUT /clients/:clientId/inputs` | Register `{inputs: [{deviceId, groupId, label}]}`        |
+| same                                    | `PUT /clients/:clientId`        | Save `{deviceId}`; null clears selection                 |
+| same                                    | `DELETE /clients/:clientId`     | Clear the saved selection                                |
+| `/api/sessions/:sessionId/plugin/voice` | `GET /status`                   | Read lifecycle and media readiness                       |
+| same                                    | `POST /control`                 | Send `{action, target?}`                                 |
+
+Control actions are `status`, `manual`, `activate`, `deactivate`, `mute`, `unmute`, `interrupt`,
+and `transfer` (with a target catalog order). The typed session method `voice.control` uses the
+same operations as commands and minor-mode actions. Browser recording uploads continue to use
+`/api/sessions/:sessionId/plugin/voice-media/manual/transcribe`.
+
+The native server composes Voice controllers with one session media broker. Workers receive PCM
+on a dedicated media port. No terminal editor or Pi ExtensionContext is emulated. Live voice
+still requires its separate subscription credentials; a successful local readiness check does
+not verify a live provider connection.
+
 Capture speech on the client, transcribe it on the host, and play responses through DoomPi Voice mode.
 
 Part of the [DoomPi distribution](https://www.npmjs.com/package/@agimon-ai/doompi).

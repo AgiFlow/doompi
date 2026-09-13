@@ -211,7 +211,11 @@
       "session",
       "global",
       "workspace"
-    ]
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
+    }
   },
   "doompiWeb": {
     "pluginId": "task",

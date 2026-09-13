@@ -4,6 +4,7 @@ import { VoiceActivitySection } from '../web/components/VoiceActivitySection';
 import { VoiceComposerAction } from '../web/components/VoiceComposerAction';
 import { startVoiceMediaRuntime } from '../web/components/VoiceMediaRuntime';
 import { VoiceToolMessage } from '../web/components/VoiceToolMessage';
+import { voiceSettingsSection } from '../web/lib/voiceSettings';
 import {
   VOICE_DESCRIBE_TOOL,
   VOICE_NARRATE_TOOL,
@@ -18,6 +19,8 @@ import { voiceMediaWakeChannel, voiceOwnershipChannel } from '../web/stores/voic
  */
 export const webPlugin = defineWebPlugin({
   id: 'voice',
+  global: { settingsSections: [voiceSettingsSection] },
+  workspace: { settingsSections: [voiceSettingsSection] },
   session: {
     channels: [voiceMediaWakeChannel, voiceOwnershipChannel],
     start: startVoiceMediaRuntime,

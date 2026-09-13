@@ -308,7 +308,18 @@ export function computeWebSourcesHash(resolved: Record<string, string>): string 
 export function computeServerSourcesHash(resolved: Record<string, string>): string {
   const hash = crypto.createHash('sha256');
   const roots = [...new Set(Object.values(resolved).flatMap((entry) => owningPackageRoot(entry) ?? []))].sort();
-  for (const root of roots) updateFileInputHash(hash, path.join(root, PACKAGE_MANIFEST_FILE));
+  for (const root of roots) {
+    const manifestPath = path.join(root, PACKAGE_MANIFEST_FILE);
+    updateFileInputHash(hash, manifestPath);
+    const manifest: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    if (!isRecord(manifest) || !isRecord(manifest.doompiServer) || !isRecord(manifest.doompiServer.contracts)) continue;
+    // Include missing declarations too: building or repairing a contract must invalidate an incomplete generation.
+    for (const file of [manifest.doompiServer.contracts.entry, manifest.doompiServer.contracts.dist]) {
+      if (typeof file !== 'string' || !file.startsWith('./') || file.split('/').includes('..') || /[\\%?#]/u.test(file))
+        continue;
+      updateFileInputHash(hash, path.join(root, file));
+    }
+  }
   for (const [name, entry] of Object.entries(resolved).sort(([left], [right]) => left.localeCompare(right))) {
     updateFramedHash(hash, 'entry', JSON.stringify([name, entry]));
   }

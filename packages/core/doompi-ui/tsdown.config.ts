@@ -2,6 +2,7 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: {
+    'api-contracts': 'src/exports/apiContracts.ts',
     leader: 'src/exports/leader.ts',
     extensionName: 'src/exports/extensionName.ts',
     logSinkTelemetry: 'src/exports/logSinkTelemetry.ts',

@@ -218,15 +218,16 @@ export function Composer() {
 
   useEffect(() => {
     if (editorTextRequest === null) return;
-    updateComposerState(sessionId, (state) => ({
-      ...state,
-      draft: editorTextRequest.text,
-      caret: editorTextRequest.text.length,
-      dismissedToken: null,
-    }));
+    updateComposerState(sessionId, (state) => {
+      const draft = editorTextRequest.append
+        ? `${state.draft}${state.draft && !/\s$/u.test(state.draft) ? ' ' : ''}${editorTextRequest.text}`
+        : editorTextRequest.text;
+      return { ...state, draft, caret: draft.length, dismissedToken: null };
+    });
     requestAnimationFrame(() => {
       inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(editorTextRequest.text.length, editorTextRequest.text.length);
+      const length = inputRef.current?.value.length ?? 0;
+      inputRef.current?.setSelectionRange(length, length);
     });
   }, [editorTextRequest, sessionId]);
 

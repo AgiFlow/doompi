@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionWebComposition } from '../../src/types/hub';
 
 const mocks = vi.hoisted(() => ({
+  activateVerifiedBundle: vi.fn(),
   activateVerifiedPluginComposition: vi.fn(),
   activateWebPluginSession: vi.fn(),
   installSessionWebPlugins: vi.fn(),
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../src/pwa/workerClient', () => ({
+  activateVerifiedBundle: mocks.activateVerifiedBundle,
   activateVerifiedPluginComposition: mocks.activateVerifiedPluginComposition,
 }));
 vi.mock('../../src/web/lib/pluginRegistry', () => mocks);
@@ -97,6 +99,7 @@ beforeEach(() => {
   scriptPlugins = [];
   styleFailure = false;
   vi.clearAllMocks();
+  mocks.activateVerifiedBundle.mockResolvedValue({ ok: true, revision: 1 });
   mocks.activateVerifiedPluginComposition.mockResolvedValue({ ok: true, revision: 1 });
   mocks.installedWebPlugins.mockReturnValue([]);
   mocks.fetch.mockImplementation(async () =>
@@ -147,6 +150,81 @@ async function start() {
 }
 
 describe('three-level web plugin mounts', () => {
+  it('pins the local signed shell before mounting its plugins', async () => {
+    const register = vi.fn().mockResolvedValue({});
+    vi.stubGlobal('location', { hostname: '127.0.0.1' });
+    const serviceWorker = {
+      register,
+      controller: null as object | null,
+      addEventListener: vi.fn((_type: string, listener: () => void) => {
+        queueMicrotask(() => {
+          serviceWorker.controller = {};
+          listener();
+        });
+      }),
+      removeEventListener: vi.fn(),
+    };
+    vi.stubGlobal('navigator', { serviceWorker });
+    mocks.fetch.mockImplementation(async () =>
+      Response.json({
+        shell: { publicKey: 'local-signing-key', revision: 7 },
+        global: composition('f', 1),
+        workspaces: [],
+      }),
+    );
+    const stop = startSessionWebPluginRuntime({ onHubConnected: () => () => {} } as unknown as WebPluginRuntime);
+    stops.push(stop);
+
+    await refreshWebPluginCompositions();
+
+    expect(register).toHaveBeenCalledWith('/sw.js', { scope: '/' });
+    expect(mocks.activateVerifiedBundle).toHaveBeenCalledWith({
+      publicKey: 'local-signing-key',
+      minimumRevision: 7,
+    });
+    expect(mocks.activateVerifiedBundle.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.activateVerifiedPluginComposition.mock.invocationCallOrder[0]!,
+    );
+    expect(serviceWorker.removeEventListener).toHaveBeenCalledWith('controllerchange', expect.any(Function));
+    expect(mocks.installGlobalWebPlugins).toHaveBeenCalled();
+  });
+
+  it('does not accept a shell signing key from a remote origin', async () => {
+    vi.stubGlobal('location', { hostname: 'doompi.agimon.win' });
+    mocks.fetch.mockImplementation(async () =>
+      Response.json({
+        shell: { publicKey: 'untrusted-response', revision: 7 },
+        global: composition('f', 1),
+        workspaces: [],
+      }),
+    );
+    const stop = startSessionWebPluginRuntime({ onHubConnected: () => () => {} } as unknown as WebPluginRuntime);
+    stops.push(stop);
+
+    await refreshWebPluginCompositions();
+
+    expect(mocks.activateVerifiedBundle).not.toHaveBeenCalled();
+    expect(mocks.installGlobalWebPlugins).toHaveBeenCalled();
+  });
+
+  it('refuses local plugins when the signed shell cannot be verified', async () => {
+    vi.stubGlobal('location', { hostname: 'localhost' });
+    vi.stubGlobal('navigator', { serviceWorker: { register: vi.fn().mockResolvedValue({}), controller: {} } });
+    mocks.activateVerifiedBundle.mockResolvedValue({ ok: false, code: 'signature', message: 'Invalid signature' });
+    mocks.fetch.mockImplementation(async () =>
+      Response.json({
+        shell: { publicKey: 'refused-signing-key', revision: 8 },
+        global: composition('f', 1),
+        workspaces: [],
+      }),
+    );
+    const stop = startSessionWebPluginRuntime({ onHubConnected: () => () => {} } as unknown as WebPluginRuntime);
+    stops.push(stop);
+
+    await expect(refreshWebPluginCompositions()).rejects.toThrow('Invalid signature');
+    expect(mocks.activateVerifiedPluginComposition).not.toHaveBeenCalled();
+  });
+
   it('mounts global and both workspaces without any live session', async () => {
     scriptPlugins = [{ id: 'fixture', global: {}, workspace: {} }];
     const stop = startSessionWebPluginRuntime({ onHubConnected: () => () => {} } as unknown as WebPluginRuntime);

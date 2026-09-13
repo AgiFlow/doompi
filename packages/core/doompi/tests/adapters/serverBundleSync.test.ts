@@ -176,7 +176,7 @@ describe('syncServerBundle', () => {
     const { input } = fixture();
     const { descriptor } = await syncServerBundle(input);
     expect(descriptor.entries).toEqual([]);
-    expect(fs.readdirSync(input.outputDirectory)).toEqual([DOOM_SERVER_BUNDLE_FILE]);
+    expect(fs.readdirSync(input.outputDirectory).sort()).toEqual(['contracts.json', DOOM_SERVER_BUNDLE_FILE].sort());
   });
 
   it('deduplicates packages while retaining mode and layer ownership', async () => {
@@ -211,7 +211,9 @@ describe('syncServerBundle', () => {
     expect(descriptor.entries.map(({ packageName }) => packageName)).toEqual(['alpha', 'zeta']);
     const loaded = await loadServerBundle('session', loadOptions(input, 'coding', ['default']));
     expect(loaded.facets.map(({ declaration }) => declaration.packageName)).toEqual(['alpha']);
-    expect(fs.readdirSync(input.outputDirectory).sort()).toEqual(['modules', DOOM_SERVER_BUNDLE_FILE].sort());
+    expect(fs.readdirSync(input.outputDirectory).sort()).toEqual(
+      ['contracts.json', 'modules', DOOM_SERVER_BUNDLE_FILE].sort(),
+    );
   });
 
   it('detects server dependency, declaration and artifact drift without importing facets', async () => {
@@ -536,3 +538,127 @@ describe('syncServerBundle', () => {
     expect(fs.readFileSync(file)).toEqual(before);
   });
 });
+
+describe('compiled API contract receipts', () => {
+  it('exports a separate contract graph without importing or activating server facets', async () => {
+    const { root, input } = fixture();
+    const pkg = installedPackage(root, 'contract-owner');
+    const manifestPath = path.join(pkg.directory, 'package.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    manifest.version = '1.2.3';
+    manifest.doompiServer.contracts = { entry: './src/exports/contracts.ts', dist: './dist/contracts.mjs' };
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+    fs.writeFileSync(
+      path.join(pkg.directory, 'dist/server.mjs'),
+      'throw new Error("Server facet must not load during sync"); export default { apply() {} };',
+    );
+    const dependency = path.join(pkg.directory, 'dist/schema.mjs');
+    fs.writeFileSync(dependency, 'export const description = "Initial contract";');
+    fs.writeFileSync(
+      path.join(pkg.directory, 'dist/contracts.mjs'),
+      `
+      import { description } from './schema.mjs';
+      export default { version: 1, http: [{ id: 'read', scope: 'session', basePath: 'example', path: '/', method: 'GET', authentication: 'owner', description,
+        responses: { '200': { description: 'Read value', schema: { type: 'object', properties: { value: { type: 'string' } }, required: ['value'] } } }
+      }], sockets: [], dynamic: [] };
+    `,
+    );
+    const result = await syncServerBundle({ ...input, compositions: [composition('coding', [pkg.entry])] });
+    expect(result.contractGaps).toEqual([]);
+    const compiled = JSON.parse(fs.readFileSync(path.join(input.outputDirectory, 'contracts.json'), 'utf8'));
+    expect(compiled.packages[0]).toMatchObject({
+      packageName: 'contract-owner',
+      packageVersion: '1.2.3',
+      contract: { http: [{ description: 'Initial contract' }] },
+    });
+    const resolved = { owner: pkg.entry };
+    const state = {
+      resolved,
+      serverBundle: {
+        descriptorPath: path.join(input.outputDirectory, DOOM_SERVER_BUNDLE_FILE),
+        fingerprint: input.fingerprint,
+        compilerManifests: result.compilerManifests,
+        sourcesHash: computeServerSourcesHash(resolved),
+      },
+    };
+    const registration = {
+      generation: input.generation,
+      generationRoot: path.dirname(input.outputDirectory),
+      serverBundle: {
+        path: state.serverBundle.descriptorPath,
+        fingerprint: input.fingerprint,
+        sha256: 'a'.repeat(64),
+      },
+    };
+    expect(serverBundleIsFresh(state, registration)).toBe(true);
+    fs.writeFileSync(dependency, 'export const description = "Changed contract";');
+    expect(serverBundleIsFresh(state, registration)).toBe(false);
+  });
+
+  it('keeps sync usable with missing or malformed contracts and records the gaps', async () => {
+    const { root, input } = fixture();
+    const missing = installedPackage(root, 'missing-contract');
+    const invalid = installedPackage(root, 'invalid-contract');
+    const file = path.join(invalid.directory, 'package.json');
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    manifest.doompiServer.contracts = { entry: './src/contracts.ts', dist: './dist/contracts.mjs' };
+    fs.writeFileSync(file, JSON.stringify(manifest));
+    fs.writeFileSync(path.join(invalid.directory, 'dist/contracts.mjs'), 'export default { invalid: true };');
+    const result = await syncServerBundle({
+      ...input,
+      compositions: [composition('coding', [missing.entry, invalid.entry])],
+    });
+    expect(result.descriptor.entries).toHaveLength(2);
+    expect(result.contractGaps).toHaveLength(2);
+    expect(result.contractGaps.join(' ')).toContain('Invalid DoomPi API contract');
+    expect(result.contractGaps.join(' ')).toContain('No doompiServer.contracts declaration');
+  });
+});
+
+it('compiles every built repository contract graph without TypeBox initialization failures', async () => {
+  const { input } = fixture();
+  const repositoryRoot = path.resolve(import.meta.dirname, '../../../../..');
+  const packageRoots = new Map<string, string>();
+  const entries = [];
+  for (const file of fs
+    .globSync(['packages/*/*/package.json', 'layers/*/*/package.json'], { cwd: repositoryRoot })
+    .sort()) {
+    const directory = path.dirname(path.join(repositoryRoot, file));
+    const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8')) as {
+      name: string;
+      doompiServer?: { entry: string; scopes: ('global' | 'workspace' | 'session')[]; contracts?: { dist: string } };
+    };
+    if (!manifest.doompiServer) continue;
+    expect(manifest.doompiServer.contracts, manifest.name).toBeDefined();
+    packageRoots.set(manifest.name, directory);
+    entries.push({
+      packageName: manifest.name,
+      entry: manifest.doompiServer.entry,
+      module: './unused.mjs',
+      scopes: manifest.doompiServer.scopes,
+      owners: [{ majorMode: 'test', layer: 'default' }],
+      required: false,
+    });
+  }
+  const options = {
+    ...input,
+    repositoryRoot,
+    packageRoots: [...packageRoots],
+    descriptor: { version: 2, generation: input.generation, fingerprint: input.fingerprint, entries },
+  };
+  const result = JSON.parse(
+    execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        'const { compileApiContracts } = await import(process.argv[1]); const options = JSON.parse(process.argv[2]); options.packageRoots = new Map(options.packageRoots); process.stdout.write(JSON.stringify(await compileApiContracts(options)));',
+        new URL('../../dist/builders/apiContracts/index.mjs', import.meta.url).href,
+        JSON.stringify(options),
+      ],
+      { encoding: 'utf8', timeout: 110000, maxBuffer: 16 * 1024 * 1024 },
+    ),
+  ) as { gaps: string[]; compilerManifests: Record<string, string> };
+  expect(result.gaps).toEqual([]);
+  expect(Object.keys(result.compilerManifests)).toHaveLength(entries.length);
+}, 120000);

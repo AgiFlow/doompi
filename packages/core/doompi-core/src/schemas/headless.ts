@@ -53,6 +53,7 @@ export interface DoomHeadlessClient {
   notify(request: DoomNotificationRequest): void | Promise<void>;
   request(request: DoomHeadlessClientRequest, signal?: AbortSignal): Promise<unknown>;
   setStatus(source: string, text: string | undefined): void;
+  appendComposerText?(text: string): void;
 }
 
 export interface DoomHeadlessSession {
@@ -64,6 +65,8 @@ export interface DoomHeadlessSession {
   }): readonly Record<string, unknown>[] | Promise<readonly Record<string, unknown>[]>;
   appendCustomEntry(type: string, data: unknown): Promise<void>;
   prompt(text: string, delivery?: 'prompt' | 'steer' | 'followUp'): Promise<void>;
+  /** Resolves when accepted by the session, before the agent turn settles. */
+  admitPrompt?(text: string, delivery?: 'prompt' | 'steer' | 'followUp'): Promise<void>;
   abort(): Promise<void>;
   compact(instructions?: string): Promise<void>;
   activity(): Promise<{ hasPendingMessages: boolean; isIdle: boolean }>;
@@ -79,6 +82,19 @@ export interface DoomHeadlessExecutionContext {
   readonly client: DoomHeadlessClient;
   readonly session: DoomHeadlessSession;
   readonly model?: { provider: string; id: string };
+  readonly textCompletion?: {
+    available(reference: string): boolean;
+    complete(
+      reference: string,
+      request: {
+        systemPrompt: string;
+        input: string;
+        maxTokens: number;
+        cacheRetention?: 'none' | 'short' | 'long';
+        signal?: AbortSignal;
+      },
+    ): Promise<string>;
+  };
   readonly selection: DoomHeadlessSelection;
   shutdown(): void;
 }

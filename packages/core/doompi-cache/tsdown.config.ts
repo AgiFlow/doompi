@@ -18,6 +18,7 @@ export default defineConfig([
     ...output,
     name: 'package',
     entry: {
+      'api-contracts': 'src/exports/apiContracts.ts',
       index: 'src/exports/index.ts',
       env: 'src/exports/env.ts',
       'extensions/server': 'src/extensions/server.ts',

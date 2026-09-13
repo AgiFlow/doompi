@@ -21,8 +21,12 @@ import type { HeadlessSessionHost } from '../../../../../src/systems/main/types/
 
 function host() {
   const listeners = new Set<(frame: Record<string, unknown>) => void>();
+  let resolveExit!: (code: number) => void;
+  const exited = new Promise<number>((resolve) => {
+    resolveExit = resolve;
+  });
   const runtime = {
-    exited: new Promise<number>(() => undefined),
+    exited,
     readEntries: vi.fn(async () => ({ entries: [], leafId: null })),
     readState: vi.fn(async () => ({
       sessionId: 'session',
@@ -56,6 +60,9 @@ function host() {
       dispose: vi.fn(async () => undefined),
     } satisfies HeadlessSessionHost,
     runtime,
+    exit() {
+      resolveExit(0);
+    },
     emitFrame(frame: Record<string, unknown>) {
       for (const listener of listeners) listener(frame);
     },
@@ -100,6 +107,36 @@ afterEach(async () => {
 });
 
 describe('serveHeadlessServer', () => {
+  it('serves mentioned files only from the session working directory', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-session-file-'));
+    temporaryDirectories.push(root);
+    const cwd = path.join(root, 'repo');
+    fs.mkdirSync(cwd);
+    fs.writeFileSync(path.join(cwd, 'README.md'), '# Local README');
+    fs.writeFileSync(path.join(root, 'secret.md'), 'outside');
+    fs.symlinkSync(path.join(root, 'secret.md'), path.join(cwd, 'linked.md'));
+    fs.writeFileSync(path.join(cwd, 'large.bin'), '');
+    fs.truncateSync(path.join(cwd, 'large.bin'), 25 * 1024 * 1024 + 1);
+
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({ id: 'one', name: 'One', cwd, createdAt: 'now', host: host().host });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
+    servers.push(server);
+    const file = (relativePath: string) =>
+      fetch(`${server.url}/api/sessions/one/file?path=${encodeURIComponent(relativePath)}`, {
+        headers: { 'x-doompi-token': 'secret' },
+      });
+
+    expect((await file('README.md')).status).toBe(200);
+    expect(await (await file('README.md')).text()).toBe('# Local README');
+    expect((await file('../secret.md')).status).toBe(403);
+    expect((await file('linked.md')).status).toBe(403);
+    expect((await file('missing.md')).status).toBe(404);
+    expect((await file('large.bin')).status).toBe(413);
+    expect((await fetch(`${server.url}/api/sessions/one/file?path=README.md`)).status).toBe(401);
+    await hub.close();
+  });
+
   it('routes restart, history, and resume through the live session lifecycle', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
     hub.register({ id: 'current', name: 'Current', cwd: '/repo', createdAt: '2025-01-01', host: host().host });
@@ -596,6 +633,56 @@ describe('serveHeadlessServer', () => {
     await hubBinding.dispose(BACKGROUND_CONTEXT);
     await client.dispose();
     await vi.waitFor(() => expect(disconnected).toHaveBeenCalledTimes(1));
+    await hub.close();
+  });
+
+  it('reattaches a Pi client to a replacement runtime with the same session id', async () => {
+    const first = host();
+    const second = host();
+    const hub = createHeadlessHub({
+      manager: {
+        closeSession: vi.fn(async (sessionId: string) => {
+          if (sessionId === 'one') first.exit();
+        }),
+      } as never,
+    });
+    hub.register({ id: 'one', name: 'First', cwd: '/repo', createdAt: 'now', host: first.host });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0 });
+    servers.push(server);
+    const client = await Client.connect({
+      serverId: DOOM_COCKPIT_SERVER_ID,
+      transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}/api/pi`),
+    });
+    const attach = () =>
+      client.request(
+        { serverId: DOOM_COCKPIT_SERVER_ID },
+        { serviceId: DoomSessionManagementService.id, member: 'attach', args: ['one'] },
+      );
+    await attach();
+    const firstBinding = createRemoteServiceBinding({
+      services: [DoomSessionService],
+      transport: createClientServiceTransport(client, () => client.attachment),
+    });
+    await firstBinding.ready(BACKGROUND_CONTEXT);
+    await firstBinding.use(DoomSessionService).prompt({ text: 'before', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
+    expect(first.runtime.submitPrompt).toHaveBeenCalledWith('before', undefined);
+
+    await hub.closeSession('one');
+    await vi.waitFor(() => expect(client.attachment).toBeUndefined());
+    hub.register({ id: 'one', name: 'Second', cwd: '/repo', createdAt: 'later', host: second.host });
+    await attach();
+    const secondBinding = createRemoteServiceBinding({
+      services: [DoomSessionService],
+      transport: createClientServiceTransport(client, () => client.attachment),
+    });
+    await secondBinding.ready(BACKGROUND_CONTEXT);
+    await secondBinding.use(DoomSessionService).prompt({ text: 'after', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
+    expect(second.runtime.submitPrompt).toHaveBeenCalledWith('after', undefined);
+    expect(first.runtime.submitPrompt).not.toHaveBeenCalledWith('after', undefined);
+
+    await secondBinding.dispose(BACKGROUND_CONTEXT);
+    await firstBinding.dispose(BACKGROUND_CONTEXT);
+    await client.dispose();
     await hub.close();
   });
 

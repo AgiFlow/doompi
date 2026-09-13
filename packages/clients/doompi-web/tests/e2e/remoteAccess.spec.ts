@@ -89,6 +89,56 @@ test('an approval prompt names the device and says what approving grants', async
   await expect(page.getByTestId('pairing-deny')).toBeVisible();
 });
 
+test('a pending approval takes over the remote access dialog until it is resolved', async ({ page, cockpit }) => {
+  const pending = [
+    {
+      id: 'req-1',
+      userAgent: 'iPhone Safari',
+      edgeIp: '203.0.113.7',
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date().toISOString(),
+    },
+  ];
+  let reads = 0;
+  await page.route('**/api/remote', async (route) => {
+    reads += 1;
+    await route.fulfill({ json: liveState([], reads === 1 ? [] : pending) });
+  });
+  await page.route('**/api/remote/pairing/req-1/deny', async (route) => {
+    await route.fulfill({ json: liveState() });
+  });
+
+  await page.goto(cockpit.url);
+  await page.getByTestId('remote-access-open').click();
+  await expect(page.getByTestId('pairing-approval')).toBeVisible();
+  await expect(page.getByTestId('remote-access-dialog')).toBeHidden();
+  await page.getByTestId('pairing-deny').click();
+  await expect(page.getByTestId('pairing-approval')).toBeHidden();
+  await expect(page.getByTestId('remote-access-dialog')).toBeVisible();
+});
+
+test('the host sees a new pairing request without opening remote access', async ({ page, cockpit }) => {
+  const pending = [
+    {
+      id: 'req-1',
+      userAgent: 'iPhone Safari',
+      edgeIp: '203.0.113.7',
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date().toISOString(),
+    },
+  ];
+  let reads = 0;
+  await page.route('**/api/remote', async (route) => {
+    reads += 1;
+    await route.fulfill({ json: liveState([], reads < 3 ? [] : pending) });
+  });
+
+  await page.goto(cockpit.url);
+  await expect(page.getByTestId('remote-access-dialog')).toBeHidden();
+  await expect(page.getByTestId('pairing-approval')).toBeVisible();
+  await expect(page.getByTestId('pairing-approval-agent')).toContainText('iPhone');
+});
+
 test('the container switch is off by default and asks for a workspace before it can be used', async ({
   page,
   cockpit,

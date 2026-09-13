@@ -881,6 +881,40 @@ describe('restoring a journalled transcript', () => {
     expect(state.entries[0]).toMatchObject({ kind: 'tool', running: false, isError: true, output: 'boom' });
   });
 
+  it('reuses a journalled tool call when its live start arrives later', () => {
+    let state = reduceSession(
+      initialSessionState,
+      journal('e1', {
+        role: 'assistant',
+        content: [{ type: 'toolCall', id: 'call-1', name: 'read', arguments: { path: 'README.md' } }],
+      }),
+    );
+    state = reduceSession(state, {
+      type: 'tool_execution_start',
+      toolCallId: 'call-1',
+      toolName: 'read',
+      args: { path: 'README.md' },
+    });
+    state = reduceSession(
+      state,
+      journal('e2', {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        content: [{ type: 'text', text: 'summary' }],
+        isError: false,
+      }),
+    );
+
+    expect(state.entries).toHaveLength(1);
+    expect(state.entries[0]).toMatchObject({
+      kind: 'tool',
+      toolCallId: 'call-1',
+      output: 'summary',
+      running: false,
+    });
+    expect(state.toolsThisRun).toBe(1);
+  });
+
   it('folds each journal entry once, so a re-attach does not double the transcript', () => {
     const entry = journal('e1', { role: 'user', content: [{ type: 'text', text: 'hello' }] });
     let state = reduceSession(initialSessionState, entry);

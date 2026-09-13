@@ -485,7 +485,12 @@
       "import": "./dist/main.mjs",
       "require": "./dist/main.cjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./api-contracts": {
+      "types": "./dist/api-contracts.d.mts",
+      "import": "./dist/api-contracts.mjs",
+      "require": "./dist/api-contracts.cjs"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -522,6 +527,8 @@
   },
   "devDependencies": {
     "@agimon-ai/vibe-lint-plugin-doom-core": "workspace:*",
+    "@apidevtools/swagger-parser": "^13.0.0",
+    "@asyncapi/parser": "^3.6.3",
     "@earendil-works/pi-ai": "0.85.1",
     "@earendil-works/pi-client": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",

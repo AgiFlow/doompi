@@ -197,7 +197,7 @@ describe('browser voice media', () => {
 
     expect(source).toContain('data-testid="composer-voice-action"');
     expect(source).not.toContain('data-testid="composer-voice-error"');
-    expect(source).toContain('new ManualComposerRecorder(appendComposerDraft');
+    expect(source).toMatch(/new ManualComposerRecorder\(\s*appendComposerDraft/u);
     expect(source).toContain('manualRecorder.current?.toggle(sessionId)');
     expect(source).toContain('sessionId === null || autonomous');
     expect(source).toContain('manual voice is unavailable while autonomous voice is active');

@@ -21,6 +21,7 @@ import {
   type CompileExtensionResourceBinding,
   type CompileExtensionResourcePackage,
 } from '../../compiler';
+import { compileApiContracts } from '../apiContracts';
 import type { ExtensionComposition } from '../cli/extensionAssembler';
 
 export interface ServerBundleSyncInput {
@@ -37,6 +38,7 @@ export interface ServerBundleSyncInput {
 export interface ServerBundleSyncResult {
   readonly descriptor: DoomServerBundle;
   readonly compilerManifests: Record<string, string>;
+  readonly contractGaps: readonly string[];
 }
 
 function packageRootOf(entry: string): string {
@@ -206,7 +208,16 @@ export async function syncServerBundle(input: ServerBundleSyncInput): Promise<Se
       required: declaration.required === true,
     });
   }
-  const complete = parseDoomServerBundle({ ...descriptor, entries });
+  const contracts = await compileApiContracts({
+    descriptor: { ...descriptor, entries },
+    packageRoots: new Map([...packages].map(([name, value]) => [name, value.declaration.packageDir])),
+    repositoryRoot: input.repositoryRoot,
+    outputDirectory: input.outputDirectory,
+    cacheDirectory: input.cacheDirectory,
+    sharedCacheDirectory: input.sharedCacheDirectory,
+  });
+  Object.assign(compilerManifests, contracts.compilerManifests);
+  const complete = parseDoomServerBundle({ ...descriptor, entries, contracts: contracts.contracts });
   writeFileAtomic(descriptorPath, `${JSON.stringify(complete, null, 2)}\n`);
-  return { descriptor: complete, compilerManifests };
+  return { descriptor: complete, compilerManifests, contractGaps: contracts.gaps };
 }

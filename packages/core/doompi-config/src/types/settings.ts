@@ -79,8 +79,16 @@ export interface SettingsWriteRequest {
   repoRoot: string;
   scope: SettingsScope;
   keyPath: readonly string[];
-  value: string | null;
+  value: string | number | null;
   /** The hash of the target file when the page read it. */
+  expectedHash: string;
+}
+
+/** One atomic save, validated as a whole before replacing the configuration file. */
+export interface SettingsBatchWriteRequest {
+  repoRoot: string;
+  scope: SettingsScope;
+  edits: readonly Pick<SettingsWriteRequest, 'keyPath' | 'value'>[];
   expectedHash: string;
 }
 

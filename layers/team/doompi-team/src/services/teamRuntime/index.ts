@@ -75,7 +75,7 @@ export function createTeamExtensionRuntime(
   const subagentWaiter = new SubagentWaiter(asyncJobTracker);
   const externalProcesses = new ExternalProcessIpc();
   const asyncSubagentSpawner = new AsyncSubagentSpawner(externalProcesses);
-  const discovery = new AgentDiscoveryService();
+  const discovery = new AgentDiscoveryService(options.environment);
   const skills = new SkillDiscoveryService();
   const capabilityPolicies = new SubagentCapabilityPolicyStore();
   const mcpToolResolver = new McpDirectToolResolverBinding();

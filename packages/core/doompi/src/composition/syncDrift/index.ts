@@ -1,7 +1,9 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { parseCompiledContracts } from '@agimon-ai/doompi-core/api-contracts';
 import { parseDoomServerBundle } from '@agimon-ai/doompi-core/server-facet';
 import { readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
 
@@ -54,14 +56,29 @@ export function serverBundleIsFresh(
     const descriptor = parseDoomServerBundle(JSON.parse(fs.readFileSync(bundle.descriptorPath, 'utf8')));
     if (descriptor.generation !== registration.generation || descriptor.fingerprint !== bundle.fingerprint)
       return false;
-    if (Object.keys(bundle.compilerManifests).length !== descriptor.entries.length) return false;
+
     const root = fs.realpathSync(registration.generationRoot);
     const inside = (target: string) => {
       const relative = path.relative(root, fs.realpathSync(target));
       return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
     };
-    for (const entry of descriptor.entries) {
-      const manifestPath = bundle.compilerManifests[entry.packageName];
+    if (!descriptor.contracts) return false;
+    const contractFile = path.resolve(path.dirname(bundle.descriptorPath), descriptor.contracts.file);
+    if (!inside(contractFile)) return false;
+    const bytes = fs.readFileSync(contractFile);
+    if (crypto.createHash('sha256').update(bytes).digest('hex') !== descriptor.contracts.sha256) return false;
+    const contracts = parseCompiledContracts(JSON.parse(bytes.toString('utf8')));
+    if (contracts.generation !== descriptor.generation || contracts.fingerprint !== descriptor.fingerprint)
+      return false;
+    const outputs = [
+      ...descriptor.entries.map((entry) => ({ key: entry.packageName, module: entry.module })),
+      ...contracts.packages.flatMap((entry) =>
+        entry.module ? [{ key: `${entry.packageName}#contracts`, module: entry.module }] : [],
+      ),
+    ];
+    if (Object.keys(bundle.compilerManifests).length !== outputs.length) return false;
+    for (const entry of outputs) {
+      const manifestPath = bundle.compilerManifests[entry.key];
       if (!manifestPath || !inside(manifestPath)) return false;
       const receipt = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
       if (

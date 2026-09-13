@@ -133,6 +133,12 @@ describe('global remote control', () => {
     expect(redeemed.headers.get('set-cookie')).toContain('__Host-doompi_device=');
     expect(redeemed.headers.get('set-cookie')).toContain('Secure');
     const cookie = redeemed.headers.get('set-cookie')!.split(';')[0];
+    const manifest = await tunnel(publicPort, '/bundle-manifest.json', 'GET', undefined, cookie);
+    expect(manifest.status).toBe(200);
+    expect(await manifest.json()).toEqual({ ok: true });
+    const bundleAsset = await tunnel(publicPort, '/bundle-assets/1/index.html', 'GET', undefined, cookie);
+    expect(bundleAsset.status).toBe(200);
+    expect(await bundleAsset.json()).toEqual({ ok: true });
     const frontend = createServer((_request, response) => {
       response.writeHead(200, { 'content-type': 'text/html' });
       response.end('<title>isolated cockpit</title>');
@@ -192,6 +198,31 @@ describe('global remote control', () => {
     expect(
       (JSON.parse(Buffer.from(inner.body, 'base64').toString('utf8')) as { state: { status: string } }).state.status,
     ).toBe('on');
+    const create = channel.seal(
+      Buffer.from(
+        JSON.stringify({
+          v: 1,
+          method: 'POST',
+          target: '/api/sessions',
+          headers: [['content-type', 'application/json']],
+          body: Buffer.from(JSON.stringify({ cwd: '/workspace' })).toString('base64'),
+        }),
+      ),
+    );
+    if (!create.ok) throw new Error('Could not seal the session creation request.');
+    const challenged = await tunnel(publicPort, '/api/remote/request', 'POST', create.envelope, cookie);
+    expect(challenged.status).toBe(200);
+    const openedChallenge = channel.open(await challenged.json());
+    expect(openedChallenge.ok).toBe(true);
+    if (!openedChallenge.ok) throw new Error('Could not open the step-up challenge.');
+    const challenge = JSON.parse(Buffer.from(openedChallenge.plaintext).toString('utf8')) as {
+      status: number;
+      body: string;
+    };
+    expect(challenge.status).toBe(401);
+    expect(JSON.parse(Buffer.from(challenge.body, 'base64').toString('utf8'))).toMatchObject({
+      action: 'session.create',
+    });
     const passkeyStart = await tunnel(publicPort, '/api/remote/passkeys/register/begin', 'POST', {}, cookie);
     expect(passkeyStart.status, await passkeyStart.clone().text()).toBe(200);
     const passkeyCeremony = (await passkeyStart.json()) as { ceremonyId: string; options: unknown };

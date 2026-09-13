@@ -330,7 +330,9 @@ const Entry = memo(function Entry({
                   ))}
               </div>
             ) : null}
-            {sessionId ? <MentionPreviews sessionId={sessionId} mentions={parseFileMentions(entry.text)} /> : null}
+            {sessionId ? (
+              <MentionPreviews sessionId={sessionId} mentions={parseFileMentions(entry.text)} onFileLink={onFileLink} />
+            ) : null}
           </div>
           <MessageActions
             actions={pluginActions}

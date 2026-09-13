@@ -172,8 +172,8 @@ export class VoiceSessionController implements IVoiceSessionController {
         ui.notify('Voice transcription was empty', INFO_NOTIFICATION);
         return;
       }
-      const draft = ui.getEditorText();
-      ui.setEditorText(`${draft}${draft && !/\s$/.test(draft) ? ' ' : ''}${transcript}`);
+      const draft = ui.getEditorText?.() ?? '';
+      ui.setEditorText?.(`${draft}${draft && !/\s$/.test(draft) ? ' ' : ''}${transcript}`);
       await this.telemetry.recordEvent(TRANSCRIPTION_FINISHED_EVENT, {
         engine: selected.adapter.engine,
         duration_ms: recordingDurationMs,

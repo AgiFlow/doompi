@@ -353,7 +353,11 @@
       "global",
       "workspace",
       "session"
-    ]
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
+    }
   },
   "pi": {
     "extensions": [

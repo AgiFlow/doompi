@@ -14,6 +14,7 @@ import {
   type SettingsModel,
   type SettingsRepository,
   type SettingsWriteRequest,
+  type SettingsBatchWriteRequest,
 } from '../../types/settings';
 import { sealedHttpSession } from './sealedSession';
 import { fetchWithStepUp } from './stepUp';
@@ -85,7 +86,7 @@ export type WriteConfigResult =
   | { ok: false; stale: false; error: string };
 
 export async function writeSettingsValue(
-  request: SettingsWriteRequest,
+  request: SettingsWriteRequest | SettingsBatchWriteRequest,
   workspaceId?: string,
 ): Promise<WriteConfigResult> {
   if (request.scope === 'repository' && !workspaceId)

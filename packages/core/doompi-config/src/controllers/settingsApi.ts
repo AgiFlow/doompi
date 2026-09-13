@@ -3,7 +3,7 @@ import type { DoomApi } from '@agimon-ai/doompi-core/package-api';
 import { KEY_SEPARATOR } from '../constants/settings';
 import { repositoryDoomConfigPath } from '../services/config';
 import { configScopeOf } from '../services/configPolicy';
-import { setDoomConfigValue, unsetDoomConfigValue, writeDoomConfigValues } from '../services/configWriter';
+import { writeDoomConfigValues } from '../services/configWriter';
 import { DEFAULT_IMAGE_MAX_DIMENSION, MIN_IMAGE_MAX_DIMENSION } from '../services/imageSettings';
 import { loadPiImageSettings, savePiImageSettings } from '../services/piConfig';
 import {
@@ -103,8 +103,12 @@ export const settingsApi: DoomApi = {
         const scope = context.scope === 'global' ? 'global' : 'repository';
         if (body.scope !== scope || (scope === 'repository' && body.repoRoot !== currentRepository?.path))
           return Response.json({ error: 'The write targets a different mount.' }, { status: 403 });
-        const allowed = configScopeOf(body.keyPath);
-        if (allowed !== 'both' && allowed !== scope)
+        if (
+          body.edits.some((edit) => {
+            const allowed = configScopeOf(edit.keyPath);
+            return allowed !== 'both' && allowed !== scope;
+          })
+        )
           return Response.json({ error: 'This key cannot be set at this scope.' }, { status: 409 });
         const before = configView(context, []);
         if (before.hashes[scope] !== body.expectedHash)
@@ -113,10 +117,18 @@ export const settingsApi: DoomApi = {
             { status: 409 },
           );
         const target = pathFor(scope, currentRepository?.path ?? '', homeDirectory);
-        if (body.value === null) await unsetDoomConfigValue(target, body.keyPath, { scope });
-        else await setDoomConfigValue(target, body.keyPath, body.value, { scope });
+        await writeDoomConfigValues(
+          target,
+          body.edits.map(({ keyPath, value }) => ({ keyPath, ...(value === null ? {} : { value }) })),
+          { scope },
+        );
         context.configurationChanged?.();
-        return Response.json(configView(context, [body.keyPath.join(KEY_SEPARATOR)]));
+        return Response.json(
+          configView(
+            context,
+            body.edits.map((edit) => edit.keyPath.join(KEY_SEPARATOR)),
+          ),
+        );
       }
       return Response.json({ error: 'Configuration route not found.' }, { status: 404 });
     };

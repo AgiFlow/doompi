@@ -2,6 +2,7 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: {
+    'api-contracts': 'src/exports/apiContracts.ts',
     'store-process-liveness': 'src/exports/storeProcessLiveness.ts',
     'delegation-manager': 'src/exports/delegationManager.ts',
     logSinkTelemetry: 'src/exports/logSinkTelemetry.ts',

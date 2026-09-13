@@ -224,7 +224,18 @@ async function writeMatchingState(root: string): Promise<SyncState> {
   };
   const descriptorPath = path.join(apiDirectory, DOOM_SERVER_BUNDLE_FILE);
   const fingerprint = 'a'.repeat(64);
-  fs.writeFileSync(descriptorPath, JSON.stringify({ version: 2, generation, fingerprint, entries: [] }));
+  const contractsPath = path.join(apiDirectory, 'contracts.json');
+  fs.writeFileSync(contractsPath, JSON.stringify({ version: 1, generation, fingerprint, packages: [] }));
+  fs.writeFileSync(
+    descriptorPath,
+    JSON.stringify({
+      version: 2,
+      generation,
+      fingerprint,
+      entries: [],
+      contracts: { file: './contracts.json', sha256: syncStateSha256(contractsPath) },
+    }),
+  );
   state.serverBundle = {
     descriptorPath,
     fingerprint,
@@ -776,7 +787,7 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     await new SyncCommand().execute(['sync'], environmentFor(root), root, capture().output);
     const registration = readSyncRegistration(root, homeFor(root))!;
     const state = readSyncState(root, homeFor(root))!;
-    expect(fs.readdirSync(registration.apiDirectory)).toEqual([DOOM_SERVER_BUNDLE_FILE]);
+    expect(fs.readdirSync(registration.apiDirectory)).toEqual(['contracts.json', DOOM_SERVER_BUNDLE_FILE]);
     expect(registration.serverBundle?.path).toBe(state.serverBundle?.descriptorPath);
     expect(registration.serverBundle?.fingerprint).toBe(state.serverBundle?.fingerprint);
     expect(registration.serverBundle?.sha256).toBe(syncStateSha256(state.serverBundle!.descriptorPath));

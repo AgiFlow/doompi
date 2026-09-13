@@ -37,6 +37,10 @@ export function RemoteAccessDialog() {
   const moving = state.step === 'handover';
   const starting = state.busy || view?.status === 'starting';
 
+  // The approval prompt is the only action that matters while a device waits.
+  // Two modal roots compete for focus and backdrop ordering when both stay open.
+  if (view?.pending?.length) return null;
+
   return (
     <Dialog open={state.step !== 'closed'} onOpenChange={(next) => (next ? undefined : closeRemoteDialog())}>
       <DialogContent width="lg" data-testid="remote-access-dialog" aria-describedby={undefined}>

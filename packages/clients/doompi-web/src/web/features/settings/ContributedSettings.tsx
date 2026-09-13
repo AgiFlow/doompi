@@ -163,6 +163,7 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
         <Input
           data-testid={`settings-input-${field.id}`}
           value={value}
+          type={kind === 'number' ? 'number' : 'text'}
           spellCheck={false}
           disabled={busy || locked !== undefined}
           placeholder={field.placeholder ?? 'inherit'}
@@ -281,9 +282,6 @@ export function ContributedSettings({ section, scope, repoRoot = '', workspaceId
     if (config === undefined || !canSaveSettings({ dirty: dirtyFields.length, scope, repoRoot })) return;
     setBusy(true);
     setError('');
-    // One request per field, in order, so a refusal names the field that caused
-    // it and everything before it has already landed. Each write answers with
-    // the file's new hash, which the next one must carry.
     const planned = plannedSettingsWrites({
       fields: section.fields,
       drafts,
@@ -291,17 +289,17 @@ export function ContributedSettings({ section, scope, repoRoot = '', workspaceId
       repoRoot,
       startingHash: config.hashes[scope],
     });
-    let hash = config.hashes[scope];
-    let saved = 0;
-    for (const [index, write] of planned.entries()) {
-      const result = await writeSettingsValue({ ...write, expectedHash: hash }, workspaceId);
-      if (!result.ok) {
-        setError(`${dirtyFields[index]?.label ?? 'setting'}: ${result.error}`);
-        break;
-      }
-      hash = result.config.hashes[scope];
-      saved += 1;
-    }
+    const result = await writeSettingsValue(
+      {
+        repoRoot,
+        scope,
+        expectedHash: config.hashes[scope],
+        edits: planned.map(({ keyPath, value }) => ({ keyPath, value })),
+      },
+      workspaceId,
+    );
+    const saved = result.ok ? planned.length : 0;
+    if (!result.ok) setError(result.error);
     setBusy(false);
     if (saved > 0) {
       setDrafts({});

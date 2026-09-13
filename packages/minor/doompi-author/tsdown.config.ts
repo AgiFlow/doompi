@@ -3,6 +3,7 @@ import { defineConfig } from 'tsdown';
 export default defineConfig({
   // The cockpit bundles the browser entry from source.
   entry: {
+    'api-contracts': 'src/exports/apiContracts.ts',
     index: 'src/exports/index.ts',
     authorFacade: 'src/exports/authorFacade.ts',
     'extensions/pi': 'src/extensions/pi.ts',

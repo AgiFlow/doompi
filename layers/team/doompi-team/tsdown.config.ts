@@ -2,6 +2,7 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: {
+    'api-contracts': 'src/exports/apiContracts.ts',
     'fable-plan-api': 'src/schemas/fablePlanApi.ts',
     'runtime-subagent-policy': 'src/schemas/subagentPolicy.ts',
     'runtime-subagent-tool': 'src/schemas/subagentTool.ts',

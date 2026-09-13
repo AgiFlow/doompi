@@ -35,4 +35,18 @@ describe('MentionPreviewAsset', () => {
 
     expect(markup).toContain('href="blob:sealed-file" download="readme.txt"');
   });
+
+  it('uses a file tab button when a file link provider can open the path', () => {
+    const markup = renderToStaticMarkup(
+      createElement(MentionPreviewAsset, {
+        mention: { path: 'README.md', kind: 'file' },
+        asset: asset('application/octet-stream'),
+        openFile() {},
+      }),
+    );
+
+    expect(markup).toContain('<button type="button"');
+    expect(markup).toContain('README.md');
+    expect(markup).not.toContain('download=');
+  });
 });

@@ -113,6 +113,7 @@ describe('doom file edit package boundary', () => {
       require: './dist/extensions/server.cjs',
     });
     expect(manifest.doompiServer).toEqual({
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
       entry: './src/extensions/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['session', 'global', 'workspace'],

@@ -154,6 +154,8 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   listCommands(): readonly { name: string; description: string }[];
   setModel(model: { provider: string; id: string }): Promise<void>;
   availableModels(): Promise<readonly Model<Api>[]>;
+  /** Shares the harness dispatch guards with host-owned auxiliary model requests. */
+  completeModel?: Models['complete'];
   availableThinkingLevels(): Promise<ThinkingLevel[]>;
   setThinkingLevel(level: ThinkingLevel): Promise<void>;
   setSteeringMode(mode: QueueMode): Promise<void>;

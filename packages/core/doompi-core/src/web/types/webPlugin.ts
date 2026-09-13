@@ -271,7 +271,7 @@ export interface SettingsFieldContribution {
   /** Unique within the section; also the testid suffix. */
   id: string;
   label: string;
-  kind: 'text' | 'select' | 'toggle' | 'info';
+  kind: 'text' | 'number' | 'select' | 'toggle' | 'info';
   /** The config key this reads and writes, e.g. ['modes','planning','main','model']. */
   keyPath: readonly string[];
   /** One line of help under the field. */

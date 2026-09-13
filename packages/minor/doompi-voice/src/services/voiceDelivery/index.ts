@@ -13,12 +13,13 @@ export type VoiceDeliveryResult =
   | ({ kind: 'failed'; code: string } & Omit<VoiceDeliveryRequest, 'text'>);
 
 export interface VoiceDeliveryDependencies {
-  deliver(text: string, intent?: VoiceDeliveryIntent): void;
+  deliver(text: string, intent?: VoiceDeliveryIntent): void | Promise<void>;
   onResult(result: VoiceDeliveryResult): void;
 }
 
 export class VoiceDelivery {
   private blocked = false;
+  private generation = 0;
   private pending: VoiceDeliveryRequest | undefined;
 
   public constructor(private readonly dependencies: VoiceDeliveryDependencies) {}
@@ -38,6 +39,7 @@ export class VoiceDelivery {
 
   public clear(): void {
     this.pending = undefined;
+    this.generation += 1;
   }
 
   private flush(): void {
@@ -58,10 +60,24 @@ export class VoiceDelivery {
       this.dependencies.onResult({ kind: 'failed', ...identity, code: 'blank transcript' });
       return;
     }
+    const generation = this.generation;
+    const succeeded = (): void => {
+      if (generation === this.generation) this.dependencies.onResult({ kind: 'delivered', ...identity });
+    };
+    const failed = (error: unknown): void => {
+      if (generation === this.generation)
+        this.dependencies.onResult({
+          kind: 'failed',
+          ...identity,
+          code: error instanceof Error ? error.message : String(error),
+        });
+    };
     try {
-      if (request.intent) this.dependencies.deliver(request.text, request.intent);
-      else this.dependencies.deliver(request.text);
-      this.dependencies.onResult({ kind: 'delivered', ...identity });
+      const admitted = request.intent
+        ? this.dependencies.deliver(request.text, request.intent)
+        : this.dependencies.deliver(request.text);
+      if (admitted) void admitted.then(succeeded, failed);
+      else succeeded();
     } catch (error) {
       this.dependencies.onResult({
         kind: 'failed',

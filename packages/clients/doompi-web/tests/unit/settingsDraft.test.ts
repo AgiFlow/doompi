@@ -108,3 +108,24 @@ describe('the key a field writes', () => {
     expect(settingsKeyOf(MODEL)).toBe('modes.planning.main.model');
   });
 });
+
+it('preserves numeric settings as numbers without turning invalid drafts into clears', () => {
+  const field: SettingsFieldContribution = {
+    id: 'timeout',
+    label: 'Timeout',
+    kind: 'number',
+    keyPath: ['voice', 'autoCapture', 'utteranceIdleMs'],
+  };
+  const planned = (value: string | null) =>
+    plannedSettingsWrites({
+      fields: [field],
+      drafts: { 'voice.autoCapture.utteranceIdleMs': value },
+      scope: 'global',
+      repoRoot: '',
+      startingHash: 'hash',
+    })[0];
+  expect(planned('3500')?.value).toBe(3500);
+  expect(planned(null)?.value).toBeNull();
+  expect(planned('invalid')?.value).toBe('invalid');
+  expect(planned('Infinity')?.value).toBe('Infinity');
+});

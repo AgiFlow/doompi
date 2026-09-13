@@ -10,7 +10,7 @@ import type {
   SettingsRepository,
   SettingsScope,
   SettingsValueView,
-  SettingsWriteRequest,
+  SettingsBatchWriteRequest,
 } from '../../types/settings';
 import { globalDoomConfigPath, loadDoomConfigLayers, repositoryDoomConfigPath } from '../config';
 import { configScopeOf } from '../configPolicy';
@@ -40,19 +40,25 @@ export function pathFor(scope: SettingsScope, repoRoot: string, homeDirectory: s
   return scope === 'repository' ? repositoryDoomConfigPath(repoRoot) : globalDoomConfigPath(homeDirectory);
 }
 
-export function parseWrite(body: unknown): SettingsWriteRequest | undefined {
+export function parseWrite(body: unknown): SettingsBatchWriteRequest | undefined {
   if (!isRecord(body)) return undefined;
-  const { repoRoot, scope, keyPath, value, expectedHash } = body;
-  if (typeof repoRoot !== 'string') return undefined;
-  if (scope !== 'global' && scope !== 'repository') return undefined;
-  // Only a repository write needs to know which repository.
+  const { repoRoot, scope, expectedHash } = body;
+  if (typeof repoRoot !== 'string' || (scope !== 'global' && scope !== 'repository')) return undefined;
   if (scope === 'repository' && repoRoot === '') return undefined;
-  if (!Array.isArray(keyPath) || keyPath.length === 0 || keyPath.some((part) => typeof part !== 'string')) {
-    return undefined;
-  }
-  if (value !== null && typeof value !== 'string') return undefined;
   if (typeof expectedHash !== 'string') return undefined;
-  return { repoRoot, scope, keyPath: keyPath as string[], value, expectedHash };
+  const edits = body.edits === undefined ? [{ keyPath: body.keyPath, value: body.value }] : body.edits;
+  if (!Array.isArray(edits) || edits.length === 0 || edits.length > 100) return undefined;
+  const validated: Array<SettingsBatchWriteRequest['edits'][number]> = [];
+  for (const edit of edits) {
+    if (!isRecord(edit)) return undefined;
+    const { keyPath, value } = edit;
+    if (!Array.isArray(keyPath) || keyPath.length === 0 || keyPath.some((part) => typeof part !== 'string'))
+      return undefined;
+    if (value !== null && typeof value !== 'string' && (typeof value !== 'number' || !Number.isFinite(value)))
+      return undefined;
+    validated.push({ keyPath: keyPath as string[], value });
+  }
+  return { repoRoot, scope, expectedHash, edits: validated };
 }
 
 export function configuredSelectionValue<T>(

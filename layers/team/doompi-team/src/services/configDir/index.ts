@@ -118,7 +118,9 @@ export function resolveConfigDirName(codingAgentModule?: unknown, entryPoint?: s
 let memoizedConfigDirName: string | undefined;
 
 /** The config directory name for this process. Resolved once, then reused. */
-export function getConfigDirName(): string {
+export function getConfigDirName(environment: Readonly<NodeJS.ProcessEnv> = process.env): string {
+  if (environment !== process.env)
+    return resolveConfigDirName(undefined, process.argv[1], environment[PI_CODING_AGENT_PACKAGE_ROOT_ENV] ?? '');
   memoizedConfigDirName ??= resolveConfigDirName();
   return memoizedConfigDirName;
 }
@@ -134,8 +136,11 @@ export function resetConfigDirNameCache(): void {
 }
 
 /** The project-local config directory, for example `<projectRoot>/.pi`. */
-export function getProjectConfigDir(projectRoot: string): string {
-  return path.join(projectRoot, getConfigDirName());
+export function getProjectConfigDir(
+  projectRoot: string,
+  environment: Readonly<NodeJS.ProcessEnv> = process.env,
+): string {
+  return path.join(projectRoot, getConfigDirName(environment));
 }
 
 /** Read a JSON settings file as an object, retaining strict path-specific errors. */
@@ -164,13 +169,14 @@ export function readSettingsFileStrict(filePath: string): Record<string, unknown
 }
 
 /** The user-level agent directory, honouring `~` expansion in the override. */
-export function getAgentDir(): string {
-  const configured = process.env.PI_CODING_AGENT_DIR;
-  if (configured === HOME_ALIAS) return os.homedir();
+export function getAgentDir(environment: Readonly<NodeJS.ProcessEnv> = process.env): string {
+  const configured = environment.PI_CODING_AGENT_DIR;
+  const homeDirectory = environment.HOME ?? os.homedir();
+  if (configured === HOME_ALIAS) return homeDirectory;
   if (configured?.startsWith(HOME_ALIAS_PREFIX)) {
-    return path.join(os.homedir(), configured.slice(HOME_ALIAS_PREFIX.length));
+    return path.join(homeDirectory, configured.slice(HOME_ALIAS_PREFIX.length));
   }
-  return configured || path.join(os.homedir(), getConfigDirName(), AGENT_DIR_NAME);
+  return configured || path.join(homeDirectory, getConfigDirName(environment), AGENT_DIR_NAME);
 }
 
 /** Resolve a child's working directory, which may be relative to the parent's. */

@@ -82,7 +82,7 @@ export interface AutonomousVoiceSessionDependencies {
   client: AutonomousVoiceWorkerPort;
   clock: IClock;
   ui: AutoCaptureUi;
-  deliver(this: void, text: string, intent?: VoiceDeliveryIntent): void;
+  deliver(this: void, text: string, intent?: VoiceDeliveryIntent): void | Promise<void>;
   narrationReferences(): readonly string[];
   correctTranscript?(this: void, transcript: string, signal: AbortSignal): Promise<string>;
   adjudicateTranscript?(

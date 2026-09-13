@@ -2,6 +2,7 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: {
+    'api-contracts': 'src/exports/apiContracts.ts',
     index: 'src/exports/index.ts',
     'ansi-scrub': 'src/exports/ansiScrub.ts',
     'bash-render': 'src/exports/bashRender.ts',

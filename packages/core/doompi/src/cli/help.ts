@@ -21,6 +21,7 @@ export function printHelp(): void {
 Usage: doompi [harness options] [Pi options] [prompt]
        doompi init
        doompi sync [matrix options] [--check]
+       doompi api-export --out <directory> [--major-mode <name>] [--strict]
        doompi compat <codex|claude|antigravity> [matrix options] [provider arguments]
        doompi history-export <v4-source> <v3-destination> [options]
        doompi history-import <v3-source> <v4-destination> --confirm-offline

@@ -26,7 +26,7 @@ import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from 'r
 import type { SubagentRun } from '../../types/webSubagents';
 import { RUN_ACTIONS_SLOT } from '../api/runActionsSlot';
 import { abbreviateCwd } from '../lib/format';
-import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from '../stores/catalogStore';
+import { catalog, closeCatalog, closeLaunch, loadCatalog, openCatalog, openLaunch } from '../stores/catalogStore';
 import {
   clearAutoOpen,
   dismissRun,
@@ -356,6 +356,11 @@ export function SubagentsPanel({
   );
   const shelf = useStore(catalog.store, (state) => catalog.select(state, sessionId));
   const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (sessionId === null || !shelf.open) return;
+    return loadCatalog(sessionId);
+  }, [sessionId, shelf.open]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), TICK_MS);

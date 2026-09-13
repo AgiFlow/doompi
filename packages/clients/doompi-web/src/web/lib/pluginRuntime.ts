@@ -12,7 +12,7 @@ import * as ReactDomClient from 'react-dom/client';
 import * as ReactJsxDevRuntime from 'react/jsx-dev-runtime';
 import * as ReactJsxRuntime from 'react/jsx-runtime';
 
-import { activateVerifiedPluginComposition } from '../../pwa/workerClient';
+import { activateVerifiedBundle, activateVerifiedPluginComposition } from '../../pwa/workerClient';
 import type { SessionWebComposition } from '../../types/hub';
 import {
   activateWebPluginSession,
@@ -79,6 +79,7 @@ interface LoadedComposition {
 }
 interface CompositionsResponse {
   global?: SessionWebComposition;
+  shell?: { publicKey: string; revision: number };
   workspaces: { id: string; webComposition?: SessionWebComposition }[];
 }
 
@@ -89,6 +90,41 @@ let runtime: WebPluginRuntime | undefined;
 let runtimeEpoch = 0;
 let focusEpoch = 0;
 let scriptQueue: Promise<unknown> = Promise.resolve();
+let localVerifier: { key: string; ready: Promise<void> } | undefined;
+
+async function bootstrapLocalVerifier(shell: CompositionsResponse['shell']): Promise<void> {
+  if (typeof location === 'undefined' || !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) return;
+  // In-memory test hosts can supply plugin definitions without a signed shell.
+  if (shell === undefined) return;
+  const key = `${shell.publicKey}:${String(shell.revision)}`;
+  if (localVerifier?.key !== key) {
+    const ready = (async () => {
+      await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      const result = await activateVerifiedBundle({ publicKey: shell.publicKey, minimumRevision: shell.revision });
+      if (!result.ok) throw new Error(`The local cockpit bundle was refused (${result.code}): ${result.message}`);
+      if (navigator.serviceWorker.controller) return;
+      await new Promise<void>((resolve, reject) => {
+        const changed = () => {
+          if (!navigator.serviceWorker.controller) return;
+          clearTimeout(timeout);
+          navigator.serviceWorker.removeEventListener('controllerchange', changed);
+          resolve();
+        };
+        const timeout = setTimeout(() => {
+          navigator.serviceWorker.removeEventListener('controllerchange', changed);
+          reject(new Error('The local verification worker did not take control.'));
+        }, 10_000);
+        navigator.serviceWorker.addEventListener('controllerchange', changed);
+        changed();
+      });
+    })();
+    localVerifier = { key, ready };
+    void ready.catch(() => {
+      if (localVerifier?.ready === ready) localVerifier = undefined;
+    });
+  }
+  await localVerifier.ready;
+}
 
 function mountKey(mount: WebPluginMount): string {
   return mount.scope === 'global'
@@ -275,6 +311,7 @@ async function readCompositions(): Promise<CompositionsResponse> {
 
 export async function refreshWebPluginCompositions(): Promise<void> {
   const metadata = await readCompositions();
+  await bootstrapLocalVerifier(metadata.shell);
   await mountComposition({ scope: 'global' }, metadata.global);
   for (const workspace of metadata.workspaces) {
     await mountComposition({ scope: 'workspace', workspaceId: workspace.id }, workspace.webComposition);

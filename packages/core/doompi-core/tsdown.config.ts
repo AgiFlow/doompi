@@ -3,6 +3,7 @@ import { defineConfig } from 'tsdown';
 export default defineConfig({
   entry: {
     index: 'src/exports/index.ts',
+    'api-contracts': 'src/exports/apiContracts.ts',
     'agent-model': 'src/exports/agentModel.ts',
     'ask-user': 'src/exports/askUser.ts',
     'background-work': 'src/exports/backgroundWork.ts',

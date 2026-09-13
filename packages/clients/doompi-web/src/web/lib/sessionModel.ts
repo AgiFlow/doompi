@@ -135,6 +135,7 @@ export interface DialogRequest {
 }
 
 export interface EditorTextRequest {
+  append?: boolean;
   id: string;
   text: string;
 }
@@ -375,7 +376,12 @@ function toolEntryFromStart(frame: Frame, id: string): ToolEntry {
 }
 
 function applyToolStart(state: SessionState, frame: Frame): SessionState {
-  const opened = withEntry(closeAssistant(state, undefined), toolEntryFromStart(frame, `t${state.nextId}`));
+  const closed = closeAssistant(state, undefined);
+  const toolCallId = asString(frame.toolCallId);
+  if (toolCallId !== '' && closed.entries.some((entry) => entry.kind === 'tool' && entry.toolCallId === toolCallId)) {
+    return { ...closed, toolsThisRun: closed.toolsThisRun + 1 };
+  }
+  const opened = withEntry(closed, toolEntryFromStart(frame, `t${state.nextId}`));
   return { ...opened, toolsThisRun: opened.toolsThisRun + 1 };
 }
 
@@ -565,6 +571,10 @@ function applyDialog(state: SessionState, frame: Frame): SessionState {
   const method = asString(frame.method);
   if (method === 'setStatus') return applyStatus(state, frame);
   if (method === 'setWidget') return applyWidget(state, frame);
+  if (method === 'append_composer_text') {
+    if (typeof frame.text !== 'string') return state;
+    return { ...state, editorTextRequest: { id: asString(frame.id), text: frame.text, append: true } };
+  }
   if (method === 'set_editor_text') {
     if (typeof frame.text !== 'string') return state;
     return { ...state, editorTextRequest: { id: asString(frame.id), text: frame.text } };

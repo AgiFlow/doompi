@@ -70,16 +70,19 @@ export function isDirectory(dirPath: string): boolean {
 }
 
 /** True when `dir` carries either marker that makes it a project root. */
-export function isProjectRootCandidate(dir: string): boolean {
-  return isDirectory(getProjectConfigDir(dir)) || isDirectory(path.join(dir, DOT_AGENTS_DIR_NAME));
+export function isProjectRootCandidate(dir: string, environment: Readonly<NodeJS.ProcessEnv> = process.env): boolean {
+  return isDirectory(getProjectConfigDir(dir, environment)) || isDirectory(path.join(dir, DOT_AGENTS_DIR_NAME));
 }
 
 /** Every project root above `cwd`, nearest first. */
-export function findProjectRootCandidates(cwd: string): string[] {
+export function findProjectRootCandidates(
+  cwd: string,
+  environment: Readonly<NodeJS.ProcessEnv> = process.env,
+): string[] {
   const roots: string[] = [];
   let currentDir = cwd;
   while (true) {
-    if (isProjectRootCandidate(currentDir)) roots.push(currentDir);
+    if (isProjectRootCandidate(currentDir, environment)) roots.push(currentDir);
 
     const parentDir = path.dirname(currentDir);
     if (parentDir === currentDir) return roots;
@@ -110,8 +113,11 @@ export function findNearestGitRoot(cwd: string): string | null {
  * Deliberately throws on an unrecognised value rather than falling back: a typo
  * here silently changes which agents the whole session sees.
  */
-export function readProjectRootResolution(projectRoot: string): ProjectRootResolution | undefined {
-  const settingsPath = path.join(getProjectConfigDir(projectRoot), SETTINGS_FILE_NAME);
+export function readProjectRootResolution(
+  projectRoot: string,
+  environment: Readonly<NodeJS.ProcessEnv> = process.env,
+): ProjectRootResolution | undefined {
+  const settingsPath = path.join(getProjectConfigDir(projectRoot, environment), SETTINGS_FILE_NAME);
   if (!fs.existsSync(settingsPath)) return undefined;
 
   const settings = readSettingsFileStrict(settingsPath);
@@ -127,8 +133,11 @@ export function readProjectRootResolution(projectRoot: string): ProjectRootResol
 }
 
 /** The closest project root above `cwd`, ignoring any resolution policy. */
-export function findNearestProjectRoot(cwd: string): string | null {
-  return findProjectRootCandidates(cwd)[0] ?? null;
+export function findNearestProjectRoot(
+  cwd: string,
+  environment: Readonly<NodeJS.ProcessEnv> = process.env,
+): string | null {
+  return findProjectRootCandidates(cwd, environment)[0] ?? null;
 }
 
 /**
@@ -138,19 +147,25 @@ export function findNearestProjectRoot(cwd: string): string | null {
  * of its monorepo's shared agents, and from the git root second so a repository
  * can claim its packages without editing each one.
  */
-export function findConfiguredProjectRoot(cwd: string): string | null {
-  const candidates = findProjectRootCandidates(cwd);
+export function findConfiguredProjectRoot(
+  cwd: string,
+  environment: Readonly<NodeJS.ProcessEnv> = process.env,
+): string | null {
+  const candidates = findProjectRootCandidates(cwd, environment);
   const nearestRoot = candidates[0];
   if (!nearestRoot) return null;
 
-  const nearestMode = readProjectRootResolution(nearestRoot);
+  const nearestMode = readProjectRootResolution(nearestRoot, environment);
   if (nearestMode === 'nearest') return nearestRoot;
 
   const gitRoot = findNearestGitRoot(cwd);
   const gitProjectRoot = gitRoot
     ? candidates.find((candidate) => path.resolve(candidate) === path.resolve(gitRoot))
     : undefined;
-  if (gitProjectRoot && (nearestMode === 'git-root' || readProjectRootResolution(gitProjectRoot) === 'git-root')) {
+  if (
+    gitProjectRoot &&
+    (nearestMode === 'git-root' || readProjectRootResolution(gitProjectRoot, environment) === 'git-root')
+  ) {
     return gitProjectRoot;
   }
 
@@ -165,19 +180,25 @@ export function findConfiguredProjectRoot(cwd: string): string | null {
  * working after the move. Returned unfiltered because the caller reads each
  * directory anyway and a missing one costs nothing.
  */
-export function userAgentDirs(): string[] {
-  return [path.join(getAgentDir(), AGENTS_DIR_NAME), path.join(os.homedir(), DOT_AGENTS_DIR_NAME)];
+export function userAgentDirs(environment: Readonly<NodeJS.ProcessEnv> = process.env): string[] {
+  return [
+    path.join(getAgentDir(environment), AGENTS_DIR_NAME),
+    path.join(environment.HOME ?? os.homedir(), DOT_AGENTS_DIR_NAME),
+  ];
 }
 
 /** The user-level settings file. Always resolvable, unlike the project one. */
-export function getUserAgentSettingsPath(): string {
-  return path.join(getAgentDir(), SETTINGS_FILE_NAME);
+export function getUserAgentSettingsPath(environment: Readonly<NodeJS.ProcessEnv> = process.env): string {
+  return path.join(getAgentDir(environment), SETTINGS_FILE_NAME);
 }
 
 /** The project settings file, or null when `cwd` sits under no project root. */
-export function getProjectAgentSettingsPath(cwd: string): string | null {
-  const projectRoot = findConfiguredProjectRoot(cwd);
-  return projectRoot ? path.join(getProjectConfigDir(projectRoot), SETTINGS_FILE_NAME) : null;
+export function getProjectAgentSettingsPath(
+  cwd: string,
+  environment: Readonly<NodeJS.ProcessEnv> = process.env,
+): string | null {
+  const projectRoot = findConfiguredProjectRoot(cwd, environment);
+  return projectRoot ? path.join(getProjectConfigDir(projectRoot, environment), SETTINGS_FILE_NAME) : null;
 }
 
 /**
@@ -188,12 +209,15 @@ export function getProjectAgentSettingsPath(cwd: string): string | null {
  * `preferredDir` is where a newly created agent should be written, and is
  * returned whether or not it exists yet.
  */
-export function resolveNearestProjectAgentDirs(cwd: string): { readDirs: string[]; preferredDir: string | null } {
-  const projectRoot = findConfiguredProjectRoot(cwd);
+export function resolveNearestProjectAgentDirs(
+  cwd: string,
+  environment: Readonly<NodeJS.ProcessEnv> = process.env,
+): { readDirs: string[]; preferredDir: string | null } {
+  const projectRoot = findConfiguredProjectRoot(cwd, environment);
   if (!projectRoot) return { readDirs: [], preferredDir: null };
 
   const legacyDir = path.join(projectRoot, DOT_AGENTS_DIR_NAME);
-  const preferredDir = path.join(getProjectConfigDir(projectRoot), AGENTS_DIR_NAME);
+  const preferredDir = path.join(getProjectConfigDir(projectRoot, environment), AGENTS_DIR_NAME);
   const readDirs: string[] = [];
   if (isDirectory(legacyDir)) readDirs.push(legacyDir);
   if (isDirectory(preferredDir)) readDirs.push(preferredDir);

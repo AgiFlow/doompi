@@ -5,6 +5,7 @@ import {
   type SubagentCatalogAgent,
   type SubagentCatalogPayload,
 } from '../../types/webSubagents';
+import { fetchCatalog } from '../api/catalog';
 
 /** One session's catalog: what the hub last reported plus what the drawer is doing with it. */
 export interface CatalogSession {
@@ -12,6 +13,8 @@ export interface CatalogSession {
   agents: SubagentCatalogAgent[];
   models: string[];
   warning: string | undefined;
+  loading: boolean;
+  requestId: number;
   /** True while the catalog drawer is shown in the subagents tab. */
   open: boolean;
   filter: string;
@@ -30,6 +33,8 @@ export const catalog = defineSessionStore<CatalogSession>({
   agents: [],
   models: [],
   warning: undefined,
+  loading: false,
+  requestId: 0,
   open: false,
   filter: '',
   task: '',
@@ -75,6 +80,33 @@ export function openLaunch(sessionId: string, agent: string, fork: boolean): voi
 
 export function closeLaunch(sessionId: string): void {
   catalog.update(sessionId, (current) => ({ ...current, launch: undefined }));
+}
+
+/** Each drawer opening owns one request and cancels it when the drawer leaves. */
+export function loadCatalog(sessionId: string): () => void {
+  const controller = new AbortController();
+  const requestId = catalog.select(catalog.store.state, sessionId).requestId + 1;
+  catalog.update(sessionId, (current) => ({ ...current, requestId, loading: true, warning: undefined }));
+  const isCurrent = (): boolean =>
+    !controller.signal.aborted && catalog.store.state[sessionId]?.requestId === requestId;
+  void fetchCatalog(sessionId, controller.signal)
+    .then((payload) => {
+      if (isCurrent()) subagentCatalogChannel.apply(sessionId, payload);
+    })
+    .catch((error: unknown) => {
+      if (isCurrent())
+        catalog.update(sessionId, (current) => ({
+          ...current,
+          warning: error instanceof Error ? error.message : String(error),
+        }));
+    })
+    .finally(() => {
+      if (isCurrent()) catalog.update(sessionId, (current) => ({ ...current, loading: false }));
+    });
+  return () => {
+    if (isCurrent()) catalog.update(sessionId, (current) => ({ ...current, loading: false }));
+    controller.abort();
+  };
 }
 
 /** The plugin's catalog channel: 'subagent_catalog' payloads into the store; the drawer's own state survives a refresh. */

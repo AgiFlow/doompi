@@ -1,179 +1,174 @@
-import {
-  DOOM_HEADLESS_OWNER as TEST_OWNER,
-  DOOM_HEADLESS_HOST_SERVICE as TEST_AGENT,
-} from '@agimon-ai/doompi-core/headless';
-import {
-  DOOM_HEADLESS_HOST_SERVICE,
-  type DoomHeadlessActivity,
-  type DoomHeadlessCommand,
-  type DoomHeadlessExecutionContext,
-  type DoomHeadlessHook,
-  type DoomHeadlessHostService,
-  type DoomHeadlessResource,
-  type DoomHeadlessTool,
-} from '@agimon-ai/doompi-core/headless';
-import { DOOM_SERVER_HOST_SERVICE as TEST_SERVER, type DoomServerFacet } from '@agimon-ai/doompi-core/server-facet';
-import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
-import { DOOM_MINOR_MODE_CATALOG_SERVICE as TEST_CATALOG } from '@agimon-ai/doompi-minor-mode';
-import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
-import { Context } from '@deepseek-ai/cordis';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
 import { describe, expect, it, vi } from 'vitest';
 
-import { voiceServerFacet } from '../../../src/extensions/server';
+import { VoiceMediaBroker } from '../../../src/controllers/clientMediaApi';
+import { createVoiceServer } from '../../../src/controllers/voiceServer';
 
-async function fixture(selectionModes: string[] = []) {
-  let minorModes = selectionModes;
-  const execution = {
-    cwd: process.cwd(),
-    repoRoot: process.cwd(),
-    sessionId: 'voice-headless-test',
-    get selection() {
-      return { majorMode: 'copilot', activeLayers: [], domains: [], state: { 'minor-mode': minorModes } };
-    },
-    client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
-    session: {
-      entries: vi.fn(() => []),
-      appendCustomEntry: vi.fn(),
-      prompt: vi.fn(),
-      abort: vi.fn(),
-      compact: vi.fn(),
-      activity: vi.fn(),
-    },
-    shutdown: vi.fn(),
-  } as unknown as DoomHeadlessExecutionContext;
-  const modes: DoomHeadlessMinorMode[] = [];
-  const activities: DoomHeadlessActivity[] = [];
-  const tools: DoomHeadlessTool[] = [];
-  const resources: DoomHeadlessResource[] = [];
-  const commands: DoomHeadlessCommand[] = [];
-  const hooks: DoomHeadlessHook[] = [];
-  const publish = vi.fn();
-  const dispose = vi.fn();
-  const registrations = { dispose: vi.fn() };
-  const registerOwner = vi.fn((mode: DoomHeadlessMinorMode) => {
-    modes.push(mode);
-    return { publish, dispose };
-  });
-  const host = {
-    context: execution,
-    changeSelection: vi.fn(async ({ values: selected }: { values?: string[] }) => {
-      if (selected) minorModes = selected;
-    }),
-    assertActive: vi.fn(),
-    registerToolRestriction: () => registrations,
-    registerActivity: (activity: DoomHeadlessActivity) => {
-      activities.push(activity);
-      return registrations;
-    },
-    registerTool: (tool: DoomHeadlessTool) => {
-      tools.push(tool);
-      return registrations;
-    },
-    registerResource: (resource: DoomHeadlessResource) => {
-      resources.push(resource);
-      return registrations;
-    },
-    registerCommand: (command: DoomHeadlessCommand) => {
-      commands.push(command);
-      return registrations;
-    },
-    registerHook: (hook: DoomHeadlessHook) => {
-      hooks.push(hook);
-      return registrations;
-    },
-  } as unknown as DoomHeadlessHostService;
-  const context = new Context();
-  context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
-  context.provide(DOOM_SERVER_HOST_SERVICE, {
-    scope: 'session',
-    context: {},
-    registerApi: () => ({ dispose() {} }),
-  } as unknown as DoomServerHostService);
-  const close = await mountFacet(voiceServerFacet, context, host, registerOwner);
-  return { execution, modes, activities, tools, resources, commands, hooks, publish, dispose, registrations, close };
-}
-
-function operation(execution: DoomHeadlessExecutionContext) {
-  return {
-    context: execution,
-    operationId: 'voice-headless-test',
-    sessionKind: 'headless' as const,
-    signal: new AbortController().signal,
-  };
-}
-
-describe('voice headless facet', () => {
-  it('reports the explicit no-media contract across mode, tools, commands, and activity', async () => {
-    const test = await fixture(['voice-auto']);
-    const mode = test.modes[0];
-    const activity = test.activities[0];
-    const resource = test.resources[0];
-    const voice = test.commands.find(({ name }) => name === 'voice');
-    const voiceAuto = test.commands.find(({ name }) => name === 'voice-auto');
-    const shutdown = test.hooks.find(({ event }) => event === 'session_shutdown') as
-      | DoomHeadlessHook<'session_shutdown'>
-      | undefined;
-    if (!mode || !activity || !resource || !voice || !voiceAuto || !shutdown)
-      throw new Error('Voice headless registrations were not created');
-
-    expect(mode.initialState).toMatchObject({
-      activation: 'active',
-      condition: 'ready',
-      detail: 'autonomous voice',
+describe('native Voice session', () => {
+  it('exposes status and controls without terminal adapters or false active tools', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'voice-native-'));
+    const host = {
+      context: {
+        cwd: home,
+        repoRoot: home,
+        sessionId: 'native',
+        environment: {},
+        selection: { majorMode: 'copilot', activeLayers: [], domains: [] },
+        client: { notify: vi.fn(), setStatus: vi.fn(), request: vi.fn(), appendComposerText: vi.fn() },
+        session: { activity: async () => ({ isIdle: true }), admitPrompt: vi.fn() },
+      },
+      assertActive: vi.fn(),
+      changeSelection: vi.fn(),
+      registerTool: vi.fn(() => ({ dispose: vi.fn() })),
+    } as unknown as DoomHeadlessHostService;
+    const broker = new VoiceMediaBroker({
+      directEvents: { publish: vi.fn(), subscribe: () => () => undefined, close() {} },
+      sessionId: 'native',
+      clientConnectWaitMs: 0,
     });
-    await expect(mode.handleAction('activate', {}, operation(test.execution))).rejects.toThrow(
-      'Voice media requires an explicit client media transport.',
-    );
-    await expect(mode.handleAction('deactivate', {}, operation(test.execution))).resolves.toEqual({
-      message: 'Voice mode deactivated.',
-    });
-    await expect(mode.handleAction('unknown', {}, operation(test.execution))).rejects.toThrow(
-      'Unknown voice mode action: unknown',
-    );
-    await expect(Promise.resolve().then(() => activity.start(test.execution))).rejects.toThrow(
-      'Voice media requires an explicit client media transport.',
-    );
-    expect(await resource.read(test.execution)).toContain('voice');
-
-    for (const tool of test.tools) {
-      const result = await tool.execute('voice-tool', {}, undefined, undefined, test.execution);
-      expect(result).toMatchObject({ isError: true });
-      expect(result.content[0]).toMatchObject({ type: 'text', text: expect.stringContaining('Voice media') });
+    const facet = createVoiceServer(host, broker, home);
+    const api = facet.api![0]!.start({} as never);
+    try {
+      const response = await api.fetch(new Request('http://voice/status'));
+      expect(await response.json()).toMatchObject({
+        state: 'disabled',
+        manual: 'idle',
+        media: { capture: false, playback: false },
+      });
+      expect(host.registerTool).not.toHaveBeenCalled();
+      const activate = await api.fetch(
+        new Request('http://voice/control', { method: 'POST', body: JSON.stringify({ action: 'activate' }) }),
+      );
+      expect(activate.status).toBe(409);
+      expect(await activate.json()).toMatchObject({ error: expect.stringContaining('Configure Voice') });
+      const stop = await api.fetch(
+        new Request('http://voice/control', { method: 'POST', body: JSON.stringify({ action: 'deactivate' }) }),
+      );
+      expect(stop.status).toBe(200);
+    } finally {
+      await facet.onDispose?.({} as never);
+      await rm(home, { recursive: true, force: true });
     }
-    await voice.execute('', test.execution);
-    await voiceAuto.execute('', test.execution);
-    expect(test.execution.client.notify).toHaveBeenNthCalledWith(1, {
-      body: 'Voice media requires an explicit client media transport. The current headless host exposes no capture, playback, or transcription transport.',
-      level: 'error',
-    });
-    expect(test.execution.client.notify).toHaveBeenNthCalledWith(2, {
-      body: 'Voice media requires an explicit client media transport. The current headless host exposes no capture, playback, or transcription transport.',
-      level: 'error',
-    });
-    await shutdown.handle({}, test.execution);
-    expect(test.execution.client.setStatus).toHaveBeenCalledWith('@agimon-ai/doompi-voice', undefined);
-
-    await test.close?.();
-    expect(test.dispose).toHaveBeenCalledOnce();
-    expect(test.registrations.dispose).toHaveBeenCalled();
+    expect(broker.readiness().closed).toBe(true);
+    expect(host.context.client.setStatus).toHaveBeenLastCalledWith('doom-voice', undefined);
   });
 });
 
-async function mountFacet(
-  facet: DoomServerFacet,
-  existing: Context,
-  host: DoomHeadlessHostService,
-  registerOwner: ReturnType<typeof vi.fn>,
-) {
-  const root = new Context();
-  root.provide(TEST_SERVER, existing.get(TEST_SERVER));
-  root.provide(TEST_AGENT, host);
-  root.provide(TEST_CATALOG, { registerOwner } as never);
-  const owner = root.extend({ [TEST_OWNER]: { packageName: '@fixture/mode' } });
-  const release = await facet.apply(owner);
-  await vi.waitFor(() => expect(registerOwner).toHaveBeenCalled());
-  return async () => {
-    await release?.();
-    await root.fiber.dispose();
-  };
-}
+it('activates live voice through the native ownership broker and exposes tools only after browser readiness', async () => {
+  const { mkdir, writeFile } = await import('node:fs/promises');
+  const { VOICE_MEDIA_PROTOCOL_VERSION, VOICE_MEDIA_ROUTES, VOICE_MEDIA_EVENT_WAIT_NONE } =
+    await import('../../../src/types/clientMedia');
+  const { VOICE_OWNERSHIP_ROUTES, VOICE_OWNERSHIP_PROTOCOL_VERSION } =
+    await import('../../../src/types/voiceOwnership');
+  const { REALTIME_ROUTES } = await import('../../../src/types/realtime');
+  const home = await mkdtemp(join(tmpdir(), 'voice-native-live-'));
+  await mkdir(join(home, '.pi', '.doom'), { recursive: true });
+  await writeFile(join(home, '.pi', '.doom', 'config.yaml'), 'voice:\n  mode: live\n');
+  let selection: string[] = [];
+  const registerTool = vi.fn(() => ({ dispose: vi.fn() }));
+  const host = {
+    context: {
+      cwd: home,
+      repoRoot: home,
+      sessionId: 'native-live',
+      environment: {},
+      get selection() {
+        return { majorMode: 'copilot', activeLayers: [], domains: [], state: { 'minor-mode': selection } };
+      },
+      client: { notify: vi.fn(), setStatus: vi.fn() },
+      session: { activity: async () => ({ isIdle: true }), admitPrompt: vi.fn() },
+    },
+    assertActive: vi.fn(),
+    registerTool,
+    changeSelection: async (change: { values: string[] }) => {
+      selection = change.values;
+    },
+  } as unknown as DoomHeadlessHostService;
+  const broker = new VoiceMediaBroker({
+    directEvents: { publish: vi.fn(), subscribe: () => () => undefined, close() {} },
+    sessionId: 'native-live',
+    clientConnectWaitMs: 0,
+    hubToken: 'hub',
+    realtimeProvider: { createCall: async () => ({ sdp: 'answer', callId: 'fixture' }) },
+  });
+  const post = (path: string, body: object) =>
+    broker.fetch(
+      new Request(`http://voice${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer hub' },
+        body: JSON.stringify(body),
+      }),
+    );
+  const facet = createVoiceServer(host, broker, home);
+  const api = facet.api![0]!.start({} as never);
+  try {
+    await facet.onStart?.({} as never);
+    await vi.waitFor(async () => {
+      const response = await broker.fetch(
+        new Request(`http://voice${VOICE_OWNERSHIP_ROUTES.state}`, { headers: { authorization: 'Bearer hub' } }),
+      );
+      expect(await response.json()).toMatchObject({ registration: { eligible: true } });
+    });
+    const lease = { clientId: 'browser', connectionId: 'live-tab' };
+    expect(
+      (
+        await post(VOICE_MEDIA_ROUTES.clientConnect, {
+          ...lease,
+          version: VOICE_MEDIA_PROTOCOL_VERSION,
+          clientKind: 'browser',
+          controlLocation: 'local',
+          capabilities: {
+            capture: true,
+            playback: true,
+            captureActivity: false,
+            autonomousOrchestration: false,
+            realtime: true,
+          },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await post(VOICE_OWNERSHIP_ROUTES.command, {
+          version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+          commandId: 'activate',
+          action: 'activate',
+        })
+      ).status,
+    ).toBe(200);
+    expect(registerTool).not.toHaveBeenCalled();
+    const eventResponse = await broker.fetch(
+      new Request(
+        `http://voice${VOICE_MEDIA_ROUTES.clientEvents}?clientId=browser&connectionId=live-tab&after=0&wait=${VOICE_MEDIA_EVENT_WAIT_NONE}`,
+      ),
+    );
+    const event = (await eventResponse.json()) as { activationId: string };
+    const browser = { ...lease, activationId: event.activationId };
+    expect((await post(REALTIME_ROUTES.clientNegotiate, { ...browser, sdp: 'offer' })).status).toBe(200);
+    await post(REALTIME_ROUTES.clientState, {
+      ...browser,
+      state: { connection: 'connected', listening: true, speaking: false, muted: false },
+    });
+    await post(REALTIME_ROUTES.clientEvent, {
+      ...browser,
+      event: JSON.stringify({ type: 'session.started', session: { id: 'provider' } }),
+    });
+    await vi.waitFor(() => expect(registerTool).toHaveBeenCalledTimes(4));
+    expect(await (await api.fetch(new Request('http://voice/status'))).json()).toMatchObject({
+      state: 'active',
+      mode: 'live',
+    });
+    const stopped = await api.fetch(
+      new Request('http://voice/control', { method: 'POST', body: JSON.stringify({ action: 'deactivate' }) }),
+    );
+    expect(await stopped.json()).toMatchObject({ state: 'disabled' });
+    for (const registration of registerTool.mock.results) expect(registration.value.dispose).toHaveBeenCalledOnce();
+  } finally {
+    await facet.onDispose?.({} as never);
+    await rm(home, { recursive: true, force: true });
+  }
+});

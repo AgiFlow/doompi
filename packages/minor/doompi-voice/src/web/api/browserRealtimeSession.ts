@@ -1,3 +1,4 @@
+import type { VoiceMicrophoneConstraints } from '../../types/clientMedia';
 import { REALTIME_LIMITS, type BrowserRealtimeOptions, type RealtimeBrowserState } from '../../types/realtime';
 
 interface BrowserMediaTrack {
@@ -54,7 +55,7 @@ interface BrowserTrackEvent {
 
 const browser = globalThis as unknown as {
   navigator: {
-    mediaDevices?: { getUserMedia(constraints: { audio: true; video: false }): Promise<BrowserMediaStream> };
+    mediaDevices?: { getUserMedia(constraints: VoiceMicrophoneConstraints): Promise<BrowserMediaStream> };
   };
   RTCPeerConnection?: new () => BrowserPeerConnection;
   MediaStream: new (tracks: BrowserMediaTrack[]) => BrowserMediaStream;
@@ -103,7 +104,13 @@ export class BrowserRealtimeSession {
   private abortController: AbortController | undefined;
   private suppressOutput = false;
 
-  public constructor(private readonly options: BrowserRealtimeOptions) {}
+  public constructor(
+    private readonly options: BrowserRealtimeOptions,
+    private readonly microphoneConstraints: () => Promise<VoiceMicrophoneConstraints> = async () => ({
+      audio: true,
+      video: false,
+    }),
+  ) {}
 
   public async start(): Promise<void> {
     if (this.started) throw new Error('Realtime browser session has already started.');
@@ -117,7 +124,9 @@ export class BrowserRealtimeSession {
       if (typeof browser.RTCPeerConnection !== 'function' || browser.navigator.mediaDevices?.getUserMedia === undefined)
         throw new Error('Browser realtime media is unavailable.');
 
-      const capture = browser.navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const capture = this.microphoneConstraints().then((constraints) =>
+        browser.navigator.mediaDevices!.getUserMedia(constraints),
+      );
       void capture.then(
         (lateStream) => {
           if (!this.isCurrent(generation)) for (const track of lateStream.getTracks()) track.stop();

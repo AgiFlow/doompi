@@ -102,6 +102,10 @@ function createCliApplication(initialTelemetry?: HarnessTelemetry) {
       const [{ runSync }, telemetry] = await Promise.all([import('./commands/sync/workflow'), getTelemetry()]);
       return runSync(args, undefined, undefined, undefined, { telemetry });
     }
+    if (args[0] === 'api-export') {
+      const { runApiExport } = await import('./commands/api-export');
+      return runApiExport(args);
+    }
     if (args[0] === 'doctor') {
       const { runDoctor } = await import('./commands/doctor');
       return runDoctor(args);

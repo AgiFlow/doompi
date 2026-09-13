@@ -148,3 +148,46 @@ describe('configuration mount ownership', () => {
     expect(changed).toHaveBeenCalledTimes(1);
   });
 });
+
+it('atomically configures Voice with numeric values and preserves scope restrictions', async () => {
+  const global = mount('global');
+  const before = (await (await global.request('/config')).json()) as SettingsConfigView;
+  const keyPath = ['voice', 'autoCapture', 'utteranceIdleMs'];
+  const edits = [
+    { keyPath: ['voice', 'autoCapture', 'model'], value: 'provider/model' },
+    { keyPath: ['voice', 'autoCapture', 'tts', 'engine'], value: 'macos-say' },
+    { keyPath, value: 3500 },
+  ];
+  const request = { repoRoot: '', scope: 'global', edits, expectedHash: before.hashes.global };
+  const response = await global.request('/value', request);
+  expect(response.status).toBe(200);
+  const file = path.join(home, '.pi', '.doom', 'config.yaml');
+  const saved = fs.readFileSync(file, 'utf8');
+  expect(saved).toContain('utteranceIdleMs: 3500');
+  const view = (await response.json()) as SettingsConfigView;
+  expect(
+    (
+      await global.request('/value', {
+        ...request,
+        edits: [
+          { keyPath: ['voice', 'language'], value: 'fr' },
+          { keyPath, value: -1 },
+        ],
+        expectedHash: view.hashes.global,
+      })
+    ).status,
+  ).toBe(422);
+  expect(fs.readFileSync(file, 'utf8')).toBe(saved);
+  const workspace = mount('workspace');
+  const workspaceBefore = (await (await workspace.request('/config')).json()) as SettingsConfigView;
+  expect(
+    (
+      await workspace.request('/value', {
+        ...request,
+        repoRoot: repo,
+        scope: 'repository',
+        expectedHash: workspaceBefore.hashes.repository,
+      })
+    ).status,
+  ).toBe(409);
+});

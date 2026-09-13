@@ -194,24 +194,6 @@ function protocolHost(
   threads: ThreadJournals,
   telemetry?: ServerTelemetry,
 ): ServerHost<DoomSessionMetadata> {
-  const serviceHosts = new Map<string, ReturnType<typeof createAgentServerService>>();
-  const serviceHost = (session: HeadlessHubSession): ReturnType<typeof createAgentServerService> => {
-    const current = serviceHosts.get(session.id);
-    if (current) return current;
-    const created = createAgentServerService({
-      runtime: session.host.runtime,
-      onPresentationFrame: (listener) => session.host.onPresentationFrame(listener),
-      respondToExtensionUi: (frame) => session.host.respondToExtensionUi(frame),
-      readThreadTranscript: (threadId, request, context) => threads.readPage(session.id, threadId, request, context),
-      sessionId: session.id,
-      sessionName: session.name,
-      cwd: session.cwd,
-      createdAt: metadataOf(session).createdAt,
-      telemetry,
-    });
-    serviceHosts.set(session.id, created);
-    return created;
-  };
   return {
     serverServices: managementHost(hub, threads),
     async resolveSession(sessionId) {
@@ -222,7 +204,26 @@ function protocolHost(
     async openSession(metadata, context): Promise<RoutedSessionHandle> {
       const session = hub.session(metadata.id);
       if (!session) throw new SessionNotFoundError(`No session ${metadata.id}`);
-      return serviceHost(session).openSession(metadata, context);
+      const service = createAgentServerService({
+        runtime: session.host.runtime,
+        onPresentationFrame: (listener) => session.host.onPresentationFrame(listener),
+        respondToExtensionUi: (frame) => session.host.respondToExtensionUi(frame),
+        readThreadTranscript: (threadId, request, readContext) =>
+          threads.readPage(session.id, threadId, request, readContext),
+        sessionId: session.id,
+        sessionName: session.name,
+        cwd: session.cwd,
+        createdAt: metadataOf(session).createdAt,
+        telemetry,
+      });
+      const handle = await service.openSession(metadata, context);
+      return {
+        ...handle,
+        terminated: session.host.runtime.exited.then(async () => {
+          await handle.close(BACKGROUND_CONTEXT);
+          return undefined;
+        }),
+      };
     },
   };
 }

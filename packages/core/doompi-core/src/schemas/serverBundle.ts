@@ -26,6 +26,7 @@ export interface DoomServerBundle {
   readonly generation: string;
   readonly fingerprint: string;
   readonly entries: readonly DoomServerBundleEntry[];
+  readonly contracts?: { readonly file: string; readonly sha256: string };
 }
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -94,5 +95,15 @@ export function parseDoomServerBundle(value: unknown): DoomServerBundle {
     if (typeof candidate.required !== 'boolean') throw new Error(`Invalid server bundle ${packageName} required`);
     return { packageName, entry, module, scopes: candidate.scopes, owners, required: candidate.required };
   });
-  return { version: DOOM_SERVER_BUNDLE_VERSION, generation, fingerprint, entries };
+  let contracts: DoomServerBundle['contracts'];
+  if (value.contracts !== undefined) {
+    if (
+      !record(value.contracts) ||
+      typeof value.contracts.sha256 !== 'string' ||
+      !/^[a-f0-9]{64}$/u.test(value.contracts.sha256)
+    )
+      throw new Error('Invalid server bundle contracts');
+    contracts = { file: relativeFile(value.contracts.file, 'contracts file'), sha256: value.contracts.sha256 };
+  }
+  return { version: DOOM_SERVER_BUNDLE_VERSION, generation, fingerprint, entries, ...(contracts ? { contracts } : {}) };
 }

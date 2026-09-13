@@ -101,7 +101,11 @@
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
-    ]
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
+    }
   },
   "pi": {
     "extensions": [

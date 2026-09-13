@@ -32,7 +32,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { getHarnessState, loadMajorModesConfig, resolvePackageConfigurations } from '@agimon-ai/doompi-config';
+import { loadHarnessState, loadMajorModesConfig, resolvePackageConfigurations } from '@agimon-ai/doompi-config';
 
 import {
   DOOMPI_TEAM_PACKAGE,
@@ -130,10 +130,12 @@ export interface ActiveTeamPackageConfig {
 }
 
 /** Resolve Team-owned package configuration from the current parent harness state. */
-export function resolveActiveTeamPackageConfig(): ActiveTeamPackageConfig | undefined {
-  const harness = getHarnessState();
+export function resolveActiveTeamPackageConfig(
+  environment: Readonly<NodeJS.ProcessEnv> = process.env,
+): ActiveTeamPackageConfig | undefined {
+  const harness = loadHarnessState(environment).state;
   if (!harness.root) return undefined;
-  const layers = loadMajorModesConfig(harness.root);
+  const layers = loadMajorModesConfig(harness.root, environment.HOME);
   const entries = resolvePackageConfigurations(layers, harness.layers, DOOMPI_TEAM_PACKAGE);
   const config = mergeTeamPackageConfigurations(entries);
   return config ? { config, path: path.join(harness.root, MAJOR_MODES_CONFIG_RELATIVE_PATH) } : undefined;
@@ -147,11 +149,15 @@ function teamModelSpecs(config: TeamPackageConfig | undefined): string[] | undef
 }
 
 /** Resolve Team's ordered package model policy without merging it into an agent definition. */
-export function resolveActiveTeamModelSpecs(): string[] | undefined {
-  return teamModelSpecs(resolveActiveTeamPackageConfig()?.config);
+export function resolveActiveTeamModelSpecs(
+  environment: Readonly<NodeJS.ProcessEnv> = process.env,
+): string[] | undefined {
+  return teamModelSpecs(resolveActiveTeamPackageConfig(environment)?.config);
 }
 
 export class AgentDiscoveryService implements AgentDiscoveryContract {
+  constructor(private readonly environment: Readonly<NodeJS.ProcessEnv> = process.env) {}
+
   private readonly cache = new LruCache<string, CacheEntry>(MAX_CACHED_DISCOVERIES);
 
   /**
@@ -202,13 +208,13 @@ export class AgentDiscoveryService implements AgentDiscoveryContract {
    * keeps the stat count fixed regardless of how many scopes are queried.
    */
   private fingerprint(cwd: string): string {
-    const harness = getHarnessState();
+    const harness = loadHarnessState(this.environment).state;
     const sources = [
-      getUserAgentSettingsPath(),
-      getProjectAgentSettingsPath(cwd) ?? MISSING_SOURCE_MARKER,
-      ...userAgentDirs(),
-      ...resolveNearestProjectAgentDirs(cwd).readDirs,
-      ...pluginAgentDirs(),
+      getUserAgentSettingsPath(this.environment),
+      getProjectAgentSettingsPath(cwd, this.environment) ?? MISSING_SOURCE_MARKER,
+      ...userAgentDirs(this.environment),
+      ...resolveNearestProjectAgentDirs(cwd, this.environment).readDirs,
+      ...pluginAgentDirs(this.environment),
     ];
     if (harness.root) sources.push(path.join(harness.root, MAJOR_MODES_CONFIG_RELATIVE_PATH));
     return [...sources.map(stampOf), `active-layers${FINGERPRINT_FIELD_SEPARATOR}${harness.layers.join(',')}`].join(
@@ -221,8 +227,8 @@ export class AgentDiscoveryService implements AgentDiscoveryContract {
    * which is the only direct way to assert that the cache is doing its job.
    */
   protected load(cwd: string, scope: AgentScope): AgentDiscoveryResult {
-    const userSettingsPath = getUserAgentSettingsPath();
-    const projectSettingsPath = getProjectAgentSettingsPath(cwd);
+    const userSettingsPath = getUserAgentSettingsPath(this.environment);
+    const projectSettingsPath = getProjectAgentSettingsPath(cwd, this.environment);
     const userSettings: SubagentSettings =
       scope === 'project' ? EMPTY_SUBAGENT_SETTINGS : readSubagentSettings(userSettingsPath);
     const projectSettings: SubagentSettings =
@@ -234,7 +240,7 @@ export class AgentDiscoveryService implements AgentDiscoveryContract {
       userSettingsPath,
       projectSettingsPath,
     );
-    const teamPackage = resolveActiveTeamPackageConfig();
+    const teamPackage = resolveActiveTeamPackageConfig(this.environment);
     const packageModels = teamModelSpecs(teamPackage?.config);
     const packagePrimaryModel = packageModels?.[0];
     const defaultModel =
@@ -258,15 +264,25 @@ export class AgentDiscoveryService implements AgentDiscoveryContract {
         projectSettingsPath,
       );
 
-    const plugin = resolve(pluginAgentDirs().flatMap((directory) => loadAgentsFromDir(directory, 'plugin')));
+    const plugin = resolve(
+      pluginAgentDirs(this.environment).flatMap((directory) =>
+        loadAgentsFromDir(directory, 'plugin', this.environment),
+      ),
+    );
     const user =
-      scope === 'project' ? [] : resolve(userAgentDirs().flatMap((directory) => loadAgentsFromDir(directory, 'user')));
+      scope === 'project'
+        ? []
+        : resolve(
+            userAgentDirs(this.environment).flatMap((directory) =>
+              loadAgentsFromDir(directory, 'user', this.environment),
+            ),
+          );
     const project =
       scope === 'user'
         ? []
         : resolve(
-            resolveNearestProjectAgentDirs(cwd).readDirs.flatMap((directory) =>
-              loadAgentsFromDir(directory, 'project'),
+            resolveNearestProjectAgentDirs(cwd, this.environment).readDirs.flatMap((directory) =>
+              loadAgentsFromDir(directory, 'project', this.environment),
             ),
           );
 
@@ -274,7 +290,7 @@ export class AgentDiscoveryService implements AgentDiscoveryContract {
       // A disabled agent is dropped last, so that an override which re-enables
       // one has already been applied by the time this runs.
       agents: mergeAgentsForScope(scope, user, project, plugin).filter((agent) => agent.disabled !== true),
-      projectAgentsDir: resolveNearestProjectAgentDirs(cwd).preferredDir,
+      projectAgentsDir: resolveNearestProjectAgentDirs(cwd, this.environment).preferredDir,
       modelScope: projectSettings.modelScope ?? userSettings.modelScope,
     };
   }
