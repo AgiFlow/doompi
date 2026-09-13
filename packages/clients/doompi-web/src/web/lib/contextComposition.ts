@@ -1,6 +1,6 @@
-import type { ContextProjection, MinorModeProjection } from '../../types/hub.ts';
-import { minorModes } from './composition.ts';
-import { parseSelection } from './statusLine.ts';
+import type { ContextProjection, MinorModeProjection } from '../../types/hub';
+import { minorModes } from './composition';
+import { parseSelection } from './statusLine';
 
 /**
  * What the session is composed of, as opposed to what it is doing.

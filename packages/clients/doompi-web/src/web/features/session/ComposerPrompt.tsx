@@ -1,11 +1,12 @@
-import type { ToolPromptRenderProps } from '@agimon-ai/doompi-web-contracts';
+import type { ToolPromptRenderProps } from '@agimon-ai/doompi-core/web';
 import { useEffect } from 'react';
-import { ToolRendererBoundary } from '../../components/ToolRendererBoundary.tsx';
-import type { ToolPromptClaim } from '../../lib/toolPrompt.ts';
-import { toolMessageProps } from '../../lib/toolMessageProps.ts';
-import { answerDialogValue, cancelDialog, useActiveSession } from '../../stores/sessionStore.ts';
-import { markToolPromptFailed } from '../../stores/toolPromptStore.ts';
-import { usePluginSlotProps } from '../../stores/usePluginSlotProps.ts';
+
+import { ToolRendererBoundary } from '../../components/ToolRendererBoundary';
+import { toolMessageProps } from '../../lib/toolMessageProps';
+import type { ToolPromptClaim } from '../../lib/toolPrompt';
+import { answerDialogValue, cancelDialog, useActiveSession } from '../../stores/sessionStore';
+import { markToolPromptFailed } from '../../stores/toolPromptStore';
+import { usePluginSlotProps } from '../../stores/usePluginSlotProps';
 
 /**
  * Hands the request back after a prompt threw. Rendered rather than called,

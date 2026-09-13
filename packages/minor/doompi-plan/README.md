@@ -98,8 +98,16 @@ calls consume provider quota.
 ## Public API
 
 The root exports planning configuration schemas, prompts, Fable flow helpers, and the Plan mode
-service. Focused exports include `/config`, `/planConfig`, `/planMode`, `/fableFlow`, and `/prompts`.
-`/session-api` is the entry a host mounts for the cockpit's plan tab.
+service. Focused exports include `/config`, `/plan-config`, `/plan-mode`, `/fable-flow`, and `/prompts`.
+The session-scoped server plugin owns the cockpit plan API. Pi and server entries live in
+`src/extensions`; their public modules are `/extensions/pi` and `/extensions/server`.
+Controllers compose tools and services. Services live in named folders, and `src/exports`
+contains only flat public exports.
+
+The Pi plugin constructs declarations, installs optional Cordis services, and then becomes ready.
+Its `onStop` hook cancels pending work and restores the previous agent configuration before
+registrations are removed. `onDispose` also handles partial startup cleanup. Session events and
+Plan flavor changes remain separate from plugin startup and shutdown.
 
 ## Development
 

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -9,15 +10,15 @@ const mocks = vi.hoisted(() => ({
   acquireBootstrapClaim: vi.fn(),
 }));
 
-vi.mock('../../src/adapters/bootstrapLocator.ts', () => ({
+vi.mock('../../src/builders/cli/bootstrapLocator', () => ({
   findSyncedRoot: mocks.findSyncedRoot,
   readStartupBootstrapStatus: mocks.readStartupBootstrapStatus,
 }));
-vi.mock('../../src/adapters/bootstrapClaim.ts', () => ({
+vi.mock('../../src/builders/cli/bootstrapClaim', () => ({
   acquireBootstrapClaim: mocks.acquireBootstrapClaim,
 }));
 
-import { packageBootstrap } from '../../src/adapters/packageBootstrap.ts';
+import { packageBootstrap } from '../../src/extensions/pi';
 
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-package-runtime-')));
 let sequence = 0;

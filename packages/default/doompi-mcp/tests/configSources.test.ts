@@ -2,14 +2,12 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
-import {
-  buildMcpConfigGroups,
-  PROXY_SERVER_NAME,
-  resolveSharedConfigPath,
-} from '../src/adapters/node/configSources.ts';
-import { definitionsCachePath } from '../src/adapters/node/mcpRuntime.ts';
+
+import { buildMcpConfigGroups, PROXY_SERVER_NAME, resolveSharedConfigPath } from '../src/services/configSources';
+import { definitionsCachePath } from '../src/services/mcpRuntime';
 
 let repoRoot: string;
 let stagingDirectory: string;

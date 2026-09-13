@@ -5,9 +5,9 @@
  * rather than a hand-rolled stub, so a change to the slot contract breaks this
  * story at the type level instead of silently drifting.
  */
-import type { WorkflowCatalogEntryView } from '../../types/webWorkflows.ts';
-import { catalog } from '../stores/catalogStore.ts';
-import { WorkflowCatalogDrawer } from './WorkflowCatalogDrawer.tsx';
+import type { WorkflowCatalogEntryView } from '../../types/webWorkflows';
+import { catalog } from '../stores/catalogStore';
+import { WorkflowCatalogDrawer } from './WorkflowCatalogDrawer';
 
 /** Its own session id, so a story that seeds this store cannot disturb another's. */
 const SESSION_ID = 'workflow-catalog';

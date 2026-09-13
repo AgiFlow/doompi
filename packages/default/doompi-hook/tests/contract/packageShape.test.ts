@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -17,6 +18,7 @@ interface PackageManifest {
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
   devDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
 }
 
 const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
@@ -51,35 +53,31 @@ describe('doompi-hook package contract', () => {
     expect(new Set(keywords).size).toBe(keywords.length);
   });
 
-  it('publishes one closed Pi entry through pi.extensions', async () => {
+  it('publishes Pi and server entries through a closed exports map', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).not.toContain('./extensions/doom');
-    for (const subpath of ['.', './extensions/pi']) {
+    for (const subpath of ['.', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
+    expect(manifest.doompiServer).toMatchObject({
+      entry: './src/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['session'],
+    });
   });
 
   it('routes the Pi entry through a default-exported factory on the shared Cordis host', async () => {
-    const entry = await readFile(path.join(packageDirectory, 'src/exports/extensions/pi.ts'), 'utf8');
-    const factory = await readFile(path.join(packageDirectory, 'src/adapters/pi/extension.ts'), 'utf8');
-
-    expect(entry).toContain("from '../../adapters/pi/extension.ts'");
-    expect(entry).toContain('as default');
-    expect(entry).not.toContain('doom.ts');
-    expect(factory).toContain('connectDoomCordisHost');
-    expect(factory).toContain('connection.root.plugin(');
-    expect(factory).not.toContain('new Context()');
-    expect(
-      factory.match(/await fiber\.dispose\(\);\s*\}\s*finally\s*\{\s*await connection\.dispose\(\);/gu),
-    ).toHaveLength(2);
-    expect(factory).toContain('registerHookHandlers');
-    expect(factory).toContain('inject([DOOM_HELP_SERVICE]');
-    expect(factory).toContain("name: 'doompi-author-hook'");
+    const entry = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
+    expect(entry).toContain('export default hookExtension');
+    expect(entry).toContain('definePiExtension');
+    expect(entry).toContain('createHookHandlers');
+    expect(entry).toContain('services: [binding.plugin]');
+    expect(entry).not.toContain('new Context()');
   });
 
   it('never depends on the host package, which would make the build graph cyclic', async () => {
@@ -121,10 +119,10 @@ describe('doompi-hook package contract', () => {
   it('declares no protocol channel literals, which belong to the contracts package', async () => {
     const sources = await Promise.all(
       [
-        'src/adapters/pi/extension.ts',
-        'src/adapters/pi/hookHandlers.ts',
-        'src/adapters/hookDocuments.ts',
-        'src/adapters/hookRunner.ts',
+        'src/extensions/pi.ts',
+        'src/controllers/hookHandlers.ts',
+        'src/services/hookDocuments/index.ts',
+        'src/services/hookRunner/index.ts',
         'src/exports/index.ts',
       ].map((relativePath) => readFile(path.join(packageDirectory, relativePath), 'utf8')),
     );

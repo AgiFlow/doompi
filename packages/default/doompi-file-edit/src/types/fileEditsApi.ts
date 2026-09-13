@@ -1,4 +1,4 @@
-import type { FileEditOrigin, FileEditTool } from './domain.ts';
+import type { FileEditOrigin, FileEditTool } from './domain';
 
 /**
  * The wire vocabulary this package's API shares with whatever calls it.
@@ -43,25 +43,25 @@ export function previewPath(): string {
  */
 export function detailUrl(sessionId: string, filePath: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [PATH_QUERY_PARAM]: filePath });
-  return `/api/plugin/${API_BASE_PATH}${detailPath()}?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${detailPath()}?${search.toString()}`;
 }
 
 /** The absolute URL a page puts a manual save to. */
 export function contentUrl(sessionId: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `/api/plugin/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
 }
 
 /** The absolute URL a page reads an unchanged file through. */
 export function previewUrl(sessionId: string, filePath: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [PATH_QUERY_PARAM]: filePath });
-  return `/api/plugin/${API_BASE_PATH}${previewPath()}?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${previewPath()}?${search.toString()}`;
 }
 
 /** The absolute URL a page deletes a file through; the path rides the query, not a body. */
 export function deleteUrl(sessionId: string, filePath: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [PATH_QUERY_PARAM]: filePath });
-  return `/api/plugin/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
 }
 
 /**

@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -12,21 +13,17 @@ import {
   resolveChildCwd,
   resolveConfigDirName,
   resolveWatchPath,
-} from '../../src/adapters/filesystem/configDir';
+} from '../../src/services/configDir';
 import {
   createSessionScope,
-  currentResultsDir,
-  currentRunsDir,
-  getRunConfigPath,
   scopeResultsDir,
   scopeRunsDir,
-  scopeTeamDir,
   SESSIONS_ROOT_DIR,
   sessionScopeDir,
   sessionScopeKey,
   resolveTempScopeId,
   TEMP_ROOT_DIR,
-} from '../../src/adapters/filesystem/paths';
+} from '../../src/services/sessionPaths';
 
 const temporaryDirs: string[] = [];
 
@@ -146,14 +143,12 @@ describe('filesystem roots', () => {
   it("derives every per-session directory from that session's own scope", () => {
     const scope = createSessionScope('session-under-test');
     const scopeDir = sessionScopeDir(scope);
-    for (const dir of [scopeResultsDir(scope), scopeRunsDir(scope), scopeTeamDir(scope)]) {
-      expect(path.dirname(dir)).toBe(scopeDir);
-    }
+    for (const dir of [scopeResultsDir(scope), scopeRunsDir(scope)]) expect(path.dirname(dir)).toBe(scopeDir);
   });
 
   it('keeps the per-session subdirectories distinct', () => {
     const scope = createSessionScope('session-under-test');
-    const dirs = [scopeResultsDir(scope), scopeRunsDir(scope), scopeTeamDir(scope)];
+    const dirs = [scopeResultsDir(scope), scopeRunsDir(scope)];
     expect(new Set(dirs).size).toBe(dirs.length);
   });
 
@@ -169,18 +164,6 @@ describe('filesystem roots', () => {
     // Sanitizing would map both of these onto the same segment.
     expect(sessionScopeKey('a/b')).not.toBe(sessionScopeKey('a:b'));
     expect(sessionScopeKey('x')).toMatch(/^[0-9a-f]{16}$/);
-  });
-
-  it('places a run config inside its own session, not at the shared root', () => {
-    const scope = createSessionScope('session-under-test');
-    const configPath = getRunConfigPath(scope, 'abc123');
-    expect(configPath).toBe(path.join(sessionScopeDir(scope), 'launch', 'abc123.json'));
-    expect(path.dirname(configPath)).not.toBe(TEMP_ROOT_DIR);
-  });
-
-  it('resolves the current-scope helpers against the scope the process has adopted', () => {
-    // tests/setup.ts installs a per-worker scope; these must agree with it.
-    expect(path.dirname(currentRunsDir())).toBe(path.dirname(currentResultsDir()));
   });
 });
 

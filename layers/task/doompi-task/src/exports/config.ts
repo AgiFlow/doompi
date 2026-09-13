@@ -1,1 +1,1 @@
-export * from '../types/config';
+export * from '../services/config';

@@ -1,7 +1,8 @@
+import type { DockFaceContribution } from '@agimon-ai/doompi-core/web';
 import { Button, SectionLabel } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import type { DockFaceContribution } from '@agimon-ai/doompi-web-contracts';
-import { type DockTab, setDockTab, uiStore } from '../../stores/uiStore.ts';
+
+import { type DockTab, setDockTab, uiStore } from '../../stores/uiStore';
 
 const HOST_TABS: readonly { id: DockTab; label: string }[] = [
   { id: 'activity', label: 'activity' },

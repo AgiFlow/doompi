@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
-import { renderMermaid } from '../lib/mermaidDiagram.ts';
-import { SyntaxText } from './SyntaxText.tsx';
+
+import { renderMermaid } from '../lib/mermaidDiagram';
+import { SyntaxText } from './SyntaxText';
 
 /**
  * A mermaid fence, drawn.

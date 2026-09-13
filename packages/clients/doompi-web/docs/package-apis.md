@@ -49,44 +49,59 @@ The hub removes `session` or `hubSession` before calling the package handler. A 
 
 ## Why APIs follow the composition
 
-`doompi sync` discovers `doompiApi` declarations from the same package roots used for the TUI and web plugins. It generates `hub.routes.mjs` and `session.routes.mjs` inside the immutable synchronized generation.
+`doompi sync` discovers `doompiServer` declarations across the repository's configured candidate packages. It writes one `api/server.bundle.json` descriptor referencing independently compiled, generation-pinned facet modules.
 
-This keeps UI and server capabilities aligned. A plugin from repository A cannot silently borrow an API that exists only in repository B or in the global fallback. A session-associated hub request selects the complete generation already assigned to that session.
+The candidate list is not the active composition. Hosts filter scope and effective mode/layer ownership before importing facets or starting their handlers. A session-associated hub request uses that session's owning repository, pinned generation and effective selection, never another repository or newer sync defaults.
 
-An empty API composition is valid and still produces both route modules. Missing metadata means a package contributes no API. Invalid optional declarations can be reported and skipped without removing unrelated packages.
+An empty composition still produces a valid descriptor. Optional package load failures are attributed and isolated; required failures prevent readiness. A malformed selected descriptor never silently falls back. Legacy route and facet aggregates are read only for explicitly admitted older generations, never generated or combined with a new descriptor.
 
 See [Web bundling and serving](bundle.md) for generation selection and publication.
 
 ## Declare an API
 
-Add `doompiApi` to the package manifest:
+Declare one server facet in the package manifest:
 
 ```json
 {
-  "doompiApi": {
-    "basePath": "example",
-    "session": {
-      "entry": "./src/exports/sessionApi.ts",
-      "dist": "./dist/sessionApi.mjs"
-    },
-    "hub": {
-      "entry": "./src/exports/hubApi.ts",
-      "dist": "./dist/hubApi.mjs"
-    }
+  "doompiServer": {
+    "entry": "./src/exports/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": ["session"]
   }
 }
 ```
 
-The field accepts one declaration or an array. `basePath` is kebab-case and must be unique among loaded APIs. A package may declare only `hub`, only `session`, or both.
+Use `hub`, `session`, or both scopes. Each package has one facet declaration with package-relative source and built paths that cannot escape the package. Publish its built entry and matching package export. Do not add a separate `doompiApi` field.
 
-Each scope names a package-relative source `entry` and built `dist` file. Paths cannot traverse outside the package. Sync uses the source entry to understand the build and the host imports the built module at runtime.
+The built entry default-exports a Cordis object plugin. For example, re-export this adapter from `src/exports/extensions/server.ts`:
+
+```ts
+import {
+  DOOM_SERVER_HOST_SERVICE,
+  requireDoomServerHost,
+  type DoomServerFacet,
+} from '@agimon-ai/doompi-core/server-facet';
+import { api } from '../exampleApi';
+
+export default {
+  inject: [DOOM_SERVER_HOST_SERVICE],
+  apply(context) {
+    const host = requireDoomServerHost(context);
+    if (host.scope !== 'session') return;
+    const registration = host.registerApi(api);
+    return () => registration.dispose();
+  },
+} satisfies DoomServerFacet;
+```
+
+The API owns its base path. Eligible registrations compete for paths in deterministic installation order. Returning the disposer ties unmounting and handler cleanup to facet lifetime.
 
 ## Implement the handler
 
-The built entry exports one `api` value:
+Keep the API implementation reusable, separate from the facet entry:
 
 ```ts
-import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 
 export const api: DoomApi = {
   basePath: 'example',
@@ -123,7 +138,7 @@ A hub context may include an opaque repository resolver and synchronized reposit
 
 Before forwarding a browser request, the hub discards incoming copies of its trusted caller headers. It then stamps locality, paired-device identity when remote, and the result of any required passkey step-up.
 
-A handler can read that context with `doomApiCallerFrom(request.headers)` from `@agimon-ai/doompi-extension-contracts/package-api`.
+A handler can read that context with `doomApiCallerFrom(request.headers)` from `@agimon-ai/doompi-core/package-api`.
 
 This metadata answers who reached the handler and through which boundary. It does not replace operation-specific authorization. A package that writes credentials, starts processes, or opens new paths must still validate the request and enforce its own scope.
 
@@ -143,9 +158,7 @@ A session server loads its API registry at startup. Build and run `doompi sync`,
 GET /api/plugin/mcp/repository?repositoryId=<repository-id>&hubSession=<session-id>
 ```
 
-The hub uses `hubSession` only to select the matching hub API generation. It removes the selector, then invokes the MCP handler in the hub process. Without `hubSession`, `DOOMPI_API_DIR` takes precedence, followed by the generated global API directory.
-
-A hub module is built server code. Build and sync it before restarting or reloading the hub composition.
+The headless hub uses `hubSession` only to select the matching admitted server-facet generation. It removes the selector, then invokes the handler in the headless process. A hub module is built server code, so build and sync it before restarting the headless process.
 
 ## Failure and trust boundaries
 
@@ -158,4 +171,4 @@ Package APIs are trusted executable code, not remote sandboxes. Keep the failure
 - make `close()` safe after partial startup
 - report a package-scoped notice instead of taking down unrelated APIs
 
-Remote requests still pass through the web guard and sealed transport, but those layers do not make a handler correct. A direct browser `fetch` from a plugin may expose its payload to the tunnel relay unless it uses the sealed transport helper. See [Remote security](security.md).
+Remote requests still pass through the browser transport boundary, but that layer does not make a handler correct. See [Remote security](security.md).

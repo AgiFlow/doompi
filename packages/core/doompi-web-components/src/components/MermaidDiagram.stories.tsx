@@ -1,4 +1,4 @@
-import { MermaidDiagram } from './MermaidDiagram.tsx';
+import { MermaidDiagram } from './MermaidDiagram';
 
 const GRAPH = 'graph TD; A-->B;';
 

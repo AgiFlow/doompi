@@ -15,7 +15,7 @@ vi.mock('@agimon-ai/doompi-web-security/browser', () => ({
   sealedTransport: { fetch: (input: string, init?: RequestInit) => fetchMock(input, init) },
 }));
 
-const { fetchContextItemDetail } = await import('../../src/web/lib/contextDetailApi.ts');
+const { fetchContextItemDetail } = await import('../../src/web/lib/contextDetailApi');
 
 function answer(status: number, body: string): Response {
   return { ok: status >= 200 && status < 300, status, text: () => Promise.resolve(body) } as unknown as Response;

@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createBashHookRunner } from '../../src/adapters/hookRunner.ts';
-import { HOOK_TELEMETRY_EVENT } from '../../src/types/telemetry.ts';
-import { asSpawn, type FakeChild, fakeChild, type FakeChildOutcome } from '../helpers/childProcess.ts';
-import { recordingTelemetry } from '../helpers/telemetry.ts';
+
+import { HOOK_TELEMETRY_EVENT } from '../../src/constants/telemetry';
+import { createBashHookRunner } from '../../src/services/hookRunner';
+import { asSpawn, type FakeChild, fakeChild, type FakeChildOutcome } from '../helpers/childProcess';
+import { recordingTelemetry } from '../helpers/telemetry';
 
 const REPO_ROOT = '/repo';
 

@@ -38,7 +38,8 @@ not. Use it as-is, build your own config on top, or raid it for parts.
 npm install -g @agimon-ai/doompi
 ```
 
-The package pins and installs the upstream Pi version used by `dpi`.
+The package pins and installs the upstream Pi version used by `dpi`. It also owns the
+[`doompi-server` executable and server API](docs/server/index.md) used by the web and desktop clients.
 
 The root package contains the fixed host foundation only. Feature packages are selected by
 `.doom/modes.yaml` and installed into the consumer repository when they are first needed.
@@ -49,8 +50,8 @@ DoomPi is alpha software. Configuration and package boundaries may still change 
 releases.
 
 - Node.js 22.19.0 or newer
-- macOS or Linux on arm64 or x64 for the bundled Runner backend
-- Pi 0.85.0 and Pi TUI 0.85.0 for packages that declare them as peer requirements
+- Release targets: macOS arm64, Linux x64, and Linux arm64
+- Pi 0.85.1 and Pi TUI 0.85.1 for packages that declare them as peer requirements
 
 ## Try DoomPi without replacing your Pi setup
 
@@ -84,6 +85,8 @@ another target's registration or generation.
 
 `dpi` preserves Pi's normal global and repository settings, then applies DoomPi's extension and theme
 settings in memory. It never writes those values to `.pi/settings.json`.
+
+Export the published HTTP and socket contracts with `doompi api-export --out ./api-schema --strict`. See [compiled API export](docs/server/api-export.md) for artifact formats, CI checks, and package declarations.
 
 Run `doompi sync --check` to detect missing, invalid, or stale registered state. Unregistered legacy state
 is not loaded. Inside a repository, `doompi sync` publishes that repository and worktree. Outside every
@@ -325,7 +328,7 @@ mode and domain into a distribution Pi can load quickly.
 [`@agimon-ai/doompi-config`][pkg-doompi-config] resolves the four YAML files and exposes the
 configuration API. [`@agimon-ai/doompi-domain`][pkg-doompi-domain] owns domain selection, plugin
 materialization, resource staging, and MCP scoping.
-[`@agimon-ai/doompi-extension-contracts`][pkg-doompi-extension-contracts] contains the shared
+[`@agimon-ai/doompi-core`][pkg-doompi-core] contains the shared
 Cordis service and event contracts used by extension authors.
 [`@agimon-ai/doompi-hashline`][pkg-doompi-hashline] provides the shared snapshot tags and line-anchor
 protocol. [`@agimon-ai/doompi-read`][pkg-doompi-read] and [`@agimon-ai/doompi-grep`][pkg-doompi-grep]
@@ -743,7 +746,7 @@ MIT
 
 ## Maintainer release order
 
-Publish [`@agimon-ai/doompi-extension-contracts`][pkg-doompi-extension-contracts] and
+Publish [`@agimon-ai/doompi-core`][pkg-doompi-core] and
 [`@agimon-ai/doompi-hashline`][pkg-doompi-hashline] first, then
 [`@agimon-ai/doompi-help`][pkg-doompi-help], and only then the
 [`@agimon-ai/doompi`][pkg-doompi] runtime that consumes them. Generated changelogs remain owned
@@ -785,4 +788,4 @@ loaded extension graph inside the same release boundary as the packages that con
 [pkg-doompi-goal]: https://www.npmjs.com/package/@agimon-ai/doompi-goal
 [pkg-doompi-workflow]: https://www.npmjs.com/package/@agimon-ai/doompi-workflow
 [pkg-doompi-voice]: https://www.npmjs.com/package/@agimon-ai/doompi-voice
-[pkg-doompi-extension-contracts]: https://www.npmjs.com/package/@agimon-ai/doompi-extension-contracts
+[pkg-doompi-core]: https://www.npmjs.com/package/@agimon-ai/doompi-core

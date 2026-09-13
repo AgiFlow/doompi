@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  alignLine,
-  fitLine,
-  formatTokens,
-  frameLine,
-  packSegments,
-  padLine,
-} from '../../src/tui/workflow/rendering.ts';
+
+import { alignLine, fitLine, formatTokens, frameLine, packSegments, padLine } from '../../src/tui/workflow/rendering';
 
 /**
  * The width arithmetic every workflow overlay draws through.

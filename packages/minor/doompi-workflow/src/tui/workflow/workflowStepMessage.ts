@@ -1,5 +1,6 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { Box, type Component, Text, truncateToWidth } from '@earendil-works/pi-tui';
+
 import type { StepReport } from './workflowStatusRow';
 
 export interface WorkflowStepMessageDetails {

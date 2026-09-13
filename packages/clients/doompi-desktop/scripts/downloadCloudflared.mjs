@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { assertSupportedDesktopTarget } from './desktopTarget.mjs';
+
 const VERSION = '2026.8.3';
 const TARGETS = {
   'darwin-arm64': {
@@ -15,6 +17,11 @@ const TARGETS = {
     archive: false,
     asset: 'cloudflared-linux-amd64',
     sha256: 'f29324fe934d1e100617484c78deef803c4dc2cd351d645bbde42e96b4fccc5e',
+  },
+  'linux-arm64': {
+    archive: false,
+    asset: 'cloudflared-linux-arm64',
+    sha256: '4bcfd35521a7cbc545ebfd5d57334a71ee180e2a64874981f374c81472118391',
   },
 };
 const LICENSE_SHA256 = '58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d8bd';
@@ -34,9 +41,9 @@ async function download(url, expectedDigest) {
   return contents;
 }
 
-const targetName = `${process.platform}-${process.arch}`;
+const targetName = assertSupportedDesktopTarget();
 const target = TARGETS[targetName];
-if (target === undefined) throw new Error(`DoomPi Desktop does not package cloudflared for ${targetName}.`);
+if (target === undefined) throw new Error(`DoomPi Desktop has no cloudflared payload for ${targetName}.`);
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outputDirectory = path.join(packageRoot, 'build', 'runtime', 'vendor', 'cloudflared');

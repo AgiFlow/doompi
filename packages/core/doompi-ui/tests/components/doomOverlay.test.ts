@@ -1,13 +1,14 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_NAVIGATION_KEYS,
-} from '../../src/exports/components/doomOverlay.ts';
+} from '../../src/exports/doomOverlay';
 
 const theme = {
   fg: (_color: string, text: string) => text,

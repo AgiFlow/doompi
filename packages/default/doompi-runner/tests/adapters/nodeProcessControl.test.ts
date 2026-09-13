@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NodeProcessControl } from '../../src/adapters/ProcessControl/NodeProcessControl.ts';
+
+import { NodeProcessControl } from '../../src/services/processControl';
 
 describe('NodeProcessControl', () => {
   afterEach(() => {

@@ -1,7 +1,8 @@
 import { useStore } from '@tanstack/react-store';
 import { Store } from '@tanstack/store';
-import type { SessionSummary } from '../../types/hub.ts';
-import type { AttachPhase } from '../lib/sessionSummary.ts';
+
+import type { SessionSummary } from '../../types/hub';
+import type { AttachPhase } from '../lib/sessionSummary';
 
 /** One rail entry: the hub's summary plus this page's view of its connection. */
 export interface SessionMeta {

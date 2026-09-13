@@ -1,5 +1,6 @@
 import { Button, Dot, ShieldIcon } from '@agimon-ai/doompi-web-components';
-import type { RemoteAccessStatus } from '../../types/remoteAccess.ts';
+
+import type { RemoteAccessStatus } from '../../types/remoteAccess';
 
 export interface RemoteAccessButtonProps {
   status: RemoteAccessStatus;

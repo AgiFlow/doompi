@@ -3,7 +3,9 @@
   "version": "0.0.1-alpha.5",
   "description": "Git worktree sessions for DoomPi: spawn an isolated worktree with its own session and manage it from the parent",
   "keywords": [
+    "ai",
     "coding-agent",
+    "developer-tools",
     "doompi",
     "git-worktree",
     "pi-coding-agent",
@@ -28,7 +30,7 @@
     "dist",
     "llms.txt",
     "package.json",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "src/prompts",
     "src/types/webWorktrees.ts",
     "src/types/worktreeRegistry.ts",
@@ -45,15 +47,15 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./api/git": {
-      "types": "./dist/hubApi.d.mts",
-      "import": "./dist/hubApi.mjs",
-      "require": "./dist/hubApi.cjs"
-    },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
+    },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -68,9 +70,8 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
@@ -104,11 +105,17 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "doompiApi": {
-    "basePath": "git",
-    "hub": {
-      "entry": "./src/exports/hubApi.ts",
-      "dist": "./dist/hubApi.mjs"
+  "doompiServer": {
+    "entry": "./src/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "session",
+      "global",
+      "workspace"
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
     }
   },
   "doompiWeb": {
@@ -116,11 +123,10 @@
     "channels": [
       "git_worktrees"
     ],
-    "client": "./src/exports/webClient.ts",
-    "hub": {
-      "entry": "./src/exports/webHub.ts",
-      "dist": "./dist/webHub.mjs"
-    }
+    "client": "./src/extensions/web.ts",
+    "scopes": [
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

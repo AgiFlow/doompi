@@ -4,4 +4,4 @@ export {
   DOOMPI_PROMPT_CACHE_ROOT_SESSION_ENV,
   PI_CACHE_RETENTION_ENV,
   PI_CACHE_RETENTION_LONG,
-} from '../types/environment.ts';
+} from '../constants/environment';

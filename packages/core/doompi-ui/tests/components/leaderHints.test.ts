@@ -1,8 +1,9 @@
 import type { ExtensionContext, ReadonlyFooterDataProvider, Theme } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { describe, expect, it } from 'vitest';
-import { LeaderHints, MAX_WIDGET_LINES } from '../../src/exports/components/leaderHints.ts';
-import type { LeaderSnapshot } from '../../src/exports/uiState.ts';
+
+import { LeaderHints, MAX_WIDGET_LINES } from '../../src/exports/leaderHints';
+import type { LeaderSnapshot } from '../../src/exports/uiState';
 
 const theme = {
   bg: (_color: string, text: string) => text,

@@ -1,7 +1,8 @@
 // @scaffold-generated
 import { access, readFile, readdir } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -15,6 +16,7 @@ interface PackageManifest {
   peerDependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
 }
 
 const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
@@ -64,7 +66,7 @@ describe('doompi-git package contract', () => {
         'dist',
         'src/prompts',
         'src/web',
-        'src/exports/webClient.ts',
+        'src/extensions/web.ts',
         'llms.txt',
         'README.md',
         'package.json',
@@ -90,15 +92,21 @@ describe('doompi-git package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    // './api/git' is the hub-scoped package API the cockpit's worktrees panel
-    // calls; 'src/web' and the web client entry ship as source because the
-    // cockpit bundles the browser half itself.
-    expect(Object.keys(exportsMap)).toEqual(['.', './api/git', './extensions/pi', './package.json']);
+    // './extensions/server' is the facet the hub and session host install;
+    // 'src/web' and the web client entry ship as source because the cockpit
+    // bundles the browser half itself.
+    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(conditions(exportsMap['.'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/pi'])).toEqual(['types', 'import', 'require']);
-    expect(conditions(exportsMap['./api/git'])).toEqual(['types', 'import', 'require']);
+    expect(conditions(exportsMap['./extensions/server'])).toEqual(['types', 'import', 'require']);
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
+    expect(manifest.doompiServer).toEqual({
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      entry: './src/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['session', 'global', 'workspace'],
+    });
   });
 
   it('ships an H1-led Help index and every linked package resource', async () => {

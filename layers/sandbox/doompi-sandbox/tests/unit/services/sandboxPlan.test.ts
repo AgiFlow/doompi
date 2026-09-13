@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildSandboxPlan, type SandboxPlanInput } from '../../../src/services/sandboxPlan.ts';
-import { sandboxImageTag } from '../../../src/adapters/sandboxImageTag.ts';
+
+import { sandboxImageTag } from '../../../src/services/sandboxImageTag';
+import { buildSandboxPlan, type SandboxPlanInput } from '../../../src/services/sandboxPlan';
 
 function input(overrides: Partial<SandboxPlanInput> = {}): SandboxPlanInput {
   return {

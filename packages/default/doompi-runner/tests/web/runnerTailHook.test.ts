@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fetchRunnerLog, followRunnerLog } from '../../src/web/api/logApi.ts';
-import { useRunnerTail } from '../../src/web/hooks/runnerTail.ts';
+
+import { fetchRunnerLog, followRunnerLog } from '../../src/web/api/logApi';
+import { useRunnerTail } from '../../src/web/hooks/runnerTail';
 
 const setTail = vi.fn();
 let cleanup: (() => void) | undefined;
@@ -16,7 +17,7 @@ vi.mock('react', async (importOriginal) => {
   };
 });
 
-vi.mock('../../src/web/api/logApi.ts', () => ({
+vi.mock('../../src/web/api/logApi', () => ({
   fetchRunnerLog: vi.fn(),
   followRunnerLog: vi.fn(),
 }));

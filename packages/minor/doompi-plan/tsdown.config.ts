@@ -1,7 +1,18 @@
 import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-  entry: { '*': ['src/exports/**/*.ts', '!src/exports/webClient.ts'] },
+  entry: {
+    'api-contracts': 'src/exports/apiContracts.ts',
+    index: 'src/exports/index.ts',
+    'extensions/pi': 'src/extensions/pi.ts',
+    'extensions/server': 'src/extensions/server.ts',
+    config: 'src/exports/config.ts',
+    'fable-flow': 'src/exports/fableFlow.ts',
+    'log-sink-telemetry': 'src/exports/logSinkTelemetry.ts',
+    'plan-config': 'src/exports/planConfig.ts',
+    'plan-mode': 'src/exports/planMode.ts',
+    prompts: 'src/exports/prompts.ts',
+  },
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },
   exports: false,

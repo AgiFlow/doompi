@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadAuthorDocument, saveAuthorDocument } from '../../src/web/api/authorFiles.ts';
+
+import { loadAuthorDocument, saveAuthorDocument } from '../../src/web/api/authorFiles';
 
 const SOURCE_SHA = 'a'.repeat(64);
 const SAVED_SHA = 'b'.repeat(64);
@@ -30,7 +31,7 @@ describe('Author browser file seams', () => {
       originalFragments: [{ id: 'cell', location: 'A1', text: 'before' }],
     });
     expect(fetch.mock.calls[0]?.[0]).toBe('/api/sessions/session%2F1/file?path=report.csv');
-    expect(fetch.mock.calls[1]?.[0]).toBe('/api/plugin/author/documents/open?session=session%2F1');
+    expect(fetch.mock.calls[1]?.[0]).toBe('/api/sessions/session%2F1/plugin/author/documents/open?session=session%2F1');
     expect(JSON.parse((fetch.mock.calls[1]?.[1]?.body as string) ?? '')).toEqual({ path: 'report.csv', format: 'csv' });
   });
 
@@ -55,8 +56,8 @@ describe('Author browser file seams', () => {
     ).resolves.toBe(SAVED_SHA);
 
     expect(fetch.mock.calls.map(([url]) => url)).toEqual([
-      '/api/plugin/author/documents/preflight?session=session',
-      '/api/plugin/author/documents/serialize?session=session',
+      '/api/sessions/session/plugin/author/documents/preflight?session=session',
+      '/api/sessions/session/plugin/author/documents/serialize?session=session',
       '/api/sessions/session/file?path=report.csv',
     ]);
     expect(JSON.parse((fetch.mock.calls[0]?.[1]?.body as string) ?? '')).toEqual({

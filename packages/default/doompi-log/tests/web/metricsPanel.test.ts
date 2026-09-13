@@ -1,13 +1,14 @@
-import { renderPlugin } from '@agimon-ai/doompi-web-contracts/testing';
+import { renderPlugin } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it, vi } from 'vitest';
-import type { IssueSample, MetricsBucket, MetricsGroup, MetricsTool } from '../../src/types/webMetrics.ts';
-import { GroupBars } from '../../src/web/components/charts/GroupBars.tsx';
-import { TimelineChart } from '../../src/web/components/charts/TimelineChart.tsx';
-import { IssuesDetail } from '../../src/web/components/IssuesDetail.tsx';
-import { EmptyForReason, FocusNotice } from '../../src/web/components/MetricsNotice.tsx';
-import { IssuesSection } from '../../src/web/components/IssuesSection.tsx';
-import { MetricsReportView } from '../../src/web/components/MetricsReportView.tsx';
-import { MetricsPanel } from '../../src/web/components/MetricsPanel.tsx';
+
+import type { IssueSample, MetricsBucket, MetricsGroup, MetricsTool } from '../../src/types/webMetrics';
+import { GroupBars } from '../../src/web/components/charts/GroupBars';
+import { TimelineChart } from '../../src/web/components/charts/TimelineChart';
+import { IssuesDetail } from '../../src/web/components/IssuesDetail';
+import { IssuesSection } from '../../src/web/components/IssuesSection';
+import { EmptyForReason, FocusNotice } from '../../src/web/components/MetricsNotice';
+import { MetricsPanel } from '../../src/web/components/MetricsPanel';
+import { MetricsReportView } from '../../src/web/components/MetricsReportView';
 
 /**
  * The drawn parts of the page, rendered to static markup.

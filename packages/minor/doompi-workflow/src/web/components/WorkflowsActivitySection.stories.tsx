@@ -5,10 +5,11 @@
  * rather than a hand-rolled stub, so a change to the slot contract breaks this
  * story at the type level instead of silently drifting.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { WorkflowRunView } from '../../types/webWorkflows.ts';
-import { workflows } from '../stores/workflowsStore.ts';
-import { WorkflowsActivitySection } from './WorkflowsActivitySection.tsx';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import type { WorkflowRunView } from '../../types/webWorkflows';
+import { workflows } from '../stores/workflowsStore';
+import { WorkflowsActivitySection } from './WorkflowsActivitySection';
 
 /** Its own session id, so a story that seeds this store cannot disturb another's. */
 const SESSION_ID = 'workflows-activity';

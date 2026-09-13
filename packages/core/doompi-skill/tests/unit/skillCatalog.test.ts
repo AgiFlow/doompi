@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { createSyntheticSourceInfo, type Skill } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildSkillCatalog, findSkill, type SkillCatalog } from '../../src/adapters/skillCatalog.ts';
+
+import { buildSkillCatalog, findSkill, type SkillCatalog } from '../../src/services/skillCatalog';
 
 function writeSkill(directory: string, name: string, description: string, body = 'Body.'): void {
   fs.mkdirSync(directory, { recursive: true });

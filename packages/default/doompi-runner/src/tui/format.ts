@@ -1,8 +1,6 @@
-import { formatUptime } from '../commands/bash/responseEnvelope.ts';
+import { OVERLAY_HEADING } from '../constants/format';
+import { formatUptime } from '../services/bashResult';
 import type { RunnerRecord } from '../types/runnerRegistry';
-
-export const WIDGET_KEY = 'doom-runners';
-export const OVERLAY_HEADING = 'Runners';
 
 /** Compact footer text. An absent value removes the group entirely. */
 export function formatRunnerStatus(count: number): string | undefined {

@@ -3,9 +3,11 @@ import http from 'node:http';
 import type https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
-import { createBrokerServer } from '../../../src/adapters/brokerServer.ts';
-import type { ResolvedCredential } from '../../../src/services/brokerRoutes.ts';
+
+import type { ResolvedCredential } from '../../../src/services/brokerRoutes';
+import { createBrokerServer } from '../../../src/services/brokerServer';
 
 const TOKEN = 'session-token-0123456789';
 const REAL_KEY = 'sk-host-real-key';

@@ -1,0 +1,4 @@
+export interface {{ restrictionName | pascalCase }}State {
+  isActive(): boolean;
+  subscribe(listener: () => void): () => void;
+}

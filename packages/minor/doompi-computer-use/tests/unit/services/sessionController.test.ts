@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { initialComputerUseState, reduceComputerUseState } from '../../../src/services/sessionController.ts';
-import type { ComputerUseGrant, ComputerUseTarget } from '../../../src/types/computerUse.ts';
+
+import { initialComputerUseState, reduceComputerUseState } from '../../../src/models/computerUseState';
+import type { ComputerUseGrant, ComputerUseTarget } from '../../../src/types/computerUse';
 
 const identity = { sessionId: 'session-a', runtimeId: 'runtime-a', modeEpoch: 'mode-a' };
 const target: ComputerUseTarget = {

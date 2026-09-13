@@ -47,7 +47,7 @@ const TASK_STATUSES: readonly TaskStatus[] = ['pending', 'in_progress', 'complet
 const TASK_ACTIONS: readonly TaskAction[] = ['upsert', 'list', 'get', 'delete', 'clear', 'assign', 'cancel'];
 const INLINE_WHITESPACE = /\s+/gu;
 
-/** One task as the result details carry it (src/services/store/types.ts Task). */
+/** One task as the result details carry it (src/models/task.ts Task). */
 export interface TaskView {
   id: number;
   subject: string;
@@ -57,7 +57,7 @@ export interface TaskView {
   delegation?: { agent?: string; state?: string };
 }
 
-/** The result details (src/services/store/types.ts TaskDetails), narrowed to what the card reads. */
+/** The result details (src/models/task.ts TaskDetails), narrowed to what the card reads. */
 export interface TaskDetailsView {
   action: TaskAction;
   params: Record<string, unknown>;

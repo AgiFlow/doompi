@@ -1,16 +1,17 @@
 import {
-  createDoomVoiceToolsService,
   VOICE_FACADE_TOOL_NAMES,
   VOICE_MODE_TOOL_NAMES,
   VOICE_NARRATE_TOOL_NAME,
-} from '@agimon-ai/doompi-extension-contracts/voice-tools';
+} from '@agimon-ai/doompi-core/voice-tools';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   createNarrationTool,
   type NarrationToolOutcome,
   type NarrationToolRuntime,
-} from '../src/adapters/pi/narrationTool.ts';
+} from '../src/controllers/narrationTool';
+import { createDoomVoiceToolsService } from '../src/services/voiceTools';
 
 const NARRATION_OUTCOMES: readonly NarrationToolOutcome[] = ['completed', 'interrupted', 'superseded', 'failed'];
 

@@ -1,4 +1,4 @@
-import type { McpResultBlock } from '../../types/webMcp.ts';
+import type { McpResultBlock } from '../../types/webMcp';
 
 /**
  * Pure view logic for MCP tool cards, the browser counterpart of

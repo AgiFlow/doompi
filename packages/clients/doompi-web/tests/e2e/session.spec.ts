@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, test } from '../support/cockpit.ts';
+
+import { expect, test } from '../support/cockpit';
 
 test('sends a prompt and shows it in the timeline', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
@@ -136,13 +137,11 @@ test('surfaces an agent error in the timeline', async ({ page, cockpit }) => {
 test('previews the files a prompt mentions and renders the reply as markdown', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
-  const record = JSON.parse(
-    fs.readFileSync(path.join(cockpit.registryDir, 'sessions', `${cockpit.session.id}.json`), 'utf8'),
-  ) as { cwd: string };
-  fs.mkdirSync(path.join(record.cwd, 'docs'), { recursive: true });
-  fs.mkdirSync(path.join(record.cwd, 'notes'), { recursive: true });
-  fs.writeFileSync(path.join(record.cwd, 'docs', 'happy-jump.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
-  fs.writeFileSync(path.join(record.cwd, 'notes', 'plan.md'), '# Plan\n');
+  const cwd = cockpit.session.cwd;
+  fs.mkdirSync(path.join(cwd, 'docs'), { recursive: true });
+  fs.mkdirSync(path.join(cwd, 'notes'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'docs', 'happy-jump.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  fs.writeFileSync(path.join(cwd, 'notes', 'plan.md'), '# Plan\n');
   await page.getByTestId('composer-input').fill('@docs/happy-jump.svg and @notes/plan.md look');
   await page.getByTestId('composer-send').click();
   await cockpit.session.waitForCommand('prompt');
@@ -232,46 +231,34 @@ test('follows the newest reply, and stops following once the reader scrolls back
 });
 
 test('opens a session that ran before this page with its transcript intact', async ({ page, cockpit }) => {
+  cockpit.session.replaceEntries([
+    { type: 'message', id: 'e1', message: { role: 'user', content: [{ type: 'text', text: 'widen the gate' }] } },
+    {
+      type: 'message',
+      id: 'e2',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'checking the tree' },
+          { type: 'toolCall', id: 'call-1', name: 'bash', arguments: { command: 'git status' } },
+        ],
+      },
+    },
+    {
+      type: 'message',
+      id: 'e3',
+      message: {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        toolName: 'bash',
+        content: [{ type: 'text', text: 'M src/index.ts' }],
+        isError: false,
+      },
+    },
+  ]);
+
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
-
-  // The hub asks for the journal the moment it attaches; a session driven from
-  // the TUI, or one this hub is meeting after a restart, answers with the work
-  // it has already done.
-  await cockpit.session.waitForCommand('get_entries');
-  cockpit.session.emit({
-    type: 'response',
-    command: 'get_entries',
-    success: true,
-    data: {
-      leafId: 'e3',
-      entries: [
-        { type: 'message', id: 'e1', message: { role: 'user', content: [{ type: 'text', text: 'widen the gate' }] } },
-        {
-          type: 'message',
-          id: 'e2',
-          message: {
-            role: 'assistant',
-            content: [
-              { type: 'text', text: 'checking the tree' },
-              { type: 'toolCall', id: 'call-1', name: 'bash', arguments: { command: 'git status' } },
-            ],
-          },
-        },
-        {
-          type: 'message',
-          id: 'e3',
-          message: {
-            role: 'toolResult',
-            toolCallId: 'call-1',
-            toolName: 'bash',
-            content: [{ type: 'text', text: 'M src/index.ts' }],
-            isError: false,
-          },
-        },
-      ],
-    },
-  });
 
   await expect(page.getByTestId('entry-user')).toHaveText(/widen the gate/);
   await expect(page.getByTestId('entry-assistant')).toContainText('checking the tree');
@@ -289,22 +276,12 @@ test('opens a session that ran before this page with its transcript intact', asy
 });
 
 test('a reload does not double a restored transcript', async ({ page, cockpit }) => {
-  const journal = {
-    type: 'response',
-    command: 'get_entries',
-    success: true,
-    data: {
-      leafId: 'e1',
-      entries: [
-        { type: 'message', id: 'e1', message: { role: 'user', content: [{ type: 'text', text: 'only once' }] } },
-      ],
-    },
-  };
+  cockpit.session.replaceEntries([
+    { type: 'message', id: 'e1', message: { role: 'user', content: [{ type: 'text', text: 'only once' }] } },
+  ]);
 
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
-  await cockpit.session.waitForCommand('get_entries');
-  cockpit.session.emit(journal);
   await expect(page.getByTestId('entry-user')).toHaveCount(1);
 
   // The reload replays the hub's ring, which already holds the restored entry.

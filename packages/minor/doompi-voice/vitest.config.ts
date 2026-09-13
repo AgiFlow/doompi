@@ -1,4 +1,5 @@
 import { fileURLToPath, URL } from 'node:url';
+
 import { defineConfig } from 'vitest/config';
 
 const threshold = process.env.THRESHOLD ? Number.parseInt(process.env.THRESHOLD, 10) : 80;
@@ -33,6 +34,10 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: '@agimon-ai/doompi-core/pi-extension',
+        replacement: source('../../core/doompi-core/src/exports/piExtension.ts'),
+      },
+      {
         find: /^@agimon-ai\/doompi-config\/(.*)$/,
         replacement: `${source('../../core/doompi-config/src/exports/')}$1.ts`,
       },
@@ -42,40 +47,44 @@ export default defineConfig({
         replacement: `${source('../../core/doompi-ui/src/exports/')}$1.ts`,
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/cordis-host',
-        replacement: source('../../core/doompi-extension-contracts/src/exports/cordisHost.ts'),
+        find: '@agimon-ai/doompi-core/cordis-host',
+        replacement: source('../../core/doompi-core/src/exports/cordisHost.ts'),
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/ask-user',
-        replacement: source('../../core/doompi-extension-contracts/src/exports/askUser.ts'),
+        find: '@agimon-ai/doompi-core/ask-user',
+        replacement: source('../../core/doompi-core/src/exports/askUser.ts'),
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/package-api',
-        replacement: source('../../core/doompi-extension-contracts/src/exports/packageApi.ts'),
+        find: '@agimon-ai/doompi-core/package-api',
+        replacement: source('../../core/doompi-core/src/exports/packageApi.ts'),
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/profile-identity',
-        replacement: source('../../core/doompi-extension-contracts/src/exports/profileIdentity.ts'),
+        find: '@agimon-ai/doompi-core/profile-identity',
+        replacement: source('../../core/doompi-core/src/exports/profileIdentity.ts'),
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/leader',
-        replacement: source('../../core/doompi-extension-contracts/src/exports/leader.ts'),
+        find: '@agimon-ai/doompi-core/leader',
+        replacement: source('../../core/doompi-core/src/exports/leader.ts'),
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/voice-tools',
-        replacement: source('../../core/doompi-extension-contracts/src/exports/voiceTools.ts'),
+        find: '@agimon-ai/doompi-voice/voice-tools',
+        replacement: source('src/exports/voiceTools.ts'),
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/voice-reload-handoff',
-        replacement: source('../../core/doompi-extension-contracts/src/exports/voiceReloadHandoff.ts'),
+        find: '@agimon-ai/doompi-voice/voice-reload-handoff',
+        replacement: source('src/exports/voiceReloadHandoff.ts'),
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/ui-hub',
-        replacement: source('../../core/doompi-extension-contracts/src/exports/uiHub.ts'),
+        find: '@agimon-ai/doompi-core/server-facet',
+        replacement: source('../../core/doompi-core/src/exports/serverFacet.ts'),
       },
       {
-        find: /^@agimon-ai\/doompi-extension-contracts\/(.*)$/,
-        replacement: `${source('../../core/doompi-extension-contracts/src/exports/')}$1.ts`,
+        find: '@agimon-ai/doompi-core/tool-surface',
+        replacement: source('../../core/doompi-core/src/exports/toolSurface.ts'),
+      },
+      {
+        find: '@agimon-ai/doompi-core/ui-hub',
+        replacement: source('../../core/doompi-core/src/exports/uiHub.ts'),
       },
     ],
   },

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   listSettingsModels,
   listSettingsRepositories,
@@ -8,7 +9,7 @@ import {
   writeImageSettings,
   writeRepositorySelection,
   writeSettingsValue,
-} from '../../src/web/lib/settingsApi.ts';
+} from '../../src/web/lib/settingsApi';
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -48,12 +49,14 @@ describe('settings API', () => {
   it('reads selected config keys and accepts a configuration object', async () => {
     const fetchMock = stubFetch(json(200, config));
 
-    await expect(readSettingsConfig('/repo with space', ['modes.main.model', 'voice.language'])).resolves.toEqual({
+    await expect(
+      readSettingsConfig('/repo with space', ['modes.main.model', 'voice.language'], 'repo'),
+    ).resolves.toEqual({
       ok: true,
       config,
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/settings/config?repoRoot=%2Frepo+with+space&key=modes.main.model&key=voice.language',
+      '/api/workspaces/repo/plugin/config/config?repoRoot=%2Frepo+with+space&key=modes.main.model&key=voice.language',
       undefined,
     );
   });
@@ -67,17 +70,23 @@ describe('settings API', () => {
       new Error('offline'),
     );
 
-    await expect(readSettingsConfig('/repo', [])).resolves.toEqual({ ok: false, error: 'bad key' });
-    await expect(readSettingsConfig('/repo', [])).resolves.toEqual({ ok: false, error: 'The hub answered 503.' });
-    await expect(readSettingsConfig('/repo', [])).resolves.toEqual({
+    await expect(readSettingsConfig('/repo', [], 'repo')).resolves.toEqual({ ok: false, error: 'bad key' });
+    await expect(readSettingsConfig('/repo', [], 'repo')).resolves.toEqual({
+      ok: false,
+      error: 'The hub answered 503.',
+    });
+    await expect(readSettingsConfig('/repo', [], 'repo')).resolves.toEqual({
       ok: false,
       error: 'The hub answered with no configuration.',
     });
-    await expect(readSettingsConfig('/repo', [])).resolves.toEqual({
+    await expect(readSettingsConfig('/repo', [], 'repo')).resolves.toEqual({
       ok: false,
       error: 'The hub answered with no configuration.',
     });
-    await expect(readSettingsConfig('/repo', [])).resolves.toEqual({ ok: false, error: 'The hub is unreachable.' });
+    await expect(readSettingsConfig('/repo', [], 'repo')).resolves.toEqual({
+      ok: false,
+      error: 'The hub is unreachable.',
+    });
   });
 
   it('writes values and distinguishes stale, rejected, malformed, and unreachable responses', async () => {
@@ -162,7 +171,7 @@ describe('settings API', () => {
       ok: true,
       settings: repositorySettings,
     });
-    expect(fetchMock).toHaveBeenCalledWith('/api/settings/repository?repository=repo+with+space', undefined);
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/repo%20with%20space/plugin/config/repository', undefined);
     await expect(readRepositorySettings('repo')).resolves.toEqual({ ok: false, error: 'gone' });
     await expect(readRepositorySettings('repo')).resolves.toEqual({
       ok: false,

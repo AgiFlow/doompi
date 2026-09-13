@@ -5,10 +5,11 @@
  * a hand-rolled stub, so a change to the render contract breaks this story at
  * the type level instead of silently drifting.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { McpToolDetails } from '../../types/webMcp.ts';
-import { McpToolMessage } from './McpToolMessage.tsx';
-import { MCP_STATUS_KEY } from '../lib/mcpToolMatch.ts';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import type { McpToolDetails } from '../../types/webMcp';
+import { MCP_STATUS_KEY } from '../lib/mcpToolMatch';
+import { McpToolMessage } from './McpToolMessage';
 
 /** The server names the session publishes, which is how a call is recognised without details. */
 const statuses = { [MCP_STATUS_KEY]: 'linear,github' };

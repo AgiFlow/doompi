@@ -1,5 +1,5 @@
-import { defineSessionStore } from '@agimon-ai/doompi-web-contracts';
-import { {{ topic | camelCase }}ChannelType, type {{ topic | pascalCase }}ItemView } from '../../types/web{{ topic | pascalCase }}.ts';
+import { defineSessionStore } from '@agimon-ai/doompi-core/web';
+import { {{ topic | camelCase }}ChannelType, type {{ topic | pascalCase }}ItemView } from '../../types/web{{ topic | pascalCase }}';
 
 /**
  * One session's record: the hub's last report plus whatever this page does

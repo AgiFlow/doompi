@@ -2,25 +2,27 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
+import {
+  publishSyncRegistration,
+  SYNC_REGISTRATION_VERSION,
+  syncStateSha256,
+} from '@agimon-ai/doompi-core/sync-registration';
+import {
+  BUNDLED_PRECOMPILE_STRATEGY,
+  PRECOMPILE_STATE_VERSION,
+  SYNC_STATE_VERSION,
+} from '@agimon-ai/doompi-core/sync-state-contract';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   readBootstrapPointer,
   readBootstrapStatus,
   readBundleStatus,
   readStartupBootstrapStatus,
-} from '../../src/adapters/bootstrapLocator.ts';
-import {
-  publishSyncRegistration,
-  SYNC_REGISTRATION_VERSION,
-  syncStateSha256,
-} from '../../src/adapters/syncRegistration.ts';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation.ts';
-import {
-  BUNDLED_PRECOMPILE_STRATEGY,
-  PRECOMPILE_STATE_VERSION,
-  SYNC_STATE_VERSION,
-} from '../../src/adapters/syncStateContract.ts';
-import { testMcpProjection } from '../helpers/mcpProjection.ts';
+} from '../../src/builders/cli/bootstrapLocator';
+import { testMcpProjection } from '../helpers/mcpProjection';
 
 /** Digest a compiler manifest must now record so freshness is judged by content. */
 function sha256Of(file: string): string {
@@ -160,7 +162,7 @@ describe('readBootstrapState contract', () => {
 });
 
 describe('readBootstrapStatus freshness', () => {
-  const entry = path.resolve(import.meta.dirname, '../../src/extensions/entries/doom.ts');
+  const entry = path.resolve(import.meta.dirname, '../../src/extensions/composedPi.ts');
 
   function compilerManifest(output: string, entries: string[]): Record<string, unknown> {
     return {
@@ -213,9 +215,18 @@ describe('readBootstrapStatus freshness', () => {
     expect(readBootstrapStatus(root, entry, homeFor(root))).toEqual({ bootstrap, fresh: true });
   });
 
+  it('resolves the installed composed entry without an explicit override', () => {
+    vi.stubEnv('DOOMPI_BOOTSTRAP_ENTRY', '');
+    const root = temporaryRoot();
+    const { bootstrap } = bundledState(root);
+
+    expect(readBootstrapStatus(root, undefined, homeFor(root))).toEqual({ bootstrap, fresh: true });
+    expect(readStartupBootstrapStatus(root, undefined, homeFor(root))).toEqual({ bootstrap, fresh: true });
+  });
+
   it('loads the generated bootstrap built from a launcher-staged Doom entry', () => {
     const root = temporaryRoot();
-    const stagedEntry = path.join(root, 'runtime', 'doompi', 'dist', 'src', 'extensions', 'entries', 'doom.mjs');
+    const stagedEntry = path.join(root, 'runtime', 'doompi', 'dist', 'extensions', 'composed-pi.mjs');
     fs.mkdirSync(path.dirname(stagedEntry), { recursive: true });
     fs.writeFileSync(stagedEntry, 'export default () => undefined;\n');
     const { bootstrap, bootstrapManifest } = bundledState(root, { bootstrapEntry: stagedEntry });
@@ -228,7 +239,7 @@ describe('readBootstrapStatus freshness', () => {
   it('rejects output built for a different package entry or precompile contract', () => {
     const root = temporaryRoot();
     const { bootstrap } = bundledState(root);
-    const otherInstall = path.join(os.tmpdir(), 'other-doompi', 'dist', 'extensions', 'entries', 'doom.mjs');
+    const otherInstall = path.join(os.tmpdir(), 'other-doompi', 'dist', 'extensions', 'composed-pi.mjs');
 
     expect(readBootstrapStatus(root, otherInstall, homeFor(root))).toEqual({ bootstrap, fresh: false });
 

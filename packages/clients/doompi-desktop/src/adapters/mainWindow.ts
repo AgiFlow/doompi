@@ -1,4 +1,5 @@
 import path from 'node:path';
+
 import { BrowserWindow, nativeImage, shell } from 'electron';
 
 const MIN_WIDTH = 900;

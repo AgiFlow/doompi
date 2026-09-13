@@ -1,6 +1,7 @@
 import { createRootRoute, createRoute, Outlet } from '@tanstack/react-router';
-import { CockpitPage } from './CockpitPage.tsx';
-import { SettingsPage } from './SettingsPage.tsx';
+
+import { CockpitPage } from './CockpitPage';
+import { SettingsPage } from './SettingsPage';
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,

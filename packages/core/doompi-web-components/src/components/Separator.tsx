@@ -1,6 +1,7 @@
 import { Separator as SeparatorPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+
+import { cn } from '../lib/cn';
 
 /**
  * A hairline in the soft border colour. Radix decides the semantics: a

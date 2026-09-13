@@ -1,14 +1,16 @@
-import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-extension-contracts/testing';
+import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { activateComputerUseExtension, COMPUTER_USE_TOOL_NAMES } from '../../../src/adapters/pi/extension.ts';
-import { COMMAND_NAME } from '../../../src/commands/computerUseCommand.ts';
-import type { ComputerUseSessionClient } from '../../../src/adapters/pi/sessionApiClient.ts';
+
+import { COMPUTER_USE_TOOL_NAMES } from '../../../src/constants/computerUse';
+import { COMMAND_NAME } from '../../../src/controllers/computerUseCommand';
+import { computerUseExtension as activateComputerUseExtension } from '../../../src/extensions/pi';
+import type { ComputerUseSessionClient } from '../../../src/services/sessionApiClient';
 import {
   COMPUTER_USE_MODE_STATUS_KEY,
   COMPUTER_USE_STATUS_KEY,
   type ComputerUseSessionView,
-} from '../../../src/types/computerUseApi.ts';
-import type { ComputerUseExtensionDependencies, ComputerUseExtensionService } from '../../../src/types/extension.ts';
+} from '../../../src/types/computerUseApi';
+import type { ComputerUseExtensionDependencies, ComputerUseExtensionService } from '../../../src/types/extension';
 
 describe('the standard Pi entry contract', () => {
   for (const scenario of standardExtensionScenarios({
@@ -20,20 +22,21 @@ describe('the standard Pi entry contract', () => {
 });
 
 describe('doompi-computer-use Pi extension', () => {
-  it('waits for session start before reconciling its registered tools', async () => {
+  it('keeps its registered tools off the surface until the grant is active', async () => {
     const host = createPiTestHost();
-    const getActiveTools = vi.spyOn(host.pi, 'getActiveTools');
+    await host.cordis();
+    const setActiveTools = vi.spyOn(host.pi, 'setActiveTools');
     await activateComputerUseExtension(host.pi);
     expect(host.tools.map((tool) => tool.name)).toEqual(expect.arrayContaining([...COMPUTER_USE_TOOL_NAMES]));
-    expect(getActiveTools).not.toHaveBeenCalled();
     await host.emit('session_start', {});
-    await vi.waitFor(() => expect(getActiveTools).toHaveBeenCalled());
+    await vi.waitFor(() => expect(setActiveTools).toHaveBeenCalled());
     expect(host.activeTools()).not.toEqual(expect.arrayContaining([...COMPUTER_USE_TOOL_NAMES]));
     await host.dispose();
   });
 
   it('injects its service into the standalone command', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     const service: ComputerUseExtensionService = {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
@@ -45,8 +48,8 @@ describe('doompi-computer-use Pi extension', () => {
   });
 
   it('exposes tools and guidance only while the session grant is active', async () => {
-    const host = createPiTestHost();
-    host.pi.setActiveTools(['read']);
+    const host = createPiTestHost({ builtinTools: ['read'] });
+    await host.cordis();
     let phase: 'active' | 'inactive' | 'awaiting_confirmation' = 'inactive';
     let globallyEnabled = true;
     const client: ComputerUseSessionClient = {

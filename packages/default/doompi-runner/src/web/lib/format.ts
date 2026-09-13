@@ -1,5 +1,5 @@
 /**
- * Local copy of the runtime's formatUptime (src/commands/bash/responseEnvelope.ts):
+ * Local copy of the runtime's formatUptime (src/services/bashResult/index.ts):
  * the web plugin may reach only src/types, so the one helper it needs lives here.
  */
 export function formatRunnerUptime(startedAt: string, now: number): string {

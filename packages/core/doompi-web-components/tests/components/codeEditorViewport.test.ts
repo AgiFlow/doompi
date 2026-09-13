@@ -1,6 +1,7 @@
 import { EditorState } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
-import { resolveEditorViewportRegion } from '../../src/components/CodeEditorView.tsx';
+
+import { resolveEditorViewportRegion } from '../../src/components/CodeEditorView';
 
 describe('CodeEditor viewport geometry', () => {
   it('resolves client geometry to an ordered native text range', () => {

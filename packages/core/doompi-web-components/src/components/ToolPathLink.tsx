@@ -1,4 +1,4 @@
-import { cn } from '../lib/cn.ts';
+import { cn } from '../lib/cn';
 
 /**
  * The file path in a tool call's header, as a link when something can open it.

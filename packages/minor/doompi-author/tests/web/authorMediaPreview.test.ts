@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AuthorMediaPreview } from '../../src/web/components/AuthorMediaPreview.tsx';
-import { loadAuthorMedia } from '../../src/web/api/authorMedia.ts';
+
+import { loadAuthorMedia } from '../../src/web/api/authorMedia';
+import { AuthorMediaPreview } from '../../src/web/components/AuthorMediaPreview';
 
 const hooks = vi.hoisted(() => ({
   value: undefined as undefined | { source: string; url?: string; error?: string },
@@ -14,7 +15,7 @@ vi.mock('react', async (original) => ({
     hooks.cleanup = effect();
   },
 }));
-vi.mock('../../src/web/api/authorMedia.ts', () => ({ loadAuthorMedia: vi.fn() }));
+vi.mock('../../src/web/api/authorMedia', () => ({ loadAuthorMedia: vi.fn() }));
 afterEach(() => {
   hooks.cleanup?.();
   hooks.cleanup = undefined;

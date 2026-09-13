@@ -1,9 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  createCompletionBatcher,
-  resolveCompletionBatchConfig,
-} from '../../src/adapters/runs/background/completionBatcher';
+import { createCompletionBatcher, resolveCompletionBatchConfig } from '../../src/services/completionBatcher';
 
 const TEST_CONFIG = resolveCompletionBatchConfig({
   debounceMs: 100,

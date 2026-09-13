@@ -1,8 +1,9 @@
 import { Button, SectionLabel, Spinner } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import { QrCode } from '../../components/QrCode.tsx';
-import { addPasskey, newPairingCode, remoteAccessStore } from '../../stores/remoteAccessStore.ts';
-import { PairedDeviceList } from './PairedDeviceList.tsx';
+
+import { QrCode } from '../../components/QrCode';
+import { addPasskey, newPairingCode, remoteAccessStore } from '../../stores/remoteAccessStore';
+import { PairedDeviceList } from './PairedDeviceList';
 
 /** The QR credential, a short manual code, and the direct address. */
 export function RemoteAccessPairing() {

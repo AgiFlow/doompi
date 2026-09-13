@@ -1,11 +1,11 @@
-import type { AuthorJsonSchema } from '../../types/author.ts';
-import { authorGridGeometry, resolveAuthorGridCell, resolveAuthorGridNativeAnchor } from '../lib/authorGrid.ts';
+import type { AuthorJsonSchema } from '../../types/author';
+import { authorGridGeometry, resolveAuthorGridCell, resolveAuthorGridNativeAnchor } from '../lib/authorGrid';
 import type {
   AuthorDocumentKind,
   AuthorNativeAnchor,
   AuthorRegionDraft,
   AuthorTrustedTool,
-} from '../lib/authorViewportTypes.ts';
+} from '../lib/authorViewportTypes';
 import {
   addAuthorRegion,
   authorDocument,
@@ -15,7 +15,7 @@ import {
   reviseAuthorFragment,
   setAuthorCrop,
   updateAuthorRequest,
-} from './authorWorkspaceStore.ts';
+} from './authorWorkspaceStore';
 
 const stringProperty = { type: 'string', minLength: 1 } as const;
 

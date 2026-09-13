@@ -4,8 +4,9 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { createCodexLogin } from '../src/adapters/realtime/codexLogin.ts';
-import type { CodexAuthTransaction, CodexOwnedAuthStorage } from '../src/adapters/realtime/codexAuth.ts';
+
+import type { CodexAuthTransaction, CodexOwnedAuthStorage } from '../src/services/codexAuth';
+import { createCodexLogin } from '../src/services/codexLogin';
 
 const signal = new AbortController().signal;
 const idToken = `e30.${Buffer.from(

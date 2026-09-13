@@ -1,10 +1,11 @@
+import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Button, StatusBadge, Textarea } from '@agimon-ai/doompi-web-components';
-import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type FormEvent, useEffect, useState } from 'react';
-import type { SubagentRun } from '../../types/webSubagents.ts';
-import { isTerminalRun, requestRunSteer, subagents } from '../stores/subagentsStore.ts';
-import { elapsedRun, RUN_BADGE, RunControl } from './RunControl.tsx';
+
+import type { SubagentRun } from '../../types/webSubagents';
+import { isTerminalRun, requestRunSteer, subagents } from '../stores/subagentsStore';
+import { elapsedRun, RUN_BADGE, RunControl } from './RunControl';
 
 const TICK_MS = 10_000;
 /** The tab id doubles as the URL segment, so it stays plain and unique across plugins. */

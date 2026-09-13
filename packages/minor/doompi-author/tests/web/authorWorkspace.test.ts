@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   addAuthorAnnotation,
   addAuthorRegion,
@@ -16,7 +17,7 @@ import {
   reviseAuthorDocument,
   reviseAuthorFragment,
   setAuthorCrop,
-} from '../../src/web/stores/authorWorkspaceStore.ts';
+} from '../../src/web/stores/authorWorkspaceStore';
 
 afterEach(() => authorWorkspace.reset());
 

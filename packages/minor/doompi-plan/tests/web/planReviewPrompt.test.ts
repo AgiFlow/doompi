@@ -1,14 +1,21 @@
-import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { ToolPromptDialog } from '@agimon-ai/doompi-web-contracts';
+import type { ToolPromptDialog } from '@agimon-ai/doompi-core/web';
+import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it, vi } from 'vitest';
+
+import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
 import {
   CONTINUE_PLANNING_CHOICE,
   EXIT_PLAN_MODE_CHOICE,
   PLAN_REVIEW_OPTIONS,
   PLAN_REVIEW_TITLE,
-} from '../../src/types/planApi.ts';
-import { claimsPlanReviewPrompt, PlanReviewPrompt } from '../../src/web/components/PlanReviewPrompt.tsx';
-import { webPlugin } from '../../src/web/index.ts';
+} from '../../src/types/planApi';
+import { claimsPlanReviewPrompt, PlanReviewPrompt } from '../../src/web/components/PlanReviewPrompt';
+const webPlugin = {
+  id: scopedWebPlugin.id,
+  ...scopedWebPlugin.global,
+  ...scopedWebPlugin.workspace,
+  ...scopedWebPlugin.session,
+};
 
 function dialog(patch: Partial<ToolPromptDialog> = {}): ToolPromptDialog {
   return {

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { registerRunWorktreeTool } from '../../../../src/adapters/pi/extensions/runWorktreeTool.ts';
-import type { WorktreeOperations } from '../../../../src/adapters/worktree/worktreeOperations.ts';
-import type { WorktreeRecord } from '../../../../src/types/worktreeRegistry.ts';
+
+import type { WorktreeOperations } from '../../../../src/services/worktreeOperations';
+import { createRunWorktreeTool } from '../../../../src/tools/runWorktree';
+import type { WorktreeRecord } from '../../../../src/types/worktreeRegistry';
 
 const RECORD: WorktreeRecord = {
   version: 1,
@@ -32,15 +33,7 @@ function operations(overrides: Partial<WorktreeOperations> = {}): WorktreeOperat
 
 /** Captures the tool the extension registers, so execute can be driven directly. */
 function toolFor(ops: WorktreeOperations) {
-  let captured: { execute: (...args: never[]) => unknown } | undefined;
-  const pi = {
-    registerTool: (definition: unknown) => {
-      captured = definition as { execute: (...args: never[]) => unknown };
-    },
-  };
-  registerRunWorktreeTool(pi as never, ops);
-  if (captured === undefined) throw new Error('no tool registered');
-  return captured;
+  return createRunWorktreeTool(ops);
 }
 
 const CTX = { cwd: '/repo', sessionManager: { getSessionId: () => 'parent-1' } };
@@ -58,12 +51,8 @@ async function call(ops: WorktreeOperations, params: unknown): Promise<string> {
 }
 
 describe('execute', () => {
-  it('registers one tool named run_worktree', () => {
-    const pi = { registerTool: vi.fn() };
-    registerRunWorktreeTool(pi as never, operations());
-    expect(pi.registerTool).toHaveBeenCalledOnce();
-    const [[definition]] = pi.registerTool.mock.calls as [[{ name: string }]];
-    expect(definition.name).toBe('run_worktree');
+  it('declares the run_worktree tool', () => {
+    expect(createRunWorktreeTool(operations()).name).toBe('run_worktree');
   });
 
   it('spawns and reports the path and session', async () => {

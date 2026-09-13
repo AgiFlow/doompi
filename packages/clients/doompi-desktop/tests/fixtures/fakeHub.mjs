@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import http from 'node:http';
-import path from 'node:path';
 
 const args = process.argv.slice(2);
 
@@ -11,17 +10,16 @@ function argument(flag) {
   return value;
 }
 
-const host = argument('--host');
-const port = Number(argument('--port'));
-const registryDirectory = argument('--registry-dir');
+const headless = args.includes('--auth-token-file');
+const host = headless ? '127.0.0.1' : argument('--host');
+const port = Number(argument(headless ? '--web' : '--port'));
 const markerPath = process.env.DESKTOP_E2E_HUB_MARKER;
+const role = headless ? 'headless' : 'web';
 if (markerPath === undefined || markerPath === '') throw new Error('Missing DESKTOP_E2E_HUB_MARKER');
 if (!Number.isInteger(port) || port < 1) throw new Error(`Invalid fake hub port ${String(port)}`);
-fs.mkdirSync(registryDirectory, { recursive: true });
-fs.mkdirSync(path.dirname(markerPath), { recursive: true });
 
 function record(event) {
-  fs.appendFileSync(markerPath, `${JSON.stringify({ event, pid: process.pid })}\n`);
+  fs.appendFileSync(markerPath, `${JSON.stringify({ event, pid: process.pid, role })}\n`);
 }
 
 const page = `<!doctype html>
@@ -50,7 +48,12 @@ const server = http.createServer((request, response) => {
   const requestUrl = new URL(request.url ?? '/', `http://${host}:${String(port)}`);
   if (requestUrl.pathname === '/api/health') {
     response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ status: 'ok' }));
+    response.end(JSON.stringify({ status: 'ok', role }));
+    return;
+  }
+  if (headless) {
+    response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+    response.end('not found');
     return;
   }
   if (requestUrl.pathname === '/same-origin') {
@@ -82,7 +85,7 @@ function stop() {
 process.once('SIGTERM', stop);
 process.once('SIGINT', stop);
 server.once('error', (error) => {
-  fs.appendFileSync(markerPath, `${JSON.stringify({ event: 'error', message: String(error) })}\n`);
+  fs.appendFileSync(markerPath, `${JSON.stringify({ event: 'error', message: String(error), role })}\n`);
   process.exit(1);
 });
 server.listen(port, host, () => record('started'));

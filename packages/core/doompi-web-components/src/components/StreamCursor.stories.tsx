@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { StreamCursor } from './StreamCursor.tsx';
+import { StreamCursor } from './StreamCursor';
 
 const meta = {
   title: 'Components/StreamCursor',

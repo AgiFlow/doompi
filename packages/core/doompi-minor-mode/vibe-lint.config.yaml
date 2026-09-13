@@ -1,0 +1,6 @@
+plugins:
+  - core
+  - doom-extension
+extends:
+  - core/recommended
+  - doom-extension/recommended

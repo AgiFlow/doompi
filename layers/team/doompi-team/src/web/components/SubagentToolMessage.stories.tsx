@@ -5,8 +5,9 @@
  * package's own testing fixture rather than a hand-rolled stub, so a change to
  * the slot contract breaks this story at the type level.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { SubagentToolMessage } from './SubagentToolMessage.tsx';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { SubagentToolMessage } from './SubagentToolMessage';
 
 const props = (overrides: Omit<Parameters<typeof toolMessagePropsFixture>[0], 'toolName'>) =>
   toolMessagePropsFixture({ toolName: 'subagent', ...overrides }).props;
@@ -68,7 +69,7 @@ export const Playground = {
         <SubagentToolMessage
           {...props({
             args: { action: 'status', id: 'run-8f21' },
-            output: 'run-8f21 reviewer running 4m\nreading packages/core/doompi-web-contracts',
+            output: 'run-8f21 reviewer running 4m\nreading packages/core/doompi-core',
             running: true,
           })}
         />

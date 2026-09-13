@@ -1,7 +1,8 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import type { KeybindingsManager, SelectItem } from '@earendil-works/pi-tui';
 import { describe, expect, it, vi } from 'vitest';
-import { MatrixPickerComponent } from '../../src/exports/components/matrixPicker.ts';
+
+import { MatrixPickerComponent } from '../../src/exports/matrixPicker';
 
 const ITEMS: SelectItem[] = [
   { value: 'development', label: 'development' },

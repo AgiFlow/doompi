@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   MessageItem,
   MessageItemBody,
@@ -6,8 +7,8 @@ import {
   VolumeIcon,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { VOICE_NARRATE_TOOL, voiceCallSummary, voiceResultLines } from '../lib/voiceToolRender.ts';
+
+import { VOICE_NARRATE_TOOL, voiceCallSummary, voiceResultLines } from '../lib/voiceToolRender';
 
 /**
  * The voice tools' timeline item. Facade calls keep their structured tool card.

@@ -1,14 +1,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterAll, describe, expect, it, vi } from 'vitest';
+
 import {
   extensionName,
   extensionPackageName,
   extensionToolSource,
   withExtensionSource,
-} from '../src/exports/extensionName.ts';
+} from '../src/exports/extensionName';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-extension-name-'));
 

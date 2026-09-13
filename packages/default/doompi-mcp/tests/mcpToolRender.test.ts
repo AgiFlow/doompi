@@ -1,7 +1,8 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { describe, expect, it } from 'vitest';
-import { renderMcpCall, renderMcpResult } from '../src/tui/mcpToolRender.ts';
+
+import { renderMcpCall, renderMcpResult } from '../src/tui/mcpToolRender';
 
 function plainTheme(): Theme {
   const identity = (text: string): string => text;

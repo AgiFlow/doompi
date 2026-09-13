@@ -1,7 +1,7 @@
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { readDoomHelpService, type DoomHelpService } from '@agimon-ai/doompi-extension-contracts/help';
-import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-extension-contracts/mode';
-import { DOOM_UI_HUB_SERVICE } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { readDoomHelpService, type DoomHelpService } from '@agimon-ai/doompi-core/help';
+import { DOOM_UI_HUB_SERVICE } from '@agimon-ai/doompi-core/ui-hub';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE } from '@agimon-ai/doompi-minor-mode';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   runtimeService: undefined as DoomHelpService | undefined,
 }));
 
-vi.mock('../../../src/container/index.ts', () => ({
+vi.mock('../../../src/services/helpRuntime', () => ({
   createHelpRuntime: (service: DoomHelpService, options: Record<string, unknown>) => {
     mocks.runtimeService = service;
     mocks.runtimeOptions = options;
@@ -33,7 +33,7 @@ vi.mock('../../../src/container/index.ts', () => ({
   },
 }));
 
-vi.mock('../../../src/adapters/pi/helpMode.ts', () => ({
+vi.mock('../../../src/controllers/helpMode', () => ({
   registerHelpModeIntegration: (...argumentsValue: unknown[]) => mocks.modeRegister(...argumentsValue),
   registerHelpUiIntegration: (...argumentsValue: unknown[]) => {
     mocks.uiRegister(...argumentsValue);
@@ -41,8 +41,8 @@ vi.mock('../../../src/adapters/pi/helpMode.ts', () => ({
   },
 }));
 
-import { helpExtension } from '../../../src/adapters/pi/extension';
-import piExtension from '../../../src/exports/extensions/pi.ts';
+import { helpExtension } from '../../../src/extensions/pi';
+import piExtension from '../../../src/extensions/pi';
 
 type LifecycleHandler = (...argumentsValue: unknown[]) => unknown;
 
@@ -83,6 +83,7 @@ function extensionFixture(): ExtensionFixture {
       commands.set(name, definition);
     },
   };
+  void installDoomCordisHost(pi as unknown as ExtensionAPI, { mode: 'composed', source: 'help-test-host' });
   return { commands, pi: pi as unknown as ExtensionAPI, handlers };
 }
 
@@ -145,7 +146,7 @@ describe('standard Help extension', () => {
     await dispatch(handlers, 'session_shutdown');
     expect(readDoomHelpService(connection.root)).toBeUndefined();
     await expect(commands.get('doom-help')?.handler('', { hasUI: false, ui: { notify: vi.fn() } })).rejects.toThrow(
-      'waiting for the active session service',
+      'aborted',
     );
     expect(mocks.runtimeDispose).toHaveBeenCalledOnce();
     expect(mocks.modeDispose).toHaveBeenCalledOnce();

@@ -1,6 +1,10 @@
-import { subscribeThreadFrame, unsubscribeThreadFrame } from '../../types/hub.ts';
-import { sendHubFrame } from '../lib/transport.ts';
-import { dropSessionStore } from './sessionStore.ts';
+import type { SessionService, SessionServiceState } from '@agimon-ai/doompi-core/session-protocol';
+import type { Context } from '@earendil-works/chord';
+
+import { subscribeThreadFrame, unsubscribeThreadFrame } from '../../types/hub';
+import { sendHubFrame } from '../lib/transport';
+import { createPagedTranscript } from './pagedTranscriptStore';
+import { applySessionFrame, dropSessionStore } from './sessionStore';
 
 /** A session id is a registry id and never starts with this, so a thread's fold cannot shadow a session's. */
 const THREAD_KEY_PREFIX = 'thread:';
@@ -9,6 +13,9 @@ interface ThreadHold {
   sessionId: string;
   threadId: string;
   refs: number;
+  transcript?: ReturnType<typeof createPagedTranscript>;
+  pendingState?: SessionServiceState;
+  ready?: boolean;
 }
 
 /**
@@ -17,6 +24,59 @@ interface ThreadHold {
  * this is also what a reconnect replays.
  */
 const holds = new Map<string, ThreadHold>();
+const readers = new Map<string, { service: SessionService; context: Context }>();
+
+function startTranscript(held: ThreadHold): void {
+  if (held.transcript || !held.ready) return;
+  const reader = readers.get(held.sessionId);
+  if (!reader) return;
+  const key = threadStoreKey(held.sessionId, held.threadId);
+  const transcript = createPagedTranscript(
+    key,
+    {
+      readTranscriptPage: (request, context) =>
+        reader.service.readTranscriptPage({ ...request, threadId: held.threadId }, context),
+    },
+    (id, frame, replay) => applySessionFrame(id, frame, { replay }),
+    reader.context,
+  );
+  held.transcript = transcript;
+  if (held.pendingState) transcript.publish(held.pendingState);
+  void transcript.initialize().catch((error: unknown) => {
+    if (held.transcript === transcript) applySessionFrame(key, { type: 'error', message: String(error) });
+  });
+}
+
+export function bindThreadReader(sessionId: string, service: SessionService, context: Context): () => void {
+  const reader = { service, context };
+  readers.set(sessionId, reader);
+  for (const held of holds.values()) if (held.sessionId === sessionId) startTranscript(held);
+  return () => {
+    if (readers.get(sessionId) !== reader) return;
+    readers.delete(sessionId);
+    for (const held of holds.values())
+      if (held.sessionId === sessionId) {
+        held.transcript?.dispose();
+        held.transcript = undefined;
+      }
+  };
+}
+
+/** SQLite children use the same cursor window and delta reducer as their parent. */
+export function applyThreadTranscriptFrame(
+  sessionId: string,
+  threadId: string,
+  frame: Record<string, unknown>,
+): boolean {
+  if (frame.type !== 'transcript_state' && frame.type !== 'transcript_ready') return false;
+  const held = holds.get(threadStoreKey(sessionId, threadId));
+  if (!held) return true;
+  held.ready = true;
+  if (frame.type === 'transcript_state') held.pendingState = frame.state as SessionServiceState;
+  startTranscript(held);
+  if (held.pendingState) held.transcript?.publish(held.pendingState);
+  return true;
+}
 
 /** Where a thread's fold lives in the session store map. */
 export function threadStoreKey(sessionId: string, threadId: string): string {
@@ -41,6 +101,7 @@ export function unsubscribeThread(sessionId: string, threadId: string): void {
   held.refs -= 1;
   if (held.refs > 0) return;
   holds.delete(key);
+  held.transcript?.dispose();
   sendHubFrame(unsubscribeThreadFrame(sessionId, threadId));
 }
 
@@ -54,6 +115,7 @@ export function dropThreads(sessionId: string): void {
   for (const [key, held] of holds) {
     if (held.sessionId !== sessionId) continue;
     holds.delete(key);
+    held.transcript?.dispose();
     dropSessionStore(key);
   }
 }
@@ -64,5 +126,7 @@ export function heldThreads(): Array<{ sessionId: string; threadId: string; refs
 }
 
 export function resetThreads(): void {
+  for (const held of holds.values()) held.transcript?.dispose();
   holds.clear();
+  readers.clear();
 }

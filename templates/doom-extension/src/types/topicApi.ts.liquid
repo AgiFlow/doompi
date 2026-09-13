@@ -29,6 +29,6 @@ export function itemUrl(sessionId: string, id: string): string {
 /** What the item route answers with. */
 export interface {{ topic | pascalCase }}ItemView {
   id: string;
-  /** The session the answer came from, or null from a hub-scoped host. */
+  /** The session the answer came from, or null from a global or workspace host. */
   sessionId: string | null;
 }

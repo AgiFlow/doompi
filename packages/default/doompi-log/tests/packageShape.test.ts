@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 type JsonRecord = Record<string, unknown>;
@@ -14,11 +15,10 @@ const CONFIG_FILES = ['tsdown.config.ts', 'tsconfig.json', 'vitest.config.ts', '
 const EXPORT_SUBPATHS = [
   '.',
   './extensions/pi',
-  // The hub-scoped metrics API the cockpit host imports; declared in doompiApi.
-  './hub-api',
+  './extensions/server',
   './metrics',
   './metricsSource',
-  './tui/metricsOverlay',
+  './metrics-overlay',
   './package.json',
 ];
 const PI_ENTRY = './dist/extensions/pi.mjs';
@@ -72,5 +72,16 @@ describe('@agimon-ai/doompi-log package shape', () => {
 
     const pi = objectValue(PACKAGE_MANIFEST.pi);
     expect(pi.extensions).toEqual([PI_ENTRY]);
+    expect(PACKAGE_MANIFEST.doompiServer).toEqual({
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      entry: './src/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['global', 'workspace', 'session'],
+    });
+    expect(objectValue(exports)['./extensions/server']).toEqual({
+      types: './dist/extensions/server.d.mts',
+      import: './dist/extensions/server.mjs',
+      require: './dist/extensions/server.cjs',
+    });
   });
 });

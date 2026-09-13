@@ -1,6 +1,7 @@
-import type { ComposerCapture, WebPluginContextItem } from '@agimon-ai/doompi-web-contracts';
-import type { AuthorWorkspaceDocument } from './authorWorkspaceStore.ts';
-import type { AuthorCrop, AuthorNativeAnchor, AuthorRegionDraft } from '../lib/authorViewportTypes.ts';
+import type { ComposerCapture, WebPluginContextItem } from '@agimon-ai/doompi-core/web';
+
+import type { AuthorCrop, AuthorNativeAnchor, AuthorRegionDraft } from '../lib/authorViewportTypes';
+import type { AuthorWorkspaceDocument } from './authorWorkspaceStore';
 
 export const AUTHOR_CAPTURE_MAX_DIMENSION = 1600;
 export const AUTHOR_CAPTURE_MAX_BYTES = 2 * 1024 * 1024;

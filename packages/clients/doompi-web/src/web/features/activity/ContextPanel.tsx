@@ -1,7 +1,8 @@
-import type { ContextItemKind } from '@agimon-ai/doompi/contextApi';
+import type { ContextItemKind } from '@agimon-ai/doompi-core/context-api';
 import { Button, EmptyState } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
-import { PluginSurface } from '../../components/PluginSurface.tsx';
+
+import { PluginSurface } from '../../components/PluginSurface';
 import {
   type ContextGroup,
   type ContextItemSource,
@@ -11,11 +12,11 @@ import {
   ownersOf,
   projectedGroups,
   totalTokens,
-} from '../../lib/contextComposition.ts';
-import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
-import { useActiveSessionMeta } from '../../stores/sessionsStore.ts';
-import { useActiveSession } from '../../stores/sessionStore.ts';
-import { ContextItemDialog } from './ContextItemDialog.tsx';
+} from '../../lib/contextComposition';
+import { HOST_SLOTS } from '../../lib/pluginRegistry';
+import { useActiveSessionMeta } from '../../stores/sessionsStore';
+import { useActiveSession } from '../../stores/sessionStore';
+import { ContextItemDialog } from './ContextItemDialog';
 
 /** The row a reader clicked, which is all the detail request is made of. */
 interface ItemTarget {

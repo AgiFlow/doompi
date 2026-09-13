@@ -1,5 +1,6 @@
 import * as ort from 'onnxruntime-web/wasm';
-import { SileroVadFrames } from '../lib/sileroVadFrames.ts';
+
+import { SileroVadFrames } from '../lib/sileroVadFrames';
 
 type WorkerCommand =
   | { id: number; type: 'initialize'; modelUrl: string }

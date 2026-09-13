@@ -1,8 +1,9 @@
 import type { McpToolInfo } from '@agimon-ai/mcp-proxy';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { readDirectToolFilter } from '../src/adapters/process/directToolsEnvironment.ts';
-import { DIRECT_TOOLS_ENV } from '../src/schemas/directTools.ts';
-import { McpCatalog, toPiToolName } from '../src/services/mcpCatalog.ts';
+
+import { DIRECT_TOOLS_ENV } from '../src/schemas/directTools';
+import { readDirectToolFilter } from '../src/services/directToolsEnvironment';
+import { McpCatalog, toPiToolName } from '../src/services/mcpCatalog';
 
 function mcpTool(name: string, description?: string): McpToolInfo {
   return { name, inputSchema: { type: 'object' }, ...(description ? { description } : {}) };

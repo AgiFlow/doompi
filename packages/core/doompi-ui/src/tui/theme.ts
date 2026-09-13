@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { FooterTextColor } from '@agimon-ai/doompi-extension-contracts/footer';
+
+import type { FooterTextColor } from '@agimon-ai/doompi-core/footer';
 import type { ThemeColor } from '@earendil-works/pi-coding-agent';
 
 export const DEFAULT_THEME_NAME = 'doom-pi-dark';

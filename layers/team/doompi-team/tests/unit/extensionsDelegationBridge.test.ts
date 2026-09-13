@@ -1,14 +1,15 @@
+import { Context } from '@deepseek-ai/cordis';
+import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   DOOM_DELEGATION_ACCEPTED_EVENT,
   DOOM_DELEGATION_FINISHED_EVENT,
   DOOM_DELEGATION_UPDATED_EVENT,
   type DelegationRequest,
-} from '@agimon-ai/doompi-extension-contracts/delegation';
-import { Context } from '@deepseek-ai/cordis';
-import { afterEach, describe, expect, it } from 'vitest';
-
-import { createDelegationBridge, type DelegationBridgeDeps } from '../../src/adapters/pi/extensions/delegationBridge';
-import type { TrackedAsyncJobsContract } from '../../src/adapters/asyncJobTracker';
+} from '../../src/exports/delegationApi';
+import type { TrackedAsyncJobsContract } from '../../src/services/asyncJobTracker';
+import { createDelegationBridge, type DelegationBridgeDeps } from '../../src/services/delegationBridge';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 interface StoredEvent {
   name: string;
@@ -88,7 +89,11 @@ describe('createDelegationBridge live metrics', () => {
     ctx.on(DOOM_DELEGATION_FINISHED_EVENT, (payload) => {
       events.push({ name: DOOM_DELEGATION_FINISHED_EVENT, payload });
     });
-    const service = bridge.createService(ctx, { sessionId: 'session-1', availableModels: [] });
+    const service = bridge.createService(ctx, {
+      sessionId: 'session-1',
+      sessionScope: TEST_SESSION_SCOPE,
+      availableModels: [],
+    });
 
     const request: DelegationRequest = {
       requestId: 'request-1',
@@ -185,15 +190,34 @@ describe('createDelegationBridge fork source', () => {
     const bridge = createDelegationBridge(forkDeps(spawnRequests));
     const ctx = new Context();
     roots.push(ctx);
-    let current = { sessionFile: '/tmp/parent.jsonl', leafId: 'leaf-1' };
+    let current = {
+      sessionFile: '/tmp/parent.jsonl',
+      leafId: 'leaf-1',
+      terminalSource: {
+        kind: 'terminal-pi-fork' as const,
+        sourceSessionId: 'session-1',
+        sourceLeafId: 'leaf-1',
+        snapshotJsonl: '{}\n',
+      },
+    };
     const service = bridge.createService(ctx, {
       sessionId: 'session-1',
+      sessionScope: TEST_SESSION_SCOPE,
       availableModels: [],
       captureForkSource: () => current,
     });
 
     await service.request(forkRequest('request-1'));
-    current = { sessionFile: '/tmp/parent.jsonl', leafId: 'leaf-2' };
+    current = {
+      sessionFile: '/tmp/parent.jsonl',
+      leafId: 'leaf-2',
+      terminalSource: {
+        kind: 'terminal-pi-fork',
+        sourceSessionId: 'session-1',
+        sourceLeafId: 'leaf-2',
+        snapshotJsonl: '{}\n',
+      },
+    };
     await service.request(forkRequest('request-2'));
 
     expect(spawnRequests.map((request) => request.parentLeafId)).toEqual(['leaf-1', 'leaf-2']);
@@ -206,6 +230,7 @@ describe('createDelegationBridge fork source', () => {
     roots.push(ctx);
     const service = bridge.createService(ctx, {
       sessionId: 'session-1',
+      sessionScope: TEST_SESSION_SCOPE,
       availableModels: [],
       captureForkSource: () => undefined,
     });
@@ -221,7 +246,11 @@ describe('createDelegationBridge fork source', () => {
     const bridge = createDelegationBridge(forkDeps(spawnRequests));
     const ctx = new Context();
     roots.push(ctx);
-    const service = bridge.createService(ctx, { sessionId: 'session-1', availableModels: [] });
+    const service = bridge.createService(ctx, {
+      sessionId: 'session-1',
+      sessionScope: TEST_SESSION_SCOPE,
+      availableModels: [],
+    });
 
     await service.request(forkRequest('request-1'));
 

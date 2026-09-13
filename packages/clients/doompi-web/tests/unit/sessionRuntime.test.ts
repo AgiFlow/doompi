@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 interface SocketHandlers {
@@ -10,6 +11,7 @@ interface SocketHandlers {
 const socketState = vi.hoisted(() => ({
   handlers: undefined as SocketHandlers | undefined,
   sent: [] as Record<string, unknown>[],
+  presentation: undefined as ((sessionId: string, frame: Record<string, unknown>, replay: boolean) => void) | undefined,
 }));
 
 const pluginState = vi.hoisted(() => ({
@@ -19,9 +21,35 @@ const pluginState = vi.hoisted(() => ({
 }));
 
 const menuState = vi.hoisted(() => ({ claimed: [] as string[], cleared: 0 }));
-vi.mock('../../src/web/lib/wsClient.ts', () => ({
-  sessionSocketUrl: () => 'ws://test/api/session',
-  createSessionSocket: (_url: string, handlers: SocketHandlers) => {
+
+vi.mock('../../src/web/lib/pluginRegistry', () => ({
+  dispatchChannelFrame: (frame: Record<string, unknown>) => pluginState.dispatched.push(frame),
+}));
+
+vi.mock('../../src/web/lib/pluginRuntime', () => ({
+  focusSessionWebPlugins: (sessionId: string) => {
+    pluginState.focusedSessions.push(sessionId);
+    return pluginState.focus(sessionId);
+  },
+  removeSessionWebPluginRuntime: () => undefined,
+}));
+
+vi.mock('../../src/web/app/protocolRuntime', () => ({
+  startProtocolRuntime: (_location: unknown, presentation: NonNullable<typeof socketState.presentation>) => {
+    socketState.presentation = presentation;
+    return { client: {}, focus: () => undefined, stop: () => undefined };
+  },
+}));
+
+// ProtocolRuntime is stubbed above, so record its command boundary separately.
+vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({
+  sendSessionProtocolFrame: (sessionId: string, frame: Record<string, unknown>) => {
+    socketState.sent.push({ type: 'session_command', sessionId, frame });
+  },
+}));
+
+vi.mock('../../src/web/lib/protocolHubSocket', () => ({
+  createProtocolHubSocket: (_client: unknown, handlers: SocketHandlers) => {
     socketState.handlers = handlers;
     return {
       send: (frame: Record<string, unknown>) => socketState.sent.push(frame),
@@ -30,48 +58,35 @@ vi.mock('../../src/web/lib/wsClient.ts', () => ({
   },
 }));
 
-vi.mock('../../src/web/lib/pluginRegistry.ts', () => ({
-  dispatchChannelFrame: (frame: Record<string, unknown>) => pluginState.dispatched.push(frame),
-}));
-
-vi.mock('../../src/web/lib/pluginRuntime.ts', () => ({
-  focusSessionWebPlugins: (sessionId: string) => {
-    pluginState.focusedSessions.push(sessionId);
-    return pluginState.focus(sessionId);
-  },
-  removeSessionWebPluginRuntime: () => undefined,
-}));
-
-vi.mock('../../src/web/app/protocolRuntime.ts', () => ({
-  startProtocolRuntime: () => ({ focus: () => undefined, stop: () => undefined }),
-}));
-
-vi.mock('../../src/web/lib/browserTelemetry.ts', () => ({
+vi.mock('../../src/web/lib/browserTelemetry', () => ({
   browserReadyDuration: () => 0,
   recordBrowserPerformance: () => undefined,
 }));
 
-vi.mock('../../src/web/stores/menuStore.ts', () => ({
+vi.mock('../../src/web/stores/menuStore', () => ({
   claimDialogMenu: (id: string) => menuState.claimed.push(id),
   clearPendingMenu: () => {
     menuState.cleared += 1;
   },
 }));
 
-import { startSessionRuntime } from '../../src/web/app/sessionRuntime.ts';
-import { onHubConnected } from '../../src/web/lib/transport.ts';
-import { resetSessions, sessionsStore, setActiveSession } from '../../src/web/stores/sessionsStore.ts';
+import { startSessionRuntime } from '../../src/web/app/sessionRuntime';
+import { onHubConnected } from '../../src/web/lib/transport';
+import { onCaptureStatus, pendingCaptureSessions, submitCapture } from '../../src/web/stores/captureStore';
+import { resetSessions, sessionsStore, setActiveSession } from '../../src/web/stores/sessionsStore';
 import {
   applyProtocolTranscript,
   applySessionFrame,
   dropSessionStore,
   requestOlderHistory,
   sessionStoreFor,
-} from '../../src/web/stores/sessionStore.ts';
-import { threadStoreKey } from '../../src/web/stores/threadStore.ts';
+} from '../../src/web/stores/sessionStore';
+import { threadStoreKey } from '../../src/web/stores/threadStore';
 
 afterEach(() => {
   socketState.handlers = undefined;
+  socketState.presentation = undefined;
+  vi.useRealTimers();
   socketState.sent = [];
   pluginState.dispatched = [];
   pluginState.focus = (_sessionId: string) => Promise.resolve();
@@ -103,6 +118,7 @@ describe('session runtime backlog publication', () => {
       type: 'sessions_snapshot',
       sessions: [{ id: sessionId, name: kind, createdAt: '1' }],
     });
+    if (kind !== 'thread') setActiveSession(sessionId);
     applySessionFrame(key, {
       type: 'extension_ui_request',
       method: 'setStatus',
@@ -173,12 +189,12 @@ describe('session runtime backlog publication', () => {
         expect(socketState.sent.at(-1)).toEqual({ type: 'history_request', sessionId, before: 'oldest-entry' });
       }
 
-      socketState.handlers?.onFrame({
-        type: kind === 'thread' ? 'thread_frame' : 'session_frame',
-        sessionId,
-        threadId: 'child',
-        frame: { type: 'extension_ui_request', method: 'setStatus', statusKey: 'progress', statusText: 'live' },
-      });
+      const live = { type: 'extension_ui_request', method: 'setStatus', statusKey: 'progress', statusText: 'live' };
+      if (kind === 'thread') {
+        socketState.handlers?.onFrame({ type: 'thread_frame', sessionId, threadId: 'child', frame: live });
+      } else {
+        socketState.presentation?.(sessionId, live, false);
+      }
       expect(published).toHaveBeenCalledTimes(2);
       expect(store.state.statuses.progress).toBe('live');
     } finally {
@@ -273,16 +289,8 @@ describe('session runtime voice subscription lifetime', () => {
       sessionId: 's1',
       frame: { type: 'agent_settled' },
     });
-    socketState.handlers?.onFrame({
-      type: 'session_frame',
-      sessionId: 's2',
-      frame: { type: 'extension_ui_request', method: 'select', id: 'visible-menu' },
-    });
-    socketState.handlers?.onFrame({
-      type: 'session_frame',
-      sessionId: 's2',
-      frame: { type: 'agent_settled' },
-    });
+    socketState.presentation?.('s2', { type: 'extension_ui_request', method: 'select', id: 'visible-menu' }, false);
+    socketState.presentation?.('s2', { type: 'agent_settled' }, false);
 
     expect(menuState.claimed).toEqual(['visible-menu']);
     expect(menuState.cleared).toBe(1);
@@ -332,22 +340,57 @@ describe('session runtime hub connection lifecycle', () => {
     expect(hydratedStates).toEqual([true, true]);
   });
 
+  it.each(['close', 'stop'] as const)('clears replay guards when the socket %s', (cleanup) => {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+    const sessionId = `replay-cleanup-${cleanup}`;
+    const stop = startSessionRuntime();
+    socketState.handlers?.onFrame({
+      type: 'sessions_snapshot',
+      sessions: [{ id: sessionId, name: sessionId, createdAt: '1' }],
+    });
+    setActiveSession(sessionId);
+
+    if (cleanup === 'close') socketState.handlers?.onClose();
+    else stop();
+
+    applySessionFrame(sessionId, {
+      type: 'extension_ui_request',
+      method: 'setStatus',
+      statusKey: 'live',
+      statusText: 'live',
+    });
+    socketState.handlers?.onFrame({
+      type: 'session_backlog',
+      sessionId,
+      frames: [{ type: 'extension_ui_request', method: 'setStatus', statusKey: 'live', statusText: 'stale' }],
+      dropped: 0,
+    });
+
+    expect(sessionStoreFor(sessionId).state.statuses).toEqual({ live: 'stale' });
+    if (cleanup === 'close') stop();
+    dropSessionStore(sessionId);
+  });
+
   it('re-reads the command list when a reload rebuilt the resource catalog', () => {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
     const stop = startSessionRuntime();
-    socketState.handlers?.onFrame({ type: 'sessions_snapshot', sessions: [] });
+    socketState.handlers?.onFrame({
+      type: 'sessions_snapshot',
+      sessions: [{ id: 's1', name: 'Focused', createdAt: '1' }],
+    });
+    setActiveSession('s1');
     socketState.sent = [];
 
     // Pi reports a reload no other way, so this journalled entry is the only
     // notice that `$` is completing from the previous selection's skills.
-    socketState.handlers?.onFrame({
-      type: 'session_frame',
-      sessionId: 's1',
-      frame: {
+    socketState.presentation?.(
+      's1',
+      {
         type: 'entry_appended',
         entry: { type: 'custom', customType: 'doom-resource-catalog', data: { version: 1, revision: 7 } },
       },
-    });
+      false,
+    );
     stop();
 
     expect(sentCommandTypes('s1')).toContain('get_commands');
@@ -356,17 +399,21 @@ describe('session runtime hub connection lifecycle', () => {
   it('leaves the command list alone for an unrelated custom entry', () => {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
     const stop = startSessionRuntime();
-    socketState.handlers?.onFrame({ type: 'sessions_snapshot', sessions: [] });
+    socketState.handlers?.onFrame({
+      type: 'sessions_snapshot',
+      sessions: [{ id: 's1', name: 'Focused', createdAt: '1' }],
+    });
+    setActiveSession('s1');
     socketState.sent = [];
 
-    socketState.handlers?.onFrame({
-      type: 'session_frame',
-      sessionId: 's1',
-      frame: {
+    socketState.presentation?.(
+      's1',
+      {
         type: 'entry_appended',
         entry: { type: 'custom', customType: 'doom-minor-modes', data: { version: 1, revision: 1, modes: [] } },
       },
-    });
+      false,
+    );
     stop();
 
     expect(sentCommandTypes('s1')).not.toContain('get_commands');
@@ -431,4 +478,86 @@ describe('session runtime hub connection lifecycle', () => {
     expect(cockpitSource).toContain('data-testid="voice-transfer-transition"');
     expect(cockpitSource).toContain('Transferring voice to {transferLabel}...');
   });
+});
+
+describe('pending capture subscription lifetime', () => {
+  it.each(['completed', 'rejected', 'timeout', 'removed', 'close'] as const)(
+    'retains a background capture until %s, without claiming replay as execution',
+    async (outcome) => {
+      vi.useFakeTimers();
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+      const stop = startSessionRuntime();
+      const events: string[] = [];
+      const stopStatus = onCaptureStatus(({ status }) => events.push(status));
+      try {
+        socketState.handlers?.onFrame({
+          type: 'sessions_snapshot',
+          sessions: [
+            { id: 'capture-owner', name: 'Capture', createdAt: '1', attach: 'attached' },
+            { id: 'visible', name: 'Visible', createdAt: '2', attach: 'attached' },
+          ],
+        });
+        setActiveSession('capture-owner');
+        const bytes = new Uint8Array(33);
+        bytes.set([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
+        new DataView(bytes.buffer).setUint32(16, 1);
+        new DataView(bytes.buffer).setUint32(20, 1);
+        const delivery = submitCapture('capture-owner', {
+          data: Buffer.from(bytes).toString('base64'),
+          mimeType: 'image/png',
+          context: { id: 'capture1', kind: 'capture', source: 'test', label: 'Capture', content: 'Fix this' },
+        });
+        const result = delivery.then(
+          () => 'accepted',
+          (error: unknown) => String(error),
+        );
+        const sent = socketState.sent.find((frame) => frame.type === 'session_command');
+        const command = sent?.frame as { id: string; message: string };
+        expect(command).toMatchObject({ id: expect.stringContaining('capture-') });
+        socketState.sent = [];
+        setActiveSession('visible');
+        expect(sessionSubscriptionFrames()).toEqual([{ type: 'subscribe', sessionId: 'visible' }]);
+        expect(pendingCaptureSessions.state.has('capture-owner')).toBe(true);
+        const consume = { type: 'message_start', message: { role: 'user', content: command.message } };
+        socketState.handlers?.onFrame({
+          type: 'session_backlog',
+          sessionId: 'capture-owner',
+          frames: [consume, { type: 'agent_settled' }],
+        });
+        expect(events).toEqual([]);
+        const live = (frame: Record<string, unknown>) =>
+          socketState.handlers?.onFrame({
+            type: 'session_frame',
+            sessionId: 'capture-owner',
+            frame,
+          });
+        if (outcome === 'completed') {
+          live({ type: 'response', id: command.id, success: true });
+          expect(await result).toBe('accepted');
+          expect(sessionSubscriptionFrames()).toEqual([{ type: 'subscribe', sessionId: 'visible' }]);
+          live(consume);
+          live({ type: 'agent_settled' });
+          expect(events).toEqual(['queued', 'working', 'completed']);
+        } else if (outcome === 'rejected') {
+          live({ type: 'response', id: command.id, success: false, error: 'refused' });
+          expect(await result).toContain('refused');
+        } else if (outcome === 'timeout') {
+          await vi.advanceTimersByTimeAsync(30_000);
+          expect(await result).toContain('not confirmed');
+        } else {
+          if (outcome === 'removed')
+            socketState.handlers?.onFrame({ type: 'session_removed', sessionId: 'capture-owner' });
+          else socketState.handlers?.onClose();
+          expect(await result).toContain('lost its connection');
+        }
+        expect(pendingCaptureSessions.state.size).toBe(0);
+        expect(sessionSubscriptionFrames()).toContainEqual({ type: 'unsubscribe', sessionId: 'capture-owner' });
+      } finally {
+        stopStatus();
+        stop();
+        dropSessionStore('capture-owner');
+        dropSessionStore('visible');
+      }
+    },
+  );
 });

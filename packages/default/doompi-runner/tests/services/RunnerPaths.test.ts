@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { LOG_DIR_ENV } from '../../src/exports/config';
-import { RunnerPaths } from '../../src/adapters/RunnerPaths';
+import { RunnerPaths } from '../../src/services/runnerPaths';
 
 const HOUR_MS = 60 * 60 * 1000;
 

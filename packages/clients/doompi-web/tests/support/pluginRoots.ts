@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pluginBlocksOf } from '../../src/services/webPluginManifest.ts';
+
+import { pluginBlocksOf } from '@agimon-ai/doompi/builders/web';
 
 /**
  * Every workspace package that declares a cockpit plugin, found by walking.

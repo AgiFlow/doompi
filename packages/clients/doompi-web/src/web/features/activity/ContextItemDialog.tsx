@@ -1,4 +1,4 @@
-import type { ContextItemDetail, ContextItemKind } from '@agimon-ai/doompi/contextApi';
+import type { ContextItemDetail, ContextItemKind } from '@agimon-ai/doompi-core/context-api';
 import {
   Dialog,
   DialogBody,
@@ -9,7 +9,8 @@ import {
   Spinner,
 } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
-import { fetchContextItemDetail } from '../../lib/contextDetailApi.ts';
+
+import { fetchContextItemDetail } from '../../lib/contextDetailApi';
 
 /**
  * What one row of the composition actually is.
@@ -188,7 +189,7 @@ function SkillFacts({ detail }: { detail: Extract<ContextItemDetail, { itemKind:
   return (
     <div data-testid="context-item-cost" className="flex flex-col gap-1">
       <Row label="listing" value={tokens(detail.tokens)} strong />
-      <Row label="file" value={detail.filePath} />
+      {detail.filePath ? <Row label="file" value={detail.filePath} /> : null}
       {detail.modelInvocable ? null : <p className="text-xs text-doom-faint">not offered to the model</p>}
     </div>
   );

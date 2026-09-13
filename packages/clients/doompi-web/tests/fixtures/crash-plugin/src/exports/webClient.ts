@@ -1,1 +1,1 @@
-export { webPlugin } from '../web/index.tsx';
+export { webPlugin } from '../web';

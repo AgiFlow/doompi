@@ -3,7 +3,8 @@ import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { DoomConfigContext, HarnessState } from '@agimon-ai/doompi-config/types';
 import { Context, type Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import type { HookCommand, HookOutcome, HookPayload, HookRunOptions, HookRunner } from '../../src/types/hooks.ts';
+
+import type { HookCommand, HookOutcome, HookPayload, HookRunOptions, HookRunner } from '../../src/types/hooks';
 
 export type PiHandler = (event: unknown, ctx: ExtensionContext) => Promise<unknown>;
 

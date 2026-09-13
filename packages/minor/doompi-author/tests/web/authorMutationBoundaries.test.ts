@@ -1,13 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { authorGridTools } from '../../src/web/stores/authorGridTools.ts';
-import { AUTHOR_TEXT_PROFILE, authorProfilesForDocument } from '../../src/web/stores/authorProfiles.ts';
-import { authorGrid, registerAuthorGridResolver, updateAuthorGridGeometry } from '../../src/web/lib/authorGrid.ts';
-import * as workspace from '../../src/web/stores/authorWorkspaceStore.ts';
-import type {
-  AuthorDocumentInput,
-  AuthorNativeAnchor,
-  AuthorRegionDraft,
-} from '../../src/web/lib/authorViewportTypes.ts';
+
+import { authorGrid, registerAuthorGridResolver, updateAuthorGridGeometry } from '../../src/web/lib/authorGrid';
+import type { AuthorDocumentInput, AuthorNativeAnchor, AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
+import { authorGridTools } from '../../src/web/stores/authorGridTools';
+import { AUTHOR_TEXT_PROFILE, authorProfilesForDocument } from '../../src/web/stores/authorProfiles';
+import * as workspace from '../../src/web/stores/authorWorkspaceStore';
 const signal = new AbortController().signal;
 const region: AuthorRegionDraft = {
   id: 'r',

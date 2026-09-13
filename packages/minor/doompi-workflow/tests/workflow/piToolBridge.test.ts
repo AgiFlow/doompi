@@ -1,5 +1,7 @@
+import type { WorkflowRunRecord } from '@agimon-ai/workflow-mcp';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { describe, expect, it } from 'vitest';
+
 import {
   finishedRunSummary,
   isSessionRun,
@@ -12,8 +14,7 @@ import {
   toAgentToolResult,
   toolResultText,
   withOptions,
-} from '../../src/adapters/pi/workflow/piToolBridge';
-import type { WorkflowRunRecord } from '@agimon-ai/workflow-mcp';
+} from '../../src/services/piToolBridge';
 
 function runRecord(overrides: Partial<WorkflowRunRecord> = {}): WorkflowRunRecord {
   return {

@@ -2,12 +2,22 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: {
-    '*': ['src/exports/**/*.ts', '!src/exports/webClient.ts'],
-    // Child-process entries: private artifacts the runtime spawns, not exports.
-    'extensions/subagentPromptRuntimeEntry': 'src/adapters/pi/extensions/subagentPromptRuntimeEntry.cts',
-    'runs/piModuleAlias': 'src/adapters/process/piModuleAlias.ts',
-    'runs/sdkRunnerEntry': 'src/adapters/process/sdkRunnerEntry.ts',
-    'runs/background/cliRunnerEntry': 'src/adapters/runs/background/cliRunnerEntry.ts',
+    'api-contracts': 'src/exports/apiContracts.ts',
+    'fable-plan-api': 'src/schemas/fablePlanApi.ts',
+    'runtime-subagent-policy': 'src/schemas/subagentPolicy.ts',
+    'runtime-subagent-tool': 'src/schemas/subagentTool.ts',
+    'delegation-api': 'src/exports/delegationApi.ts',
+    'fable-plan': 'src/exports/fablePlanApi.ts',
+    'subagent-policy': 'src/exports/subagentPolicy.ts',
+    'subagent-tool': 'src/exports/subagentTool.ts',
+    delegation: 'src/exports/delegation.ts',
+    capabilityCeiling: 'src/exports/capabilityCeiling.ts',
+    index: 'src/exports/index.ts',
+    env: 'src/exports/env.ts',
+    teamSnapshot: 'src/exports/teamSnapshot.ts',
+    'extensions/pi': 'src/extensions/pi.ts',
+    'extensions/server': 'src/extensions/server.ts',
+    'runs/background/cliRunnerEntry': 'src/bin/cliRunner.ts',
   },
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },

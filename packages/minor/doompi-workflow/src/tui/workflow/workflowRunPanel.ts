@@ -14,13 +14,14 @@
 
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { type KeyId, matchesKey } from '@earendil-works/pi-tui';
+
 import {
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_OVERLAY_ACCENT,
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from './doomOverlay.ts';
+} from './doomOverlay';
 import { fit, fitTerminalLine } from './overlayText';
 import { DoubleEscapeDetector } from './workflowOverlay';
 

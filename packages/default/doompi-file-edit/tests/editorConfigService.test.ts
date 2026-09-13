@@ -1,9 +1,11 @@
-import { globalDoomConfigPath } from '@agimon-ai/doompi-config';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import { globalDoomConfigPath } from '@agimon-ai/doompi-config';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { EditorConfigService } from '../src/adapters/EditorConfigService/EditorConfigService.ts';
+
+import { EditorConfigService } from '../src/services/editorConfigService';
 
 /** The real service reads real config files; point both sources at temp files. */
 class TestEditorConfigService extends EditorConfigService {

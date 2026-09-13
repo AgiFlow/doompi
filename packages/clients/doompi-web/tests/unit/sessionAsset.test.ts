@@ -1,6 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
-import { sealedHttpSession } from '../../src/web/lib/sealedSession.ts';
-import { loadSessionAsset } from '../../src/web/lib/sessionAsset.ts';
+
+import { sealedHttpSession } from '../../src/web/lib/sealedSession';
+import { loadSessionAsset } from '../../src/web/lib/sessionAsset';
 
 const fetchSpy = vi.spyOn(sealedHttpSession, 'fetch');
 

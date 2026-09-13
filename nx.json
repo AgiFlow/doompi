@@ -62,7 +62,7 @@
           "@agimon-ai/doompi-config",
           "@agimon-ai/doompi-domain",
           "@agimon-ai/doompi-edit",
-          "@agimon-ai/doompi-extension-contracts",
+          "@agimon-ai/doompi-core",
           "@agimon-ai/doompi-file-edit",
           "@agimon-ai/doompi-git",
           "@agimon-ai/doompi-goal",
@@ -90,7 +90,6 @@
           "@agimon-ai/doompi-runner-rtk-linux-arm64",
           "@agimon-ai/doompi-runner-rtk-linux-x64",
           "@agimon-ai/doompi-sandbox",
-          "@agimon-ai/doompi-server",
           "@agimon-ai/doompi-skill",
           "@agimon-ai/doompi-task",
           "@agimon-ai/doompi-team",
@@ -100,11 +99,13 @@
           "@agimon-ai/doompi-voice",
           "@agimon-ai/doompi-web",
           "@agimon-ai/doompi-web-components",
-          "@agimon-ai/doompi-web-contracts",
           "@agimon-ai/doompi-web-security",
           "@agimon-ai/doompi-workflow",
           "@agimon-ai/vibe-lint-plugin-doom-extension",
-          "@agimon-ai/vibe-lint-plugin-doom-web"
+          "@agimon-ai/vibe-lint-plugin-doom-web",
+          "@agimon-ai/doompi-minor-mode",
+          "@agimon-ai/vibe-lint-plugin-doom-core",
+          "@agimon-ai/vibe-lint-plugin-doom-cli"
         ],
         "version": {
           "updateDependents": "never"

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   GREP_COLLAPSED_LINES,
   hashlineBody,
@@ -8,7 +9,7 @@ import {
   READ_COLLAPSED_LINES,
   resultTextLines,
   takeTrailingNotice,
-} from '../../src/exports/index.ts';
+} from '../../src/exports';
 
 const text = (value: string) => ({ content: [{ type: 'text', text: value }] });
 

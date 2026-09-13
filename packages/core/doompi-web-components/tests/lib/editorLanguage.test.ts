@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { grammarKeyOf } from '../../src/lib/editorLanguage.ts';
+
+import { grammarKeyOf } from '../../src/lib/editorLanguage';
 
 describe('grammarKeyOf', () => {
   it('tells the four JavaScript dialects apart, because they parse differently', () => {

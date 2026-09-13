@@ -1,13 +1,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import type { DoomDirectEventBus, DoomHubChannelHost, DoomHubChannelSource } from '@agimon-ai/doompi-core/hub-channel';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createWorktreesChannel } from '../../../../src/adapters/web/worktreesChannel.ts';
-import { registryFile } from '../../../../src/adapters/filesystem/paths.ts';
-import { DoomGitExpectedError } from '../../../../src/services/support/errors.ts';
-import type { HubChannelHost, HubChannelSource } from '@agimon-ai/doompi-web-contracts';
-import type { WorktreeOperations } from '../../../../src/adapters/worktree/worktreeOperations.ts';
-import { WORKTREE_RECORD_VERSION, type WorktreeRecord } from '../../../../src/types/worktreeRegistry.ts';
+
+import { createWorktreesChannel } from '../../../../src/controllers/worktreesChannel';
+import { DoomGitExpectedError } from '../../../../src/services/errors';
+import { registryFile } from '../../../../src/services/paths';
+import { GIT_WORKTREE_LIFECYCLE_EVENT } from '../../../../src/services/worktreeEvents';
+import type { WorktreeOperations } from '../../../../src/services/worktreeOperations';
+import { WORKTREE_RECORD_VERSION, type WorktreeRecord } from '../../../../src/types/worktreeRegistry';
 
 let home: string;
 let repository: string;
@@ -54,15 +57,48 @@ interface Published {
   payload: { worktrees: { id: string; unowned: boolean }[]; pending?: string; error?: string };
 }
 
-function fakeHost(published: Published[]): HubChannelHost {
+function fakeHost(
+  published: Published[],
+  live: readonly string[],
+  directEvents: DoomDirectEventBus,
+): DoomHubChannelHost {
   return {
     sessions: () => [],
+    sessionService: {
+      create: vi.fn(),
+      close: vi.fn(),
+      isLive: (sessionId) => live.includes(sessionId),
+    },
+    directEvents,
     publish: (sessionId, payload) => {
       published.push({ sessionId, payload: payload as Published['payload'] });
     },
     requestSessionApi: vi.fn(),
     onNotice: vi.fn(),
   };
+}
+function directEvents(): {
+  bus: DoomDirectEventBus;
+  emit(frameType: string, sessionId: string, payload: unknown): void;
+} {
+  const listeners = new Map<string, Set<(payload: unknown) => void>>();
+  const key = (frameType: string, sessionId: string): string => `${frameType}:${sessionId}`;
+  const bus: DoomDirectEventBus = {
+    publish(frameType, sessionId, payload) {
+      for (const listener of listeners.get(key(frameType, sessionId)) ?? []) listener(payload);
+    },
+    subscribe(frameType, sessionId, listener) {
+      const current = listeners.get(key(frameType, sessionId)) ?? new Set<(payload: unknown) => void>();
+      current.add(listener);
+      listeners.set(key(frameType, sessionId), current);
+      return () => {
+        current.delete(listener);
+        if (current.size === 0) listeners.delete(key(frameType, sessionId));
+      };
+    },
+    close: () => listeners.clear(),
+  };
+  return { bus, emit: (frameType, sessionId, payload) => bus.publish(frameType, sessionId, payload) };
 }
 
 function fakeOperations(overrides: Partial<WorktreeOperations> = {}): WorktreeOperations {
@@ -83,15 +119,10 @@ function start(
   published: Published[],
   operations: WorktreeOperations,
   live: readonly string[] = ['parent-1', 'parent-2'],
+  events: DoomDirectEventBus = directEvents().bus,
 ) {
-  const channel = createWorktreesChannel({
-    intervalMs: 60_000,
-    operations,
-    homeDir: home,
-    registryDir: path.join(home, 'run'),
-    isSessionLive: (_dir, sessionId) => live.includes(sessionId),
-  });
-  const source: HubChannelSource = channel.start(fakeHost(published));
+  const channel = createWorktreesChannel({ operations, homeDir: home });
+  const source: DoomHubChannelSource = channel.start(fakeHost(published, live, events));
   return { channel, source };
 }
 
@@ -141,6 +172,28 @@ describe('what a session is shown', () => {
     source.sessionAdded?.(OWNER);
 
     expect(published.at(-1)?.payload.worktrees).toEqual([]);
+  });
+});
+describe('direct lifecycle events', () => {
+  it('refreshes durable registry state without polling', () => {
+    const published: Published[] = [];
+    const events = directEvents();
+    const { source } = start(published, fakeOperations(), ['parent-1'], events.bus);
+
+    source.sessionAdded?.(OWNER);
+    expect(published.at(-1)?.payload.worktrees).toEqual([]);
+    seed(record());
+    events.emit(GIT_WORKTREE_LIFECYCLE_EVENT, OWNER.sessionId, { version: 1, repositoryRoot: repository });
+
+    expect(published.at(-1)?.payload.worktrees.map((entry) => entry.id)).toEqual(['wt1']);
+    const count = published.length;
+    events.emit(GIT_WORKTREE_LIFECYCLE_EVENT, OWNER.sessionId, { version: 0, repositoryRoot: repository });
+    events.emit(GIT_WORKTREE_LIFECYCLE_EVENT, OWNER.sessionId, null);
+    events.emit(GIT_WORKTREE_LIFECYCLE_EVENT, OWNER.sessionId, { version: 1, repositoryRoot: '' });
+    expect(published).toHaveLength(count);
+    source.sessionRemoved?.(OWNER.sessionId);
+    events.emit(GIT_WORKTREE_LIFECYCLE_EVENT, OWNER.sessionId, { version: 1, repositoryRoot: repository });
+    expect(published).toHaveLength(count);
   });
 });
 

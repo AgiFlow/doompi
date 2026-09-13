@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import registerOllama from '../../src/extensions/entries/ollamaProvider.ts';
+
+import registerOllama from '../../src/extensions/ollamaProvider';
 
 interface RegisteredProvider {
   baseUrl: string;

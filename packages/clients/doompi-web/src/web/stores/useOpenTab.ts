@@ -1,7 +1,8 @@
 import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useCallback } from 'react';
-import { sessionsStore } from './sessionsStore.ts';
+
+import { sessionsStore } from './sessionsStore';
 
 /**
  * Navigation for the focused session, in the shape plugins receive: a tab id

@@ -1,9 +1,10 @@
 import { type ComponentProps, useEffect, useMemo, useState } from 'react';
-import { cn } from '../lib/cn.ts';
-import { type HashlineGroup, hashlineGroups, hashlineGroupsKey } from '../lib/hashlineHighlight.ts';
-import type { PresentedLine } from '../lib/hashlineView.ts';
-import { detectGrammar, highlightToLines, type SyntaxSpan } from '../lib/syntaxHighlight.ts';
-import { SyntaxLine } from './SyntaxText.tsx';
+
+import { cn } from '../lib/cn';
+import { type HashlineGroup, hashlineGroups, hashlineGroupsKey } from '../lib/hashlineHighlight';
+import type { PresentedLine } from '../lib/hashlineView';
+import { detectGrammar, highlightToLines, type SyntaxSpan } from '../lib/syntaxHighlight';
+import { SyntaxLine } from './SyntaxText';
 
 /**
  * The anchored body shared by hashline results: a file heading per group, a

@@ -1,8 +1,6 @@
 import { type Static, Type } from 'typebox';
 
 /** Replaces pi's built-in tool of the same name, so hooks keyed on `bash` keep working. */
-export const BASH_TOOL_NAME = 'bash';
-export const BASH_TOOL_LABEL = 'bash';
 
 /**
  * Built-in bash parameters plus the backgrounding controls.

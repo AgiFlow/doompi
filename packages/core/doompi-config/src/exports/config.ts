@@ -3,27 +3,27 @@ export {
   globalDoomConfigPath,
   loadDoomConfig,
   loadDoomConfigAsync,
-  loadDoomConfigLenient,
   loadDoomConfigLayers,
+  loadDoomConfigLenient,
   repositoryDoomConfigPath,
   resolvePlanningPlansDirectory,
-} from '../adapters/config.ts';
+} from '../services/config';
 export {
-  type ConfigKeyScope,
-  configLeafKeys,
-  configRootKeys,
-  configScopeOf,
   DOOM_PLANNING_THINKING_LEVELS,
   DOOM_VOICE_ENGINES,
   DOOM_VOICE_MODES,
   DOOM_VOICE_TTS_ENGINES,
+  configLeafKeys,
+  configRootKeys,
+  configScopeOf,
   mergeDoomConfigs,
   parseAutocompactModeConfig,
   parseDoomConfig,
   parsePlanningModeConfig,
   resolveVoiceConfig,
   valueAtKeyPath,
-} from '../services/configPolicy.ts';
+  type ConfigKeyScope,
+} from '../services/configPolicy';
 export type {
   ConfigDiagnostic,
   ConfigValueOrigin,
@@ -31,4 +31,4 @@ export type {
   DoomConfigLayers,
   LenientParseOptions,
   LenientParseResult,
-} from '../types/config.ts';
+} from '../types/config';

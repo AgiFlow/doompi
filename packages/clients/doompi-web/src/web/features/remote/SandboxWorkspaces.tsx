@@ -1,6 +1,7 @@
 import { Button, Input } from '@agimon-ai/doompi-web-components';
 import { useState } from 'react';
-import { updateRemoteSettings } from '../../stores/remoteAccessStore.ts';
+
+import { updateRemoteSettings } from '../../stores/remoteAccessStore';
 
 /**
  * The directories the contained cockpit is allowed to see.

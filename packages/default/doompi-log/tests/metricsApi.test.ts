@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { sealedFetch } = vi.hoisted(() => ({ sealedFetch: vi.fn() }));
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fetch: sealedFetch } }));
 
-const { fetchIssues, fetchMetrics } = await import('../src/web/api/metricsApi.ts');
+const { fetchIssues, fetchMetrics } = await import('../src/web/api/metricsApi');
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -28,7 +28,7 @@ describe('the metrics browser client', () => {
 
     // A plugin calling fetch directly would send plaintext to the tunnel relay.
     expect(sealedFetch).toHaveBeenCalledTimes(1);
-    expect(sealedFetch.mock.calls[0]?.[0]).toContain('/api/plugin/log/metrics');
+    expect(sealedFetch.mock.calls[0]?.[0]).toContain('/api/global/plugin/log/metrics');
   });
 
   it('passes the dimension, period and focus as query parameters', async () => {
@@ -107,7 +107,7 @@ describe('the issues browser client', () => {
 
     const result = await fetchIssues();
 
-    expect(String(sealedFetch.mock.calls[0]?.[0])).toBe('/api/plugin/log/issues');
+    expect(String(sealedFetch.mock.calls[0]?.[0])).toBe('/api/global/plugin/log/issues');
     expect(result).toEqual({ issues: { totalIssues: 69, byTool: { bash: 25 } } });
   });
 
@@ -116,7 +116,7 @@ describe('the issues browser client', () => {
 
     await fetchIssues('id_abc');
 
-    expect(String(sealedFetch.mock.calls[0]?.[0])).toBe('/api/plugin/log/issues?focus=id_abc');
+    expect(String(sealedFetch.mock.calls[0]?.[0])).toBe('/api/global/plugin/log/issues?focus=id_abc');
   });
 
   it('passes an unavailable body through rather than flattening it', async () => {

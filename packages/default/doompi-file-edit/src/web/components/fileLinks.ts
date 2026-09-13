@@ -1,8 +1,9 @@
-import type { FileLinkSource, TransientTab } from '@agimon-ai/doompi-web-contracts';
-import type { FilesItemView } from '../../types/webFiles.ts';
-import { fileTab } from './FilePanel.tsx';
-import { filePreviewTab } from './FilePreviewPanel.tsx';
-import { files } from '../stores/filesStore.ts';
+import type { FileLinkSource, TransientTab } from '@agimon-ai/doompi-core/web';
+
+import type { FilesItemView } from '../../types/webFiles';
+import { files } from '../stores/filesStore';
+import { fileTab } from './FilePanel';
+import { filePreviewTab } from './FilePreviewPanel';
 
 /**
  * The files a message names, as links into the same tab the activity dock

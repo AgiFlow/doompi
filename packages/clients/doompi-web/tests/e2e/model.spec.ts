@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 const state = (model: { id: string; provider: string }, thinkingLevel: string) => ({
   type: 'response',
@@ -34,10 +34,10 @@ test('picks a model from the chip popup and asks the session to switch', async (
   await expect(page.getByTestId('agent-model')).toHaveText('gpt-5.6-sol');
 
   await page.getByTestId('axis-model').click();
-  // Opening asks Pi for both lists; nothing is cached from a previous open.
+  // Opening asks Pi for both lists; the protocol handles their replies in request order.
   await cockpit.session.waitForCommand('get_available_models');
-  await cockpit.session.waitForCommand('get_available_thinking_levels');
   cockpit.session.emit(MODELS);
+  await cockpit.session.waitForCommand('get_available_thinking_levels');
   cockpit.session.emit(LEVELS);
 
   const popup = page.getByTestId('model-popup');
@@ -53,8 +53,8 @@ test('picks a model from the chip popup and asks the session to switch', async (
     cockpit.session.received.filter((frame) => frame.type === 'get_available_thinking_levels').length;
   await page.getByTestId('axis-model').click();
   await expect.poll(modelRequests).toBe(2);
-  await expect.poll(levelRequests).toBe(2);
   cockpit.session.emit(MODELS);
+  await expect.poll(levelRequests).toBe(2);
   cockpit.session.emit(LEVELS);
   await expect(popup).toBeVisible();
 
@@ -79,6 +79,8 @@ test('picks a thinking level and shows a refused pick', async ({ page, cockpit }
   cockpit.session.emit(state({ id: 'gpt-5.6-sol', provider: 'openai' }, 'max'));
 
   await page.getByTestId('axis-model').click();
+  await cockpit.session.waitForCommand('get_available_models');
+  cockpit.session.emit(MODELS);
   await cockpit.session.waitForCommand('get_available_thinking_levels');
   cockpit.session.emit(LEVELS);
 

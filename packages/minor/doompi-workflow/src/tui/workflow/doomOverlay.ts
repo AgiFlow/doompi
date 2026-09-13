@@ -1,6 +1,7 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { type Component, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
-import { fitLine, frameLine, padLine } from './rendering.ts';
+
+import { fitLine, frameLine, padLine } from './rendering';
 
 const DEFAULT_TERMINAL_ROWS = 24;
 const FULL_CHROME_ROWS = 6;

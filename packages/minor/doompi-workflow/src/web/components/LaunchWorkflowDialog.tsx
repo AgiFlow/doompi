@@ -1,3 +1,4 @@
+import type { SessionFrameSender } from '@agimon-ai/doompi-core/web';
 import {
   Badge,
   Button,
@@ -15,17 +16,17 @@ import {
   SelectValue,
   Textarea,
 } from '@agimon-ai/doompi-web-components';
-import type { SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
 import { type KeyboardEvent as ReactKeyboardEvent, useState } from 'react';
-import type { WorkflowCatalogEntryView, WorkflowCatalogInputView } from '../../types/webWorkflows.ts';
+
+import type { WorkflowCatalogEntryView, WorkflowCatalogInputView } from '../../types/webWorkflows';
 import {
   initialInputs,
   initialRunner,
   launchProblems,
   workflowLaunchLine,
   type WorkflowLaunchRequest,
-} from '../lib/launchLine.ts';
-import { requestLaunch } from '../stores/workflowsStore.ts';
+} from '../lib/launchLine';
+import { requestLaunch } from '../stores/workflowsStore';
 
 const PROMPT_ROWS = 3;
 const BOOLEAN_TYPE = 'boolean';

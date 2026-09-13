@@ -1,4 +1,4 @@
-import type { LeaderContribution } from '@agimon-ai/doompi-extension-contracts/leader';
+import type { LeaderContribution } from '@agimon-ai/doompi-core/leader';
 
 export const SKILLS_COMMAND = 'skills';
 export const SKILL_INVOCATION_PREFIX = '/skill:';

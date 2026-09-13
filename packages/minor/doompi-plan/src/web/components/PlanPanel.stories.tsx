@@ -8,9 +8,10 @@
  * plan route is answered here at module scope, from the same PlanDetailView the
  * route returns; anything else still goes to the page's own fetch.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { PlanPanel } from './PlanPanel.tsx';
-import { currentUrl, type PlanDetailView } from '../../types/planApi.ts';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { currentUrl, type PlanDetailView } from '../../types/planApi';
+import { PlanPanel } from './PlanPanel';
 
 const PLAN: PlanDetailView = {
   path: '.doom/plans/story-coverage.md',

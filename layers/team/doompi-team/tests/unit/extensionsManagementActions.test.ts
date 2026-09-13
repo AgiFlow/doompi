@@ -1,230 +1,246 @@
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import type { DoomChildSessionHandle } from '@agimon-ai/doompi-core/child';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ManagementActions } from '../../src/adapters/pi/extensions/managementActions';
-import { controlInboxDir, steerRequestsDir, writeSteerAck } from '../../src/adapters/intercom/supervisorControlChannel';
-import type { AsyncRunStatus } from '../../src/adapters/runs/background/asyncExecution';
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/adapters/asyncJobTracker';
-import type { RunIdResolverContract, ResolvedRunLocation } from '../../src/adapters/runIdResolver';
+import { AsyncJobTracker } from '../../src/services/asyncJobTracker';
+import {
+  EXTERNAL_IPC_CHANNEL,
+  EXTERNAL_IPC_VERSION,
+  type ExternalProcessEndpoint,
+  ExternalProcessIpc,
+  type ExternalControlMessage,
+  type ExternalRunProjection,
+} from '../../src/services/externalProcessIpc';
+import { ManagementActions } from '../../src/services/managementActions';
+import type { NativeRunCoordinatorContract } from '../../src/services/nativeRunCoordinator';
+import { createSessionScope, type SessionScope } from '../../src/services/sessionPaths';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
-class FakeRunIdResolver implements RunIdResolverContract {
-  locations = new Map<string, ResolvedRunLocation>();
-  resolve(id: string): ResolvedRunLocation | undefined {
-    if (id === 'ambiguous')
-      throw new Error(`Ambiguous run id prefix '${id}' matched: run-a, run-b. Provide a longer id.`);
-    return this.locations.get(id);
-  }
-  async resolveAsync(id: string): Promise<ResolvedRunLocation | undefined> {
-    return this.resolve(id);
-  }
-}
-
-class FakeAsyncJobTracker implements AsyncJobTrackerContract {
-  forSession() {
-    return this;
-  }
-  jobs: TrackedAsyncJob[] = [];
-  list(): TrackedAsyncJob[] {
-    return this.jobs;
-  }
-  get(runId: string): TrackedAsyncJob | undefined {
-    return this.jobs.find((job) => job.runId === runId);
-  }
-  track(): void {}
-  untrack(): void {}
-  reset(): void {}
-  start(): void {}
-  stop(): void {}
-}
-
-const temporaryDirs: string[] = [];
-
-function makeRunDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-team-management-actions-'));
-  temporaryDirs.push(dir);
-  return dir;
-}
-
-function writeStatus(runDir: string, status: Record<string, unknown>): void {
-  fs.writeFileSync(path.join(runDir, 'status.json'), JSON.stringify(status));
-}
+const trackers: AsyncJobTracker[] = [];
+const externalIpcs: ExternalProcessIpc[] = [];
 
 afterEach(() => {
-  while (temporaryDirs.length > 0) {
-    const dir = temporaryDirs.pop();
-    if (dir) fs.rmSync(dir, { recursive: true, force: true });
-  }
+  for (const tracker of trackers.splice(0)) tracker.stop();
+  for (const ipc of externalIpcs.splice(0)) ipc.close();
 });
 
-function makeActions() {
-  const runIds = new FakeRunIdResolver();
-  const jobs = new FakeAsyncJobTracker();
-  class FastManagementActions extends ManagementActions {
-    protected override readonly steerAckTimeoutMs = 0;
-    protected override readonly steerAckPollIntervalMs = 1;
-  }
-  const actions = new FastManagementActions(runIds, jobs);
-  return { runIds, jobs, actions };
+function makeActions(
+  scope: SessionScope = TEST_SESSION_SCOPE,
+  tracker = new AsyncJobTracker(),
+  nativeRuns?: NativeRunCoordinatorContract,
+  externalProcesses?: ExternalProcessIpc,
+) {
+  trackers.push(tracker);
+  const actions = new ManagementActions(tracker, nativeRuns, externalProcesses);
+  actions.bindSessionScope(scope);
+  return { actions, tracker };
+}
+
+function externalProjection(runId: string, state = 'running'): ExternalRunProjection {
+  return {
+    runId,
+    agent: 'worker',
+    task: 'inspect',
+    cwd: '/work',
+    runtime: 'claude',
+    state,
+    startedAt: 10,
+    updatedAt: 20,
+  };
+}
+
+function nativeProjection(runId: string, status = 'running') {
+  return {
+    runId,
+    agent: 'worker',
+    task: 'inspect',
+    cwd: '/work',
+    runtime: 'pi',
+    status,
+    startedAt: 10,
+    updatedAt: 20,
+  } as const;
+}
+
+function fakeNativeRuns(activeRunId = 'native-run') {
+  const native = {
+    start: vi.fn(),
+    get: vi.fn((_sessionId: string, runId: string): DoomChildSessionHandle | undefined =>
+      runId === activeRunId ? ({} as DoomChildSessionHandle) : undefined,
+    ),
+    status: vi.fn(),
+    steer: vi.fn(async (_sessionId: string, _runId: string, _message: string, _signal?: AbortSignal) => undefined),
+    stop: vi.fn(async (_sessionId: string, _runId: string, _reason?: string) => undefined),
+    close: vi.fn(async () => undefined),
+  } satisfies NativeRunCoordinatorContract;
+  return native;
+}
+
+function fakeExternalEndpoint(runId: string, scope: SessionScope) {
+  const sent: object[] = [];
+  let receive: ((message: unknown) => void) | undefined;
+  const endpoint: ExternalProcessEndpoint = {
+    onMessage(handler) {
+      receive = handler;
+      return () => {
+        receive = undefined;
+      };
+    },
+    onExit() {
+      return () => undefined;
+    },
+    send: vi.fn(async (message: object) => {
+      sent.push(message);
+      const control = message as Partial<ExternalControlMessage>;
+      if (control.command === 'steer' && control.requestId) {
+        receive?.({
+          channel: EXTERNAL_IPC_CHANNEL,
+          version: EXTERNAL_IPC_VERSION,
+          direction: 'runner',
+          kind: 'ack',
+          runId,
+          scopeKey: scope.scopeKey,
+          requestId: control.requestId,
+          command: 'steer',
+          state: 'delivered',
+          message: 'External child accepted the steer request.',
+        });
+      }
+    }),
+    disconnect: vi.fn(),
+  };
+  return { endpoint, sent };
 }
 
 describe('ManagementActions', () => {
-  describe('status', () => {
-    it('returns status:undefined, claimed:false, and the requested id back when nothing resolves', () => {
-      const { actions } = makeActions();
+  it('resolves exact and unique prefixes from current-session projections', () => {
+    const { actions, tracker } = makeActions();
+    tracker.upsertExternal(TEST_SESSION_SCOPE.rootSessionId, TEST_SESSION_SCOPE, externalProjection('run-123'));
 
-      const result = actions.status('no-such-run');
+    expect(actions.status('run-123').runId).toBe('run-123');
+    expect(actions.status('run-1').runId).toBe('run-123');
+    expect(actions.status('run-1').status).toMatchObject({ state: 'running', runtime: 'claude' });
+  });
 
-      expect(result).toEqual({ runId: 'no-such-run', runDir: undefined, claimed: false, status: undefined });
+  it('prefers an exact run over a matching prefix and rejects ambiguous prefixes', () => {
+    const { actions, tracker } = makeActions();
+    tracker.upsertExternal(TEST_SESSION_SCOPE.rootSessionId, TEST_SESSION_SCOPE, externalProjection('run-1'));
+    tracker.upsertExternal(TEST_SESSION_SCOPE.rootSessionId, TEST_SESSION_SCOPE, externalProjection('run-123'));
+
+    expect(actions.status('run-1').runId).toBe('run-1');
+    expect(() => actions.status('run-')).toThrow(/Multiple current-session runs match 'run-'/);
+  });
+
+  it('keeps status and list projections isolated by session scope', () => {
+    const otherScope = createSessionScope('other-session');
+    const tracker = new AsyncJobTracker();
+    const { actions } = makeActions(TEST_SESSION_SCOPE, tracker);
+    const { actions: otherActions } = makeActions(otherScope, tracker);
+    tracker.upsertExternal(TEST_SESSION_SCOPE.rootSessionId, TEST_SESSION_SCOPE, externalProjection('owned-run'));
+    tracker.upsertExternal(otherScope.rootSessionId, otherScope, externalProjection('foreign-run'));
+
+    expect(actions.list().runs.map((run) => run.runId)).toEqual(['owned-run']);
+    expect(actions.status('foreign-run')).toEqual({
+      runId: 'foreign-run',
+      runDir: undefined,
+      resultPath: undefined,
+      claimed: false,
+      status: undefined,
+    });
+    expect(otherActions.status('foreign-run').status).toMatchObject({ runId: 'foreign-run' });
+  });
+
+  it('projects native status and routes stop and steer through the typed coordinator', async () => {
+    const native = fakeNativeRuns();
+    const { actions, tracker } = makeActions(TEST_SESSION_SCOPE, new AsyncJobTracker(), native);
+    tracker.upsertNative(TEST_SESSION_SCOPE.rootSessionId, TEST_SESSION_SCOPE, nativeProjection('native-run'));
+
+    expect(actions.status('native-run').status).toMatchObject({
+      runId: 'native-run',
+      state: 'running',
+      runtime: 'pi',
+      startedAt: 10,
+      lastUpdate: 20,
     });
 
-    it("reads the resolved run's real status.json off disk", () => {
-      const { runIds, actions } = makeActions();
-      const runDir = makeRunDir();
-      writeStatus(runDir, { runId: 'run-1', agent: 'worker', state: 'running', summary: 'in progress' });
-      runIds.locations.set('run-1', { runId: 'run-1', runDir, resultPath: undefined, claimed: false });
+    const stop = await actions.stop('native-run', 'no longer needed');
+    const signal = new AbortController().signal;
+    const steer = await actions.steer('native-run', 'continue', 2, signal);
 
-      const result = actions.status('run-1');
-
-      expect(result.runId).toBe('run-1');
-      expect(result.claimed).toBe(false);
-      expect((result.status as AsyncRunStatus | undefined)?.summary).toBe('in progress');
+    expect(stop).toEqual({ requestId: expect.any(String) });
+    expect(steer).toMatchObject({
+      requestId: expect.any(String),
+      index: 2,
+      state: 'delivered',
+      message: 'Native child accepted the steer request.',
     });
+    expect(native.stop).toHaveBeenCalledWith(TEST_SESSION_SCOPE.rootSessionId, 'native-run', 'no longer needed');
+    expect(native.steer).toHaveBeenCalledWith(TEST_SESSION_SCOPE.rootSessionId, 'native-run', 'continue', signal);
+  });
 
-    it('reads status through the promise-based startup path', async () => {
-      const { runIds, actions } = makeActions();
-      const runDir = makeRunDir();
-      writeStatus(runDir, { runId: 'run-async', agent: 'worker', state: 'running' });
-      runIds.locations.set('run-async', { runId: 'run-async', runDir, resultPath: undefined, claimed: false });
+  it('routes external stop and acknowledged steer through ExternalProcessIpc', async () => {
+    const ipc = new ExternalProcessIpc();
+    externalIpcs.push(ipc);
+    const { endpoint, sent } = fakeExternalEndpoint('external-run', TEST_SESSION_SCOPE);
+    ipc.register(TEST_SESSION_SCOPE, 'external-run', endpoint);
+    const { actions, tracker } = makeActions(TEST_SESSION_SCOPE, new AsyncJobTracker(), undefined, ipc);
+    tracker.upsertExternal(TEST_SESSION_SCOPE.rootSessionId, TEST_SESSION_SCOPE, externalProjection('external-run'));
 
-      await expect(actions.statusAsync('run-async')).resolves.toMatchObject({
-        runId: 'run-async',
-        status: { state: 'running' },
-      });
+    const stop = await actions.stop('external-run', 'cancelled');
+    const steer = await actions.steer('external-run', 'try another path', 1);
+
+    expect(stop.requestId).toEqual(expect.any(String));
+    expect(sent[0]).toMatchObject({
+      kind: 'control',
+      command: 'stop',
+      runId: 'external-run',
+      reason: 'cancelled',
+      requestId: stop.requestId,
     });
-
-    it('propagates an ambiguous-prefix throw from the resolver, unmodified', () => {
-      const { actions } = makeActions();
-
-      expect(() => actions.status('ambiguous')).toThrow(/Ambiguous run id prefix/);
+    expect(steer).toMatchObject({
+      requestId: expect.any(String),
+      index: 1,
+      state: 'delivered',
+      message: 'External child accepted the steer request.',
     });
-
-    it('reports status:undefined when the resolved run has no readable status.json', () => {
-      const { runIds, actions } = makeActions();
-      const runDir = makeRunDir(); // empty, no status.json written
-      runIds.locations.set('run-empty', { runId: 'run-empty', runDir, resultPath: undefined, claimed: false });
-
-      const result = actions.status('run-empty');
-
-      expect(result.status).toBeUndefined();
+    expect(sent[1]).toMatchObject({
+      kind: 'control',
+      command: 'steer',
+      message: 'try another path',
+      targetIndex: 1,
+      requestId: steer.requestId,
     });
   });
 
-  describe('list', () => {
-    it('returns exactly what AsyncJobTracker.list() returns, nothing more', () => {
-      const { jobs, actions } = makeActions();
-      jobs.jobs = [{ runId: 'run-1', status: 'running' }];
+  it('resolves a unique prefix for external control', async () => {
+    const ipc = new ExternalProcessIpc();
+    externalIpcs.push(ipc);
+    const { endpoint, sent } = fakeExternalEndpoint('external-prefix-run', TEST_SESSION_SCOPE);
+    ipc.register(TEST_SESSION_SCOPE, 'external-prefix-run', endpoint);
+    const { actions, tracker } = makeActions(TEST_SESSION_SCOPE, new AsyncJobTracker(), undefined, ipc);
+    tracker.upsertExternal(
+      TEST_SESSION_SCOPE.rootSessionId,
+      TEST_SESSION_SCOPE,
+      externalProjection('external-prefix-run'),
+    );
 
-      expect(actions.list()).toEqual({ runs: [{ runId: 'run-1', status: 'running' }] });
-    });
+    await actions.stop('external-prefix', 'prefix control');
+
+    expect(sent[0]).toMatchObject({ runId: 'external-prefix-run', command: 'stop' });
   });
 
-  describe('interrupt / stop / steer', () => {
-    it('interrupt() throws naming the id when nothing resolves, before writing anything', () => {
-      const { actions } = makeActions();
-      expect(() => actions.interrupt('ghost')).toThrow(/\[run_not_found\].*No active run matches 'ghost'/);
-    });
+  it('reports missing projections and controls without touching a filesystem channel', async () => {
+    const native = fakeNativeRuns('different-run');
+    const ipc = new ExternalProcessIpc();
+    externalIpcs.push(ipc);
+    const { actions, tracker } = makeActions(TEST_SESSION_SCOPE, new AsyncJobTracker(), native, ipc);
 
-    it('interrupt() writes a real interrupt request file into the resolved run dir', () => {
-      const { runIds, actions } = makeActions();
-      const runDir = makeRunDir();
-      runIds.locations.set('run-1', { runId: 'run-1', runDir, resultPath: undefined, claimed: false });
+    await expect(actions.stop('missing-run')).rejects.toThrow(/\[run_not_found\].*No active run matches 'missing-run'/);
+    await expect(actions.steer('missing-run', 'continue')).rejects.toThrow(/\[run_not_found\]/);
 
-      const result = actions.interrupt('run-1', 'user requested');
+    tracker.upsertNative(TEST_SESSION_SCOPE.rootSessionId, TEST_SESSION_SCOPE, nativeProjection('native-gone'));
+    await expect(actions.stop('native-gone')).rejects.toThrow(/Native run 'native-gone' is no longer active/);
 
-      expect(fs.existsSync(result.requestPath)).toBe(true);
-      const written = JSON.parse(fs.readFileSync(result.requestPath, 'utf-8'));
-      expect(written).toMatchObject({ type: 'interrupt', reason: 'user requested' });
-    });
-
-    it('stop() writes a real stop request file into the resolved run dir', () => {
-      const { runIds, actions } = makeActions();
-      const runDir = makeRunDir();
-      runIds.locations.set('run-1', { runId: 'run-1', runDir, resultPath: undefined, claimed: false });
-
-      const result = actions.stop('run-1');
-
-      expect(fs.existsSync(result.requestPath)).toBe(true);
-      expect(JSON.parse(fs.readFileSync(result.requestPath, 'utf-8'))).toMatchObject({ type: 'stop' });
-    });
-
-    it('steer() writes a real steer request file with the message and optional targetIndex', async () => {
-      const { runIds, actions } = makeActions();
-      const runDir = makeRunDir();
-      runIds.locations.set('run-1', { runId: 'run-1', runDir, resultPath: undefined, claimed: false });
-
-      const result = await actions.steer('run-1', 'go this way', 2);
-
-      expect(fs.existsSync(result.requestPath)).toBe(true);
-      const written = JSON.parse(fs.readFileSync(result.requestPath, 'utf-8'));
-      expect(written).toMatchObject({ message: 'go this way', targetIndex: 2, id: result.requestId });
-    });
-
-    it('steer() reports pending when no request-specific acknowledgment arrives', async () => {
-      const { runIds, actions } = makeActions();
-      const runDir = makeRunDir();
-      runIds.locations.set('run-1', { runId: 'run-1', runDir, resultPath: undefined, claimed: false });
-
-      const result = await actions.steer('run-1', 'go this way');
-
-      expect(result).toMatchObject({
-        requestPath: expect.any(String),
-        requestId: expect.any(String),
-        index: 0,
-        state: 'pending',
-      });
-    });
-
-    it('steer() returns the exact matching child acknowledgment without consuming another request', async () => {
-      class AckManagementActions extends ManagementActions {
-        protected override readonly steerAckTimeoutMs = 500;
-        protected override readonly steerAckPollIntervalMs = 5;
-        protected override generateSteerRequestId(): string {
-          return 'matching-request';
-        }
-      }
-      const runIds = new FakeRunIdResolver();
-      const runDir = makeRunDir();
-      runIds.locations.set('run-1', { runId: 'run-1', runDir, resultPath: undefined, claimed: false });
-      const actions = new AckManagementActions(runIds, new FakeAsyncJobTracker());
-      const pending = actions.steer('run-1', 'go this way', 2);
-      writeSteerAck(runDir, {
-        requestId: 'matching-request',
-        index: 2,
-        ts: Date.now(),
-        state: 'delivered',
-        message: 'Pi accepted this exact request.',
-      });
-
-      await expect(pending).resolves.toMatchObject({
-        requestId: 'matching-request',
-        index: 2,
-        state: 'delivered',
-        message: 'Pi accepted this exact request.',
-      });
-    });
-
-    it('control inbox and steer dirs are the real ones control-channel.ts itself resolves', async () => {
-      const { runIds, actions } = makeActions();
-      const runDir = makeRunDir();
-      runIds.locations.set('run-1', { runId: 'run-1', runDir, resultPath: undefined, claimed: false });
-
-      actions.interrupt('run-1');
-      await actions.steer('run-1', 'hello');
-
-      expect(fs.existsSync(controlInboxDir(runDir))).toBe(true);
-      expect(fs.existsSync(steerRequestsDir(runDir))).toBe(true);
-    });
+    tracker.upsertExternal(TEST_SESSION_SCOPE.rootSessionId, TEST_SESSION_SCOPE, externalProjection('external-gone'));
+    await expect(actions.stop('external-gone')).rejects.toThrow(/External run 'external-gone' is no longer active/);
   });
 });

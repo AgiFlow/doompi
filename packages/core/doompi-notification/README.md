@@ -27,10 +27,7 @@ Callers should discover the optional service through Cordis and request delivery
 a particular host:
 
 ```ts
-import {
-  DOOM_NOTIFICATION_SERVICE,
-  readDoomNotificationService,
-} from '@agimon-ai/doompi-extension-contracts/notification';
+import { DOOM_NOTIFICATION_SERVICE, readDoomNotificationService } from '@agimon-ai/doompi-core/notification';
 
 ctx.inject([DOOM_NOTIFICATION_SERVICE], (notificationContext) => {
   void readDoomNotificationService(notificationContext)?.request({
@@ -84,6 +81,15 @@ escape sequences never end up in machine-read output.
 
 DoomPi depends on this package and activates it as fixed host core, so a DoomPi install already has
 it. It is not selectable from `.doom/modes.yaml`.
+
+The Pi and server loaders use `/extensions/pi` and `/extensions/server`, built directly from
+`src/extensions`. The root export contains reusable notification helpers and types.
+Controllers own delivery and UI integration; policy and text services live in named service folders.
+
+The Pi declaration installs its router and optional session binding before handling events.
+`onStop` restores the original UI methods and shell title before service registrations are removed.
+`onDispose` provides the same cleanup after partial startup. Detached children return before
+acquiring a Cordis connection, leaving notification ownership with the parent.
 
 ## License
 

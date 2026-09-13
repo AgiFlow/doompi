@@ -1,13 +1,15 @@
+import { resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import type { MinorModeActionRequest } from '@agimon-ai/doompi-extension-contracts/mode';
-import { describe, expect, it } from 'vitest';
-import { classifyTransition, type TransitionClassifierContext } from '../../src/services/transitionClassifier.ts';
 import type {
   DoomTransitionRequest,
   TransitionSelectionSnapshot,
   TransitionSynchronization,
   TransitionTarget,
-} from '@agimon-ai/doompi-extension-contracts/transition';
+} from '@agimon-ai/doompi-core/transition';
+import { classifyTransition, type TransitionClassifierContext } from '@agimon-ai/doompi-core/transition-classifier';
+import { describe, expect, it } from 'vitest';
+
+import { extensionLayers } from '../../src/composition/transitionLayers';
 
 const config: MajorModesConfig = {
   layers: {
@@ -50,8 +52,8 @@ function request(target: TransitionTarget): DoomTransitionRequest {
 function context(synchronization: TransitionSynchronization = { kind: 'launcher' }): TransitionClassifierContext {
   return {
     current,
-    majorModesConfig: config,
-    hooksEnabled: true,
+    resolveLayers: (majorMode) => resolveLayers(config, majorMode),
+    extensionLayers: (layers) => extensionLayers(config, layers),
     synchronization,
     resolveComposition: (selection) => ({
       fingerprint: fingerprints[selection.majorMode as keyof typeof fingerprints],
@@ -61,31 +63,14 @@ function context(synchronization: TransitionSynchronization = { kind: 'launcher'
   };
 }
 
-function minorAction(): MinorModeActionRequest {
-  return {
-    operationId: 'minor-operation-1',
-    mode: {
-      source: '@agimon-ai/doompi-plan',
-      id: 'plan',
-      ownerGeneration: 'owner-1',
-      registrationId: 'registration-1',
-    },
-    actionId: 'activate',
-    arguments: {},
-  };
-}
-
 describe('transition classifier', () => {
   it('classifies catalog-owned minor-mode actions as live', () => {
-    const result = classifyTransition(
-      request({ axis: 'minor-mode', action: minorAction(), requesterSource: '@agimon-ai/requester' }),
-      context(),
-    );
+    const result = classifyTransition(request({ axis: 'live', capability: 'minor-mode' }), context());
 
     expect(result).toMatchObject({
-      axis: 'minor-mode',
+      axis: 'live',
       disposition: 'live',
-      diagnostics: ['transition.live.minor-mode'],
+      diagnostics: ['transition.live.capability'],
       reloadHandoffRequired: false,
       externalRelaunchRequired: false,
     });

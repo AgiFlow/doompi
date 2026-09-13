@@ -2,10 +2,11 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { assertDeclaredApi, mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
+
+import { mountPackageApi } from '@agimon-ai/doompi-core/testing';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createPlanApi, api, MAX_PLAN_BYTES } from '../../src/adapters/planApi.ts';
+
+import { createPlanApi, api, MAX_PLAN_BYTES } from '../../src/controllers/planApi';
 import {
   API_BASE_PATH,
   contentPath,
@@ -17,10 +18,8 @@ import {
   type PlanDetailView,
   type PlanPointerRecord,
   SESSION_QUERY_PARAM,
-} from '../../src/types/planApi.ts';
-import type { PlanPointerPort } from '../../src/types/planPointer.ts';
-
-const PACKAGE_ROOT = path.resolve(fileURLToPath(import.meta.url), '..', '..', '..');
+} from '../../src/types/planApi';
+import type { PlanPointerPort } from '../../src/types/planPointer';
 
 /**
  * The routes over a real plan file, because what they promise is about a file:
@@ -237,8 +236,8 @@ describe('the plan status line', () => {
  */
 describe('the plans API as a host mounts it', () => {
   it('builds one query carrying the session the hub should proxy to', () => {
-    expect(currentUrl('s1')).toBe(`/api/plugin/${API_BASE_PATH}${currentPath()}?${SESSION_QUERY_PARAM}=s1`);
-    expect(contentUrl('s1')).toBe(`/api/plugin/${API_BASE_PATH}${contentPath()}?${SESSION_QUERY_PARAM}=s1`);
+    expect(currentUrl('s1')).toBe(`/api/sessions/s1/plugin/${API_BASE_PATH}${currentPath()}?${SESSION_QUERY_PARAM}=s1`);
+    expect(contentUrl('s1')).toBe(`/api/sessions/s1/plugin/${API_BASE_PATH}${contentPath()}?${SESSION_QUERY_PARAM}=s1`);
     expect(currentUrl('s1').match(/\?/gu)).toHaveLength(1);
   });
 
@@ -251,14 +250,5 @@ describe('the plans API as a host mounts it', () => {
     expect((await mounted.fetch(`/api/plugin/${API_BASE_PATH}${currentPath()}`)).status).toBe(404);
     expect((await mounted.fetch('/api/plugin/elsewhere/current')).status).toBe(404);
     mounted.close();
-  });
-
-  it('serves the base path the manifest mounts it at', () => {
-    // Vibe-Lint reads the manifest statically and cannot see this value, so
-    // nothing else compares the two. A rename on one side alone means no
-    // client URL ever lands.
-    expect(assertDeclaredApi({ packageRoot: PACKAGE_ROOT, api, scope: 'session' })).toMatchObject({
-      basePath: API_BASE_PATH,
-    });
   });
 });

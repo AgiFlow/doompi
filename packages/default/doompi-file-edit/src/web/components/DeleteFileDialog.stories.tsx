@@ -6,7 +6,7 @@
  * The dialog portals to the body, so only the open one is worth a variant: the
  * closed dialog renders nothing at all.
  */
-import { DeleteFileDialog } from './DeleteFileDialog.tsx';
+import { DeleteFileDialog } from './DeleteFileDialog';
 
 const noop = (): void => {};
 

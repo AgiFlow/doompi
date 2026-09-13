@@ -7,7 +7,8 @@
  */
 
 import { Buffer } from 'node:buffer';
-import type { SubagentPolicy } from '@agimon-ai/doompi-extension-contracts/subagent-policy';
+
+import type { SubagentPolicy } from '../../schemas/subagentPolicy';
 import { SUBAGENT_CAPABILITY_CEILING_ENV } from '../../types/environment';
 
 export const SUBAGENT_CAPABILITY_CEILING_VERSION = 2 as const;

@@ -1,3 +1,4 @@
+import type { SessionFrameSender } from '@agimon-ai/doompi-core/web';
 import {
   Button,
   Dialog,
@@ -14,10 +15,10 @@ import {
   SelectValue,
   Textarea,
 } from '@agimon-ai/doompi-web-components';
-import type { SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
 import { type ReactNode, useState } from 'react';
-import type { WebTask, WebTaskStatus } from '../../types/webTasks.ts';
-import { requestTaskEdit, requestTaskMessage, taskEditDraft, type TaskEditDraft } from '../stores/tasksStore.ts';
+
+import type { WebTask, WebTaskStatus } from '../../types/webTasks';
+import { requestTaskEdit, requestTaskMessage, taskEditDraft, type TaskEditDraft } from '../stores/tasksStore';
 
 /** How the one task dialog is opened: reading it, changing it, or steering its run. */
 export type TaskDialogMode = 'view' | 'edit' | 'message';

@@ -1,13 +1,3 @@
-export type {
-  LayerDefinition,
-  LayerPackage,
-  LayerPackageConfig,
-  LayerResolvers,
-  MajorModeDefinition,
-  MajorModesConfig,
-  ResolvedLayerDefinition,
-  ResolvedPackageConfiguration,
-} from '../adapters/majorModes.ts';
 export {
   filterHookDisabledLayers,
   isLocalPackageSpecifier,
@@ -17,4 +7,14 @@ export {
   loadMajorModesConfigLenient,
   resolveLayers,
   resolvePackageConfigurations,
-} from '../adapters/majorModes.ts';
+} from '../services/majorModes';
+export type {
+  LayerDefinition,
+  LayerPackage,
+  LayerPackageConfig,
+  LayerResolvers,
+  MajorModeDefinition,
+  MajorModesConfig,
+  ResolvedLayerDefinition,
+  ResolvedPackageConfiguration,
+} from '../services/majorModes';

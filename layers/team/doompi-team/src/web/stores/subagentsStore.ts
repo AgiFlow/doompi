@@ -1,5 +1,6 @@
-import { defineSessionStore, type SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
-import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../../types/webSubagents.ts';
+import { defineSessionStore, type SessionFrameSender } from '@agimon-ai/doompi-core/web';
+
+import { SUBAGENT_RUNS_TYPE, type SubagentRun } from '../../types/webSubagents';
 
 /** Session slash verbs used by the browser controls. */
 const STOP_COMMAND = '/subagents-stop';
@@ -85,17 +86,16 @@ export function dismissRun(sessionId: string, runId: string): void {
   }));
 }
 
-/**
- * Launches an agent through the session's own /run verb, sent as a prompt the
- * way the stop request is. The runtime answers with a new run in the feed;
- * remembering the fleet as it was is what tells that run apart later.
- */
-export function requestLaunch(send: SessionFrameSender, sessionId: string, command: string, agent: string): void {
-  send(sessionId, { type: 'prompt', message: command });
+/** Remember the fleet before the server launch so its first update can open the new run. */
+export function requestLaunch(sessionId: string, agent: string): void {
   subagents.update(sessionId, (current) => ({
     ...current,
     pendingLaunch: { agent, knownRunIds: current.runs.map((run) => run.runId) },
   }));
+}
+
+export function clearPendingLaunch(sessionId: string): void {
+  subagents.update(sessionId, (current) => ({ ...current, pendingLaunch: undefined }));
 }
 
 export function clearAutoOpen(sessionId: string): void {

@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { describe, expect, it, vi } from 'vitest';
-import { runCli, type CliDependencies } from '../../src/exports/cli/cliApp';
+
+import { runCli, type CliDependencies } from '../../src/exports/cliApp';
 import type { IRunnerRegistry, RunnerRecord } from '../../src/types/runnerRegistry';
 
 function record(overrides: Partial<RunnerRecord> = {}): RunnerRecord {

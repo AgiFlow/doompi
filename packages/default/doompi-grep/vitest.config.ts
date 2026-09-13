@@ -17,7 +17,7 @@ export default defineConfig({
         'dist/',
         'tests/',
         'src/exports/',
-        'src/adapters/pi/extension.ts',
+        'src/extensions/pi.ts',
         '**/*.d.ts',
         '**/*.config.*',
         '**/coverage/**',

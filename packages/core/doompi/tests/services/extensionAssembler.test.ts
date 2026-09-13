@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { loadMajorModesConfig, type MajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { describe, expect, it } from 'vitest';
+
 import {
   assembleChildExtensions,
   assembleExtensions,
@@ -10,7 +12,7 @@ import {
   type ExtensionLayerResolvers,
   packageAttribution,
   resolveExtensionComposition,
-} from '../../src/services/extensionAssembler.ts';
+} from '../../src/builders/cli/extensionAssembler';
 
 const CONFIG_PATH = '/repo/.doom/modes.yaml';
 const REPOSITORY_ROOT = path.resolve(__dirname, '..', 'fixtures', 'repository');
@@ -106,15 +108,17 @@ describe('standard extension composition', () => {
       layers: [],
       majorModesConfig: config,
     });
-    const ownDirectory = path.resolve(__dirname, '..', '..', 'src', 'extensions', 'entries');
+    const ownDirectory = path.resolve(__dirname, '..', '..', 'src', 'extensions');
     const ownEntries = entries.filter((entry) => entry.startsWith(ownDirectory));
 
     expect(ownEntries.length).toBeGreaterThan(0);
-    for (const entry of ownEntries) {
-      expect(fs.existsSync(entry), entry).toBe(true);
-      const module = (await import(pathToFileURL(entry).href)) as { default?: unknown };
-      expect(typeof module.default, entry).toBe('function');
-    }
+    await Promise.all(
+      ownEntries.map(async (entry) => {
+        expect(fs.existsSync(entry), entry).toBe(true);
+        const module = (await import(pathToFileURL(entry).href)) as { default?: unknown };
+        expect(typeof module.default, entry).toBe('function');
+      }),
+    );
   });
 
   it('activates configured defaults before the checked-in copilot feature set', () => {
@@ -160,9 +164,11 @@ describe('standard extension composition', () => {
     const config = modes({ feature: layer({ packages: ['feature-package'] }) });
     const entries = assembleExtensions(context(config));
 
-    expect(entries.slice(0, 5)).toEqual([
+    expect(entries.slice(0, 7)).toEqual([
       '/own/cordisHost.ts',
-      '/own/modeCatalog.ts',
+      '/own/terminalChildSession.ts',
+      '/package/@agimon-ai/doompi-minor-mode/extensions/pi.mjs',
+      '/own/contextCatalog.ts',
       '/package/@agimon-ai/doompi-config/extensions/pi.mjs',
       '/own/transitionCoordinator.ts',
       '/package/@agimon-ai/doompi-ui/extensions/pi.mjs',
@@ -462,7 +468,8 @@ describe('standard extension composition', () => {
     expect(composition.parentActivation.filter((entry) => featurePaths.includes(entry))).toEqual(featurePaths);
     expect(composition.childActivation.filter((entry) => featurePaths.includes(entry))).toEqual(featurePaths);
     expect(composition.childActivation[0]).toBe('/own/cordisHost.ts');
-    expect(composition.childActivation[1]).toBe('/package/@agimon-ai/doompi-config/extensions/pi.mjs');
+    expect(composition.childActivation[1]).toBe('/own/terminalChildSession.ts');
+    expect(composition.childActivation[2]).toBe('/package/@agimon-ai/doompi-config/extensions/pi.mjs');
     expect(composition.childActivation.at(-1)).toBe('/own/cordisFinalizer.ts');
     expect(composition.childActivation).not.toContain('/package/@agimon-ai/doompi-ui/extensions/pi.mjs');
     expect(composition.childActivation).not.toContain('/own/transitionCoordinator.ts');

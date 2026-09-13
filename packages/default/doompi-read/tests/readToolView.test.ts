@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readCallView } from '../src/web/lib/readToolView.ts';
+
+import { readCallView } from '../src/web/lib/readToolView';
 
 describe('the read call view', () => {
   it('lists the path, offset, and limit the way the TUI heading does', () => {

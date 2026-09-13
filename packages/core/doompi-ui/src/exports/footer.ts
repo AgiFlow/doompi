@@ -7,10 +7,10 @@ export type {
   FooterStatusPlacement,
   FooterTextColor,
   FooterTextSegment,
-} from '@agimon-ai/doompi-extension-contracts/footer';
+} from '@agimon-ai/doompi-core/footer';
 export {
   FooterStatusItemSchema,
   FooterStatusPlacementSchema,
   FooterTextColorSchema,
   FooterTextSegmentSchema,
-} from '@agimon-ai/doompi-extension-contracts/footer';
+} from '@agimon-ai/doompi-core/footer';

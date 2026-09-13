@@ -1,1 +1,1 @@
-export { applyMajorMode, applyPersona, applyProfile } from '../adapters/selectionSwitch.ts';
+export { applyMajorMode, applyPersona, applyProfile } from '../services/selectionSwitch';

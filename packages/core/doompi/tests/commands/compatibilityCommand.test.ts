@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CompatibilityCommand } from '../../src/commands/compatibilityCommand.ts';
-import { launchCompatibility } from '../../src/adapters/compatibility';
-import { buildCompatibilityContext } from '../../src/adapters/compatibilityContext';
-import type { CompatibilityContext } from '../../src/adapters/compatibilityContext';
+
+import { CompatibilityCommand } from '../../src/cli/commands/compat';
+import { buildCompatibilityContext } from '../../src/cli/commands/compat/context';
+import type { CompatibilityContext } from '../../src/cli/commands/compat/context';
+import { launchCompatibility } from '../../src/cli/commands/compat/providers';
 
 vi.mock('@agimon-ai/doompi-config/domains', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -11,8 +12,8 @@ vi.mock('@agimon-ai/doompi-config/domains', async (importOriginal) => ({
 vi.mock('@agimon-ai/doompi-config/majorModes', () => ({
   loadMajorModesConfig: vi.fn(() => ({ defaultMajorMode: 'minimal' })),
 }));
-vi.mock('../../src/adapters/compatibility', () => ({ launchCompatibility: vi.fn() }));
-vi.mock('../../src/adapters/compatibilityContext', () => ({ buildCompatibilityContext: vi.fn() }));
+vi.mock('../../src/cli/commands/compat/providers', () => ({ launchCompatibility: vi.fn() }));
+vi.mock('../../src/cli/commands/compat/context', () => ({ buildCompatibilityContext: vi.fn() }));
 
 describe('CompatibilityCommand', () => {
   const cleanup = vi.fn(async () => undefined);

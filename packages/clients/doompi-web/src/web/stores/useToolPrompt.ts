@@ -1,9 +1,10 @@
 import { useStore } from '@tanstack/react-store';
 import { useMemo } from 'react';
-import { type ToolPromptClaim, toolPromptClaim } from '../lib/toolPrompt.ts';
-import { menuStore } from './menuStore.ts';
-import { useActiveSession } from './sessionStore.ts';
-import { toolPromptStore } from './toolPromptStore.ts';
+
+import { type ToolPromptClaim, toolPromptClaim } from '../lib/toolPrompt';
+import { menuStore } from './menuStore';
+import { useActiveSession } from './sessionStore';
+import { toolPromptStore } from './toolPromptStore';
 
 /**
  * The running tool standing in for the composer, or null while none is.

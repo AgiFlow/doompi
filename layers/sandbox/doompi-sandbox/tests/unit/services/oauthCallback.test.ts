@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   OAUTH_CALLBACK_HOST_ENV,
   OAUTH_CALLBACK_PORTS,
   OAUTH_CONTAINER_BIND,
   oauthPublishArgs,
-} from '../../../src/services/oauthCallback.ts';
+} from '../../../src/services/oauthCallback';
 
 describe('oauth callback contract', () => {
   it('covers the fixed ports Pi binds', () => {

@@ -1,0 +1,64 @@
+/**
+ * DESIGN PATTERNS:
+ * - The restriction is pure, so most of it is tested with plain arrays and no
+ *   host at all. Only the arbitration behaviour needs a real tool surface.
+ * - A rival package is modelled as another registered restriction, never as a
+ *   direct setActiveTools call. That is the whole point of the arbiter: proving
+ *   we do not clobber a rival is only meaningful if the rival owns a
+ *   restriction too.
+ *
+ * AVOID:
+ * - Hard-coded expected tool arrays where a derived helper reads better.
+ * - Asserting on surface.active() immediately after construction: cordis.inject
+ *   resolves asynchronously and the surface is still unrestricted there.
+ */
+import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
+import { describe, expect, it } from 'vitest';
+import { {{ restrictionName | camelCase }}ToolRestriction } from '../../../src/services/{{ restrictionName | camelCase }}Tools';
+
+const ALL_TOOLS = ['read', 'bash', 'edit', 'write'];
+
+function surfaceOver(tools: readonly string[]) {
+  let pushed: readonly string[] = tools;
+  const surface = createDoomToolSurface({
+    generation: '{{ restrictionName | kebabCase }}-test',
+    allTools: () => tools,
+    activeTools: () => pushed,
+    setActiveTools: (names) => {
+      pushed = [...names];
+    },
+  });
+  return { surface, active: () => pushed };
+}
+
+describe('{{ restrictionName | camelCase }}ToolRestriction', () => {
+  it('passes every tool through while inactive', () => {
+    expect({{ restrictionName | camelCase }}ToolRestriction(false)(ALL_TOOLS, ALL_TOOLS)).toEqual(ALL_TOOLS);
+  });
+
+  it('only ever removes, never adds', () => {
+    const restricted = {{ restrictionName | camelCase }}ToolRestriction(true)(ALL_TOOLS, ALL_TOOLS);
+
+    expect(restricted.every((name) => ALL_TOOLS.includes(name))).toBe(true);
+    expect(restricted.length).toBeLessThan(ALL_TOOLS.length);
+  });
+
+  it('restores its own tools on dispose without un-hiding a rival owner', () => {
+    const { surface, active } = surfaceOver(ALL_TOOLS);
+    const rival = surface.register({
+      source: 'rival',
+      restrict: (incoming) => incoming.filter((name) => name !== 'bash'),
+    });
+    const mine = surface.register({
+      source: '{{ packageName }}',
+      restrict: {{ restrictionName | camelCase }}ToolRestriction(true),
+    });
+
+    mine.dispose();
+
+    expect(active()).not.toContain('bash');
+    expect(active()).toContain('read');
+    rival.dispose();
+    expect(active()).toEqual(ALL_TOOLS);
+  });
+});

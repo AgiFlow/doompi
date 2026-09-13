@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   COCKPIT_HOME_VOLUME,
   COCKPIT_LABEL,
   buildCockpitPlan,
   type CockpitPlanInput,
-} from '../../../src/services/cockpitPlan.ts';
-import type { SandboxHostFacts } from '../../../src/types/sandboxHarness.ts';
+} from '../../../src/services/cockpitPlan';
+import type { SandboxHostFacts } from '../../../src/types/sandboxHarness';
 
 const HOST: SandboxHostFacts = {
   hasTty: true,

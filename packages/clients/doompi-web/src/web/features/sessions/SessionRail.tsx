@@ -30,20 +30,21 @@ import {
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
-import { MascotMark } from '../../components/MascotMark.tsx';
-import { RemoteAccessButton } from '../../components/RemoteAccessButton.tsx';
-import { PluginSurface } from '../../components/PluginSurface.tsx';
-import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
-import { restartSession, stopSession } from '../../lib/hubApi.ts';
-import { abbreviateCwd, sessionStatusLine } from '../../lib/sessionSummary.ts';
-import { DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections.ts';
-import { closeNewSession, openNewSession, newSessionStore } from '../../stores/newSessionStore.ts';
-import { paletteStore } from '../../stores/paletteStore.ts';
-import { renameSession, sessionStoreFor } from '../../stores/sessionStore.ts';
-import { resolveParentId, sessionsStore, type SessionMeta } from '../../stores/sessionsStore.ts';
-import { openRemoteDialog, remoteAccessStore, turnRemoteAccessOff } from '../../stores/remoteAccessStore.ts';
-import { NewSessionDialog } from './NewSessionDialog.tsx';
-import { ResumeSessionDialog } from './ResumeSessionDialog.tsx';
+
+import { MascotMark } from '../../components/MascotMark';
+import { PluginSurface } from '../../components/PluginSurface';
+import { RemoteAccessButton } from '../../components/RemoteAccessButton';
+import { restartSession, stopSession } from '../../lib/hubApi';
+import { HOST_SLOTS } from '../../lib/pluginRegistry';
+import { abbreviateCwd, sessionStatusLine } from '../../lib/sessionSummary';
+import { DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections';
+import { closeNewSession, openNewSession, newSessionStore } from '../../stores/newSessionStore';
+import { paletteStore } from '../../stores/paletteStore';
+import { openRemoteDialog, remoteAccessStore, turnRemoteAccessOff } from '../../stores/remoteAccessStore';
+import { resolveParentId, sessionsStore, type SessionMeta } from '../../stores/sessionsStore';
+import { renameSession, sessionStoreFor } from '../../stores/sessionStore';
+import { NewSessionDialog } from './NewSessionDialog';
+import { ResumeSessionDialog } from './ResumeSessionDialog';
 const STATUS_REFRESH_MS = 30_000;
 
 /**

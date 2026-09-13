@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { CliApp } from '../../src/exports/cli/cliApp';
-import { EmitMcpCommand } from '../../src/commands/emitMcpCommand';
-import { ExplainCommand, explainMatrix } from '../../src/commands/explainCommand';
-import { LaunchCommand } from '../../src/commands/launchCommand';
-import { SandboxLaunchCommand } from '../../src/commands/sandboxLaunchCommand';
-import type { HarnessOptions } from '../../src/types/interfaces/harness';
+
+import { EmitMcpCommand } from '../../src/cli/commands/emit-mcp';
+import { ExplainCommand, explainMatrix } from '../../src/cli/commands/explain';
+import { LaunchCommand } from '../../src/cli/commands/launch';
+import { SandboxLaunchCommand } from '../../src/cli/commands/sandbox';
+import type { HarnessOptions } from '../../src/composition/types/harness';
+import { CliApp } from '../../src/exports/cliApp';
 
 function options(overrides: Partial<HarnessOptions> = {}): HarnessOptions {
   return {

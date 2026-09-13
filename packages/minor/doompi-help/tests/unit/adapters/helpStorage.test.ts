@@ -2,15 +2,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   DefaultHelpSkillMaterializer,
   defaultHelpCacheRoot,
   HelpIndexCache,
   resolveHelpPackageIdentity,
   sha256Hex,
-} from '../../../src/adapters/helpStorage.ts';
-import type { ResolvedHelpIndex } from '../../../src/types/help.ts';
+} from '../../../src/services/helpStorage';
+import type { ResolvedHelpIndex } from '../../../src/types/help';
 
 const SOURCE = '@agimon-ai/example-help';
 

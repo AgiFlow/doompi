@@ -10,9 +10,9 @@
  */
 
 /** REST endpoint listing providers with their auth state; DELETE /:providerId signs out. */
-export const AUTH_PROVIDERS_API_ROUTE = '/api/auth/providers';
+export const AUTH_PROVIDERS_API_ROUTE = '/api/global/plugin/doompi/providers';
 /** REST endpoint for login flows: POST starts one, GET /:flowId polls it, POST /:flowId/answer answers its prompt, DELETE /:flowId cancels. */
-export const AUTH_LOGINS_API_ROUTE = '/api/auth/logins';
+export const AUTH_LOGINS_API_ROUTE = '/api/global/plugin/doompi/logins';
 
 export type AuthMethodType = 'api_key' | 'oauth';
 

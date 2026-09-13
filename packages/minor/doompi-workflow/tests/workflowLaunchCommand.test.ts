@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   isLaunchParseFailure,
   parseWorkflowLaunchCommand,
   resolveWorkflowEntry,
   validateWorkflowLaunch,
   workflowLaunchCommand,
-} from '../src/services/workflowLaunchCommand.ts';
-import { WORKFLOW_LAUNCH_VERB, workflowLaunchLine } from '../src/web/lib/launchLine.ts';
+} from '../src/services/workflowLaunchCommand';
+import { WORKFLOW_LAUNCH_VERB, workflowLaunchLine } from '../src/web/lib/launchLine';
 
 describe('parseWorkflowLaunchCommand', () => {
   it('reads the workflow, the runner, the inputs and the prompt', () => {

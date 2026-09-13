@@ -1,13 +1,14 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, test } from '../support/cockpit.ts';
+
+import { expect, test } from '../support/cockpit';
 import {
   performanceEntries,
   PERFORMANCE_BACKLOG_LIMIT,
   PERFORMANCE_MARKERS,
   seedPerformanceSession,
-} from '../support/performanceFixture.ts';
+} from '../support/performanceFixture';
 
 // Test-only inputs: normal regression runs use the current packaged build.
 const snapshotRoot = process.env.DOOMPI_PERFORMANCE_PACKAGE_ROOT ?? null;

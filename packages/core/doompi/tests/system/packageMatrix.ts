@@ -2,7 +2,7 @@ import path from 'node:path';
 
 export const REPOSITORY_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../../../../');
 
-export type PackageLayer = 'core' | 'default' | 'minor' | 'team' | 'task' | 'ask-user';
+export type PackageLayer = 'core' | 'default' | 'minor' | 'layer' | 'team' | 'task' | 'ask-user';
 export type PiManifestEntry = './dist/extensions/pi.mjs';
 
 export interface PackageMatrixEntry {
@@ -33,7 +33,9 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-config': 'packages/core/doompi-config',
   '@agimon-ai/doompi-domain': 'packages/core/doompi-domain',
   '@agimon-ai/doompi-edit': 'packages/default/doompi-edit',
-  '@agimon-ai/doompi-extension-contracts': 'packages/core/doompi-extension-contracts',
+  '@agimon-ai/doompi-git': 'layers/source-control/doompi-git',
+  '@agimon-ai/doompi-core': 'packages/core/doompi-core',
+  '@agimon-ai/doompi-minor-mode': 'packages/core/doompi-minor-mode',
   '@agimon-ai/doompi-file-edit': 'packages/default/doompi-file-edit',
   '@agimon-ai/doompi-goal': 'packages/minor/doompi-goal',
   '@agimon-ai/doompi-grep': 'packages/default/doompi-grep',
@@ -41,6 +43,7 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-help': 'packages/minor/doompi-help',
   '@agimon-ai/doompi-hook': 'packages/default/doompi-hook',
   '@agimon-ai/doompi-log': 'packages/default/doompi-log',
+  '@agimon-ai/doompi-model-guidance': 'layers/llm/doompi-model-guidance',
   '@agimon-ai/doompi-loop': 'packages/minor/doompi-loop',
   '@agimon-ai/doompi-major-mode': 'packages/core/doompi-major-mode',
   '@agimon-ai/doompi-mcp': 'packages/default/doompi-mcp',
@@ -50,6 +53,7 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-prompt': 'packages/default/doompi-prompt',
   '@agimon-ai/doompi-read': 'packages/default/doompi-read',
   '@agimon-ai/doompi-runner': 'packages/default/doompi-runner',
+  '@agimon-ai/doompi-sandbox': 'layers/sandbox/doompi-sandbox',
   '@agimon-ai/doompi-runner-rmux-darwin-arm64': 'packages/default/doompi-runner-rmux-darwin-arm64',
   '@agimon-ai/doompi-runner-rmux-darwin-x64': 'packages/default/doompi-runner-rmux-darwin-x64',
   '@agimon-ai/doompi-runner-rmux-linux-arm64': 'packages/default/doompi-runner-rmux-linux-arm64',
@@ -66,12 +70,12 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-user-feedback': 'layers/ask-user/doompi-user-feedback',
   '@agimon-ai/doompi-voice': 'packages/minor/doompi-voice',
   '@agimon-ai/doompi-web-components': 'packages/core/doompi-web-components',
-  '@agimon-ai/doompi-web-contracts': 'packages/core/doompi-web-contracts',
   '@agimon-ai/doompi-web-security': 'packages/core/doompi-web-security',
   '@agimon-ai/doompi-workflow': 'packages/minor/doompi-workflow',
 };
 
 const STANDARD_PI_NAMES = [
+  '@agimon-ai/doompi-minor-mode',
   '@agimon-ai/doompi-autocompact',
   '@agimon-ai/doompi-autostop',
   '@agimon-ai/doompi-author',
@@ -81,6 +85,7 @@ const STANDARD_PI_NAMES = [
   '@agimon-ai/doompi-domain',
   '@agimon-ai/doompi-edit',
   '@agimon-ai/doompi-file-edit',
+  '@agimon-ai/doompi-git',
   '@agimon-ai/doompi-goal',
   '@agimon-ai/doompi-grep',
   '@agimon-ai/doompi-help',
@@ -89,6 +94,7 @@ const STANDARD_PI_NAMES = [
   '@agimon-ai/doompi-loop',
   '@agimon-ai/doompi-major-mode',
   '@agimon-ai/doompi-mcp',
+  '@agimon-ai/doompi-model-guidance',
   '@agimon-ai/doompi-notification',
   '@agimon-ai/doompi-ui',
   '@agimon-ai/doompi-plan',
@@ -96,6 +102,7 @@ const STANDARD_PI_NAMES = [
   '@agimon-ai/doompi-prompt',
   '@agimon-ai/doompi-read',
   '@agimon-ai/doompi-runner',
+  '@agimon-ai/doompi-sandbox',
   '@agimon-ai/doompi-skill',
   '@agimon-ai/doompi-task',
   '@agimon-ai/doompi-team',
@@ -127,6 +134,7 @@ const PACKAGE_RESOURCES: Readonly<Record<string, readonly string[]>> = {
     './src/prompts/doompi-author-domain/SKILL.md',
     './src/prompts/doompi-author-domain/references/domains-contract.md',
   ],
+  '@agimon-ai/doompi-git': ['./llms.txt', './README.md', './src/prompts/doompi-use-git/SKILL.md'],
   '@agimon-ai/doompi-goal': ['./llms.txt', './README.md', './src/prompts/doompi-use-goal/SKILL.md'],
   '@agimon-ai/doompi-help': ['./llms.txt', './README.md', './src/prompts/doompi-use-help/SKILL.md'],
   '@agimon-ai/doompi-hook': ['./llms.txt', './README.md', './src/prompts/doompi-author-hook/SKILL.md'],
@@ -138,6 +146,7 @@ const PACKAGE_RESOURCES: Readonly<Record<string, readonly string[]>> = {
     './src/prompts/doompi-author-major-mode/references/modes-contract.md',
   ],
   '@agimon-ai/doompi-mcp': ['./llms.txt', './README.md', './src/prompts/doompi-use-mcp/SKILL.md'],
+  '@agimon-ai/doompi-model-guidance': ['./llms.txt', './README.md', './src/prompts/doompi-use-model-guidance/SKILL.md'],
   '@agimon-ai/doompi-plan': ['./llms.txt', './README.md', './src/prompts/doompi-use-plan/SKILL.md'],
   '@agimon-ai/doompi-profile': [
     './llms.txt',
@@ -152,6 +161,7 @@ const PACKAGE_RESOURCES: Readonly<Record<string, readonly string[]>> = {
     './skills/doom-runner/SKILL.md',
     './src/prompts/doompi-use-runner/SKILL.md',
   ],
+  '@agimon-ai/doompi-sandbox': ['./llms.txt', './README.md', './src/prompts/doompi-use-sandbox/SKILL.md'],
   '@agimon-ai/doompi-skill': [
     './llms.txt',
     './README.md',
@@ -185,6 +195,8 @@ function packageLayerFor(relativeDirectory: string): PackageLayer {
   if (relativeDirectory.startsWith('packages/minor/')) return 'minor';
   if (relativeDirectory.startsWith('layers/team/')) return 'team';
   if (relativeDirectory.startsWith('layers/task/')) return 'task';
+  if (relativeDirectory.startsWith('layers/ask-user/')) return 'ask-user';
+  if (relativeDirectory.startsWith('layers/')) return 'layer';
   return 'ask-user';
 }
 

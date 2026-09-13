@@ -1,5 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import type { SessionSummary } from '../../src/types/hub.ts';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands';
+
+vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({ sendSessionProtocolFrame: vi.fn() }));
+import type { SessionSummary } from '../../src/types/hub';
 import {
   abortCommand,
   clearQueueCommand,
@@ -16,7 +20,7 @@ import {
   setModelCommand,
   setThinkingLevelCommand,
   steerCommand,
-} from '../../src/web/lib/commands.ts';
+} from '../../src/web/lib/commands';
 import {
   bindTransport,
   notifyHubConnected,
@@ -24,34 +28,37 @@ import {
   releaseTransport,
   sendFrame,
   sendHubFrame,
-} from '../../src/web/lib/transport.ts';
+} from '../../src/web/lib/transport';
 import {
-  dropThreads,
-  heldThreads,
-  resetThreads,
-  resubscribeThreads,
-  subscribeThread,
-  threadStoreKey,
-  unsubscribeThread,
-} from '../../src/web/stores/threadStore.ts';
-import {
-  closeTransientTab,
-  dropTransientTabs,
-  findTransientTab,
-  openTransientTab,
-  resetTransientTabs,
-  transientTabsOf,
-  transientTabsStore,
-} from '../../src/web/stores/transientTabsStore.ts';
+  closeNewSession,
+  newSessionStore,
+  openNewSession,
+  resetNewSessionStore,
+} from '../../src/web/stores/newSessionStore';
 import {
   closePalette,
   openPalette,
   paletteStore,
   setPalettePath,
   togglePalette,
-} from '../../src/web/stores/paletteStore.ts';
+} from '../../src/web/stores/paletteStore';
+import {
+  applySessionBacklog,
+  applySessionRemoved,
+  applySessionsSnapshot,
+  applySessionUpsert,
+  beginSessionTransfer,
+  completeSessionTransfer,
+  markSocketClosed,
+  noSessions,
+  resetSessions,
+  sessionsStore,
+  setActiveSession,
+  waitForSession,
+} from '../../src/web/stores/sessionsStore';
 import {
   abortRun,
+  beginSessionReplay,
   answerDialogConfirm,
   answerDialogValue,
   applyProtocolQueue,
@@ -60,6 +67,7 @@ import {
   cancelDialog,
   clearQueuedMessages,
   deleteQueuedMessage,
+  endSessionReplay,
   dropSessionStore,
   loadModelChoices,
   queueFollowUp,
@@ -74,27 +82,25 @@ import {
   rewindToMessage,
   sessionStoreFor,
   submitMessage,
-} from '../../src/web/stores/sessionStore.ts';
+} from '../../src/web/stores/sessionStore';
 import {
-  applySessionBacklog,
-  applySessionRemoved,
-  applySessionsSnapshot,
-  applySessionUpsert,
-  beginSessionTransfer,
-  completeSessionTransfer,
-  markSocketClosed,
-  noSessions,
-  resetSessions,
-  sessionsStore,
-  setActiveSession,
-  waitForSession,
-} from '../../src/web/stores/sessionsStore.ts';
+  dropThreads,
+  heldThreads,
+  resetThreads,
+  resubscribeThreads,
+  subscribeThread,
+  threadStoreKey,
+  unsubscribeThread,
+} from '../../src/web/stores/threadStore';
 import {
-  closeNewSession,
-  newSessionStore,
-  openNewSession,
-  resetNewSessionStore,
-} from '../../src/web/stores/newSessionStore.ts';
+  closeTransientTab,
+  dropTransientTabs,
+  findTransientTab,
+  openTransientTab,
+  resetTransientTabs,
+  transientTabsOf,
+  transientTabsStore,
+} from '../../src/web/stores/transientTabsStore';
 
 type Frame = Record<string, unknown>;
 
@@ -113,7 +119,6 @@ function summary(id: string, overrides: Partial<SessionSummary> = {}): SessionSu
     pendingMessageCount: 0,
     everPrompted: false,
     awaitingInput: false,
-    socketPath: `/run/${id}.sock`,
     ...overrides,
   };
 }
@@ -124,6 +129,12 @@ beforeEach(() => {
   resetSessions();
   resetNewSessionStore();
   bindTransport((frame) => sent.push(frame as Frame));
+  // A tagged test log joins both send boundaries, not a legacy wire envelope.
+  vi.mocked(sendSessionProtocolFrame)
+    .mockReset()
+    .mockImplementation((sessionId, frame) => {
+      sent.push({ type: 'session_command', sessionId, frame });
+    });
 });
 
 describe('command builders', () => {
@@ -250,6 +261,33 @@ describe('transcript ownership', () => {
     ]);
   });
 
+  it('restores journal notices in timestamp order beside protocol transcript entries', () => {
+    applyProtocolTranscript(
+      's1',
+      [
+        { kind: 'assistant', id: 'before', text: 'before', thinking: '', streaming: false, timestamp: 100 },
+        { kind: 'assistant', id: 'after', text: 'after', thinking: '', streaming: false, timestamp: 300 },
+      ],
+      false,
+    );
+    applySessionFrame('s1', {
+      type: 'entry_appended',
+      entry: {
+        id: 'notice-1',
+        type: 'custom',
+        customType: 'doom-notification',
+        timestamp: 200,
+        data: { version: 1, title: '', subtitle: '', body: 'between', level: 'info' },
+      },
+    });
+
+    expect(sessionStoreFor('s1').state.entries.map((entry) => ('text' in entry ? entry.text : undefined))).toEqual([
+      'before',
+      'between',
+      'after',
+    ]);
+  });
+
   it('preserves a protocol transcript through a legacy backlog reset', () => {
     applyProtocolTranscript(
       's1',
@@ -364,15 +402,54 @@ describe('transcript ownership', () => {
     ]);
   });
 });
+describe('replay projections', () => {
+  it('keeps live-only status and widget keys through a no-protocol backlog reset', () => {
+    const sessionId = 'replay-projection';
+    beginSessionReplay(sessionId);
+    applySessionFrame(sessionId, {
+      type: 'extension_ui_request',
+      method: 'setStatus',
+      statusKey: 'live-status',
+      statusText: 'live',
+    });
+    applySessionFrame(sessionId, {
+      type: 'extension_ui_request',
+      method: 'setWidget',
+      widgetKey: 'live-widget',
+      widgetLines: ['live'],
+    });
+
+    resetSessionStore(sessionId);
+
+    expect(sessionStoreFor(sessionId).state.statuses).toEqual({ 'live-status': 'live' });
+    expect(sessionStoreFor(sessionId).state.widgets).toEqual(['live-widget']);
+    applySessionFrame(
+      sessionId,
+      { type: 'extension_ui_request', method: 'setStatus', statusKey: 'live-status', statusText: 'stale' },
+      { replay: true },
+    );
+    applySessionFrame(
+      sessionId,
+      { type: 'extension_ui_request', method: 'setWidget', widgetKey: 'live-widget', widgetLines: [] },
+      { replay: true },
+    );
+
+    expect(sessionStoreFor(sessionId).state.statuses).toEqual({ 'live-status': 'live' });
+    expect(sessionStoreFor(sessionId).state.widgets).toEqual(['live-widget']);
+    endSessionReplay(sessionId);
+  });
+});
+
 describe('transport', () => {
-  it('envelopes session commands with the session id', () => {
+  it('routes session commands through the typed binding without a hub envelope', () => {
+    vi.mocked(sendSessionProtocolFrame).mockImplementation(() => undefined);
     sendFrame('s1', promptCommand('hello'));
-    expect(sent).toEqual([{ type: 'session_command', sessionId: 's1', frame: { type: 'prompt', message: 'hello' } }]);
+    expect(sendSessionProtocolFrame).toHaveBeenCalledExactlyOnceWith('s1', { type: 'prompt', message: 'hello' });
+    expect(sent).toEqual([]);
   });
 
   it('sends hub frames unenveloped', () => {
     sendHubFrame({ type: 'subscribe', sessionId: 's1' });
-    expect(sent).toEqual([{ type: 'subscribe', sessionId: 's1' }]);
     expect(sent).toEqual([{ type: 'subscribe', sessionId: 's1' }]);
   });
 
@@ -387,10 +464,13 @@ describe('transport', () => {
 
     expect(connections).toBe(2);
   });
-  it('drops frames when nothing is bound rather than throwing', () => {
+  it('propagates a disconnected session binding rather than silently dropping a command', () => {
     releaseTransport();
-    expect(() => sendFrame('s1', { type: 'prompt' })).not.toThrow();
-    bindTransport((frame) => sent.push(frame as Frame));
+    vi.mocked(sendSessionProtocolFrame).mockImplementation(() => {
+      throw new Error('The session protocol is not connected.');
+    });
+    expect(() => sendFrame('s1', { type: 'prompt' })).toThrow('The session protocol is not connected.');
+    expect(sent).toEqual([]);
   });
 });
 
@@ -474,7 +554,7 @@ describe('sessionsStore', () => {
 
 describe('menuStore', () => {
   it('anchors a fresh selection command and expires a stale one', async () => {
-    const { setPendingMenu, clearPendingMenu, pendingMenuFor } = await import('../../src/web/stores/menuStore.ts');
+    const { setPendingMenu, clearPendingMenu, pendingMenuFor } = await import('../../src/web/stores/menuStore');
     clearPendingMenu();
     expect(pendingMenuFor(Date.now())).toBeNull();
 
@@ -489,7 +569,7 @@ describe('menuStore', () => {
 
   it('spends the anchor on the dialog that answers it, and releases the claim', async () => {
     const { claimDialogMenu, menuStore, releaseDialogMenu, resetMenuStore, setPendingMenu } =
-      await import('../../src/web/stores/menuStore.ts');
+      await import('../../src/web/stores/menuStore');
     resetMenuStore();
 
     setPendingMenu('domains');
@@ -511,7 +591,7 @@ describe('menuStore', () => {
 
 describe('promptFocus', () => {
   it('hands the keyboard back to the registered input, and never to a disabled one', async () => {
-    const { focusPrompt, registerPromptInput } = await import('../../src/web/lib/promptFocus.ts');
+    const { focusPrompt, registerPromptInput } = await import('../../src/web/lib/promptFocus');
 
     let focused = 0;
     const selections: Array<[number, number]> = [];
@@ -698,17 +778,14 @@ describe('session actions', () => {
       { kind: 'queued', text: 'later', images: userImages },
     ]);
   });
-  it('clears queued work before aborting an explicit session', () => {
+  it('clears local queued work before aborting an explicit session', () => {
     setActiveSession('s1');
     applySessionFrame('s2', { type: 'queue_update', steering: ['interrupt'], followUp: ['later'] });
 
     abortRun('s2');
 
     expect(sessionStoreFor('s2').state.entries.filter((entry) => entry.kind === 'queued')).toEqual([]);
-    expect(sent).toEqual([
-      { type: 'session_command', sessionId: 's2', frame: { type: 'clear_queue' } },
-      { type: 'session_command', sessionId: 's2', frame: { type: 'abort' } },
-    ]);
+    expect(sent).toEqual([{ type: 'session_command', sessionId: 's2', frame: { type: 'abort' } }]);
   });
 
   it('refuse to send blank drafts', () => {
@@ -798,6 +875,7 @@ describe('session actions', () => {
     runCommand('domains');
     runCommand('/mode');
     expect(sent.map((frame) => (frame.frame as Frame).message)).toEqual(['/domains', '/mode']);
+    expect(sessionStoreFor('s1').state.entries).toEqual([]);
   });
 
   it('send a built-in as its own frame rather than as prompt text', () => {
@@ -816,9 +894,9 @@ describe('session actions', () => {
       { type: 'prompt', message: '/mode' },
       { type: 'prompt', message: 'read @src/a.ts and summarise it' },
     ]);
-    // The command is still echoed into the timeline, so the run has a cause.
+    // UI-triggered commands stay out of the transcript. Commands typed in the
+    // composer still appear with the rest of the user's prompts.
     expect(sessionStoreFor('s1').state.entries).toEqual([
-      expect.objectContaining({ kind: 'user', text: '/compact' }),
       expect.objectContaining({ kind: 'user', text: '/compact keep the API decisions' }),
       expect.objectContaining({ kind: 'user', text: '/compact\n\nfolded attachment text' }),
       expect.objectContaining({ kind: 'user', text: '/compaction is a word' }),

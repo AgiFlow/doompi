@@ -32,6 +32,8 @@ export const MAX_SESSION_FILE_BYTES = 25 * 1024 * 1024;
 
 /** The route the timeline fetches a mentioned file from; path is the cwd-relative file. */
 export const SESSION_FILE_ROUTE = '/api/sessions/:sessionId/file';
+export const SESSION_FILE_SHA256_HEADER = 'X-File-SHA256';
+export const SESSION_FILE_EXPECTED_SHA256_HEADER = 'X-Expected-SHA256';
 
 export function sessionFileUrl(sessionId: string, relativePath: string): string {
   return `/api/sessions/${encodeURIComponent(sessionId)}/file?path=${encodeURIComponent(relativePath)}`;

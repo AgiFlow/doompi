@@ -1,19 +1,34 @@
 import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
+
 import {
-  assertSocketHeadroom,
+  DEFAULT_HEADLESS_PORT,
   DEFAULT_PORT,
+  headlessArguments,
+  headlessEntry,
   hubArguments,
   hubEntry,
   hubEnvironment,
   LOOPBACK_HOST,
-} from '../../src/services/hubLaunch.ts';
+} from '../../src/services/hubLaunch';
 
-describe('locating the staged cockpit', () => {
-  it('reads from the resources directory once packaged', () => {
+describe('locating the staged runtime', () => {
+  it('reads the presentation entry from the resources directory once packaged', () => {
     const entry = hubEntry({ resourcesPath: '/Apps/DoomPi.app/Contents/Resources', packaged: true, projectRoot: '/x' });
     expect(entry).toBe(
       path.join('/Apps/DoomPi.app/Contents/Resources', 'runtime', 'doompi-web', 'dist', 'bin', 'serve.mjs'),
+    );
+  });
+
+  it('reads the headless entry from the resources directory once packaged', () => {
+    const entry = headlessEntry({
+      resourcesPath: '/Apps/DoomPi.app/Contents/Resources',
+      packaged: true,
+      projectRoot: '/x',
+    });
+    expect(entry).toBe(
+      path.join('/Apps/DoomPi.app/Contents/Resources', 'runtime', 'doompi', 'dist', 'bin', 'serve.mjs'),
     );
   });
 
@@ -23,7 +38,7 @@ describe('locating the staged cockpit', () => {
   });
 });
 
-describe('the runtime handed to the cockpit', () => {
+describe('the runtime handed to child processes', () => {
   it('turns this binary into Node for every descendant', () => {
     expect(hubEnvironment({ PATH: '/usr/bin' }, '/runtime/doompi-web/dist/bin/serve.mjs').ELECTRON_RUN_AS_NODE).toBe(
       '1',
@@ -42,7 +57,7 @@ describe('the runtime handed to the cockpit', () => {
 
   it('points dynamic commands and native tools at the runtime artifact', () => {
     const environment = hubEnvironment({}, '/runtime/doompi-web/dist/bin/serve.mjs');
-    expect(environment.DOOMPI_SERVER_COMMAND).toBe(path.join('/runtime', 'doompi-server', 'dist', 'bin', 'serve.mjs'));
+    expect(environment.DOOMPI_SERVER_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'serve.mjs'));
     expect(environment.DOOMPI_AGENT_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'dpi.mjs'));
     expect(environment.DOOMPI_SYNC_COMMAND).toBe(path.join('/runtime', 'doompi', 'dist', 'bin', 'dpi.mjs'));
     expect(environment.DOOMPI_PACKAGE_ROOT).toBe(path.join('/runtime', 'doompi', 'dist', 'src'));
@@ -86,33 +101,36 @@ describe('the runtime handed to the cockpit', () => {
   });
 });
 
-describe('socket headroom', () => {
-  it('accepts the default home-directory registry', () => {
-    expect(() => assertSocketHeadroom('/Users/someone/.doompi/run')).not.toThrow();
-  });
-
-  it('still accepts the macOS application-support path for a short username', () => {
-    // Worth pinning: this path is long but it fits, so the guard must not be
-    // used to argue that userData is impossible. It is not; sharing the
-    // registry with the CLI is the reason the home directory is preferred.
-    expect(() => assertSocketHeadroom('/Users/someone/Library/Application Support/DoomPi/run')).not.toThrow();
-  });
-
-  it('refuses a directory that leaves no room for a session socket', () => {
-    const longUser = '/Users/a-rather-long-corporate-account/Library/Application Support/DoomPi/run';
-    expect(() => assertSocketHeadroom(longUser)).toThrow(/below the 40/u);
-  });
-
-  it('names the directory it rejected', () => {
-    const tooLong = `/${'d'.repeat(90)}`;
-    expect(() => assertSocketHeadroom(tooLong)).toThrow(new RegExp(tooLong, 'u'));
-  });
-});
-
-describe('cockpit arguments', () => {
-  it('pins the host, port and registry so nothing is left to a default', () => {
+describe('canonical child arguments', () => {
+  it('starts the client-neutral server with a token file and protocol port', () => {
     expect(
-      hubArguments({ entry: '/hub/serve.mjs', host: LOOPBACK_HOST, port: DEFAULT_PORT, registryDir: '/r' }),
-    ).toEqual(['/hub/serve.mjs', '--host', '127.0.0.1', '--port', '7433', '--registry-dir', '/r']);
+      headlessArguments({
+        headlessEntry: '/server/serve.mjs',
+        headlessPort: DEFAULT_HEADLESS_PORT,
+        tokenFile: '/tmp/t',
+      }),
+    ).toEqual(['/server/serve.mjs', '--auth-token-file', '/tmp/t', '--name', 'DoomPi Desktop', '--web', '7434']);
+  });
+
+  it('starts the presentation proxy against the headless endpoint', () => {
+    expect(
+      hubArguments({
+        entry: '/web/serve.mjs',
+        host: LOOPBACK_HOST,
+        port: DEFAULT_PORT,
+        headlessPort: DEFAULT_HEADLESS_PORT,
+        token: 'secret',
+      }),
+    ).toEqual([
+      '/web/serve.mjs',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      '7433',
+      '--headless-url',
+      'http://127.0.0.1:7434',
+      '--headless-token',
+      'secret',
+    ]);
   });
 });

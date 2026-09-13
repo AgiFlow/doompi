@@ -19,6 +19,7 @@ overrides:
   "js-yaml@5.0.0 - 5.2.1": "^5.2.2"
   "liquidjs@10.0.0 - 10.27.1": "^10.27.2"
   "protobufjs@8.0.0 - 8.7.1": "^8.7.2"
+  "smol-toml@0.0.0 - 1.7.0": "^1.7.1"
   "sharp@0.34.5": 0.35.4
 
 # Oxlint resolves its type-aware backend from the workspace root.
@@ -27,6 +28,7 @@ publicHoistPattern:
 
 allowBuilds:
   "@google/genai": false
+  "@scarf/scarf": false
   better-sqlite3: true
   # The desktop shell's runtime is downloaded by its own postinstall; without
   # this there is no Electron binary to package or run.

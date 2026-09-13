@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { onComposerSubmitted, publishComposerSubmission } from '../../src/web/lib/composerSubmissions.ts';
+
+import { onComposerSubmitted, publishComposerSubmission } from '../../src/web/lib/composerSubmissions';
 
 describe('composer submission publisher', () => {
   it('publishes an immutable context snapshot once and releases listeners', () => {

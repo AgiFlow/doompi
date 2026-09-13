@@ -1,6 +1,10 @@
 import type { BoundaryConfig, OverrideConfig, PluginConfigPreset, Severity } from '@agimon-ai/vibe-lint';
 
 const rules: Record<string, Severity> = {
+  'composition-layout': 'error',
+  'plugin-composition-wiring': 'error',
+  'doom-constants': 'error',
+  'neutral-extension-contracts': 'error',
   'doom-folder-layout': 'error',
   'compatibility-wrapper-only': 'error',
   'doom-clean-architecture-boundary': 'error',
@@ -12,13 +16,12 @@ const rules: Record<string, Severity> = {
   'no-ambient-host-access': 'error',
   'package-layer-order': 'error',
   'doom-layer-boundary': 'error',
-  // Relative imports still carry a .ts extension across most of the repository.
-  // Promoted with the codemod that removes them, not before.
-  'clean-import-path': 'off',
+  'clean-import-path': 'error',
   'service-boundary': 'error',
   'schema-placement': 'error',
   'doom-package-shape': 'error',
   'doom-prompt-shape': 'error',
+  'doom-server-facet-shape': 'error',
   'pi-peer-version': 'error',
   'prefer-cordis-container': 'error',
   'cordis-context-in-pi-adapter': 'error',
@@ -34,13 +37,15 @@ const rules: Record<string, Severity> = {
   'no-protocol-channel-literals': 'error',
   'dispose-external-subscriptions': 'error',
   'provider-owned-policy': 'error',
+  'no-direct-tool-activation': 'error',
   'web-plugin-entry': 'error',
   'web-plugin-import-allowlist': 'error',
   'web-plugin-layer-boundary': 'error',
-  'package-api-entry': 'error',
   'package-api-manifest': 'error',
   'web-plugin-manifest': 'error',
   'web-plugin-no-module-state': 'error',
+  'web-plugin-protocol-layout': 'error',
+  'web-plugin-typed-calls': 'error',
   'web-plugin-tool-renderers': 'error',
 };
 
@@ -63,69 +68,60 @@ function layer(...roots: string[]): string[] {
  * declares, so a package can still replace one of these outright.
  */
 const boundaries: BoundaryConfig[] = [
+  { name: 'constants', pattern: 'src/constants/**', allowedImports: layer('constants') },
   {
     name: 'exports',
     pattern: 'src/exports/**',
-    // Mirrors ALLOWED_ROOT_DEPENDENCIES.exports, which is the full canonical set:
-    // the root barrel aggregates the other published subpaths.
-    // bin and extensions are transitional roots: a published subpath may still
-    // forward to one until TRANSITIONAL_ROOTS is emptied.
-    allowedImports: layer(
-      'adapters',
-      'bin',
-      'commands',
-      'container',
-      'exports',
-      'extensions',
-      'providers',
-      'schemas',
-      'services',
-      'tui',
-      'types',
-      // The cockpit client entry is published from src/exports as a source
-      // re-export, so exports reaches the browser half too.
-      'web',
-    ),
+    allowedImports: layer('constants', 'controllers', 'models', 'schemas', 'services', 'tools', 'tui', 'types'),
   },
-  { name: 'types', pattern: 'src/types/**', allowedImports: layer('types') },
-  { name: 'schemas', pattern: 'src/schemas/**', allowedImports: layer('schemas', 'types') },
+  { name: 'types', pattern: 'src/types/**', allowedImports: layer('constants', 'types') },
+  { name: 'schemas', pattern: 'src/schemas/**', allowedImports: layer('constants', 'schemas', 'types') },
+  {
+    name: 'models',
+    pattern: 'src/models/**',
+    allowedImports: layer('constants', 'models', 'schemas', 'types'),
+  },
   {
     name: 'services',
     pattern: 'src/services/**',
-    allowedImports: layer('schemas', 'services', 'types'),
-  },
-  // The Pi adapter subtree is the host entry, so it is listed before the general
-  // adapters boundary and may reach commands and TUI to wire them up.
-  // isCompositionAdapter in ../rules/architecture.ts exempts the same subtree.
-  {
-    name: 'pi-adapter',
-    pattern: 'src/adapters/pi/**',
-    allowedImports: layer('adapters', 'commands', 'container', 'providers', 'schemas', 'services', 'tui', 'types'),
+    allowedImports: layer('constants', 'models', 'schemas', 'services', 'types'),
   },
   {
-    name: 'adapters',
-    pattern: 'src/adapters/**',
-    allowedImports: layer('adapters', 'schemas', 'services', 'types'),
+    name: 'controllers',
+    pattern: 'src/controllers/**',
+    allowedImports: layer('constants', 'controllers', 'models', 'schemas', 'services', 'types'),
   },
   {
-    name: 'commands',
-    pattern: 'src/commands/**',
-    allowedImports: layer('commands', 'schemas', 'services', 'types'),
+    name: 'tools',
+    pattern: 'src/tools/**',
+    allowedImports: layer('constants', 'models', 'schemas', 'services', 'tools', 'types'),
+  },
+  // Browser entries retain the browser-only policy before general composition.
+  {
+    name: 'web-plugin-entry',
+    pattern: 'src/extensions/web.ts',
+    allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
   },
   {
-    name: 'providers',
-    pattern: 'src/providers/**',
-    allowedImports: layer('providers', 'schemas', 'services', 'types'),
-  },
-  {
-    name: 'container',
-    pattern: 'src/container/**',
-    allowedImports: layer('adapters', 'commands', 'container', 'providers', 'schemas', 'services', 'tui', 'types'),
+    name: 'extensions',
+    pattern: 'src/extensions/**',
+    allowedImports: layer(
+      'constants',
+      'controllers',
+      'extensions',
+      'models',
+      'schemas',
+      'services',
+      'tools',
+      'tui',
+      'types',
+      'web',
+    ),
   },
   {
     name: 'tui',
     pattern: 'src/tui/**',
-    allowedImports: layer('schemas', 'services', 'tui', 'types'),
+    allowedImports: layer('constants', 'models', 'schemas', 'services', 'tui', 'types'),
   },
   {
     name: 'prompts',
@@ -135,25 +131,28 @@ const boundaries: BoundaryConfig[] = [
   {
     name: 'bin',
     pattern: 'src/bin/**',
-    // An executable is a composition root of its own: it assembles the graph
-    // and runs it, so it reaches the same layers the container does.
     allowedImports: layer(
-      'adapters',
       'bin',
-      'commands',
-      'container',
-      'providers',
+      'constants',
+      'controllers',
+      'models',
       'schemas',
       'services',
+      'tools',
       'tui',
       'types',
+      'web',
     ),
   },
   // The web cockpit plugin's browser half lives in src/web. It may reach its
   // own files and the shared src/types shapes (web-plugin-import-allowlist
   // checks the bare specifiers); tests reach it through the src/** entry above
   // like any other package source.
-  { name: 'web-plugin', pattern: 'src/web/**', allowedImports: ['src/web/**', 'src/types', 'src/types/**'] },
+  {
+    name: 'web-plugin',
+    pattern: 'src/web/**',
+    allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
+  },
   { name: 'tests', pattern: 'tests/**', allowedImports: ['src/**', 'tests/**'] },
   {
     name: 'metadata',
@@ -162,23 +161,10 @@ const boundaries: BoundaryConfig[] = [
   },
 ];
 
-/**
- * Pi loads a module's default export as its host entry contract, and satisfies
- * it by aliasing an already named export, which is a deferred named export, so
- * both rules have to stand down on the entry itself.
- *
- * src/extensions/** is the pre-src/exports entry location and comes off this
- * list once `extensions` leaves TRANSITIONAL_ROOTS.
- */
+/** Host loaders and build tools require default exports only at their direct entries. */
 const overrides: OverrideConfig[] = [
   {
-    files: [
-      'src/exports/extensions/*.ts',
-      'src/exports/pi.ts',
-      'src/extensions/**/*.ts',
-      'tsdown.config.ts',
-      'vitest.config.ts',
-    ],
+    files: ['src/extensions/pi.ts', 'src/extensions/server.ts', 'tsdown.config.ts', 'vitest.config.ts'],
     rules: { 'no-default-export': 'off', 'direct-export-only': 'off' },
   },
 ];

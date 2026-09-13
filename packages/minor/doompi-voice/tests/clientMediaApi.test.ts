@@ -1,5 +1,6 @@
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
 import { describe, expect, it } from 'vitest';
-import { createVoiceMediaApi } from '../src/adapters/clientMediaApi.ts';
+
 import {
   VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
@@ -14,7 +15,8 @@ import {
   type VoiceMediaWake,
   VOICE_MEDIA_PROTOCOL_VERSION,
   VOICE_MEDIA_ROUTES,
-} from '../src/types/clientMedia.ts';
+} from '../src/types/clientMedia';
+import { createTestVoiceMediaApi as createVoiceMediaApi } from './support';
 
 const INTERNAL_TOKEN = 'internal-test-token';
 const CLIENT_ID = 'browser-client';
@@ -40,6 +42,16 @@ function json(value: object, host = false): RequestInit {
       ...(host ? { authorization: `Bearer ${INTERNAL_TOKEN}` } : {}),
     },
     body: JSON.stringify(value),
+  };
+}
+
+function wakeEvents(wakes: VoiceMediaWake[]): DoomDirectEventBus {
+  return {
+    publish: (frameType, _sessionId, payload) => {
+      if (frameType === 'voice_media_wake') wakes.push(payload as VoiceMediaWake);
+    },
+    subscribe: () => () => undefined,
+    close: () => undefined,
   };
 }
 
@@ -85,7 +97,7 @@ describe('voice client media session API', () => {
     const api = createVoiceMediaApi({
       internalToken: INTERNAL_TOKEN,
       eventEpoch: 'epoch-browser',
-      wakePublisher: { publish: (wake) => wakes.push(wake) },
+      directEvents: wakeEvents(wakes),
     });
 
     expect(await (await connect(api)).json()).toEqual({
@@ -161,7 +173,7 @@ describe('voice client media session API', () => {
       eventEpoch: 'epoch-activity',
       now: () => now,
       clientConnectWaitMs: 0,
-      wakePublisher: { publish: (wake) => wakes.push(wake) },
+      directEvents: wakeEvents(wakes),
     });
     await connect(api);
     now = 10_000;

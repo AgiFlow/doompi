@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CheckIcon, CopyIcon } from '../icons/icons.ts';
-import { cn } from '../lib/cn.ts';
-import { Button } from './Button.tsx';
+
+import { CheckIcon, CopyIcon } from '../icons/icons';
+import { cn } from '../lib/cn';
+import { Button } from './Button';
 
 /**
  * Puts a piece of text on the clipboard and says so.

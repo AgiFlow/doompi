@@ -1,10 +1,13 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   disposeExternalSubscriptions,
   doomPackageShape,
+  noDirectToolActivation,
   noLiveGlobalRegistry,
   noProtocolChannelLiterals,
   noRawPiEvents,
@@ -129,29 +132,27 @@ describe('Doom package convention rules', () => {
 
   it('checks only manifest-declared Pi entry modules for thinness', () => {
     writeManifest({ pi: { extensions: ['./dist/extensions/pi.mjs'] } });
-    const entry = write('src/exports/extensions/pi.ts', 'export class RuntimeState {}');
+    const entry = write('src/extensions/pi.ts', 'export class RuntimeState {}');
     const helper = write('src/services/helper.ts', 'export class Helper {}');
 
     expect(thinPiAdapter.check?.(entry, root, boundaryContext())).toContain('too broad');
     fs.writeFileSync(entry, 'export function activate(): void {}', 'utf8');
     expect(thinPiAdapter.check?.(entry, root, boundaryContext())).toBeNull();
     expect(thinPiAdapter.check?.(helper, root, boundaryContext())).toBeNull();
-    expect(
-      thinPiAdapter.check?.(path.join(root, 'src/exports/extensions/missing.ts'), root, boundaryContext()),
-    ).toBeNull();
+    expect(thinPiAdapter.check?.(path.join(root, 'src/extensions/missing.ts'), root, boundaryContext())).toBeNull();
   });
 
   it('rejects oversized or tool-owning Pi entries', () => {
     writeManifest({ pi: { extensions: ['./dist/extensions/pi.mjs'] } });
-    const oversized = write('src/exports/extensions/pi.ts', Array.from({ length: 81 }, () => '// line').join('\n'));
+    const oversized = write('src/extensions/pi.ts', Array.from({ length: 81 }, () => '// line').join('\n'));
     expect(thinPiAdapter.check?.(oversized, root, boundaryContext())).toContain('too broad');
 
-    const toolOwning = write('src/exports/extensions/pi.ts', 'pi.registerTool({ name: "run" });');
+    const toolOwning = write('src/extensions/pi.ts', 'pi.registerTool({ name: "run" });');
     expect(thinPiAdapter.check?.(toolOwning, root, boundaryContext())).toContain('too broad');
   });
 
   it('reserves raw Pi EventBus access for the exact Cordis host discovery adapter', () => {
-    writeManifest({ name: '@agimon-ai/doompi-extension-contracts' });
+    writeManifest({ name: '@agimon-ai/doompi-core' });
     const raw = write('src/extensions/pi.ts', "pi.events.emit('ready', {});");
     const safe = write('src/services/events.ts', 'protocol.emitReady();');
     const hiddenRaw = write('src/schemas/askUser.ts', "events.on('ready', handler);");
@@ -168,12 +169,12 @@ describe('Doom package convention rules', () => {
     const typedRaw = write(
       'src/services/typed.ts',
       [
-        `import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protocol';`,
+        `import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';`,
         `export function bridge(bus: EventBusLike) { bus.emit('ready', payload); }`,
       ].join('\n'),
     );
     const host = write(
-      'src/adapters/pi/cordisHost.ts',
+      'src/controllers/cordisHost.ts',
       [
         `export const DOOM_CORDIS_HOST_QUERY_CHANNEL = 'doom:cordis:host:v1:query';`,
         `pi.events.on(DOOM_CORDIS_HOST_QUERY_CHANNEL, handler);`,
@@ -209,56 +210,72 @@ describe('Doom package convention rules', () => {
     expect(noRawPiEvents.check?.(path.join(root, 'missing.ts'), root, boundaryContext())).toBeNull();
   });
 
+  it('recognizes only the core-owned direct AgentHarness event boundary', () => {
+    writeManifest({ name: '@agimon-ai/doompi' });
+    const native = write('src/controllers/directHarnessRuntime.ts', "harness.events.on('run_start', handler);");
+    const wrongPath = write('src/controllers/runtime.ts', "harness.events.on('run_start', handler);");
+
+    expect(noRawPiEvents.check?.(native, root, boundaryContext())).toBeNull();
+    expect(noRawPiEvents.check?.(wrongPath, root, boundaryContext())).toContain('Raw Pi EventBus access');
+
+    fs.writeFileSync(native, "pi.events.on('run_start', handler);", 'utf8');
+    expect(noRawPiEvents.check?.(native, root, boundaryContext())).toContain('Raw Pi EventBus access');
+
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: '@agimon-ai/doompi-host' }), 'utf8');
+    fs.writeFileSync(native, "harness.events.on('run_start', handler);", 'utf8');
+    expect(noRawPiEvents.check?.(native, root, boundaryContext())).toContain('Raw Pi EventBus access');
+  });
+
   it('rejects same-runner protocol runtimes and legacy host/client helpers while preserving types and schemas', () => {
     writeManifest({ name: '@agimon-ai/doompi-ui' });
     const runtime = write(
-      'src/adapters/pi/runtime.ts',
+      'src/controllers/runtime.ts',
       [
-        `import { createProtocolRuntime as createRuntime } from '@agimon-ai/doompi-extension-contracts/protocol';`,
-        `import { DoomFooterStatusRegistry } from '@agimon-ai/doompi-extension-contracts/footer';`,
+        `import { createProtocolRuntime as createRuntime } from '@agimon-ai/doompi-core/protocol';`,
+        `import { DoomFooterStatusRegistry } from '@agimon-ai/doompi-core/footer';`,
         `createRuntime(options);`,
         `new DoomFooterStatusRegistry();`,
       ].join('\n'),
     );
     const typeOnly = write(
       'src/types/runtime.ts',
-      `import type { ProtocolRuntime } from '@agimon-ai/doompi-extension-contracts/protocol';`,
+      `import type { ProtocolRuntime } from '@agimon-ai/doompi-core/protocol';`,
     );
     const schema = write(
       'src/schemas/leader.ts',
-      `import { createDoomLeaderContribution } from '@agimon-ai/doompi-extension-contracts/leader';`,
+      `import { createDoomLeaderContribution } from '@agimon-ai/doompi-core/leader';`,
     );
     const reexportedLegacyHelper = write(
-      'src/adapters/pi/leader.ts',
+      'src/controllers/leader.ts',
       `import { registerDoomLeaderContribution } from '@agimon-ai/doompi-ui/leader';`,
     );
     const namespaceLegacyHelper = write(
-      'src/adapters/pi/narration.ts',
+      'src/controllers/narration.ts',
       [
-        `import * as narration from '@agimon-ai/doompi-extension-contracts/narration';`,
+        `import * as narration from '@agimon-ai/doompi-core/narration';`,
         `narration?.createNarrationRequester(options);`,
       ].join('\n'),
     );
     const defaultProtocolRuntime = write(
-      'src/adapters/pi/defaultRuntime.ts',
-      `import runtime from '@agimon-ai/doompi-extension-contracts/protocol';`,
+      'src/controllers/defaultRuntime.ts',
+      `import runtime from '@agimon-ai/doompi-core/protocol';`,
     );
     const legacyReexport = write(
       'src/exports/legacy.ts',
-      `export { registerDoomHelpContribution } from '@agimon-ai/doompi-extension-contracts/help';`,
+      `export { registerDoomHelpContribution } from '@agimon-ai/doompi-core/help';`,
     );
     const cordisCatalog = write(
-      'src/adapters/pi/catalog.ts',
+      'src/controllers/catalog.ts',
       [
-        `import { createMinorModeCatalogClient } from '@agimon-ai/doompi-extension-contracts/mode-client';`,
-        `import { registerMinorModeOwner } from '@agimon-ai/doompi-extension-contracts/mode-owner';`,
+        `import { createMinorModeCatalogClient } from '@agimon-ai/doompi-core/mode-client';`,
+        `import { registerMinorModeOwner } from '@agimon-ai/doompi-core/mode-owner';`,
         `createMinorModeCatalogClient(injectedCatalog);`,
         `registerMinorModeOwner(injectedCatalog, definition);`,
       ].join('\n'),
     );
     const futureProtocolRuntime = write(
-      'src/adapters/pi/futureRuntime.ts',
-      `import { createFutureTransport } from '@agimon-ai/doompi-extension-contracts/protocol';`,
+      'src/controllers/futureRuntime.ts',
+      `import { createFutureTransport } from '@agimon-ai/doompi-core/protocol';`,
     );
 
     const result = noSameRunnerProtocol.check?.(runtime, root, boundaryContext());
@@ -281,7 +298,7 @@ describe('Doom package convention rules', () => {
       'createFutureTransport',
     );
 
-    writeManifest({ name: '@agimon-ai/doompi-extension-contracts' });
+    writeManifest({ name: '@agimon-ai/doompi-core' });
     const legacyContractRuntime = write(
       'src/schemas/help.ts',
       [
@@ -317,6 +334,13 @@ describe('Doom package convention rules', () => {
     expect(noLiveGlobalRegistry.check?.(registry, root, boundaryContext())).toContain('process-global registry');
     expect(noLiveGlobalRegistry.check?.(hostGlobal, root, boundaryContext())).toBeNull();
 
+    const scopes = write(
+      'src/services/scopes.ts',
+      `interface Mounts { global?: object }
+const mounts = { global: {} }; export const selected = mounts.global;`,
+    );
+    expect(noLiveGlobalRegistry.check?.(scopes, root, boundaryContext())).toBeNull();
+
     const nodeGlobal = write('src/services/nodeGlobal.ts', `const root = global; root[Symbol.for('doom/live')] = {};`);
     expect(noLiveGlobalRegistry.check?.(nodeGlobal, root, boundaryContext())).toContain('process-global registry');
 
@@ -328,9 +352,9 @@ describe('Doom package convention rules', () => {
       `const key = Symbol.for('doom/live');\nconst root = globalThis as Record<PropertyKey, unknown>;\nroot[key] = new globalThis.AudioContext();`,
     );
     expect(noLiveGlobalRegistry.check?.(browserGlobal, root, boundaryContext())).toBeNull();
-    writeManifest({ name: '@agimon-ai/doompi-extension-contracts' });
+    writeManifest({ name: '@agimon-ai/doompi-voice' });
     const voiceReloadHandoff = write(
-      'src/schemas/voiceReloadHandoff.ts',
+      'src/services/voiceReloadHandoff/index.ts',
       [
         `const VOICE_RELOAD_HANDOFF_TTL_MS = 30_000;`,
         `const key = Symbol.for('doom/voice/reload');`,
@@ -340,7 +364,7 @@ describe('Doom package convention rules', () => {
       ].join('\n'),
     );
     const liveVoiceRegistry = write(
-      'src/schemas/voiceTools.ts',
+      'src/services/voiceTools/index.ts',
       `const key = Symbol.for('doom/voice/live');\nconst state = globalThis as Record<PropertyKey, unknown>;`,
     );
     expect(noLiveGlobalRegistry.check?.(voiceReloadHandoff, root, boundaryContext())).toBeNull();
@@ -350,7 +374,7 @@ describe('Doom package convention rules', () => {
 
     writeManifest({ name: '@agimon-ai/doompi-domain' });
     const reloadHandoff = write(
-      'src/adapters/domainSwitchHandoff.ts',
+      'src/models/domainSwitchHandoff.ts',
       [
         `const DOMAIN_SWITCH_HANDOFF_TTL_MS = 30_000;`,
         `const key = Symbol.for('doom/reload');`,
@@ -363,7 +387,7 @@ describe('Doom package convention rules', () => {
 
     writeManifest({ name: '@agimon-ai/doompi' });
     const bootstrap = write(
-      'src/adapters/bootstrapClaim.ts',
+      'src/models/bootstrapClaim.ts',
       [
         `const key = Symbol.for('doom/bootstrap');`,
         `const claim = Symbol();`,
@@ -380,9 +404,9 @@ describe('Doom package convention rules', () => {
   it('centralizes Doom protocol channel literals', () => {
     const literal = write('src/services/events.ts', "export const channel = 'doom:run:start';");
     const nonSource = write('src/services/events.json', '"doom:run:start"');
-    const contract = write('doompi-extension-contracts/src/protocol.ts', "export const channel = 'doom:run:start';");
+    const contract = write('doompi-core/src/protocol.ts', "export const channel = 'doom:run:start';");
 
-    expect(noProtocolChannelLiterals.check?.(literal, root, boundaryContext())).toContain('doompi-extension-contracts');
+    expect(noProtocolChannelLiterals.check?.(literal, root, boundaryContext())).toContain('doompi-core');
     expect(noProtocolChannelLiterals.check?.(nonSource, root, boundaryContext())).toBeNull();
     expect(noProtocolChannelLiterals.check?.(contract, root, boundaryContext())).toBeNull();
     expect(
@@ -417,6 +441,35 @@ describe('Doom package convention rules', () => {
     expect(disposeExternalSubscriptions.check?.(write('src/services/safe.ts', 'run();'), root)).toBeNull();
   });
 
+  it('recognizes retained direct-harness subscriptions disposed by the native runtime', () => {
+    writeManifest({ name: '@agimon-ai/doompi' });
+    const native = write(
+      'src/controllers/directHarnessRuntime.ts',
+      [
+        'const unsubscribe = EVENT_TYPES.map((type) => harness.events.on(type, handler));',
+        'const dispose = async (): Promise<void> => {',
+        '  for (const unsubscribeEvent of unsubscribe) unsubscribeEvent();',
+        '};',
+        'dispose();',
+      ].join('\n'),
+    );
+    expect(disposeExternalSubscriptions.check?.(native, root, boundaryContext())).toBeNull();
+
+    fs.writeFileSync(native, "harness.events.on('run_start', handler);", 'utf8');
+    expect(disposeExternalSubscriptions.check?.(native, root, boundaryContext())).toContain(
+      'Retain the external subscription disposer',
+    );
+
+    fs.writeFileSync(
+      native,
+      ["const unsubscribe = harness.events.on('run_start', handler);", 'const dispose = async () => {};'].join('\n'),
+      'utf8',
+    );
+    expect(disposeExternalSubscriptions.check?.(native, root, boundaryContext())).toContain(
+      'Retain the external subscription disposer',
+    );
+  });
+
   it('rejects foreign tool-call mutation while allowing semantic policy', () => {
     const assignment = write(
       'src/extensions/assignment.ts',
@@ -435,5 +488,44 @@ describe('Doom package convention rules', () => {
     expect(providerOwnedPolicy.check?.(objectMutation, root, boundaryContext())).toContain('Do not mutate');
     expect(providerOwnedPolicy.check?.(semanticPolicy, root, boundaryContext())).toBeNull();
     expect(providerOwnedPolicy.check?.(path.join(root, 'missing.ts'), root, boundaryContext())).toBeNull();
+  });
+
+  it('rejects direct setActiveTools calls outside the tool-surface owner', () => {
+    writeManifest({ name: '@agimon-ai/doompi-plan' });
+    const direct = write('src/services/planMode.ts', 'pi.setActiveTools([...names]);');
+    const restriction = write(
+      'src/services/planRestriction.ts',
+      'toolSurface.register({ source: PLAN_LEADER_SOURCE, restrict });',
+    );
+
+    expect(noDirectToolActivation.check?.(direct, root, boundaryContext())).toContain('DOOM_TOOL_SURFACE_SERVICE');
+    expect(noDirectToolActivation.check?.(restriction, root, boundaryContext())).toBeNull();
+  });
+
+  it('allows the contracts package arbiter and its fake host to drive the setter', () => {
+    writeManifest({ name: '@agimon-ai/doompi-core' });
+    const arbiter = write('src/services/toolSurface/index.ts', 'options.setActiveTools(next);');
+    const fakeHost = write('src/controllers/piTestHost.ts', 'host.setActiveTools(names);');
+    const other = write('src/services/other.ts', 'pi.setActiveTools(names);');
+
+    expect(noDirectToolActivation.check?.(arbiter, root, boundaryContext())).toBeNull();
+    expect(noDirectToolActivation.check?.(fakeHost, root, boundaryContext())).toBeNull();
+    expect(noDirectToolActivation.check?.(other, root, boundaryContext())).toContain('setActiveTools');
+  });
+
+  it('allows only the direct harness lane to set tools in the native host runtime', () => {
+    writeManifest({ name: '@agimon-ai/doompi' });
+    const native = write('src/controllers/directHarnessRuntime.ts', 'lane.setActiveTools(names);');
+    const wrongPath = write('src/controllers/toolRuntime.ts', 'lane.setActiveTools(names);');
+
+    expect(noDirectToolActivation.check?.(native, root, boundaryContext())).toBeNull();
+    expect(noDirectToolActivation.check?.(wrongPath, root, boundaryContext())).toContain('setActiveTools');
+
+    fs.writeFileSync(native, 'host.setActiveTools(names);', 'utf8');
+    expect(noDirectToolActivation.check?.(native, root, boundaryContext())).toContain('setActiveTools');
+
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: '@agimon-ai/doompi-host' }), 'utf8');
+    fs.writeFileSync(native, 'lane.setActiveTools(names);', 'utf8');
+    expect(noDirectToolActivation.check?.(native, root, boundaryContext())).toContain('setActiveTools');
   });
 });

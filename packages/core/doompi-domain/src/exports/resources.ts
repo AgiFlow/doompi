@@ -7,8 +7,8 @@ export {
   DISPATCHER_AGENT_NAME,
   mergeMcpConfigs,
   mergeMcpConfigsAsync,
-} from '../adapters/resourceCollector.ts';
-export { resolveSkillCacheDirectory, sanitizeSyncLabel } from '../adapters/skillCacheLocation.ts';
+} from '../services/resourceCollector';
+export { resolveSkillCacheDirectory, sanitizeSyncLabel } from '../services/skillCacheLocation';
 export type {
   HarnessResourceOptions,
   HarnessResources,
@@ -16,4 +16,4 @@ export type {
   McpResourceOptions,
   NamedResource,
   StagedMcpResources,
-} from '../types/resources.ts';
+} from '../types/resources';

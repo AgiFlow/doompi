@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Button } from './Button.tsx';
+import { Button } from './Button';
 
 const SIZES = ['xs', 'sm', 'md', 'lg'] as const;
 const VARIANTS = ['outline', 'primary', 'ghost', 'danger', 'danger-outline', 'success', 'link'] as const;

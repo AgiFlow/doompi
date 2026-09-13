@@ -1,11 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { HubChannelHost, HubSessionScope } from '@agimon-ai/doompi-web-contracts';
+
+import type { DoomHubChannelHost } from '@agimon-ai/doompi-core/hub-channel';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FileEditPaths } from '../../../src/adapters/FileEditPaths/FileEditPaths.ts';
-import { createFilesChannel, readSessionFiles, watchFiles } from '../../../src/adapters/webFilesChannel.ts';
-import type { FilesItemView } from '../../../src/types/webFiles.ts';
+
+import { createFilesChannel, readSessionFiles } from '../../../src/controllers/webFilesChannel';
+import { FileEditPaths } from '../../../src/services/fileEditPaths';
 
 let root: string;
 let timelinePath: string;
@@ -123,121 +124,88 @@ describe('readSessionFiles', () => {
   });
 });
 
-describe('watchFiles', () => {
-  it('refreshes filtering from .doomignore and dedupes unchanged visible lists', async () => {
-    vi.useFakeTimers();
-    vi.stubEnv('PI_CODING_AGENT_DIR', root);
-    const scope: HubSessionScope = { sessionId: 'refresh-ignore', cwd: root };
-    const actualTimelinePath = new FileEditPaths().timelinePath(root, scope.sessionId);
-    const kept = place('kept.ts');
-    const ignored = place('generated.log');
-    fs.writeFileSync(
-      actualTimelinePath,
-      [
-        line({ version: 2, path: kept, tool: 'edit', at: 10, origin: 'tool', before: 'before' }),
-        line({ version: 2, path: ignored, tool: 'edit', at: 20, origin: 'tool', before: 'before' }),
-      ].join(''),
-    );
-    fs.writeFileSync(path.join(root, '.doomignore'), '*.log\n');
-    const seen: string[][] = [];
-    const source = watchFiles(scope, (items) => seen.push(items.map((row) => row.relPath)), {
-      pollMs: 10,
-      debounceMs: 1,
-    });
-
-    try {
-      expect(seen).toEqual([['kept.ts']]);
-      fs.writeFileSync(path.join(root, '.doomignore'), '*.tmp\n');
-      await vi.advanceTimersByTimeAsync(10);
-      expect(seen).toEqual([['kept.ts'], ['generated.log', 'kept.ts']]);
-
-      fs.writeFileSync(path.join(root, '.doomignore'), '# no visible change\n');
-      await vi.advanceTimersByTimeAsync(10);
-      expect(seen).toHaveLength(2);
-
-      fs.rmSync(path.join(root, '.doomignore'));
-      await vi.advanceTimersByTimeAsync(10);
-      expect(seen).toHaveLength(2);
-    } finally {
-      source.close();
-    }
-  });
-  it('reports the current list, then reports again only once it changes', async () => {
-    vi.useFakeTimers();
-    const seen: FilesItemView[][] = [];
-    const scope: HubSessionScope = { sessionId: 's1', cwd: root };
-    // The real path resolver keys off the session id, so the test drives the
-    // reader directly and uses the watcher only for its polling behaviour.
-    const source = watchFiles(scope, (items) => seen.push(items), { pollMs: 10, debounceMs: 1 });
-    try {
-      expect(seen).toHaveLength(1);
-      expect(seen[0]).toEqual([]);
-      await vi.advanceTimersByTimeAsync(30);
-      // Nothing changed, so nothing more was announced.
-      expect(seen).toHaveLength(1);
-    } finally {
-      source.close();
-    }
-  });
-
-  it('stops polling once closed', async () => {
-    vi.useFakeTimers();
-    const seen: FilesItemView[][] = [];
-    const source = watchFiles({ sessionId: 's1', cwd: root }, (items) => seen.push(items), { pollMs: 5 });
-    source.close();
-    const count = seen.length;
-    await vi.advanceTimersByTimeAsync(50);
-    expect(seen).toHaveLength(count);
-  });
-});
-
 describe('createFilesChannel', () => {
-  function createHost(): HubChannelHost & { published: Array<[string, unknown]> } {
+  function createHost(): DoomHubChannelHost & {
+    published: Array<[string, unknown]>;
+    emit(sessionId: string, payload: unknown): void;
+  } {
     const published: Array<[string, unknown]> = [];
+    const listeners = new Map<string, Set<(payload: unknown) => void>>();
     return {
       published,
       sessions: () => [],
+      directEvents: {
+        publish(frameType, sessionId, payload) {
+          for (const listener of listeners.get(`${frameType}:${sessionId}`) ?? []) listener(payload);
+        },
+        subscribe(frameType, sessionId, listener) {
+          const key = `${frameType}:${sessionId}`;
+          const current = listeners.get(key) ?? new Set<(payload: unknown) => void>();
+          current.add(listener);
+          listeners.set(key, current);
+          return () => {
+            current.delete(listener);
+            if (current.size === 0) listeners.delete(key);
+          };
+        },
+        close: () => listeners.clear(),
+      },
+      emit(sessionId, payload) {
+        this.directEvents.publish('file_edits', sessionId, payload);
+      },
       publish: (sessionId, payload) => published.push([sessionId, payload]),
       requestSessionApi: () => Promise.resolve(Response.json({ error: 'not implemented' }, { status: 501 })),
       onNotice: () => undefined,
     };
   }
 
-  it('watches a session when it arrives and stops when it leaves', () => {
-    const closed: string[] = [];
-    const channel = createFilesChannel((scope, onChange) => {
-      onChange([{ path: '/a.ts', relPath: 'a.ts', tool: 'edit', at: 1, count: 1, diffable: true }]);
-      return { close: () => closed.push(scope.sessionId) };
-    });
+  it('seeds durable state and follows direct events until the session leaves', () => {
+    vi.stubEnv('PI_CODING_AGENT_DIR', root);
+    const edited = place('a.ts');
+    const sessionId = 's1';
+    const actualTimelinePath = new FileEditPaths().timelinePath(root, sessionId);
+    fs.writeFileSync(
+      actualTimelinePath,
+      line({ version: 2, path: edited, tool: 'edit', at: 1, origin: 'tool', before: 'before' }),
+    );
     const host = createHost();
-    const source = channel.start(host);
+    const source = createFilesChannel().start(host);
 
-    source.sessionAdded?.({ sessionId: 's1', cwd: root });
-    expect(host.published).toHaveLength(1);
-    expect(source.payloadFor({ sessionId: 's1', cwd: root })).toEqual({
-      items: [{ path: '/a.ts', relPath: 'a.ts', tool: 'edit', at: 1, count: 1, diffable: true }],
+    source.sessionAdded?.({ sessionId, cwd: root });
+    expect(source.payloadFor({ sessionId, cwd: root })).toEqual({
+      items: [{ path: edited, relPath: 'a.ts', tool: 'edit', at: 1, count: 1, diffable: true }],
     });
 
-    source.sessionRemoved?.('s1');
-    expect(closed).toEqual(['s1']);
-    // A session that left reports nothing rather than its last known list.
-    expect(source.payloadFor({ sessionId: 's1', cwd: root })).toBeUndefined();
+    const direct = { items: [{ path: edited, relPath: 'a.ts', tool: 'write', at: 2, count: 2, diffable: true }] };
+    host.emit(sessionId, direct);
+    expect(source.payloadFor({ sessionId, cwd: root })).toEqual(direct);
+    expect(host.published.at(-1)).toEqual([sessionId, direct]);
+
+    source.sessionRemoved?.(sessionId);
+    const count = host.published.length;
+    host.emit(sessionId, { items: [] });
+    expect(host.published).toHaveLength(count);
+    expect(source.payloadFor({ sessionId, cwd: root })).toBeUndefined();
+  });
+
+  it('ignores malformed direct payloads and closes every subscription', () => {
+    const host = createHost();
+    const source = createFilesChannel().start(host);
+    source.sessionAdded?.({ sessionId: 's1', cwd: root });
+    source.sessionAdded?.({ sessionId: 's2', cwd: root });
+    const count = host.published.length;
+
+    host.emit('s1', { items: 'invalid' });
+    expect(host.published).toHaveLength(count);
+    source.close();
+    host.emit('s1', { items: [] });
+    host.emit('s2', { items: [] });
+    expect(host.published).toHaveLength(count);
   });
 
   it('sends no frame for a session it has never heard from', () => {
-    const channel = createFilesChannel(() => ({ close: () => undefined }));
-    const source = channel.start(createHost());
+    const source = createFilesChannel().start(createHost());
     expect(source.payloadFor({ sessionId: 'unknown', cwd: root })).toBeUndefined();
-  });
-
-  it('closes every watcher it started', () => {
-    const closed: string[] = [];
-    const channel = createFilesChannel((scope) => ({ close: () => closed.push(scope.sessionId) }));
-    const source = channel.start(createHost());
-    source.sessionAdded?.({ sessionId: 's1', cwd: root });
-    source.sessionAdded?.({ sessionId: 's2', cwd: root });
-    source.close();
-    expect(closed.sort()).toEqual(['s1', 's2']);
   });
 
   it('claims the frame type the plugin manifest declares', () => {

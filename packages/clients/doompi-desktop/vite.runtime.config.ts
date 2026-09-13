@@ -1,7 +1,9 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { defineConfig } from 'vite';
-import { desktopRuntimePlugin } from './scripts/desktopRuntimePlugin.ts';
+
+import { desktopRuntimePlugin } from './scripts/desktopRuntimePlugin';
 
 const packageRoot = fileURLToPath(new URL('.', import.meta.url));
 const workspaceRoot = path.resolve(packageRoot, '..', '..', '..');
@@ -21,12 +23,15 @@ export default defineConfig({
         'doompi-web/dist/bin/serve': source('packages/clients/doompi-web/src/bin/serve.ts'),
         'doompi-web/dist/index': source('packages/clients/doompi-web/src/exports/index.ts'),
         'doompi-web/dist/bundler': source('packages/clients/doompi-web/src/exports/bundler.ts'),
-        'doompi-server/dist/bin/serve': source('packages/clients/doompi-server/src/bin/serve.ts'),
+        'doompi/dist/bin/serve': source('packages/core/doompi/src/bin/serve.ts'),
         'doompi/dist/bin/cli': source('packages/core/doompi/src/bin/cli.ts'),
         'doompi/dist/bin/doomRunner': source('packages/core/doompi/src/bin/doomRunner.ts'),
         'doompi/dist/bin/dpi': source('packages/core/doompi/src/bin/dpi.ts'),
         'doompi/dist/src/adapters/syncedRuntimeBuilder': source(
           'packages/core/doompi/src/adapters/syncedRuntimeBuilder.ts',
+        ),
+        'doompi/dist/src/extensions/entries/agentModel': source(
+          'packages/core/doompi/src/extensions/entries/agentModel.ts',
         ),
         'doompi/dist/src/extensions/entries/doom': source('packages/core/doompi/src/extensions/entries/doom.ts'),
         'doompi/dist/src/extensions/entries/cordisFinalizer': source(
@@ -38,6 +43,9 @@ export default defineConfig({
         'doompi/dist/src/extensions/entries/effort': source('packages/core/doompi/src/extensions/entries/effort.ts'),
         'doompi/dist/src/extensions/entries/launcherBootstrap': source(
           'packages/core/doompi/src/extensions/entries/launcherBootstrap.ts',
+        ),
+        'doompi/dist/src/extensions/entries/minorModeCommand': source(
+          'packages/core/doompi/src/extensions/entries/minorModeCommand.ts',
         ),
         'doompi/dist/src/extensions/entries/modeCatalog': source(
           'packages/core/doompi/src/extensions/entries/modeCatalog.ts',

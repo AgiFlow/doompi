@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mediaPreviewController } from '../../src/components/MediaPreview.tsx';
+
+import { mediaPreviewController } from '../../src/components/MediaPreview';
 
 function fixture(options: { context?: boolean; blob?: Blob | null } = {}) {
   const blob = options.blob === undefined ? new Blob(['frame'], { type: 'image/png' }) : options.blob;

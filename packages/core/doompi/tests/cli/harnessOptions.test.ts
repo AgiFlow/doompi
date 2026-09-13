@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const configMocks = vi.hoisted(() => ({
@@ -22,7 +23,7 @@ vi.mock('@agimon-ai/doompi-config/profiles', async (importOriginal) => ({
   loadProfileCatalog: configMocks.loadProfileCatalog,
 }));
 
-const { resolveHarnessOptions } = await import('../../src/commands/cli/harnessOptions.ts');
+const { resolveHarnessOptions } = await import('../../src/cli/harnessOptions');
 
 const temporaryDirectories: string[] = [];
 
@@ -45,8 +46,8 @@ describe('resolveHarnessOptions', () => {
 
     expect(options.repoRoot).toBe(cwd);
     expect(options.cwd).toBe(cwd);
-    expect(configMocks.loadMajorModesConfig).toHaveBeenCalledWith(cwd);
-    expect(configMocks.loadDomains).toHaveBeenCalledWith(cwd);
+    expect(configMocks.loadMajorModesConfig).toHaveBeenCalledWith(cwd, expect.any(String));
+    expect(configMocks.loadDomains).toHaveBeenCalledWith(cwd, expect.any(String));
   });
 
   it('continues to use the nearest configured repository for a nested working directory', () => {
@@ -59,8 +60,8 @@ describe('resolveHarnessOptions', () => {
 
     expect(options.repoRoot).toBe(root);
     expect(options.cwd).toBe(cwd);
-    expect(configMocks.loadMajorModesConfig).toHaveBeenCalledWith(root);
-    expect(configMocks.loadDomains).toHaveBeenCalledWith(root);
+    expect(configMocks.loadMajorModesConfig).toHaveBeenCalledWith(root, expect.any(String));
+    expect(configMocks.loadDomains).toHaveBeenCalledWith(root, expect.any(String));
   });
 
   it('starts on the repository default profile, and lets a run override it', () => {

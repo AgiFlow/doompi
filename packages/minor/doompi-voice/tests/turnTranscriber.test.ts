@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TurnTranscriber } from '../src/services/turnTranscriber.ts';
-import type { IClock } from '../src/types/index.ts';
+
+import { TurnTranscriber } from '../src/services/turnTranscriber';
+import type { IClock } from '../src/types';
 
 const clock: IClock = {
   now: () => Date.now(),

@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { createDoomConfigContext, provideDoomConfigContext } from '@agimon-ai/doompi-config';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { getHarnessState, HARNESS_STATE_POINTER, resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 import type {
   BeforeAgentStartEvent,
@@ -15,11 +17,11 @@ import type {
   Skill,
 } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getHarnessState, HARNESS_STATE_POINTER, resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
-import skillsExtension from '../../src/adapters/pi/extension.ts';
-import { skillInvocation } from '../../src/services/skillText.ts';
-import { SKILLS_LEADER_CONTRIBUTION } from '../../src/types/skills.ts';
-import type { SkillsOverlayOptions, SkillsOverlayResult } from '../../src/tui/skillsOverlay.ts';
+
+import skillsExtension from '../../src/extensions/pi';
+import { skillInvocation } from '../../src/services/skillText';
+import type { SkillsOverlayOptions, SkillsOverlayResult } from '../../src/tui/skillsOverlay';
+import { SKILLS_LEADER_CONTRIBUTION } from '../../src/types/skills';
 
 const { registerLeaderContribution, openOverlay, helpState, mergeHelp, disposeHelp } = vi.hoisted(() => {
   const state = { skills: [] as Skill[], diagnostics: [] as string[], revision: 0 };
@@ -43,14 +45,14 @@ const { registerLeaderContribution, openOverlay, helpState, mergeHelp, disposeHe
 
 // Token pricing has dedicated catalog coverage. Avoid loading its vocabulary in this command integration suite.
 vi.mock('gpt-tokenizer', () => ({ countTokens: (text: string) => text.length }));
-vi.mock('../../src/tui/skillsOverlay.ts', () => ({ openSkillsOverlay: openOverlay }));
-vi.mock('../../src/adapters/helpSkills.ts', () => ({
+vi.mock('../../src/tui/skillsOverlay', () => ({ openSkillsOverlay: openOverlay }));
+vi.mock('../../src/services/helpSkills', () => ({
   createActiveHelpSkillView: () => ({ bind: vi.fn(() => vi.fn()), merge: mergeHelp, dispose: disposeHelp }),
 }));
 
 type CommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
 
-const SKILL_RELOAD_TEST_TIMEOUT_MS = 15_000;
+const SKILL_INTEGRATION_TEST_TIMEOUT_MS = 15_000;
 
 function writeSkill(directory: string, name: string): void {
   fs.mkdirSync(directory, { recursive: true });
@@ -129,6 +131,7 @@ describe('skills pi extension', () => {
       }),
       getCommands: vi.fn(() => []),
     } as unknown as ExtensionAPI;
+    await installDoomCordisHost(pi, { mode: 'composed', source: 'skills-command-test-host' });
     await skillsExtension(pi);
     activeHandlers = handlers;
     const connection = await connectDoomCordisHost(pi, 'skills-command-test');
@@ -212,7 +215,7 @@ describe('skills pi extension', () => {
     expect(ctx.ui.notify).toHaveBeenCalledWith('/skills requires interactive mode', 'error');
   });
 
-  it('prefills the editor for the selected skill', async () => {
+  it('prefills the editor for the selected skill', { timeout: SKILL_INTEGRATION_TEST_TIMEOUT_MS }, async () => {
     const { commands } = await register();
     const ctx = await context([path.join(root, '.claude', 'skills')]);
     invokeFirstSkill();
@@ -271,7 +274,7 @@ describe('skills pi extension', () => {
 
   it(
     'injects the loaded inventory on every turn and resets it for a reload generation',
-    { timeout: SKILL_RELOAD_TEST_TIMEOUT_MS },
+    { timeout: SKILL_INTEGRATION_TEST_TIMEOUT_MS },
     async () => {
       const { handlers } = await register();
       const skillRoot = path.join(root, '.claude', 'skills');

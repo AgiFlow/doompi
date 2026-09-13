@@ -1,11 +1,11 @@
 import type {
   AssistantTranscriptItem,
-  SessionServiceState,
   ToolTranscriptItem,
   TranscriptItem,
   UserTranscriptItem,
-} from '@agimon-ai/doompi-extension-contracts/session-protocol';
-import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
+} from '@agimon-ai/doompi-core/session-protocol';
+import type { ToolResultView } from '@agimon-ai/doompi-core/web';
+
 import {
   imagesFromContent,
   summariseArgs,
@@ -14,29 +14,36 @@ import {
   type TimelineEntry,
   type ToolEntry,
   type UserEntry,
-} from './sessionModel.ts';
+} from './sessionModel';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function userEntry(item: UserTranscriptItem): UserEntry {
+function userEntry(item: UserTranscriptItem): UserEntry & { timestamp: number } {
   const text = item.content
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
     .map((part) => part.text)
     .join('');
   const images = imagesFromContent(item.content);
-  return { kind: 'user', id: item.id, text, ...(images.length > 0 ? { images } : {}) };
+  return { kind: 'user', id: item.id, text, timestamp: item.timestamp, ...(images.length > 0 ? { images } : {}) };
 }
 
-function assistantEntry(item: AssistantTranscriptItem): AssistantEntry {
+function assistantEntry(item: AssistantTranscriptItem): AssistantEntry & { timestamp: number } {
   let text = '';
   let thinking = '';
   for (const part of item.content) {
     if (part.type === 'text') text += part.text;
     else if (part.type === 'thinking') thinking += part.thinking;
   }
-  return { kind: 'assistant', id: item.id, text, thinking, streaming: item.status === 'streaming' };
+  return {
+    kind: 'assistant',
+    id: item.id,
+    text,
+    thinking,
+    streaming: item.status === 'streaming',
+    timestamp: item.timestamp,
+  };
 }
 
 /**
@@ -46,7 +53,7 @@ function assistantEntry(item: AssistantTranscriptItem): AssistantEntry {
  * where a DoomPi tool's own payload travels; handing it back whole is what
  * lets the owning plugin render its call the way it does in the terminal.
  */
-function toolEntry(item: ToolTranscriptItem): ToolEntry {
+function toolEntry(item: ToolTranscriptItem): ToolEntry & { timestamp: number } {
   const output = item.content
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
     .map((part) => part.text)
@@ -66,6 +73,7 @@ function toolEntry(item: ToolTranscriptItem): ToolEntry {
     output,
     isError: item.isError,
     running: item.status === 'running',
+    timestamp: item.timestamp,
   };
 }
 
@@ -86,21 +94,10 @@ export function toTimelineEntries(transcript: readonly TranscriptItem[]): Timeli
   return transcript.map(timelineEntry);
 }
 
-/** Retains concurrent live items between progress events for one protocol binding. */
-export function createProtocolTimeline(): (state: SessionServiceState) => TimelineEntry[] {
-  const pending = new Map<string, TranscriptItem>();
-  return ({ snapshot, progress }) => {
-    if (snapshot.phase === 'idle') pending.clear();
-    if (progress && snapshot.phase !== 'idle') {
-      if (progress.type === 'item_finished') pending.delete(progress.item.id);
-      else pending.set(progress.item.id, progress.item);
-    }
-    for (const item of snapshot.transcript) pending.delete(item.id);
-    return toTimelineEntries([...snapshot.transcript, ...pending.values()]);
-  };
-}
-
 /** Projects the protocol's authoritative pending steer queue onto composer rows. */
 export function toQueuedEntries(queue: readonly UserTranscriptItem[]): QueuedEntry[] {
-  return queue.map((item) => ({ ...userEntry(item), kind: 'queued', delivery: 'steer' }));
+  return queue.map((item) => {
+    const { timestamp: _timestamp, ...entry } = userEntry(item);
+    return { ...entry, kind: 'queued', delivery: 'steer' };
+  });
 }

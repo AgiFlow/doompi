@@ -1,16 +1,12 @@
-import {
-  DOOM_ASK_USER_BLOCKED_EVENT,
-  DOOM_ASK_USER_PROMPT_EVENT,
-} from '@agimon-ai/doompi-extension-contracts/ask-user';
+import { DOOM_ASK_USER_BLOCKED_EVENT, DOOM_ASK_USER_PROMPT_EVENT } from '@agimon-ai/doompi-core/ask-user';
 import { Context } from '@deepseek-ai/cordis';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  type AskUserQuestionToolDependencies,
-  registerAskUserQuestionTool,
-} from '../../src/adapters/pi/askUserQuestionAdapter.js';
-import type { QuestionParams } from '../../src/schemas/questionnaire.js';
-import type { ToolTextResult } from '../../src/types/questionnaire.js';
+
+import type { QuestionParams } from '../../src/schemas/questionnaire';
+import { type AskUserQuestionToolDependencies, createAskUserQuestionTool } from '../../src/tools/askUserQuestion';
+import { askUserToolRender } from '../../src/tui/askUserToolRender';
+import type { ToolTextResult } from '../../src/types/questionnaire';
 
 interface Renderable {
   render(width: number): string[];
@@ -75,11 +71,6 @@ function createTool(dependencies: Partial<AskUserQuestionToolDependencies> = {})
   cordis.on(DOOM_ASK_USER_BLOCKED_EVENT, (payload) => {
     emitted.push({ event: DOOM_ASK_USER_BLOCKED_EVENT, payload });
   });
-  const pi = {
-    registerTool: (definition: unknown) => {
-      tool = definition as RegisteredTool;
-    },
-  } as unknown as ExtensionAPI;
   const defaults: AskUserQuestionToolDependencies = {
     enqueue: async (runner, signal) =>
       runner({
@@ -99,7 +90,11 @@ function createTool(dependencies: Partial<AskUserQuestionToolDependencies> = {})
       cancelled: false,
     }),
   };
-  registerAskUserQuestionTool(pi, cordis, { ...defaults, ...dependencies });
+  tool = createAskUserQuestionTool(
+    cordis,
+    { ...defaults, ...dependencies },
+    askUserToolRender,
+  ) as unknown as RegisteredTool;
   if (!tool) throw new Error('Tool was not registered');
   return { tool, emitted };
 }

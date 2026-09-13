@@ -1,14 +1,15 @@
-import type { HubChannelHost, HubSessionScope } from '@agimon-ai/doompi-web-contracts';
+import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkflowCatalogChannel } from '../src/adapters/workflowCatalogChannel.ts';
+
+import { createWorkflowCatalogChannel } from '../src/controllers/workflowCatalogChannel';
 import {
   createWorkflowCatalogReader,
   presentWorkflowCatalog,
   type CatalogDetail,
   type CatalogListEntry,
   type WorkflowCatalogReaderDeps,
-} from '../src/services/webWorkflowCatalog.ts';
-import type { WorkflowCatalogEntryView, WorkflowCatalogPayload } from '../src/types/webWorkflows.ts';
+} from '../src/services/webWorkflowCatalog';
+import type { WorkflowCatalogEntryView, WorkflowCatalogPayload } from '../src/types/webWorkflows';
 
 const BLOG: CatalogListEntry = {
   path: '/repo/automations/blog.workflow.yml',
@@ -109,25 +110,40 @@ describe('presentWorkflowCatalog', () => {
   });
 });
 
-interface FakeHost extends HubChannelHost {
+interface FakeHost extends DoomHubChannelHost {
   published: Array<{ sessionId: string; payload: WorkflowCatalogPayload }>;
   notices: string[];
+  emit(payload: WorkflowCatalogPayload): void;
 }
 
-function fakeHost(scopes: HubSessionScope[]): FakeHost {
+function fakeHost(scopes: DoomHubSessionScope[]): FakeHost {
   const published: FakeHost['published'] = [];
   const notices: string[] = [];
+  const listeners = new Set<(payload: unknown) => void>();
   return {
     published,
     notices,
     sessions: () => scopes,
+    directEvents: {
+      publish: (_frameType, _sessionId, payload) => {
+        for (const listener of listeners) listener(payload);
+      },
+      subscribe: (_frameType, _sessionId, listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      close: () => listeners.clear(),
+    },
+    emit: (payload) => {
+      for (const listener of listeners) listener(payload);
+    },
     publish: (sessionId, payload) => published.push({ sessionId, payload: payload as WorkflowCatalogPayload }),
     requestSessionApi: () => Promise.resolve(Response.json({ error: 'not implemented' }, { status: 501 })),
     onNotice: (message) => notices.push(message),
   };
 }
 
-const scope: HubSessionScope = { sessionId: 's1', cwd: '/repo' };
+const scope: DoomHubSessionScope = { sessionId: 's1', cwd: '/repo' };
 
 const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -190,6 +206,18 @@ describe('workflow catalog channel', () => {
     await settled();
     source.sessionRemoved?.('s1');
     expect(source.payloadFor(scope)).toBeUndefined();
+    source.close();
+  });
+
+  it('updates an existing session from a direct lifecycle event', async () => {
+    const host = fakeHost([scope]);
+    const source = createWorkflowCatalogChannel({ deps: deps() }).start(host);
+    source.sessionAdded?.(scope);
+    await settled();
+    const payload: WorkflowCatalogPayload = { cwd: '/repo', workflows: [] };
+    host.emit(payload);
+    expect(source.payloadFor(scope)).toEqual(payload);
+    expect(host.published.at(-1)?.payload).toEqual(payload);
     source.close();
   });
 });

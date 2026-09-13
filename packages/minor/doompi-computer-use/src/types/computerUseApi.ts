@@ -1,4 +1,4 @@
-import type { DoomApiCaller } from '@agimon-ai/doompi-extension-contracts/package-api';
+import type { DoomApiCaller } from '@agimon-ai/doompi-core/package-api';
 
 export const API_BASE_PATH = 'computer-use';
 export const computerUseChannelType = 'computer_use_state';
@@ -11,7 +11,7 @@ export const COMPUTER_USE_DEFAULT_DURATION_MS = 300 * 1_000;
 export const COMPUTER_USE_CONFIRMATION_WINDOW_MS = 2 * 60 * 1_000;
 
 export function activationUrl(sessionId: string): string {
-  return `/api/plugin/${API_BASE_PATH}/activate?${SESSION_QUERY_PARAM}=${encodeURIComponent(sessionId)}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}/activate?${SESSION_QUERY_PARAM}=${encodeURIComponent(sessionId)}`;
 }
 
 export const COMPUTER_USE_ROUTES = {

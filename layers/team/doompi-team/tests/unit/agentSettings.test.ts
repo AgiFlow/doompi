@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -33,14 +34,14 @@ import {
   saveBuiltinAgentOverride,
   setAgentFrontmatterFields,
   writeSettingsFile,
-} from '../../src/adapters/agents/settings';
+} from '../../src/services/agentSettings';
+import { getProjectConfigDir } from '../../src/services/configDir';
 import type {
   AgentConfig,
   AgentModelSourceInfo,
   BuiltinAgentOverrideConfig,
   SubagentSettings,
-} from '../../src/adapters/agents/types';
-import { getProjectConfigDir } from '../../src/adapters/filesystem/configDir';
+} from '../../src/types/agent';
 
 const SETTINGS_FILE_NAME = 'settings.json';
 

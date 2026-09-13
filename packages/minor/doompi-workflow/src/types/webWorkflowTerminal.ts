@@ -6,7 +6,7 @@
  * event names live here rather than being spelled twice.
  */
 
-import { DOOM_HUB_API_SESSION_QUERY_PARAM } from '@agimon-ai/doompi-extension-contracts/package-api';
+import { DOOM_HUB_API_SESSION_QUERY_PARAM } from '@agimon-ai/doompi-core/package-api';
 
 /** Segment this package's API is mounted under, below /api/plugin/. */
 export const WORKFLOW_API_BASE_PATH = 'workflow';
@@ -18,7 +18,7 @@ export const WORKFLOW_SCREEN_EVENT = 'screen';
 
 /** Where a run's routes live, below the mount every hub-scoped package API shares. */
 export function workflowRunPath(workspace: string, runKey: string): string {
-  return `/api/plugin/${WORKFLOW_API_BASE_PATH}/runs/${encodeURIComponent(workspace)}/${encodeURIComponent(runKey)}`;
+  return `/api/global/plugin/${WORKFLOW_API_BASE_PATH}/runs/${encodeURIComponent(workspace)}/${encodeURIComponent(runKey)}`;
 }
 
 /** What a surface may do with one run's terminal, and why anything is missing. */

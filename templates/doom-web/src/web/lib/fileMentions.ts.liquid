@@ -3,8 +3,8 @@ import { MEDIA_TYPES, type MediaKind } from '../../types/media.ts';
 export interface FileMention {
   /** The cwd-relative path as the message spelled it. */
   path: string;
-  /** How the timeline previews it; 'file' offers a link instead. */
-  kind: MediaKind | 'file';
+  /** How the timeline previews it; 'file' offers a link, 'directory' previews nothing. */
+  kind: MediaKind | 'file' | 'directory';
 }
 
 // An @ token starts the message or follows whitespace, runs to the next
@@ -12,7 +12,11 @@ export interface FileMention {
 const MENTION = /(?:^|\s)@([^\s@]+)/gu;
 const TRAILING_PUNCTUATION = /[.,;:!?)\]]+$/u;
 
-export function mediaKindFor(filePath: string): MediaKind | 'file' {
+export function mediaKindFor(filePath: string): MediaKind | 'file' | 'directory' {
+  // The trailing slash the @ completion writes for a folder. Naming one is
+  // useful to the agent, but there is no asset behind it, and fetching one
+  // only ever produced a "could not load" badge under the message.
+  if (filePath.endsWith('/')) return 'directory';
   const dot = filePath.lastIndexOf('.');
   if (dot < 0) return 'file';
   return MEDIA_TYPES[filePath.slice(dot + 1).toLowerCase()]?.kind ?? 'file';

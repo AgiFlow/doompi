@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { SessionSummary } from '../../src/types/hub.ts';
+
+import type { SessionSummary } from '../../src/types/hub';
 import {
   applySessionRemoved,
   applySessionUpsert,
@@ -7,7 +8,7 @@ import {
   resetSessions,
   resolveParentId,
   sessionsStore,
-} from '../../src/web/stores/sessionsStore.ts';
+} from '../../src/web/stores/sessionsStore';
 
 /** A summary with an explicit creation time, because ordering is the subject here. */
 function summary(id: string, createdAt: string, overrides: Partial<SessionSummary> = {}): SessionSummary {
@@ -23,7 +24,6 @@ function summary(id: string, createdAt: string, overrides: Partial<SessionSummar
     pendingMessageCount: 0,
     everPrompted: false,
     awaitingInput: false,
-    socketPath: `/run/${id}.sock`,
     ...overrides,
   };
 }

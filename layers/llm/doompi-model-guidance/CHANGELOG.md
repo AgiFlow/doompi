@@ -14,7 +14,7 @@
 ### 🧱 Updated Dependencies
 
 - Updated @agimon-ai/doompi-config to 0.0.1-alpha.67
-- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.67
 
 ### ❤️ Thank You
 
@@ -29,7 +29,7 @@
 ### 🧱 Updated Dependencies
 
 - Updated @agimon-ai/doompi-config to 0.0.1-alpha.66
-- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.66
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.66
 
 ### ❤️ Thank You
 
@@ -44,7 +44,7 @@
 ### 🧱 Updated Dependencies
 
 - Updated @agimon-ai/doompi-config to 0.0.1-alpha.65
-- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.65
 
 ### ❤️ Thank You
 
@@ -59,7 +59,7 @@
 ### 🧱 Updated Dependencies
 
 - Updated @agimon-ai/doompi-config to 0.0.1-alpha.64
-- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.64
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.64
 
 ### ❤️ Thank You
 
@@ -74,7 +74,7 @@
 ### 🧱 Updated Dependencies
 
 - Updated @agimon-ai/doompi-config to 0.0.1-alpha.63
-- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.63
 
 ### ❤️ Thank You
 

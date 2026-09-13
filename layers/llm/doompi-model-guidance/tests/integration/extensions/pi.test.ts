@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const harnessState = { root: undefined as string | undefined };
@@ -9,7 +10,7 @@ vi.mock('@agimon-ai/doompi-config', () => ({
   getHarnessState: () => harnessState,
 }));
 
-const { registerModelGuidanceHandlers } = await import('../../../src/adapters/pi/extension.ts');
+const { modelGuidanceEvents } = await import('../../../src/controllers/modelGuidanceEvents');
 
 type Handler = (
   event: { systemPrompt: string },
@@ -19,18 +20,8 @@ type Handler = (
 let workspace: string;
 let handler: Handler;
 
-/** Captures the single before_agent_start handler the adapter registers. */
 function registerHandler(): Handler {
-  let captured: Handler | undefined;
-  const pi = {
-    on(event: string, candidate: Handler) {
-      if (event === 'before_agent_start') captured = candidate;
-    },
-  };
-
-  registerModelGuidanceHandlers(pi as never);
-  if (!captured) throw new Error('before_agent_start handler was not registered');
-  return captured;
+  return (event, context) => modelGuidanceEvents.before_agent_start(event as never, context as never);
 }
 
 function writeRepositoryGuidance(contents: string): void {
@@ -60,9 +51,11 @@ describe('before_agent_start', () => {
     expect(handler({ systemPrompt: 'base' }, {})).toBeUndefined();
   });
 
-  it('is inert for a model id with no entry', () => {
+  it('applies the built-in GPT-6 Astra preset when no file entry overrides it', () => {
     writeRepositoryGuidance('modelGuidance:\n  claude-opus-5: Stay focused.\n');
-    expect(handler({ systemPrompt: 'base' }, { model: { id: 'gpt-6-astra' } })).toBeUndefined();
+    expect(handler({ systemPrompt: 'base' }, { model: { id: 'gpt-6-astra' } })?.systemPrompt).toContain(
+      'Continue executing an agreed plan',
+    );
   });
 
   it('is inert when the harness root is unset', () => {

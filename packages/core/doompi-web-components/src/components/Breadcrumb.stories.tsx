@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Breadcrumb } from './Breadcrumb.tsx';
+import { Breadcrumb } from './Breadcrumb';
 
 const DEEP_PATH = 'packages/core/doompi-web-components/src/components/Breadcrumb.tsx';
 

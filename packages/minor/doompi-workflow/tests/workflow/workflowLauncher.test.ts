@@ -1,7 +1,9 @@
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { type EmbeddedWorkflowFeature, type Workflow } from '@agimon-ai/workflow-mcp';
+import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createWorkflowLaunchExecutor, type WorkflowLaunchInput } from '../../src/services/workflowExecution';
 import {
   collectWorkflowInputs,
   loadWorkflowCatalog,
@@ -9,12 +11,11 @@ import {
   summarizeWorkflowFile,
   parseWorkflowCatalogPage,
   type WorkflowLauncherUi,
-} from '../../src/adapters/pi/workflow/workflowLauncher';
-import { createWorkflowLaunchExecutor, type WorkflowLaunchInput } from '../../src/adapters/pi/workflow/piTools';
+} from '../../src/services/workflowLauncher';
 
 const CWD = '/repo';
 const SESSION_ID = 'session-1';
-
+const ENVIRONMENT = Object.freeze({});
 function textResult(value: unknown, isError = false): CallToolResult {
   return { content: [{ type: 'text', text: JSON.stringify(value) }], isError };
 }
@@ -258,6 +259,7 @@ describe('createWorkflowLaunchExecutor', () => {
   it('rejects an Agiflow launch without a prompt before starting the workflow', async () => {
     const execute = vi.fn();
     const executor = createWorkflowLaunchExecutor({
+      environment: ENVIRONMENT,
       runTool: { execute } as unknown as EmbeddedWorkflowFeature['runTool'],
       trackPendingRun: <T>(run: Promise<T>) => run,
     });
@@ -281,6 +283,7 @@ describe('createWorkflowLaunchExecutor', () => {
   it('rejects partial Agiflow job identity before starting the workflow', async () => {
     const execute = vi.fn();
     const executor = createWorkflowLaunchExecutor({
+      environment: ENVIRONMENT,
       runTool: { execute } as unknown as EmbeddedWorkflowFeature['runTool'],
       trackPendingRun: <T>(run: Promise<T>) => run,
     });
@@ -309,6 +312,7 @@ describe('createWorkflowLaunchExecutor', () => {
     };
     const onUpdate = vi.fn();
     const executor = createWorkflowLaunchExecutor({
+      environment: ENVIRONMENT,
       activeRunCount: vi.fn().mockResolvedValue(0),
       onLaunch,
       observeSession,
@@ -334,6 +338,7 @@ describe('createWorkflowLaunchExecutor', () => {
   it('does not call onLaunch when the run tool reports an error', async () => {
     const onLaunch = vi.fn();
     const executor = createWorkflowLaunchExecutor({
+      environment: ENVIRONMENT,
       onLaunch,
       runTool: {
         execute: vi.fn().mockResolvedValue(textResult({ message: 'rejected' }, true)),
@@ -349,6 +354,7 @@ describe('createWorkflowLaunchExecutor', () => {
     const execute = vi.fn();
     const rejectRunner = vi.fn().mockReturnValue('runner rejected');
     const executor = createWorkflowLaunchExecutor({
+      environment: ENVIRONMENT,
       activeRunCount: vi.fn().mockResolvedValue(5),
       rejectRunner,
       runTool: { execute } as unknown as EmbeddedWorkflowFeature['runTool'],

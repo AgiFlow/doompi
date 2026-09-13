@@ -1,11 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SubagentWaiter } from '../../src/adapters/runs/background/subagentWait';
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/adapters/asyncJobTracker';
+import type {
+  AsyncJobTrackerContract,
+  TrackedAsyncJob,
+  TrackedAsyncJobsContract,
+} from '../../src/services/asyncJobTracker';
+import type { SessionScope } from '../../src/services/sessionPaths';
+import { SubagentWaiter } from '../../src/services/subagentWait';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
-/** An in-memory job tracker a test can mutate directly to simulate status.json changing over time. */
+/** An in-memory job tracker a test can mutate directly to simulate event-fed state. */
 class FakeAsyncJobTracker implements AsyncJobTrackerContract {
-  forSession() {
+  forSession(_sessionId: string, _scope: SessionScope): TrackedAsyncJobsContract {
     return this;
   }
   private readonly jobs = new Map<string, TrackedAsyncJob>();
@@ -31,7 +37,6 @@ class FakeAsyncJobTracker implements AsyncJobTrackerContract {
   reset(): void {
     this.jobs.clear();
   }
-  start(): void {}
   stop(): void {}
 }
 
@@ -40,6 +45,11 @@ class TestSubagentWaiter extends SubagentWaiter {
   protected override readonly pollIntervalMs = 50;
   protected override readonly defaultTimeoutMs = 5000;
 }
+
+const WAIT_CONTEXT = {
+  sessionId: TEST_SESSION_SCOPE.rootSessionId,
+  sessionScope: TEST_SESSION_SCOPE,
+};
 
 let tracker: FakeAsyncJobTracker;
 let waiter: TestSubagentWaiter;
@@ -62,7 +72,7 @@ async function advance(ms: number): Promise<void> {
 describe('SubagentWaiter.wait - target resolution', () => {
   it('tracks and waits on a single { id } target', async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
-    const promise = waiter.wait({ target: { id: 'run-1' } });
+    const promise = waiter.wait({ ...WAIT_CONTEXT, target: { id: 'run-1' } });
 
     tracker.setJob({ runId: 'run-1', status: 'complete' });
     await advance(50);
@@ -75,7 +85,7 @@ describe('SubagentWaiter.wait - target resolution', () => {
   it('tracks and waits on every id in an { ids } target', async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
     tracker.setJob({ runId: 'run-2', status: 'running' });
-    const promise = waiter.wait({ target: { ids: ['run-1', 'run-2'] } });
+    const promise = waiter.wait({ ...WAIT_CONTEXT, target: { ids: ['run-1', 'run-2'] } });
 
     tracker.setJob({ runId: 'run-2', status: 'complete' });
     await advance(50);
@@ -89,7 +99,7 @@ describe('SubagentWaiter.wait - target resolution', () => {
   it('waits on every run the tracker already knows about for an { all: true } target', async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
     tracker.setJob({ runId: 'run-2', status: 'running' });
-    const promise = waiter.wait({ target: { all: true } });
+    const promise = waiter.wait({ ...WAIT_CONTEXT, target: { all: true } });
 
     tracker.setJob({ runId: 'run-1', status: 'failed' });
     await advance(50);
@@ -99,13 +109,13 @@ describe('SubagentWaiter.wait - target resolution', () => {
   });
 
   it("resolves 'no-active-runs' immediately for an empty { ids: [] } target", async () => {
-    const outcome = await waiter.wait({ target: { ids: [] } });
+    const outcome = await waiter.wait({ ...WAIT_CONTEXT, target: { ids: [] } });
 
     expect(outcome).toEqual({ reason: 'no-active-runs', elapsedMs: 0, runs: [] });
   });
 
   it("resolves 'no-active-runs' immediately when none of the targeted ids have ever had a readable status", async () => {
-    const outcome = await waiter.wait({ target: { ids: ['ghost-1', 'ghost-2'] } });
+    const outcome = await waiter.wait({ ...WAIT_CONTEXT, target: { ids: ['ghost-1', 'ghost-2'] } });
 
     expect(outcome.reason).toBe('no-active-runs');
     expect(outcome.runs).toEqual([
@@ -118,7 +128,12 @@ describe('SubagentWaiter.wait - target resolution', () => {
 describe('SubagentWaiter.wait - waitFor modes', () => {
   it("waitFor: 'completion' ignores attention and waits through it for a terminal state", async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
-    const promise = waiter.wait({ target: { id: 'run-1' }, waitFor: 'completion', timeoutMs: 2000 });
+    const promise = waiter.wait({
+      ...WAIT_CONTEXT,
+      target: { id: 'run-1' },
+      waitFor: 'completion',
+      timeoutMs: 2000,
+    });
 
     tracker.setJob({ runId: 'run-1', status: 'running', activityState: 'needs_attention', attentionReason: 'x' });
     await advance(50);
@@ -133,7 +148,12 @@ describe('SubagentWaiter.wait - waitFor modes', () => {
 
   it("waitFor: 'attention' returns the instant activityState is needs_attention, before any terminal state", async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
-    const promise = waiter.wait({ target: { id: 'run-1' }, waitFor: 'attention', timeoutMs: 2000 });
+    const promise = waiter.wait({
+      ...WAIT_CONTEXT,
+      target: { id: 'run-1' },
+      waitFor: 'attention',
+      timeoutMs: 2000,
+    });
 
     tracker.setJob({
       runId: 'run-1',
@@ -163,21 +183,21 @@ describe('SubagentWaiter.wait - waitFor modes', () => {
       attentionReason: 'missing-deliverable',
     });
 
-    const completionOutcome = await waiter.wait({ target: { id: 'run-1' }, waitFor: 'completion' });
+    const completionOutcome = await waiter.wait({ ...WAIT_CONTEXT, target: { id: 'run-1' }, waitFor: 'completion' });
     expect(completionOutcome.reason).toBe('completed');
 
-    const attentionOutcome = await waiter.wait({ target: { id: 'run-1' }, waitFor: 'attention' });
+    const attentionOutcome = await waiter.wait({ ...WAIT_CONTEXT, target: { id: 'run-1' }, waitFor: 'attention' });
     expect(attentionOutcome.reason).toBe('attention');
 
     // 'any' prefers reporting attention when both are simultaneously true,
     // since it is the more actionable signal for the caller to act on.
-    const anyOutcome = await waiter.wait({ target: { id: 'run-1' } });
+    const anyOutcome = await waiter.wait({ ...WAIT_CONTEXT, target: { id: 'run-1' } });
     expect(anyOutcome.reason).toBe('attention');
   });
 
   it("waitFor: 'attention' does not resolve on a plain terminal state with no attention flag", async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
-    const promise = waiter.wait({ target: { id: 'run-1' }, waitFor: 'attention', timeoutMs: 200 });
+    const promise = waiter.wait({ ...WAIT_CONTEXT, target: { id: 'run-1' }, waitFor: 'attention', timeoutMs: 200 });
 
     tracker.setJob({ runId: 'run-1', status: 'complete' });
     await advance(200);
@@ -188,7 +208,7 @@ describe('SubagentWaiter.wait - waitFor modes', () => {
 
   it("waitFor: 'any' (the default) resolves on attention when that comes first", async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
-    const promise = waiter.wait({ target: { id: 'run-1' } });
+    const promise = waiter.wait({ ...WAIT_CONTEXT, target: { id: 'run-1' } });
 
     tracker.setJob({ runId: 'run-1', status: 'running', activityState: 'needs_attention', attentionReason: 'x' });
     await advance(50);
@@ -199,7 +219,7 @@ describe('SubagentWaiter.wait - waitFor modes', () => {
 
   it("waitFor: 'any' (the default) resolves on completion when that comes first", async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
-    const promise = waiter.wait({ target: { id: 'run-1' } });
+    const promise = waiter.wait({ ...WAIT_CONTEXT, target: { id: 'run-1' } });
 
     tracker.setJob({ runId: 'run-1', status: 'complete' });
     await advance(50);
@@ -213,7 +233,7 @@ describe('SubagentWaiter.wait - return on first, not wait for all', () => {
   it('resolves as soon as ANY targeted run satisfies waitFor, leaving the rest in flight', async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
     tracker.setJob({ runId: 'run-2', status: 'running' });
-    const promise = waiter.wait({ target: { ids: ['run-1', 'run-2'] }, timeoutMs: 2000 });
+    const promise = waiter.wait({ ...WAIT_CONTEXT, target: { ids: ['run-1', 'run-2'] }, timeoutMs: 2000 });
 
     tracker.setJob({ runId: 'run-1', status: 'complete' });
     // run-2 deliberately left running.
@@ -229,7 +249,7 @@ describe('SubagentWaiter.wait - return on first, not wait for all', () => {
 describe('SubagentWaiter.wait - timeout is a snapshot, never an error', () => {
   it('resolves (does not throw or reject) with reason timeout when nothing satisfies waitFor in time', async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
-    const promise = waiter.wait({ target: { id: 'run-1' }, timeoutMs: 300 });
+    const promise = waiter.wait({ ...WAIT_CONTEXT, target: { id: 'run-1' }, timeoutMs: 300 });
 
     await advance(300);
 
@@ -242,7 +262,7 @@ describe('SubagentWaiter.wait - timeout is a snapshot, never an error', () => {
 
   it('uses the injected default timeout when the caller does not specify one', async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
-    const promise = waiter.wait({ target: { id: 'run-1' } }); // no timeoutMs; TestSubagentWaiter defaults to 5000
+    const promise = waiter.wait({ ...WAIT_CONTEXT, target: { id: 'run-1' } }); // no timeoutMs; TestSubagentWaiter defaults to 5000
 
     await advance(4999);
     // Not yet resolved - would need to inspect a flag; instead assert the
@@ -255,7 +275,7 @@ describe('SubagentWaiter.wait - timeout is a snapshot, never an error', () => {
 
   it('treats a non-positive timeoutMs as "use the default" rather than "expire immediately"', async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
-    const promise = waiter.wait({ target: { id: 'run-1' }, timeoutMs: 0 });
+    const promise = waiter.wait({ ...WAIT_CONTEXT, target: { id: 'run-1' }, timeoutMs: 0 });
 
     tracker.setJob({ runId: 'run-1', status: 'complete' });
     await advance(50);
@@ -269,7 +289,12 @@ describe('SubagentWaiter.wait - abort signal', () => {
   it('resolves reason aborted when the signal fires before the wait condition is met', async () => {
     tracker.setJob({ runId: 'run-1', status: 'running' });
     const controller = new AbortController();
-    const promise = waiter.wait({ target: { id: 'run-1' }, signal: controller.signal, timeoutMs: 2000 });
+    const promise = waiter.wait({
+      ...WAIT_CONTEXT,
+      target: { id: 'run-1' },
+      signal: controller.signal,
+      timeoutMs: 2000,
+    });
 
     controller.abort();
     await advance(50);
@@ -283,7 +308,7 @@ describe('SubagentWaiter.wait - resolves immediately for an already-satisfied ru
   it('does not wait a single poll cycle when the target is already terminal at call time', async () => {
     tracker.setJob({ runId: 'run-1', status: 'complete' });
 
-    const outcome = await waiter.wait({ target: { id: 'run-1' } });
+    const outcome = await waiter.wait({ ...WAIT_CONTEXT, target: { id: 'run-1' } });
 
     expect(outcome.reason).toBe('completed');
     expect(outcome.elapsedMs).toBe(0);

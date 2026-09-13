@@ -1,6 +1,7 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
-import { colorStatus, statusText } from '../../src/services/statusLine.ts';
+
+import { colorStatus, statusText } from '../../src/services/statusLine';
 
 const theme = {
   fg: (color: string, text: string) => `${color}(${text})`,

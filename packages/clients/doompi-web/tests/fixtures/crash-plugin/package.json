@@ -5,6 +5,14 @@
   "type": "module",
   "doompiWeb": {
     "pluginId": "crash",
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/exports/webClient.ts",
+    "scopes": [
+      "session"
+    ]
+  },
+  "pi": {
+    "extensions": [
+      "./src/extension.ts"
+    ]
   }
 }

@@ -1,18 +1,21 @@
+import type { ComposerCapture } from '@agimon-ai/doompi-core/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ComposerCapture } from '@agimon-ai/doompi-web-contracts';
+
+import { onComposerSubmitted } from '../../src/web/lib/composerSubmissions';
+import { sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands';
 import {
   applyCaptureFrame,
   disconnectCaptures,
   onCaptureStatus,
   submitCapture,
-} from '../../src/web/stores/captureStore.ts';
-import { onComposerSubmitted } from '../../src/web/lib/composerSubmissions.ts';
-import { bindTransport, releaseTransport } from '../../src/web/lib/transport.ts';
+} from '../../src/web/stores/captureStore';
 
-vi.mock('../../src/web/stores/sessionsStore.ts', () => ({
+vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({ sendSessionProtocolFrame: vi.fn() }));
+
+vi.mock('../../src/web/stores/sessionsStore', () => ({
   sessionsStore: { state: { byId: { s1: { attach: 'attached' } } } },
 }));
-vi.mock('../../src/web/stores/sessionStore.ts', () => ({ sessionStoreFor: () => ({ state: { streaming: false } }) }));
+vi.mock('../../src/web/stores/sessionStore', () => ({ sessionStoreFor: () => ({ state: { streaming: false } }) }));
 
 const bytes = new Uint8Array(33);
 bytes.set([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]);
@@ -26,16 +29,14 @@ const capture: ComposerCapture = {
 const cleanups: (() => void)[] = [];
 afterEach(() => {
   disconnectCaptures();
-  releaseTransport();
+  vi.mocked(sendSessionProtocolFrame).mockReset();
   cleanups.splice(0).forEach((cleanup) => cleanup());
   vi.useRealTimers();
 });
 
 function setup() {
   const frames: Record<string, unknown>[] = [];
-  bindTransport((frame) => {
-    frames.push((frame as { frame: Record<string, unknown> }).frame);
-  });
+  vi.mocked(sendSessionProtocolFrame).mockImplementation((_sessionId, frame) => frames.push(frame));
   const events: string[] = [];
   cleanups.push(
     onComposerSubmitted(() => events.push('submitted')),
@@ -49,6 +50,10 @@ describe('direct capture delivery', () => {
     const { frames, events } = setup();
     const delivery = submitCapture('s1', capture);
     const command = frames[0];
+    expect(events).toEqual([]);
+    // Pi's internal request id is not the browser command id, so it cannot
+    // claim this capture as accepted.
+    applyCaptureFrame('s1', { type: 'response', id: 'pi-internal-id', success: true });
     expect(events).toEqual([]);
     applyCaptureFrame('s1', { type: 'response', id: command.id, success: true });
     await delivery;
@@ -84,17 +89,20 @@ describe('direct capture delivery', () => {
     expect(events.at(-1)).toBe('error');
   });
 
-  it('rejects RPC refusal and unconfirmed offline sends without publishing submissions', async () => {
+  it('rejects RPC refusal, unconfirmed delivery, and disconnected protocol without publishing submissions', async () => {
     vi.useFakeTimers();
     const { frames, events } = setup();
     const delivery = submitCapture('s1', capture);
     const rejected = expect(delivery).rejects.toThrow('refused');
     applyCaptureFrame('s1', { type: 'response', id: frames[0].id, success: false, error: 'refused' });
     await rejected;
-    releaseTransport();
     const offline = expect(submitCapture('s1', capture)).rejects.toThrow('not confirmed');
     await vi.advanceTimersByTimeAsync(30_000);
     await offline;
+    vi.mocked(sendSessionProtocolFrame).mockImplementation(() => {
+      throw new Error('The session protocol is not connected.');
+    });
+    await expect(submitCapture('s1', capture)).rejects.toThrow('The session protocol is not connected.');
     expect(events).toEqual([]);
   });
 

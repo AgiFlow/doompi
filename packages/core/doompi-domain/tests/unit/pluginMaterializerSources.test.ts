@@ -2,9 +2,11 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { GitPluginSource, NpmPluginSource, PluginEntry } from '@agimon-ai/doompi-config/domains';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { materializePluginEntries } from '../../src/adapters/pluginMaterializer.ts';
+
+import { materializePluginEntries } from '../../src/services/pluginMaterializer';
 
 const AGENT_PLUGIN_SCHEMA = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json';
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseDoomConfig } from '../src/services/configPolicy.ts';
+
+import { parseDoomConfig } from '../src/services/configPolicy';
 
 const FILE = '/tmp/doom-config-lenient/config.yaml';
 

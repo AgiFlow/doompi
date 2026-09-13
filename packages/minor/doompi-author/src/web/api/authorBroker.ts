@@ -1,4 +1,4 @@
-import type { ModelContext } from '@agimon-ai/doompi-web-contracts';
+import type { ModelContext } from '@agimon-ai/doompi-core/web';
 
 /** Client-side broker transport. Calls always cross Model Context's execution boundary. */
 export class AuthorClientBroker {

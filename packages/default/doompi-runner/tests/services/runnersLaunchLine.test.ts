@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { parseRunnersCommand } from '../../src/services/runs/runnersCommand.ts';
-import { launchProblems, RUNNER_SHELL_REQUEST, runnerLaunchLine } from '../../src/web/lib/launchLine.ts';
+
+import { parseRunnersCommand } from '../../src/services/runnersCommand';
+import { launchProblems, RUNNER_SHELL_REQUEST, runnerLaunchLine } from '../../src/web/lib/launchLine';
 
 /**
  * The cockpit writes the launch line and the session parses it, in different

@@ -1,11 +1,12 @@
-import type { SettingsFieldContribution } from '@agimon-ai/doompi-web-contracts';
+import type { SettingsFieldContribution } from '@agimon-ai/doompi-core/web';
 import { describe, expect, it } from 'vitest';
+
 import {
   canSaveSettings,
   plannedSettingsWrites,
   settingsKeyOf,
   settingsLockedReason,
-} from '../../src/web/lib/settingsDraft.ts';
+} from '../../src/web/lib/settingsDraft';
 
 /**
  * The rules a settings page runs on.
@@ -106,4 +107,25 @@ describe('the key a field writes', () => {
   it('is the dotted form the routes answer by', () => {
     expect(settingsKeyOf(MODEL)).toBe('modes.planning.main.model');
   });
+});
+
+it('preserves numeric settings as numbers without turning invalid drafts into clears', () => {
+  const field: SettingsFieldContribution = {
+    id: 'timeout',
+    label: 'Timeout',
+    kind: 'number',
+    keyPath: ['voice', 'autoCapture', 'utteranceIdleMs'],
+  };
+  const planned = (value: string | null) =>
+    plannedSettingsWrites({
+      fields: [field],
+      drafts: { 'voice.autoCapture.utteranceIdleMs': value },
+      scope: 'global',
+      repoRoot: '',
+      startingHash: 'hash',
+    })[0];
+  expect(planned('3500')?.value).toBe(3500);
+  expect(planned(null)?.value).toBeNull();
+  expect(planned('invalid')?.value).toBe('invalid');
+  expect(planned('Infinity')?.value).toBe('Infinity');
 });

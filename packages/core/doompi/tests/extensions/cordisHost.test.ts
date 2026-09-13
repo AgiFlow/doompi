@@ -1,4 +1,4 @@
-import { connectDoomCordisHost, DOOM_CORDIS_SESSION_SERVICE } from '@agimon-ai/doompi-extension-contracts/cordis-host';
+import { connectDoomCordisHost, DOOM_CORDIS_SESSION_SERVICE } from '@agimon-ai/doompi-core/cordis-host';
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -6,8 +6,9 @@ import type {
   SessionStartEvent,
 } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
-import cordisFinalizerExtension from '../../src/extensions/entries/cordisFinalizer.ts';
-import cordisHostExtension from '../../src/extensions/entries/cordisHost.ts';
+
+import cordisFinalizerExtension from '../../src/extensions/cordisFinalizer';
+import cordisHostExtension from '../../src/extensions/cordisHost';
 
 type Handler = (event: never, context: ExtensionContext) => unknown;
 
@@ -45,7 +46,7 @@ describe('composed Cordis boundary entries', () => {
   it('opens first, provides the session, and finalizes last with idempotent cleanup', async () => {
     const { pi, dispatch } = setup();
     await cordisHostExtension(pi);
-    const feature = await connectDoomCordisHost(pi, '@test/feature', { allowStandalone: false });
+    const feature = await connectDoomCordisHost(pi, '@test/feature');
     await cordisFinalizerExtension(pi);
 
     await dispatch({ type: 'session_start', reason: 'startup' });

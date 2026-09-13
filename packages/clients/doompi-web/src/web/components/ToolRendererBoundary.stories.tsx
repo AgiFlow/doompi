@@ -7,7 +7,7 @@
  * that throws: React catches it, re-runs the render prop with `failed`, and
  * the host item stands in. The throw is logged once by componentDidCatch.
  */
-import { ToolRendererBoundary } from './ToolRendererBoundary.tsx';
+import { ToolRendererBoundary } from './ToolRendererBoundary';
 
 function PluginItem() {
   return (

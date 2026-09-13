@@ -1,10 +1,11 @@
 // @scaffold-generated
 import { describe, expect, it } from 'vitest';
+
 import {
   computerStateCallSummary,
   computerStateResultLines,
   computerStateToolName,
-} from '../../src/web/lib/computerStateToolRender.ts';
+} from '../../src/web/lib/computerStateToolRender';
 
 describe('the computer_state tool view', () => {
   it('names the tool the package registers', () => {

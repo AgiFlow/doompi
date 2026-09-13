@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   type ContextItem,
   contextGroups,
   ownerLabel,
   ownersOf,
   totalTokens,
-} from '../../src/web/lib/contextComposition.ts';
+} from '../../src/web/lib/contextComposition';
 
 // The same live capture the status-line parser is tested against, so the
 // grouping is driven by what DoomPi really publishes rather than a guess.

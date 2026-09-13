@@ -28,9 +28,9 @@
 
 ### 🧱 Updated Dependencies
 
-- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.67
 - Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.27
-- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-core/web to 0.0.1-alpha.30
 - Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.29
 - Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.64
 
@@ -58,9 +58,9 @@
 
 ### 🧱 Updated Dependencies
 
-- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.66
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.66
 - Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.26
-- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.29
+- Updated @agimon-ai/doompi-core/web to 0.0.1-alpha.29
 - Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.28
 - Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.63
 
@@ -87,9 +87,9 @@
 
 ### 🧱 Updated Dependencies
 
-- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.65
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.65
 - Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.25
-- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.28
+- Updated @agimon-ai/doompi-core/web to 0.0.1-alpha.28
 - Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.27
 - Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.62
 
@@ -116,9 +116,9 @@
 
 ### 🧱 Updated Dependencies
 
-- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.64
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.64
 - Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.24
-- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.27
+- Updated @agimon-ai/doompi-core/web to 0.0.1-alpha.27
 - Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.26
 - Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.61
 
@@ -145,9 +145,9 @@
 
 ### 🧱 Updated Dependencies
 
-- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.63
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.63
 - Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.23
-- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.26
+- Updated @agimon-ai/doompi-core/web to 0.0.1-alpha.26
 - Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.25
 - Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.60
 
@@ -174,9 +174,9 @@
 
 ### 🧱 Updated Dependencies
 
-- Updated @agimon-ai/doompi-extension-contracts to 0.0.1-alpha.62
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.62
 - Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.22
-- Updated @agimon-ai/doompi-web-contracts to 0.0.1-alpha.25
+- Updated @agimon-ai/doompi-core/web to 0.0.1-alpha.25
 - Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.24
 - Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.59
 

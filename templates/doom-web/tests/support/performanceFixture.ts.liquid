@@ -1,0 +1,72 @@
+import type { HeadlessSession, Frame } from './headlessSession.ts';
+
+export const PERFORMANCE_BACKLOG_LIMIT = 2_000;
+export const PERFORMANCE_MARKERS = { large: 'PERF_LARGE_READY', small: 'PERF_SMALL_READY' } as const;
+export type PerformanceWorkload = keyof typeof PERFORMANCE_MARKERS;
+
+/** Fixed logical input, shared by correctness tests and production browser profiling. */
+export function performanceEntries(workload: PerformanceWorkload): Frame[] {
+  const turns = workload === 'large' ? 140 : 2;
+  const entries: Frame[] = [];
+  const paragraph = 'Verified state stays ordered while the focused session changes. '.repeat(12);
+  for (let index = 0; index < turns; index += 1) {
+    const prefix = `perf-${workload}-${String(index)}`;
+    entries.push({
+      id: `${prefix}-user`,
+      type: 'message',
+      message: { role: 'user', content: [{ type: 'text', text: `Review fixture turn ${String(index)}.` }] },
+    });
+    const content: Frame[] = [
+      { type: 'thinking', thinking: `Checking turn ${String(index)} without changing session identity.` },
+      {
+        type: 'text',
+        text: [
+          `## Fixture turn ${String(index)}`,
+          paragraph,
+          '- [x] Preserve order\n- [ ] Confirm the next update',
+          '| State | Result |\n| --- | --- |\n| idle | verified |',
+          '```ts\nconst session = { phase: "idle", ready: true };\n```',
+          'Inspect `README.md` or [the reference](https://example.com/reference).',
+          index === turns - 1 ? PERFORMANCE_MARKERS[workload] : '',
+        ].join('\n\n'),
+      },
+    ];
+    const withTool = workload === 'large' && index % 14 === 0;
+    if (withTool)
+      content.push({ type: 'toolCall', id: `${prefix}-tool`, name: 'read', arguments: { path: 'README.md' } });
+    entries.push({ id: `${prefix}-assistant`, type: 'message', message: { role: 'assistant', content } });
+    if (withTool) {
+      entries.push({
+        id: `${prefix}-result`,
+        type: 'message',
+        message: {
+          role: 'toolResult',
+          toolCallId: `${prefix}-tool`,
+          toolName: 'read',
+          content: [{ type: 'text', text: `Fixture file result ${String(index)}.` }],
+          isError: false,
+        },
+      });
+    }
+  }
+  return entries;
+}
+
+export function seedPerformanceSession(session: HeadlessSession, workload: PerformanceWorkload): void {
+  session.emit({
+    type: 'response',
+    command: 'get_entries',
+    success: true,
+    data: { entries: performanceEntries(workload) },
+  });
+  const statusFrames = workload === 'large' ? 1_000 : 1;
+  for (let index = 0; index < statusFrames; index += 1) {
+    session.emit({
+      type: 'extension_ui_request',
+      method: 'setStatus',
+      statusKey: 'performance',
+      statusText: String(index),
+    });
+  }
+  session.emit({ type: 'agent_settled' });
+}

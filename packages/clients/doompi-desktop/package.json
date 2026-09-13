@@ -27,7 +27,7 @@
     "build": "pnpm run build:native && tsdown",
     "build:native": "node scripts/buildMacComputerUseHelper.mjs",
     "build:runtime": "vite build --config vite.runtime.config.ts && node scripts/downloadCloudflared.mjs",
-    "package": "pnpm run build && pnpm run build:runtime && npx --yes electron-builder@26.0.12 --config electron-builder.yml --publish never",
+    "package": "node scripts/assertDesktopTarget.mjs && pnpm run build && pnpm run build:runtime && node scripts/packageElectron.mjs",
     "start": "pnpm run build && pnpm run build:runtime && electron dist/bin/main.cjs",
     "test": "vitest --run",
     "test:e2e": "playwright test",
@@ -35,10 +35,12 @@
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
+  "dependencies": {
+    "@agimon-ai/doompi-config": "workspace:*"
+  },
   "devDependencies": {
     "@agimon-ai/doompi": "workspace:*",
     "@agimon-ai/doompi-config": "workspace:*",
-    "@agimon-ai/doompi-server": "workspace:*",
     "@agimon-ai/doompi-web": "workspace:*",
     "@playwright/test": "1.62.1",
     "@types/node": "26.4.1",

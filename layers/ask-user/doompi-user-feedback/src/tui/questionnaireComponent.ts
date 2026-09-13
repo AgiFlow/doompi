@@ -11,8 +11,9 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from '@earendil-works/pi-tui';
-import type { QuestionData, QuestionParams } from '../schemas/questionnaire.js';
-import type { ExternalEditResult, QuestionAnswer, QuestionnaireResult } from '../types/questionnaire.js';
+
+import type { QuestionData, QuestionParams } from '../schemas/questionnaire';
+import type { ExternalEditResult, QuestionAnswer, QuestionnaireResult } from '../types/questionnaire';
 
 export interface QuestionnaireComponentOptions {
   tui: TUI;

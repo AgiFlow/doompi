@@ -4,7 +4,7 @@
  * and fetches it, so outside a running cockpit only the pending and failed
  * states are reachable; the loaded state needs the session file endpoint.
  */
-import { AuthorMediaPreview } from './AuthorMediaPreview.tsx';
+import { AuthorMediaPreview } from './AuthorMediaPreview';
 
 const meta = {
   title: 'Author/AuthorMediaPreview',

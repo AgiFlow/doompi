@@ -1,15 +1,16 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 /*
  * Plain CSF objects; the style-system renderer resolves the default export by
  * looking for a bare `const meta`. The panel reads the focused document out of
  * the workspace store, so each variant seeds its own session through the
  * store's public mutations rather than faking the state shape.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
-import type { AuthorDocumentInput } from '../lib/authorViewportTypes.ts';
-import { updateAuthorGridGeometry } from '../lib/authorGrid.ts';
-import { addAuthorRegion, focusAuthorDocument, putAuthorDocument } from '../stores/authorWorkspaceStore.ts';
-import { AuthorPanel } from './AuthorPanel.tsx';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { updateAuthorGridGeometry } from '../lib/authorGrid';
+import type { AuthorDocumentInput } from '../lib/authorViewportTypes';
+import { addAuthorRegion, focusAuthorDocument, putAuthorDocument } from '../stores/authorWorkspaceStore';
+import { AuthorPanel } from './AuthorPanel';
 
 const SPEC: AuthorDocumentInput = {
   path: 'docs/spec.md',

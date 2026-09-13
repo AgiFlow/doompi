@@ -9,7 +9,7 @@ vi.mock('@agimon-ai/doompi-web-security/browser', () => ({
   sealedTransport: { active: mocks.active, fetch: mocks.fetch },
 }));
 
-import { activateVerifiedPluginComposition } from '../../src/pwa/workerClient.ts';
+import { activateVerifiedPluginComposition } from '../../src/pwa/workerClient';
 
 const composition = {
   id: 'a'.repeat(64),

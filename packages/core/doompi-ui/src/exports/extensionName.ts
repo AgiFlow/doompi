@@ -3,4 +3,4 @@ export {
   extensionPackageName,
   extensionToolSource,
   withExtensionSource,
-} from '../adapters/pi/extensionName.ts';
+} from '../services/extensionSource';

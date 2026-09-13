@@ -1,11 +1,12 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
+
+import { parseBundleAssetPolicy } from '@agimon-ai/doompi-core/web';
+import { bundleAssetPolicyPlugin } from '@agimon-ai/doompi/builders/web';
 import { build } from 'vite';
 import { describe, expect, it } from 'vitest';
-import { bundleAssetPolicyPlugin } from '../../src/adapters/bundleAssetPolicy.ts';
-import { parseBundleAssetPolicy } from '../../src/types/bundleAssetPolicy.ts';
 
 const requireFromComponents = createRequire(
   new URL('../../../../core/doompi-web-components/package.json', import.meta.url),

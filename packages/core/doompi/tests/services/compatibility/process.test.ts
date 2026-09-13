@@ -2,7 +2,9 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   acquireDirectoryLock,
   forwardSignals,
@@ -14,7 +16,7 @@ import {
   runInteractive,
   signalExitCode,
   waitForExit,
-} from '../../../src/exports/services/compatibility/process';
+} from '../../../src/exports/process';
 
 const NODE = process.execPath;
 const SIGINT: NodeJS.Signals = 'SIGINT';

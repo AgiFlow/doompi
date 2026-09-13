@@ -2,9 +2,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { bundleCockpitWeb } from '@agimon-ai/doompi/builders/web';
 import { afterEach, describe, expect, it } from 'vitest';
-import { bundleCockpitWeb } from '../../src/adapters/webBundler.ts';
-import { loadHubChannels } from '../../src/adapters/webHubPluginLoader.ts';
 
 const workflowRoot = fileURLToPath(new URL('../../../../minor/doompi-workflow', import.meta.url));
 const planRoot = fileURLToPath(new URL('../../../../minor/doompi-plan', import.meta.url));
@@ -98,7 +98,7 @@ afterEach(() => {
 });
 
 describe('the sync-time cockpit bundler', () => {
-  it('bundles the shell with an installed plugin and hands the hub its channels', { timeout: 120_000 }, async () => {
+  it('bundles the shell with an installed browser plugin', { timeout: 120_000 }, async () => {
     const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-bundle-'));
     cleanups.push(() => fs.rmSync(outDir, { recursive: true, force: true }));
     const notices: string[] = [];
@@ -108,16 +108,17 @@ describe('the sync-time cockpit bundler', () => {
     // and the bundle still builds from the rest.
     const malformed = brokenPackage({
       name: 'malformed',
-      doompiWeb: { pluginId: 'Bad Case', client: './web/index.ts' },
+      doompiWeb: { scopes: ['session'], pluginId: 'Bad Case', client: './web/index.ts' },
     });
     const entryless = brokenPackage({
       name: 'entryless',
-      doompiWeb: { pluginId: 'entryless', client: './web/index.ts' },
+      doompiWeb: { scopes: ['session'], pluginId: 'entryless', client: './web/index.ts' },
     });
 
     // The real thing: Vite compiles the host shell plus doompi-workflow's
     // shipped web source, discovered from its doompiWeb manifest alone.
     const result = await bundleCockpitWeb({
+      hostRoot: fileURLToPath(new URL('../..', import.meta.url)),
       pluginRoots: [teamRoot, malformed, workflowRoot, entryless, planRoot],
       outDir,
       onNotice: (message) => notices.push(message),
@@ -133,7 +134,6 @@ describe('the sync-time cockpit bundler', () => {
     expect(bundledJsHas(result.assetsDir, 'no subagent runs yet')).toBe(true);
     expect(fs.existsSync(path.join(result.assetsDir, 'index.html'))).toBe(true);
     expect(fs.existsSync(path.join(result.assetsDir, 'webPlugins.server.json'))).toBe(false);
-    expect(fs.existsSync(path.join(outDir, 'webPlugins.server.json'))).toBe(true);
 
     const compositionScript = fs.readFileSync(path.join(result.pluginsDir, 'composition.js'), 'utf8');
     expect(fs.readFileSync(path.join(result.pluginsDir, 'index.html'), 'utf8')).not.toContain('<script');
@@ -161,15 +161,6 @@ describe('the sync-time cockpit bundler', () => {
     // Tailwind scanned the plugin sources too: the subagents grid uses an
     // auto-fill column template the host shell never does.
     expect(bundledCssHas(result.assetsDir, 'auto-fill')).toBe(true);
-
-    // The hub loads the plugin's built channel from the registry the bundle carries.
-    const channels = await loadHubChannels(result.assetsDir, (message) => notices.push(message));
-    expect(channels.map((channel) => channel.frameType)).toEqual([
-      'subagent_runs',
-      'subagent_catalog',
-      'workflow_runs',
-      'workflow_catalog',
-    ]);
   });
 
   it('resolves an installed plugin to the host sealed transport singleton', { timeout: 120_000 }, async () => {
@@ -180,7 +171,11 @@ describe('the sync-time cockpit bundler', () => {
     expect(fs.realpathSync(installed.publicSecurityRoot)).toBe(fs.realpathSync(installed.physicalSecurityRoot));
     expect(fs.realpathSync(installed.physicalSecurityRoot)).not.toBe(fs.realpathSync(securityPackageRoot));
 
-    const result = await bundleCockpitWeb({ pluginRoots: [installed.pluginRoot], outDir });
+    const result = await bundleCockpitWeb({
+      hostRoot: fileURLToPath(new URL('../..', import.meta.url)),
+      pluginRoots: [installed.pluginRoot],
+      outDir,
+    });
 
     expect(result.pluginIds).toContain('security-singleton-probe');
     expect(bundledJsHas(result.assetsDir, 'security-singleton-probe')).toBe(true);
@@ -192,7 +187,11 @@ describe('the sync-time cockpit bundler', () => {
     const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-voice-bundle-'));
     cleanups.push(() => fs.rmSync(outDir, { recursive: true, force: true }));
 
-    const result = await bundleCockpitWeb({ pluginRoots: [voiceRoot], outDir });
+    const result = await bundleCockpitWeb({
+      hostRoot: fileURLToPath(new URL('../..', import.meta.url)),
+      pluginRoots: [voiceRoot],
+      outDir,
+    });
     const pluginFiles = filesBelow(result.pluginsDir);
     const bundledJavaScript = pluginFiles
       .filter((file) => file.endsWith('.js'))
@@ -211,22 +210,5 @@ describe('the sync-time cockpit bundler', () => {
     expect(compositionScript).not.toContain('{}.url');
     expect(compositionScript).not.toContain('new URL(`/assets/');
     expect(compositionScript).not.toContain('../models/silero_vad_v6.2.1.onnx');
-  });
-  it('serves zero channels for assets without a registry, since nothing is built in', async () => {
-    const channels = await loadHubChannels('/nonexistent-assets', () => undefined);
-    expect(channels).toEqual([]);
-  });
-
-  it('treats a registry naming a missing hub entry as a notice, not a crash', async () => {
-    const assetsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-registry-'));
-    cleanups.push(() => fs.rmSync(assetsDir, { recursive: true, force: true }));
-    fs.writeFileSync(
-      path.join(assetsDir, 'webPlugins.server.json'),
-      JSON.stringify([{ pluginId: 'ghost', channels: ['ghost_runs'], hubEntry: '/nowhere/dist/webHub.mjs' }]),
-    );
-    const notices: string[] = [];
-    const channels = await loadHubChannels(assetsDir, (message) => notices.push(message));
-    expect(channels).toEqual([]);
-    expect(notices.some((message) => message.includes("web plugin 'ghost' hub channels unavailable"))).toBe(true);
   });
 });

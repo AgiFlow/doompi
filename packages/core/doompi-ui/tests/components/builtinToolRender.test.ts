@@ -1,6 +1,7 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { Text } from '@earendil-works/pi-tui';
 import { describe, expect, it } from 'vitest';
+
 import {
   type EditToolResult,
   frameBuiltinResult,
@@ -13,7 +14,7 @@ import {
   renderReadCall,
   renderReadResult,
   renderWriteCall,
-} from '../../src/tui/builtinToolRender.ts';
+} from '../../src/tui/builtinToolRender';
 
 function plainTheme(): Theme {
   const identity = (text: string): string => text;

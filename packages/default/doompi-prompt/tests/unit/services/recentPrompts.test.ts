@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createRecentPrompts, RECENT_PROMPT_LIMIT } from '../../../src/services/recentPrompts.ts';
+
+import { RECENT_PROMPT_LIMIT } from '../../../src/constants/recentPrompts';
+import { createRecentPrompts } from '../../../src/models/recentPrompts';
 
 describe('the staged prompt ring', () => {
   it('lists the newest prompt first', () => {

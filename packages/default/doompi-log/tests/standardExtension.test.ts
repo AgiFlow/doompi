@@ -1,10 +1,7 @@
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import {
-  createDoomReadinessCoordinator,
-  DOOM_READINESS_SERVICE,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { createDoomReadinessCoordinator, DOOM_READINESS_SERVICE } from '@agimon-ai/doompi-core/readiness';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const lifecycleMocks = vi.hoisted(() => ({
@@ -18,7 +15,7 @@ const lifecycleMocks = vi.hoisted(() => ({
 }));
 const cordisRoots: Context[] = [];
 
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
+vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
   connectDoomCordisHost: async () => {
     const root = lifecycleMocks.createCordisRoot() as Context;
     await lifecycleMocks.prepareCordisRoot(root);
@@ -33,7 +30,7 @@ vi.mock('@agimon-ai/doompi-telemetry', () => ({
   createDoomTelemetry: lifecycleMocks.createTelemetry,
 }));
 
-const { doomLogExtension } = await import('../src/adapters/pi/extension.ts');
+const { doomLogExtension } = await import('../src/extensions/pi');
 
 function createContext(sessionId: string): ExtensionContext {
   return {
@@ -47,17 +44,24 @@ function createPi(): {
   pi: ExtensionAPI;
   handler(name: string): (...args: unknown[]) => unknown;
 } {
-  const handlers = new Map<string, (...args: unknown[]) => unknown>();
+  const handlers = new Map<string, Array<(...args: unknown[]) => unknown>>();
   return {
     pi: {
       events: {},
-      on: (name: string, handler: (...args: unknown[]) => unknown) => handlers.set(name, handler),
+      on: (name: string, handler: (...args: unknown[]) => unknown) => {
+        const list = handlers.get(name) ?? [];
+        list.push(handler);
+        handlers.set(name, list);
+      },
       registerCommand: vi.fn(),
     } as unknown as ExtensionAPI,
     handler(name: string) {
       const handler = handlers.get(name);
       if (!handler) throw new Error(`Missing ${name} handler.`);
-      return handler;
+      if (handler.length === 1) return handler[0]!;
+      return async (...args: unknown[]) => {
+        for (const invoke of handler) await invoke(...args);
+      };
     },
   };
 }

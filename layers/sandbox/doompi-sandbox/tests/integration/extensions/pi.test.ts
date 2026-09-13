@@ -1,11 +1,12 @@
 // @scaffold-generated
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { COMMAND_NAME } from '../../../src/commands/doomSandboxCommand.ts';
-import { activateSandboxExtension } from '../../../src/adapters/pi/extension.ts';
-import type { SandboxExtensionService } from '../../../src/types/extension.ts';
+
+import { COMMAND_NAME } from '../../../src/constants/sandbox';
+import { activateSandboxExtension } from '../../../src/extensions/pi';
+import type { SandboxExtensionService } from '../../../src/types/extension';
 
 interface CommandDefinition {
   handler: (
@@ -14,11 +15,11 @@ interface CommandDefinition {
   ) => Promise<void>;
 }
 
-function createPiFixture(): {
+async function createPiFixture(): Promise<{
   commands: Map<string, CommandDefinition>;
   listeners: Map<string, () => void | Promise<void>>;
   pi: ExtensionAPI;
-} {
+}> {
   const commands = new Map<string, CommandDefinition>();
   const listeners = new Map<string, () => void | Promise<void>>();
   const eventHandlers = new Map<string, Set<(payload: unknown) => void>>();
@@ -35,14 +36,16 @@ function createPiFixture(): {
       },
     },
     on: vi.fn((event: string, listener: () => void) => listeners.set(event, listener)),
+    registerProvider: vi.fn(),
     registerCommand: vi.fn((name: string, definition: CommandDefinition) => commands.set(name, definition)),
   } as unknown as ExtensionAPI;
+  await installDoomCordisHost(pi, { mode: 'composed', source: 'sandbox-test-host' });
   return { commands, listeners, pi };
 }
 
 describe('doompi-sandbox Pi extension', () => {
   it('injects its service into the standalone command', async () => {
-    const fixture = createPiFixture();
+    const fixture = await createPiFixture();
     const service: SandboxExtensionService = {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
@@ -56,7 +59,7 @@ describe('doompi-sandbox Pi extension', () => {
   });
 
   it('is headless-safe', async () => {
-    const fixture = createPiFixture();
+    const fixture = await createPiFixture();
     const service: SandboxExtensionService = {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
@@ -69,7 +72,7 @@ describe('doompi-sandbox Pi extension', () => {
   });
 
   it('installs once per host and permits the next Pi runtime after shutdown', async () => {
-    const fixture = createPiFixture();
+    const fixture = await createPiFixture();
 
     await activateSandboxExtension(fixture.pi);
     await fixture.listeners.get('session_shutdown')?.();
@@ -80,7 +83,7 @@ describe('doompi-sandbox Pi extension', () => {
   });
 
   it('follows optional Help provider replacement and withdraws its contribution on shutdown', async () => {
-    const fixture = createPiFixture();
+    const fixture = await createPiFixture();
     await activateSandboxExtension(fixture.pi);
     const connection = await connectDoomCordisHost(fixture.pi, 'doompi-sandbox-help-test');
     const firstService = createDoomHelpService('doompi-sandbox-help-first');
@@ -90,7 +93,7 @@ describe('doompi-sandbox Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-sandbox',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-use-sandbox',

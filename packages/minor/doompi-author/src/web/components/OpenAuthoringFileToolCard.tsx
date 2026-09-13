@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   Button,
   MessageItem,
@@ -6,8 +7,8 @@ import {
   MessageItemStatus,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { authorFileTab } from './AuthorDocumentPanel.tsx';
+
+import { authorFileTab } from './AuthorDocumentPanel';
 
 export function openAuthoringFileTab(
   path: string,

@@ -1,6 +1,7 @@
-import type { ToolRendererContribution } from '@agimon-ai/doompi-web-contracts';
-import { IntercomToolMessage } from './IntercomToolMessage.tsx';
-import { SubagentToolMessage } from './SubagentToolMessage.tsx';
+import type { ToolRendererContribution } from '@agimon-ai/doompi-core/web';
+
+import { IntercomToolMessage } from './IntercomToolMessage';
+import { SubagentToolMessage } from './SubagentToolMessage';
 
 /**
  * The timeline items for this package's tools. structured_output is left

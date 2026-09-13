@@ -1,7 +1,7 @@
-export type { DoomConfigEdit, WriteDoomConfigOptions } from '../adapters/configWriter.ts';
 export {
-  type DoomConfigScope,
   setDoomConfigValue,
   unsetDoomConfigValue,
   writeDoomConfigValues,
-} from '../adapters/configWriter.ts';
+  type DoomConfigScope,
+} from '../services/configWriter';
+export type { DoomConfigEdit, WriteDoomConfigOptions } from '../services/configWriter';

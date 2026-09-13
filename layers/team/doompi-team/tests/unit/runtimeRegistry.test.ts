@@ -6,7 +6,7 @@ import {
   isPiRuntime,
   resolveRuntimeLaunch,
   resolveRuntimeTable,
-} from '../../src/adapters/runs/shared/runtimeRegistry';
+} from '../../src/services/runtimeRegistry';
 
 const values = { prompt: 'do the thing', cwd: '/work' };
 

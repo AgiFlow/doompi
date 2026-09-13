@@ -9,9 +9,10 @@
  * Only one panel is given a repository: the settings store is a module
  * singleton keyed by repository id, so two loaded panels would fight over it.
  */
-import type { RepositorySettingsPanelProps } from '@agimon-ai/doompi-web-contracts';
-import type { McpRepositoryCatalog } from '../../types/webMcp.ts';
-import { McpRepositorySettingsPanel } from './McpRepositorySettingsPanel.tsx';
+import type { RepositorySettingsPanelProps } from '@agimon-ai/doompi-core/web';
+
+import type { McpRepositoryCatalog } from '../../types/webMcp';
+import { McpRepositorySettingsPanel } from './McpRepositorySettingsPanel';
 
 const catalog: McpRepositoryCatalog = {
   repositoryId: 'repo-1',

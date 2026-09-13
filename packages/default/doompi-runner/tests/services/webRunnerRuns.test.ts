@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  FINISHED_RUNNER_RETENTION_MS,
-  parseRunnerRecord,
-  presentRunnerRuns,
-  toRunnerRunView,
-} from '../../src/services/webRunnerRuns.ts';
+
+import { FINISHED_RUNNER_RETENTION_MS } from '../../src/constants/webRunnerRuns';
+import { parseRunnerRecord, presentRunnerRuns, toRunnerRunView } from '../../src/services/webRunnerRuns';
 import type { RunnerRecord } from '../../src/types/runnerRegistry';
 
 const NOW = Date.parse('2026-08-24T12:00:00.000Z');

@@ -2,8 +2,10 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { NodeGitStatusAdapter } from '../../../src/adapters/node/gitStatus.ts';
+
+import { NodeGitStatusAdapter } from '../../../src/services/gitStatus';
 
 let root: string;
 const adapter = new NodeGitStatusAdapter();

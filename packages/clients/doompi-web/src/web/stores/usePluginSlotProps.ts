@@ -1,14 +1,15 @@
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { useCallback, useMemo } from 'react';
-import { minorModes } from '../lib/composition.ts';
-import { pluginSlotProps } from '../lib/pluginSlotProps.ts';
-import { submitCapture } from './captureStore.ts';
-import { appendComposerDraft, attachComposerCapture, attachComposerContext } from './composerStore.ts';
-import { sessionStoreFor } from './sessionStore.ts';
-import { closeTransientTab, openTransientTab } from './transientTabsStore.ts';
-import { useOpenTab } from './useOpenTab.ts';
-import { useWebPluginRegistry } from './useWebPluginRegistry.ts';
+
+import { minorModes } from '../lib/composition';
+import { pluginSlotProps } from '../lib/pluginSlotProps';
+import { submitCapture } from './captureStore';
+import { appendComposerDraft, attachComposerCapture, attachComposerContext } from './composerStore';
+import { sessionStoreFor } from './sessionStore';
+import { closeTransientTab, openTransientTab } from './transientTabsStore';
+import { useOpenTab } from './useOpenTab';
+import { useWebPluginRegistry } from './useWebPluginRegistry';
 /** The props a plugin component receives for a session, with the host's navigation and facts bound in. */
 export function usePluginSlotProps(sessionId: string | null, onOpen?: () => void): WebPluginSlotProps {
   const store = sessionStoreFor(sessionId);

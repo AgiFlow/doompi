@@ -2,9 +2,10 @@ import type { NodeTelemetryHandle, NodeTelemetryOptions } from '@agimon-ai/log-s
 import type { ExtensionAPI, ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import type { TUI } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { LogMetricsAggregator } from '../src/services/metrics.ts';
-import { LogMetricsOverlayComponent, type LogMetricsView } from '../src/tui/logMetricsOverlay.ts';
-import { installLogTestRuntime } from './helpers/extensionRuntime.ts';
+
+import { LogMetricsAggregator } from '../src/services/metrics';
+import { LogMetricsOverlayComponent, type LogMetricsView } from '../src/tui/logMetricsOverlay';
+import { installLogTestRuntime } from './helpers/extensionRuntime';
 
 type Handler = (event: Record<string, unknown>, context: ExtensionContext) => Promise<void>;
 type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void>;

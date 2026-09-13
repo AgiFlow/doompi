@@ -1,10 +1,9 @@
+import type { ExtensionAPI, MessageRenderOptions, Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 
-import type { ExtensionAPI, MessageRenderOptions, Theme } from '@earendil-works/pi-coding-agent';
-
-import type { CompletionNotifyDetails } from '../../src/adapters/runs/background/notify';
-import { SUBAGENT_NOTIFY_MESSAGE_TYPE } from '../../src/adapters/runs/background/notify';
-import { registerCompletionRenderer, renderCompletionNotice } from '../../src/adapters/pi/tui/completionNotice';
+import type { CompletionNotifyDetails } from '../../src/services/notify';
+import { SUBAGENT_NOTIFY_MESSAGE_TYPE } from '../../src/services/notify';
+import { createCompletionRenderer, renderCompletionNotice } from '../../src/tui/completionNotice';
 
 /**
  * Identity theme: every assertion here is about WHAT text is emitted and
@@ -139,7 +138,7 @@ describe('registerCompletionRenderer', () => {
 
   it('registers under the same custom type the notifier sends', () => {
     const { pi, render } = fakePi();
-    registerCompletionRenderer(pi);
+    pi.registerMessageRenderer(...createCompletionRenderer());
 
     // The type assertion lives inside `render`; reaching it at all proves the
     // registration happened under the shared token.
@@ -148,7 +147,7 @@ describe('registerCompletionRenderer', () => {
 
   it('renders from structured details, not from the formatted content', () => {
     const { pi, render } = fakePi();
-    registerCompletionRenderer(pi);
+    pi.registerMessageRenderer(...createCompletionRenderer());
 
     // Content and details deliberately disagree: if the renderer ever went
     // back to parsing content, this would surface the wrong agent name.
@@ -160,7 +159,7 @@ describe('registerCompletionRenderer', () => {
 
   it('falls back to raw content when a message carries no details', () => {
     const { pi, render } = fakePi();
-    registerCompletionRenderer(pi);
+    pi.registerMessageRenderer(...createCompletionRenderer());
 
     const component = render(undefined, 'Background task completed: **legacy**');
 
@@ -169,7 +168,7 @@ describe('registerCompletionRenderer', () => {
 
   it('ignores a details field that is not an array of completion details', () => {
     const { pi, render } = fakePi();
-    registerCompletionRenderer(pi);
+    pi.registerMessageRenderer(...createCompletionRenderer());
 
     const component = render([{ notAgent: true }], 'raw content wins');
 

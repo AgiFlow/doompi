@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resolveVoiceCommandCorrector } from '../src/adapters/pi/voice.ts';
+
+import { resolveVoiceCommandCorrector } from '../src/controllers/voice';
 import {
   compactVoiceCommandContext,
   MAX_VOICE_COMMAND_CONTEXT_BYTES,
   type VoiceCommandCorrectionModelRequest,
   VoiceCommandCorrector,
-} from '../src/services/commandCorrection.ts';
+} from '../src/services/commandCorrection';
 
 function modelReturning(output: string) {
   const complete = vi.fn(async (_request: VoiceCommandCorrectionModelRequest) => output);

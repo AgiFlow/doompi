@@ -19,7 +19,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from './DropdownMenu.tsx';
+} from './DropdownMenu';
 
 const meta = {
   title: 'Components/DropdownMenu',

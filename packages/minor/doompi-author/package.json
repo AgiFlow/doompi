@@ -30,7 +30,7 @@
     "src/types/author.ts",
     "src/types/webAuthor.ts",
     "src/types/structuredDocuments.ts",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "src/prompts",
     "llms.txt",
     "README.md",
@@ -53,17 +53,17 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
-    "./session-api": {
-      "types": "./dist/sessionApi.d.mts",
-      "import": "./dist/sessionApi.mjs",
-      "require": "./dist/sessionApi.cjs"
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
     },
-    "./web-hub": {
-      "types": "./dist/webHub.d.mts",
-      "import": "./dist/webHub.mjs",
-      "require": "./dist/webHub.cjs"
-    },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./author-facade": {
+      "types": "./dist/authorFacade.d.mts",
+      "import": "./dist/authorFacade.mjs",
+      "require": "./dist/authorFacade.cjs"
+    }
   },
   "publishConfig": {
     "access": "public"
@@ -76,14 +76,15 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
+    "@agimon-ai/doompi-minor-mode": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "csv-parse": "7.0.2",
     "hono": "4.13.5",
     "saxes": "6.0.0",
+    "typebox": "1.3.25",
     "yauzl": "3.4.0",
     "yazl": "3.3.1"
   },
@@ -115,11 +116,17 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "doompiApi": {
-    "basePath": "author",
-    "session": {
-      "entry": "./src/exports/sessionApi.ts",
-      "dist": "./dist/sessionApi.mjs"
+  "doompiServer": {
+    "entry": "./src/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "global",
+      "workspace",
+      "session"
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
     }
   },
   "doompiWeb": {
@@ -127,11 +134,10 @@
     "channels": [
       "author_webmcp"
     ],
-    "client": "./src/exports/webClient.ts",
-    "hub": {
-      "entry": "./src/exports/webHub.ts",
-      "dist": "./dist/webHub.mjs"
-    }
+    "client": "./src/extensions/web.ts",
+    "scopes": [
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

@@ -1,3 +1,4 @@
+import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   Button,
   Dot,
@@ -8,17 +9,17 @@ import {
   EmptyState,
   PlusIcon,
 } from '@agimon-ai/doompi-web-components';
-import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
-import type { RunnerRunView } from '../../types/webRunners.ts';
-import { formatRunnerUptime } from '../lib/format.ts';
-import { RUNNER_SHELL_REQUEST } from '../lib/launchLine.ts';
-import { useRunnerTail } from '../hooks/runnerTail.ts';
-import { requestRunnerStart, requestRunnerStop, runners } from '../stores/runnersStore.ts';
-import { LaunchRunnerDialog } from './LaunchRunnerDialog.tsx';
-import { runnerLogTab } from './RunnerLogPanel.tsx';
-import { runnerShellTab } from './RunnerShellPanel.tsx';
+
+import type { RunnerRunView } from '../../types/webRunners';
+import { useRunnerTail } from '../hooks/runnerTail';
+import { formatRunnerUptime } from '../lib/format';
+import { RUNNER_SHELL_REQUEST } from '../lib/launchLine';
+import { requestRunnerStart, requestRunnerStop, runners } from '../stores/runnersStore';
+import { LaunchRunnerDialog } from './LaunchRunnerDialog';
+import { runnerLogTab } from './RunnerLogPanel';
+import { runnerShellTab } from './RunnerShellPanel';
 
 const TICK_MS = 10_000;
 const SHELL_LAUNCH_TIMEOUT_MS = 30_000;

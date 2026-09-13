@@ -1,6 +1,7 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { describe, expect, it } from 'vitest';
+
 import {
   abbreviateHome,
   type BashResultDetails,
@@ -11,7 +12,7 @@ import {
   renderBashCall,
   renderBashResult,
   truncateMiddle,
-} from '../../src/tui/bashRender.ts';
+} from '../../src/tui/bashRender';
 
 /** Themes only decorate, so an identity theme keeps assertions about text. */
 const theme = {

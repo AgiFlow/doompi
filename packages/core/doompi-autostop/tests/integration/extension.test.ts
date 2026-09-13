@@ -1,8 +1,15 @@
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import {
+  DOOM_BACKGROUND_WORK_SERVICE,
+  type BackgroundWorkItem,
+  type DoomBackgroundWorkService,
+} from '@agimon-ai/doompi-core/background-work';
+import { installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { autoStopExtension } from '../../src/adapters/pi/extension.ts';
-import { DEFAULT_AUTO_STOP_DELAYS } from '../../src/services/idlePolicy.ts';
-import { createSessionHarness } from '../helpers/session.ts';
+
+import { DEFAULT_AUTO_STOP_DELAYS } from '../../src/exports';
+import { autoStopExtension } from '../../src/extensions/pi';
+import { createSessionHarness } from '../helpers/session';
 
 const { cooldownMs, recheckMs } = DEFAULT_AUTO_STOP_DELAYS;
 
@@ -35,6 +42,40 @@ describe('auto-stop Pi factory', () => {
 
     vi.advanceTimersByTime(1);
     expect(session.shutdown).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits until both background runners and agents have finished', async () => {
+    const session = createSessionHarness();
+    const host = await session.host;
+    let items: BackgroundWorkItem[] = [
+      { provider: 'doom-runner', id: 'runner-1', sessionId: 'autostop-test', status: 'running' },
+      { provider: 'team-direct-runs', id: 'agent-1', sessionId: 'autostop-test', status: 'running' },
+    ];
+    const backgroundWork = {
+      generation: 'autostop-background-test',
+      register: vi.fn(),
+      snapshot: (sessionId?: string) => ({
+        items: items.filter((item) => sessionId === undefined || item.sessionId === sessionId),
+        errors: [],
+      }),
+    } as unknown as DoomBackgroundWorkService;
+    const provider = host.root.plugin((context) => context.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork));
+    await provider;
+    await autoStopExtension(session.pi);
+
+    await session.fire('agent_settled');
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).not.toHaveBeenCalled();
+
+    items = items.filter((item) => item.provider !== 'doom-runner');
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).not.toHaveBeenCalled();
+
+    items = [];
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).toHaveBeenCalledTimes(1);
+
+    await provider.dispose();
   });
 
   it('leaves a settled session alone while a message is queued', async () => {
@@ -127,6 +168,14 @@ describe('auto-stop Pi factory', () => {
 
   it('disposes the fiber when registration throws', async () => {
     const busHandlers = new Map<string, Set<(payload: unknown) => void>>();
+    const context = {
+      hasPendingMessages: () => false,
+      isIdle: () => true,
+      shutdown: vi.fn(),
+    } as unknown as ExtensionContext;
+    let settled: ((event: unknown, context: ExtensionContext) => void) | undefined;
+    let pendingTimerCount = 0;
+    const on = vi.fn();
     const pi = {
       events: {
         emit(event: string, payload: unknown) {
@@ -139,14 +188,21 @@ describe('auto-stop Pi factory', () => {
           return () => listeners.delete(handler);
         },
       },
-      on: vi.fn(() => {
-        throw new Error('registration boom');
-      }),
+      on,
     } as unknown as ExtensionAPI;
+    await installDoomCordisHost(pi, { mode: 'composed', source: 'autostop-registration-test-host' });
+    on.mockClear().mockImplementation((event: string, handler: unknown) => {
+      if (event === 'agent_settled') settled = handler as typeof settled;
+      if (event === 'session_shutdown') {
+        settled?.({ type: 'agent_settled' }, context);
+        pendingTimerCount = vi.getTimerCount();
+        throw new Error('registration boom');
+      }
+    });
 
     await expect(autoStopExtension(pi)).rejects.toThrow('registration boom');
-    // The shutdown hook is the last registration, so a throw before it means
-    // nothing is left holding the session.
-    expect(pi.on).toHaveBeenCalledTimes(1);
+    expect(pi.on).toHaveBeenCalledWith('session_shutdown', expect.any(Function));
+    expect(pendingTimerCount).toBe(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

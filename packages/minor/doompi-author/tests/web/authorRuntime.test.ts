@@ -1,7 +1,8 @@
-import type { ModelContext, ModelContextTool, WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+import type { ModelContext, ModelContextTool, WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 import { describe, expect, it, vi } from 'vitest';
-import { AuthorClientBroker } from '../../src/web/api/authorBroker.ts';
-import { AuthorRuntime } from '../../src/web/api/authorRuntime.ts';
+
+import { AuthorClientBroker } from '../../src/web/api/authorBroker';
+import { AuthorRuntime } from '../../src/web/api/authorRuntime';
 
 function fixture() {
   const tools = new Map<string, ModelContextTool>();
@@ -27,6 +28,7 @@ function fixture() {
   const pluginRuntime: WebPluginRuntime = {
     sendSessionFrame() {},
     sendHubFrame() {},
+    invokeServerMethod: async () => undefined,
     onHubConnected: () => () => undefined,
     acquireModelContext: async () => ({ kind: 'simulator', modelContext }),
   };

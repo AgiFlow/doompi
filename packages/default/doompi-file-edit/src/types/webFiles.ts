@@ -1,4 +1,4 @@
-import type { FileEditTool } from './domain.ts';
+import type { FileEditTool } from './domain';
 
 /**
  * View types shared by this package's hub channel and its web plugin. Wire

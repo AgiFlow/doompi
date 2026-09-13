@@ -1,4 +1,5 @@
 import path from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -21,28 +22,29 @@ vi.mock('@agimon-ai/doompi-config/majorModes', () => ({
   filterHookDisabledLayers: mocks.filterHookDisabledLayers,
   loadMajorModesConfig: mocks.loadMajorModesConfig,
 }));
-vi.mock('../../src/services/extensionAssembler.ts', () => ({
+vi.mock('../../src/builders/cli/extensionAssembler', () => ({
   PERSONA_ENTRY: 'persona',
   resolveExtensionComposition: mocks.resolveExtensionComposition,
 }));
-vi.mock('../../src/adapters/extensionCompiler.ts', () => ({
+vi.mock('../../src/compiler', () => ({
   compileExtensionSet: mocks.compileExtensionSet,
   extensionSetManifestPath: mocks.extensionSetManifestPath,
 }));
-vi.mock('../../src/adapters/modules/moduleResolution.ts', () => ({ ownEntry: mocks.ownEntry }));
-vi.mock('../../src/adapters/runtimeBundle.ts', () => ({
+vi.mock('../../src/builders/cli/entryResolution', () => ({ ownEntry: mocks.ownEntry }));
+vi.mock('../../src/builders/cli/runtimeBundle', () => ({
   compileModeExtension: mocks.compileModeExtension,
 }));
-vi.mock('../../src/adapters/syncState.ts', () => ({
+vi.mock('../../src/composition/syncState', () => ({
   createMapResolvers: mocks.createMapResolvers,
   readSyncState: mocks.readSyncState,
   syncDirectory: mocks.syncDirectory,
   writeSyncState: mocks.writeSyncState,
 }));
 
-import { buildSyncedRuntime } from '../../src/adapters/syncedRuntimeBuilder.ts';
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/adapters/syncStateContract.ts';
-import { testMcpProjection } from '../helpers/mcpProjection.ts';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+
+import { buildSyncedRuntime } from '../../src/builders/cli';
+import { testMcpProjection } from '../helpers/mcpProjection';
 
 const state = {
   version: 1,
@@ -96,7 +98,7 @@ beforeEach(() => {
       compilerManifest: `/manifests/${outputName}.json`,
     }),
   );
-  mocks.ownEntry.mockReturnValue('/doom.ts');
+  mocks.ownEntry.mockReturnValue('/composedPi.ts');
   mocks.compileExtensionSet.mockResolvedValue('/dist/bootstrap.mjs');
   mocks.syncDirectory.mockReturnValue('/repo/.pi/doom');
   mocks.writeSyncState.mockResolvedValue('/repo/.pi/doom/state.json');
@@ -107,6 +109,12 @@ describe('buildSyncedRuntime', () => {
     const result = await buildSyncedRuntime('/repo', { DOOMPI_MCP: '0' });
 
     expect(mocks.compileModeExtension).toHaveBeenCalledTimes(4);
+    expect(result.compositions.map((composition) => composition.fingerprint)).toEqual([
+      'fingerprint:copilot:loud',
+      'fingerprint:copilot:mute',
+      'fingerprint:minimal:loud',
+      'fingerprint:minimal:mute',
+    ]);
     expect(result.bundles).toEqual({
       'fingerprint:copilot:loud': '/dist/copilot.mjs',
       'fingerprint:copilot:mute': '/dist/copilot.mute.mjs',
@@ -123,7 +131,7 @@ describe('buildSyncedRuntime', () => {
       expect.objectContaining({ compositionFingerprint: expect.stringMatching(/^fingerprint:/) }),
     );
     expect(mocks.compileExtensionSet).toHaveBeenCalledWith(
-      ['/doom.ts'],
+      ['/composedPi.ts'],
       path.join('/repo/.pi/doom', 'cache'),
       expect.objectContaining({ outputName: 'bootstrap' }),
     );
@@ -136,13 +144,46 @@ describe('buildSyncedRuntime', () => {
         precompile: {
           version: PRECOMPILE_STATE_VERSION,
           strategy: BUNDLED_PRECOMPILE_STRATEGY,
-          bootstrapEntry: '/doom.ts',
+          bootstrapEntry: '/composedPi.ts',
           bootstrapManifest: '/manifests/bootstrap.json',
           bundleManifests: result.bundleManifests,
         },
       }),
       expect.any(String),
     );
+  });
+  it('exposes every composition before waiting for parallel mode builds and preserves declared order', async () => {
+    const pending: (() => void)[] = [];
+    const onCompositionsResolved = vi.fn();
+    mocks.compileModeExtension.mockImplementation(
+      ({ outputName }: { outputName: string }) =>
+        new Promise((resolve) =>
+          pending.push(() =>
+            resolve({ bundle: `/dist/${outputName}.mjs`, compilerManifest: `/manifests/${outputName}.json` }),
+          ),
+        ),
+    );
+    const building = buildSyncedRuntime('/repo', process.env, process.env.HOME, { onCompositionsResolved });
+    expect(pending).toHaveLength(4);
+    expect(onCompositionsResolved).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ fingerprint: 'fingerprint:copilot:loud' })]),
+    );
+    expect(mocks.writeSyncState).not.toHaveBeenCalled();
+    for (const complete of pending.toReversed()) complete();
+    const result = await building;
+    expect(Object.keys(result.bundles)).toEqual([
+      'fingerprint:copilot:loud',
+      'fingerprint:copilot:mute',
+      'fingerprint:minimal:loud',
+      'fingerprint:minimal:mute',
+    ]);
+    expect(mocks.writeSyncState).toHaveBeenCalledOnce();
+  });
+
+  it('uses the supplied home directory when loading major-mode configuration', async () => {
+    await buildSyncedRuntime('/repo', { HOME: '/wrong-home' }, '/configured-home');
+
+    expect(mocks.loadMajorModesConfig).toHaveBeenCalledWith('/repo', '/configured-home');
   });
 
   it('refuses to publish artifacts over synchronization that changed during compilation', async () => {

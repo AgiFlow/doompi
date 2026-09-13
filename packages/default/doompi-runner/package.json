@@ -31,12 +31,15 @@
   "files": [
     "dist",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "skills",
     "llms.txt",
     "src/prompts",
     "src/types/webRunners.ts",
     "src/types/webRunnerLog.ts",
+    "src/types/runnerRegistry.ts",
+    "src/types/logReader.ts",
+    "src/constants",
     "README.md",
     "LICENSE",
     "package.json",
@@ -67,10 +70,10 @@
       "import": "./dist/bin/runnerHost.mjs",
       "require": "./dist/bin/runnerHost.cjs"
     },
-    "./cli/cliApp": {
-      "types": "./dist/cli/cliApp.d.mts",
-      "import": "./dist/cli/cliApp.mjs",
-      "require": "./dist/cli/cliApp.cjs"
+    "./cli-app": {
+      "types": "./dist/cli-app.d.mts",
+      "import": "./dist/cli-app.mjs",
+      "require": "./dist/cli-app.cjs"
     },
     "./compaction": {
       "types": "./dist/compaction.d.mts",
@@ -82,235 +85,150 @@
       "import": "./dist/config.mjs",
       "require": "./dist/config.cjs"
     },
-    "./container": {
-      "types": "./dist/container/index.d.mts",
-      "import": "./dist/container/index.mjs",
-      "require": "./dist/container/index.cjs"
+    "./runner-dependencies": {
+      "types": "./dist/runner-dependencies.d.mts",
+      "import": "./dist/runner-dependencies.mjs",
+      "require": "./dist/runner-dependencies.cjs"
     },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
+    },
     "./reconcile": {
       "types": "./dist/reconcile.d.mts",
       "import": "./dist/reconcile.mjs",
       "require": "./dist/reconcile.cjs"
     },
-    "./services/AnsiScrub": {
-      "types": "./dist/services/AnsiScrub/index.d.mts",
-      "import": "./dist/services/AnsiScrub/index.mjs",
-      "require": "./dist/services/AnsiScrub/index.cjs"
+    "./ansi-scrub": {
+      "types": "./dist/ansi-scrub.d.mts",
+      "import": "./dist/ansi-scrub.mjs",
+      "require": "./dist/ansi-scrub.cjs"
     },
-    "./services/AnsiScrub/ansiScrub": {
-      "types": "./dist/services/AnsiScrub/ansiScrub.d.mts",
-      "import": "./dist/services/AnsiScrub/ansiScrub.mjs",
-      "require": "./dist/services/AnsiScrub/ansiScrub.cjs"
+    "./bash-run-service": {
+      "types": "./dist/bash-run-service.d.mts",
+      "import": "./dist/bash-run-service.mjs",
+      "require": "./dist/bash-run-service.cjs"
     },
-    "./services/BashRunService": {
-      "types": "./dist/services/BashRunService/index.d.mts",
-      "import": "./dist/services/BashRunService/index.mjs",
-      "require": "./dist/services/BashRunService/index.cjs"
+    "./clock": {
+      "types": "./dist/clock.d.mts",
+      "import": "./dist/clock.mjs",
+      "require": "./dist/clock.cjs"
     },
-    "./services/BashRunService/BashRunService": {
-      "types": "./dist/services/BashRunService/BashRunService.d.mts",
-      "import": "./dist/services/BashRunService/BashRunService.mjs",
-      "require": "./dist/services/BashRunService/BashRunService.cjs"
+    "./launcher": {
+      "types": "./dist/launcher.d.mts",
+      "import": "./dist/launcher.mjs",
+      "require": "./dist/launcher.cjs"
     },
-    "./services/Clock": {
-      "types": "./dist/services/Clock/index.d.mts",
-      "import": "./dist/services/Clock/index.mjs",
-      "require": "./dist/services/Clock/index.cjs"
+    "./lifeline": {
+      "types": "./dist/lifeline.d.mts",
+      "import": "./dist/lifeline.mjs",
+      "require": "./dist/lifeline.cjs"
     },
-    "./services/Clock/SystemClock": {
-      "types": "./dist/services/Clock/SystemClock.d.mts",
-      "import": "./dist/services/Clock/SystemClock.mjs",
-      "require": "./dist/services/Clock/SystemClock.cjs"
+    "./index": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
     },
-    "./services/Launcher": {
-      "types": "./dist/services/Launcher/index.d.mts",
-      "import": "./dist/services/Launcher/index.mjs",
-      "require": "./dist/services/Launcher/index.cjs"
+    "./log-file": {
+      "types": "./dist/log-file.d.mts",
+      "import": "./dist/log-file.mjs",
+      "require": "./dist/log-file.cjs"
     },
-    "./services/Launcher/Launcher": {
-      "types": "./dist/services/Launcher/Launcher.d.mts",
-      "import": "./dist/services/Launcher/Launcher.mjs",
-      "require": "./dist/services/Launcher/Launcher.cjs"
+    "./log-reader": {
+      "types": "./dist/log-reader.d.mts",
+      "import": "./dist/log-reader.mjs",
+      "require": "./dist/log-reader.cjs"
     },
-    "./services/Lifeline": {
-      "types": "./dist/services/Lifeline/index.d.mts",
-      "import": "./dist/services/Lifeline/index.mjs",
-      "require": "./dist/services/Lifeline/index.cjs"
+    "./process-control": {
+      "types": "./dist/process-control.d.mts",
+      "import": "./dist/process-control.mjs",
+      "require": "./dist/process-control.cjs"
     },
-    "./services/Lifeline/NodeLifeline": {
-      "types": "./dist/services/Lifeline/NodeLifeline.d.mts",
-      "import": "./dist/services/Lifeline/NodeLifeline.mjs",
-      "require": "./dist/services/Lifeline/NodeLifeline.cjs"
+    "./pty-host": {
+      "types": "./dist/pty-host.d.mts",
+      "import": "./dist/pty-host.mjs",
+      "require": "./dist/pty-host.cjs"
     },
-    "./services/Lifeline/watchdog": {
-      "types": "./dist/services/Lifeline/client.d.mts",
-      "import": "./dist/services/Lifeline/client.mjs",
-      "require": "./dist/services/Lifeline/client.cjs"
+    "./pty-spawner": {
+      "types": "./dist/pty-spawner.d.mts",
+      "import": "./dist/pty-spawner.mjs",
+      "require": "./dist/pty-spawner.cjs"
     },
-    "./services/LogFile": {
-      "types": "./dist/services/LogFile/index.d.mts",
-      "import": "./dist/services/LogFile/index.mjs",
-      "require": "./dist/services/LogFile/index.cjs"
+    "./rmux-backend": {
+      "types": "./dist/rmux-backend.d.mts",
+      "import": "./dist/rmux-backend.mjs",
+      "require": "./dist/rmux-backend.cjs"
     },
-    "./services/LogFile/LogFile": {
-      "types": "./dist/services/LogFile/LogFile.d.mts",
-      "import": "./dist/services/LogFile/LogFile.mjs",
-      "require": "./dist/services/LogFile/LogFile.cjs"
+    "./rtk-processor": {
+      "types": "./dist/rtk-processor.d.mts",
+      "import": "./dist/rtk-processor.mjs",
+      "require": "./dist/rtk-processor.cjs"
     },
-    "./services/LogReader": {
-      "types": "./dist/services/LogReader/index.d.mts",
-      "import": "./dist/services/LogReader/index.mjs",
-      "require": "./dist/services/LogReader/index.cjs"
+    "./runner-namer": {
+      "types": "./dist/runner-namer.d.mts",
+      "import": "./dist/runner-namer.mjs",
+      "require": "./dist/runner-namer.cjs"
     },
-    "./services/LogReader/LogReader": {
-      "types": "./dist/services/LogReader/LogReader.d.mts",
-      "import": "./dist/services/LogReader/LogReader.mjs",
-      "require": "./dist/services/LogReader/LogReader.cjs"
+    "./runner-paths": {
+      "types": "./dist/runner-paths.d.mts",
+      "import": "./dist/runner-paths.mjs",
+      "require": "./dist/runner-paths.cjs"
     },
-    "./services/ProcessControl": {
-      "types": "./dist/services/ProcessControl/index.d.mts",
-      "import": "./dist/services/ProcessControl/index.mjs",
-      "require": "./dist/services/ProcessControl/index.cjs"
+    "./runner-registry": {
+      "types": "./dist/runner-registry.d.mts",
+      "import": "./dist/runner-registry.mjs",
+      "require": "./dist/runner-registry.cjs"
     },
-    "./services/ProcessControl/NodeProcessControl": {
-      "types": "./dist/services/ProcessControl/NodeProcessControl.d.mts",
-      "import": "./dist/services/ProcessControl/NodeProcessControl.mjs",
-      "require": "./dist/services/ProcessControl/NodeProcessControl.cjs"
-    },
-    "./services/PtyHost": {
-      "types": "./dist/services/PtyHost/index.d.mts",
-      "import": "./dist/services/PtyHost/index.mjs",
-      "require": "./dist/services/PtyHost/index.cjs"
-    },
-    "./services/PtyHost/PtyHost": {
-      "types": "./dist/services/PtyHost/PtyHost.d.mts",
-      "import": "./dist/services/PtyHost/PtyHost.mjs",
-      "require": "./dist/services/PtyHost/PtyHost.cjs"
-    },
-    "./services/PtySpawner": {
-      "types": "./dist/services/PtySpawner/index.d.mts",
-      "import": "./dist/services/PtySpawner/index.mjs",
-      "require": "./dist/services/PtySpawner/index.cjs"
-    },
-    "./services/PtySpawner/NodePtySpawner": {
-      "types": "./dist/services/PtySpawner/NodePtySpawner.d.mts",
-      "import": "./dist/services/PtySpawner/NodePtySpawner.mjs",
-      "require": "./dist/services/PtySpawner/NodePtySpawner.cjs"
-    },
-    "./services/RmuxBackend": {
-      "types": "./dist/services/RmuxBackend/index.d.mts",
-      "import": "./dist/services/RmuxBackend/index.mjs",
-      "require": "./dist/services/RmuxBackend/index.cjs"
-    },
-    "./services/RmuxBackend/RmuxBackend": {
-      "types": "./dist/services/RmuxBackend/RmuxBackend.d.mts",
-      "import": "./dist/services/RmuxBackend/RmuxBackend.mjs",
-      "require": "./dist/services/RmuxBackend/RmuxBackend.cjs"
-    },
-    "./services/RtkProcessor": {
-      "types": "./dist/services/RtkProcessor/index.d.mts",
-      "import": "./dist/services/RtkProcessor/index.mjs",
-      "require": "./dist/services/RtkProcessor/index.cjs"
-    },
-    "./services/RtkProcessor/RtkProcessor": {
-      "types": "./dist/services/RtkProcessor/RtkProcessor.d.mts",
-      "import": "./dist/services/RtkProcessor/RtkProcessor.mjs",
-      "require": "./dist/services/RtkProcessor/RtkProcessor.cjs"
-    },
-    "./services/RunnerNamer": {
-      "types": "./dist/services/RunnerNamer/index.d.mts",
-      "import": "./dist/services/RunnerNamer/index.mjs",
-      "require": "./dist/services/RunnerNamer/index.cjs"
-    },
-    "./services/RunnerNamer/RunnerNamer": {
-      "types": "./dist/services/RunnerNamer/RunnerNamer.d.mts",
-      "import": "./dist/services/RunnerNamer/RunnerNamer.mjs",
-      "require": "./dist/services/RunnerNamer/RunnerNamer.cjs"
-    },
-    "./services/RunnerPaths": {
-      "types": "./dist/services/RunnerPaths/index.d.mts",
-      "import": "./dist/services/RunnerPaths/index.mjs",
-      "require": "./dist/services/RunnerPaths/index.cjs"
-    },
-    "./services/RunnerPaths/RunnerPaths": {
-      "types": "./dist/services/RunnerPaths/RunnerPaths.d.mts",
-      "import": "./dist/services/RunnerPaths/RunnerPaths.mjs",
-      "require": "./dist/services/RunnerPaths/RunnerPaths.cjs"
-    },
-    "./services/RunnerRegistry": {
-      "types": "./dist/services/RunnerRegistry/index.d.mts",
-      "import": "./dist/services/RunnerRegistry/index.mjs",
-      "require": "./dist/services/RunnerRegistry/index.cjs"
-    },
-    "./services/RunnerRegistry/RunnerRegistry": {
-      "types": "./dist/services/RunnerRegistry/RunnerRegistry.d.mts",
-      "import": "./dist/services/RunnerRegistry/RunnerRegistry.mjs",
-      "require": "./dist/services/RunnerRegistry/RunnerRegistry.cjs"
-    },
-    "./services/Spawner": {
-      "types": "./dist/services/Spawner/index.d.mts",
-      "import": "./dist/services/Spawner/index.mjs",
-      "require": "./dist/services/Spawner/index.cjs"
-    },
-    "./services/Spawner/NodeSpawner": {
-      "types": "./dist/services/Spawner/NodeSpawner.d.mts",
-      "import": "./dist/services/Spawner/NodeSpawner.mjs",
-      "require": "./dist/services/Spawner/NodeSpawner.cjs"
-    },
-    "./session-api": {
-      "types": "./dist/sessionApi.d.mts",
-      "import": "./dist/sessionApi.mjs",
-      "require": "./dist/sessionApi.cjs"
+    "./spawner": {
+      "types": "./dist/spawner.d.mts",
+      "import": "./dist/spawner.mjs",
+      "require": "./dist/spawner.cjs"
     },
     "./session": {
       "types": "./dist/session.d.mts",
       "import": "./dist/session.mjs",
       "require": "./dist/session.cjs"
     },
-    "./tool/bashTool": {
-      "types": "./dist/tool/bashTool.d.mts",
-      "import": "./dist/tool/bashTool.mjs",
-      "require": "./dist/tool/bashTool.cjs"
+    "./bash-tool": {
+      "types": "./dist/bash-tool.d.mts",
+      "import": "./dist/bash-tool.mjs",
+      "require": "./dist/bash-tool.cjs"
     },
-    "./tool/responseEnvelope": {
-      "types": "./dist/tool/responseEnvelope.d.mts",
-      "import": "./dist/tool/responseEnvelope.mjs",
-      "require": "./dist/tool/responseEnvelope.cjs"
+    "./response-envelope": {
+      "types": "./dist/response-envelope.d.mts",
+      "import": "./dist/response-envelope.mjs",
+      "require": "./dist/response-envelope.cjs"
     },
-    "./tool/schema": {
-      "types": "./dist/tool/schema.d.mts",
-      "import": "./dist/tool/schema.mjs",
-      "require": "./dist/tool/schema.cjs"
+    "./bash-schema": {
+      "types": "./dist/bash-schema.d.mts",
+      "import": "./dist/bash-schema.mjs",
+      "require": "./dist/bash-schema.cjs"
     },
-    "./tui/bashRender": {
-      "types": "./dist/tui/bashRender.d.mts",
-      "import": "./dist/tui/bashRender.mjs",
-      "require": "./dist/tui/bashRender.cjs"
+    "./bash-render": {
+      "types": "./dist/bash-render.d.mts",
+      "import": "./dist/bash-render.mjs",
+      "require": "./dist/bash-render.cjs"
     },
-    "./tui/format": {
-      "types": "./dist/tui/format.d.mts",
-      "import": "./dist/tui/format.mjs",
-      "require": "./dist/tui/format.cjs"
+    "./runner-format": {
+      "types": "./dist/runner-format.d.mts",
+      "import": "./dist/runner-format.mjs",
+      "require": "./dist/runner-format.cjs"
     },
-    "./tui/runnerSpace": {
-      "types": "./dist/tui/runnerSpace.d.mts",
-      "import": "./dist/tui/runnerSpace.mjs",
-      "require": "./dist/tui/runnerSpace.cjs"
+    "./runner-space": {
+      "types": "./dist/runner-space.d.mts",
+      "import": "./dist/runner-space.mjs",
+      "require": "./dist/runner-space.cjs"
     },
     "./types": {
       "types": "./dist/types.d.mts",
       "import": "./dist/types.mjs",
       "require": "./dist/types.cjs"
-    },
-    "./web-hub": {
-      "types": "./dist/webHub.d.mts",
-      "import": "./dist/webHub.mjs",
-      "require": "./dist/webHub.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -326,11 +244,10 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@agimon-ai/foundation-process-registry": "0.29.19",
     "@deepseek-ai/cordis": "4.0.2",
@@ -378,11 +295,17 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "doompiApi": {
-    "basePath": "runner",
-    "session": {
-      "entry": "./src/exports/sessionApi.ts",
-      "dist": "./dist/sessionApi.mjs"
+  "doompiServer": {
+    "entry": "./src/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "global",
+      "workspace",
+      "session"
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
     }
   },
   "doompiWeb": {
@@ -390,11 +313,10 @@
     "channels": [
       "runner_runs"
     ],
-    "client": "./src/exports/webClient.ts",
-    "hub": {
-      "entry": "./src/exports/webHub.ts",
-      "dist": "./dist/webHub.mjs"
-    }
+    "client": "./src/extensions/web.ts",
+    "scopes": [
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

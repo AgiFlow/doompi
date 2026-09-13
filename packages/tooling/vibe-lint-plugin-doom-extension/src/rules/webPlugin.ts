@@ -1,7 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
+
 import { projectPath } from './manifestEntries.js';
 
 /**
@@ -18,10 +20,13 @@ import { projectPath } from './manifestEntries.js';
 const PACKAGE_MANIFEST_NAME = 'package.json';
 /** The root a package keeps its cockpit plugin in. */
 export const WEB_ROOT = 'src/web';
+/** The remaining raw hub sender is migrated after the Author pilot. */
+const LEGACY_HUB_SENDERS = new Set(['@agimon-ai/doompi-git']);
 const WEB_TSCONFIG = 'tsconfig.json';
 const TYPES_ROOT = 'src/types';
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
-const CONTRACTS_PACKAGE = '@agimon-ai/doompi-web-contracts';
+const CONTRACTS_PACKAGE = '@agimon-ai/doompi-core';
+const WEB_CONTRACTS_ENTRY = `${CONTRACTS_PACKAGE}/web`;
 const COMPONENTS_PACKAGE = '@agimon-ai/doompi-web-components';
 /** The shared sealed transport; a plugin calling bare fetch sends plaintext to the tunnel's relay. */
 const SECURITY_BROWSER_PACKAGE = '@agimon-ai/doompi-web-security/browser';
@@ -30,7 +35,7 @@ const ALLOWED_BARE_SPECIFIERS = new Set([
   'react/jsx-runtime',
   '@tanstack/store',
   '@tanstack/react-store',
-  CONTRACTS_PACKAGE,
+  WEB_CONTRACTS_ENTRY,
   COMPONENTS_PACKAGE,
   SECURITY_BROWSER_PACKAGE,
 ]);
@@ -44,7 +49,7 @@ const ALLOWED_BARE_SPECIFIERS = new Set([
  * alternative, and those drift silently when the slot contract changes.
  */
 const STORY_SUFFIX = '.stories.tsx';
-const CONTRACTS_TESTING_PACKAGE = `${CONTRACTS_PACKAGE}/testing`;
+const CONTRACTS_TESTING_PACKAGE = `${WEB_CONTRACTS_ENTRY}/testing`;
 const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 const WEB_PLUGIN_EXPORT = 'webPlugin';
 const DEFINE_WEB_PLUGIN = 'defineWebPlugin';
@@ -66,8 +71,12 @@ export interface WebPluginBlock {
 }
 
 export interface WebPackageManifest {
+  name?: unknown;
   files?: unknown;
   dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>;
   doompiWeb?: unknown;
 }
 
@@ -109,6 +118,67 @@ function webSourcePath(filePath: string, configRoot: string): string | null {
   if (!SOURCE_EXTENSIONS.has(path.extname(filePath))) return null;
   return relativePath;
 }
+
+/** Package browser messages use scoped typed calls; only host administration uses raw hub frames. */
+export const webPluginTypedCalls: RuleDefinition = {
+  preflight: true,
+  rule: 'Web plugins call typed scoped server methods instead of sending raw hub frames',
+  rationale:
+    'A raw frame has no request or response schema and can silently reach the wrong composition scope. Typed methods validate both sides and carry an explicit global or workspace address.',
+  check(filePath, configRoot) {
+    const manifest = readManifest(configRoot);
+    if (!manifest?.doompiWeb || (typeof manifest.name === 'string' && LEGACY_HUB_SENDERS.has(manifest.name)))
+      return null;
+    if (webSourcePath(filePath, configRoot) === null) return null;
+    const source = readSource(filePath);
+    if (!source) return null;
+    let rawSender = false;
+    const visit = (node: ts.Node): void => {
+      if (ts.isIdentifier(node) && node.text === 'sendHubFrame') rawSender = true;
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    return rawSender ? 'Use runtime.invokeServerMethod with a declared scoped plugin method.' : null;
+  },
+};
+
+/** Prevents a second package-owned transport tree from growing beside the typed contract. */
+export const webPluginProtocolLayout: RuleDefinition = {
+  preflight: true,
+  rule: 'Plugin protocol schemas live in src/schemas and packages do not create private transport roots',
+  rationale:
+    'Private protocol, transport, and socket trees duplicate the host connection and leave unused message handlers behind. Package methods belong in src/schemas, server registration in src/extensions/server.ts, and browser callers in src/web/api.',
+  check(filePath, configRoot) {
+    const manifest = readManifest(configRoot);
+    if (!manifest?.doompiWeb || !fs.existsSync(filePath)) return null;
+    const relativePath = projectPath(filePath, configRoot);
+    if (relativePath === null || !SOURCE_EXTENSIONS.has(path.extname(filePath))) return null;
+    if (relativePath === 'src/exports/webClient.ts')
+      return 'Remove src/exports/webClient.ts; the browser entry belongs at src/extensions/web.ts.';
+    if (
+      /^(?:src\/)?(?:protocol|transport|communication|socket)(?:\/|\.)/u.test(relativePath) ||
+      /^src\/(?:web|adapters)\/(?:protocol|transport|communication|socket)(?:\/|\.)/u.test(relativePath) ||
+      /^src\/web\/.*Socket\.[cm]?tsx?$/u.test(relativePath)
+    )
+      return `${relativePath} creates a private protocol or transport surface; use the host plugin method runtime.`;
+    const source = readSource(filePath);
+    if (!source) return null;
+    let definesMethod = false;
+    const visit = (node: ts.Node): void => {
+      if (
+        ts.isCallExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === 'defineDoomPluginMethod'
+      )
+        definesMethod = true;
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    return definesMethod && !relativePath.startsWith('src/schemas/')
+      ? `${relativePath} defines a plugin method outside src/schemas/.`
+      : null;
+  },
+};
 
 /** Every module specifier a file names: static imports and re-exports, type-only ones included, and dynamic imports. */
 function moduleSpecifiers(sourceFile: ts.SourceFile): string[] {
@@ -155,12 +225,51 @@ export function pluginBlocks(manifest: WebPackageManifest): WebPluginBlock[] {
   return blocks.filter((block): block is WebPluginBlock => typeof block === 'object' && block !== null);
 }
 
-/** Whether a `files` allowlist entry covers a repo-relative path: the entry itself or a directory above it. */
+/** Matches the literal directories and glob patterns used by package publication allowlists. */
 export function isPublished(files: readonly string[], relativePath: string): boolean {
-  return files.some((entry) => {
+  const matches = (entry: string): boolean => {
     const normalized = stripDot(entry).replace(/\/$/, '');
-    return relativePath === normalized || relativePath.startsWith(`${normalized}/`);
-  });
+    return (
+      relativePath === normalized ||
+      relativePath.startsWith(`${normalized}/`) ||
+      path.matchesGlob(relativePath, normalized)
+    );
+  };
+  return (
+    files.some((entry) => !entry.startsWith('!') && matches(entry)) &&
+    !files.some((entry) => entry.startsWith('!') && matches(entry.slice(1)))
+  );
+}
+
+/** Follow package-local source dependencies from the published browser entry, including worker URL imports. */
+function unpublishedBrowserDependencies(configRoot: string, entry: string, files: readonly string[]): string[] {
+  const pending = [path.resolve(configRoot, stripDot(entry))];
+  const visited = new Set<string>();
+  const missing = new Set<string>();
+  while (pending.length > 0) {
+    const filePath = pending.pop()!;
+    if (visited.has(filePath) || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) continue;
+    visited.add(filePath);
+    const source = readSource(filePath);
+    if (!source) continue;
+    for (const specifier of moduleSpecifiers(source)) {
+      if (!specifier.startsWith('.')) continue;
+      // Vite queries select how the file is bundled, but are not part of its packed filename.
+      const target = path.resolve(path.dirname(filePath), specifier.replace(/[?#].*$/u, ''));
+      if (projectPath(target, configRoot) === null) continue;
+      const candidates = [
+        target,
+        ...[...SOURCE_EXTENSIONS].map((extension) => `${target}${extension}`),
+        ...[...SOURCE_EXTENSIONS].map((extension) => path.join(target, `index${extension}`)),
+      ];
+      const dependency = candidates.find((candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+      if (!dependency) continue;
+      const relative = projectPath(dependency, configRoot)!;
+      if (!isPublished(files, relative)) missing.add(relative);
+      pending.push(dependency);
+    }
+  }
+  return [...missing].sort();
 }
 
 export function walkSources(directory: string): string[] {
@@ -184,7 +293,14 @@ function webImports(configRoot: string): { typeFiles: Set<string>; packages: Set
     for (const specifier of moduleSpecifiers(sourceFile)) {
       if (specifier.startsWith('.')) {
         const target = relativeTarget(filePath, specifier, configRoot);
-        if (target !== null && isTypesPath(target)) typeFiles.add(target);
+        if (target !== null && isTypesPath(target)) {
+          const resolved = SOURCE_EXTENSIONS.has(path.extname(target))
+            ? target
+            : ([...SOURCE_EXTENSIONS]
+                .map((extension) => `${target}${extension}`)
+                .find((candidate) => fs.existsSync(path.join(configRoot, candidate))) ?? target);
+          typeFiles.add(resolved);
+        }
       } else {
         packages.add(bareSpecifierPackage(specifier));
       }
@@ -242,7 +358,7 @@ export const webPluginLayerBoundary: RuleDefinition = {
 
 export const webPluginImportAllowlist: RuleDefinition = {
   preflight: true,
-  rule: 'A web plugin imports only react, the TanStack store packages, the web contract, the shared components, its own web/ files, and its package src/types',
+  rule: 'A web plugin imports only react, the TanStack store packages, the web contract, the shared components, its own web/ files, and its package src/types and src/constants',
   rationale:
     "The cockpit's bundler compiles a plugin's web/ folder into the host bundle, so whatever it imports ships to the browser: a node builtin or a server framework breaks the build or leaks into the page, and another plugin's module couples two packages that must stay installable apart. The core boundary rule only sees relative paths, so bare specifiers are checked here.",
   check(filePath, configRoot) {
@@ -256,7 +372,15 @@ export const webPluginImportAllowlist: RuleDefinition = {
     for (const specifier of moduleSpecifiers(sourceFile)) {
       if (specifier.startsWith('.')) {
         const target = relativeTarget(filePath, specifier, configRoot);
-        if (target === null || !(isWebPath(target) || isTypesPath(target))) {
+        if (
+          target === null ||
+          !(
+            isWebPath(target) ||
+            isTypesPath(target) ||
+            target === 'src/constants' ||
+            target.startsWith('src/constants/')
+          )
+        ) {
           offenders.add(specifier);
         }
       } else if (!allowed.has(specifier)) {
@@ -264,7 +388,7 @@ export const webPluginImportAllowlist: RuleDefinition = {
       }
     }
     if (offenders.size === 0) return null;
-    return `Web plugin code may import only react, @tanstack/store, @tanstack/react-store, ${CONTRACTS_PACKAGE}, ${COMPONENTS_PACKAGE}, its own ${WEB_ROOT}/** and src/types/**; found: ${[...offenders].join(', ')}.`;
+    return `Web plugin code may import only react, @tanstack/store, @tanstack/react-store, ${WEB_CONTRACTS_ENTRY}, ${COMPONENTS_PACKAGE}, its own ${WEB_ROOT}/** and src/types/** or src/constants/**; found: ${[...offenders].join(', ')}.`;
   },
 };
 
@@ -288,11 +412,20 @@ export const webPluginNoModuleState: RuleDefinition = {
   },
 };
 
+function hasBrowserRuntime(manifest: WebPackageManifest, packageName: string): boolean {
+  if (manifest.dependencies?.[packageName] !== undefined) return true;
+  return (
+    manifest.peerDependencies?.[packageName] !== undefined &&
+    manifest.peerDependenciesMeta?.[packageName]?.optional === true &&
+    manifest.devDependencies?.[packageName] !== undefined
+  );
+}
+
 export const webPluginManifest: RuleDefinition = {
   preflight: true,
-  rule: 'A doompiWeb manifest block names a kebab-case plugin with an existing, typechecked client entry, publishes what its web/ code ships, and depends on the web contract',
+  rule: 'A doompiWeb manifest block names a kebab-case browser-only plugin with the canonical client entry',
   rationale:
-    'doompi sync discovers a plugin from this block and Vite compiles the shipped web/ source from the installed package, so a wrong entry path, an unpublished src/types file, or a missing contract dependency only fails on a user machine after publishing. Checking the block against the files it names catches that before the package leaves the repository.',
+    'doompi sync discovers browser presentation from doompiWeb.client while server facets own APIs and channels. An alternate client path, web-owned hub entry, unpublished type file, or missing contract dependency fails only after packaging unless rejected here.',
   check(filePath, configRoot) {
     if (path.basename(filePath) !== PACKAGE_MANIFEST_NAME) return null;
     const manifest = readManifest(configRoot);
@@ -312,12 +445,14 @@ export const webPluginManifest: RuleDefinition = {
         problems.push(`'${id}' registrationOrder must be a non-negative integer when present`);
       }
       const client = normalizeEntry(block.client);
-      if (client === null || !client.startsWith('./') || client.includes('..')) {
-        problems.push(`'${id}' client must be a package-relative ./path`);
+      if (client !== './src/extensions/web.ts') {
+        problems.push(`'${id}' client must be ./src/extensions/web.ts`);
       } else {
         if (!fs.existsSync(path.join(configRoot, client))) problems.push(`'${id}' client '${client}' does not exist`);
         if (!isPublished(files, stripDot(client)))
           problems.push(`'${id}' client '${client}' is not in the files allowlist`);
+        for (const dependency of unpublishedBrowserDependencies(configRoot, client, files))
+          problems.push(`'${id}' browser entry imports '${dependency}', which is not in the files allowlist`);
       }
       // Keyed off the root the package actually has, not the client path: the
       // client may be a re-export from src/exports, which sits in neither root.
@@ -326,15 +461,7 @@ export const webPluginManifest: RuleDefinition = {
         problems.push(`'${id}' has no ${webRoot}/${WEB_TSCONFIG}, so its web entry is never typechecked`);
       }
       if (block.hub !== undefined) {
-        const hub = block.hub as { entry?: unknown; dist?: unknown } | string;
-        const entry = normalizeEntry(hub);
-        const dist = typeof hub === 'object' && hub !== null ? hub.dist : undefined;
-        if (entry === null || !fs.existsSync(path.join(configRoot, entry))) {
-          problems.push(`'${id}' hub.entry '${String(entry)}' does not exist`);
-        }
-        if (typeof dist !== 'string' || !dist.startsWith('./')) {
-          problems.push(`'${id}' hub.dist must be the package-relative ./path of the built hub entry`);
-        }
+        problems.push(`'${id}' must not declare doompiWeb.hub; register channels and APIs through doompiServer`);
       }
     }
     const imports = webImports(configRoot);
@@ -342,10 +469,10 @@ export const webPluginManifest: RuleDefinition = {
       if (!isPublished(files, typeFile))
         problems.push(`${WEB_ROOT}/ imports '${typeFile}', which is not in the files allowlist`);
     }
-    if (manifest.dependencies?.[CONTRACTS_PACKAGE] === undefined) {
+    if (!hasBrowserRuntime(manifest, CONTRACTS_PACKAGE)) {
       problems.push(`${CONTRACTS_PACKAGE} must be a dependency: the synced bundle imports it at runtime`);
     }
-    if (imports.packages.has(COMPONENTS_PACKAGE) && manifest.dependencies?.[COMPONENTS_PACKAGE] === undefined) {
+    if (imports.packages.has(COMPONENTS_PACKAGE) && !hasBrowserRuntime(manifest, COMPONENTS_PACKAGE)) {
       problems.push(`${COMPONENTS_PACKAGE} must be a dependency: ${WEB_ROOT}/ imports it`);
     }
     return problems.length > 0 ? `doompiWeb manifest: ${problems.join('; ')}.` : null;
@@ -397,7 +524,7 @@ function exportsWebPlugin(sourceFile: ts.SourceFile): boolean {
   for (const statement of sourceFile.statements) {
     if (ts.isImportDeclaration(statement) && ts.isStringLiteralLike(statement.moduleSpecifier)) {
       const bindings = statement.importClause?.namedBindings;
-      if (statement.moduleSpecifier.text === CONTRACTS_PACKAGE && bindings && ts.isNamedImports(bindings)) {
+      if (statement.moduleSpecifier.text === WEB_CONTRACTS_ENTRY && bindings && ts.isNamedImports(bindings)) {
         importsHelper ||= bindings.elements.some(
           (element) => (element.propertyName ?? element.name).text === DEFINE_WEB_PLUGIN,
         );
@@ -442,12 +569,13 @@ export const webPluginEntry: RuleDefinition = {
       .map(stripDot);
     if (!entries.includes(relativePath)) return null;
     const sourceFile = readSource(filePath);
-    if (!sourceFile || exportsWebPlugin(sourceFile)) return null;
+    if (!sourceFile) return null;
+    if (exportsWebPlugin(sourceFile)) return null;
     const target = reExportedWebPluginTarget(sourceFile, filePath);
     if (target !== null) {
       const forwarded = readResolvedSource(target);
       if (forwarded && exportsWebPlugin(forwarded)) return null;
     }
-    return `The doompiWeb client entry must export ${WEB_PLUGIN_EXPORT} built with ${DEFINE_WEB_PLUGIN}(...) imported from ${CONTRACTS_PACKAGE}, directly or through one re-export; the host registry imports { ${WEB_PLUGIN_EXPORT} } from it.`;
+    return `The doompiWeb client entry must export ${WEB_PLUGIN_EXPORT} built with ${DEFINE_WEB_PLUGIN}(...) imported from ${WEB_CONTRACTS_ENTRY}, directly or through one re-export; the host registry imports { ${WEB_PLUGIN_EXPORT} } from it.`;
   },
 };

@@ -1,6 +1,19 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 test.use({ assets: 'synced' });
+
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/global/plugin/voice/clients/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        deviceId: 'physical-mic',
+        inputs: [{ deviceId: 'physical-mic', groupId: 'built-in', label: 'Built-in microphone' }],
+      }),
+    });
+  });
+});
 
 test('records once and appends the returned transcript without invoking autonomous voice', async ({
   page,
@@ -41,6 +54,11 @@ test('records once and appends the returned transcript without invoking autonomo
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: {
+        enumerateDevices: async () => [
+          { deviceId: 'physical-mic', groupId: 'built-in', label: 'Built-in microphone', kind: 'audioinput' },
+        ],
+        addEventListener() {},
+        removeEventListener() {},
         getUserMedia: async () => ({
           getTracks: () => [
             {
@@ -55,7 +73,7 @@ test('records once and appends the returned transcript without invoking autonomo
     });
   });
 
-  await page.route('**/api/plugin/voice-media/**', async (route) => {
+  await page.route('**/api/sessions/*/plugin/voice-media/manual/**', async (route) => {
     const request = route.request();
     mediaRequests.push({
       url: request.url(),
@@ -98,7 +116,7 @@ test('records once and appends the returned transcript without invoking autonomo
     method: 'POST',
     contentType: 'audio/webm;codecs=opus',
   });
-  expect(mediaRequests[0]?.url).toContain('/api/plugin/voice-media/manual/transcribe?session=s1');
+  expect(mediaRequests[0]?.url).toContain('/api/sessions/s1/plugin/voice-media/manual/transcribe?session=s1');
   expect(Number(mediaRequests[0]?.duration)).toBeGreaterThanOrEqual(0);
   expect(mediaRequests[0]?.bodyLength).toBeGreaterThan(0);
   expect(
@@ -151,6 +169,11 @@ test('cleans up after a failed transcription and retries successfully', async ({
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: {
+        enumerateDevices: async () => [
+          { deviceId: 'physical-mic', groupId: 'built-in', label: 'Built-in microphone', kind: 'audioinput' },
+        ],
+        addEventListener() {},
+        removeEventListener() {},
         getUserMedia: async () => ({
           getTracks: () => [
             {
@@ -165,7 +188,7 @@ test('cleans up after a failed transcription and retries successfully', async ({
     });
   });
 
-  await page.route('**/api/plugin/voice-media/**', async (route) => {
+  await page.route('**/api/sessions/*/plugin/voice-media/manual/**', async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
     mediaRequests.push({

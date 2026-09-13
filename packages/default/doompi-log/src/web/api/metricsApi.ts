@@ -1,4 +1,5 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
+
 import {
   isMetricsUnavailable,
   issuesUrl,
@@ -7,7 +8,7 @@ import {
   type MetricsPeriod,
   type MetricsResponse,
   type IssuesResponse,
-} from '../../types/webMetrics.ts';
+} from '../../types/webMetrics';
 
 /**
  * The page's half of this package's metrics API. The only place the cockpit

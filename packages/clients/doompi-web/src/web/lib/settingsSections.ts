@@ -1,11 +1,12 @@
-import type { SettingsSectionContribution } from '@agimon-ai/doompi-web-contracts';
+import type { SettingsSectionContribution } from '@agimon-ai/doompi-core/web';
+
 import {
   pluginRepositorySettingsPanels,
   pluginSettingsPanels,
   pluginSettingsSections,
   type InstalledRepositorySettingsPanel,
   type InstalledSettingsPanel,
-} from './pluginRegistry.ts';
+} from './pluginRegistry';
 
 /**
  * The settings menu, as data: the rail's gear and the settings page both
@@ -114,7 +115,7 @@ export function settingsSections(workspace?: SettingsWorkspace): readonly Settin
     workspace: 'general' as const,
     contribution,
   }));
-  const contributedForRepository = contributions.map((contribution) => ({
+  const contributedForRepository = [...pluginSettingsSections('workspace')].sort(byMenuOrder).map((contribution) => ({
     id: `${REPOSITORY_SECTION_PREFIX}${contribution.id}`,
     label: contribution.label,
     detail: contribution.detail,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   appendQueued,
   appendUserPrompt,
@@ -12,7 +13,7 @@ import {
   type ToolEntry,
   summariseArgs,
   textFromContent,
-} from '../../src/web/lib/sessionModel.ts';
+} from '../../src/web/lib/sessionModel';
 
 const fold = (frames: Array<Record<string, unknown>>, from: SessionState = initialSessionState): SessionState =>
   frames.reduce((carried, frame) => reduceSession(carried, frame), from);
@@ -298,6 +299,25 @@ describe('reduceSession', () => {
     expect(state.dialog).toBeNull();
   });
 
+  it('restores a settlement divider at its chronological turn boundary', () => {
+    const state = reduceSession(
+      {
+        ...initialSessionState,
+        entries: [
+          { kind: 'user', id: 'u1', text: 'first', timestamp: 100 },
+          { kind: 'assistant', id: 'a1', text: 'one', thinking: '', streaming: false, timestamp: 200 },
+          { kind: 'user', id: 'u2', text: 'second', timestamp: 300 },
+          { kind: 'assistant', id: 'a2', text: 'two', thinking: '', streaming: false, timestamp: 400 },
+        ],
+        nextId: 5,
+      },
+      { type: 'agent_settled', timestamp: 250 },
+      { transcriptFromProtocol: true },
+    );
+
+    expect(state.entries.map((entry) => entry.kind)).toEqual(['user', 'assistant', 'settled', 'user', 'assistant']);
+  });
+
   it('unwraps replayed frames', () => {
     const state = reduceSession(initialSessionState, {
       type: 'replay',
@@ -334,10 +354,15 @@ describe('reduceSession', () => {
       messageCount: 3,
       isStreaming: true,
     });
+    expect(state).toMatchObject({ streaming: true, settled: false });
   });
 
-  it('survives a get_state with no model', () => {
-    const state = reduceSession(initialSessionState, { type: 'response', command: 'get_state', data: {} });
+  it('uses the authoritative get_state lifecycle without adding a transcript entry', () => {
+    const active = { ...initialSessionState, streaming: true, settled: false };
+    const state = reduceSession(active, { type: 'response', command: 'get_state', data: { isStreaming: false } });
+
+    expect(state).toMatchObject({ streaming: false, settled: true });
+    expect(state.entries).toEqual([]);
     expect(state.agent?.model).toBe('unknown');
   });
 
@@ -662,6 +687,35 @@ describe('reduceSession', () => {
     expect(reduceSession(initialSessionState, { type: 'entry_appended', entry: 'junk' }).minorModes).toBeNull();
   });
 
+  it('restores live selection statuses from the journalled context projection', () => {
+    const projection = {
+      version: 1,
+      revision: 3,
+      selection: { majorMode: 'copilot', domains: ['default', 'web'], profile: 'writer' },
+      groups: [],
+      totalTokens: 0,
+      inactiveTokens: 0,
+      estimator: 'gpt-tokenizer',
+    };
+    const restored = reduceSession(initialSessionState, {
+      type: 'entry_appended',
+      entry: { type: 'custom', customType: 'doom-context', data: projection },
+    });
+    expect(restored.context).toEqual(projection);
+    expect(restored.statuses).toMatchObject({
+      'doom-major-mode': '*writer*:[copilot]:default,web',
+      'doom-domain': 'default,web',
+      'doom-profile': 'writer',
+    });
+
+    const legacy = reduceSession(initialSessionState, {
+      type: 'entry_appended',
+      entry: { type: 'custom', customType: 'doom-context', data: { ...projection, selection: undefined } },
+    });
+    expect(legacy.context).toEqual({ ...projection, selection: undefined });
+    expect(legacy.statuses).toEqual({});
+  });
+
   it('closes only the matching dialog when the hub reports it answered', () => {
     const opened = reduceSession(initialSessionState, {
       type: 'extension_ui_request',
@@ -804,7 +858,7 @@ describe('restoring a journalled transcript', () => {
 
     expect(state.entries[0]).toEqual({
       kind: 'user',
-      id: 'u1',
+      id: 'e1',
       text: 'review this',
       images: [{ data: 'cG5n', mimeType: 'image/png' }],
     });
@@ -830,6 +884,40 @@ describe('restoring a journalled transcript', () => {
       }),
     );
     expect(state.entries[0]).toMatchObject({ kind: 'tool', running: false, isError: true, output: 'boom' });
+  });
+
+  it('reuses a journalled tool call when its live start arrives later', () => {
+    let state = reduceSession(
+      initialSessionState,
+      journal('e1', {
+        role: 'assistant',
+        content: [{ type: 'toolCall', id: 'call-1', name: 'read', arguments: { path: 'README.md' } }],
+      }),
+    );
+    state = reduceSession(state, {
+      type: 'tool_execution_start',
+      toolCallId: 'call-1',
+      toolName: 'read',
+      args: { path: 'README.md' },
+    });
+    state = reduceSession(
+      state,
+      journal('e2', {
+        role: 'toolResult',
+        toolCallId: 'call-1',
+        content: [{ type: 'text', text: 'summary' }],
+        isError: false,
+      }),
+    );
+
+    expect(state.entries).toHaveLength(1);
+    expect(state.entries[0]).toMatchObject({
+      kind: 'tool',
+      toolCallId: 'call-1',
+      output: 'summary',
+      running: false,
+    });
+    expect(state.toolsThisRun).toBe(1);
   });
 
   it('folds each journal entry once, so a re-attach does not double the transcript', () => {

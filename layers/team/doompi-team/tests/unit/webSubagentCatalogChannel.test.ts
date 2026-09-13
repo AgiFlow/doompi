@@ -1,34 +1,50 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import type { HubChannelHost } from '@agimon-ai/doompi-web-contracts';
-import { afterEach, describe, expect, it } from 'vitest';
-import { sessionCatalogPathFor, writeSessionCatalogSnapshot } from '../../src/adapters/sessionCatalogSnapshot.ts';
-import { createSubagentCatalogChannel } from '../../src/adapters/webSubagentCatalogChannel.ts';
-import type { CatalogAgentInput } from '../../src/services/webSubagentCatalog.ts';
-import type { SubagentCatalogPayload } from '../../src/types/webSubagents.ts';
+import type { DoomDirectEventBus, DoomHubChannelHost as HubChannelHost } from '@agimon-ai/doompi-core/hub-channel';
+import { describe, expect, it } from 'vitest';
 
-let cleanups: Array<() => void> = [];
-
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0).reverse()) cleanup();
-});
+import { createSubagentCatalogChannel } from '../../src/controllers/webSubagentCatalogChannel';
+import type { CatalogAgentInput } from '../../src/services/webSubagentCatalog';
+import type { SubagentCatalogPayload } from '../../src/types/webSubagents';
 
 interface FakeHost extends HubChannelHost {
   published: Array<{ sessionId: string; payload: SubagentCatalogPayload }>;
-  notices: string[];
+  emit(sessionId: string, payload: unknown): void;
 }
 
 function fakeHost(): FakeHost {
   const published: FakeHost['published'] = [];
-  const notices: string[] = [];
+  const listeners = new Map<string, Set<(payload: unknown) => void>>();
+  const latest = new Map<string, unknown>();
+  const key = (frameType: string, sessionId: string): string => `${frameType}:${sessionId}`;
+  const directEvents: DoomDirectEventBus = {
+    publish(frameType, sessionId, payload) {
+      const eventKey = key(frameType, sessionId);
+      latest.set(eventKey, payload);
+      for (const listener of listeners.get(eventKey) ?? []) listener(payload);
+    },
+    subscribe(frameType, sessionId, listener, options) {
+      const eventKey = key(frameType, sessionId);
+      const current = listeners.get(eventKey) ?? new Set<(payload: unknown) => void>();
+      current.add(listener);
+      listeners.set(eventKey, current);
+      if (options?.replayLatest && latest.has(eventKey)) listener(latest.get(eventKey));
+      return () => {
+        current.delete(listener);
+        if (current.size === 0) listeners.delete(eventKey);
+      };
+    },
+    clearSession(sessionId) {
+      for (const eventKey of latest.keys()) if (eventKey.endsWith(`:${sessionId}`)) latest.delete(eventKey);
+    },
+    close: () => listeners.clear(),
+  };
   return {
     published,
-    notices,
+    emit: (sessionId, payload) => directEvents.publish('subagent_catalog', sessionId, payload),
     sessions: () => [{ sessionId: 's1', cwd: '/w' }],
+    directEvents,
     publish: (sessionId, payload) => published.push({ sessionId, payload: payload as SubagentCatalogPayload }),
-    requestSessionApi: () => Promise.resolve(Response.json({ error: 'not implemented' }, { status: 501 })),
-    onNotice: (message) => notices.push(message),
+    requestSessionApi: () => Promise.resolve(Response.json({ error: 'must not be called' }, { status: 500 })),
+    onNotice: () => undefined,
   };
 }
 
@@ -38,133 +54,52 @@ const agent = (name: string, source: CatalogAgentInput['source']): CatalogAgentI
   description: `${name} does things`,
   filePath: `/x/${name}.md`,
 });
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-const waitFor = async (predicate: () => boolean, what: string, timeoutMs = 4000): Promise<void> => {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}.`);
-    await sleep(15);
-  }
-};
+
+const payload = (names: string[]): SubagentCatalogPayload => ({
+  cwd: '/w',
+  agents: names.map((name, index) => ({
+    ...agent(name, index === 0 ? 'project' : 'user'),
+    fallbackModels: [],
+    tools: [],
+    skills: [],
+    extensions: [],
+    defaultContext: 'fresh',
+  })),
+  models: ['t1'],
+});
 
 describe('the subagent catalog hub channel', () => {
-  it('publishes the catalog on arrival, answers snapshots, and publishes only changes on the tick', async () => {
+  it('replays and publishes the session-owned catalog without polling', () => {
     const host = fakeHost();
-    let agents = [agent('reviewer', 'project')];
-    let reads = 0;
-    const channel = createSubagentCatalogChannel((cwd) => {
-      reads += 1;
-      return { agents: cwd === '/w' ? agents : [], models: ['t1'] };
-    }, 20);
-    const source = channel.start(host);
-    cleanups.push(() => source.close());
-    expect(channel.frameType).toBe('subagent_catalog');
-
+    host.emit('s1', payload(['reviewer']));
+    const source = createSubagentCatalogChannel().start(host);
     source.sessionAdded?.({ sessionId: 's1', cwd: '/w' });
-    await waitFor(() => host.published.length === 1, 'the arrival catalog');
-    expect(host.published).toHaveLength(1);
-    expect(host.published[0]).toMatchObject({ sessionId: 's1', payload: { cwd: '/w', models: ['t1'] } });
-    expect(host.published[0]?.payload.agents.map((row) => row.name)).toEqual(['reviewer']);
 
-    // A snapshot re-reads for the subscriber but does not publish again.
-    const readsBefore = reads;
-    expect(source.payloadFor({ sessionId: 's1', cwd: '/w' })).toMatchObject({ cwd: '/w' });
-    expect(reads).toBe(readsBefore + 1);
-    expect(source.payloadFor({ sessionId: 'nobody', cwd: '/w' })).toBeUndefined();
-    await sleep(70);
     expect(host.published).toHaveLength(1);
+    expect(source.payloadFor({ sessionId: 's1', cwd: '/w' })).toEqual(payload(['reviewer']));
 
-    agents = [...agents, agent('scout', 'user')];
-    await waitFor(() => host.published.length === 2, 'the change publishing');
-    expect(host.published[1]?.payload.agents.map((row) => row.name)).toEqual(['reviewer', 'scout']);
+    host.emit('s1', payload(['reviewer', 'scout']));
+    expect(host.published).toHaveLength(2);
+    expect(source.payloadFor({ sessionId: 's1', cwd: '/w' })).toEqual(payload(['reviewer', 'scout']));
 
     source.sessionRemoved?.('s1');
+    host.emit('s1', payload(['after-removal']));
+    expect(host.published).toHaveLength(2);
     expect(source.payloadFor({ sessionId: 's1', cwd: '/w' })).toBeUndefined();
+    source.close();
   });
 
-  it('publishes an empty catalog with the reason when discovery fails, noticing once', async () => {
+  it('ignores malformed or cross-scope events and closes its subscription', () => {
     const host = fakeHost();
-    const channel = createSubagentCatalogChannel(() => {
-      throw new Error('bad frontmatter');
-    }, 1_000_000);
-    const source = channel.start(host);
-    cleanups.push(() => source.close());
-
+    const source = createSubagentCatalogChannel().start(host);
     source.sessionAdded?.({ sessionId: 's1', cwd: '/w' });
-    await waitFor(() => host.published.length === 1, 'the failed catalog');
-    expect(host.published[0]?.payload).toEqual({ cwd: '/w', agents: [], models: [], warning: 'bad frontmatter' });
-    expect(host.notices).toHaveLength(1);
-    source.payloadFor({ sessionId: 's1', cwd: '/w' });
-    await sleep(0);
-    expect(host.notices).toHaveLength(1);
-  });
 
-  it('reads plugin agents from the session API that owns the active domains', async () => {
-    const host = fakeHost();
-    host.requestSessionApi = async (scope, request) => {
-      expect(scope).toEqual({ sessionId: 's1', cwd: '/w' });
-      expect(request).toMatchObject({ basePath: 'team', path: '/catalog', method: 'GET' });
-      return Response.json({ agents: [agent('plugins.reviewer', 'plugin')], models: ['team/model'] });
-    };
-    const source = createSubagentCatalogChannel(undefined, 1_000_000).start(host);
-    cleanups.push(() => source.close());
+    host.emit('s1', { cwd: '/w', agents: 'invalid', models: [] });
+    host.emit('s1', { cwd: '/elsewhere', agents: [], models: [] });
+    expect(host.published).toEqual([]);
 
-    source.sessionAdded?.({ sessionId: 's1', cwd: '/w' });
-    await waitFor(() => host.published.length === 1, 'the session API catalog');
-
-    expect(host.published[0]?.payload).toMatchObject({
-      cwd: '/w',
-      agents: [{ name: 'plugins.reviewer', source: 'plugin' }],
-      models: ['team/model'],
-    });
-  });
-
-  it('prefers what the session published over the session API', async () => {
-    const sessionId = `catalog-chan-${String(process.pid)}-${String(Date.now())}`;
-    const snapshotPath = sessionCatalogPathFor({ sessionId, tmpdir: os.tmpdir(), uid: process.getuid?.() });
-    if (snapshotPath === undefined) return; // No uid on this platform: the bridge is disabled by design.
-    cleanups.push(() => fs.rmSync(path.dirname(snapshotPath), { recursive: true, force: true }));
-    writeSessionCatalogSnapshot(sessionId, {
-      cwd: '/w',
-      agents: [agent('domains.developer', 'plugin')],
-      models: ['team/model'],
-    });
-
-    const host = fakeHost();
-    let apiCalls = 0;
-    host.requestSessionApi = () => {
-      apiCalls += 1;
-      return Promise.resolve(Response.json({ agents: [], models: [] }));
-    };
-    const source = createSubagentCatalogChannel(undefined, 1_000_000).start(host);
-    cleanups.push(() => source.close());
-
-    source.sessionAdded?.({ sessionId, cwd: '/w' });
-    await waitFor(() => host.published.length === 1, 'the published catalog');
-
-    expect(apiCalls).toBe(0);
-    expect(host.published[0]?.payload).toMatchObject({
-      cwd: '/w',
-      agents: [{ name: 'domains.developer', source: 'plugin' }],
-      models: ['team/model'],
-    });
-  });
-
-  it('falls back to the session API when the published snapshot is for another cwd', async () => {
-    const sessionId = `catalog-chan-moved-${String(process.pid)}-${String(Date.now())}`;
-    const snapshotPath = sessionCatalogPathFor({ sessionId, tmpdir: os.tmpdir(), uid: process.getuid?.() });
-    if (snapshotPath === undefined) return;
-    cleanups.push(() => fs.rmSync(path.dirname(snapshotPath), { recursive: true, force: true }));
-    writeSessionCatalogSnapshot(sessionId, { cwd: '/elsewhere', agents: [agent('stale', 'plugin')], models: [] });
-
-    const host = fakeHost();
-    host.requestSessionApi = () => Promise.resolve(Response.json({ agents: [agent('fresh', 'project')], models: [] }));
-    const source = createSubagentCatalogChannel(undefined, 1_000_000).start(host);
-    cleanups.push(() => source.close());
-
-    source.sessionAdded?.({ sessionId, cwd: '/w' });
-    await waitFor(() => host.published.length === 1, 'the session API catalog');
-
-    expect(host.published[0]?.payload.agents.map((row) => row.name)).toEqual(['fresh']);
+    source.close();
+    host.emit('s1', payload(['late']));
+    expect(host.published).toEqual([]);
   });
 });

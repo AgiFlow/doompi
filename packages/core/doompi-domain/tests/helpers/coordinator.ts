@@ -1,13 +1,12 @@
-import { Context } from '@deepseek-ai/cordis';
 import {
   DOOM_TRANSITION_SERVICE,
   type DoomTransitionCoordinator,
   type DoomTransitionPlan,
   type DoomTransitionRequest,
-  type MinorModeCatalogHost,
   type TransitionOutcome,
   type TransitionSelectionSnapshot,
-} from '@agimon-ai/doompi-extension-contracts/transition';
+} from '@agimon-ai/doompi-core/transition';
+import { Context } from '@deepseek-ai/cordis';
 
 /**
  * A coordinator stub on a real cordis registry.
@@ -62,9 +61,6 @@ export function bindStubCoordinator(
       const resolvedOutcome = applied ?? 'applied';
       if (resolvedOutcome === 'applied') committed = plan.candidate;
       return { ...plan, outcome: resolvedOutcome };
-    },
-    attachMinorModeCatalog(_catalog: MinorModeCatalogHost) {
-      return () => undefined;
     },
     dispose() {
       // The stub owns nothing.

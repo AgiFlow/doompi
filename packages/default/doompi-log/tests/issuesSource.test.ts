@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createIssuesSource } from '../src/adapters/node/issuesSource.ts';
+
+import { createIssuesSource } from '../src/services/issuesSource';
 
 /**
  * The CLI's output is a foreign process's JSON, so the narrowing matters more

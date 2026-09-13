@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { humanizeDuration, stepReportLines } from '../../src/tui/workflow/workflowStatusRow';
 
 describe('humanizeDuration', () => {

@@ -1,4 +1,5 @@
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
+
 import {
   cleanImportPath,
   compatibilityWrapperOnly,
@@ -9,6 +10,7 @@ import {
   doomCleanArchitectureBoundary,
   doomFolderLayout,
   doomLayerBoundary,
+  doomServerFacetShape,
   flatServiceLayout,
   noAmbientHostAccess,
   noForwardingModule,
@@ -20,9 +22,12 @@ import {
   schemaPlacement,
   serviceBoundary,
 } from './architecture.js';
+import { compositionLayout } from './compositionLayout.js';
+import { doomConstants } from './constants.js';
 import {
   disposeExternalSubscriptions,
   doomPackageShape,
+  noDirectToolActivation,
   noLiveGlobalRegistry,
   noProtocolChannelLiterals,
   noRawPiEvents,
@@ -32,19 +37,27 @@ import {
   providerOwnedPolicy,
   thinPiAdapter,
 } from './conventions.js';
+import { neutralExtensionContracts } from './neutralContracts.js';
+import { packageApiManifest } from './packageApi.js';
 import { piExtensionDefaultFactory } from './piExtensionContract.js';
+import { pluginCompositionWiring } from './pluginWiring.js';
 import { doomPromptShape } from './prompts.js';
-import { packageApiEntry, packageApiManifest } from './packageApi.js';
 import {
   webPluginEntry,
   webPluginImportAllowlist,
   webPluginLayerBoundary,
   webPluginManifest,
   webPluginNoModuleState,
+  webPluginProtocolLayout,
+  webPluginTypedCalls,
 } from './webPlugin.js';
 import { webPluginToolRenderers } from './webPluginTools.js';
 
 export const rules: Record<string, RuleDefinition> = {
+  'composition-layout': compositionLayout,
+  'plugin-composition-wiring': pluginCompositionWiring,
+  'doom-constants': doomConstants,
+  'neutral-extension-contracts': neutralExtensionContracts,
   'clean-import-path': cleanImportPath,
   'cordis-context-in-pi-adapter': cordisContextInPiAdapter,
   'cordis-feature-plugin': cordisFeaturePlugin,
@@ -60,9 +73,11 @@ export const rules: Record<string, RuleDefinition> = {
   'no-forwarding-module': noForwardingModule,
   'no-internal-public-import': noInternalPublicImport,
   'no-legacy-cordis-access': noLegacyCordisAccess,
+  'no-direct-tool-activation': noDirectToolActivation,
   'no-live-global-registry': noLiveGlobalRegistry,
   'package-layer-order': packageLayerOrder,
   'doom-layer-boundary': doomLayerBoundary,
+  'doom-server-facet-shape': doomServerFacetShape,
   'service-boundary': serviceBoundary,
   'schema-placement': schemaPlacement,
   'doom-package-shape': doomPackageShape,
@@ -76,12 +91,13 @@ export const rules: Record<string, RuleDefinition> = {
   'no-protocol-channel-literals': noProtocolChannelLiterals,
   'dispose-external-subscriptions': disposeExternalSubscriptions,
   'provider-owned-policy': providerOwnedPolicy,
-  'package-api-entry': packageApiEntry,
   'package-api-manifest': packageApiManifest,
   'web-plugin-entry': webPluginEntry,
   'web-plugin-import-allowlist': webPluginImportAllowlist,
   'web-plugin-layer-boundary': webPluginLayerBoundary,
   'web-plugin-manifest': webPluginManifest,
   'web-plugin-no-module-state': webPluginNoModuleState,
+  'web-plugin-protocol-layout': webPluginProtocolLayout,
+  'web-plugin-typed-calls': webPluginTypedCalls,
   'web-plugin-tool-renderers': webPluginToolRenderers,
 };

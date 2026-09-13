@@ -1,6 +1,6 @@
-export { notificationExtension, type NotificationExtensionOptions } from '../adapters/pi/extension.ts';
-export { createMainThreadTitleController, createWorkerTitleController } from '../adapters/shellTitleController.ts';
-export { sendSystemNotification } from '../adapters/systemNotification.ts';
+export type { NotificationExtensionOptions } from '../controllers/notificationRuntime';
+export { createMainThreadTitleController, createWorkerTitleController } from '../controllers/shellTitleController';
+export { sendSystemNotification } from '../controllers/systemNotification';
 export {
   askUserPromptBody,
   type AttentionState,
@@ -8,7 +8,7 @@ export {
   supportsShellTitle,
   warrantsAttentionNotification,
   warrantsSettledNotification,
-} from '../services/notificationPolicy.ts';
+} from '../services/notificationPolicy';
 export {
   attentionNotification,
   notificationBody,
@@ -16,11 +16,11 @@ export {
   settledNotification,
   shellTabTitle,
   type ShellTabTitleInput,
-} from '../services/notificationText.ts';
+} from '../services/notificationText';
 export type {
   DesktopNotification,
   ShellTitleAction,
   ShellTitleCommand,
   ShellTitleController,
   WriteTitle,
-} from '../types/notifications.ts';
+} from '../types/notifications';

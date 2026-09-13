@@ -1,6 +1,6 @@
+import type { SessionServiceState } from '@agimon-ai/doompi-core/session-protocol';
 import { replicatedState } from '@earendil-works/chord';
 import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import type { SessionServiceState } from '@agimon-ai/doompi-extension-contracts/session-protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fake = vi.hoisted(() => ({
@@ -12,6 +12,11 @@ const fake = vi.hoisted(() => ({
   dispose: vi.fn<() => Promise<void>>(),
   binding: vi.fn(),
   publish: vi.fn(),
+  applyFrame: vi.fn(),
+  applyQueue: vi.fn(),
+  reset: vi.fn(),
+  refresh: vi.fn(),
+  order: [] as string[],
   release: vi.fn(),
 }));
 
@@ -36,18 +41,38 @@ vi.mock('@earendil-works/chord', async (original) => ({
   ...(await original<typeof import('@earendil-works/chord')>()),
   createRemoteServiceBinding: fake.binding,
 }));
-vi.mock('../../src/web/lib/piTransport.ts', () => ({
+vi.mock('../../src/web/lib/piTransport', () => ({
   protocolSocketUrl: () => 'ws://test/api/pi',
   createProtocolTransport: () => ({}),
 }));
-vi.mock('../../src/web/lib/browserTelemetry.ts', () => ({ recordBrowserPerformance: () => {} }));
-vi.mock('../../src/web/stores/sessionStore.ts', () => ({
-  applyProtocolTranscript: fake.publish,
+vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({ bindSessionProtocol: () => fake.release }));
+vi.mock('../../src/web/lib/browserTelemetry', () => ({ recordBrowserPerformance: () => {} }));
+vi.mock('../../src/web/stores/sessionStore', () => ({
+  applyProtocolTranscript: (...args: unknown[]) => {
+    fake.order.push('transcript');
+    fake.publish(...args);
+  },
+  applyProtocolQueue: (...args: unknown[]) => {
+    fake.order.push('queue');
+    fake.applyQueue(...args);
+  },
+  applySessionFrame: (...args: unknown[]) => {
+    fake.order.push('frame');
+    fake.applyFrame(...args);
+  },
+  beginSessionReplay: () => fake.order.push('begin'),
+  endSessionReplay: () => fake.order.push('end'),
+  resetSessionStore: () => {
+    fake.order.push('reset');
+    fake.reset();
+  },
   releaseProtocolTranscript: fake.release,
-  applyProtocolQueue: () => {},
+  refreshSessionFacts: fake.refresh,
+  bindHistoryReader: () => () => {},
+  setHasNewerHistory: () => {},
 }));
 
-import { startProtocolRuntime, type ProtocolRuntime } from '../../src/web/app/protocolRuntime.ts';
+import { startProtocolRuntime, type ProtocolRuntime } from '../../src/web/app/protocolRuntime';
 
 function sessionState() {
   return replicatedState<SessionServiceState>({
@@ -63,11 +88,11 @@ function sessionState() {
       attached: true,
       locked: false,
       revision: 0,
-      transcript: [],
       queuedSteer: [],
       queuedSteerCount: 0,
     },
     progress: null,
+    presentation: { revision: 0, dropped: 0, events: [], projections: [] },
   });
 }
 
@@ -86,8 +111,22 @@ beforeEach(() => {
   fake.dispose.mockResolvedValue(undefined);
   state = sessionState();
   disposeBinding = vi.fn().mockResolvedValue(undefined);
+  fake.order = [];
   fake.binding.mockImplementation(() => ({
-    use: () => ({ state }),
+    use: () => ({
+      state,
+      readTranscriptPage: async () => ({
+        entries: [],
+        context: [],
+        drafts: [],
+        olderCursor: null,
+        newerCursor: null,
+        startCursor: null,
+        endCursor: null,
+        generation: 0,
+        revision: state.state.presentation?.revision ?? 0,
+      }),
+    }),
     ready: async () => {},
     dispose: disposeBinding,
   }));
@@ -117,15 +156,13 @@ describe('protocol attachment recovery', () => {
     expect(fake.request).toHaveBeenCalledTimes(3);
     expect(fake.connect).toHaveBeenCalledTimes(1);
 
-    state.state.snapshot.transcript = [
-      { id: 'new', role: 'user', content: [{ type: 'text', text: 'live again' }], timestamp: 1 },
-    ];
+    const frame = {
+      type: 'entry_appended' as const,
+      entry: { type: 'message', id: 'new', message: { role: 'user', content: 'live again' } },
+    };
+    state.state.presentation = { revision: 1, dropped: 0, events: [{ sequence: 1, frame }], projections: [] };
     state.publish(BACKGROUND_CONTEXT);
-    expect(fake.publish).toHaveBeenLastCalledWith(
-      'session-1',
-      [expect.objectContaining({ text: 'live again' })],
-      false,
-    );
+    expect(fake.applyFrame).toHaveBeenLastCalledWith('session-1', frame, { replay: false });
   });
 
   it('cancels attachment retries when the page stops focusing the session', async () => {
@@ -152,12 +189,87 @@ describe('protocol attachment recovery', () => {
     const pending = new Promise<void>((resolve) => {
       ready = resolve;
     });
-    fake.binding.mockImplementation(() => ({ use: () => ({ state }), ready: () => pending, dispose: disposeBinding }));
+    fake.binding.mockImplementation(() => ({
+      use: () => ({
+        state,
+        readTranscriptPage: async () => ({
+          entries: [],
+          context: [],
+          drafts: [],
+          olderCursor: null,
+          newerCursor: null,
+          startCursor: null,
+          endCursor: null,
+          generation: 0,
+          revision: state.state.presentation?.revision ?? 0,
+        }),
+      }),
+      ready: () => pending,
+      dispose: disposeBinding,
+    }));
     await start();
+    fake.publish.mockClear();
     runtime!.stop();
     ready();
     await vi.advanceTimersByTimeAsync(0);
     expect(fake.publish).not.toHaveBeenCalled();
     expect(disposeBinding).toHaveBeenCalledTimes(1);
+  });
+  it('reloads history after branch navigation', async () => {
+    await start();
+    fake.reset.mockClear();
+    state.state.presentation = {
+      revision: 1,
+      dropped: 0,
+      projections: [],
+      events: [{ sequence: 1, frame: { type: 'navigation_end' } }],
+    };
+    state.publish(BACKGROUND_CONTEXT);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fake.reset).toHaveBeenCalledOnce();
+  });
+  it('delivers changed presentation projections without requiring a replay', async () => {
+    await start();
+    state.state.presentation = {
+      revision: 1,
+      dropped: 0,
+      projections: [],
+      events: [{ sequence: 1, frame: { type: 'agent_start' } }],
+    };
+    state.publish(BACKGROUND_CONTEXT);
+    fake.order = [];
+    fake.applyFrame.mockClear();
+    const frame = {
+      type: 'extension_ui_request' as const,
+      method: 'setStatus' as const,
+      statusKey: 'doom-profile',
+      statusText: 'reviewer',
+    };
+    state.state.presentation = {
+      revision: 2,
+      dropped: 0,
+      projections: [{ sequence: 2, frame }],
+      events: [{ sequence: 2, frame }],
+    };
+    state.publish(BACKGROUND_CONTEXT);
+    expect(fake.order).toEqual(['frame']);
+    expect(fake.applyFrame).toHaveBeenCalledExactlyOnceWith('session-1', frame, { replay: false });
+  });
+
+  it('replays when the presentation revision regresses even without a ring gap', async () => {
+    await start();
+    state.state.presentation = {
+      revision: 2,
+      dropped: 0,
+      projections: [],
+      events: [{ sequence: 2, frame: { type: 'agent_start' } }],
+    };
+    state.publish(BACKGROUND_CONTEXT);
+    fake.order = [];
+    state.state.presentation = { revision: 1, dropped: 0, projections: [], events: [] };
+    state.publish(BACKGROUND_CONTEXT);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fake.order[0]).toBe('begin');
+    expect(fake.order[1]).toBe('reset');
   });
 });

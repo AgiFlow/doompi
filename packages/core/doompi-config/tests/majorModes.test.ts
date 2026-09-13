@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   filterHookDisabledLayers,
   layerEntries,
@@ -10,7 +12,7 @@ import {
   type MajorModesConfig,
   resolveLayers,
   resolvePackageConfigurations,
-} from '../src/exports/majorModes.ts';
+} from '../src/exports/majorModes';
 
 describe('major mode configuration', () => {
   let root: string;

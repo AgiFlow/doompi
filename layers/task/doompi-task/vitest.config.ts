@@ -1,18 +1,18 @@
 import { fileURLToPath, URL } from 'node:url';
+
 import { defineConfig } from 'vitest/config';
 
 const threshold = process.env.THRESHOLD ? Number.parseInt(process.env.THRESHOLD, 10) : 80;
 const doomExtensionContractsExports = fileURLToPath(
-  new URL('../../../packages/core/doompi-extension-contracts/src/exports/', import.meta.url),
+  new URL('../../../packages/core/doompi-core/src/exports/', import.meta.url),
 );
-const doomTeamSrc = fileURLToPath(new URL('../../team/doompi-team/src/', import.meta.url));
 const doomUiExports = fileURLToPath(new URL('../../../packages/core/doompi-ui/src/exports/', import.meta.url));
 
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: ['./tests/setup.ts'],
+    setupFiles: ['./tests/setup'],
     bail: 10,
     exclude: ['node_modules/**/*', 'dist/**/*', 'coverage/**/*'],
     coverage: {
@@ -28,35 +28,39 @@ export default defineConfig({
   },
   resolve: {
     alias: [
-      { find: /^@agimon-ai\/doompi-team\/(.*)$/, replacement: `${doomTeamSrc}$1.ts` },
       {
-        find: '@agimon-ai/doompi-extension-contracts/cordis-host',
+        find: '@agimon-ai/doompi-core/runtime-cordis-host',
+        replacement: `${doomExtensionContractsExports}../pi/cordisHost.ts`,
+      },
+      {
+        find: '@agimon-ai/doompi-core/pi-extension',
+        replacement: `${doomExtensionContractsExports}piExtension.ts`,
+      },
+      {
+        find: '@agimon-ai/doompi-core/cordis-host',
         replacement: `${doomExtensionContractsExports}cordisHost.ts`,
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/context-contributions',
+        find: '@agimon-ai/doompi-core/context-contributions',
         replacement: `${doomExtensionContractsExports}contextContributions.ts`,
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/background-work',
+        find: '@agimon-ai/doompi-core/delegation',
+        replacement: `${doomExtensionContractsExports}delegation.ts`,
+      },
+      {
+        find: '@agimon-ai/doompi-core/background-work',
         replacement: `${doomExtensionContractsExports}backgroundWork.ts`,
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/child-process',
+        find: '@agimon-ai/doompi-core/child-process',
         replacement: `${doomExtensionContractsExports}childProcess.ts`,
       },
       {
-        find: '@agimon-ai/doompi-extension-contracts/subagent-tool',
-        replacement: `${doomExtensionContractsExports}subagentTool.ts`,
-      },
-      {
-        find: '@agimon-ai/doompi-extension-contracts/ui-hub',
+        find: '@agimon-ai/doompi-core/ui-hub',
         replacement: `${doomExtensionContractsExports}uiHub.ts`,
       },
-      {
-        find: /^@agimon-ai\/doompi-extension-contracts\/(.*)$/,
-        replacement: `${doomExtensionContractsExports}$1.ts`,
-      },
+      { find: '@agimon-ai/doompi-ui/doom-overlay', replacement: `${doomUiExports}doomOverlay.ts` },
       { find: /^@agimon-ai\/doompi-ui\/(.*)$/, replacement: `${doomUiExports}$1.ts` },
     ],
   },

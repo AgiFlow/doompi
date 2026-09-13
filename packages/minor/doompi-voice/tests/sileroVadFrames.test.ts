@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   SILERO_CONTEXT_SAMPLES,
   SILERO_FRAME_SAMPLES,
   SILERO_STATE_SAMPLES,
   SileroVadFrames,
-} from '../src/web/lib/sileroVadFrames.ts';
+} from '../src/web/lib/sileroVadFrames';
 
 function pcm(samples: readonly number[]): Uint8Array {
   const bytes = new Uint8Array(samples.length * 2);

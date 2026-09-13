@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+
 import type { Plugin } from 'vite';
 
 interface DesktopRuntimePluginOptions {
@@ -9,13 +10,19 @@ interface DesktopRuntimePluginOptions {
   workspaceRoot: string;
 }
 
+export const SUPPORTED_DESKTOP_TARGETS = new Set(['darwin-arm64', 'linux-x64', 'linux-arm64']);
+
+export function assertSupportedDesktopTarget(target: string): void {
+  if (SUPPORTED_DESKTOP_TARGETS.has(target)) return;
+  throw new Error(`DoomPi Desktop supports ${[...SUPPORTED_DESKTOP_TARGETS].join(', ')}; ${target} is not supported.`);
+}
 export const DOOMPI_RUNTIME_PACKAGES = new Set([
   '@agimon-ai/doompi',
   '@agimon-ai/doompi-autostop',
   '@agimon-ai/doompi-cache',
   '@agimon-ai/doompi-config',
   '@agimon-ai/doompi-domain',
-  '@agimon-ai/doompi-extension-contracts',
+  '@agimon-ai/doompi-core',
   '@agimon-ai/doompi-major-mode',
   '@agimon-ai/doompi-notification',
   '@agimon-ai/doompi-profile',
@@ -31,7 +38,7 @@ const PLATFORM_PACKAGE_SUFFIX = /-(darwin|linux)-(arm64|x64)$/u;
 const EXTERNAL_RUNTIME_PACKAGES = new Set(['@earendil-works/pi-coding-agent']);
 
 const WEB_RUNTIME_PACKAGES = new Set([
-  '@agimon-ai/doompi-extension-contracts',
+  '@agimon-ai/doompi-core',
   '@agimon-ai/doompi-web-components',
   '@agimon-ai/doompi-web-security',
   '@earendil-works/pi-client',
@@ -49,6 +56,9 @@ const WEB_RUNTIME_PACKAGES = new Set([
 /** Copies the non-JavaScript files required by the bundled desktop runtime. */
 export function desktopRuntimePlugin(options: DesktopRuntimePluginOptions): Plugin {
   const target = `${process.platform}-${process.arch}`;
+  assertSupportedDesktopTarget(target);
+  const napiTarget =
+    process.platform === 'linux' ? `${target}-gnu` : process.platform === 'win32' ? `${target}-msvc` : target;
   const runtimePackages = new Set([...nativePackageCandidates(target), 'picomatch', 'postcss']);
   return {
     name: 'doompi-desktop-runtime-files',
@@ -76,7 +86,6 @@ export function desktopRuntimePlugin(options: DesktopRuntimePluginOptions): Plug
     writeBundle() {
       copyWebAssets(options.workspaceRoot, options.outDir);
       copyPackageManifest(options.workspaceRoot, options.outDir, 'packages/clients/doompi-web', 'doompi-web');
-      copyPackageManifest(options.workspaceRoot, options.outDir, 'packages/clients/doompi-server', 'doompi-server');
       copyPackageManifest(options.workspaceRoot, options.outDir, 'packages/core/doompi', 'doompi');
       copyPackageManifest(
         options.workspaceRoot,
@@ -91,6 +100,8 @@ export function desktopRuntimePlugin(options: DesktopRuntimePluginOptions): Plug
           ...DOOMPI_RUNTIME_PACKAGES,
           `@agimon-ai/doompi-runner-rmux-${target}`,
           `@agimon-ai/doompi-runner-rtk-${target}`,
+          `@tursodatabase/database-${napiTarget}`,
+          `sqlite-vec-${process.platform === 'win32' ? `windows-${process.arch}` : target}`,
         ]),
         path.join(options.workspaceRoot, 'packages', 'core', 'doompi'),
       );
@@ -103,6 +114,7 @@ export function desktopRuntimePlugin(options: DesktopRuntimePluginOptions): Plug
         path.join(options.workspaceRoot, 'packages', 'clients', 'doompi-web'),
         new Set(['@earendil-works/pi-coding-agent']),
       );
+      copyMermaidD3Runtime(options.workspaceRoot, options.outDir);
       copyNpmRuntime(options.workspaceRoot, options.outDir);
       copyViteRuntime(options.workspaceRoot, options.outDir);
     },
@@ -144,6 +156,7 @@ interface CatalogPackage {
 }
 
 export function bundledDoomPiPackages(workspaceRoot: string, target: string): CatalogPackage[] {
+  assertSupportedDesktopTarget(target);
   const packages: CatalogPackage[] = [];
   const layerRoot = path.join(workspaceRoot, 'layers');
   const groupRoots = [
@@ -206,6 +219,21 @@ function copyPackageCatalog(workspaceRoot: string, outDir: string, target: strin
   fs.writeFileSync(
     path.join(catalogRoot, 'index.json'),
     `${JSON.stringify({ version: 1, packages: catalog }, null, 2)}\n`,
+  );
+}
+
+/** Preserves Mermaid's modern D3 closure beside older D3 consumers in the flat web runtime. */
+function copyMermaidD3Runtime(workspaceRoot: string, outDir: string): void {
+  const webComponentsRoot = path.join(workspaceRoot, 'packages', 'core', 'doompi-web-components');
+  const webComponentsRequire = createRequire(path.join(webComponentsRoot, 'package.json'));
+  const mermaidManifest = resolveManifest(webComponentsRequire, 'mermaid');
+  const mermaidRequire = createRequire(mermaidManifest);
+  const d3Root = path.dirname(fs.realpathSync(resolveManifest(mermaidRequire, 'd3')));
+  copyRuntimePackages(
+    workspaceRoot,
+    path.join(outDir, 'doompi-web', 'node_modules', 'mermaid', 'node_modules'),
+    new Set(['d3']),
+    d3Root,
   );
 }
 

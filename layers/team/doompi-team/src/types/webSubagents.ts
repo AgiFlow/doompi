@@ -22,6 +22,8 @@ export interface SubagentRun {
   taskRef?: string;
   model?: string;
   cwd: string;
+  /** The child transcript path, when the session host exposes one. */
+  sessionFile?: string;
   /** Epoch milliseconds, as doom-team writes them. */
   startedAt: number;
   endedAt?: number;

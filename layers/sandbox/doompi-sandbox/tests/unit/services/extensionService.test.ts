@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DefaultSandboxExtensionService } from '../../../src/services/extensionService.ts';
+
+import { DefaultSandboxExtensionService } from '../../../src/services/extensionService';
 
 describe('DefaultSandboxExtensionService', () => {
   it('reports a host session and how to contain it', async () => {

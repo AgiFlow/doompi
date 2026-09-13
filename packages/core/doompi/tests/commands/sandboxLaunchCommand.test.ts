@@ -1,16 +1,17 @@
-import { DOOMPI_SANDBOX_ENV } from '@agimon-ai/doompi-extension-contracts/sandbox-harness';
+import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
+import { DOOMPI_SANDBOX_ENV } from '@agimon-ai/doompi-core/sandbox-harness';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HarnessTelemetry } from '../../src/adapters/telemetry/logSinkTelemetry';
-import { SandboxLaunchCommand } from '../../src/commands/sandboxLaunchCommand';
-import type { HarnessContext } from '../../src/exports/services/harnessContext';
-import type { HarnessOptions } from '../../src/types/interfaces/harness';
+
+import { SandboxLaunchCommand } from '../../src/cli/commands/sandbox';
+import type { HarnessOptions } from '../../src/composition/types/harness';
+import type { HarnessContext } from '../../src/exports/harnessContext';
 
 const adapterMocks = vi.hoisted(() => ({
   resolveSandboxHarnessEntry: vi.fn(),
   loadSandboxHarness: vi.fn(),
 }));
 
-vi.mock('../../src/adapters/sandboxHarness.ts', () => adapterMocks);
+vi.mock('../../src/cli/commands/sandbox/harness', () => adapterMocks);
 
 function options(overrides: Partial<HarnessOptions> = {}): HarnessOptions {
   return {

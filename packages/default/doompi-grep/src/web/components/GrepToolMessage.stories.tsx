@@ -5,8 +5,9 @@
  * rather than a hand-rolled stub, so a change to the slot contract breaks this
  * story at the type level instead of silently drifting.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { GrepToolMessage } from './GrepToolMessage.tsx';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { GrepToolMessage } from './GrepToolMessage';
 
 const MATCHES = [
   '@file src/lib/cn.ts#a1b2c3d4',

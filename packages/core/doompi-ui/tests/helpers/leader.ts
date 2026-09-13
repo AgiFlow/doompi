@@ -1,5 +1,5 @@
-import type { DoomLeaderBinding } from '../../src/exports/leader.ts';
-import { DoomLeaderRegistry } from '../../src/exports/leaderRegistry.ts';
+import type { DoomLeaderBinding } from '../../src/exports/leader';
+import { DoomLeaderRegistry } from '../../src/exports/leaderRegistry';
 
 export const TASK_LEADER_SOURCE = '@agimon-ai/doompi-task';
 

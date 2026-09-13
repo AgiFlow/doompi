@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseHarnessArgs } from '../../src/exports/cli/options';
+
+import { parseHarnessArgs } from '../../src/exports/options';
 
 describe('parseHarnessArgs', () => {
   beforeEach(() => {

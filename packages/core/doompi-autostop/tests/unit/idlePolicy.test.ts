@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   AUTO_STOP_ACTION,
   type AutoStopDelays,
   DEFAULT_AUTO_STOP_DELAYS,
   decideOnRecheck,
   decideOnSettled,
-} from '../../src/services/idlePolicy.ts';
+} from '../../src/exports';
 
 const delays: AutoStopDelays = { cooldownMs: 4_000, recheckMs: 50 };
 

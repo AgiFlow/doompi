@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createCockpitHarness } from '../../../src/adapters/cockpitHarness.ts';
-import { cockpitImageTag } from '../../../src/adapters/sandboxImageTag.ts';
-import type { EngineCaptureResult, EngineProcessRunner } from '../../../src/types/sandboxHarness.ts';
+
+import { createCockpitHarness } from '../../../src/services/cockpitHarness';
+import { cockpitImageTag } from '../../../src/services/sandboxImageTag';
+import type { EngineCaptureResult, EngineProcessRunner } from '../../../src/types/sandboxHarness';
 
 const TAG = cockpitImageTag('9.9.9');
 const CONTAINER_ID = 'c0ffee1234';

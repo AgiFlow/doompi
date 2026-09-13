@@ -5,8 +5,8 @@ export {
   persistMcpConfig,
   PROXY_SERVER_NAME,
   resolveMcpAllowlist,
-} from '../adapters/mcpFilter.ts';
-export { mcpSessionEnvironment, type McpSessionEnvironmentInput } from '../adapters/mcpSessionEnvironment.ts';
+} from '../services/mcpFilter';
+export { mcpSessionEnvironment, type McpSessionEnvironmentInput } from '../services/mcpSessionEnvironment';
 export {
   type AgentPluginMcpConfigSource,
   normalizeAgentPluginMcpSource,

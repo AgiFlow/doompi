@@ -1,5 +1,5 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import { MessageItem, MessageItemBody, MessageItemHeader, toolTone } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
 
 const ACTION_LABEL: Readonly<Record<string, string>> = {
   spawn_worktree: 'Create worktree',

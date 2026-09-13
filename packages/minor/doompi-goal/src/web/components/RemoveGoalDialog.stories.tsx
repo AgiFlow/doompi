@@ -6,7 +6,7 @@
  * One open dialog only. DialogContent is a centred fixed portal behind a
  * scrim, so a second open instance would sit exactly on top of the first.
  */
-import { RemoveGoalDialog } from './RemoveGoalDialog.tsx';
+import { RemoveGoalDialog } from './RemoveGoalDialog';
 
 const noop = (): void => undefined;
 

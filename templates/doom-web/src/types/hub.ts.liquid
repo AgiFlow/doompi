@@ -8,13 +8,23 @@ import type { BridgeState, SessionFrame } from './session.ts';
  * Field naming follows @earendil-works/pi-protocol so a future swap to the
  * upstream session server stays a transport change, not a rename.
  */
-export const HUB_PROTOCOL_VERSION = 1;
+export const HUB_PROTOCOL_VERSION = 2;
 
 /** Role marker in the health payload; doompi-server probes for it before binding the port. */
 export const HUB_ROLE = 'hub';
 
-/** REST endpoint for creating sessions; the page posts {cwd, name?} and receives {sessionId}. */
+/** REST endpoint for creating sessions and browsing resumable Pi history. */
 export const SESSIONS_API_ROUTE = '/api/sessions';
+
+/** One inactive Pi thread available to resume in a live session's workspace. */
+export interface PiSessionHistoryItem {
+  id: string;
+  name?: string;
+  firstMessage: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+}
 
 /**
  * REST endpoint behind the new-session directory picker; the page sends the
@@ -36,6 +46,35 @@ export interface SessionGitStatus {
   branch: string;
   /** True when the working tree has uncommitted changes; rendered as a star. */
   dirty: boolean;
+}
+
+/**
+ * A session's parent, as read from its lineage sidecar. Fixed at spawn, so the
+ * hub reads it once rather than refreshing it like git status.
+ */
+export interface SessionLineage {
+  parentSessionId: string;
+  /** The spawning package's own label, such as "worktree". Never interpreted. */
+  provenance: string;
+}
+/** One immutable, signed client composition resolved for a session. */
+export interface SessionWebComposition {
+  /** Stable identity of the synchronized root and generation. */
+  id: string;
+  /** Monotonic signing revision advertised by the manifest. */
+  revision: number;
+  /** Same-origin signed-manifest route read by the trusted service worker. */
+  manifestUrl: string;
+  /** Same-origin prefix for the untrusted source bytes verified by the worker. */
+  rawAssetBaseUrl: string;
+  /** Worker-owned prefix from which the page may execute verified bytes. */
+  verifiedAssetBaseUrl: string;
+  /** Absolute path below both asset prefixes to the composition script. */
+  entryPath: string;
+  /** Absolute paths below both asset prefixes, replaced when this session is focused. */
+  stylePaths: string[];
+  /** Frame types owned by the matching session-local hub composition. */
+  channels: string[];
 }
 
 /**
@@ -63,12 +102,20 @@ export interface SessionSummary {
   awaitingInput: boolean;
   /** ISO 8601 of the last settled run, once one finished. */
   lastSettledAt?: string;
-  /** Shown in the refused overlay so the user can find the competing client. */
-  socketPath: string;
-  /** Where this session serves its package APIs, when it serves any; the hub proxies there. */
-  apiSocketPath?: string;
   /** Omitted when the cwd is not a git repository or git is unavailable. */
   git?: SessionGitStatus;
+  /** Signed plugin composition independently resolved for this session. */
+  webComposition?: SessionWebComposition;
+  /**
+   * The session this one was spawned from, when a lineage sidecar named one.
+   * The rail nests a session under its parent; absent means a top-level row.
+   */
+  parentSessionId?: string;
+  /**
+   * The spawning package's own label for the relationship, such as "worktree".
+   * The hub does not interpret it; the rail uses it to pick an affordance.
+   */
+  sessionProvenance?: string;
 }
 
 /**
@@ -76,7 +123,7 @@ export interface SessionSummary {
  * frame type and the payload shape belongs to the plugin. Re-exported so in-package code keeps importing wire shapes
  * from this one root.
  */
-export type { ChannelFrame } from '@agimon-ai/doompi-web-contracts';
+export type { ChannelFrame } from '@agimon-ai/doompi-core/web';
 
 export const HUB_HELLO_TYPE = 'hub_hello';
 export const SESSIONS_SNAPSHOT_TYPE = 'sessions_snapshot';
@@ -86,14 +133,63 @@ export const SESSION_BACKLOG_TYPE = 'session_backlog';
 export const SESSION_FRAME_TYPE = 'session_frame';
 /** Hub-synthesized close for an answered dialog; Pi itself never announces one. */
 export const DIALOG_ANSWERED_TYPE = 'extension_ui_answered';
+/**
+ * Sync rebuilt the artifacts this page is running against.
+ *
+ * The plugin bundle the browser loaded is one of them, and a bundle only
+ * changes on disk: nothing about the running page notices. The page reloads
+ * itself rather than staying on surfaces the repository no longer describes.
+ */
+export const HUB_RESYNCED_TYPE = 'hub_resynced';
 
 /**
  * The custom session entry the DoomPi runtime journals with its minor-mode
  * catalog projection; it arrives inside Pi's entry_appended frames. The shape
- * mirrors MinorModeProjection in doompi-extension-contracts.
+ * mirrors MinorModeProjection in doompi-minor-mode.
  */
 export const MINOR_MODE_ENTRY_TYPE = 'doom-minor-modes';
 
+/**
+ * The custom session entry the DoomPi runtime journals when the agent's model
+ * changes without a client having asked for it. The shape mirrors
+ * AgentModelProjection in doompi-core.
+ *
+ * Pi reports a thinking-level switch on the wire, so that field follows from
+ * the frame alone. It has no wire event for the model, so plan mode applying
+ * its configured planning model would otherwise leave the chip naming the
+ * model the session left behind.
+ */
+export const AGENT_MODEL_ENTRY_TYPE = 'doom-agent-model';
+/**
+ * The custom session entry DoomPi journals describing what the session is
+ * composed of: which mode admitted each tool and skill, and what each costs.
+ *
+ * Schemas are deliberately absent. Only names, kinds, owners and integer token
+ * counts travel, so republishing the whole composition stays cheap.
+ */
+export const CONTEXT_ENTRY_TYPE = 'doom-context';
+
+/**
+ * The custom session entry doompi-profile journals naming the persona the
+ * session speaks as. The shape mirrors ProfileIdentityProjection in
+ * doompi-core.
+ *
+ * Unlike the entries above, this one is transcript rather than projection: it
+ * stays in journal order and is never collapsed to the latest record, because a
+ * message keeps the persona it was written under. Adding it to
+ * PROJECTION_ENTRY_TYPES would repaint the whole transcript on every switch.
+ */
+export const PROFILE_IDENTITY_ENTRY_TYPE = 'doom-profile-identity';
+/**
+ * The custom session entry doompi-domain journals once Pi has rebuilt its
+ * resource catalog for a reload; it mirrors DOOM_RESOURCE_CATALOG_ENTRY_TYPE in
+ * doompi-core.
+ *
+ * A reload is what changes the skills the composer offers under `$`, and Pi
+ * reports nothing else for one, so this entry is the cockpit's only notice that
+ * the command list it cached belongs to the previous selection.
+ */
+export const RESOURCE_CATALOG_ENTRY_TYPE = 'doom-resource-catalog';
 export interface MinorModeActionProjection {
   id: string;
   label: string;
@@ -119,9 +215,81 @@ export interface MinorModeProjection {
   revision: number;
   modes: MinorModeRecordProjection[];
 }
+
+export type ContextGroupKind = 'major' | 'minor' | 'domain' | 'core';
+export type ContextItemSource = 'extension' | 'mcp' | 'plugin' | 'core';
+
+export interface ContextItemProjection {
+  name: string;
+  itemKind: 'tool' | 'skill';
+  source: ContextItemSource;
+  owner: string;
+  tokens: number;
+  active: boolean;
+}
+
+export interface ContextGroupProjection {
+  id: string;
+  label: string;
+  kind: ContextGroupKind;
+  items: ContextItemProjection[];
+  /** What the group costs now: active items only. */
+  tokens: number;
+  /** What its gated items would add if switched on. */
+  inactiveTokens: number;
+}
+
+export interface ContextProjection {
+  version: 1;
+  revision: number;
+  selection?: { majorMode: string; domains: string[]; profile?: string };
+  groups: ContextGroupProjection[];
+  totalTokens: number;
+  inactiveTokens: number;
+  /** Names the tokenizer, because the figures are indicative, not billed. */
+  estimator: string;
+}
 export const SUBSCRIBE_TYPE = 'subscribe';
 export const UNSUBSCRIBE_TYPE = 'unsubscribe';
 export const SESSION_COMMAND_TYPE = 'session_command';
+/** A page follows one thread of a session: a journal a plugin's hub source names, such as a subagent run. */
+export const SUBSCRIBE_THREAD_TYPE = 'subscribe_thread';
+export const UNSUBSCRIBE_THREAD_TYPE = 'unsubscribe_thread';
+export const THREAD_BACKLOG_TYPE = 'thread_backlog';
+export const THREAD_FRAME_TYPE = 'thread_frame';
+
+/** A page asks for the transcript before what it already holds. */
+export const HISTORY_REQUEST_TYPE = 'history_request';
+/** One older window, oldest first, answering a history_request. */
+export const HISTORY_PAGE_TYPE = 'history_page';
+
+/**
+ * How many journalled messages one page carries. Small enough that prepending
+ * a window never blocks the reader's scroll, large enough that a flick through
+ * a long transcript does not turn into a hundred round trips.
+ */
+export const HISTORY_PAGE_SIZE = 100;
+
+export interface HistoryRequestFrame {
+  type: typeof HISTORY_REQUEST_TYPE;
+  sessionId: string;
+  /** Journal id of the oldest entry the page holds; absent asks for the newest window. */
+  before?: string;
+  limit?: number;
+}
+
+export interface HistoryPageFrame {
+  type: typeof HISTORY_PAGE_TYPE;
+  sessionId: string;
+  /** Entry frames, oldest first, to prepend above what the page holds. */
+  frames: Record<string, unknown>[];
+  /** The cursor for the next older window; null when the transcript starts here. */
+  cursor: string | null;
+  /** Whether anything older than this window exists. */
+  hasMore: boolean;
+  /** Echoed so a page can drop an answer to a question it has since abandoned. */
+  before?: string;
+}
 
 /** First frame on every page socket, before the snapshot. */
 export interface HubHelloFrame {
@@ -146,12 +314,15 @@ export interface SessionRemovedFrame {
   sessionId: string;
 }
 
-/** Reply to subscribe: recent history from the hub's ring, then live frames follow. */
+/**
+ * Reply to subscribe: this session's latest status and widget projections first,
+ * then its bounded transient history. Live frames follow.
+ */
 export interface SessionBacklogFrame {
   type: typeof SESSION_BACKLOG_TYPE;
   sessionId: string;
   frames: SessionFrame[];
-  /** Frames the bounded ring had to discard before this page subscribed. */
+  /** Transient frames the bounded ring discarded; projections do not contribute. */
   dropped: number;
 }
 
@@ -197,4 +368,48 @@ export function subscribeFrame(sessionId: string): SubscribeFrame {
 
 export function unsubscribeFrame(sessionId: string): UnsubscribeFrame {
   return { type: UNSUBSCRIBE_TYPE, sessionId };
+}
+
+export interface SubscribeThreadFrame {
+  type: typeof SUBSCRIBE_THREAD_TYPE;
+  sessionId: string;
+  threadId: string;
+}
+
+export interface UnsubscribeThreadFrame {
+  type: typeof UNSUBSCRIBE_THREAD_TYPE;
+  sessionId: string;
+  threadId: string;
+}
+
+/** Reply to subscribe_thread: the journal's newest entries as entry_appended frames, then live ones follow. */
+export interface ThreadBacklogFrame {
+  type: typeof THREAD_BACKLOG_TYPE;
+  sessionId: string;
+  threadId: string;
+  frames: SessionFrame[];
+}
+
+/** One journal entry a followed thread gained, addressed to the pages following it. */
+export interface ThreadFrameEnvelope {
+  type: typeof THREAD_FRAME_TYPE;
+  sessionId: string;
+  threadId: string;
+  frame: SessionFrame;
+}
+
+export function subscribeThreadFrame(sessionId: string, threadId: string): SubscribeThreadFrame {
+  return { type: SUBSCRIBE_THREAD_TYPE, sessionId, threadId };
+}
+
+export function unsubscribeThreadFrame(sessionId: string, threadId: string): UnsubscribeThreadFrame {
+  return { type: UNSUBSCRIBE_THREAD_TYPE, sessionId, threadId };
+}
+
+export function threadBacklog(sessionId: string, threadId: string, frames: SessionFrame[]): ThreadBacklogFrame {
+  return { type: THREAD_BACKLOG_TYPE, sessionId, threadId, frames };
+}
+
+export function threadFrameEnvelope(sessionId: string, threadId: string, frame: SessionFrame): ThreadFrameEnvelope {
+  return { type: THREAD_FRAME_TYPE, sessionId, threadId, frame };
 }

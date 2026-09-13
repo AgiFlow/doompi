@@ -1,4 +1,4 @@
-import type { SettingsSectionContribution } from '@agimon-ai/doompi-web-contracts';
+import type { SettingsSectionContribution } from '@agimon-ai/doompi-core/web';
 
 export const computerUseSettingsSection: SettingsSectionContribution = {
   id: 'computer-use',

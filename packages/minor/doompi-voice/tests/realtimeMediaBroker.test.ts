@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createVoiceMediaApi } from '../src/adapters/clientMediaApi.ts';
-import { RealtimeMediaBroker } from '../src/adapters/realtime/realtimeMediaBroker.ts';
-import { REALTIME_ROUTES as routes } from '../src/types/realtime.ts';
-import { VOICE_MEDIA_PROTOCOL_VERSION, VOICE_MEDIA_ROUTES } from '../src/types/clientMedia.ts';
-import { VOICE_OWNERSHIP_ROUTES } from '../src/types/voiceOwnership.ts';
+
+import { createVoiceMediaApi } from '../src/controllers/clientMediaApi';
+import { RealtimeMediaBroker } from '../src/services/realtimeMediaBroker';
+import { VOICE_MEDIA_PROTOCOL_VERSION, VOICE_MEDIA_ROUTES } from '../src/types/clientMedia';
+import { REALTIME_ROUTES as routes } from '../src/types/realtime';
+import { VOICE_OWNERSHIP_ROUTES } from '../src/types/voiceOwnership';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
@@ -25,7 +26,11 @@ function fixture(fakeTimers = false) {
     sessionId: 'session',
     clientConnectWaitMs: 0,
     now: () => (fakeTimers ? Date.now() : now),
-    wakePublisher: { publish: wakePublish },
+    directEvents: {
+      publish: (_frameType: string, _sessionId: string, payload: unknown) => wakePublish(payload),
+      subscribe: () => () => undefined,
+      close: () => undefined,
+    },
   });
   disposers.push(() => api.close());
   const post = (route: string, body: object, authorized = true) =>

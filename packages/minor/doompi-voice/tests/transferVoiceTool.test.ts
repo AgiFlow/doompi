@@ -1,12 +1,35 @@
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
+import { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   TRANSFER_VOICE_TOOL_NAME,
   createTransferVoiceToolLifecycle,
-  reconcileTransferVoiceTool,
-  registerTransferVoiceTool,
-} from '../src/adapters/pi/transferVoiceTool.ts';
-import { sessionVoiceOwnership } from '../src/services/sessionVoiceOwnership.ts';
-import { VOICE_OWNERSHIP_PROTOCOL_VERSION, type VoiceOwnershipCommand } from '../src/types/voiceOwnership.ts';
+  transferVoiceToolRestriction,
+  transferVoiceToolVisible,
+} from '../src/controllers/transferVoiceTool';
+import { sessionVoiceOwnership } from '../src/services/sessionVoiceOwnership';
+import { VOICE_OWNERSHIP_PROTOCOL_VERSION, type VoiceOwnershipCommand } from '../src/types/voiceOwnership';
+
+function surfaceFixture() {
+  const all = ['read', TRANSFER_VOICE_TOOL_NAME];
+  let activeTools = [...all];
+  const surface = createDoomToolSurface({
+    generation: 'transfer-voice-test',
+    allTools: () => all,
+    activeTools: () => activeTools,
+    setActiveTools: (names) => {
+      activeTools = [...names];
+    },
+  });
+  const handle = surface.register({
+    source: 'voice#transfer-voice',
+    restrict: transferVoiceToolRestriction(transferVoiceToolVisible()),
+  });
+  return { handle, visible: () => surface.active() };
+}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -43,7 +66,13 @@ describe('transfer_voice server handoff tool', () => {
     const state = { value: 'active' as const } as { value: 'active' | 'disabled' };
     const dispose = await installOwner(state);
     const registerTool = vi.fn();
-    const registration = registerTransferVoiceTool({ registerTool: registerTool as never });
+    const registration = createTransferVoiceToolLifecycle(() => undefined);
+    const root = new Context();
+    await definePiExtension({ name: 'transfer-test', tools: registration }).install(root, {
+      registerTool,
+      on: vi.fn(),
+      registerCommand: vi.fn(),
+    } as unknown as ExtensionAPI);
     const tool = registerTool.mock.calls[0]![0] as {
       description: string;
       execute(
@@ -59,7 +88,7 @@ describe('transfer_voice server handoff tool', () => {
     expect(accepted.content[0]?.text).toContain('Target');
     expect(sessionVoiceOwnership.snapshot().handoff).toMatchObject({ handle: 'target-handle' });
 
-    registration.refresh();
+    registration.sessionStarted();
     expect(registerTool).toHaveBeenCalledOnce();
     await sessionVoiceOwnership.command({
       version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
@@ -67,28 +96,24 @@ describe('transfer_voice server handoff tool', () => {
       action: 'catalog',
       targets: [{ handle: 'target-2', label: 'Second', order: 1 }],
     });
-    registration.refresh();
+    registration.sessionStarted();
     expect(registerTool).toHaveBeenCalledTimes(2);
+    registration.dispose();
+    await root.fiber.dispose();
     dispose();
   });
 
-  it('reconciles visibility from active server ownership', async () => {
+  it('shows the tool only while the server holds ownership with a listed target', async () => {
     const state = { value: 'active' as const } as { value: 'active' | 'disabled' };
     const dispose = await installOwner(state);
-    let activeTools = ['read'];
-    const setActiveTools = vi.fn((tools: string[]) => {
-      activeTools = tools;
-    });
-    const pi = { getActiveTools: () => activeTools, setActiveTools };
+    const surface = surfaceFixture();
 
-    reconcileTransferVoiceTool(pi);
-    expect(activeTools).toEqual(['read', TRANSFER_VOICE_TOOL_NAME]);
-    reconcileTransferVoiceTool(pi);
-    expect(setActiveTools).toHaveBeenCalledOnce();
+    surface.handle.update(transferVoiceToolRestriction(transferVoiceToolVisible()));
+    expect(surface.visible()).toEqual(['read', TRANSFER_VOICE_TOOL_NAME]);
 
     state.value = 'disabled';
-    reconcileTransferVoiceTool(pi);
-    expect(activeTools).toEqual(['read']);
+    surface.handle.update(transferVoiceToolRestriction(transferVoiceToolVisible()));
+    expect(surface.visible()).toEqual(['read']);
     dispose();
   });
 
@@ -96,18 +121,16 @@ describe('transfer_voice server handoff tool', () => {
     vi.useFakeTimers();
     const state = { value: 'active' as const } as { value: 'active' | 'disabled' };
     const dispose = await installOwner(state);
-    let activeTools: string[] = [];
-    const lifecycle = createTransferVoiceToolLifecycle({
-      registerTool: vi.fn() as never,
-      getActiveTools: () => activeTools,
-      setActiveTools: (tools) => {
-        activeTools = tools;
-      },
-    });
+    const surface = surfaceFixture();
+    const lifecycle = createTransferVoiceToolLifecycle((restrict) => surface.handle.update(restrict));
 
     lifecycle.sessionStarted();
     lifecycle.sessionStarted();
-    expect(activeTools).toContain(TRANSFER_VOICE_TOOL_NAME);
+    expect(surface.visible()).toContain(TRANSFER_VOICE_TOOL_NAME);
+
+    state.value = 'disabled';
+    vi.advanceTimersByTime(1_000);
+    expect(surface.visible()).not.toContain(TRANSFER_VOICE_TOOL_NAME);
     lifecycle.dispose();
     lifecycle.dispose();
     dispose();

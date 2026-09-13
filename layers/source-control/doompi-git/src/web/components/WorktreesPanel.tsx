@@ -1,3 +1,4 @@
+import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 /**
  * The '# git' group's tab: this session's worktrees, and the form that makes one.
  *
@@ -24,11 +25,11 @@
  *   loses its border.
  */
 import { Button, Dot, EmptyState, Input, Spinner, StatusBadge } from '@agimon-ai/doompi-web-components';
-import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
-import type { WorktreeView } from '../../types/webWorktrees.ts';
-import { requestWorktreeClose, requestWorktreeCreate, worktreeActivity } from '../stores/worktreesActivityStore.ts';
+
+import type { WorktreeView } from '../../types/webWorktrees';
+import { requestWorktreeClose, requestWorktreeCreate, worktreeActivity } from '../stores/worktreesActivityStore';
 
 const WORKTREES_TAB_ID = 'git-worktrees';
 

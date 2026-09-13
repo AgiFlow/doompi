@@ -1,0 +1,37 @@
+{
+  "name": "@agimon-ai/{{ packageName }}",
+  "version": "0.0.1",
+  "description": "{{ packageDescription }}",
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "test": "vitest --run --passWithNoTests"
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@agimon-ai/vibe-lint-plugin-doom-core": "workspace:*",
+    "@types/node": "26.4.1",
+    "tsdown": "0.23.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

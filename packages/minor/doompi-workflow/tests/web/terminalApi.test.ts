@@ -1,5 +1,6 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   artifactContentUrl,
   deleteWorkflowRun,
@@ -8,7 +9,7 @@ import {
   followScreen,
   sendKeys,
   takeControl,
-} from '../../src/web/api/terminalApi.ts';
+} from '../../src/web/api/terminalApi';
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fetch: vi.fn() } }));
 
@@ -36,14 +37,12 @@ describe('workflow hub API bundle routing', () => {
     followScreen('repo/a', 'run one', () => undefined, 'session/a');
 
     expect(eventSourceUrls).toEqual([
-      '/api/plugin/workflow/runs/repo%2Fa/run%20one/screen/stream?hubSession=session%2Fa',
+      '/api/sessions/session%2Fa/plugin/workflow/runs/repo%2Fa/run%20one/screen/stream',
     ]);
     expect(artifactContentUrl('repo/a', 'run one', 'reports/a b.md', false, 'session/a')).toBe(
-      '/api/plugin/workflow/runs/repo%2Fa/run%20one/artifacts/reports/a%20b.md?raw=1&hubSession=session%2Fa',
+      '/api/sessions/session%2Fa/plugin/workflow/runs/repo%2Fa/run%20one/artifacts/reports/a%20b.md?raw=1',
     );
-    expect(artifactContentUrl('repo/a', 'run one', 'report.md', true, 'session/a')).toContain(
-      '?raw=1&download=1&hubSession=session%2Fa',
-    );
+    expect(artifactContentUrl('repo/a', 'run one', 'report.md', true, 'session/a')).toContain('?raw=1&download=1');
   });
 
   it('routes reads, writes, and deletion through the selected session bundle', async () => {
@@ -60,11 +59,11 @@ describe('workflow hub API bundle routing', () => {
     await deleteWorkflowRun('repo', 'run', 'session-a');
 
     expect(fetch.mock.calls.map(([url]) => url)).toEqual([
-      '/api/plugin/workflow/runs/repo/run/control?hubSession=session-a',
-      '/api/plugin/workflow/runs/repo/run/keys?hubSession=session-a',
-      '/api/plugin/workflow/runs/repo/run/artifacts?hubSession=session-a',
-      '/api/plugin/workflow/runs/repo/run/artifacts/report.md?hubSession=session-a',
-      '/api/plugin/workflow/runs/repo/run?hubSession=session-a',
+      '/api/sessions/session-a/plugin/workflow/runs/repo/run/control',
+      '/api/sessions/session-a/plugin/workflow/runs/repo/run/keys',
+      '/api/sessions/session-a/plugin/workflow/runs/repo/run/artifacts',
+      '/api/sessions/session-a/plugin/workflow/runs/repo/run/artifacts/report.md',
+      '/api/sessions/session-a/plugin/workflow/runs/repo/run',
     ]);
   });
 });

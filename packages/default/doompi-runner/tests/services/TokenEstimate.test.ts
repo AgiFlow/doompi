@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { estimateTokens } from '../../src/services/TokenEstimate/tokenEstimate';
+
+import { estimateTokens } from '../../src/services/tokenEstimate';
 
 describe('estimateTokens', () => {
   it('returns nothing for empty text', () => {

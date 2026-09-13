@@ -1,4 +1,4 @@
-import type { RunnerBackend, RunnerExitReason, RunnerState } from './runnerRegistry.ts';
+import type { RunnerBackend, RunnerExitReason, RunnerState } from './runnerRegistry';
 
 /**
  * Runner run view types shared by this package's hub channel and its web
@@ -35,5 +35,3 @@ export interface RunnerRunView {
   logPath: string;
   exit?: RunnerRunExitView;
 }
-
-export const RUNNER_RUNS_TYPE = 'runner_runs';

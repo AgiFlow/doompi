@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Input } from './Input.tsx';
+import { Input } from './Input';
 
 const VARIANTS = ['default', 'bare'] as const;
 const SIZES = ['xs', 'sm', 'md', 'lg'] as const;

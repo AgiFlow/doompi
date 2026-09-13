@@ -1,21 +1,22 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { DoomMcpToolResolverService } from '@agimon-ai/doompi-extension-contracts/mcp-tool-resolver';
+
+import type { DoomMcpToolResolverService } from '@agimon-ai/doompi-core/mcp-tool-resolver';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { formatTeamContextSnapshot } from '../../src/adapters/api/teamSnapshot';
 import {
   McpDirectToolResolverBinding,
   resolveMcpDirectToolNames,
   resolveMcpDirectToolSelections,
-} from '../../src/adapters/runs/shared/mcpDirectToolAllowlist';
+} from '../../src/services/mcpDirectToolAllowlist';
+import { formatTeamContextSnapshot } from '../../src/services/teamSnapshot';
 import {
   formatChildToolDiagnostic,
   readChildToolDiagnostic,
   readChildToolDiagnosticError,
   writeChildToolDiagnostic,
-} from '../../src/adapters/runs/shared/toolAvailability';
+} from '../../src/services/toolAvailability';
 
 const temporaryDirs: string[] = [];
 

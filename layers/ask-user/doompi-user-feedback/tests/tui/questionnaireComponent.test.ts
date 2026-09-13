@@ -1,9 +1,10 @@
 import type { KeybindingsManager, Theme } from '@earendil-works/pi-coding-agent';
 import { CURSOR_MARKER, Key, matchesKey, type MarkdownTheme, type TUI, visibleWidth } from '@earendil-works/pi-tui';
 import { describe, expect, it, vi } from 'vitest';
-import type { QuestionParams } from '../../src/schemas/questionnaire.ts';
-import { QuestionnaireComponent } from '../../src/tui/questionnaireComponent.ts';
-import type { ExternalEditResult, QuestionnaireResult } from '../../src/types/questionnaire.ts';
+
+import type { QuestionParams } from '../../src/schemas/questionnaire';
+import { QuestionnaireComponent } from '../../src/tui/questionnaireComponent';
+import type { ExternalEditResult, QuestionnaireResult } from '../../src/types/questionnaire';
 
 const theme = {
   fg: (_color: string, text: string) => text,

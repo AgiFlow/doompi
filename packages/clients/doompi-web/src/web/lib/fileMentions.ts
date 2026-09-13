@@ -1,4 +1,4 @@
-import { MEDIA_TYPES, type MediaKind } from '../../types/media.ts';
+import { MEDIA_TYPES, type MediaKind } from '../../types/media';
 
 export interface FileMention {
   /** The cwd-relative path as the message spelled it. */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { validateParams } from '../../../../src/adapters/pi/extensions/runWorktreeTool.ts';
+
+import { validateParams } from '../../../../src/tools/runWorktree';
 
 describe('validateParams', () => {
   it.each([

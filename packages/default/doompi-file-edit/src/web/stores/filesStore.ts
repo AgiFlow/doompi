@@ -1,7 +1,8 @@
-import { defineSessionStore } from '@agimon-ai/doompi-web-contracts';
-import type { FileEditsDetailView } from '../../types/fileEditsApi.ts';
-import { filesChannelType, type FilesItemView } from '../../types/webFiles.ts';
-import type { FileComment } from '../lib/fileView.ts';
+import { defineSessionStore } from '@agimon-ai/doompi-core/web';
+
+import type { FileEditsDetailView } from '../../types/fileEditsApi';
+import { filesChannelType, type FilesItemView } from '../../types/webFiles';
+import type { FileComment } from '../lib/fileView';
 
 /**
  * One session's record: the hub's last report plus whatever this page does with

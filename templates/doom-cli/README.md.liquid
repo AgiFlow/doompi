@@ -1,0 +1,9 @@
+# {{ packageName }}
+
+{{ packageDescription }}
+
+Command handlers, options, help, and presentation belong together under `src/cli/commands/<name>`. Shared routing and parsing belong in `src/cli`. Command execution uses functions; public compatibility classes only delegate.
+
+Each of `src/builders/cli`, `src/builders/server`, and `src/builders/web` owns its subsystem composition, generated entrypoints, and bundling. Server argument parsing and process signals belong in `src/cli/server`.
+
+Shared compiler, cache, and input mechanics belong under `src/compiler`. Shared selection data and persisted composition state belong under `src/composition`. Neither builders nor composition may import CLI code, and the compiler may not import those higher layers.

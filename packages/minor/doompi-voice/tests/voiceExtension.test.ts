@@ -1,25 +1,25 @@
-import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-extension-contracts/ask-user';
-import {
-  DOOM_CORDIS_SESSION_SERVICE,
-  type DoomCordisSessionService,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { createNarrationRequest, readDoomNarrationService } from '@agimon-ai/doompi-extension-contracts/narration';
-import { createDoomVoiceToolsService, VOICE_MODE_TOOL_NAMES } from '@agimon-ai/doompi-extension-contracts/voice-tools';
+import { DOOM_ASK_USER_BLOCKED_EVENT } from '@agimon-ai/doompi-core/ask-user';
+import { DOOM_CORDIS_SESSION_SERVICE, type DoomCordisSessionService } from '@agimon-ai/doompi-core/cordis-host';
+import { createNarrationRequest, readDoomNarrationService } from '@agimon-ai/doompi-core/narration';
+import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
+import { VOICE_MODE_TOOL_NAMES } from '@agimon-ai/doompi-core/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
+import type { NarrationToolRuntime } from '../src/controllers/narrationTool';
 import {
   type AutoCapturePiEventController,
   createVoiceNarrationService,
   extractTerminalAssistantText,
-  reconcileVoiceModeTools,
   registerAutoCaptureCordisEventHandlers,
   registerSessionVoiceNarrationService,
-  registerVoiceTurnFallback,
+  createVoiceTurnFallback,
   type VoiceTurnFallbackRuntime,
-} from '../src/exports';
-import type { NarrationToolRuntime } from '../src/adapters/pi/narrationTool.ts';
-import { deliverAutoCaptureInput } from '../src/adapters/pi/voice.ts';
+  voiceToolRestriction,
+} from '../src/controllers/voice';
+import { deliverAutoCaptureInput } from '../src/controllers/voice';
+import { createDoomVoiceToolsService } from '../src/services/voiceTools';
 describe('autonomous prompt delivery', () => {
   it('queues composed prompts as follow-ups without changing ordinary idle or steer delivery', () => {
     const sendUserMessage = vi.fn();
@@ -39,36 +39,40 @@ describe('autonomous prompt delivery', () => {
   });
 });
 
-describe('Voice-owned tool reconciliation', () => {
+describe('Voice-owned tool restriction', () => {
   function fixture(registered = [...VOICE_MODE_TOOL_NAMES]) {
-    let active = ['read', ...VOICE_MODE_TOOL_NAMES, 'write'];
-    const setActiveTools = vi.fn((names: string[]) => {
-      active = [...names];
+    const all = ['read', 'write', ...registered];
+    let activeTools = [...all];
+    const surface = createDoomToolSurface({
+      generation: 'voice-test',
+      allTools: () => all,
+      activeTools: () => activeTools,
+      setActiveTools: (names) => {
+        activeTools = [...names];
+      },
     });
-    const pi = {
-      getActiveTools: () => [...active],
-      getAllTools: () => ['read', 'write', ...registered].map((name) => ({ name })),
-      setActiveTools,
-    } as unknown as ExtensionAPI;
-    return { pi, active: () => [...active], setActiveTools };
+    const handle = surface.register({ source: 'voice', restrict: voiceToolRestriction(false) });
+    return { handle, visible: () => surface.active() };
   }
 
-  it('removes every stale Voice-owned name while preserving unrelated tool order', () => {
+  it('hides every Voice-owned tool until autonomous voice is on', () => {
     const h = fixture();
-    reconcileVoiceModeTools(h.pi, false);
-    expect(h.active()).toEqual(['read', 'write']);
+    expect(h.visible()).toEqual(['read', 'write']);
+    h.handle.update(voiceToolRestriction(true));
+    expect(h.visible()).toEqual(['read', 'write', ...VOICE_MODE_TOOL_NAMES]);
   });
 
-  it('re-adds all three names only when every Voice-owned tool is registered', () => {
-    const enabled = fixture();
-    reconcileVoiceModeTools(enabled.pi, false);
-    reconcileVoiceModeTools(enabled.pi, true);
-    expect(enabled.active()).toEqual(['read', 'write', ...VOICE_MODE_TOOL_NAMES]);
-
+  it('shows the facade only when every Voice-owned tool reached the host', () => {
     const incomplete = fixture(['describe_voice_tools', 'use_voice_tools']);
-    reconcileVoiceModeTools(incomplete.pi, true);
-    expect(incomplete.active()).toEqual(['read', 'write']);
-    expect(incomplete.active()).not.toContain('narrate');
+    incomplete.handle.update(voiceToolRestriction(true));
+    expect(incomplete.visible()).toEqual(['read', 'write']);
+  });
+
+  it('keeps narrate hidden while live mode owns narration', () => {
+    const live = fixture();
+    live.handle.update(voiceToolRestriction(true, false));
+    expect(live.visible()).toContain('use_voice_tools');
+    expect(live.visible()).not.toContain('narrate');
   });
 });
 
@@ -287,14 +291,9 @@ describe('turn-end narration fallback', () => {
       activeGeneration: vi.fn(() => generation),
       narrate: vi.fn(async () => 'completed' as const),
     };
-    const dispose = registerVoiceTurnFallback(
-      {
-        on: ((name: string, handler: LifecycleHandler) => {
-          handlers.set(name, handler);
-        }) as ExtensionAPI['on'],
-      },
-      runtime,
-    );
+    const fallback = createVoiceTurnFallback(runtime);
+    for (const [name, handler] of Object.entries(fallback.events)) handlers.set(name, handler as LifecycleHandler);
+    const dispose = () => fallback.dispose();
     return {
       runtime,
       dispose,

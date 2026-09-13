@@ -21,7 +21,8 @@ const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclud
 })
   .split('\n')
   .filter(Boolean)
-  .map((file) => path.join(root, file));
+  .map((file) => path.join(root, file))
+  .filter((file) => fs.existsSync(file));
 
 if (files.length === 0) {
   console.log('[vibe-lint] No tracked package files matched.');

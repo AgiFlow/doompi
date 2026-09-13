@@ -1,3 +1,4 @@
+import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   AnsiLine,
   Button,
@@ -25,25 +26,25 @@ import {
   StatusBadge,
   StreamCursor,
 } from '@agimon-ai/doompi-web-components';
-import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+
 import type {
   WorkflowJobView,
   WorkflowProgressState,
   WorkflowRunView,
   WorkflowStepView,
-} from '../../types/webWorkflows.ts';
-import type { WorkflowTerminalCapabilitiesView } from '../../types/webWorkflowTerminal.ts';
-import { ArtifactsPane, artifactTab } from './ArtifactsPane.tsx';
-import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from '../stores/catalogStore.ts';
-import { LaunchWorkflowDialog } from './LaunchWorkflowDialog.tsx';
-import { formatRunDuration } from '../lib/runDuration.ts';
-import { stepTerminalTab } from './StepTerminalPanel.tsx';
-import { deleteWorkflowRun, followScreen } from '../api/terminalApi.ts';
-import { WorkflowCatalogDrawer } from './WorkflowCatalogDrawer.tsx';
-import { workflowRunIdentity } from '../lib/workflowActivity.ts';
-import { focusRun, removeRun, workflows } from '../stores/workflowsStore.ts';
+} from '../../types/webWorkflows';
+import type { WorkflowTerminalCapabilitiesView } from '../../types/webWorkflowTerminal';
+import { deleteWorkflowRun, followScreen } from '../api/terminalApi';
+import { formatRunDuration } from '../lib/runDuration';
+import { workflowRunIdentity } from '../lib/workflowActivity';
+import { catalog, closeCatalog, closeLaunch, openCatalog, openLaunch } from '../stores/catalogStore';
+import { focusRun, removeRun, workflows } from '../stores/workflowsStore';
+import { ArtifactsPane, artifactTab } from './ArtifactsPane';
+import { LaunchWorkflowDialog } from './LaunchWorkflowDialog';
+import { stepTerminalTab } from './StepTerminalPanel';
+import { WorkflowCatalogDrawer } from './WorkflowCatalogDrawer';
 
 /** One workflows tab per session; the surface is singular, so the id needs nothing else. */
 export const WORKFLOWS_TAB_ID = 'workflows-runs';

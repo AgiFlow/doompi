@@ -7,8 +7,8 @@
  * content is portalled and positioned against its trigger, so the triggers sit
  * in a three-column grid and the wrapper keeps a min-height for the drop.
  */
-import { Button } from './Button.tsx';
-import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from './Popover.tsx';
+import { Button } from './Button';
+import { Popover, PopoverContent, PopoverFooter, PopoverHeader, PopoverTrigger } from './Popover';
 
 const meta = {
   title: 'Components/Popover',

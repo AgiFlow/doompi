@@ -116,7 +116,7 @@ import { resolveSubagentLaunchContract } from '@agimon-ai/doompi-team';
 
 Focused subpaths include `/api/capability-ceiling`, `/api/delegation`, `/api/team-snapshot`,
 and `/env`. Live cross-extension collaboration contracts come from
-`@agimon-ai/doompi-extension-contracts`; Pi loads `/extensions/pi` through package metadata.
+`@agimon-ai/doompi-core`; Pi loads `/extensions/pi` through package metadata.
 
 ## Development
 
@@ -134,3 +134,9 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+## Source and lifecycle
+
+`src/extensions/pi.ts`, `server.ts`, and `web.ts` are the host entries. They compose controllers, native tool declarations, and named services. Controllers coordinate services and models; TUI rendering stays in `src/tui`. Public capabilities live in flat `src/exports` files and build separately from host entries.
+
+The Pi and server helpers own contribution registration and disposal. Team's collaboration service replaces session fibers explicitly, uses the injected session only when its session manager matches, and otherwise mounts in the standalone plugin context. Losing that injected session disposes its collaboration fiber.

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -37,9 +38,9 @@ describe('@agimon-ai/doompi-autocompact package shape', () => {
     // imports ship as source. Nothing else under src/ does.
     expect(packageJson.files?.filter((entry) => entry.startsWith('src/'))).toEqual([
       'src/web',
-      'src/exports/webClient.ts',
+      'src/extensions/web.ts',
       'src/types/autocompactSettings.ts',
-      'src/types/constants.ts',
+      'src/constants/autocompact.ts',
     ]);
     expect(packageJson.files?.some((entry) => /^(tests|coverage|\.env)/u.test(entry))).toBe(false);
   });
@@ -58,12 +59,13 @@ describe('@agimon-ai/doompi-autocompact package shape', () => {
     expect(config).toMatch(/dts\s*:\s*\{[^}]*eager/u);
     // The browser client re-export is negated out: the cockpit bundles it from
     // source, and node-building it would pull React into dist for nothing.
-    expect(config).toContain("'*': ['src/exports/**/*.ts', '!src/exports/webClient.ts']");
+    expect(config).toContain("'extensions/pi': 'src/extensions/pi.ts'");
+    expect(config).toContain("index: 'src/exports/index.ts'");
     expect(config).not.toContain('src/adapters/');
   });
 
   it('summarizes through the session provider instead of a separate thread', () => {
-    const adapter = readConfig('src/adapters/pi/extension.ts');
+    const adapter = readConfig('src/services/autocompactRuntime/index.ts');
 
     expect(adapter).toContain('provider.streamSimple(model, context, options)');
     expect(adapter).not.toContain('node:worker_threads');

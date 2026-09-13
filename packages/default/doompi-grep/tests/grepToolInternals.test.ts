@@ -1,8 +1,10 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { groupGrepRows, parseGrepRow, tagGrepResult } from '../src/adapters/pi/grepTool.ts';
+
+import { groupGrepRows, parseGrepRow, tagGrepResult } from '../src/tools/piGrep';
 
 let directory = '';
 

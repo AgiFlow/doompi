@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   buildPromptDocument,
   describePrompt,
   hasArgumentTokens,
   isValidPromptName,
   parsePromptDocument,
-} from '../../../src/services/savedPromptDocument.ts';
+} from '../../../src/services/savedPromptDocument';
 
 describe('saved prompt names', () => {
   it('accepts a lowercase slug', () => {

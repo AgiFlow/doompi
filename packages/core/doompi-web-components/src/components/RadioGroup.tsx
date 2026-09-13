@@ -1,6 +1,7 @@
 import { RadioGroup as RadioGroupPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+
+import { cn } from '../lib/cn';
 
 /** One choice out of several; Radix owns the arrow-key roving focus a native group has. */
 export function RadioGroup({ className, ...props }: ComponentProps<typeof RadioGroupPrimitive.Root>) {

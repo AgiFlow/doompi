@@ -1,5 +1,6 @@
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { describe, expect, it } from 'vitest';
+
 import {
   applySummary,
   errorMessage,
@@ -8,7 +9,7 @@ import {
   majorModeSummary,
   optionName,
   voiceSwitchToken,
-} from '../../src/services/majorModeText.ts';
+} from '../../src/services/majorModeText';
 
 const config: MajorModesConfig = {
   defaultMajorMode: 'copilot',

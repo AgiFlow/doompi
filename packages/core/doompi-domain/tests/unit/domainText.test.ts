@@ -1,6 +1,7 @@
-import type { DoomTransitionResult } from '@agimon-ai/doompi-extension-contracts/transition';
-import { VOICE_TOOL_MAX_DOMAIN_COUNT } from '@agimon-ai/doompi-extension-contracts/voice-tools';
+import type { DoomTransitionResult } from '@agimon-ai/doompi-core/transition';
+import { VOICE_TOOL_MAX_DOMAIN_COUNT } from '@agimon-ai/doompi-core/voice-tools';
 import { describe, expect, it } from 'vitest';
+
 import {
   DOMAIN_STATUS_KEY,
   domainItems,
@@ -17,7 +18,7 @@ import {
   transitionError,
   unchangedSummary,
   voiceSwitchToken,
-} from '../../src/services/domainText.ts';
+} from '../../src/services/domainText';
 
 const listing = { active: ['default'], effective: ['default'], available: ['default', 'development'] };
 

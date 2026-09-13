@@ -1,5 +1,5 @@
-import { startManualBrowserRecording, type ManualBrowserRecording } from './manualBrowserRecorder.ts';
-import { transcribeManualRecording } from './manualTranscriptionClient.ts';
+import { startManualBrowserRecording, type ManualBrowserRecording } from './manualBrowserRecorder';
+import { transcribeManualRecording } from './manualTranscriptionClient';
 
 export type ManualComposerPhase = 'idle' | 'starting' | 'recording' | 'transcribing';
 
@@ -85,7 +85,12 @@ export class ManualComposerRecorder {
     let transcription: AbortController | undefined;
     try {
       const result = await recording.result;
-      if (result === undefined || this.generation !== token) return;
+      if (this.generation !== token) return;
+      if (result === undefined) {
+        this.recording = undefined;
+        this.publish({ phase: 'idle' });
+        return;
+      }
       if (this.recording === recording) this.recording = undefined;
       this.publish({ phase: 'transcribing' });
       transcription = new AbortController();

@@ -1,5 +1,6 @@
 import type { StatusTone } from '@agimon-ai/doompi-web-components';
-import type { TimelineEntry, ToolEntry } from './sessionModel.ts';
+
+import type { TimelineEntry, ToolEntry } from './sessionModel';
 
 /**
  * Runs of the same tool, gathered so the transcript draws one frame instead of

@@ -1,10 +1,12 @@
-import { randomUUID } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { systemPreferences } from 'electron';
-import type { ComputerUseBackend, ComputerUseStopResult } from '../../types/computerUse.ts';
+
+import type { ComputerUseBackend, ComputerUseStopResult } from '../../types/computerUse';
 
 const MAX_HELPER_OUTPUT_BYTES = 8 * 1024 * 1024;
 const HELPER_TIMEOUT_MS = 15_000;

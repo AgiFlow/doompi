@@ -1,4 +1,4 @@
-import { DOOM_BACKGROUND_WORK_CHANGED_EVENT } from '@agimon-ai/doompi-extension-contracts/background-work';
+import { DOOM_BACKGROUND_WORK_CHANGED_EVENT } from '@agimon-ai/doompi-core/background-work';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it } from 'vitest';
 

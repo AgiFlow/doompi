@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   domainCompletionItems,
   domainCompletionPrefix,
@@ -11,7 +13,7 @@ import {
   resolvePluginDirectories,
   resolvePluginEntries,
   resolveSharedSkills,
-} from '../src/exports/domains.ts';
+} from '../src/exports/domains';
 
 const AGENT_PLUGIN_SCHEMA = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json';
 

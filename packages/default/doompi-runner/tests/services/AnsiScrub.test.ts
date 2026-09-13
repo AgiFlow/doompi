@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   collapseCarriageReturns,
   scrubTerminalOutput,
   scrubTerminalOutputToPlainText,
   stripAnsi,
   stripAnsiKeepingColour,
-} from '../../src/services/AnsiScrub/ansiScrub';
+} from '../../src/services/ansiScrub';
 
 const ESC = '\u001B';
 const BEL = '\u0007';

@@ -1,9 +1,14 @@
 import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-  // webClient.ts re-exports the browser half; the cockpit bundles it from
-  // source, so node-building it here would pull React into dist for nothing.
-  entry: { '*': ['src/exports/**/*.ts', '!src/exports/webClient.ts'] },
+  // The cockpit bundles the browser entry from source.
+  entry: {
+    'api-contracts': 'src/exports/apiContracts.ts',
+    index: 'src/exports/index.ts',
+    authorFacade: 'src/exports/authorFacade.ts',
+    'extensions/pi': 'src/extensions/pi.ts',
+    'extensions/server': 'src/extensions/server.ts',
+  },
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },
   exports: false,

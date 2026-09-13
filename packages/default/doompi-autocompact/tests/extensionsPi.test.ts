@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,11 +11,11 @@ vi.mock('@earendil-works/pi-coding-agent', async (importOriginal) => ({
   generateSummary,
 }));
 
-const { autocompactExtension, generateCheckpointWithPi, installAutocompactRuntime } =
-  await import('../src/adapters/pi/extension.ts');
-const standardPiExtension = (await import('../src/exports/extensions/pi.ts')).default;
+const { generateCheckpointWithPi } = await import('../src/services/autocompactRuntime');
+const { autocompactExtension } = await import('../src/extensions/pi');
+const standardPiExtension = (await import('../src/extensions/pi')).default;
 
-const adapterPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/exports/extensions/pi.ts');
+const adapterPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/extensions/pi.ts');
 
 type SummarizationModel = NonNullable<ExtensionContext['model']>;
 
@@ -51,12 +52,11 @@ describe('Doom Autocompact Pi adapter boundary', () => {
     generateSummary.mockResolvedValue('checkpoint');
   });
 
-  it('exposes one thin standard Pi factory over the package-local runtime installer', () => {
+  it('exposes one named standard Pi declaration with lifecycle cleanup', () => {
     expect(standardPiExtension).toBe(autocompactExtension);
-    expect(standardPiExtension).not.toBe(installAutocompactRuntime);
 
     const source = fs.readFileSync(adapterPath, 'utf8');
-    expect(source).toContain('autocompactExtension as default');
+    expect(source).toContain('export default autocompactExtension');
     expect(source).not.toMatch(/session_start|session_shutdown|registerDoom/u);
   });
 

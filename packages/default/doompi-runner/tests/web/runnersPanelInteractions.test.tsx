@@ -1,9 +1,10 @@
-import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import type { ComponentProps, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { RunnerRunView } from '../../src/types/webRunners.ts';
-import { RunnersPanel } from '../../src/web/components/RunnersPanel.tsx';
-import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore.ts';
+
+import type { RunnerRunView } from '../../src/types/webRunners';
+import { RunnersPanel } from '../../src/web/components/RunnersPanel';
+import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore';
 
 const interaction = vi.hoisted(() => ({ targets: new Set<string>() }));
 
@@ -50,13 +51,13 @@ vi.mock('@agimon-ai/doompi-web-components', async (importOriginal) => {
   };
 });
 
-vi.mock('../../src/web/components/LaunchRunnerDialog.tsx', () => ({
+vi.mock('../../src/web/components/LaunchRunnerDialog', () => ({
   LaunchRunnerDialog: ({ defaultCwd }: { defaultCwd?: string }) => (
     <div data-testid="launch-dialog" data-default-cwd={defaultCwd ?? ''} />
   ),
 }));
 
-vi.mock('../../src/web/hooks/runnerTail.ts', () => ({
+vi.mock('../../src/web/hooks/runnerTail', () => ({
   useRunnerTail: () => 'latest output',
 }));
 

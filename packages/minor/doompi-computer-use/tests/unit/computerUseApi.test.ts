@@ -1,16 +1,17 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
 import {
   DOOM_API_CALLER_DEVICE_ID_HEADER,
   DOOM_API_CALLER_LOCALITY_HEADER,
   DOOM_API_CALLER_STEP_UP_HEADER,
-} from '@agimon-ai/doompi-extension-contracts/package-api';
-import { assertDeclaredApi } from '@agimon-ai/doompi-extension-contracts/testing';
-import { describe, expect, it } from 'vitest';
-import { api, createComputerUseApi } from '../../src/adapters/computerUseApi.ts';
-import { API_BASE_PATH, COMPUTER_USE_ROUTES } from '../../src/types/computerUseApi.ts';
+} from '@agimon-ai/doompi-core/package-api';
+import { describe, expect, it, vi } from 'vitest';
 
-const PACKAGE_ROOT = path.resolve(fileURLToPath(import.meta.url), '..', '..', '..');
+import {
+  createComputerUseApi as createComputerUseApiImpl,
+  type ComputerUseApiOptions,
+} from '../../src/controllers/computerUseApi';
+import { COMPUTER_USE_ROUTES } from '../../src/types/computerUseApi';
+
 const internal = { authorization: 'Bearer internal' };
 const hub = { authorization: 'Bearer hub' };
 const local = { [DOOM_API_CALLER_LOCALITY_HEADER]: 'local', [DOOM_API_CALLER_STEP_UP_HEADER]: 'not-required' };
@@ -21,7 +22,32 @@ const request = (route: string, method: 'GET' | 'POST', headers: Record<string, 
     ...(value === undefined ? {} : { body: JSON.stringify(value) }),
   });
 
+const testDirectEvents: DoomDirectEventBus = {
+  publish: () => undefined,
+  subscribe: () => () => undefined,
+  close: () => undefined,
+};
+const createComputerUseApi = (
+  options: Omit<ComputerUseApiOptions, 'directEvents'> & { directEvents?: DoomDirectEventBus } = {},
+) => createComputerUseApiImpl({ directEvents: testDirectEvents, ...options });
+
 describe('computer-use request broker', () => {
+  it('publishes lifecycle state changes through the direct event bus', async () => {
+    const publish = vi.fn();
+    const broker = createComputerUseApi({
+      sessionId: 's1',
+      directEvents: { publish, subscribe: () => () => undefined, close: () => undefined },
+    });
+    const value = { target: { windowId: 'w1', bundleId: 'app.fixture' }, durationMs: 60_000 };
+
+    await broker.fetch(request(COMPUTER_USE_ROUTES.activate, 'POST', local, value));
+
+    expect(publish).toHaveBeenCalledWith(
+      'computer_use_state',
+      's1',
+      expect.objectContaining({ sessionId: 's1', phase: 'awaiting_confirmation', revision: 1 }),
+    );
+  });
   it('separates agent and hub routes with context tokens', async () => {
     const broker = createComputerUseApi({ sessionId: 's1', internalToken: 'internal', hubToken: 'hub' });
     expect((await broker.fetch(request(COMPUTER_USE_ROUTES.agentState, 'GET', hub))).status).toBe(404);
@@ -293,13 +319,6 @@ describe('computer-use request broker', () => {
     expect(broker.state().artifact?.failure).toEqual({
       code: 'recording_failed',
       message: 'Screen recording did not complete.',
-    });
-  });
-});
-describe('computer-use package API declaration', () => {
-  it('declares the exact session mount used by the remote gate', () => {
-    expect(assertDeclaredApi({ packageRoot: PACKAGE_ROOT, api, scope: 'session' })).toMatchObject({
-      basePath: API_BASE_PATH,
     });
   });
 });

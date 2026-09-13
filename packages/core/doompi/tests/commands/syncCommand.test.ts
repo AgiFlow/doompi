@@ -1,18 +1,28 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { piExtensionAliasPath, writePiExtensionAlias } from '../../src/adapters/piExtensionAlias';
-import { PI_DISPATCHER_VERSION } from '../../src/adapters/piExtensionDispatcher';
-import { DUPLICATE_REGISTRATION_DRIFT } from '../../src/adapters/projectPiSettings';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
+import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '@agimon-ai/doompi-core/pi-settings';
+import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
+import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
   publishSyncRegistration,
   readSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '../../src/adapters/syncRegistration.ts';
+} from '@agimon-ai/doompi-core/sync-registration';
+import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { createLayerResolvers } from '../../src/builders/cli/extensionAssembler';
+import { piExtensionAliasPath, writePiExtensionAlias } from '../../src/builders/cli/piExtensionAlias';
+import { PI_DISPATCHER_VERSION } from '../../src/builders/cli/piExtensionDispatcher';
+import { DUPLICATE_REGISTRATION_DRIFT } from '../../src/builders/cli/projectSettings';
+import * as projectPiSettings from '../../src/builders/cli/projectSettings';
+import * as serverBundleSync from '../../src/builders/server';
+import * as webSync from '../../src/builders/web';
+import * as webBundle from '../../src/builders/web/bundle';
 import {
   collectDrift,
   formatSyncResult,
@@ -21,9 +31,8 @@ import {
   selectionCompositionFingerprint,
   selectionEnvironment,
   toSelection,
-} from '../../src/commands/syncCommand';
-import { DEFAULT_THEME, DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
-import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '../../src/exports/services/piSettings';
+} from '../../src/cli/commands/sync';
+import { computeServerSourcesHash } from '../../src/composition/syncState';
 import {
   computeInputsHash,
   readSyncState,
@@ -32,9 +41,8 @@ import {
   type SyncSelection,
   type SyncState,
   writeSyncState,
-} from '../../src/exports/services/syncState';
-import { createLayerResolvers } from '../../src/services/extensionAssembler.ts';
-import { testMcpProjection } from '../helpers/mcpProjection.ts';
+} from '../../src/exports/syncState';
+import { testMcpProjection } from '../helpers/mcpProjection';
 
 const mocks = vi.hoisted(() => ({
   readBootstrapStatus: vi.fn(() => ({ bootstrap: '/generated/bootstrap.mjs', fresh: true })),
@@ -43,25 +51,32 @@ const mocks = vi.hoisted(() => ({
       _repoRoot: string,
       _environment: NodeJS.ProcessEnv,
       _homeDirectory: string,
-      options: { state: SyncState },
-    ) => ({
-      bootstrap: '/generated/bootstrap.mjs',
-      bundles: {},
-      bundleManifests: {},
-      state: options.state,
-    }),
+      options: {
+        state: SyncState;
+        onCompositionsResolved?: (compositions: readonly []) => void;
+      },
+    ) => {
+      options.onCompositionsResolved?.([]);
+      return {
+        bootstrap: '/generated/bootstrap.mjs',
+        bundles: {},
+        bundleManifests: {},
+        state: options.state,
+        compositions: [],
+      };
+    },
   ),
   ensureLayerPackages: vi.fn(async () => [] as string[]),
   missingLayerPackageSpecifiers: vi.fn(() => [] as string[]),
 }));
 
-vi.mock('../../src/adapters/bootstrapLocator.ts', () => ({
+vi.mock('../../src/builders/cli/bootstrapLocator', () => ({
   readBootstrapStatus: mocks.readBootstrapStatus,
 }));
-vi.mock('../../src/adapters/syncedRuntimeBuilder.ts', () => ({
+vi.mock('../../src/builders/cli', () => ({
   buildSyncedRuntime: mocks.buildSyncedRuntime,
 }));
-vi.mock('../../src/adapters/layerPackageInstaller.ts', () => ({
+vi.mock('../../src/composition/layerPackageInstaller', () => ({
   ensureLayerPackages: mocks.ensureLayerPackages,
   missingLayerPackageSpecifiers: mocks.missingLayerPackageSpecifiers,
 }));
@@ -213,6 +228,26 @@ async function writeMatchingState(root: string): Promise<SyncState> {
     resolved: recordResolvedEntries(loadMajorModesConfig(root, homeDirectory), createLayerResolvers(root)),
     baseline: { themePath, themeName: DEFAULT_THEME_NAME },
   };
+  const descriptorPath = path.join(apiDirectory, DOOM_SERVER_BUNDLE_FILE);
+  const fingerprint = 'a'.repeat(64);
+  const contractsPath = path.join(apiDirectory, 'contracts.json');
+  fs.writeFileSync(contractsPath, JSON.stringify({ version: 1, generation, fingerprint, packages: [] }));
+  fs.writeFileSync(
+    descriptorPath,
+    JSON.stringify({
+      version: 2,
+      generation,
+      fingerprint,
+      entries: [],
+      contracts: { file: './contracts.json', sha256: syncStateSha256(contractsPath) },
+    }),
+  );
+  state.serverBundle = {
+    descriptorPath,
+    fingerprint,
+    compilerManifests: {},
+    sourcesHash: computeServerSourcesHash(state.resolved),
+  };
   const statePath = await writeSyncState(root, state, homeDirectory, path.join(generationRoot, 'state.json'));
   const packageRoot = fs.realpathSync(path.resolve(import.meta.dirname, '../..'));
   const manifestPath = path.join(packageRoot, 'package.json');
@@ -232,6 +267,7 @@ async function writeMatchingState(root: string): Promise<SyncState> {
       stateSha256: syncStateSha256(statePath),
       webDirectory: null,
       apiDirectory,
+      serverBundle: { path: descriptorPath, fingerprint, sha256: syncStateSha256(descriptorPath) },
       package: {
         root: packageRoot,
         version: manifest.version,
@@ -433,6 +469,16 @@ describe('drift', () => {
 // load as a failure. The suite timeout covers the whole block, including the
 // cases that sync three times in a row.
 describe('doompi sync', { timeout: 30_000 }, () => {
+  it('syncs a repository in a fresh home without creating a global mode', async () => {
+    const root = makeRepository();
+    const homeDirectory = homeFor(root);
+    const globalModesPath = path.join(homeDirectory, '.pi', '.doom', 'modes.yaml');
+
+    expect(await new SyncCommand().execute(['sync'], environmentFor(root), root, capture().output)).toBe(0);
+    expect(readSyncState(root, homeDirectory)?.selection).toEqual(SELECTION);
+    expect(fs.existsSync(globalModesPath)).toBe(false);
+  });
+
   it('syncs personal configuration into a Git checkout with no local .doom directory', async () => {
     const root = makeGitRepositoryWithPersonalConfig();
     const homeDirectory = homeFor(root);
@@ -459,6 +505,28 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(readSyncState(fixture.root, fixture.homeDirectory)?.root).toBe(fixture.root);
     expect(readSyncRegistration(fixture.root, fixture.homeDirectory)?.root).toBe(fixture.root);
     expect(text()).toContain('mode:     copilot');
+  });
+
+  it('checks the requested scope when a different package owns the global bootstrap', async () => {
+    const root = makeGitRepositoryWithPersonalConfig();
+    vi.stubEnv('HOME', homeFor(root));
+    const environment = environmentFor(root);
+    const globalRoot = path.join(homeFor(root), '.pi', '.doom');
+    const command = new SyncCommand();
+    expect(await command.execute(['sync'], environment, root, capture().output)).toBe(0);
+    mocks.readBootstrapStatus.mockImplementation((...args: unknown[]) => ({
+      bootstrap: '/generated/bootstrap.mjs',
+      fresh: args[0] !== globalRoot,
+    }));
+    const state = readSyncState(root, homeFor(root));
+    expect(collectDrift(root, SELECTION, state, environment)).toEqual([]);
+    const checked = capture();
+    expect(await command.execute(['sync', '--check'], environment, root, checked.output)).toBe(0);
+    expect(checked.text()).toBe('doompi sync is up to date\n');
+    const globalChecked = capture();
+    expect(await command.execute(['sync', '--global', '--check'], environment, root, globalChecked.output)).toBe(1);
+    expect(globalChecked.text()).toContain('precompiled runtime is missing or stale');
+    mocks.readBootstrapStatus.mockReturnValue({ bootstrap: '/generated/bootstrap.mjs', fresh: true });
   });
 
   it('stages and precompiles the matrix before registering DoomPi in Pi user settings', async () => {
@@ -670,23 +738,18 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(cliOnly?.webDirectory).toBeNull();
 
     const webRoot = path.join(root, 'web-host');
-    fs.mkdirSync(path.join(webRoot, 'dist'), { recursive: true });
-    fs.writeFileSync(
-      path.join(webRoot, 'dist', 'bundler.mjs'),
-      `import fs from 'node:fs';
-import path from 'node:path';
-export async function bundleCockpitWeb({ outDir }) {
-  const assetsDir = path.join(outDir, 'web');
-  fs.mkdirSync(assetsDir, { recursive: true });
-  fs.writeFileSync(path.join(assetsDir, 'index.html'), '<html></html>');
-  const plugins = path.join(outDir, 'plugins');
-  fs.mkdirSync(plugins, { recursive: true });
-  fs.writeFileSync(path.join(plugins, 'composition.js'), 'export {};');
-  fs.writeFileSync(path.join(plugins, 'manifest.json'), '{}');
-  return { assetsDir, pluginIds: [] };
-}
-`,
-    );
+    fs.mkdirSync(webRoot, { recursive: true });
+    fs.writeFileSync(path.join(webRoot, 'package.json'), JSON.stringify({ name: '@agimon-ai/doompi-web' }));
+    vi.spyOn(webBundle, 'bundleCockpitWeb').mockImplementation(async ({ outDir }) => {
+      const assetsDir = path.join(outDir, 'web');
+      fs.mkdirSync(assetsDir, { recursive: true });
+      fs.writeFileSync(path.join(assetsDir, 'index.html'), '<html></html>');
+      const plugins = path.join(outDir, 'plugins');
+      fs.mkdirSync(plugins, { recursive: true });
+      fs.writeFileSync(path.join(plugins, 'composition.js'), 'export {};');
+      fs.writeFileSync(path.join(plugins, 'manifest.json'), '{}');
+      return { assetsDir, pluginsDir: plugins, pluginIds: [] };
+    });
     const environment = { ...environmentFor(root), DOOMPI_WEB_PACKAGE_ROOT: webRoot };
     const buildsBefore = mocks.buildSyncedRuntime.mock.calls.length;
     await Promise.all([
@@ -703,7 +766,94 @@ export async function bundleCockpitWeb({ outDir }) {
     expect(mocks.buildSyncedRuntime.mock.calls.length - buildsBefore).toBe(1);
   });
 
-  it('prunes generations the published one replaced', async () => {
+  it('preserves the previous registration if project settings preparation fails', async () => {
+    const root = makeRepository();
+    const environment = environmentFor(root);
+    await new SyncCommand().execute(['sync'], environment, root, capture().output);
+    const location = resolveSyncLocation(root, homeFor(root));
+    const previous = fs.readFileSync(location.registrationPath);
+    const registration = readSyncRegistration(root, homeFor(root))!;
+    const settings = vi.spyOn(projectPiSettings, 'writeProjectPiSettings').mockImplementationOnce(() => {
+      throw new Error('settings write failed');
+    });
+    try {
+      await expect(new SyncCommand().execute(['sync', '--force'], environment, root, capture().output)).rejects.toThrow(
+        'settings write failed',
+      );
+      expect(fs.readFileSync(location.registrationPath)).toEqual(previous);
+      expect(fs.existsSync(registration.statePath)).toBe(true);
+      expect(fs.readdirSync(location.generationsDirectory)).toEqual([registration.generation]);
+    } finally {
+      settings.mockRestore();
+    }
+  });
+
+  it('publishes only the descriptor and binds it to registration and state', async () => {
+    const root = makeRepository();
+    await new SyncCommand().execute(['sync'], environmentFor(root), root, capture().output);
+    const registration = readSyncRegistration(root, homeFor(root))!;
+    const state = readSyncState(root, homeFor(root))!;
+    expect(fs.readdirSync(registration.apiDirectory)).toEqual(['contracts.json', DOOM_SERVER_BUNDLE_FILE]);
+    expect(registration.serverBundle?.path).toBe(state.serverBundle?.descriptorPath);
+    expect(registration.serverBundle?.fingerprint).toBe(state.serverBundle?.fingerprint);
+    expect(registration.serverBundle?.sha256).toBe(syncStateSha256(state.serverBundle!.descriptorPath));
+    fs.appendFileSync(state.serverBundle!.descriptorPath, ' ');
+    expect(() => readSyncRegistration(root, homeFor(root))).toThrow(/server descriptor hash/);
+    expect(await new SyncCommand().execute(['sync', '--check'], environmentFor(root), root, capture().output)).toBe(1);
+  });
+
+  it('finishes runtime compilation before web and server compilation consume package output', async () => {
+    const root = makeRepository();
+    const environment = environmentFor(root);
+    const location = resolveSyncLocation(root, homeFor(root));
+    let failRuntime!: () => void;
+    const web = vi.spyOn(webSync, 'syncWebBundle');
+    const server = vi.spyOn(serverBundleSync, 'syncServerBundle');
+    mocks.buildSyncedRuntime.mockImplementationOnce((_repoRoot, _environment, _homeDirectory, options) => {
+      options.onCompositionsResolved?.([]);
+      return new Promise((_resolve, reject) => {
+        failRuntime = () => reject(new Error('runtime compilation failed'));
+      });
+    });
+    const syncing = new SyncCommand().execute(['sync'], environment, root, capture().output);
+    const checked = expect(syncing).rejects.toThrow('runtime compilation failed');
+    try {
+      await vi.waitFor(() => expect(mocks.buildSyncedRuntime).toHaveBeenCalledOnce());
+      expect(web).not.toHaveBeenCalled();
+      expect(server).not.toHaveBeenCalled();
+      expect(fs.existsSync(location.registrationPath)).toBe(false);
+      failRuntime();
+      await checked;
+      expect(web).not.toHaveBeenCalled();
+      expect(server).not.toHaveBeenCalled();
+    } finally {
+      web.mockRestore();
+      server.mockRestore();
+    }
+  });
+
+  it('preserves the selected generation when server bundle compilation fails', async () => {
+    const root = makeRepository();
+    const environment = environmentFor(root);
+    await new SyncCommand().execute(['sync'], environment, root, capture().output);
+    const location = resolveSyncLocation(root, homeFor(root));
+    const previous = fs.readFileSync(location.registrationPath);
+    const generations = fs.readdirSync(location.generationsDirectory);
+    const compile = vi
+      .spyOn(serverBundleSync, 'syncServerBundle')
+      .mockRejectedValueOnce(new Error('server compilation failed'));
+    try {
+      await expect(new SyncCommand().execute(['sync', '--force'], environment, root, capture().output)).rejects.toThrow(
+        'server compilation failed',
+      );
+      expect(fs.readFileSync(location.registrationPath)).toEqual(previous);
+      expect(fs.readdirSync(location.generationsDirectory)).toEqual(generations);
+    } finally {
+      compile.mockRestore();
+    }
+  });
+
+  it('retains earlier generations that may still serve pinned sessions', async () => {
     const root = makeRepository();
     const homeDirectory = homeFor(root);
     const generations: string[] = [];
@@ -713,12 +863,12 @@ export async function bundleCockpitWeb({ outDir }) {
       if (registration) generations.push(registration.generationRoot);
     }
 
-    // The published generation and the one before it survive, because a hub
-    // that resolved its assets a moment ago may still be reading them.
-    expect(fs.existsSync(generations[2] ?? '')).toBe(true);
-    expect(fs.existsSync(generations[1] ?? '')).toBe(true);
-    expect(fs.existsSync(generations[0] ?? '')).toBe(false);
-  });
+    expect(generations).toHaveLength(3);
+    for (const generation of generations) {
+      expect(fs.existsSync(generation)).toBe(true);
+      expect(fs.existsSync(path.join(generation, 'state.json'))).toBe(true);
+    }
+  }, 90_000);
 
   it('keeps concurrent repositories isolated across a repeated sync', async () => {
     const repoA = makeRepository();

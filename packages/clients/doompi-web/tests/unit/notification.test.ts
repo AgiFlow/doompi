@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseDoomNotificationEntry } from '../../src/types/notification.ts';
+
+import { parseDoomNotificationEntry } from '../../src/types/notification';
 import {
   browserNotificationPermission,
   deliverBrowserNotification,
   requestBrowserNotificationPermission,
-} from '../../src/web/lib/browserNotifications.ts';
+} from '../../src/web/lib/browserNotifications';
 
 const data = {
   version: 1 as const,

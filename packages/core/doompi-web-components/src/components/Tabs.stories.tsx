@@ -3,7 +3,7 @@
  * imported. The Radix tabs carry a `defaultValue` so a panel is visible
  * without a click.
  */
-import { NavTab, NavTabBadge, Tabs, TabsContent, TabsList, TabsTrigger } from './Tabs.tsx';
+import { NavTab, NavTabBadge, Tabs, TabsContent, TabsList, TabsTrigger } from './Tabs';
 
 const meta = {
   title: 'Components/Tabs',

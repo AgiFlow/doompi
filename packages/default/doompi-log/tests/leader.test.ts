@@ -1,6 +1,7 @@
-import type { DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerLogMetricsLeaderBinding } from '../src/adapters/pi/extension.ts';
+
+import { registerLogMetricsLeaderBinding } from '../src/tui/logRuntime';
 
 const registerLeaderContribution = vi.fn(() => ({ update: vi.fn(), dispose: vi.fn() }));
 

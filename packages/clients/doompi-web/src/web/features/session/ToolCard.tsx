@@ -1,4 +1,4 @@
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   collapseLines,
   MessageItem,
@@ -8,10 +8,11 @@ import {
   type StatusTone,
 } from '@agimon-ai/doompi-web-components';
 import { memo } from 'react';
-import { ToolRendererBoundary } from '../../components/ToolRendererBoundary.tsx';
-import { pluginToolRenderer } from '../../lib/pluginRegistry.ts';
-import { imagesFromContent, type ToolEntry } from '../../lib/sessionModel.ts';
-import { toolMessageProps } from '../../lib/toolMessageProps.ts';
+
+import { ToolRendererBoundary } from '../../components/ToolRendererBoundary';
+import { pluginToolRenderer } from '../../lib/pluginRegistry';
+import { imagesFromContent, type ToolEntry } from '../../lib/sessionModel';
+import { toolMessageProps } from '../../lib/toolMessageProps';
 
 const MAX_PREVIEW_LINES = 12;
 

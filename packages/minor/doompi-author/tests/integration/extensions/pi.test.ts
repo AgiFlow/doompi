@@ -1,10 +1,11 @@
-import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-extension-contracts/testing';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
+import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { COMMAND_NAME } from '../../../src/commands/doomAuthorCommand.ts';
-import { activateAuthorExtension } from '../../../src/adapters/pi/extension.ts';
-import type { AuthorExtensionService } from '../../../src/types/extension.ts';
+
+import { COMMAND_NAME } from '../../../src/controllers/doomAuthorCommand';
+import { activateAuthorExtension } from '../../../src/extensions/pi';
+import type { AuthorExtensionService } from '../../../src/types/extension';
 
 /**
  * The Pi surface.
@@ -30,6 +31,7 @@ describe('doompi-author Pi extension', () => {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
 
+    await host.cordis();
     await activateAuthorExtension(host.pi, { service });
     await host.runCommand(COMMAND_NAME);
 
@@ -45,6 +47,7 @@ describe('doompi-author Pi extension', () => {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
 
+    await host.cordis();
     await activateAuthorExtension(host.pi, { service });
     await host.runCommand(COMMAND_NAME);
 
@@ -54,6 +57,7 @@ describe('doompi-author Pi extension', () => {
 
   it('follows optional Help provider replacement and withdraws its contribution on shutdown', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     await activateAuthorExtension(host.pi);
     const connection = await connectDoomCordisHost(host.pi, 'doompi-author-help-test');
     const firstService = createDoomHelpService('doompi-author-help-first');
@@ -63,7 +67,7 @@ describe('doompi-author Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-author',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-use-author',

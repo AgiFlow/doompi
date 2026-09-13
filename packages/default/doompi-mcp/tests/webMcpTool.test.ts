@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { MCP_STATUS_KEY as SESSION_STATUS_KEY } from '../src/adapters/pi/mcpConstants.ts';
+
+import { MCP_STATUS_KEY as SESSION_STATUS_KEY } from '../src/constants/piMcp';
 import {
   MCP_STATUS_KEY,
   matchMcpTool,
@@ -9,7 +10,7 @@ import {
   mcpResultBlocks,
   mcpResultView,
   mcpServers,
-} from '../src/web/lib/mcpToolMatch.ts';
+} from '../src/web/lib/mcpToolMatch';
 
 describe('the mcp web tool matcher', () => {
   it('reads the same status key the session publishes', () => {

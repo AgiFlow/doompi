@@ -1,5 +1,6 @@
 import { SettingsManager } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   DPI_MANAGED_SETTINGS,
   type DpiSettingsScope,
@@ -7,7 +8,7 @@ import {
   type DpiSettingsStorageBackend,
   installDpiSettingsOverlay,
   type PiSettingsRuntime,
-} from '../../src/adapters/dpiSettings.ts';
+} from '../../src/builders/cli/dpiSettings';
 
 class MemorySettingsStorage implements DpiSettingsStorageBackend {
   global: string | undefined;

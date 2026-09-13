@@ -8,7 +8,7 @@
  * so two of the three take a `top`/`bottom` override to claim their own slot in
  * the 800px-tall render viewport instead of stacking on the centre.
  */
-import { Button } from './Button.tsx';
+import { Button } from './Button';
 import {
   Dialog,
   DialogBody,
@@ -17,7 +17,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from './Dialog.tsx';
+} from './Dialog';
 
 const meta = {
   title: 'Components/Dialog',

@@ -12,9 +12,10 @@ import {
 import { useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useMemo, useState } from 'react';
-import type { PiSessionHistoryItem } from '../../../types/hub.ts';
-import { listSessionHistory, resumeSession } from '../../lib/hubApi.ts';
-import { sessionsStore, waitForSession } from '../../stores/sessionsStore.ts';
+
+import type { PiSessionHistoryItem } from '../../../types/hub';
+import { listSessionHistory, resumeSession } from '../../lib/hubApi';
+import { sessionsStore, waitForSession } from '../../stores/sessionsStore';
 
 function threadLabel(thread: PiSessionHistoryItem): string {
   return thread.name?.trim() || thread.firstMessage.trim().split('\n', 1)[0] || 'untitled';

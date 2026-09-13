@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkflowTerminalService, type TerminalPort } from '../src/services/workflowTerminal.ts';
+
+import { createWorkflowTerminalService, type TerminalPort } from '../src/services/workflowTerminal';
 
 interface Run {
   id: string;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { resolvePdfViewportRegion } from '../../src/components/PdfPreview.tsx';
+
+import { resolvePdfViewportRegion } from '../../src/components/PdfPreview';
 
 describe('PDF page geometry', () => {
   it('clamps a client rectangle and normalizes it within the current source page', () => {

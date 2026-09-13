@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
 import type { WorkflowProgressEvent, WorkflowRunRecord } from '@agimon-ai/workflow-mcp';
+import { describe, expect, it } from 'vitest';
+
 import {
   foldWorkflowProgress,
   MAX_PRESENTED_WORKFLOW_RUNS_PER_GROUP,
@@ -9,8 +10,8 @@ import {
   resolveWorkflowHome,
   runBelongsToSession,
   workflowPosition,
-} from '../src/services/workflowRuns.ts';
-import type { WorkflowRunView } from '../src/types/webWorkflows.ts';
+} from '../src/services/workflowRuns';
+import type { WorkflowRunView } from '../src/types/webWorkflows';
 
 describe('workflowRuns', () => {
   it('resolves the registry home the way the engine does: env override, then ~/.workflow-mcp', () => {

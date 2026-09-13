@@ -20,9 +20,11 @@ import type {
   WebPluginDefinition,
   WebPluginRuntime,
   WebPluginSlotProps,
-} from '@agimon-ai/doompi-web-contracts';
+} from '@agimon-ai/doompi-core/web';
 import type { ComponentType } from 'react';
-import { leaderConflicts } from './leaderTree.ts';
+
+import { leaderConflicts } from './leaderTree';
+import { mergeScopedPlugins, pluginsAtScope } from './pluginScopes';
 
 /**
  * The installed plugin set.
@@ -152,6 +154,10 @@ let defaultState = emptyState();
 let installingState = defaultState;
 let defaultInstalled = false;
 const sessionStates = new Map<string, RegistryState>();
+const workspaceStates = new Map<string, RegistryState>();
+const sessionPlugins = new Map<string, readonly WebPluginDefinition[]>();
+const sessionWorkspaces = new Map<string, string>();
+let activeWorkspaceId: string | null = null;
 const pendingSessionFrames = new Map<string, Map<string, Record<string, unknown>>>();
 const MAX_PENDING_CHANNEL_TYPES = 64;
 let activeSessionId: string | null = null;
@@ -159,7 +165,54 @@ let registryRevision = 0;
 const registryListeners = new Set<() => void>();
 
 function activeState(): RegistryState {
-  return (activeSessionId === null ? undefined : sessionStates.get(activeSessionId)) ?? defaultState;
+  return (
+    (activeSessionId === null ? undefined : sessionStates.get(activeSessionId)) ?? workspaceState() ?? defaultState
+  );
+}
+
+function workspaceState(): RegistryState | undefined {
+  return activeWorkspaceId === null ? undefined : workspaceStates.get(activeWorkspaceId);
+}
+
+function rebuildSession(sessionId: string): RegistryState {
+  const workspaceId = sessionWorkspaces.get(sessionId);
+  const workspace = workspaceId === undefined ? undefined : workspaceStates.get(workspaceId);
+  const state = buildWebPluginState(
+    mergeScopedPlugins(defaultState.plugins, workspace?.plugins ?? [], sessionPlugins.get(sessionId) ?? []),
+  );
+  sessionStates.set(sessionId, state);
+  return state;
+}
+
+export function installGlobalWebPlugins(plugins: readonly WebPluginDefinition[]): void {
+  defaultState = buildWebPluginState(pluginsAtScope(plugins, 'global'));
+  for (const id of sessionPlugins.keys()) rebuildSession(id);
+  emitRegistryChange();
+}
+
+export function installWorkspaceWebPlugins(workspaceId: string, plugins: readonly WebPluginDefinition[]): void {
+  const state = buildWebPluginState(pluginsAtScope(plugins, 'workspace'));
+  workspaceStates.set(workspaceId, state);
+  for (const [id, owner] of sessionWorkspaces) if (owner === workspaceId) rebuildSession(id);
+  emitRegistryChange();
+}
+
+export function removeWorkspaceWebPlugins(workspaceId: string): void {
+  workspaceStates.delete(workspaceId);
+  for (const [id, owner] of sessionWorkspaces) if (owner === workspaceId) rebuildSession(id);
+  if (activeWorkspaceId === workspaceId) activeWorkspaceId = null;
+  emitRegistryChange();
+}
+
+export function activateWebPluginWorkspace(workspaceId: string | null): void {
+  if (activeWorkspaceId === workspaceId) return;
+  activeWorkspaceId = workspaceId;
+  emitRegistryChange();
+}
+
+export function bindSessionWebWorkspace(sessionId: string, workspaceId: string): void {
+  sessionWorkspaces.set(sessionId, workspaceId);
+  if (sessionPlugins.has(sessionId)) rebuildSession(sessionId);
 }
 
 function emitRegistryChange(): void {
@@ -539,21 +592,32 @@ export function installWebPlugins(plugins: readonly WebPluginDefinition[]): void
   defaultInstalled = true;
 }
 
+export function webPluginsInstalled(): boolean {
+  return defaultInstalled;
+}
+
 /** Unit-test escape hatch; production installs exactly once. */
 export function resetWebPlugins(): void {
   defaultState = emptyState();
   installingState = defaultState;
   defaultInstalled = false;
   sessionStates.clear();
+  workspaceStates.clear();
+  sessionPlugins.clear();
+  sessionWorkspaces.clear();
+  activeWorkspaceId = null;
   pendingSessionFrames.clear();
   activeSessionId = null;
   emitRegistryChange();
 }
 
-/** Installs one session's independently synchronized plugin definitions. */
+/** Installs or atomically replaces one session's independently synchronized plugin definitions. */
 export function installSessionWebPlugins(sessionId: string, plugins: readonly WebPluginDefinition[]): void {
-  const state = buildWebPluginState(plugins);
-  sessionStates.set(sessionId, state);
+  const previous = sessionStates.get(sessionId);
+  sessionPlugins.set(sessionId, plugins);
+  const state = rebuildSession(sessionId);
+  for (const [type, channel] of previous?.channels.entries() ?? [])
+    if (state.channels.get(type) !== channel) channel.drop(sessionId);
   const pending = pendingSessionFrames.get(sessionId);
   if (pending !== undefined) {
     pendingSessionFrames.delete(sessionId);
@@ -576,6 +640,8 @@ export function removeSessionWebPlugins(sessionId: string): void {
   if (sessionState === undefined) return;
   for (const channel of sessionState.channels.values()) channel.drop(sessionId);
   sessionStates.delete(sessionId);
+  sessionPlugins.delete(sessionId);
+  sessionWorkspaces.delete(sessionId);
   if (sessionId === activeSessionId) emitRegistryChange();
 }
 
@@ -604,8 +670,8 @@ export interface InstalledRepositorySettingsPanel extends RepositorySettingsPane
 
 /** Package panels placed under the host's repository controls, in stable display order. */
 export function pluginRepositorySettingsPanels(): readonly InstalledRepositorySettingsPanel[] {
-  return activeState()
-    .plugins.flatMap((plugin) =>
+  return (workspaceState() ?? emptyState()).plugins
+    .flatMap((plugin) =>
       plugin.repositorySettingsPanel === undefined ? [] : [{ pluginId: plugin.id, ...plugin.repositorySettingsPanel }],
     )
     .sort(
@@ -628,8 +694,10 @@ export function pluginDockFaces(): readonly DockFaceContribution[] {
  * The settings pages plugins contribute, in menu order. Sorted here rather than
  * at the reader so the menu and the page agree without either sorting twice.
  */
-export function pluginSettingsSections(): readonly SettingsSectionContribution[] {
-  return activeState().settingsSections;
+export function pluginSettingsSections(
+  scope: 'global' | 'workspace' = 'global',
+): readonly SettingsSectionContribution[] {
+  return (scope === 'global' ? defaultState : workspaceState())?.settingsSections ?? [];
 }
 
 export interface InstalledSettingsPanel extends SettingsPanelContribution {
@@ -638,7 +706,7 @@ export interface InstalledSettingsPanel extends SettingsPanelContribution {
 
 /** The settings pages plugins draw themselves, in install order; the reader sorts them with the sections. */
 export function pluginSettingsPanels(): readonly InstalledSettingsPanel[] {
-  return activeState().settingsPanels;
+  return defaultState.settingsPanels;
 }
 
 /** The fills placed into one slot, in slot order; empty for a slot nobody declared. */

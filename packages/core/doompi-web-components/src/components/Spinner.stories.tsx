@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Spinner } from './Spinner.tsx';
+import { Spinner } from './Spinner';
 
 /** Spinner declares no variants; it turns in the current text colour at whatever size it is given. */
 const SIZES = [

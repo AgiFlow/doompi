@@ -98,3 +98,5 @@ it. It is not selectable from `.doom/modes.yaml`.
 ## License
 
 MIT
+
+Plugin entries live in `src/extensions`. Controllers connect host events and commands to services, while `src/exports` contains public helpers and types. Pi service bindings are owned by `definePiExtension`; startup mounts services before publishing commands and events, and disposal releases those bindings. The separate persona entry supports child sessions without a transition coordinator.

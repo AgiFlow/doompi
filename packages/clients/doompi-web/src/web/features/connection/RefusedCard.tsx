@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, Spinner } from '@agimon-ai/doompi-web-components';
-import { abbreviateCwd } from '../../lib/sessionSummary.ts';
-import { useActiveSessionMeta } from '../../stores/sessionsStore.ts';
+
+import { abbreviateCwd } from '../../lib/sessionSummary';
+import { useActiveSessionMeta } from '../../stores/sessionsStore';
 
 function Detail({ label, value }: { label: string; value: string }) {
   return (
@@ -11,16 +12,7 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
-/**
- * Shown when the focused session will not take this cockpit.
- *
- * doompi-server holds one client at a time so two views cannot fight over the
- * same agent. The hub keeps retrying underneath, so this explains the wait
- * rather than offering a button that would do the same thing again. It is not
- * dismissible for the same reason: nothing behind it would work. Other
- * sessions' refusals stay in their rail cards; only the focused one earns the
- * overlay.
- */
+/** Shown when the focused session refuses this browser connection. */
 export function RefusedCard() {
   const meta = useActiveSessionMeta();
   if (meta === null || meta.attach !== 'refused') return null;
@@ -44,17 +36,15 @@ export function RefusedCard() {
         </DialogHeader>
         <div className="flex flex-col gap-3 px-4 py-4">
           <p className="text-sm leading-relaxed text-doom-text">
-            doompi-server holds one client at a time so two views cannot fight over the same agent. Another cockpit is
-            attached to this socket right now.
+            This session is already controlled by another browser connection. DoomPi keeps retrying in the background.
           </p>
           <div className="flex flex-col gap-1.5 rounded border border-doom-border bg-doom-deep px-3 py-2.5">
             <Detail label="reason" value={meta.reason || 'attach_error'} />
-            <Detail label="socket" value={meta.summary.socketPath} />
             <Detail label="cwd" value={abbreviateCwd(meta.summary.cwd)} />
             <Detail label="retry" value="automatic, with backoff" />
           </div>
           <p data-testid="refused-hint" className="text-xs text-doom-faint">
-            close the other cockpit and this one takes over on the next attempt.
+            close the other browser connection and this one takes over on the next attempt.
           </p>
         </div>
       </DialogContent>

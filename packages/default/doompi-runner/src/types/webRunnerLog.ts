@@ -1,4 +1,5 @@
-import type { LogSlice } from './logReader.ts';
+import { RUNNER_API_BASE_PATH, SESSION_QUERY_PARAM } from '../constants/webRunnerLog';
+import type { LogSlice } from './logReader';
 
 /**
  * The runner log API, shared by this package's session-scoped routes and its
@@ -13,10 +14,8 @@ import type { LogSlice } from './logReader.ts';
  */
 
 /** Where this package's API is mounted; the segment after /api/plugin/. */
-export const RUNNER_API_BASE_PATH = 'runner';
 
 /** Query parameter the hub reads to pick which session server to proxy to. */
-export const SESSION_QUERY_PARAM = 'session';
 
 /** One runner's log, relative to the API's own mount. */
 export function runnerLogPath(runId: string): string {
@@ -35,7 +34,7 @@ export function runnerLogUrl(sessionId: string, runId: string, params: RunnerLog
   if (params.grep !== undefined && params.grep !== '') search.set(RUNNER_LOG_PARAMS.grep, params.grep);
   if (params.ignoreCase === true) search.set(RUNNER_LOG_PARAMS.ignoreCase, 'true');
   if (params.contextLines !== undefined) search.set(RUNNER_LOG_PARAMS.contextLines, String(params.contextLines));
-  return `/api/plugin/${RUNNER_API_BASE_PATH}${runnerLogPath(runId)}?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${RUNNER_API_BASE_PATH}${runnerLogPath(runId)}?${search.toString()}`;
 }
 
 /**
@@ -47,7 +46,7 @@ export function runnerLogUrl(sessionId: string, runId: string, params: RunnerLog
  */
 export function runnerLogStreamUrl(sessionId: string, runId: string, from: number): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [RUNNER_LOG_PARAMS.from]: String(from) });
-  return `/api/plugin/${RUNNER_API_BASE_PATH}${runnerLogPath(runId)}/stream?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${RUNNER_API_BASE_PATH}${runnerLogPath(runId)}/stream?${search.toString()}`;
 }
 
 /** One runner's attached screen, relative to the API's own mount. */
@@ -65,13 +64,13 @@ export function runnerScreenPath(runId: string): string {
  */
 export function runnerScreenStreamUrl(sessionId: string, runId: string, from = 0): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [RUNNER_LOG_PARAMS.from]: String(from) });
-  return `/api/plugin/${RUNNER_API_BASE_PATH}${runnerScreenPath(runId)}/stream?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${RUNNER_API_BASE_PATH}${runnerScreenPath(runId)}/stream?${search.toString()}`;
 }
 
 /** The URL a page POSTs keystrokes to, for a runner that is waiting on input. */
 export function runnerInputUrl(sessionId: string, runId: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `/api/plugin/${RUNNER_API_BASE_PATH}${runnerScreenPath(runId)}/input?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${RUNNER_API_BASE_PATH}${runnerScreenPath(runId)}/input?${search.toString()}`;
 }
 
 /**
@@ -94,7 +93,6 @@ export interface RunnerInputRequest {
 }
 
 /** The named SSE event carrying a RunnerScreenEvent payload. */
-export const RUNNER_SCREEN_EVENT = 'screen';
 
 /**
  * A log request as query parameters. `grep` is a literal substring, not a
@@ -137,7 +135,6 @@ export interface RunnerLogStreamEvent {
 }
 
 /** The named SSE event carrying a RunnerLogStreamEvent payload. */
-export const RUNNER_LOG_STREAM_EVENT = 'append';
 
 /**
  * The named SSE event that carries nothing.
@@ -147,7 +144,6 @@ export const RUNNER_LOG_STREAM_EVENT = 'append';
  * the socket keeps proving itself. Readers that only listen for `append`
  * ignore it, which is what makes it safe to add.
  */
-export const RUNNER_LOG_PING_EVENT = 'ping';
 
 /** Query parameter names, shared so the page and the route cannot drift apart. */
 export const RUNNER_LOG_PARAMS = {

@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
-import { ComputerUseHost } from '../services/computerUseHost.ts';
+
+import { ComputerUseHost } from '../services/computerUseHost';
 import {
   COMPUTER_USE_IPC_CANCEL,
   COMPUTER_USE_IPC_REQUEST,
@@ -7,7 +8,7 @@ import {
   COMPUTER_USE_MAX_IPC_BYTES,
   type ComputerUseDesktopOperation,
   type ComputerUseDesktopRequest,
-} from '../types/computerUse.ts';
+} from '../types/computerUse';
 
 const OPERATIONS = new Set<ComputerUseDesktopOperation>(['status', 'targets', 'activate', 'observe', 'act', 'stop']);
 const MAX_ACTIVE_REQUESTS = 128;
@@ -68,6 +69,9 @@ export function attachComputerUseHostBridge(
   host: ComputerUseHost,
   onNotice: (message: string) => void = () => undefined,
 ): ComputerUseHostBridge {
+  if (typeof child.send !== 'function') {
+    throw new Error('Desktop computer-use requires the headless server IPC boundary.');
+  }
   let closed = false;
   const activeRequests = new Map<string, AbortController>();
   const revokeHost = (reason: string): void => {
@@ -75,7 +79,7 @@ export function attachComputerUseHostBridge(
     activeRequests.clear();
     void host.revoke(reason);
   };
-  const revoke = (): void => revokeHost('hub_disconnected');
+  const revoke = (): void => revokeHost('headless_disconnected');
   const onMessage = (value: unknown): void => {
     if (closed) return;
     if (
@@ -86,7 +90,7 @@ export function attachComputerUseHostBridge(
       (value as Record<string, unknown>).type === 'doompi:computer-use:close' &&
       (value as Record<string, unknown>).version === COMPUTER_USE_IPC_VERSION
     ) {
-      revokeHost('hub_closed');
+      revokeHost('headless_closed');
       return;
     }
     const cancelled = cancelledRequestId(value);

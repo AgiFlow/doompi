@@ -25,11 +25,13 @@
   "bin": {
     "doom-runner": "./dist/bin/doomRunner.mjs",
     "doompi": "./dist/bin/cli.mjs",
+    "doompi-server": "./dist/bin/serve.mjs",
     "dpi": "./dist/bin/dpi.mjs"
   },
   "files": [
     "assets",
     "dist",
+    "docs/server",
     "llms.txt",
     "README.md",
     "src/prompts"
@@ -42,16 +44,6 @@
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
-    },
-    "./contextApi": {
-      "types": "./dist/contextApi.d.mts",
-      "import": "./dist/contextApi.mjs",
-      "require": "./dist/contextApi.cjs"
-    },
-    "./sessionApi": {
-      "types": "./dist/sessionApi.d.mts",
-      "import": "./dist/sessionApi.mjs",
-      "require": "./dist/sessionApi.cjs"
     },
     "./bin/cli": {
       "types": "./dist/bin/cli.d.mts",
@@ -69,246 +61,216 @@
       "require": "./dist/bin/dpi.cjs"
     },
     "./cli": {
-      "types": "./dist/cli/index.d.mts",
-      "import": "./dist/cli/index.mjs",
-      "require": "./dist/cli/index.cjs"
+      "types": "./dist/cli.d.mts",
+      "import": "./dist/cli.mjs",
+      "require": "./dist/cli.cjs"
     },
-    "./cli/cliApp": {
-      "types": "./dist/cli/cliApp.d.mts",
-      "import": "./dist/cli/cliApp.mjs",
-      "require": "./dist/cli/cliApp.cjs"
+    "./cli-app": {
+      "types": "./dist/cli-app.d.mts",
+      "import": "./dist/cli-app.mjs",
+      "require": "./dist/cli-app.cjs"
     },
-    "./cli/compatibilityOptions": {
-      "types": "./dist/cli/compatibilityOptions.d.mts",
-      "import": "./dist/cli/compatibilityOptions.mjs",
-      "require": "./dist/cli/compatibilityOptions.cjs"
+    "./compatibility-options": {
+      "types": "./dist/compatibility-options.d.mts",
+      "import": "./dist/compatibility-options.mjs",
+      "require": "./dist/compatibility-options.cjs"
     },
-    "./cli/help": {
-      "types": "./dist/cli/help.d.mts",
-      "import": "./dist/cli/help.mjs",
-      "require": "./dist/cli/help.cjs"
+    "./help": {
+      "types": "./dist/help.d.mts",
+      "import": "./dist/help.mjs",
+      "require": "./dist/help.cjs"
     },
-    "./cli/matrixOptions": {
-      "types": "./dist/cli/matrixOptions.d.mts",
-      "import": "./dist/cli/matrixOptions.mjs",
-      "require": "./dist/cli/matrixOptions.cjs"
+    "./matrix-options": {
+      "types": "./dist/matrix-options.d.mts",
+      "import": "./dist/matrix-options.mjs",
+      "require": "./dist/matrix-options.cjs"
     },
-    "./cli/options": {
-      "types": "./dist/cli/options.d.mts",
-      "import": "./dist/cli/options.mjs",
-      "require": "./dist/cli/options.cjs"
+    "./options": {
+      "types": "./dist/options.d.mts",
+      "import": "./dist/options.mjs",
+      "require": "./dist/options.cjs"
     },
     "./commands": {
-      "types": "./dist/commands/index.d.mts",
-      "import": "./dist/commands/index.mjs",
-      "require": "./dist/commands/index.cjs"
+      "types": "./dist/commands.d.mts",
+      "import": "./dist/commands.mjs",
+      "require": "./dist/commands.cjs"
     },
-    "./commands/baseCommand": {
-      "types": "./dist/commands/baseCommand.d.mts",
-      "import": "./dist/commands/baseCommand.mjs",
-      "require": "./dist/commands/baseCommand.cjs"
+    "./base-command": {
+      "types": "./dist/base-command.d.mts",
+      "import": "./dist/base-command.mjs",
+      "require": "./dist/base-command.cjs"
     },
-    "./commands/compatibilityCommand": {
-      "types": "./dist/commands/compatibilityCommand.d.mts",
-      "import": "./dist/commands/compatibilityCommand.mjs",
-      "require": "./dist/commands/compatibilityCommand.cjs"
+    "./compatibility-command": {
+      "types": "./dist/compatibility-command.d.mts",
+      "import": "./dist/compatibility-command.mjs",
+      "require": "./dist/compatibility-command.cjs"
     },
-    "./commands/emitMcpCommand": {
-      "types": "./dist/commands/emitMcpCommand.d.mts",
-      "import": "./dist/commands/emitMcpCommand.mjs",
-      "require": "./dist/commands/emitMcpCommand.cjs"
+    "./emit-mcp-command": {
+      "types": "./dist/emit-mcp-command.d.mts",
+      "import": "./dist/emit-mcp-command.mjs",
+      "require": "./dist/emit-mcp-command.cjs"
     },
-    "./commands/explainCommand": {
-      "types": "./dist/commands/explainCommand.d.mts",
-      "import": "./dist/commands/explainCommand.mjs",
-      "require": "./dist/commands/explainCommand.cjs"
+    "./explain-command": {
+      "types": "./dist/explain-command.d.mts",
+      "import": "./dist/explain-command.mjs",
+      "require": "./dist/explain-command.cjs"
     },
-    "./commands/initCommand": {
-      "types": "./dist/commands/initCommand.d.mts",
-      "import": "./dist/commands/initCommand.mjs",
-      "require": "./dist/commands/initCommand.cjs"
+    "./init-command": {
+      "types": "./dist/init-command.d.mts",
+      "import": "./dist/init-command.mjs",
+      "require": "./dist/init-command.cjs"
     },
-    "./commands/launchCommand": {
-      "types": "./dist/commands/launchCommand.d.mts",
-      "import": "./dist/commands/launchCommand.mjs",
-      "require": "./dist/commands/launchCommand.cjs"
+    "./launch-command": {
+      "types": "./dist/launch-command.d.mts",
+      "import": "./dist/launch-command.mjs",
+      "require": "./dist/launch-command.cjs"
     },
-    "./commands/syncCommand": {
-      "types": "./dist/commands/syncCommand.d.mts",
-      "import": "./dist/commands/syncCommand.mjs",
-      "require": "./dist/commands/syncCommand.cjs"
+    "./sync-command": {
+      "types": "./dist/sync-command.d.mts",
+      "import": "./dist/sync-command.mjs",
+      "require": "./dist/sync-command.cjs"
     },
     "./config": {
-      "types": "./dist/config/index.d.mts",
-      "import": "./dist/config/index.mjs",
-      "require": "./dist/config/index.cjs"
+      "types": "./dist/config.d.mts",
+      "import": "./dist/config.mjs",
+      "require": "./dist/config.cjs"
     },
-    "./config/harnessState": {
-      "types": "./dist/config/harnessState.d.mts",
-      "import": "./dist/config/harnessState.mjs",
-      "require": "./dist/config/harnessState.cjs"
+    "./harness-state": {
+      "types": "./dist/harness-state.d.mts",
+      "import": "./dist/harness-state.mjs",
+      "require": "./dist/harness-state.cjs"
     },
-    "./config/projectTrust": {
-      "types": "./dist/config/projectTrust.d.mts",
-      "import": "./dist/config/projectTrust.mjs",
-      "require": "./dist/config/projectTrust.cjs"
+    "./project-trust": {
+      "types": "./dist/project-trust.d.mts",
+      "import": "./dist/project-trust.mjs",
+      "require": "./dist/project-trust.cjs"
     },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
-    "./entries/domains": {
-      "types": "./dist/entries/domains.d.mts",
-      "import": "./dist/entries/domains.mjs",
-      "require": "./dist/entries/domains.cjs"
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
     },
-    "./entries/agentModel": {
-      "types": "./dist/entries/agentModel.d.mts",
-      "import": "./dist/entries/agentModel.mjs",
-      "require": "./dist/entries/agentModel.cjs"
+    "./extensions/agent-model": {
+      "types": "./dist/extensions/agent-model.d.mts",
+      "import": "./dist/extensions/agent-model.mjs",
+      "require": "./dist/extensions/agent-model.cjs"
     },
-    "./entries/cordisFinalizer": {
-      "types": "./dist/entries/cordisFinalizer.d.mts",
-      "import": "./dist/entries/cordisFinalizer.mjs",
-      "require": "./dist/entries/cordisFinalizer.cjs"
+    "./extensions/effort": {
+      "types": "./dist/extensions/effort.d.mts",
+      "import": "./dist/extensions/effort.mjs",
+      "require": "./dist/extensions/effort.cjs"
     },
-    "./entries/cordisHost": {
-      "types": "./dist/entries/cordisHost.d.mts",
-      "import": "./dist/entries/cordisHost.mjs",
-      "require": "./dist/entries/cordisHost.cjs"
+    "./extensions/terminal-child-session": {
+      "types": "./dist/extensions/terminal-child-session.d.mts",
+      "import": "./dist/extensions/terminal-child-session.mjs",
+      "require": "./dist/extensions/terminal-child-session.cjs"
     },
-    "./entries/doom": {
-      "types": "./dist/entries/doom.d.mts",
-      "import": "./dist/entries/doom.mjs",
-      "require": "./dist/entries/doom.cjs"
+    "./extensions/ollama-provider": {
+      "types": "./dist/extensions/ollama-provider.d.mts",
+      "import": "./dist/extensions/ollama-provider.mjs",
+      "require": "./dist/extensions/ollama-provider.cjs"
     },
-    "./entries/effort": {
-      "types": "./dist/entries/effort.d.mts",
-      "import": "./dist/entries/effort.mjs",
-      "require": "./dist/entries/effort.cjs"
-    },
-    "./entries/modeCatalog": {
-      "types": "./dist/entries/modeCatalog.d.mts",
-      "import": "./dist/entries/modeCatalog.mjs",
-      "require": "./dist/entries/modeCatalog.cjs"
-    },
-    "./entries/ollamaProvider": {
-      "types": "./dist/entries/ollamaProvider.d.mts",
-      "import": "./dist/entries/ollamaProvider.mjs",
-      "require": "./dist/entries/ollamaProvider.cjs"
-    },
-    "./entries/styleSystem": {
-      "types": "./dist/entries/styleSystem.d.mts",
-      "import": "./dist/entries/styleSystem.mjs",
-      "require": "./dist/entries/styleSystem.cjs"
-    },
-    "./logSinkTelemetry": {
-      "types": "./dist/logSinkTelemetry.d.mts",
-      "import": "./dist/logSinkTelemetry.mjs",
-      "require": "./dist/logSinkTelemetry.cjs"
+    "./extensions/style-system": {
+      "types": "./dist/extensions/style-system.d.mts",
+      "import": "./dist/extensions/style-system.mjs",
+      "require": "./dist/extensions/style-system.cjs"
     },
     "./services": {
-      "types": "./dist/services/index.d.mts",
-      "import": "./dist/services/index.mjs",
-      "require": "./dist/services/index.cjs"
+      "types": "./dist/services.d.mts",
+      "import": "./dist/services.mjs",
+      "require": "./dist/services.cjs"
     },
-    "./services/compatibility": {
-      "types": "./dist/services/compatibility/index.d.mts",
-      "import": "./dist/services/compatibility/index.mjs",
-      "require": "./dist/services/compatibility/index.cjs"
+    "./compatibility": {
+      "types": "./dist/compatibility.d.mts",
+      "import": "./dist/compatibility.mjs",
+      "require": "./dist/compatibility.cjs"
     },
-    "./services/compatibility/antigravity": {
-      "types": "./dist/services/compatibility/antigravity.d.mts",
-      "import": "./dist/services/compatibility/antigravity.mjs",
-      "require": "./dist/services/compatibility/antigravity.cjs"
+    "./antigravity": {
+      "types": "./dist/antigravity.d.mts",
+      "import": "./dist/antigravity.mjs",
+      "require": "./dist/antigravity.cjs"
     },
-    "./services/compatibility/codex": {
-      "types": "./dist/services/compatibility/codex.d.mts",
-      "import": "./dist/services/compatibility/codex.mjs",
-      "require": "./dist/services/compatibility/codex.cjs"
+    "./codex": {
+      "types": "./dist/codex.d.mts",
+      "import": "./dist/codex.mjs",
+      "require": "./dist/codex.cjs"
     },
-    "./services/compatibility/process": {
-      "types": "./dist/services/compatibility/process.d.mts",
-      "import": "./dist/services/compatibility/process.mjs",
-      "require": "./dist/services/compatibility/process.cjs"
+    "./process": {
+      "types": "./dist/process.d.mts",
+      "import": "./dist/process.mjs",
+      "require": "./dist/process.cjs"
     },
-    "./services/compatibility/shared": {
-      "types": "./dist/services/compatibility/shared.d.mts",
-      "import": "./dist/services/compatibility/shared.mjs",
-      "require": "./dist/services/compatibility/shared.cjs"
+    "./shared": {
+      "types": "./dist/shared.d.mts",
+      "import": "./dist/shared.mjs",
+      "require": "./dist/shared.cjs"
     },
-    "./services/compatibilityContext": {
-      "types": "./dist/services/compatibilityContext.d.mts",
-      "import": "./dist/services/compatibilityContext.mjs",
-      "require": "./dist/services/compatibilityContext.cjs"
+    "./compatibility-context": {
+      "types": "./dist/compatibility-context.d.mts",
+      "import": "./dist/compatibility-context.mjs",
+      "require": "./dist/compatibility-context.cjs"
     },
-    "./services/composer": {
-      "types": "./dist/services/composer.d.mts",
-      "import": "./dist/services/composer.mjs",
-      "require": "./dist/services/composer.cjs"
+    "./composer": {
+      "types": "./dist/composer.d.mts",
+      "import": "./dist/composer.mjs",
+      "require": "./dist/composer.cjs"
     },
-    "./services/harnessContext": {
-      "types": "./dist/services/harnessContext.d.mts",
-      "import": "./dist/services/harnessContext.mjs",
-      "require": "./dist/services/harnessContext.cjs"
+    "./harness-context": {
+      "types": "./dist/harness-context.d.mts",
+      "import": "./dist/harness-context.mjs",
+      "require": "./dist/harness-context.cjs"
     },
-    "./services/matrixSwitcher": {
-      "types": "./dist/services/matrixSwitcher.d.mts",
-      "import": "./dist/services/matrixSwitcher.mjs",
-      "require": "./dist/services/matrixSwitcher.cjs"
+    "./matrix-switcher": {
+      "types": "./dist/matrix-switcher.d.mts",
+      "import": "./dist/matrix-switcher.mjs",
+      "require": "./dist/matrix-switcher.cjs"
     },
-    "./services/modeCatalog": {
-      "types": "./dist/services/modeCatalog.d.mts",
-      "import": "./dist/services/modeCatalog.mjs",
-      "require": "./dist/services/modeCatalog.cjs"
+    "./mcp-filter": {
+      "types": "./dist/mcp-filter.d.mts",
+      "import": "./dist/mcp-filter.mjs",
+      "require": "./dist/mcp-filter.cjs"
     },
-    "./services/mcpFilter": {
-      "types": "./dist/services/mcpFilter.d.mts",
-      "import": "./dist/services/mcpFilter.mjs",
-      "require": "./dist/services/mcpFilter.cjs"
+    "./resource-collector": {
+      "types": "./dist/resource-collector.d.mts",
+      "import": "./dist/resource-collector.mjs",
+      "require": "./dist/resource-collector.cjs"
     },
-    "./services/piSettings": {
-      "types": "./dist/services/piSettings.d.mts",
-      "import": "./dist/services/piSettings.mjs",
-      "require": "./dist/services/piSettings.cjs"
-    },
-    "./services/resourceCollector": {
-      "types": "./dist/services/resourceCollector.d.mts",
-      "import": "./dist/services/resourceCollector.mjs",
-      "require": "./dist/services/resourceCollector.cjs"
-    },
-    "./services/syncState": {
-      "types": "./dist/services/syncState.d.mts",
-      "import": "./dist/services/syncState.mjs",
-      "require": "./dist/services/syncState.cjs"
+    "./sync-state": {
+      "types": "./dist/sync-state.d.mts",
+      "import": "./dist/sync-state.mjs",
+      "require": "./dist/sync-state.cjs"
     },
     "./utils": {
-      "types": "./dist/utils/index.d.mts",
-      "import": "./dist/utils/index.mjs",
-      "require": "./dist/utils/index.cjs"
+      "types": "./dist/utils.d.mts",
+      "import": "./dist/utils.mjs",
+      "require": "./dist/utils.cjs"
     },
-    "./utils/json": {
-      "types": "./dist/utils/json.d.mts",
-      "import": "./dist/utils/json.mjs",
-      "require": "./dist/utils/json.cjs"
+    "./repository": {
+      "types": "./dist/repository.d.mts",
+      "import": "./dist/repository.mjs",
+      "require": "./dist/repository.cjs"
     },
-    "./utils/moduleResolution": {
-      "types": "./dist/utils/moduleResolution.d.mts",
-      "import": "./dist/utils/moduleResolution.mjs",
-      "require": "./dist/utils/moduleResolution.cjs"
+    "./package.json": "./package.json",
+    "./extensions/composed-pi": {
+      "types": "./dist/extensions/composed-pi.d.mts",
+      "import": "./dist/extensions/composed-pi.mjs",
+      "require": "./dist/extensions/composed-pi.cjs"
     },
-    "./utils/repository": {
-      "types": "./dist/utils/repository.d.mts",
-      "import": "./dist/utils/repository.mjs",
-      "require": "./dist/utils/repository.cjs"
+    "./extensions/context-catalog": {
+      "types": "./dist/extensions/context-catalog.d.mts",
+      "import": "./dist/extensions/context-catalog.mjs",
+      "require": "./dist/extensions/context-catalog.cjs"
     },
-    "./utils/toolNames": {
-      "types": "./dist/utils/toolNames.d.mts",
-      "import": "./dist/utils/toolNames.mjs",
-      "require": "./dist/utils/toolNames.cjs"
-    },
-    "./package.json": "./package.json"
+    "./builders/web": {
+      "types": "./dist/builders/web.d.mts",
+      "import": "./dist/builders/web.mjs",
+      "require": "./dist/builders/web.cjs"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -326,32 +288,50 @@
     "@agimon-ai/doompi-autostop": "workspace:*",
     "@agimon-ai/doompi-cache": "workspace:*",
     "@agimon-ai/doompi-config": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-domain": "workspace:*",
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
     "@agimon-ai/doompi-major-mode": "workspace:*",
+    "@agimon-ai/doompi-minor-mode": "workspace:*",
     "@agimon-ai/doompi-notification": "workspace:*",
     "@agimon-ai/doompi-profile": "workspace:*",
     "@agimon-ai/doompi-skill": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
+    "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
+    "@earendil-works/chord": "0.85.1",
+    "@earendil-works/pi-agent-core": "0.85.1",
     "@earendil-works/pi-coding-agent": "0.85.1",
+    "@earendil-works/pi-protocol": "0.85.1",
     "@earendil-works/pi-server": "0.85.1",
+    "@earendil-works/pi-session-backend-sqlite-node": "0.85.1",
+    "@hono/node-server": "2.1.1",
+    "@simplewebauthn/server": "^14.0.1",
+    "@tailwindcss/vite": "4.3.3",
+    "@vitejs/plugin-react": "6.1.1",
     "cross-spawn": "7.0.6",
     "gpt-tokenizer": "4.0.0",
+    "hono": "4.13.5",
     "minimatch": "10.2.6",
     "protobufjs": "8.8.0",
     "rolldown": "1.2.7",
+    "tailwindcss": "4.3.3",
     "typebox": "1.3.25",
+    "vite": "8.2.2",
+    "ws": "8.21.3",
     "yaml": "2.9.0"
   },
   "devDependencies": {
     "@agimon-ai/doompi-runner": "workspace:*",
+    "@agimon-ai/vibe-lint-plugin-doom-cli": "workspace:*",
     "@earendil-works/pi-ai": "0.85.1",
+    "@earendil-works/pi-client": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",
     "@types/cross-spawn": "6.0.6",
     "@types/node": "26.4.1",
+    "@types/ws": "8.18.1",
     "@vitest/coverage-v8": "4.1.11",
+    "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vitest": "4.1.11"
   },
@@ -366,11 +346,17 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "doompiApi": {
-    "basePath": "context",
-    "session": {
-      "entry": "./src/exports/sessionApi.ts",
-      "dist": "./dist/sessionApi.mjs"
+  "doompiServer": {
+    "entry": "./src/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "global",
+      "workspace",
+      "session"
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
     }
   },
   "pi": {

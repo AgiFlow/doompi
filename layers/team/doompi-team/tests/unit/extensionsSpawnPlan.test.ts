@@ -1,35 +1,39 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
+import type {
+  DoomChildSessionHandle,
+  DoomChildSessionRequest,
+  DoomChildSessionService,
+  DoomChildSessionServiceProvider,
+} from '@agimon-ai/doompi-core/child';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ExtensionConfig } from '../../src/adapters/pi/extensions/config';
-import {
-  captureSessionForkSource,
-  type SessionForkSource,
-  SpawnPlanner,
-  type SpawnPlanRequest,
-} from '../../src/adapters/pi/extensions/spawnPlan';
+
 import { SubagentCapabilityPolicyStore } from '../../src/schemas/team/capabilityCeiling';
-import { AdmissionGate } from '../../src/adapters/runs/shared/admissionGate';
+import { AdmissionGate } from '../../src/services/admissionGate';
 import type {
   DiscoveredSkill,
   SkillDiscoveryContract,
   SkillLocation,
   SkillResolution,
-} from '../../src/adapters/agents/skills';
-import type {
-  AgentConfig,
-  AgentDiscoveryResult,
-  AgentScope,
-  AgentDiscoveryContract,
-} from '../../src/adapters/agents/types';
+} from '../../src/services/agentSkills';
 import type {
   AsyncSubagentSpawnInput,
   AsyncSubagentSpawnResult,
   AsyncSubagentSpawnerContract,
-} from '../../src/adapters/runs/background/asyncExecution';
-
+} from '../../src/services/asyncExecution';
+import type { ExtensionConfig } from '../../src/services/config';
+import type { NativeRunCoordinatorContract } from '../../src/services/nativeRunCoordinator';
+import {
+  captureSessionForkSource,
+  type SessionForkSource,
+  SpawnPlanner,
+  type SpawnPlanRequest,
+} from '../../src/services/spawnPlan';
+import type { AgentConfig, AgentDiscoveryResult, AgentScope, AgentDiscoveryContract } from '../../src/types/agent';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 function agentConfig(name: string, overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
     name,
@@ -112,14 +116,83 @@ class FakeSpawner implements AsyncSubagentSpawnerContract {
   }
 }
 
+class FakeChildSessionService implements DoomChildSessionService {
+  calls: DoomChildSessionRequest[] = [];
+  failure: Error | undefined;
+  failures = new Map<string, Error>();
+  startHook?: (request: DoomChildSessionRequest) => Promise<void>;
+
+  async start(request: DoomChildSessionRequest): Promise<DoomChildSessionHandle> {
+    this.calls.push(request);
+    await this.startHook?.(request);
+    const failure = this.failures.get(request.agent) ?? this.failure;
+    if (failure) throw failure;
+    return {
+      runId: request.runId,
+      state: () => 'running',
+      subscribe: () => () => undefined,
+      steer: async () => undefined,
+      stop: async () => undefined,
+      dispose: async () => undefined,
+    };
+  }
+
+  get(): DoomChildSessionHandle | undefined {
+    return undefined;
+  }
+
+  async close(): Promise<void> {}
+}
+
 /** Spawn planner with deterministic run ids (`run-0`, `run-1`, ...). */
 class TestableSpawnPlanner extends SpawnPlanner {
   private nextRunId = 0;
+  readonly child: FakeChildSessionService;
   teamPackageExcludeTools: string[] | undefined;
   teamPackageModels: string[] | undefined;
   forkSources: SessionForkSource[] = [];
   removedSessionFiles: string[] = [];
   failForkAt: number | undefined;
+
+  constructor(
+    agents: ConstructorParameters<typeof SpawnPlanner>[0],
+    spawner: ConstructorParameters<typeof SpawnPlanner>[1],
+    policies?: ConstructorParameters<typeof SpawnPlanner>[2],
+    skills?: ConstructorParameters<typeof SpawnPlanner>[3],
+    reportConcurrencyEvent?: ConstructorParameters<typeof SpawnPlanner>[4],
+    mcpToolResolver?: ConstructorParameters<typeof SpawnPlanner>[5],
+    admission?: ConstructorParameters<typeof SpawnPlanner>[6],
+    providerOrChild?: DoomChildSessionServiceProvider | FakeChildSessionService,
+    nativeRuns?: NativeRunCoordinatorContract,
+  ) {
+    const child = providerOrChild instanceof FakeChildSessionService ? providerOrChild : new FakeChildSessionService();
+    const provider =
+      providerOrChild instanceof FakeChildSessionService || providerOrChild === undefined
+        ? ({ get: () => child } satisfies DoomChildSessionServiceProvider)
+        : providerOrChild;
+    const native =
+      nativeRuns ??
+      ({
+        start: (_sessionId, request) => child.start(request),
+        get: () => undefined,
+        status: () => undefined,
+        steer: async () => undefined,
+        stop: async () => undefined,
+        close: async () => undefined,
+      } satisfies NativeRunCoordinatorContract);
+    super(
+      agents,
+      spawner,
+      policies,
+      skills,
+      reportConcurrencyEvent,
+      mcpToolResolver,
+      admission ?? { admit: async () => ({ release: () => undefined }) },
+      provider,
+      native,
+    );
+    this.child = child;
+  }
 
   protected override generateRunId(): string {
     const id = `run-${this.nextRunId}`;
@@ -140,16 +213,6 @@ class TestableSpawnPlanner extends SpawnPlanner {
   protected override executableAvailable(): boolean {
     return true;
   }
-
-  protected override createForkSessionFile(source: SessionForkSource): string {
-    this.forkSources.push(source);
-    if (this.forkSources.length === this.failForkAt) throw new Error('fork preparation failed');
-    return `/tmp/fork-${this.forkSources.length}.jsonl`;
-  }
-
-  protected override removePreparedSessionFile(sessionFile: string): void {
-    this.removedSessionFiles.push(sessionFile);
-  }
 }
 
 const temporaryDirectories: string[] = [];
@@ -159,7 +222,16 @@ function readableForkSource(leafId = 'parent-leaf'): SessionForkSource {
   temporaryDirectories.push(directory);
   const sessionFile = path.join(directory, 'parent.jsonl');
   fs.writeFileSync(sessionFile, '{}\n');
-  return { sessionFile, leafId };
+  return {
+    sessionFile,
+    leafId,
+    terminalSource: {
+      kind: 'terminal-pi-fork',
+      sourceSessionId: 'parent-session',
+      sourceLeafId: leafId,
+      snapshotJsonl: '{}\n',
+    },
+  };
 }
 
 afterEach(() => {
@@ -170,6 +242,7 @@ function baseRequest(overrides: Partial<SpawnPlanRequest> = {}): SpawnPlanReques
   return {
     cwd: '/work',
     agentScope: 'both',
+    sessionScope: TEST_SESSION_SCOPE,
     currentDepth: 0,
     ...overrides,
   };
@@ -178,6 +251,7 @@ function baseRequest(overrides: Partial<SpawnPlanRequest> = {}): SpawnPlanReques
 describe('SpawnPlanner', () => {
   let discovery: FakeAgentDiscovery;
   let spawner: FakeSpawner;
+  let child: FakeChildSessionService;
   let skills: FakeSkillDiscovery;
   let planner: TestableSpawnPlanner;
   let config: ExtensionConfig;
@@ -185,8 +259,9 @@ describe('SpawnPlanner', () => {
   beforeEach(() => {
     discovery = new FakeAgentDiscovery();
     spawner = new FakeSpawner();
+    child = new FakeChildSessionService();
     skills = new FakeSkillDiscovery();
-    planner = new TestableSpawnPlanner(discovery, spawner, undefined, skills);
+    planner = new TestableSpawnPlanner(discovery, spawner, undefined, skills, undefined, undefined, undefined, child);
     config = {};
   });
 
@@ -221,14 +296,14 @@ describe('SpawnPlanner', () => {
 
       const result = await planner.spawn(baseRequest({ single: { agent: 'worker', task: 'do the thing' } }), config);
 
-      expect(spawner.calls).toHaveLength(1);
-      expect(spawner.calls[0]).toMatchObject({ agent: 'worker', task: 'do the thing', childIndex: 0, fanout: false });
+      expect(child.calls).toHaveLength(1);
+      expect(child.calls[0]).toMatchObject({ agent: 'worker', task: 'do the thing' });
       expect(result.outcomes).toEqual([
-        { agent: 'worker', task: 'do the thing', childIndex: 0, runId: spawner.calls[0]!.runId, pid: 1001 },
+        { agent: 'worker', task: 'do the thing', childIndex: 0, runId: child.calls[0]!.runId },
       ]);
+      expect(spawner.calls).toEqual([]);
       expect(skills.calls).toEqual([]);
     });
-
     it('resolves agent defaults (systemPrompt, inheritProjectContext, inheritSkills, systemPromptMode) into piArgs', async () => {
       discovery.agents.set(
         'reviewer',
@@ -237,14 +312,12 @@ describe('SpawnPlanner', () => {
 
       await planner.spawn(baseRequest({ single: { agent: 'reviewer', task: 'review' } }), config);
 
-      expect(spawner.calls[0]?.piArgs).toMatchObject({
-        inheritProjectContext: false,
-        inheritSkills: false,
+      expect(child.calls[0]).toMatchObject({
         systemPromptMode: 'replace',
         systemPrompt: 'You are reviewer.',
       });
+      expect(spawner.calls).toEqual([]);
     });
-
     it('injects resolved skill metadata from request-relative roots without embedding bodies', async () => {
       const skillPath = '/request/configured-skills/code-review/SKILL.md';
       skills.resolutions.set('code-review', {
@@ -282,17 +355,15 @@ describe('SpawnPlanner', () => {
           localBaseDir: '/request',
         },
       ]);
-      expect(spawner.calls[0]?.piArgs).toMatchObject({
-        inheritSkills: false,
-        requireReadTool: true,
+      expect(child.calls[0]).toMatchObject({
         systemPromptMode: 'append',
+        systemPrompt: expect.stringContaining('<name>code-review</name>'),
       });
-      const prompt = spawner.calls[0]?.piArgs.systemPrompt ?? '';
-      expect(prompt).toContain('You are reviewer.\n\nThe following configured skills');
-      expect(prompt).toContain('<name>code-review</name>');
+      const prompt = child.calls[0]?.systemPrompt ?? '';
       expect(prompt).toContain('<description>Review code safely</description>');
       expect(prompt).toContain(`<location>${skillPath}</location>`);
       expect(prompt).not.toContain('PRIVATE_SKILL_BODY');
+      expect(spawner.calls).toEqual([]);
     });
 
     it('memoizes equivalent sibling agent and configured-skill resolution within one spawn', async () => {
@@ -314,8 +385,9 @@ describe('SpawnPlanner', () => {
 
       expect(discovery.findCalls).toHaveLength(1);
       expect(skills.calls).toHaveLength(1);
-      expect(spawner.calls).toHaveLength(8);
-      expect(spawner.calls.every((call) => call.piArgs.systemPrompt?.includes('<name>shared-skill</name>'))).toBe(true);
+      expect(child.calls).toHaveLength(8);
+      expect(child.calls.every((call) => call.systemPrompt?.includes('<name>shared-skill</name>'))).toBe(true);
+      expect(spawner.calls).toEqual([]);
     });
 
     it('injects deduplicated existing defaultReads and warns without failing for missing paths', async () => {
@@ -334,11 +406,11 @@ describe('SpawnPlanner', () => {
         config,
       );
 
-      expect(spawner.calls[0]?.piArgs.requireReadTool).toBe(true);
-      expect(spawner.calls[0]?.piArgs.systemPrompt?.match(new RegExp(readPath, 'g'))).toHaveLength(1);
-      expect(spawner.calls[0]?.piArgs.systemPrompt).toContain('before broad repository discovery');
-      expect(spawner.calls[0]?.task).toBe('inspect');
+      expect(child.calls[0]?.systemPrompt?.match(new RegExp(readPath, 'g'))).toHaveLength(1);
+      expect(child.calls[0]?.systemPrompt).toContain('before broad repository discovery');
+      expect(child.calls[0]?.task).toBe('inspect');
       expect(result.outcomes[0]?.warning).toContain(`could not read optional default paths: ${missingPath}`);
+      expect(spawner.calls).toEqual([]);
     });
 
     it('preserves replace prompt mode while appending configured skill metadata', async () => {
@@ -365,11 +437,10 @@ describe('SpawnPlanner', () => {
 
       await planner.spawn(baseRequest({ single: { agent: 'replacer', task: 'replace' } }), config);
 
-      expect(spawner.calls[0]?.piArgs.systemPromptMode).toBe('replace');
-      expect(spawner.calls[0]?.piArgs.systemPrompt).toContain(
-        'Replacement instructions.\n\nThe following configured skills',
-      );
-      expect(spawner.calls[0]?.piArgs.systemPrompt).not.toContain('REPLACEMENT_BODY');
+      expect(child.calls[0]?.systemPromptMode).toBe('replace');
+      expect(child.calls[0]?.systemPrompt).toContain('Replacement instructions.\n\nThe following configured skills');
+      expect(child.calls[0]?.systemPrompt).not.toContain('REPLACEMENT_BODY');
+      expect(spawner.calls).toEqual([]);
     });
 
     it('creates a one-shot read-only inline agent without consulting discovery or skill resolution', async () => {
@@ -386,19 +457,14 @@ describe('SpawnPlanner', () => {
 
       expect(discovery.findCalls).toEqual([]);
       expect(skills.calls).toEqual([]);
-      expect(spawner.calls[0]).toMatchObject({
+      expect(child.calls[0]).toMatchObject({
         agent: 'schema-explorer',
-        inlineAgent: { systemPrompt: 'Inspect schema boundaries.' },
-        runtime: 'pi',
-      });
-      expect(spawner.calls[0]?.piArgs).toMatchObject({
-        sessionEnabled: true,
+        task: 'Review schemas',
         systemPrompt: 'Inspect schema boundaries.',
         systemPromptMode: 'append',
-        inheritProjectContext: true,
-        inheritSkills: false,
         tools: ['read', 'grep', 'find', 'ls'],
       });
+      expect(spawner.calls).toEqual([]);
     });
 
     it('passes Team package exclusions to discovered and inline children', async () => {
@@ -417,7 +483,7 @@ describe('SpawnPlanner', () => {
         config,
       );
 
-      expect(spawner.calls.map((call) => call.piArgs.excludeTools)).toEqual([
+      expect(child.calls.map((call) => call.excludeTools)).toEqual([
         ['ask_user_question', 'intercom', 'subagent'],
         ['ask_user_question', 'intercom', 'subagent'],
       ]);
@@ -454,8 +520,8 @@ describe('SpawnPlanner', () => {
       await planner.spawn(baseRequest({ single: { agent: 'pi-worker', task: 'inspect' } }), config);
       await planner.spawn(baseRequest({ single: { agent: 'external', task: 'inspect' } }), config);
 
-      expect(spawner.calls[0]?.piArgs.sessionEnabled).toBe(true);
-      expect(spawner.calls[1]?.piArgs.sessionEnabled).toBe(false);
+      expect(child.calls).toHaveLength(1);
+      expect(spawner.calls).toHaveLength(1);
     });
 
     it('applies the typed session policy at the central spawn boundary', async () => {
@@ -469,13 +535,14 @@ describe('SpawnPlanner', () => {
 
       await planner.spawn(baseRequest({ single: { agent: 'reviewer', task: 'review' } }), config);
 
-      expect(spawner.calls[0]?.piArgs.capabilityCeiling).toEqual({
+      expect(planner.child.calls[0]?.capabilityCeiling).toEqual({
         version: 2,
         allowedTools: ['read'],
         allowedExternalProfiles: [],
         denyExtensions: true,
         sources: ['@agimon-ai/doompi-plan'],
       });
+      expect(spawner.calls).toEqual([]);
     });
 
     it('rejects external runtimes while a capability ceiling is active', async () => {
@@ -495,7 +562,7 @@ describe('SpawnPlanner', () => {
 
       await planner.spawn(baseRequest({ single: { agent: 'worker', task: 'x', model: 'override-model' } }), config);
 
-      expect(spawner.calls[0]?.piArgs.model).toBe('override-model');
+      expect(child.calls[0]?.model).toBe('override-model');
     });
 
     it("falls back to the agent's own model when no override is given", async () => {
@@ -503,7 +570,7 @@ describe('SpawnPlanner', () => {
 
       await planner.spawn(baseRequest({ single: { agent: 'worker', task: 'x' } }), config);
 
-      expect(spawner.calls[0]?.piArgs.model).toBe('agent-default-model');
+      expect(child.calls[0]?.model).toBe('agent-default-model');
     });
 
     it('tries agent config, team fallbacks, then parent config for Pi children', async () => {
@@ -536,7 +603,7 @@ describe('SpawnPlanner', () => {
         config,
       );
 
-      expect(spawner.calls[0]?.piArgs.model).toBe('openai-codex/gpt-5.6-luna:xhigh');
+      expect(child.calls[0]?.model).toBe('openai-codex/gpt-5.6-luna:xhigh');
     });
 
     it('uses parent config only after agent and team candidates are unavailable', async () => {
@@ -558,7 +625,7 @@ describe('SpawnPlanner', () => {
         config,
       );
 
-      expect(spawner.calls[0]?.piArgs.model).toBe('openai-codex/gpt-5.6-luna');
+      expect(child.calls[0]?.model).toBe('openai-codex/gpt-5.6-luna');
     });
 
     it('does not duplicate a team model inherited through discovery', async () => {
@@ -591,7 +658,7 @@ describe('SpawnPlanner', () => {
         config,
       );
 
-      expect(spawner.calls[0]?.piArgs.model).toBe('openai-codex/gpt-5.6-luna:xhigh');
+      expect(child.calls[0]?.model).toBe('openai-codex/gpt-5.6-luna:xhigh');
     });
 
     it('does not inherit a parent model for external runtimes', async () => {
@@ -643,7 +710,7 @@ describe('SpawnPlanner', () => {
         config,
       );
 
-      expect(spawner.calls[0]?.piArgs.model).toBe('openai-codex/gpt-5.6-luna:low');
+      expect(child.calls[0]?.model).toBe('openai-codex/gpt-5.6-luna:low');
     });
 
     it('does not launch when none of the configured model candidates is authenticated', async () => {
@@ -658,6 +725,7 @@ describe('SpawnPlanner', () => {
       await expect(
         planner.spawn(baseRequest({ single: { agent: 'worker', task: 'x' }, availableModels: [] }), config),
       ).rejects.toThrow(/\[model_unavailable\].*No authenticated model is available/);
+      expect(child.calls).toHaveLength(0);
       expect(spawner.calls).toHaveLength(0);
     });
 
@@ -665,6 +733,7 @@ describe('SpawnPlanner', () => {
       await expect(planner.spawn(baseRequest({ single: { agent: 'ghost', task: 'x' } }), config)).rejects.toThrow(
         /'ghost'/,
       );
+      expect(child.calls).toHaveLength(0);
       expect(spawner.calls).toHaveLength(0);
     });
 
@@ -681,6 +750,7 @@ describe('SpawnPlanner', () => {
         ),
       ).rejects.toThrow(/Fork context is unavailable/);
 
+      expect(child.calls).toHaveLength(0);
       expect(spawner.calls).toHaveLength(0);
     });
 
@@ -697,8 +767,11 @@ describe('SpawnPlanner', () => {
         config,
       );
 
-      expect(spawner.calls[0]?.parentSessionFile).toBe(parentSessionFile);
-      expect(spawner.calls[0]?.piArgs.parentSessionId).toBeUndefined();
+      expect(child.calls[0]).toMatchObject({
+        parentSessionId: 'parent-session-1',
+        source: { kind: 'fresh' },
+      });
+      expect(spawner.calls).toEqual([]);
     });
 
     it("rejects an agent's fork default when the parent source is unavailable", async () => {
@@ -711,12 +784,13 @@ describe('SpawnPlanner', () => {
         ),
       ).rejects.toThrow(/Fork context is unavailable/);
 
+      expect(child.calls).toHaveLength(0);
       expect(spawner.calls).toHaveLength(0);
     });
 
     it('a per-child spawn failure is returned as an {error} outcome, not thrown', async () => {
       discovery.agents.set('worker', agentConfig('worker'));
-      spawner.results.set('worker', new Error('spawn exploded'));
+      child.failure = new Error('spawn exploded');
 
       const result = await planner.spawn(baseRequest({ single: { agent: 'worker', task: 'x' } }), config);
 
@@ -745,18 +819,17 @@ describe('SpawnPlanner', () => {
       await planner.spawn(
         baseRequest({
           single: { agent: 'worker', task: 'fork', context: 'fork' },
-          parentSessionFile: source.sessionFile,
-          parentLeafId: source.leafId,
+          parentForkSource: source.terminalSource,
         }),
         config,
       );
 
       expect(skills.calls).toHaveLength(2);
-      expect(spawner.calls.map((call) => call.piArgs.requireReadTool)).toEqual([true, true]);
-      expect(spawner.calls[0]?.piArgs.systemPrompt).toBe(spawner.calls[1]?.piArgs.systemPrompt);
+      expect(planner.child.calls).toHaveLength(2);
+      expect(planner.child.calls[0]?.systemPrompt).toBe(planner.child.calls[1]?.systemPrompt);
+      expect(spawner.calls).toEqual([]);
     });
-
-    it('clones a valid explicit fork and forwards its parent lineage', async () => {
+    it('passes the immutable terminal snapshot directly to an explicit native fork', async () => {
       discovery.agents.set('worker', agentConfig('worker'));
       const source = readableForkSource();
 
@@ -764,20 +837,13 @@ describe('SpawnPlanner', () => {
         baseRequest({
           single: { agent: 'worker', task: 'x', context: 'fork' },
           parentSessionId: 'parent-session',
-          parentSessionFile: source.sessionFile,
-          parentLeafId: source.leafId,
+          parentForkSource: source.terminalSource,
         }),
         config,
       );
 
-      expect(planner.forkSources).toEqual([source]);
-      expect(spawner.calls[0]).toMatchObject({
-        parentSessionFile: source.sessionFile,
-        piArgs: {
-          sessionFile: '/tmp/fork-1.jsonl',
-          parentSessionId: 'parent-session',
-        },
-      });
+      expect(planner.child.calls[0]?.source).toEqual(source.terminalSource);
+      expect(spawner.calls).toEqual([]);
     });
 
     it('honors an agent default fork while an explicit fresh override stays independent', async () => {
@@ -787,12 +853,12 @@ describe('SpawnPlanner', () => {
       await planner.spawn(
         baseRequest({
           single: { agent: 'worker', task: 'x' },
-          parentSessionFile: source.sessionFile,
-          parentLeafId: source.leafId,
+          parentForkSource: source.terminalSource,
         }),
         config,
       );
-      expect(spawner.calls[0]?.piArgs.sessionFile).toBe('/tmp/fork-1.jsonl');
+      expect(planner.child.calls[0]?.source).toEqual(source.terminalSource);
+      expect(spawner.calls).toEqual([]);
 
       planner = new TestableSpawnPlanner(discovery, spawner);
       await planner.spawn(
@@ -803,8 +869,8 @@ describe('SpawnPlanner', () => {
         }),
         config,
       );
-      expect(planner.forkSources).toEqual([]);
-      expect(spawner.calls[1]?.piArgs.sessionFile).toBeUndefined();
+      expect(planner.child.calls[0]?.source).toEqual({ kind: 'fresh' });
+      expect(spawner.calls).toEqual([]);
     });
 
     it('rejects external-runtime forks before preparing or spawning', async () => {
@@ -826,7 +892,7 @@ describe('SpawnPlanner', () => {
       expect(spawner.calls).toEqual([]);
     });
 
-    it('prepares isolated files for parallel forks from the same source', async () => {
+    it('passes the immutable snapshot to parallel forks from the same source', async () => {
       discovery.agents.set('worker', agentConfig('worker'));
       const source = readableForkSource();
 
@@ -836,80 +902,14 @@ describe('SpawnPlanner', () => {
             { agent: 'worker', task: 'a', context: 'fork' },
             { agent: 'worker', task: 'b', context: 'fork' },
           ],
-          parentSessionFile: source.sessionFile,
-          parentLeafId: source.leafId,
+          parentForkSource: source.terminalSource,
         }),
         config,
       );
 
-      expect(planner.forkSources).toEqual([source, source]);
-      expect(spawner.calls.map((call) => call.piArgs.sessionFile)).toEqual(['/tmp/fork-1.jsonl', '/tmp/fork-2.jsonl']);
+      expect(planner.child.calls.map((call) => call.source)).toEqual([source.terminalSource, source.terminalSource]);
+      expect(spawner.calls).toEqual([]);
     });
-
-    it('keeps parallel fork clones isolated while leaving the parent transcript immutable', async () => {
-      const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-team-parallel-fork-'));
-      temporaryDirectories.push(directory);
-      const parent = SessionManager.create(directory, directory);
-      const parentLeafId = parent.appendMessage({ role: 'user', content: 'shared parent context', timestamp: 1 });
-      parent.appendMessage({
-        role: 'assistant',
-        content: [{ type: 'text', text: 'settled parent response' }],
-        api: 'test',
-        provider: 'test',
-        model: 'test',
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-        stopReason: 'stop',
-        timestamp: 2,
-      });
-      const parentSessionFile = parent.getSessionFile()!;
-      const parentBefore = fs.readFileSync(parentSessionFile);
-      discovery.agents.set('worker', agentConfig('worker'));
-      const realPlanner = new SpawnPlanner(discovery, spawner);
-
-      await realPlanner.spawn(
-        {
-          tasks: [
-            { agent: 'worker', task: 'child-a', context: 'fork' },
-            { agent: 'worker', task: 'child-b', context: 'fork' },
-          ],
-          cwd: directory,
-          agentScope: 'both',
-          parentSessionFile,
-          parentLeafId,
-        },
-        config,
-      );
-
-      const childSessionFiles = spawner.calls.map((call) => call.piArgs.sessionFile);
-      expect(childSessionFiles).toHaveLength(2);
-      expect(childSessionFiles[0]).toBeDefined();
-      expect(childSessionFiles[1]).toBeDefined();
-      expect(new Set(childSessionFiles).size).toBe(2);
-
-      const childA = SessionManager.open(childSessionFiles[0]!, undefined, directory);
-      const childB = SessionManager.open(childSessionFiles[1]!, undefined, directory);
-      childA.appendMessage({ role: 'user', content: 'child-a-only', timestamp: 2 });
-      childB.appendMessage({ role: 'user', content: 'child-b-only', timestamp: 3 });
-
-      const branchText = (session: SessionManager): string =>
-        session
-          .getBranch()
-          .map((entry) => (entry.type === 'message' ? JSON.stringify(entry.message) : ''))
-          .join('\\n');
-      expect(branchText(childA)).toContain('child-a-only');
-      expect(branchText(childA)).not.toContain('child-b-only');
-      expect(branchText(childB)).toContain('child-b-only');
-      expect(branchText(childB)).not.toContain('child-a-only');
-      expect(fs.readFileSync(parentSessionFile)).toEqual(parentBefore);
-    });
-
     it('supports mixed fresh and fork tasks without forking the fresh child', async () => {
       discovery.agents.set('worker', agentConfig('worker'));
       const source = readableForkSource();
@@ -920,36 +920,13 @@ describe('SpawnPlanner', () => {
             { agent: 'worker', task: 'fresh', context: 'fresh' },
             { agent: 'worker', task: 'fork', context: 'fork' },
           ],
-          parentSessionFile: source.sessionFile,
-          parentLeafId: source.leafId,
+          parentForkSource: source.terminalSource,
         }),
         config,
       );
 
-      expect(spawner.calls[0]?.piArgs.sessionFile).toBeUndefined();
-      expect(spawner.calls[1]?.piArgs.sessionFile).toBe('/tmp/fork-1.jsonl');
-    });
-
-    it('cleans prepared clones and starts no child when batch preparation fails', async () => {
-      discovery.agents.set('worker', agentConfig('worker'));
-      const source = readableForkSource();
-      planner.failForkAt = 2;
-
-      await expect(
-        planner.spawn(
-          baseRequest({
-            tasks: [
-              { agent: 'worker', task: 'a', context: 'fork' },
-              { agent: 'worker', task: 'b', context: 'fork' },
-            ],
-            parentSessionFile: source.sessionFile,
-            parentLeafId: source.leafId,
-          }),
-          config,
-        ),
-      ).rejects.toThrow(/fork preparation failed/);
-
-      expect(planner.removedSessionFiles).toEqual(['/tmp/fork-1.jsonl']);
+      expect(planner.child.calls[0]?.source).toEqual({ kind: 'fresh' });
+      expect(planner.child.calls[1]?.source).toEqual(source.terminalSource);
       expect(spawner.calls).toEqual([]);
     });
 
@@ -963,9 +940,8 @@ describe('SpawnPlanner', () => {
         config,
       );
 
-      expect(planner.forkSources).toEqual([]);
-      expect(spawner.calls[0]?.piArgs.sessionFile).toBe('/tmp/child.jsonl');
-      expect(spawner.calls[0]?.piArgs.parentSessionId).toBeUndefined();
+      expect(planner.child.calls[0]?.source).toEqual({ kind: 'v4-restore', sessionFile: '/tmp/child.jsonl' });
+      expect(spawner.calls).toEqual([]);
     });
   });
 
@@ -984,10 +960,9 @@ describe('SpawnPlanner', () => {
         config,
       );
 
-      expect(spawner.calls).toHaveLength(2);
-      expect(spawner.calls.map((c) => c.childIndex)).toEqual([0, 1]);
-      expect(spawner.calls.every((c) => c.fanout)).toBe(true);
-      expect(result.outcomes.map((o) => o.agent)).toEqual(['a', 'b']);
+      expect(child.calls.map((call) => call.agent)).toEqual(['a', 'b']);
+      expect(result.outcomes.map((outcome) => outcome.childIndex)).toEqual([0, 1]);
+      expect(result.outcomes.map((outcome) => outcome.agent)).toEqual(['a', 'b']);
     });
 
     it('keeps partial and complete skill misses independent while launching every valid child', async () => {
@@ -1017,7 +992,7 @@ describe('SpawnPlanner', () => {
         config,
       );
 
-      expect(spawner.calls).toHaveLength(2);
+      expect(child.calls).toHaveLength(2);
       expect(result.outcomes).toEqual([
         expect.objectContaining({
           agent: 'partial',
@@ -1030,9 +1005,9 @@ describe('SpawnPlanner', () => {
           warning: expect.stringContaining('could not resolve configured skills: absent'),
         }),
       ]);
-      expect(spawner.calls.map((call) => call.piArgs.requireReadTool)).toEqual([true, false]);
-      expect(spawner.calls[0]?.piArgs.systemPrompt).toContain('<name>available</name>');
-      expect(spawner.calls[1]?.piArgs.systemPrompt).toBe('You are complete-miss.');
+      expect(child.calls[0]?.systemPrompt).toContain('<name>available</name>');
+      expect(child.calls[1]?.systemPrompt).toBe('You are complete-miss.');
+      expect(spawner.calls).toEqual([]);
     });
 
     it('launches specialists in one cwd while enforcing a read-only ceiling', async () => {
@@ -1052,15 +1027,16 @@ describe('SpawnPlanner', () => {
         config,
       );
 
-      expect(spawner.calls).toHaveLength(2);
-      expect(spawner.calls.map((call) => call.piArgs.capabilityCeiling?.allowedTools)).toEqual([['read'], ['read']]);
+      expect(planner.child.calls).toHaveLength(2);
+      expect(planner.child.calls.map((call) => call.capabilityCeiling?.allowedTools)).toEqual([['read'], ['read']]);
+      expect(spawner.calls).toEqual([]);
     });
 
     it('one child failing does not prevent its siblings from spawning or being reported', async () => {
       discovery.agents.set('a', agentConfig('a'));
       discovery.agents.set('b', agentConfig('b'));
       discovery.agents.set('c', agentConfig('c'));
-      spawner.results.set('b', new Error('b failed'));
+      child.failures.set('b', new Error('b failed'));
 
       const result = await planner.spawn(
         baseRequest({
@@ -1073,7 +1049,8 @@ describe('SpawnPlanner', () => {
         config,
       );
 
-      expect(spawner.calls).toHaveLength(3);
+      expect(child.calls).toHaveLength(3);
+      expect(spawner.calls).toEqual([]);
       expect(result.outcomes[0]).toMatchObject({ agent: 'a', runId: expect.any(String) });
       expect(result.outcomes[1]).toMatchObject({ agent: 'b', error: 'b failed' });
       expect(result.outcomes[2]).toMatchObject({ agent: 'c', runId: expect.any(String) });
@@ -1101,12 +1078,11 @@ describe('SpawnPlanner', () => {
       for (const name of ['a', 'b', 'c', 'd', 'e']) discovery.agents.set(name, agentConfig(name));
       let maxActive = 0;
       let active = 0;
-      spawner.spawn = async (input) => {
+      child.startHook = async () => {
         active += 1;
         maxActive = Math.max(maxActive, active);
         await new Promise((resolve) => setTimeout(resolve, 0));
         active -= 1;
-        return { runId: input.runId, pid: 1 };
       };
 
       await planner.spawn(
@@ -1121,12 +1097,11 @@ describe('SpawnPlanner', () => {
       for (const name of ['a', 'b', 'c']) discovery.agents.set(name, agentConfig(name));
       let maxActive = 0;
       let active = 0;
-      spawner.spawn = async (input) => {
+      child.startHook = async () => {
         active += 1;
         maxActive = Math.max(maxActive, active);
         await new Promise((resolve) => setTimeout(resolve, 0));
         active -= 1;
-        return { runId: input.runId, pid: 1 };
       };
 
       await planner.spawn(
@@ -1141,12 +1116,11 @@ describe('SpawnPlanner', () => {
       for (const name of ['a', 'b', 'c']) discovery.agents.set(name, agentConfig(name));
       let maxActive = 0;
       let active = 0;
-      spawner.spawn = async (input) => {
+      child.startHook = async () => {
         active += 1;
         maxActive = Math.max(maxActive, active);
         await new Promise((resolve) => setTimeout(resolve, 0));
         active -= 1;
-        return { runId: input.runId, pid: 1 };
       };
 
       await planner.spawn(baseRequest({ tasks: ['a', 'b', 'c'].map((agent) => ({ agent, task: 'x' })) }), {
@@ -1176,7 +1150,7 @@ describe('SpawnPlanner', () => {
         maxSubagentDepth: 3,
       });
 
-      expect(spawner.calls).toHaveLength(1);
+      expect(child.calls).toHaveLength(1);
     });
 
     it('allows a spawn with no configured depth limit regardless of currentDepth', async () => {
@@ -1184,7 +1158,7 @@ describe('SpawnPlanner', () => {
 
       await planner.spawn(baseRequest({ single: { agent: 'worker', task: 'x' }, currentDepth: 999 }), {});
 
-      expect(spawner.calls).toHaveLength(1);
+      expect(child.calls).toHaveLength(1);
     });
   });
 });
@@ -1330,7 +1304,7 @@ describe('global admission control', () => {
 });
 
 describe('persisted session forks', () => {
-  it('excludes the active assistant tool-call turn and leaves the parent file unchanged', async () => {
+  it('captures the tool-safe branch as immutable JSONL and leaves the parent file unchanged', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-team-real-fork-'));
     temporaryDirectories.push(directory);
     const parent = SessionManager.create(directory, directory);
@@ -1355,35 +1329,19 @@ describe('persisted session forks', () => {
     const parentSessionFile = parent.getSessionFile()!;
     const before = fs.readFileSync(parentSessionFile);
 
-    expect(captureSessionForkSource(parent, 'tool')).toEqual({ sessionFile: parentSessionFile, leafId: userId });
-    expect(captureSessionForkSource(parent, 'settled')).toEqual({
-      sessionFile: parentSessionFile,
-      leafId: assistantId,
+    const toolSource = captureSessionForkSource(parent, 'tool');
+    const settledSource = captureSessionForkSource(parent, 'settled');
+    expect(toolSource).toMatchObject({ sessionFile: parentSessionFile, leafId: userId });
+    expect(toolSource?.terminalSource).toMatchObject({
+      kind: 'terminal-pi-fork',
+      sourceSessionId: parent.getSessionId(),
+      sourceLeafId: userId,
     });
-
-    const discovery = new FakeAgentDiscovery();
-    discovery.agents.set('worker', agentConfig('worker'));
-    const spawner = new FakeSpawner();
-    const planner = new SpawnPlanner(discovery, spawner);
-    await planner.spawn(
-      {
-        single: { agent: 'worker', task: 'inherit marker', context: 'fork' },
-        cwd: directory,
-        agentScope: 'both',
-        parentSessionFile,
-        parentLeafId: userId,
-      },
-      {},
-    );
-
-    const childSessionFile = spawner.calls[0]?.piArgs.sessionFile;
-    expect(childSessionFile).toBeDefined();
-    expect(childSessionFile).not.toBe(parentSessionFile);
+    expect(toolSource?.terminalSource.snapshotJsonl).toContain(userId);
+    expect(toolSource?.terminalSource.snapshotJsonl).not.toContain(assistantId);
+    expect(settledSource).toMatchObject({ sessionFile: parentSessionFile, leafId: assistantId });
+    expect(settledSource?.terminalSource.snapshotJsonl).toContain(assistantId);
     expect(fs.readFileSync(parentSessionFile)).toEqual(before);
-
-    const child = SessionManager.open(childSessionFile!, undefined, directory);
-    expect(child.getBranch().map((entry) => entry.id)).toContain(userId);
-    expect(child.getBranch().map((entry) => entry.id)).not.toContain(assistantId);
   });
 });
 
@@ -1396,7 +1354,7 @@ describe('timeoutMs is not the spawn handshake timeout', () => {
     discovery = new FakeAgentDiscovery();
     spawner = new FakeSpawner();
     planner = new TestableSpawnPlanner(discovery, spawner);
-    discovery.agents.set('worker', agentConfig('worker'));
+    discovery.agents.set('worker', agentConfig('worker', { runtime: 'claude' }));
   });
 
   it('never forwards a caller timeout as handshakeTimeoutMs', async () => {
@@ -1412,5 +1370,109 @@ describe('timeoutMs is not the spawn handshake timeout', () => {
     await planner.spawn(baseRequest({ single: { agent: 'worker', task: 'x' } }), { handshakeTimeoutMs: 5_000 });
 
     expect(spawner.calls[0]?.handshakeTimeoutMs).toBe(5_000);
+  });
+});
+
+describe('native and external runtime dispatch', () => {
+  function setup(runtime?: string, childFailure?: Error) {
+    const discovery = new FakeAgentDiscovery();
+    const spawner = new FakeSpawner();
+    const child = new FakeChildSessionService();
+    child.failure = childFailure;
+    discovery.agents.set('worker', agentConfig('worker', { runtime: runtime ?? 'pi' }));
+    const provider: DoomChildSessionServiceProvider = { get: () => child };
+    const native: NativeRunCoordinatorContract = {
+      start: (_sessionId, request) => child.start(request),
+      get: () => undefined,
+      status: () => undefined,
+      steer: async () => undefined,
+      stop: async () => undefined,
+      close: async () => undefined,
+    };
+    const planner = new TestableSpawnPlanner(
+      discovery,
+      spawner,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      provider,
+      native,
+    );
+    return { planner, spawner, child };
+  }
+
+  it('uses the injected child service for omitted and explicit Pi runtimes', async () => {
+    for (const runtime of [undefined, 'pi']) {
+      const { planner, spawner, child } = setup(runtime);
+      const result = await planner.spawn(
+        baseRequest({
+          single: { agent: 'worker', task: 'inspect' },
+          sessionScope: { rootSessionId: 'parent', scopeKey: 'scope' },
+        }),
+        {},
+      );
+      expect(result.outcomes[0]).toMatchObject({ runId: 'run-0' });
+      expect(child.calls[0]).toMatchObject({
+        parentSessionId: 'parent',
+        scope: { rootSessionId: 'parent', scopeKey: 'scope' },
+      });
+      expect(spawner.calls).toEqual([]);
+    }
+  });
+
+  it('passes the captured terminal snapshot directly to a native fork child', async () => {
+    const { planner, spawner, child } = setup();
+    const parentForkSource = readableForkSource('tool-safe-leaf').terminalSource;
+    const result = await planner.spawn(
+      baseRequest({
+        single: { agent: 'worker', task: 'inspect', context: 'fork' },
+        parentSessionId: 'parent',
+        parentForkSource,
+      }),
+      {},
+    );
+
+    expect(result.outcomes[0]).toMatchObject({ runId: 'run-0' });
+    expect(child.calls[0]?.source).toEqual(parentForkSource);
+    expect(spawner.calls).toEqual([]);
+  });
+
+  it('passes an explicit v4 restore source to the native child', async () => {
+    const { planner, spawner, child } = setup();
+    const sessionFile = '/tmp/native-child-v4.jsonl';
+    const result = await planner.spawn(baseRequest({ single: { agent: 'worker', task: 'continue', sessionFile } }), {});
+
+    expect(result.outcomes[0]).toMatchObject({ runId: 'run-0' });
+    expect(child.calls[0]?.source).toEqual({ kind: 'v4-restore', sessionFile });
+    expect(spawner.calls).toEqual([]);
+  });
+
+  it.each(['claude', 'codex'])('uses the process backend only for explicit %s runtime', async (runtime) => {
+    const { planner, spawner, child } = setup(runtime);
+    await planner.spawn(
+      baseRequest({ single: { agent: 'worker', task: 'inspect' } }),
+      runtime === 'codex' ? { runtimes: { codex: { command: 'codex', args: ['exec', '{prompt}'] } } } : {},
+    );
+    expect(spawner.calls).toHaveLength(1);
+    expect(child.calls).toEqual([]);
+  });
+
+  it('does not fall back when the native child service fails', async () => {
+    const { planner, spawner, child } = setup(undefined, new Error('native failed'));
+    const result = await planner.spawn(baseRequest({ single: { agent: 'worker', task: 'inspect' } }), {});
+    expect(result.outcomes[0]?.error).toBe('native failed');
+    expect(child.calls).toHaveLength(1);
+    expect(spawner.calls).toEqual([]);
+  });
+
+  it('does not fall back to native when an external runtime fails', async () => {
+    const { planner, spawner, child } = setup('claude');
+    spawner.results.set('worker', new Error('cli failed'));
+    const result = await planner.spawn(baseRequest({ single: { agent: 'worker', task: 'inspect' } }), {});
+    expect(result.outcomes[0]?.error).toBe('cli failed');
+    expect(spawner.calls).toHaveLength(1);
+    expect(child.calls).toEqual([]);
   });
 });

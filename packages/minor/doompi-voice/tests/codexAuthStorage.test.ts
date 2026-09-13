@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDoomPiCodexFileAuthStorage, type DoomPiAuthFileIo } from '../src/adapters/realtime/codexAuthStorage.ts';
+
+import { createDoomPiCodexFileAuthStorage, type DoomPiAuthFileIo } from '../src/services/codexAuthStorage';
 
 const signal = new AbortController().signal;
 

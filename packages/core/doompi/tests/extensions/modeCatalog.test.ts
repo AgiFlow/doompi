@@ -1,19 +1,18 @@
-import { DOOM_MCP_STATUS_SERVICE } from '@agimon-ai/doompi-extension-contracts/mcp-status';
-import * as contextCatalog from '../../src/services/contextCatalog.ts';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
-import { DOOM_MINOR_MODE_ENTRY_TYPE, readMinorModeCatalog } from '@agimon-ai/doompi-extension-contracts/mode';
-import {
-  DOOM_NOTIFICATION_SERVICE,
-  type DoomNotificationService,
-} from '@agimon-ai/doompi-extension-contracts/notification';
-import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protocol';
-import { prepareMinorModeReloadHandoff } from '@agimon-ai/doompi-extension-contracts/transition';
+import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
+import { DOOM_MCP_STATUS_SERVICE } from '@agimon-ai/doompi-core/mcp-status';
+import { DOOM_NOTIFICATION_SERVICE, type DoomNotificationService } from '@agimon-ai/doompi-core/notification';
+import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
+import { DOOM_MINOR_MODE_ENTRY_TYPE, readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
+import modeCatalogExtension from '@agimon-ai/doompi-minor-mode/extensions/pi';
+import { prepareMinorModeReloadHandoff } from '@agimon-ai/doompi-minor-mode/reload-handoff';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import cordisHostExtension from '../../src/extensions/entries/cordisHost.ts';
-import modeCatalogExtension from '../../src/extensions/entries/modeCatalog.ts';
-import { bindTestTransitionCoordinator } from '../helpers/transitionCoordinator.ts';
+
+import * as contextCatalog from '../../src/builders/cli/contextCatalog';
+import contextCatalogExtension from '../../src/extensions/contextCatalog';
+import cordisHostExtension from '../../src/extensions/cordisHost';
+import { bindTestTransitionCoordinator } from '../helpers/transitionCoordinator';
 
 class TestBus implements EventBusLike {
   private readonly handlers = new Map<string, Set<(data: unknown) => void>>();
@@ -45,6 +44,7 @@ async function setup() {
   } as unknown as ExtensionAPI;
   await cordisHostExtension(pi);
   await modeCatalogExtension(pi);
+  await contextCatalogExtension(pi);
   const connection = await connectDoomCordisHost(pi, 'mode-catalog-test');
   const binding = bindTestTransitionCoordinator(connection.root, 'session-1', {
     current: { domains: [], majorMode: 'copilot', layers: [] },
@@ -254,7 +254,7 @@ describe('mode catalog extension', () => {
     expect(firstHelp.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi',
-        moduleUrl: expect.stringContaining('modeCatalog'),
+        moduleUrl: expect.stringContaining('contextCatalog'),
         skills: [
           {
             name: 'doompi-author-extension',

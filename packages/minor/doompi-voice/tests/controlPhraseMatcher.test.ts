@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   controlPhraseTokens,
   controlPhraseTokensEquivalent,
@@ -8,7 +9,7 @@ import {
   matchLeadingControlPhrase,
   matchTrailingControlPhrase,
   STRICT_CONTROL_PHRASE_EDIT_RATIO,
-} from '../src/services/controlPhraseMatcher.ts';
+} from '../src/services/controlPhraseMatcher';
 
 const strict = STRICT_CONTROL_PHRASE_EDIT_RATIO;
 const lenient = LENIENT_CONTROL_PHRASE_EDIT_RATIO;

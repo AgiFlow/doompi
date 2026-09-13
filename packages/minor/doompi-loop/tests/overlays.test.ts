@@ -1,13 +1,10 @@
-import type {
-  DoomLoopLaunchersService,
-  LoopInstanceSnapshot,
-  LoopLauncherSummary,
-} from '@agimon-ai/doompi-extension-contracts/loop-launchers';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import type { TUI } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { LoopListOverlay, openLoopListOverlay } from '../src/tui/loopListOverlay.ts';
-import { openStartLoopOverlay, StartLoopOverlay } from '../src/tui/startLoopOverlay.ts';
+
+import type { DoomLoopLaunchersService, LoopInstanceSnapshot, LoopLauncherSummary } from '../src/schemas/loopLaunchers';
+import { LoopListOverlay, openLoopListOverlay } from '../src/tui/loopListOverlay';
+import { openStartLoopOverlay, StartLoopOverlay } from '../src/tui/startLoopOverlay';
 
 const theme = {
   fg: (_color: string, text: string) => text,

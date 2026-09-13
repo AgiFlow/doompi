@@ -12,7 +12,7 @@
  * still match the parser's.
  */
 
-import { COMPACTION_THRESHOLDS } from './constants.ts';
+import { COMPACTION_THRESHOLDS } from '../constants/autocompact';
 
 export const AUTOCOMPACT_CONFIG_SECTION_ID = 'autocompact';
 const AUTOCOMPACT_PATH = ['modes', AUTOCOMPACT_CONFIG_SECTION_ID] as const;

@@ -1,5 +1,6 @@
-import type { SettingsFieldContribution } from '@agimon-ai/doompi-web-contracts';
-import type { SettingsScope, SettingsValueView, SettingsWriteRequest } from '../../types/settings.ts';
+import type { SettingsFieldContribution } from '@agimon-ai/doompi-core/web';
+
+import type { SettingsScope, SettingsValueView, SettingsWriteRequest } from '../../types/settings';
 
 /**
  * What a settings page does with pending edits, kept out of the component so it
@@ -7,8 +8,8 @@ import type { SettingsScope, SettingsValueView, SettingsWriteRequest } from '../
  *
  * The rules that matter are all here: a field is only editable at a scope the
  * key is actually read from, a cleared field removes the key rather than
- * writing an empty value the parser rejects, and each write carries the hash
- * the one before it produced so a batch cannot half-apply against stale bytes.
+ * writing an empty value the parser rejects, and numeric drafts retain their
+ * type when the page combines these edits into one atomic save.
  */
 
 const KEY_SEPARATOR = '.';
@@ -34,20 +35,23 @@ export interface PlannedWritesInput {
 }
 
 /**
- * The writes a save issues, in order. Only the first carries the hash the page
- * read; the caller threads each answer's hash into the next, which is why this
- * returns a list rather than firing them in parallel.
+ * The typed edits a save combines into one request with the file's read hash.
+ * Keeping contribution order makes the result predictable for callers.
  */
 export function plannedSettingsWrites(input: PlannedWritesInput): SettingsWriteRequest[] {
   return input.fields
     .filter((field) => settingsKeyOf(field) in input.drafts)
-    .map((field) => ({
-      repoRoot: input.repoRoot,
-      scope: input.scope,
-      keyPath: field.keyPath,
-      value: input.drafts[settingsKeyOf(field)] ?? null,
-      expectedHash: input.startingHash,
-    }));
+    .map((field) => {
+      const draft = input.drafts[settingsKeyOf(field)] ?? null;
+      const numeric = field.kind === 'number' && draft !== null && draft.trim() !== '' ? Number(draft) : undefined;
+      return {
+        repoRoot: input.repoRoot,
+        scope: input.scope,
+        keyPath: field.keyPath,
+        value: numeric !== undefined && Number.isFinite(numeric) ? numeric : draft,
+        expectedHash: input.startingHash,
+      };
+    });
 }
 
 /** Whether a save can be attempted at all: something changed, and it can land somewhere. */

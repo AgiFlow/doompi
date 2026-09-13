@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { barFraction, evenPositions, formatTokens, seriesMax } from '../src/web/lib/chartScale.ts';
+
+import { barFraction, evenPositions, formatTokens, seriesMax } from '../src/web/lib/chartScale';
 
 /**
  * The chart arithmetic, tested as functions. The failure that matters here is

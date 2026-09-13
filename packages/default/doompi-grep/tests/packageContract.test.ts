@@ -1,6 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -25,11 +26,7 @@ const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 const manifestPath = path.join(packageDirectory, 'package.json');
 const piPeers = ['@earendil-works/pi-coding-agent', '@earendil-works/pi-tui'] as const;
-const doomDependencies = [
-  '@agimon-ai/doompi-extension-contracts',
-  '@agimon-ai/doompi-hashline',
-  '@agimon-ai/doompi-ui',
-] as const;
+const doomDependencies = ['@agimon-ai/doompi-core', '@agimon-ai/doompi-hashline', '@agimon-ai/doompi-ui'] as const;
 
 async function readManifest(): Promise<PackageManifest> {
   return JSON.parse(await readFile(manifestPath, 'utf8')) as PackageManifest;
@@ -93,7 +90,7 @@ describe('doompi-grep package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
     expect(exportsMap['./package.json']).toBeDefined();
-    expect(manifest.files).toEqual(['dist', 'src/web', 'src/exports/webClient.ts', '!src/web/**/*.stories.tsx']);
+    expect(manifest.files).toEqual(['dist', 'src/web', 'src/extensions/web.ts', '!src/web/**/*.stories.tsx']);
     expect(manifest.files).not.toContain('src');
     expect(manifest.files).not.toContain('tests');
     await expect(access(path.join(packageDirectory, 'dist'))).resolves.toBeUndefined();

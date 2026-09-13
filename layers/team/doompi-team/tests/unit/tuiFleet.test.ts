@@ -1,14 +1,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import type { TranscriptPage } from '@agimon-ai/doompi-core/session-protocol';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AsyncRunStatus } from '../../src/adapters/runs/background/asyncExecution';
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/adapters/asyncJobTracker';
-import { readAsyncRunStatus } from '../../src/adapters/statusReader';
-import type { PollSchedulerContract, PollSubscription } from '../../src/adapters/pollScheduler';
-import { collectFleetSnapshot, SubagentFleetComponent } from '../../src/adapters/pi/tui/fleet';
-import { readFleetTranscriptTail } from '../../src/adapters/pi/tui/fleetTranscript';
+
+import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
+import { readFleetTranscriptTail } from '../../src/services/fleetTranscript';
+import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
+import { collectFleetSnapshot, SubagentFleetComponent } from '../../src/tui/fleet';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 /**
  * `fleet.ts`'s cache is keyed on the transcript file's disk fingerprint
@@ -24,8 +26,8 @@ import { readFleetTranscriptTail } from '../../src/adapters/pi/tui/fleetTranscri
  * a call without one re-parses the file from byte zero. The wrapper keeps the
  * real implementation so those calls do real work.
  */
-vi.mock('../../src/adapters/pi/tui/fleetTranscript', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/adapters/pi/tui/fleetTranscript')>();
+vi.mock('../../src/services/fleetTranscript', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/services/fleetTranscript')>();
   return {
     ...actual,
     readFleetTranscriptTail: vi.fn(actual.readFleetTranscriptTail),
@@ -36,10 +38,6 @@ vi.mock('../../src/adapters/pi/tui/fleetTranscript', async (importOriginal) => {
 function fullReadCount(): number {
   return vi.mocked(readFleetTranscriptTail).mock.calls.filter((call) => call[1] === undefined).length;
 }
-
-vi.mock('../../src/adapters/statusReader', () => ({
-  readAsyncRunStatus: vi.fn(),
-}));
 
 /** Captures whatever the component registers, and lets a test drive ticks by hand. */
 class FakeScheduler implements PollSchedulerContract {
@@ -83,17 +81,6 @@ class FakeTracker implements AsyncJobTrackerContract {
 
 function job(runId: string, overrides: Partial<TrackedAsyncJob> = {}): TrackedAsyncJob {
   return { runId, status: 'running', startedAt: 0, updatedAt: 0, ...overrides };
-}
-
-function runStatus(overrides: Partial<AsyncRunStatus> = {}): AsyncRunStatus {
-  return {
-    runId: 'run-a',
-    agent: 'worker',
-    state: 'running',
-    startedAt: 0,
-    lastUpdate: 0,
-    ...overrides,
-  };
 }
 
 class FakeTui {
@@ -148,19 +135,18 @@ describe('SubagentFleetComponent scheduler subscription', () => {
     scheduler = new FakeScheduler();
     tracker = new FakeTracker();
     tui = new FakeTui();
-    vi.mocked(readAsyncRunStatus).mockReturnValue(runStatus({ transcriptPath: '/tmp/run-a-transcript.jsonl' }));
   });
 
   it('registers with the poll scheduler instead of owning its own timer', () => {
     tracker.jobs = [job('run-a')];
-    new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     expect(scheduler.registered).toBeDefined();
     expect(scheduler.registered?.id).toBe('tui-fleet');
   });
 
   it('THE FIX: a tick where the roster did not change reports no work and does not re-render', () => {
     tracker.jobs = [job('run-a', { updatedAt: 100 })];
-    new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     const renderCountAfterConstruct = tui.rendered;
 
     // Nothing about the tracked job changed between this tick and the last.
@@ -172,7 +158,7 @@ describe('SubagentFleetComponent scheduler subscription', () => {
 
   it('a tick where the roster changed reports work and requests a render', () => {
     tracker.jobs = [job('run-a', { updatedAt: 100, status: 'running' })];
-    new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     const renderCountAfterConstruct = tui.rendered;
 
     tracker.jobs = [job('run-a', { updatedAt: 200, status: 'complete' })];
@@ -183,7 +169,7 @@ describe('SubagentFleetComponent scheduler subscription', () => {
   });
 
   it('unregisters from the scheduler on dispose, rather than leaving a stale subscription', () => {
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     component.dispose();
     expect(scheduler.unregisterCalls).toBe(1);
     expect(scheduler.registered).toBeUndefined();
@@ -200,12 +186,11 @@ describe('SubagentFleetComponent transcript cache', () => {
     scheduler = new FakeScheduler();
     tracker = new FakeTracker();
     tui = new FakeTui();
-    tracker.jobs = [job('run-a', { updatedAt: 100 })];
-    vi.mocked(readAsyncRunStatus).mockReturnValue(runStatus({ transcriptPath: '/tmp/run-a-transcript.jsonl' }));
+    tracker.jobs = [job('run-a', { updatedAt: 100, transcriptPath: '/tmp/run-a-transcript.jsonl' })];
   });
 
   it('THE FIX: a poll tick with an unchanged roster does not clear the transcript cache, so a second render does not re-parse the transcript', async () => {
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     component.render(80);
     const fullReadsAfterFirstRender = fullReadCount();
 
@@ -218,19 +203,20 @@ describe('SubagentFleetComponent transcript cache', () => {
     expect(fullReadCount()).toBe(fullReadsAfterFirstRender);
   });
 
-  it('resumes rather than re-parsing when the selected transcript grows', () => {
+  it('resumes rather than re-parsing when a tracker event accompanies transcript growth', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-team-fleet-'));
     const transcriptPath = path.join(directory, 'transcript.jsonl');
     fs.writeFileSync(transcriptPath, '{"recordType":"message","role":"user","text":"first","ts":1}\n');
-    vi.mocked(readAsyncRunStatus).mockReturnValue(runStatus({ transcriptPath }));
+    tracker.jobs = [job('run-a', { updatedAt: 100, transcriptPath })];
 
     try {
-      const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+      const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
       component.render(80);
       const fullReadsAfterFirstRender = fullReadCount();
       const rendersBeforeAppend = tui.rendered;
 
       fs.appendFileSync(transcriptPath, '{"recordType":"message","role":"user","text":"next","ts":2}\n');
+      tracker.jobs = [job('run-a', { updatedAt: 101, transcriptPath })];
       expect(scheduler.registered?.run()).toBe(true);
       expect(tui.rendered).toBe(rendersBeforeAppend + 1);
 
@@ -246,7 +232,7 @@ describe('SubagentFleetComponent transcript cache', () => {
   });
 
   it('Ctrl+R is still a deliberate, manual cache-clearing path', () => {
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     component.render(80);
     const fullReadsAfterFirstRender = fullReadCount();
 
@@ -267,11 +253,10 @@ describe('SubagentFleetComponent render and interaction', () => {
     scheduler = new FakeScheduler();
     tracker = new FakeTracker();
     tui = new FakeTui();
-    vi.mocked(readAsyncRunStatus).mockReturnValue(runStatus({ transcriptPath: '/tmp/run-a-transcript.jsonl' }));
   });
 
   it('uses a full-height narrow layout below 36 columns', () => {
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     const lines = component.render(20);
     expect(lines).toHaveLength(80);
     expect(lines.join('\n')).toContain('AGENT RUNS');
@@ -289,7 +274,7 @@ describe('SubagentFleetComponent render and interaction', () => {
       inverse: (text: string) => text,
     } as never;
     tracker.jobs = [job('run-a', { agent: 'package-dev', updatedAt: 100, status: 'running' })];
-    const component = new SubagentFleetComponent(tui, theme, scheduler, tracker, () => {});
+    const component = new SubagentFleetComponent(tui, theme, scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     const rendered = component.render(100).join('\n');
     expect(rendered).toContain('package-dev');
     expect(rendered).toContain('run-a'.slice(0, 8));
@@ -306,7 +291,7 @@ describe('SubagentFleetComponent render and interaction', () => {
       job('run-a', { agent: 'package-dev', status: 'running', startedAt: 0, updatedAt: 30_000 }),
       job('run-b', { agent: 'reviewer', status: 'complete', startedAt: 1000, updatedAt: 61_000 }),
     ];
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
 
     const roster = component.render(100).map((line) => line.slice(0, 40));
     vi.useRealTimers();
@@ -321,17 +306,17 @@ describe('SubagentFleetComponent render and interaction', () => {
   });
 
   it('shows what the run is doing now, not just that it exists', () => {
-    tracker.jobs = [job('run-a', { agent: 'package-dev', status: 'running' })];
-    vi.mocked(readAsyncRunStatus).mockReturnValue(
-      runStatus({
-        transcriptPath: '/tmp/run-a-transcript.jsonl',
+    tracker.jobs = [
+      job('run-a', {
+        agent: 'package-dev',
+        status: 'running',
         activityState: 'working',
         currentTool: 'grep',
         toolCount: 23,
         tokens: 41200,
       }),
-    );
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    ];
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
 
     const rendered = component.render(100).join('\n');
 
@@ -342,11 +327,8 @@ describe('SubagentFleetComponent render and interaction', () => {
   });
 
   it('p swaps the detail pane to the agent tab and back', () => {
-    tracker.jobs = [job('run-a', { agent: 'package-dev' })];
-    vi.mocked(readAsyncRunStatus).mockReturnValue(
-      runStatus({ transcriptPath: '/tmp/run-a-transcript.jsonl', cwd: '/repo', task: 'do the thing' }),
-    );
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    tracker.jobs = [job('run-a', { agent: 'package-dev', cwd: '/repo', task: 'do the thing' })];
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     component.render(100);
 
     component.handleInput('p');
@@ -360,8 +342,7 @@ describe('SubagentFleetComponent render and interaction', () => {
 
   it('says a system prompt was not recorded rather than showing a plausible guess', () => {
     tracker.jobs = [job('run-a')];
-    vi.mocked(readAsyncRunStatus).mockReturnValue(runStatus({ transcriptPath: '/tmp/run-a-transcript.jsonl' }));
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     component.handleInput('p');
 
     expect(component.render(100).join('\n')).toContain('No system prompt was recorded');
@@ -369,7 +350,7 @@ describe('SubagentFleetComponent render and interaction', () => {
 
   it('uses the canonical list and detail legends in full and compact chrome', () => {
     tracker.jobs = [job('run-a')];
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     const full = component.render(200).join('\n');
     tui.terminal.rows = 5;
     const compact = component.render(200).join('\n');
@@ -383,32 +364,71 @@ describe('SubagentFleetComponent render and interaction', () => {
   });
 
   it('renders the empty-roster fallback when nothing is tracked', () => {
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     const rendered = component.render(100).join('\n');
     expect(rendered).toContain('No tracked runs');
   });
 
-  it('renders an artifacts-disabled empty state without reading a guessed transcript path', () => {
-    tracker.jobs = [job('run-a', { status: 'failed' })];
-    vi.mocked(readAsyncRunStatus).mockReturnValue(
-      runStatus({ state: 'failed', error: 'Interrupted before completion.' }),
-    );
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+  it('renders a source-unavailable empty state without reading a guessed transcript path', () => {
+    tracker.jobs = [job('run-a', { status: 'failed', error: 'Interrupted before completion.' })];
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
 
     const rendered = component.render(100).join('\n');
 
     expect(rendered).toContain('Transcript unavailable');
-    expect(rendered).toContain('Artifacts were disabled');
+    expect(rendered).toContain('did not publish');
     expect(rendered).not.toContain('ENOENT');
     expect(readFleetTranscriptTail).not.toHaveBeenCalled();
   });
 
+  it('renders a native session page instead of treating it as a Team artifact', async () => {
+    tracker.jobs = [job('run-a', { sessionFile: '/sessions/run-a.sqlite' })];
+    const page: TranscriptPage = {
+      entries: [
+        {
+          type: 'message',
+          id: 'one',
+          parentId: null,
+          seq: 1,
+          message: { role: 'user', content: 'native question', timestamp: 1 },
+        },
+        {
+          type: 'message',
+          id: 'two',
+          parentId: 'one',
+          seq: 2,
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'native answer' }],
+            model: { provider: 'test', id: 'model' },
+            status: 'complete',
+            timestamp: 2,
+          },
+        },
+      ],
+      startCursor: null,
+      endCursor: null,
+      olderCursor: null,
+      newerCursor: null,
+      generation: 0,
+      revision: 0,
+      context: [],
+      drafts: [],
+    };
+    const readTranscriptPage = vi.fn(async () => page);
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {}, {
+      readTranscriptPage,
+    });
+
+    await vi.waitFor(() => expect(readTranscriptPage).toHaveBeenCalledWith('run-a', { limit: 100 }));
+    await vi.waitFor(() => expect(component.render(100).join('\n')).toContain('native answer'));
+    expect(component.render(100).join('\n')).toContain('native question');
+    expect(readFleetTranscriptTail).not.toHaveBeenCalled();
+  });
+
   it('renders a neutral empty state when a persisted transcript path is unreadable', () => {
-    tracker.jobs = [job('run-a', { status: 'failed' })];
-    vi.mocked(readAsyncRunStatus).mockReturnValue(
-      runStatus({ state: 'failed', transcriptPath: '/tmp/missing-transcript.jsonl' }),
-    );
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    tracker.jobs = [job('run-a', { status: 'failed', transcriptPath: '/tmp/missing-transcript.jsonl' })];
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
 
     const rendered = component.render(100).join('\n');
 
@@ -420,7 +440,7 @@ describe('SubagentFleetComponent render and interaction', () => {
 
   it('moving selection with j/k updates which run is highlighted', () => {
     tracker.jobs = [job('run-a', { updatedAt: 200 }), job('run-b', { updatedAt: 100 })];
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     component.render(100);
     const renderCountBefore = tui.rendered;
     component.handleInput('j');
@@ -429,7 +449,7 @@ describe('SubagentFleetComponent render and interaction', () => {
 
   it('an unavailable control shows why, rather than silently doing nothing', () => {
     tracker.jobs = [job('run-a', { status: 'complete' })];
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     component.render(100);
     component.handleInput('i'); // interrupt: unavailable once complete
     const rendered = component.render(100).join('\n');
@@ -439,7 +459,9 @@ describe('SubagentFleetComponent render and interaction', () => {
   it('dispatches an available control through the injected dispatcher and reports the result', async () => {
     tracker.jobs = [job('run-a', { status: 'running' })];
     const dispatchAction = vi.fn().mockResolvedValue({ status: 'stopped' });
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {}, { dispatchAction });
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {}, {
+      dispatchAction,
+    });
     component.render(100);
     component.handleInput('x'); // stop
     await Promise.resolve();
@@ -451,7 +473,7 @@ describe('SubagentFleetComponent render and interaction', () => {
 
   it('closes the overlay on Escape', () => {
     const done = vi.fn();
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, done);
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, done);
     component.handleInput('\x1b');
     expect(done).toHaveBeenCalledWith(undefined);
   });
@@ -459,7 +481,9 @@ describe('SubagentFleetComponent render and interaction', () => {
   it('a steer draft composes text and submits it as a steer request', async () => {
     tracker.jobs = [job('run-a', { status: 'running' })];
     const dispatchAction = vi.fn().mockResolvedValue({ status: 'delivered' });
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {}, { dispatchAction });
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {}, {
+      dispatchAction,
+    });
     component.render(100);
     component.handleInput('m'); // steer
     component.handleInput('h');
@@ -471,8 +495,8 @@ describe('SubagentFleetComponent render and interaction', () => {
   });
 
   it('invalidate() clears the transcript cache, the same as Ctrl+R', () => {
-    tracker.jobs = [job('run-a')];
-    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, () => {});
+    tracker.jobs = [job('run-a', { transcriptPath: '/tmp/missing-fleet-transcript.jsonl' })];
+    const component = new SubagentFleetComponent(tui, fakeTheme(), scheduler, tracker, TEST_SESSION_SCOPE, () => {});
     component.render(100);
     const fullReadsAfterFirstRender = fullReadCount();
     component.invalidate();

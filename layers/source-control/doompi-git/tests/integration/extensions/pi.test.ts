@@ -1,11 +1,12 @@
+import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
 // @scaffold-generated
-import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-extension-contracts/testing';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { COMMAND_NAME } from '../../../src/commands/doomGitCommand.ts';
-import { activateGitExtension } from '../../../src/adapters/pi/extension.ts';
-import type { GitExtensionService } from '../../../src/types/extension.ts';
+
+import { COMMAND_NAME } from '../../../src/constants/git';
+import { activateGitExtension } from '../../../src/extensions/pi';
+import type { GitExtensionService } from '../../../src/types/extension';
 
 /**
  * The Pi surface.
@@ -27,6 +28,7 @@ describe('the standard Pi entry contract', () => {
 describe('doompi-git Pi extension', () => {
   it('injects its service into the standalone command', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     const service: GitExtensionService = {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
@@ -42,6 +44,7 @@ describe('doompi-git Pi extension', () => {
   it('says nothing where there is no UI to say it in', async () => {
     // The cockpit and the RPC runtime both load extensions with no terminal.
     const host = createPiTestHost({ hasUI: false, mode: 'rpc' });
+    await host.cordis();
     const service: GitExtensionService = {
       execute: vi.fn().mockResolvedValue({ message: 'ready', level: 'info' }),
     };
@@ -55,6 +58,7 @@ describe('doompi-git Pi extension', () => {
 
   it('follows optional Help provider replacement and withdraws its contribution on shutdown', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     await activateGitExtension(host.pi);
     const connection = await connectDoomCordisHost(host.pi, 'doompi-git-help-test');
     const firstService = createDoomHelpService('doompi-git-help-first');
@@ -64,7 +68,7 @@ describe('doompi-git Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-git',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-use-git',

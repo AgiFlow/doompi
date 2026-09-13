@@ -1,28 +1,29 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   assistantUsageTokens,
   cumulativeAssistantTokens,
   formatDuration,
   formatTokenCount,
-} from '../../src/services/accounting.ts';
-import { parseGoalCommand, parseTokenBudget, validateObjective } from '../../src/services/parser.ts';
-import { buildGoalPrompt, buildGoalSystemPrompt } from '../../src/services/prompts.ts';
-import { nextToolFreeRepeatState, resetGoalSafetyEpoch, safetyLimitReached } from '../../src/services/safety.ts';
-import { normalizeGoalSettings } from '../../src/services/settings.ts';
-import { decodeGoalStateEntries, serializeGoalState } from '../../src/services/stateCodec.ts';
+} from '../../src/models/accounting';
+import { nextToolFreeRepeatState, resetGoalSafetyEpoch, safetyLimitReached } from '../../src/models/safety';
+import { decodeGoalStateEntries, serializeGoalState } from '../../src/models/stateCodec';
 import {
   createGoal,
   getExecutionState,
   isContradictoryCompletionSummary,
   transitionGoal,
-} from '../../src/services/stateMachine.ts';
+} from '../../src/models/stateMachine';
+import { parseGoalCommand, parseTokenBudget, validateObjective } from '../../src/services/parser';
+import { buildGoalPrompt, buildGoalSystemPrompt } from '../../src/services/prompts';
+import { normalizeGoalSettings } from '../../src/services/settings';
 import {
   addGoalTools,
   filterGoalTools,
   goalToolNamesForState,
   validateBlockedInput,
   validateCompletionInput,
-} from '../../src/services/tools.ts';
+} from '../../src/services/tools';
 
 describe('goal parser and accounting', () => {
   it('parses budgets, quoted objectives, aliases, and validation', () => {

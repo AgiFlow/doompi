@@ -1,7 +1,8 @@
-import { DOOM_PROFILE_IDENTITY_ENTRY_TYPE } from '@agimon-ai/doompi-extension-contracts/profile-identity';
+import { DOOM_PROFILE_IDENTITY_ENTRY_TYPE } from '@agimon-ai/doompi-core/profile-identity';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { publishProfileIdentity } from '../../src/adapters/pi/identityEntry.ts';
+
+import { publishProfileIdentity } from '../../src/controllers/identityEntry';
 
 function host() {
   const appendEntry = vi.fn();

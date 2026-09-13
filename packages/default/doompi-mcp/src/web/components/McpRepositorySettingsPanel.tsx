@@ -1,7 +1,8 @@
+import type { RepositorySettingsPanelProps } from '@agimon-ai/doompi-core/web';
 import { Badge, Button } from '@agimon-ai/doompi-web-components';
-import type { RepositorySettingsPanelProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
+
 import {
   authorizeMcpServer,
   cancelMcpFlow,
@@ -9,7 +10,7 @@ import {
   followMcpAuthorization,
   loadMcpSettings,
   mcpSettings,
-} from '../stores/mcpSettingsStore.ts';
+} from '../stores/mcpSettingsStore';
 
 const TERMINAL_AUTHORIZATION = new Set(['completed', 'failed', 'cancelled', 'expired']);
 

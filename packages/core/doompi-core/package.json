@@ -1,0 +1,587 @@
+{
+  "name": "@agimon-ai/doompi-core",
+  "version": "0.0.1-alpha.69",
+  "description": "Doompi runtime systems and reusable core services.",
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "developer-tools",
+    "doompi",
+    "pi",
+    "pi-coding-agent",
+    "pi-package"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/core/doompi-core"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./agent-model": {
+      "types": "./dist/agent-model.d.mts",
+      "import": "./dist/agent-model.mjs",
+      "require": "./dist/agent-model.cjs"
+    },
+    "./ask-user": {
+      "types": "./dist/ask-user.d.mts",
+      "import": "./dist/ask-user.mjs",
+      "require": "./dist/ask-user.cjs"
+    },
+    "./author-tools": {
+      "types": "./dist/author-tools.d.mts",
+      "import": "./dist/author-tools.mjs",
+      "require": "./dist/author-tools.cjs"
+    },
+    "./background-work": {
+      "types": "./dist/background-work.d.mts",
+      "import": "./dist/background-work.mjs",
+      "require": "./dist/background-work.cjs"
+    },
+    "./child-process": {
+      "types": "./dist/child-process.d.mts",
+      "import": "./dist/child-process.mjs",
+      "require": "./dist/child-process.cjs"
+    },
+    "./cockpit-container": {
+      "types": "./dist/cockpit-container.d.mts",
+      "import": "./dist/cockpit-container.mjs",
+      "require": "./dist/cockpit-container.cjs"
+    },
+    "./config": {
+      "types": "./dist/config.d.mts",
+      "import": "./dist/config.mjs",
+      "require": "./dist/config.cjs"
+    },
+    "./context-contributions": {
+      "types": "./dist/context-contributions.d.mts",
+      "import": "./dist/context-contributions.mjs",
+      "require": "./dist/context-contributions.cjs"
+    },
+    "./delegation": {
+      "types": "./dist/delegation.d.mts",
+      "import": "./dist/delegation.mjs",
+      "require": "./dist/delegation.cjs"
+    },
+    "./cordis-host": {
+      "types": "./dist/cordis-host.d.mts",
+      "import": "./dist/cordis-host.mjs",
+      "require": "./dist/cordis-host.cjs"
+    },
+    "./footer": {
+      "types": "./dist/footer.d.mts",
+      "import": "./dist/footer.mjs",
+      "require": "./dist/footer.cjs"
+    },
+    "./help": {
+      "types": "./dist/help.d.mts",
+      "import": "./dist/help.mjs",
+      "require": "./dist/help.cjs"
+    },
+    "./leader": {
+      "types": "./dist/leader.d.mts",
+      "import": "./dist/leader.mjs",
+      "require": "./dist/leader.cjs"
+    },
+    "./mcp-projection": {
+      "types": "./dist/mcp-projection.d.mts",
+      "import": "./dist/mcp-projection.mjs",
+      "require": "./dist/mcp-projection.cjs"
+    },
+    "./mcp-session": {
+      "types": "./dist/mcp-session.d.mts",
+      "import": "./dist/mcp-session.mjs",
+      "require": "./dist/mcp-session.cjs"
+    },
+    "./mcp-status": {
+      "types": "./dist/mcp-status.d.mts",
+      "import": "./dist/mcp-status.mjs",
+      "require": "./dist/mcp-status.cjs"
+    },
+    "./mcp-tool-resolver": {
+      "types": "./dist/mcp-tool-resolver.d.mts",
+      "import": "./dist/mcp-tool-resolver.mjs",
+      "require": "./dist/mcp-tool-resolver.cjs"
+    },
+    "./narration": {
+      "types": "./dist/narration.d.mts",
+      "import": "./dist/narration.mjs",
+      "require": "./dist/narration.cjs"
+    },
+    "./notification": {
+      "types": "./dist/notification.d.mts",
+      "import": "./dist/notification.mjs",
+      "require": "./dist/notification.cjs"
+    },
+    "./package-api": {
+      "types": "./dist/package-api.d.mts",
+      "import": "./dist/package-api.mjs",
+      "require": "./dist/package-api.cjs"
+    },
+    "./profile-identity": {
+      "types": "./dist/profile-identity.d.mts",
+      "import": "./dist/profile-identity.mjs",
+      "require": "./dist/profile-identity.cjs"
+    },
+    "./plugin-protocol": {
+      "types": "./dist/plugin-protocol.d.mts",
+      "import": "./dist/plugin-protocol.mjs",
+      "require": "./dist/plugin-protocol.cjs"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.mts",
+      "import": "./dist/protocol.mjs",
+      "require": "./dist/protocol.cjs"
+    },
+    "./readiness": {
+      "types": "./dist/readiness.d.mts",
+      "import": "./dist/readiness.mjs",
+      "require": "./dist/readiness.cjs"
+    },
+    "./relaunch-handoff": {
+      "types": "./dist/relaunch-handoff.d.mts",
+      "import": "./dist/relaunch-handoff.mjs",
+      "require": "./dist/relaunch-handoff.cjs"
+    },
+    "./sandbox-harness": {
+      "types": "./dist/sandbox-harness.d.mts",
+      "import": "./dist/sandbox-harness.mjs",
+      "require": "./dist/sandbox-harness.cjs"
+    },
+    "./child": {
+      "types": "./dist/child.d.mts",
+      "import": "./dist/child.mjs",
+      "require": "./dist/child.cjs"
+    },
+    "./headless": {
+      "types": "./dist/headless.d.mts",
+      "import": "./dist/headless.mjs",
+      "require": "./dist/headless.cjs"
+    },
+    "./hub-channel": {
+      "types": "./dist/hub-channel.d.mts",
+      "import": "./dist/hub-channel.mjs",
+      "require": "./dist/hub-channel.cjs"
+    },
+    "./server-facet": {
+      "types": "./dist/server-facet.d.mts",
+      "import": "./dist/server-facet.mjs",
+      "require": "./dist/server-facet.cjs"
+    },
+    "./session-protocol": {
+      "types": "./dist/session-protocol.d.mts",
+      "import": "./dist/session-protocol.mjs",
+      "require": "./dist/session-protocol.cjs"
+    },
+    "./skills": {
+      "types": "./dist/skills.d.mts",
+      "import": "./dist/skills.mjs",
+      "require": "./dist/skills.cjs"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.mts",
+      "import": "./dist/testing.mjs",
+      "require": "./dist/testing.cjs"
+    },
+    "./tool-overrides": {
+      "types": "./dist/tool-overrides.d.mts",
+      "import": "./dist/tool-overrides.mjs",
+      "require": "./dist/tool-overrides.cjs"
+    },
+    "./tool-surface": {
+      "types": "./dist/tool-surface.d.mts",
+      "import": "./dist/tool-surface.mjs",
+      "require": "./dist/tool-surface.cjs"
+    },
+    "./transition": {
+      "types": "./dist/transition.d.mts",
+      "import": "./dist/transition.mjs",
+      "require": "./dist/transition.cjs"
+    },
+    "./voice-reload-handoff": {
+      "types": "./dist/voice-reload-handoff.d.mts",
+      "import": "./dist/voice-reload-handoff.mjs",
+      "require": "./dist/voice-reload-handoff.cjs"
+    },
+    "./voice-tools": {
+      "types": "./dist/voice-tools.d.mts",
+      "import": "./dist/voice-tools.mjs",
+      "require": "./dist/voice-tools.cjs"
+    },
+    "./ui-hub": {
+      "types": "./dist/ui-hub.d.mts",
+      "import": "./dist/ui-hub.mjs",
+      "require": "./dist/ui-hub.cjs"
+    },
+    "./pi-extension": {
+      "types": "./dist/pi-extension.d.mts",
+      "import": "./dist/pi-extension.mjs",
+      "require": "./dist/pi-extension.cjs"
+    },
+    "./web": {
+      "types": "./dist/web.d.mts",
+      "import": "./dist/web.mjs",
+      "require": "./dist/web.cjs"
+    },
+    "./web/testing": {
+      "types": "./dist/web/testing.d.mts",
+      "import": "./dist/web/testing.mjs",
+      "require": "./dist/web/testing.cjs"
+    },
+    "./context-api": {
+      "types": "./dist/context-api.d.mts",
+      "import": "./dist/context-api.mjs",
+      "require": "./dist/context-api.cjs"
+    },
+    "./server": {
+      "types": "./dist/server.d.mts",
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.cjs"
+    },
+    "./history": {
+      "types": "./dist/history.d.mts",
+      "import": "./dist/history.mjs",
+      "require": "./dist/history.cjs"
+    },
+    "./json": {
+      "types": "./dist/json.d.mts",
+      "import": "./dist/json.mjs",
+      "require": "./dist/json.cjs"
+    },
+    "./tool-names": {
+      "types": "./dist/tool-names.d.mts",
+      "import": "./dist/tool-names.mjs",
+      "require": "./dist/tool-names.cjs"
+    },
+    "./log-sink-telemetry": {
+      "types": "./dist/log-sink-telemetry.d.mts",
+      "import": "./dist/log-sink-telemetry.mjs",
+      "require": "./dist/log-sink-telemetry.cjs"
+    },
+    "./pi-settings": {
+      "types": "./dist/pi-settings.d.mts",
+      "import": "./dist/pi-settings.mjs",
+      "require": "./dist/pi-settings.cjs"
+    },
+    "./runtime-cordis-host": {
+      "types": "./dist/runtime-cordis-host.d.mts",
+      "import": "./dist/runtime-cordis-host.mjs",
+      "require": "./dist/runtime-cordis-host.cjs"
+    },
+    "./tool-inventory": {
+      "types": "./dist/tool-inventory.d.mts",
+      "import": "./dist/tool-inventory.mjs",
+      "require": "./dist/tool-inventory.cjs"
+    },
+    "./module-resolution": {
+      "types": "./dist/module-resolution.d.mts",
+      "import": "./dist/module-resolution.mjs",
+      "require": "./dist/module-resolution.cjs"
+    },
+    "./web-compositions": {
+      "types": "./dist/web-compositions.d.mts",
+      "import": "./dist/web-compositions.mjs",
+      "require": "./dist/web-compositions.cjs"
+    },
+    "./sync-location": {
+      "types": "./dist/sync-location.d.mts",
+      "import": "./dist/sync-location.mjs",
+      "require": "./dist/sync-location.cjs"
+    },
+    "./runtime-log-sink-telemetry": {
+      "types": "./dist/runtime-log-sink-telemetry.d.mts",
+      "import": "./dist/runtime-log-sink-telemetry.mjs",
+      "require": "./dist/runtime-log-sink-telemetry.cjs"
+    },
+    "./sync-registration": {
+      "types": "./dist/sync-registration.d.mts",
+      "import": "./dist/sync-registration.mjs",
+      "require": "./dist/sync-registration.cjs"
+    },
+    "./headless-hub": {
+      "types": "./dist/headless-hub.d.mts",
+      "import": "./dist/headless-hub.mjs",
+      "require": "./dist/headless-hub.cjs"
+    },
+    "./headless-session-manager": {
+      "types": "./dist/headless-session-manager.d.mts",
+      "import": "./dist/headless-session-manager.mjs",
+      "require": "./dist/headless-session-manager.cjs"
+    },
+    "./headless-session-host": {
+      "types": "./dist/headless-session-host.d.mts",
+      "import": "./dist/headless-session-host.mjs",
+      "require": "./dist/headless-session-host.cjs"
+    },
+    "./runtime-headless-session-manager": {
+      "types": "./dist/runtime-headless-session-manager.d.mts",
+      "import": "./dist/runtime-headless-session-manager.mjs",
+      "require": "./dist/runtime-headless-session-manager.cjs"
+    },
+    "./package-api-server": {
+      "types": "./dist/package-api-server.d.mts",
+      "import": "./dist/package-api-server.mjs",
+      "require": "./dist/package-api-server.cjs"
+    },
+    "./server-telemetry": {
+      "types": "./dist/server-telemetry.d.mts",
+      "import": "./dist/server-telemetry.mjs",
+      "require": "./dist/server-telemetry.cjs"
+    },
+    "./headless-server": {
+      "types": "./dist/headless-server.d.mts",
+      "import": "./dist/headless-server.mjs",
+      "require": "./dist/headless-server.cjs"
+    },
+    "./remote-runtime": {
+      "types": "./dist/remote-runtime.d.mts",
+      "import": "./dist/remote-runtime.mjs",
+      "require": "./dist/remote-runtime.cjs"
+    },
+    "./mcp-schema-cost": {
+      "types": "./dist/mcp-schema-cost.d.mts",
+      "import": "./dist/mcp-schema-cost.mjs",
+      "require": "./dist/mcp-schema-cost.cjs"
+    },
+    "./history-ownership": {
+      "types": "./dist/history-ownership.d.mts",
+      "import": "./dist/history-ownership.mjs",
+      "require": "./dist/history-ownership.cjs"
+    },
+    "./v3-export": {
+      "types": "./dist/v3-export.d.mts",
+      "import": "./dist/v3-export.mjs",
+      "require": "./dist/v3-export.cjs"
+    },
+    "./history-import": {
+      "types": "./dist/history-import.d.mts",
+      "import": "./dist/history-import.mjs",
+      "require": "./dist/history-import.cjs"
+    },
+    "./jsonl-session-repo": {
+      "types": "./dist/jsonl-session-repo.d.mts",
+      "import": "./dist/jsonl-session-repo.mjs",
+      "require": "./dist/jsonl-session-repo.cjs"
+    },
+    "./sqlite-history-import": {
+      "types": "./dist/sqlite-history-import.d.mts",
+      "import": "./dist/sqlite-history-import.mjs",
+      "require": "./dist/sqlite-history-import.cjs"
+    },
+    "./runtime-pi-settings": {
+      "types": "./dist/runtime-pi-settings.d.mts",
+      "import": "./dist/runtime-pi-settings.mjs",
+      "require": "./dist/runtime-pi-settings.cjs"
+    },
+    "./runtime-json": {
+      "types": "./dist/runtime-json.d.mts",
+      "import": "./dist/runtime-json.mjs",
+      "require": "./dist/runtime-json.cjs"
+    },
+    "./doom-package": {
+      "types": "./dist/doom-package.d.mts",
+      "import": "./dist/doom-package.mjs",
+      "require": "./dist/doom-package.cjs"
+    },
+    "./transition-classifier": {
+      "types": "./dist/transition-classifier.d.mts",
+      "import": "./dist/transition-classifier.mjs",
+      "require": "./dist/transition-classifier.cjs"
+    },
+    "./runtime-identity": {
+      "types": "./dist/runtime-identity.d.mts",
+      "import": "./dist/runtime-identity.mjs",
+      "require": "./dist/runtime-identity.cjs"
+    },
+    "./runtime-tool-names": {
+      "types": "./dist/runtime-tool-names.d.mts",
+      "import": "./dist/runtime-tool-names.mjs",
+      "require": "./dist/runtime-tool-names.cjs"
+    },
+    "./context-detail-store": {
+      "types": "./dist/context-detail-store.d.mts",
+      "import": "./dist/context-detail-store.mjs",
+      "require": "./dist/context-detail-store.cjs"
+    },
+    "./runtime-context-api": {
+      "types": "./dist/runtime-context-api.d.mts",
+      "import": "./dist/runtime-context-api.mjs",
+      "require": "./dist/runtime-context-api.cjs"
+    },
+    "./session-files-api": {
+      "types": "./dist/session-files-api.d.mts",
+      "import": "./dist/session-files-api.mjs",
+      "require": "./dist/session-files-api.cjs"
+    },
+    "./machine-api": {
+      "types": "./dist/machine-api.d.mts",
+      "import": "./dist/machine-api.mjs",
+      "require": "./dist/machine-api.cjs"
+    },
+    "./remote-api": {
+      "types": "./dist/remote-api.d.mts",
+      "import": "./dist/remote-api.mjs",
+      "require": "./dist/remote-api.cjs"
+    },
+    "./terminal-pi-child-session-service": {
+      "types": "./dist/terminal-pi-child-session-service.d.mts",
+      "import": "./dist/terminal-pi-child-session-service.mjs",
+      "require": "./dist/terminal-pi-child-session-service.cjs"
+    },
+    "./transition-coordinator": {
+      "types": "./dist/transition-coordinator.d.mts",
+      "import": "./dist/transition-coordinator.mjs",
+      "require": "./dist/transition-coordinator.cjs"
+    },
+    "./sync-state-contract": {
+      "types": "./dist/sync-state-contract.d.mts",
+      "import": "./dist/sync-state-contract.mjs",
+      "require": "./dist/sync-state-contract.cjs"
+    },
+    "./types-context-api": {
+      "types": "./dist/types-context-api.d.mts",
+      "import": "./dist/types-context-api.mjs",
+      "require": "./dist/types-context-api.cjs"
+    },
+    "./context-detail": {
+      "types": "./dist/context-detail.d.mts",
+      "import": "./dist/context-detail.mjs",
+      "require": "./dist/context-detail.cjs"
+    },
+    "./context-projection": {
+      "types": "./dist/context-projection.d.mts",
+      "import": "./dist/context-projection.mjs",
+      "require": "./dist/context-projection.cjs"
+    },
+    "./sqlite-session-storage": {
+      "types": "./dist/sqlite-session-storage.d.mts",
+      "import": "./dist/sqlite-session-storage.mjs",
+      "require": "./dist/sqlite-session-storage.cjs"
+    },
+    "./runtime-pi-extension": {
+      "types": "./dist/runtime-pi-extension.d.mts",
+      "import": "./dist/runtime-pi-extension.mjs",
+      "require": "./dist/runtime-pi-extension.cjs"
+    },
+    "./kernel": {
+      "types": "./dist/kernel.d.mts",
+      "import": "./dist/kernel.mjs",
+      "require": "./dist/kernel.cjs"
+    },
+    "./runtime-config": {
+      "types": "./dist/runtime-config.d.mts",
+      "import": "./dist/runtime-config.mjs",
+      "require": "./dist/runtime-config.cjs"
+    },
+    "./runtime-protocol": {
+      "types": "./dist/runtime-protocol.d.mts",
+      "import": "./dist/runtime-protocol.mjs",
+      "require": "./dist/runtime-protocol.cjs"
+    },
+    "./runtime-transition": {
+      "types": "./dist/runtime-transition.d.mts",
+      "import": "./dist/runtime-transition.mjs",
+      "require": "./dist/runtime-transition.cjs"
+    },
+    "./main": {
+      "types": "./dist/main.d.mts",
+      "import": "./dist/main.mjs",
+      "require": "./dist/main.cjs"
+    },
+    "./package.json": "./package.json",
+    "./api-contracts": {
+      "types": "./dist/api-contracts.d.mts",
+      "import": "./dist/api-contracts.mjs",
+      "require": "./dist/api-contracts.cjs"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-telemetry": "workspace:*",
+    "@agimon-ai/doompi-web-security": "workspace:*",
+    "@deepseek-ai/cordis": "4.0.2",
+    "@earendil-works/chord": "0.85.1",
+    "@earendil-works/pi-agent-core": "0.85.1",
+    "@earendil-works/pi-ai": "0.85.1",
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@earendil-works/pi-protocol": "0.85.1",
+    "@earendil-works/pi-server": "0.85.1",
+    "@earendil-works/pi-session-backend-sqlite-node": "0.85.1",
+    "@hono/node-server": "2.1.1",
+    "@simplewebauthn/server": "^14.0.1",
+    "cross-spawn": "7.0.6",
+    "gpt-tokenizer": "4.0.0",
+    "hono": "4.13.5",
+    "minimatch": "10.2.6",
+    "protobufjs": "8.8.0",
+    "typebox": "1.3.25",
+    "ws": "8.21.3",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@agimon-ai/vibe-lint-plugin-doom-core": "workspace:*",
+    "@apidevtools/swagger-parser": "^13.0.0",
+    "@asyncapi/parser": "^3.6.3",
+    "@earendil-works/pi-ai": "0.85.1",
+    "@earendil-works/pi-client": "0.85.1",
+    "@earendil-works/pi-tui": "0.85.1",
+    "@tanstack/store": "0.11.1",
+    "@types/cross-spawn": "6.0.6",
+    "@types/node": "26.4.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@types/ws": "8.18.1",
+    "@vitest/coverage-v8": "5.0.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tsdown": "0.23.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  },
+  "peerDependencies": {
+    "@tanstack/store": "0.11.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "peerDependenciesMeta": {
+    "@tanstack/store": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

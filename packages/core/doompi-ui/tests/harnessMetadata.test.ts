@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { readDoomHarnessMetadata } from '../src/exports/harnessMetadata.ts';
+
+import { readDoomHarnessMetadata } from '../src/exports/harnessMetadata';
 
 describe('readDoomHarnessMetadata', () => {
   beforeEach(() => {

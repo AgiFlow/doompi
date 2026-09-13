@@ -1,4 +1,5 @@
-import { defineGlobalStore } from '@agimon-ai/doompi-web-contracts';
+import { defineGlobalStore } from '@agimon-ai/doompi-core/web';
+
 import type {
   AuthorAnnotation,
   AuthorCrop,
@@ -10,7 +11,7 @@ import type {
   AuthorRequestRecord,
   AuthorRequestStatus,
   AuthorToolMode,
-} from '../lib/authorViewportTypes.ts';
+} from '../lib/authorViewportTypes';
 
 export const AUTHOR_REGION_LIMIT = 16;
 export const AUTHOR_HISTORY_RECORD_LIMIT = 100;

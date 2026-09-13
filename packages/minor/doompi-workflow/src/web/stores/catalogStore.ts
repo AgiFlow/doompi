@@ -1,9 +1,10 @@
-import { defineSessionStore, type ContextActionRunContext, type TransientTab } from '@agimon-ai/doompi-web-contracts';
+import { defineSessionStore, type ContextActionRunContext, type TransientTab } from '@agimon-ai/doompi-core/web';
+
 import {
   WORKFLOW_CATALOG_TYPE,
   type WorkflowCatalogEntryView,
   type WorkflowCatalogPayload,
-} from '../../types/webWorkflows.ts';
+} from '../../types/webWorkflows';
 
 /** One session's catalog: what the hub last reported plus what the drawer is doing with it. */
 export interface CatalogSession {

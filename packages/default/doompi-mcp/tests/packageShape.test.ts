@@ -1,6 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -13,7 +14,7 @@ interface PackageManifest {
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
-  doompiApi?: { basePath?: string; hub?: { entry?: string; dist?: string } };
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
 }
 
 /** Release bumps rewrite the manifest version, so assert its shape rather than a fixed value. */
@@ -97,12 +98,18 @@ describe('doom-mcp package boundary', () => {
   it('declares the repository MCP hub API from source to built output', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.doompiApi).toEqual({
-      basePath: 'mcp',
-      hub: { entry: './src/exports/webHub.ts', dist: './dist/webHub.mjs' },
+    expect((manifest as unknown as Record<string, unknown>).doompiApi).toBeUndefined();
+    expect(manifest.doompiServer).toEqual({
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      entry: './src/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['global', 'workspace', 'session'],
     });
-    await expectFile('src/exports/webHub.ts');
-    await expectFile('dist/webHub.mjs');
+    expect(manifest.exports?.['./extensions/server']).toEqual({
+      types: './dist/extensions/server.d.mts',
+      import: './dist/extensions/server.mjs',
+      require: './dist/extensions/server.cjs',
+    });
   });
   it('exports one standard Pi adapter without a wildcard or alternate Doom entry', async () => {
     const manifest = await readManifest();

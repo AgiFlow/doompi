@@ -1,4 +1,4 @@
-import type { WorkflowCatalogEntryView } from '../../types/webWorkflows.ts';
+import type { WorkflowCatalogEntryView } from '../../types/webWorkflows';
 
 /**
  * The `/workflow-launch` line the dialog sends.

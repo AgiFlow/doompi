@@ -1,15 +1,16 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isValidElement, type ReactNode, type ReactElement } from 'react';
-import { AuthorTextView } from '../../src/web/components/AuthorTextView.tsx';
-import { AuthorMediaView } from '../../src/web/components/AuthorMediaView.tsx';
-import * as workspace from '../../src/web/stores/authorWorkspaceStore.ts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { AuthorMediaView } from '../../src/web/components/AuthorMediaView';
+import { AuthorTextView } from '../../src/web/components/AuthorTextView';
 import {
   authorGrid,
   resolveAuthorGridCell,
   resolveAuthorGridNativeAnchor,
   updateAuthorGridGeometry,
-} from '../../src/web/lib/authorGrid.ts';
-import type { AuthorDisplayedRegion } from '../../src/web/lib/authorViewportTypes.ts';
+} from '../../src/web/lib/authorGrid';
+import type { AuthorDisplayedRegion } from '../../src/web/lib/authorViewportTypes';
+import * as workspace from '../../src/web/stores/authorWorkspaceStore';
 const hooks = vi.hoisted(() => ({
   refs: [] as unknown[],
   states: [] as unknown[],

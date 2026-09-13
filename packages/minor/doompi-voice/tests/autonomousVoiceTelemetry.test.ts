@@ -1,11 +1,12 @@
-import { createActor } from 'xstate';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createActor } from 'xstate';
+
+import { autonomousVoiceMachine } from '../src/models/autonomousVoiceMachine';
 import {
   AutonomousVoiceTelemetry,
   type AutonomousVoiceTelemetrySink,
   autonomousVoiceTelemetryStage,
-} from '../src/services/autonomousVoiceTelemetry.ts';
-import { autonomousVoiceMachine } from '../src/services/autonomousVoiceMachine.ts';
+} from '../src/services/autonomousVoiceTelemetry';
 
 const identity = {
   sessionId: 'session-1',

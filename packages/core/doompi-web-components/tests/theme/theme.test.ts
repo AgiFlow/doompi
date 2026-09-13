@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   applyTheme,
   BUILTIN_THEMES,
@@ -13,8 +14,8 @@ import {
   themeCssVariables,
   themeVariable,
   writeThemePreference,
-} from '../../src/exports/theme.ts';
-import { PALETTE_TOKENS, THEME_TOKENS } from '../../src/types/theme.ts';
+} from '../../src/exports/theme';
+import { PALETTE_TOKENS, THEME_TOKENS } from '../../src/types/theme';
 
 describe('shipped themes', () => {
   it('ships the Doom One dark palette as the default', () => {

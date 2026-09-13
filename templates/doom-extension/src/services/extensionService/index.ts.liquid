@@ -1,0 +1,8 @@
+import { COMMAND_DESCRIPTION } from '../../constants/{{ commandName | camelCase }}';
+import type { {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionResult, {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService } from './type';
+
+export class Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService implements {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService {
+  async execute(): Promise<{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionResult> {
+    return { message: COMMAND_DESCRIPTION, level: 'info' };
+  }
+}

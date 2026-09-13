@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DefaultComputerUseExtensionService } from '../../../src/services/extensionService.ts';
+
+import { DefaultComputerUseExtensionService } from '../../../src/services/extensionService';
 
 describe('DefaultComputerUseExtensionService', () => {
   it('reports when Desktop is unavailable', async () => {

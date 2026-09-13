@@ -1,7 +1,8 @@
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/webpack.mjs';
 import { useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { cn } from '../lib/cn.ts';
-import { Button } from './Button.tsx';
+
+import { cn } from '../lib/cn';
+import { Button } from './Button';
 
 type PdfLoadingTask = ReturnType<typeof import('pdfjs-dist/webpack.mjs').getDocument>;
 

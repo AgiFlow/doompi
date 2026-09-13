@@ -1,24 +1,28 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { ToolMessageRenderProps, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { ToolMessageRenderProps, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
+
+import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
 import {
   AuthorDocumentPanel,
   authorFileTab,
   displayedAuthorRegions,
-} from '../../src/web/components/AuthorDocumentPanel.tsx';
-import { AuthorRequestLog } from '../../src/web/components/AuthorRequestLog.tsx';
-import type { AuthorRequestRecord } from '../../src/web/lib/authorViewportTypes.ts';
+} from '../../src/web/components/AuthorDocumentPanel';
+import { AuthorRequestLog } from '../../src/web/components/AuthorRequestLog';
+import { OpenAuthoringFileToolCard, openAuthoringFileTab } from '../../src/web/components/OpenAuthoringFileToolCard';
+import type { AuthorRequestRecord } from '../../src/web/lib/authorViewportTypes';
 import {
   focusAuthorDocument,
   releaseAuthorDocumentFocus,
   dropAuthorSession,
-} from '../../src/web/stores/authorWorkspaceStore.ts';
-import {
-  OpenAuthoringFileToolCard,
-  openAuthoringFileTab,
-} from '../../src/web/components/OpenAuthoringFileToolCard.tsx';
-import { webPlugin } from '../../src/web/index.ts';
+} from '../../src/web/stores/authorWorkspaceStore';
+const webPlugin = {
+  id: scopedWebPlugin.id,
+  ...scopedWebPlugin.global,
+  ...scopedWebPlugin.workspace,
+  ...scopedWebPlugin.session,
+};
 
 describe('the Author web plugin', () => {
   it('registers a dock face without registering a permanent workspace tab', () => {

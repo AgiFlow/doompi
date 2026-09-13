@@ -118,3 +118,9 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+## Extension lifecycle and source layout
+
+`extensions/pi.ts` declares Config-dependent service bindings, typed controller events, and Help resources. The readiness gate in `services/hookRuntime/` keeps session-start hooks ahead of dependent events and rejects stale generations. Session-end hooks finish during `session_shutdown` before the shared helper disposes the service binding.
+
+`extensions/server.ts` declares the server hooks from `controllers/serverHooks.ts`. Controllers dispatch through `services/<name>/`; constants and shared types have their own roots. Flat `exports/` publishes reusable capabilities, and extension entry points are built directly.

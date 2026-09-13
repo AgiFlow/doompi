@@ -1,4 +1,4 @@
-import type { QuestionAnswer } from './questionnaire.ts';
+import type { QuestionAnswer } from './questionnaire';
 
 /**
  * How a rich client answers the whole questionnaire in one reply.

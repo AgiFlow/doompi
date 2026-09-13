@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { TerminalView } from '../../src/components/TerminalView.tsx';
+
+import { TerminalView } from '../../src/components/TerminalView';
 
 describe('TerminalView', () => {
   it('renders an inert terminal mount before the browser emulator is ready', () => {

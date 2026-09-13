@@ -1,4 +1,4 @@
-import { sealedHttpSession } from './sealedSession.ts';
+import { sealedHttpSession } from './sealedSession';
 
 const ROUTE = '/api/telemetry/browser';
 const MAX_QUEUE = 32;
@@ -17,6 +17,8 @@ type BrowserPerformanceEventName =
   | 'web.browser.session_socket_ready'
   | 'web.browser.reconnect'
   | 'web.browser.backlog'
+  | 'web.browser.transcript_page'
+  | 'web.browser.transcript_render'
   | 'web.browser.telemetry_drop';
 
 const BROWSER_ERROR_EVENT = 'web.browser.error';

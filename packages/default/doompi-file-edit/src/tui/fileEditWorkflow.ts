@@ -1,10 +1,11 @@
 import { copyToClipboard, type ExtensionContext } from '@earendil-works/pi-coding-agent';
-import { FileEditOverlayComponent, type FileEditOverlayResult } from './fileEditOverlay';
+
 import type { IEditorConfigService } from '../types/editorConfigService';
 import type { EditorTui, IEditorLauncher } from '../types/editorLauncher';
+import type { IFileEditWorkflow } from '../types/fileEditWorkflow';
 import type { IGitDiffService } from '../types/gitDiffService';
 import type { ITimelineStore } from '../types/timelineStore';
-import type { IFileEditWorkflow } from '../types/fileEditWorkflow';
+import { FileEditOverlayComponent, type FileEditOverlayResult } from './fileEditOverlay';
 
 const FULLSCREEN_UI_OPTIONS = {
   overlay: true,

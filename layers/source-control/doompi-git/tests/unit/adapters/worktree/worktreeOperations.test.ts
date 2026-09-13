@@ -1,16 +1,45 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HubUnavailableError } from '../../../../src/adapters/hub/hubClient.ts';
-import { createWorktreeOperations } from '../../../../src/adapters/worktree/worktreeOperations.ts';
-import { WORKTREE_RECORD_VERSION } from '../../../../src/types/worktreeRegistry.ts';
-import type { WorktreeGit, WorktreeRecord } from '../../../../src/types/worktreeRegistry.ts';
+
+import { HubUnavailableError } from '../../../../src/services/errors';
+import {
+  createWorktreeMessageInbox,
+  GIT_WORKTREE_MESSAGE_EVENT,
+  MAX_WORKTREE_INBOX_MESSAGES,
+  MAX_WORKTREE_MESSAGE_BYTES,
+} from '../../../../src/services/worktreeEvents';
+import { createWorktreeOperations } from '../../../../src/services/worktreeOperations';
+import { WORKTREE_RECORD_VERSION } from '../../../../src/types/worktreeRegistry';
+import type { WorktreeGit, WorktreeRecord } from '../../../../src/types/worktreeRegistry';
 
 let home: string;
 let repository: string;
 
 const CONTEXT = { cwd: '/repo', sessionId: 'parent-1' };
+
+function directEvents(): DoomDirectEventBus {
+  const listeners = new Map<string, Set<(payload: unknown) => void>>();
+  const key = (frameType: string, sessionId: string): string => `${frameType}:${sessionId}`;
+  return {
+    publish(frameType, sessionId, payload) {
+      for (const listener of listeners.get(key(frameType, sessionId)) ?? []) listener(payload);
+    },
+    subscribe(frameType, sessionId, listener) {
+      const current = listeners.get(key(frameType, sessionId)) ?? new Set<(payload: unknown) => void>();
+      current.add(listener);
+      listeners.set(key(frameType, sessionId), current);
+      return () => {
+        current.delete(listener);
+        if (current.size === 0) listeners.delete(key(frameType, sessionId));
+      };
+    },
+    close: () => listeners.clear(),
+  };
+}
 
 function fakeGit(overrides: Partial<WorktreeGit> = {}): WorktreeGit {
   return {
@@ -27,10 +56,23 @@ function fakeGit(overrides: Partial<WorktreeGit> = {}): WorktreeGit {
   };
 }
 
-function operations(git: WorktreeGit, createSession = vi.fn().mockResolvedValue('session-9')) {
+function fakeSessionService(
+  live: readonly string[] = [],
+  create = vi.fn().mockResolvedValue({ sessionId: 'session-9', cwd: '/worktree' }),
+  close = vi.fn().mockResolvedValue(undefined),
+) {
+  return { create, close, isLive: (sessionId: string) => live.includes(sessionId) };
+}
+
+function operations(
+  git: WorktreeGit,
+  createSession = vi.fn().mockResolvedValue({ sessionId: 'session-9', cwd: '/worktree' }),
+) {
+  const sessionService = fakeSessionService([], createSession);
   return {
-    ops: createWorktreeOperations({ git, createSession, homeDir: home, registryDir: path.join(home, 'run') }),
+    ops: createWorktreeOperations({ git, sessionService, homeDir: home }),
     createSession,
+    sessionService,
   };
 }
 
@@ -154,14 +196,13 @@ describe('spawn', () => {
     });
     const createSession = vi.fn().mockImplementation(() => {
       order.push('session');
-      return Promise.resolve('session-9');
+      return Promise.resolve({ sessionId: 'session-9', cwd: '/worktree' });
     });
     const ops = createWorktreeOperations({
       git: fakeGit(),
-      createSession,
+      sessionService: fakeSessionService([], createSession),
       mirror,
       homeDir: home,
-      registryDir: path.join(home, 'run'),
     });
 
     const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
@@ -190,9 +231,8 @@ describe('close', () => {
     const dirty = fakeGit({ dirtyFiles: vi.fn().mockResolvedValue(['src/a.ts', 'src/b.ts']) });
     const reopened = createWorktreeOperations({
       git: dirty,
-      createSession: vi.fn(),
+      sessionService: fakeSessionService(),
       homeDir: home,
-      registryDir: path.join(home, 'run'),
     });
 
     await expect(reopened.close(CONTEXT, record.id, false)).rejects.toThrow(/src\/a\.ts, src\/b\.ts/u);
@@ -206,9 +246,8 @@ describe('close', () => {
     const dirty = fakeGit({ dirtyFiles: vi.fn().mockResolvedValue(['src/a.ts']) });
     const reopened = createWorktreeOperations({
       git: dirty,
-      createSession: vi.fn(),
+      sessionService: fakeSessionService(),
       homeDir: home,
-      registryDir: path.join(home, 'run'),
     });
 
     await reopened.close(CONTEXT, record.id, true);
@@ -244,9 +283,8 @@ describe('merge', () => {
     const dirtyParent = fakeGit({ dirtyFiles: vi.fn().mockResolvedValue(['README.md']) });
     const reopened = createWorktreeOperations({
       git: dirtyParent,
-      createSession: vi.fn(),
+      sessionService: fakeSessionService(),
       homeDir: home,
-      registryDir: path.join(home, 'run'),
     });
 
     await expect(reopened.merge(CONTEXT, record.id)).rejects.toThrow(/parent checkout has 1 uncommitted/u);
@@ -273,9 +311,8 @@ describe('list and status', () => {
     const git = fakeGit({ dirtyFiles: vi.fn().mockResolvedValue(['src/a.ts']) });
     const reopened = createWorktreeOperations({
       git,
-      createSession: vi.fn(),
+      sessionService: fakeSessionService(),
       homeDir: home,
-      registryDir: path.join(home, 'run'),
     });
 
     await expect(reopened.status(CONTEXT, record.id)).resolves.toEqual({
@@ -293,9 +330,8 @@ describe('prune', () => {
     const git = fakeGit({ listWorktreePaths: vi.fn().mockResolvedValue([record.path]) });
     const reopened = createWorktreeOperations({
       git,
-      createSession: vi.fn(),
+      sessionService: fakeSessionService(),
       homeDir: home,
-      registryDir: path.join(home, 'run'),
     });
 
     const plan = await reopened.prune(CONTEXT, true);
@@ -312,9 +348,8 @@ describe('prune', () => {
     const git = fakeGit({ listWorktreePaths: vi.fn().mockResolvedValue([record.path]) });
     const reopened = createWorktreeOperations({
       git,
-      createSession: vi.fn(),
+      sessionService: fakeSessionService(),
       homeDir: home,
-      registryDir: path.join(home, 'run'),
     });
 
     await reopened.prune(CONTEXT, false);
@@ -335,9 +370,8 @@ describe('prune', () => {
     });
     const reopened = createWorktreeOperations({
       git,
-      createSession: vi.fn(),
+      sessionService: fakeSessionService(),
       homeDir: home,
-      registryDir: path.join(home, 'run'),
     });
 
     const plan = await reopened.prune(CONTEXT, false);
@@ -352,9 +386,8 @@ describe('prune', () => {
     const git = fakeGit({ listWorktreePaths: vi.fn().mockResolvedValue([record.path]) });
     const reopened = createWorktreeOperations({
       git,
-      createSession: vi.fn(),
+      sessionService: fakeSessionService(),
       homeDir: home,
-      registryDir: path.join(home, 'run'),
     });
 
     const plan = await reopened.prune(CONTEXT, true);
@@ -373,9 +406,8 @@ describe('prune', () => {
     });
     const reopened = createWorktreeOperations({
       git,
-      createSession: vi.fn(),
+      sessionService: fakeSessionService(),
       homeDir: home,
-      registryDir: path.join(home, 'run'),
     });
 
     const plan = await reopened.prune(CONTEXT, false);
@@ -392,9 +424,8 @@ describe('prune', () => {
     const git = fakeGit({ listWorktreePaths: vi.fn().mockResolvedValue([stranger]) });
     const reopened = createWorktreeOperations({
       git,
-      createSession: vi.fn(),
+      sessionService: fakeSessionService(),
       homeDir: home,
-      registryDir: path.join(home, 'run'),
     });
 
     const plan = await reopened.prune(CONTEXT, false);
@@ -418,13 +449,11 @@ describe('spawn when the registry cannot be written', () => {
   it('stops the session it started and rolls the worktree back', async () => {
     const git = fakeGit();
     const stopSession = vi.fn().mockResolvedValue(undefined);
-    const createSession = vi.fn().mockResolvedValue('session-9');
+    const createSession = vi.fn().mockResolvedValue({ sessionId: 'session-9', cwd: '/worktree' });
     const ops = createWorktreeOperations({
       git,
-      createSession,
-      stopSession,
+      sessionService: fakeSessionService([], createSession, stopSession),
       homeDir: home,
-      registryDir: path.join(home, 'run'),
     });
     const registry = path.join(home, '.pi', '.doom', 'git', 'registry');
     fs.mkdirSync(path.dirname(registry), { recursive: true });
@@ -435,7 +464,7 @@ describe('spawn when the registry cannot be written', () => {
       retryable: true,
     });
 
-    expect(stopSession).toHaveBeenCalledWith(path.join(home, 'run'), 'session-9');
+    expect(stopSession).toHaveBeenCalledWith('session-9');
     expect(git.removeWorktree).toHaveBeenCalledWith(expect.objectContaining({ force: true }));
     expect(git.deleteBranch).toHaveBeenCalledWith({ repositoryRoot: repository, branch: 'wt/one' });
   });
@@ -452,10 +481,8 @@ describe('the owner guard', () => {
   function withLiveParents(live: readonly string[], git: WorktreeGit) {
     return createWorktreeOperations({
       git,
-      createSession: vi.fn().mockResolvedValue('session-9'),
+      sessionService: fakeSessionService(live),
       homeDir: home,
-      registryDir: path.join(home, 'run'),
-      isSessionLive: (_dir, sessionId) => live.includes(sessionId),
     });
   }
 
@@ -502,5 +529,120 @@ describe('the owner guard', () => {
 
     await guarded.close(OTHER, record.id, false);
     expect(git.removeWorktree).toHaveBeenCalledOnce();
+  });
+});
+
+describe('direct worktree messages', () => {
+  it('requires an exact session target for an inbox', () => {
+    const bus = directEvents();
+    expect(() => createWorktreeMessageInbox(bus, '')).toThrow('session identity');
+  });
+
+  it('delivers messages only to the worktree peer inbox', async () => {
+    const bus = directEvents();
+    const parentInbox = createWorktreeMessageInbox(bus, CONTEXT.sessionId)!;
+    const childInbox = createWorktreeMessageInbox(bus, 'session-9')!;
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+    const live = fakeSessionService(['parent-1', 'session-9']);
+    const sender = createWorktreeOperations({
+      git: fakeGit(),
+      sessionService: live,
+      messageInbox: parentInbox,
+      homeDir: home,
+    });
+    const child = createWorktreeOperations({
+      git: fakeGit(),
+      sessionService: live,
+      messageInbox: childInbox,
+      homeDir: home,
+    });
+
+    await sender.send(CONTEXT, record.id, 'hello');
+    expect(childInbox.receive(record.id)).toEqual([
+      expect.objectContaining({ worktreeId: record.id, fromSessionId: 'parent-1', from: 'parent', text: 'hello' }),
+    ]);
+    await child.send({ cwd: record.path, sessionId: 'session-9' }, record.id, 'back');
+    expect(parentInbox.receive(record.id)).toEqual([
+      expect.objectContaining({ worktreeId: record.id, fromSessionId: 'session-9', from: 'child', text: 'back' }),
+    ]);
+  });
+
+  it('bounds inboxes, rejects oversized messages, and closes idempotently', async () => {
+    const bus = directEvents();
+    const inbox = createWorktreeMessageInbox(bus, 'session-9')!;
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+    const live = fakeSessionService(['parent-1', 'session-9']);
+    const sender = createWorktreeOperations({
+      git: fakeGit(),
+      sessionService: live,
+      messageInbox: inbox,
+      homeDir: home,
+    });
+    const message = (text: string) => ({
+      version: 1 as const,
+      worktreeId: 'wt1',
+      fromSessionId: 'parent-1',
+      from: 'parent' as const,
+      text,
+      sentAt: new Date().toISOString(),
+    });
+    const valid = message('valid');
+    const invalid: unknown[] = [
+      null,
+      42,
+      { ...valid, version: 0 },
+      { ...valid, worktreeId: '' },
+      { ...valid, fromSessionId: '' },
+      { ...valid, from: 'other' },
+      { ...valid, text: '' },
+      { ...valid, sentAt: '' },
+    ];
+    for (const payload of invalid) bus.publish(GIT_WORKTREE_MESSAGE_EVENT, 'session-9', payload);
+    expect(inbox.receive('wt1')).toEqual([]);
+
+    for (let index = 0; index <= MAX_WORKTREE_INBOX_MESSAGES; index += 1) {
+      bus.publish(GIT_WORKTREE_MESSAGE_EVENT, 'session-9', message(`message-${index}`));
+    }
+    const received = inbox.receive('wt1');
+    expect(received).toHaveLength(MAX_WORKTREE_INBOX_MESSAGES);
+    expect(received[0]?.text).toBe('message-1');
+
+    const oversized = 'x'.repeat(MAX_WORKTREE_MESSAGE_BYTES + 1);
+    await expect(sender.send(CONTEXT, record.id, oversized)).rejects.toMatchObject({ code: 'message_too_large' });
+    await expect(sender.messages(CONTEXT, record.id)).resolves.toEqual([]);
+    bus.publish(GIT_WORKTREE_MESSAGE_EVENT, 'session-9', message(oversized));
+    expect(inbox.receive('wt1')).toEqual([]);
+    inbox.close();
+    inbox.close();
+    bus.publish(GIT_WORKTREE_MESSAGE_EVENT, 'session-9', message('after-close'));
+    expect(inbox.receive('wt1')).toEqual([]);
+    expect(() => inbox.send('session-9', message('after-close'))).toThrow('closed');
+  });
+  it('rejects sends to dead peers and from unrelated sessions', async () => {
+    const bus = directEvents();
+    const inbox = createWorktreeMessageInbox(bus, CONTEXT.sessionId)!;
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+    const deadPeer = createWorktreeOperations({
+      git: fakeGit(),
+      sessionService: fakeSessionService(['parent-1']),
+      messageInbox: inbox,
+      homeDir: home,
+    });
+    await expect(deadPeer.send(CONTEXT, record.id, 'late')).rejects.toMatchObject({
+      code: 'worktree_peer_unavailable',
+    });
+
+    const unrelated = createWorktreeOperations({
+      git: fakeGit(),
+      sessionService: fakeSessionService(['parent-1', 'session-9']),
+      messageInbox: inbox,
+      homeDir: home,
+    });
+    await expect(unrelated.send({ cwd: repository, sessionId: 'parent-2' }, record.id, 'nope')).rejects.toMatchObject({
+      code: 'worktree_not_owned',
+    });
   });
 });

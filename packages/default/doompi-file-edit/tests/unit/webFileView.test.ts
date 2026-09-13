@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { FilesItemView } from '../../src/types/webFiles.ts';
-import type { FileComment } from '../../src/web/lib/fileView.ts';
+
+import type { FilesItemView } from '../../src/types/webFiles';
+import type { FileComment } from '../../src/web/lib/fileView';
 import {
   buildReviewPrompt,
   commentAnchor,
@@ -11,7 +12,7 @@ import {
   gutterWidth,
   previewModeOf,
   trimSnippet,
-} from '../../src/web/lib/fileView.ts';
+} from '../../src/web/lib/fileView';
 
 const comment = (overrides: Partial<FileComment> = {}): FileComment => ({
   id: 'c1',

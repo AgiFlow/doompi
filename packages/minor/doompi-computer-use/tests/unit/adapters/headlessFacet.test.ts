@@ -1,0 +1,332 @@
+import path from 'node:path';
+
+import {
+  DOOM_HEADLESS_OWNER as TEST_OWNER,
+  DOOM_HEADLESS_HOST_SERVICE as TEST_AGENT,
+} from '@agimon-ai/doompi-core/headless';
+import {
+  DOOM_HEADLESS_HOST_SERVICE,
+  type DoomHeadlessActivity,
+  type DoomHeadlessCommand,
+  type DoomHeadlessExecutionContext,
+  type DoomHeadlessHook,
+  type DoomHeadlessHostService,
+  type DoomHeadlessResource,
+  type DoomHeadlessTool,
+} from '@agimon-ai/doompi-core/headless';
+import { DOOM_SERVER_HOST_SERVICE as TEST_SERVER, type DoomServerFacet } from '@agimon-ai/doompi-core/server-facet';
+import { DOOM_MINOR_MODE_CATALOG_SERVICE as TEST_CATALOG } from '@agimon-ai/doompi-minor-mode';
+import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
+import { Context } from '@deepseek-ai/cordis';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { computerUseServerFacet as computerUseHeadlessFacet } from '../../../src/extensions/server';
+import type { ComputerUseSessionClient } from '../../../src/services/sessionApiClient';
+import type { ComputerUseObservation } from '../../../src/types/computerUse';
+import type { ComputerUseSessionView } from '../../../src/types/computerUseApi';
+
+const clientState = vi.hoisted(() => ({ current: undefined as unknown }));
+const runnerState = vi.hoisted(() => ({
+  options: undefined as { allowedScriptPaths: readonly string[] } | undefined,
+}));
+vi.mock('../../../src/services/computerScriptRunner', () => ({
+  ComputerScriptRunner: class {
+    constructor(options: { allowedScriptPaths: readonly string[] }) {
+      runnerState.options = options;
+    }
+    execute = vi.fn(async () => {
+      throw new Error('script unavailable');
+    });
+  },
+}));
+vi.mock('../../../src/services/sessionApiClient', () => ({
+  createComputerUseSessionClient: () => clientState.current,
+}));
+function contextFor(host: DoomHeadlessHostService): Context {
+  return {
+    effect() {},
+    get: (name: string) =>
+      name === DOOM_HEADLESS_HOST_SERVICE
+        ? host
+        : name === 'doom/server-host'
+          ? { scope: 'session', context: {}, registerApi: () => ({ dispose() {} }) }
+          : undefined,
+  } as unknown as Context;
+}
+
+async function fixture(selectionModes: string[] = [], environment: Readonly<Record<string, string | undefined>> = {}) {
+  let minorModes = selectionModes;
+  const execution = {
+    cwd: '/workspace',
+    repoRoot: '/workspace',
+    environment,
+    sessionId: 'computer-use-headless-test',
+    get selection() {
+      return { majorMode: 'copilot', activeLayers: [], domains: [], state: { 'minor-mode': minorModes } };
+    },
+    client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
+    session: {
+      entries: vi.fn(() => []),
+      appendCustomEntry: vi.fn(),
+      prompt: vi.fn(),
+      abort: vi.fn(),
+      compact: vi.fn(),
+      activity: vi.fn(),
+    },
+    shutdown: vi.fn(),
+  } as unknown as DoomHeadlessExecutionContext;
+  const modes: DoomHeadlessMinorMode[] = [];
+  const restrictions: unknown[] = [];
+  const activities: DoomHeadlessActivity[] = [];
+  const tools: DoomHeadlessTool[] = [];
+  const resources: DoomHeadlessResource[] = [];
+  const commands: DoomHeadlessCommand[] = [];
+  const hooks: DoomHeadlessHook[] = [];
+  const publish = vi.fn();
+  const dispose = vi.fn();
+  const registrations = { dispose: vi.fn() };
+  const registerOwner = vi.fn((mode: DoomHeadlessMinorMode) => {
+    modes.push(mode);
+    return { publish, dispose };
+  });
+  const host = {
+    context: execution,
+    changeSelection: vi.fn(async ({ values: selected }: { values?: string[] }) => {
+      if (selected) minorModes = selected;
+    }),
+    assertActive: vi.fn(),
+    registerToolRestriction: (restriction: unknown) => {
+      restrictions.push(restriction);
+      return registrations;
+    },
+    registerActivity: (activity: DoomHeadlessActivity) => {
+      activities.push(activity);
+      return registrations;
+    },
+    registerTool: (tool: DoomHeadlessTool) => {
+      tools.push(tool);
+      return registrations;
+    },
+    registerResource: (resource: DoomHeadlessResource) => {
+      resources.push(resource);
+      return registrations;
+    },
+    registerCommand: (command: DoomHeadlessCommand) => {
+      commands.push(command);
+      return registrations;
+    },
+    registerHook: (hook: DoomHeadlessHook) => {
+      hooks.push(hook);
+      return registrations;
+    },
+  } as unknown as DoomHeadlessHostService;
+  const close = await mountFacet(computerUseHeadlessFacet, contextFor(host), host, registerOwner);
+  return {
+    execution,
+    modes,
+    restrictions,
+    activities,
+    tools,
+    resources,
+    commands,
+    hooks,
+    publish,
+    dispose,
+    registrations,
+    close,
+  };
+}
+
+function operation(execution: DoomHeadlessExecutionContext) {
+  return {
+    context: execution,
+    operationId: 'computer-use-test',
+    sessionKind: 'headless' as const,
+    signal: new AbortController().signal,
+  };
+}
+
+const observation: ComputerUseObservation = {
+  runId: 'run-1',
+  snapshotId: 'snapshot-1',
+  targetGeneration: 'target-1',
+  applicationName: 'Test App',
+  bundleId: 'test.app',
+  windowTitle: 'Test Window',
+  elements: [],
+  screenshot: { data: 'image-data', mimeType: 'image/png' },
+};
+
+beforeEach(() => {
+  clientState.current = undefined;
+  runnerState.options = undefined;
+});
+
+describe('computer use headless facet', () => {
+  it('exposes the unavailable behavior without a desktop transport', async () => {
+    const test = await fixture();
+    const mode = test.modes[0];
+    const activity = test.activities[0];
+    const stateTool = test.tools.find(({ name }) => name === 'computer_state');
+    const actionTool = test.tools.find(({ name }) => name === 'computer_action');
+    const execTool = test.tools.find(({ name }) => name === 'computer_exec');
+    const command = test.commands[0];
+    const beforeStart = test.hooks.find(({ event }) => event === 'before_agent_start') as
+      | DoomHeadlessHook<'before_agent_start'>
+      | undefined;
+    const shutdown = test.hooks.find(({ event }) => event === 'session_shutdown') as
+      | DoomHeadlessHook<'session_shutdown'>
+      | undefined;
+    if (!mode || !activity || !stateTool || !actionTool || !execTool || !command || !beforeStart || !shutdown)
+      throw new Error('Computer-use headless registrations were not created');
+
+    expect(mode.initialState).toMatchObject({ activation: 'inactive', condition: 'ready' });
+    await expect(mode.handleAction('activate', {}, operation(test.execution))).rejects.toThrow(
+      'DoomPi Desktop computer use is unavailable.',
+    );
+    await expect(mode.handleAction('doctor', {}, operation(test.execution))).resolves.toEqual({
+      message: 'DoomPi Desktop session API is unavailable.',
+    });
+    await expect(mode.handleAction('deactivate', {}, operation(test.execution))).resolves.toEqual({
+      message: 'Computer use deactivated.',
+    });
+    await expect(mode.handleAction('unknown', {}, operation(test.execution))).rejects.toThrow(
+      'Unknown computer-use action: unknown',
+    );
+    const stopActivity = await activity.start(test.execution);
+    await stopActivity();
+
+    expect(await stateTool.execute('state', {}, undefined, undefined, test.execution)).toMatchObject({ isError: true });
+    expect(await actionTool.execute('action', {}, undefined, undefined, test.execution)).toMatchObject({
+      isError: true,
+    });
+    expect(
+      await execTool.execute('exec', { scriptPath: 'missing.ts', input: {} }, undefined, undefined, test.execution),
+    ).toMatchObject({
+      isError: true,
+    });
+    await command.execute('status', test.execution);
+    expect(test.execution.client.notify).toHaveBeenCalledWith({
+      body: 'Computer use requires a DoomPi Desktop session.',
+      level: 'error',
+    });
+    expect(beforeStart.handle({}, test.execution)).toBeUndefined();
+    await shutdown.handle({}, test.execution);
+    expect(test.execution.client.setStatus).toHaveBeenCalledWith('@agimon-ai/doompi-computer-use', undefined);
+    await test.close?.();
+    expect(test.dispose).toHaveBeenCalledOnce();
+    expect(test.registrations.dispose).toHaveBeenCalled();
+  });
+
+  it('runs the desktop-backed state, action, command, activity, and lifecycle paths', async () => {
+    const state = { phase: 'active' as 'active' | 'inactive' };
+    const client: ComputerUseSessionClient = {
+      state: vi.fn(async (): Promise<ComputerUseSessionView> => ({
+        sessionId: 'session-1',
+        revision: 1,
+        wake: 0,
+        phase: state.phase,
+      })),
+      observe: vi.fn(async () => observation),
+      act: vi.fn(async () => ({ accepted: true })),
+      stop: vi.fn(async (): Promise<ComputerUseSessionView> => {
+        state.phase = 'inactive';
+        return { sessionId: 'session-1', revision: 2, wake: 0, phase: 'inactive' };
+      }),
+    };
+    clientState.current = client;
+    const test = await fixture();
+    const mode = test.modes[0];
+    const activity = test.activities[0];
+    const stateTool = test.tools.find(({ name }) => name === 'computer_state');
+    const actionTool = test.tools.find(({ name }) => name === 'computer_action');
+    const execTool = test.tools.find(({ name }) => name === 'computer_exec');
+    const command = test.commands[0];
+    const beforeStart = test.hooks.find(({ event }) => event === 'before_agent_start') as
+      | DoomHeadlessHook<'before_agent_start'>
+      | undefined;
+    const shutdown = test.hooks.find(({ event }) => event === 'session_shutdown') as
+      | DoomHeadlessHook<'session_shutdown'>
+      | undefined;
+    if (!mode || !activity || !stateTool || !actionTool || !execTool || !command || !beforeStart || !shutdown)
+      throw new Error('Computer-use headless registrations were not created');
+
+    await expect(mode.handleAction('activate', {}, operation(test.execution))).resolves.toEqual({
+      message: 'Computer use activated.',
+    });
+    expect(test.execution.selection.state?.['minor-mode']).toContain('computer-use');
+    expect(test.publish).toHaveBeenCalled();
+    expect(test.execution.client.setStatus).toHaveBeenCalledWith(
+      '@agimon-ai/doompi-computer-use',
+      'computer use: active',
+    );
+    expect(await mode.handleAction('doctor', {}, operation(test.execution))).toEqual({
+      message: 'Computer use is active.',
+    });
+    expect(await stateTool.execute('state', {}, undefined, undefined, test.execution)).toMatchObject({
+      details: observation,
+      content: [{ type: 'text' }, { type: 'image', data: 'image-data', mimeType: 'image/png' }],
+    });
+    expect(
+      await actionTool.execute(
+        'action',
+        { kind: 'press', snapshotId: 'snapshot-1', elementRef: 'button' },
+        undefined,
+        undefined,
+        test.execution,
+      ),
+    ).toEqual(expect.objectContaining({ details: { accepted: true } }));
+    expect(
+      await execTool.execute('exec', { scriptPath: 'missing.ts', input: {} }, undefined, undefined, test.execution),
+    ).toMatchObject({
+      isError: true,
+    });
+    const stopActivity = await activity.start(test.execution);
+    await stopActivity();
+    await command.execute('deactivate', test.execution);
+    expect(client.stop).toHaveBeenCalled();
+    expect(test.execution.selection.state?.['minor-mode']).not.toContain('computer-use');
+    state.phase = 'active';
+    await mode.handleAction('doctor', {}, operation(test.execution));
+    expect(beforeStart.handle({ systemPrompt: 'Base prompt' }, test.execution)).toMatchObject({
+      systemPrompt: expect.stringContaining('[COMPUTER USE ACTIVE]'),
+    });
+    await shutdown.handle({}, test.execution);
+    expect(client.stop).toHaveBeenCalledTimes(2);
+    await test.close?.();
+    expect(test.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('uses each session environment for allowed computer script paths', async () => {
+    clientState.current = {} as ComputerUseSessionClient;
+    const first = await fixture([], {
+      DOOMPI_COMPUTER_USE_SCRIPT_PATHS: ['/first', '/shared'].join(path.delimiter),
+    });
+    const firstOptions = runnerState.options;
+    const second = await fixture([], { DOOMPI_COMPUTER_USE_SCRIPT_PATHS: '/second' });
+
+    expect(firstOptions?.allowedScriptPaths).toEqual(['/first', '/shared']);
+    expect(runnerState.options?.allowedScriptPaths).toEqual(['/second']);
+    await first.close?.();
+    await second.close?.();
+  });
+});
+
+async function mountFacet(
+  facet: DoomServerFacet,
+  existing: Context,
+  host: DoomHeadlessHostService,
+  registerOwner: ReturnType<typeof vi.fn>,
+) {
+  const root = new Context();
+  root.provide(TEST_SERVER, existing.get(TEST_SERVER));
+  root.provide(TEST_AGENT, host);
+  root.provide(TEST_CATALOG, { registerOwner } as never);
+  const owner = root.extend({ [TEST_OWNER]: { packageName: '@fixture/mode' } });
+  const release = await facet.apply(owner);
+  await vi.waitFor(() => expect(registerOwner).toHaveBeenCalled());
+  return async () => {
+    await release?.();
+    await root.fiber.dispose();
+  };
+}

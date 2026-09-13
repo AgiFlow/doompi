@@ -23,7 +23,7 @@ export {
   SUBAGENT_CHILD_ENV,
   SUBAGENT_PARENT_SESSION_ENV,
   SUBAGENT_ROOT_SESSION_ENV,
-} from '@agimon-ai/doompi-extension-contracts/child-process';
+} from '@agimon-ai/doompi-core/child-process';
 
 export const SUBAGENT_RUN_ID_ENV = 'PI_SUBAGENT_RUN_ID';
 export const SUBAGENT_CHILD_AGENT_ENV = 'PI_SUBAGENT_CHILD_AGENT';
@@ -73,12 +73,6 @@ export const PI_RUNTIME_NAME = 'pi';
 export function runtimeBinaryEnvVar(runtime: string): string {
   return `DOOM_TEAM_${runtime.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_BIN`;
 }
-
-export const SUBAGENT_TEAM_ID_ENV = 'PI_SUBAGENT_TEAM_ID';
-export const SUBAGENT_TEAM_ROOT_SESSION_ENV = 'PI_SUBAGENT_TEAM_ROOT_SESSION';
-export const SUBAGENT_TEAM_MAIN_MEMBER_ENV = 'PI_SUBAGENT_TEAM_MAIN_MEMBER';
-export const SUBAGENT_TEAM_MEMBER_ID_ENV = 'PI_SUBAGENT_TEAM_MEMBER_ID';
-export const SUBAGENT_TEAM_MEMBER_TOKEN_ENV = 'PI_SUBAGENT_TEAM_MEMBER_TOKEN';
 
 export const SUBAGENT_CAPABILITY_CEILING_ENV = 'PI_SUBAGENT_CAPABILITY_CEILING_V1';
 export const REQUIRED_CHILD_TOOLS_ENV = 'PI_SUBAGENT_REQUIRED_TOOLS';

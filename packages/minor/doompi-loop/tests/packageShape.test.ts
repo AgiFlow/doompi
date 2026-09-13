@@ -1,6 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -75,7 +76,7 @@ describe('doom-loop package boundary', () => {
       }),
     );
     expect(manifest.dependencies?.['@agimon-ai/doompi-web-components']).toBe('workspace:*');
-    expect(manifest.dependencies?.['@agimon-ai/doompi-web-contracts']).toBe('workspace:*');
+    expect(manifest.dependencies?.['@agimon-ai/doompi-core']).toBe('workspace:*');
   });
 
   it('removes rig package dependencies and config imports', async () => {
@@ -95,7 +96,12 @@ describe('doom-loop package boundary', () => {
     expect(project.sourceRoot).toBe('packages/minor/doompi-loop/src');
     expect(project.sourceTemplate).toBe('doom-extension');
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
-    expect(manifest.doompiWeb).toEqual({ pluginId: 'loop', channels: [], client: './src/exports/webClient.ts' });
+    expect(manifest.doompiWeb).toEqual({
+      scopes: ['session'],
+      pluginId: 'loop',
+      channels: [],
+      client: './src/extensions/web.ts',
+    });
   });
 
   it('declares only closed ESM, CJS, and declaration targets for public entries', async () => {
@@ -125,7 +131,7 @@ describe('doom-loop package boundary', () => {
     expect(files).toContain('src/prompts');
     expect(files).toContain('src/types/loopView.ts');
     expect(files).toContain('src/web');
-    expect(files).toContain('src/exports/webClient.ts');
+    expect(files).toContain('src/extensions/web.ts');
     expect(files).toContain('README.md');
     expect(files).toContain('package.json');
     for (const resource of files) {

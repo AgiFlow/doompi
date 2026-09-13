@@ -79,11 +79,14 @@ export function isWorkflowFinishedRuns(value: unknown): value is WorkflowFinishe
   );
 }
 
-export function registerWorkflowFinishedRenderer(pi: ExtensionAPI): void {
-  pi.registerMessageRenderer(WORKFLOW_FINISHED_MESSAGE, (message, _options, theme: Theme): Component => {
-    const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
-    const runs = (message.details as WorkflowFinishedDetails | undefined)?.runs;
-    if (!isWorkflowFinishedRuns(runs)) return new Text(content, 0, 0);
-    return new Text(renderWorkflowFinished(runs, theme), 0, 0);
-  });
+export function createWorkflowFinishedRenderer(): readonly [...Parameters<ExtensionAPI['registerMessageRenderer']>] {
+  return [
+    WORKFLOW_FINISHED_MESSAGE,
+    (message, _options, theme: Theme): Component => {
+      const content = typeof message.content === 'string' ? message.content : JSON.stringify(message.content);
+      const runs = (message.details as WorkflowFinishedDetails | undefined)?.runs;
+      if (!isWorkflowFinishedRuns(runs)) return new Text(content, 0, 0);
+      return new Text(renderWorkflowFinished(runs, theme), 0, 0);
+    },
+  ];
 }

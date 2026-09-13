@@ -1,2 +1,48 @@
-export * from '../types/clientCaptureActivity.ts';
-export * from '../types/clientMedia.ts';
+export { calculateClientPcmDbfs, ClientCaptureActivityLifecycle } from '../types/clientCaptureActivity';
+export type {
+  SpeechPresenceWindow,
+  SpeechPresenceDetector,
+  ClientCaptureSpeechClassification,
+} from '../types/clientCaptureActivity';
+export {
+  voiceMediaClientUrl,
+  VOICE_MEDIA_API_BASE_PATH,
+  VOICE_MEDIA_PROTOCOL_VERSION,
+  VOICE_MEDIA_SAMPLE_RATE,
+  VOICE_MEDIA_CHANNELS,
+  VOICE_MEDIA_BITS_PER_SAMPLE,
+  VOICE_MEDIA_CONTENT_TYPE,
+  VOICE_MEDIA_ACTIVITY_STATE_HEADER,
+  VOICE_MEDIA_PLAYBACK_STATE_HEADER,
+  VOICE_MEDIA_ACTIVITY_LEVEL_HEADER,
+  VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
+  VOICE_MEDIA_ACTIVITY_EPOCH_HEADER,
+  VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER,
+  VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
+  VOICE_MEDIA_WAKE_TYPE,
+  VOICE_MEDIA_HEARTBEAT_MS,
+  VOICE_MEDIA_EVENT_WAIT_NONE,
+  VOICE_MEDIA_ROUTES,
+} from '../types/clientMedia';
+export type {
+  VoiceClientKind,
+  VoiceMediaControlLocation,
+  VoiceMediaCapabilities,
+  VoiceMediaCaptureMode,
+  VoiceMediaPlaybackDelivery,
+  VoiceMediaCaptureActivityState,
+  VoiceMediaCaptureActivity,
+  VoiceMediaCaptureConfiguration,
+  VoiceMediaConnectRequest,
+  VoiceMediaWake,
+  VoiceMediaConnectResult,
+  VoiceMediaHeartbeatResult,
+  VoiceMediaClientEvent,
+  VoiceMediaPlaybackOutcome,
+  VoiceMediaPlaybackResult,
+  VoiceMediaTransport,
+  VoiceMediaCapture,
+  VoiceMediaCaptureSpeechAnalysis,
+  VoiceMediaPlayback,
+  VoiceMediaDevice,
+} from '../types/clientMedia';

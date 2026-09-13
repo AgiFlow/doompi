@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Switch } from './Switch.tsx';
+import { Switch } from './Switch';
 
 const meta = {
   title: 'Components/Switch',

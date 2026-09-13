@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mirrorComposition } from '../../../../src/adapters/worktree/compositionMirror.ts';
+
+import { mirrorComposition } from '../../../../src/services/compositionMirror';
 
 let source: string;
 let target: string;

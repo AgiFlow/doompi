@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { autonomousVoiceGridVisible } from '../../src/web/components/AuthorGridOverlay.tsx';
+
+import { autonomousVoiceGridVisible } from '../../src/web/components/AuthorGridOverlay';
 import {
   authorGrid,
   clearAuthorGridGeometry,
@@ -7,15 +8,15 @@ import {
   registerAuthorGridResolver,
   resolveAuthorGridCell,
   updateAuthorGridGeometry,
-} from '../../src/web/lib/authorGrid.ts';
-import { authorProfilesForDocument } from '../../src/web/stores/authorProfiles.ts';
+} from '../../src/web/lib/authorGrid';
+import { authorProfilesForDocument } from '../../src/web/stores/authorProfiles';
 import {
   authorDocument,
   authorSessionWorkspace,
   authorWorkspace,
   focusAuthorDocument,
   putAuthorDocument,
-} from '../../src/web/stores/authorWorkspaceStore.ts';
+} from '../../src/web/stores/authorWorkspaceStore';
 
 afterEach(() => {
   authorGrid.reset();

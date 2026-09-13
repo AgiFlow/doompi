@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { VoiceWorkerHandle } from '../src/services/voiceWorkerSupervisor.ts';
-import { VoiceWorkerSupervisor } from '../src/services/voiceWorkerSupervisor.ts';
-import { VOICE_WORKER_PROTOCOL_VERSION } from '../src/services/voiceWorkerProtocol.ts';
+
+import { VOICE_WORKER_PROTOCOL_VERSION } from '../src/services/voiceWorkerProtocol';
+import type { VoiceWorkerHandle } from '../src/services/voiceWorkerSupervisor';
+import { VoiceWorkerSupervisor } from '../src/services/voiceWorkerSupervisor';
 
 type Listener = (value: never) => void;
 

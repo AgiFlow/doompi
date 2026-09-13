@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Progress } from './Progress.tsx';
+import { Progress } from './Progress';
 
 const VALUES = [0, 25, 50, 75, 100] as const;
 

@@ -1,9 +1,11 @@
 import type { ExtensionAPI, Theme } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { BashParamsSchema } from '../../src/exports/bashSchema';
+import type { BashParams } from '../../src/exports/bashSchema';
+import { createBashTool } from '../../src/exports/bashTool';
+import { renderBashResult } from '../../src/tui/bashRender';
 import type { BashRunResult, IBashRunService } from '../../src/types/bashRunService';
-import { registerBashTool } from '../../src/exports/tool/bashTool';
-import { BashParamsSchema } from '../../src/exports/tool/schema';
-import type { BashParams } from '../../src/exports/tool/schema';
 
 interface RegisteredTool {
   description: string;
@@ -43,11 +45,18 @@ function captureTool(result: BashRunResult | Error, onRunnerStarted: (id: string
     }),
   };
 
-  registerBashTool(pi, {
-    bashRunService,
-    getSessionId: () => 'session-a',
-    onRunnerStarted,
-  });
+  createBashTool(
+    {
+      bashRunService,
+      getSessionId: () => 'session-a',
+      onRunnerStarted,
+    },
+    {
+      renderResult(result, options, theme, context) {
+        return renderBashResult(result, { ...options, isError: context.isError }, theme);
+      },
+    },
+  ).register(pi);
 
   if (!registered) throw new Error('bash tool was not registered');
   return registered;
@@ -57,7 +66,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('registerBashTool', () => {
+describe('createBashTool', () => {
   it('keeps model guidance concise and prevents unchanged retries', () => {
     const tool = captureTool(
       {

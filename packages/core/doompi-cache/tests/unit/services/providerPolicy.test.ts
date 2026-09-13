@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   classifyPromptCacheCapability,
   requestedPromptCacheRetention,
   rewritePromptCacheKey,
-} from '../../../src/services/providerPolicy.ts';
+} from '../../../src/services/providerPolicy';
 
 describe('provider prompt cache policy', () => {
   it.each([

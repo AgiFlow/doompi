@@ -1,7 +1,14 @@
-import { driveChannel, renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { driveChannel, renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it } from 'vitest';
-import { computerUse, computerUseChannel } from '../../src/web/stores/computerUseStore.ts';
-import { webPlugin } from '../../src/web/index.ts';
+
+import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { computerUse, computerUseChannel } from '../../src/web/stores/computerUseStore';
+const webPlugin = {
+  id: scopedWebPlugin.id,
+  ...scopedWebPlugin.global,
+  ...scopedWebPlugin.workspace,
+  ...scopedWebPlugin.session,
+};
 
 afterEach(() => computerUse.reset());
 

@@ -2,22 +2,24 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
+
 import {
   AUTHOR_DOCUMENT_MAX_BYTES,
   AUTHOR_DOCUMENT_OPEN_PATH,
   AUTHOR_DOCUMENT_SERIALIZE_PATH,
   createAuthorDocumentApi,
-} from '../../src/adapters/authorDocumentApi.ts';
-import { parseCsv, preflightCsv, serializeCsv } from '../../src/adapters/structuredDocuments/csv.ts';
+} from '../../src/controllers/authorDocumentApi';
+import { parseCsv, preflightCsv, serializeCsv } from '../../src/services/structuredDocuments/csv';
 import {
   parseMarkdownSlides,
   preflightMarkdownSlides,
   serializeMarkdownSlides,
-} from '../../src/adapters/structuredDocuments/markdownSlides.ts';
-import { readOoxmlArchive } from '../../src/adapters/structuredDocuments/ooxmlArchive.ts';
-import { parsePptx, preflightPptx, serializePptx } from '../../src/adapters/structuredDocuments/pptx.ts';
-import { parseXlsx, preflightXlsx, serializeXlsx } from '../../src/adapters/structuredDocuments/xlsx.ts';
+} from '../../src/services/structuredDocuments/markdownSlides';
+import { readOoxmlArchive } from '../../src/services/structuredDocuments/ooxmlArchive';
+import { parsePptx, preflightPptx, serializePptx } from '../../src/services/structuredDocuments/pptx';
+import { parseXlsx, preflightXlsx, serializeXlsx } from '../../src/services/structuredDocuments/xlsx';
 
 const PACKAGE_ROOT = path.resolve(fileURLToPath(import.meta.url), '..', '..', '..');
 const FIXTURES = path.join(PACKAGE_ROOT, 'tests/fixtures/structured');

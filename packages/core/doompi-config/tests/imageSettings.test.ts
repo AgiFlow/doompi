@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   DEFAULT_IMAGE_MAX_DIMENSION,
   loadPiImageSettings,
@@ -9,7 +11,7 @@ import {
   parsePiImageSettings,
   piImageSettingsPath,
   savePiImageSettings,
-} from '../src/exports/config/piConfig.ts';
+} from '../src/exports/piConfig';
 
 let home: string;
 

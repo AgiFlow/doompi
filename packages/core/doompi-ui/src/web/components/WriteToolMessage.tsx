@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   MessageItem,
   MessageItemBody,
@@ -8,8 +9,8 @@ import {
   toolTone,
   useSyntaxLines,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { resultText, type WriteCallView, writeCallView } from '../lib/builtinToolView.ts';
+
+import { resultText, type WriteCallView, writeCallView } from '../lib/builtinToolView';
 
 /**
  * The numbered preview, coloured as the file it is about to become.

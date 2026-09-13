@@ -1,8 +1,9 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import type { TUI } from '@earendil-works/pi-tui';
 import { describe, expect, it, vi } from 'vitest';
-import { SkillsOverlayComponent, type SkillsOverlayResult, skillBody } from '../../src/tui/skillsOverlay.ts';
-import type { SkillCatalog, SkillEntry } from '../../src/adapters/skillCatalog.ts';
+
+import type { SkillCatalog, SkillEntry } from '../../src/services/skillCatalog';
+import { SkillsOverlayComponent, type SkillsOverlayResult, skillBody } from '../../src/tui/skillsOverlay';
 
 /** Identity theme so assertions read as plain text, per doom-pi-ui's rendering suite. */
 const theme = {

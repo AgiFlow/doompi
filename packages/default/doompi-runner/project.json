@@ -6,6 +6,9 @@
   "tags": ["stage:active"],
   "sourceTemplate": "doom-extension",
   "targets": {
+    "test": {
+      "dependsOn": ["build"]
+    },
     "prepare-package": {
       "executor": "nx:run-commands",
       "options": {

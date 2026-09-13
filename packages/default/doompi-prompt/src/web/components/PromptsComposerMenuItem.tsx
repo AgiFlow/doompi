@@ -1,5 +1,6 @@
 import { BookmarkPlusIcon, OptionLabel, OptionRow } from '@agimon-ai/doompi-web-components';
-import { requestPromptDialogOpen } from '../lib/messagePromptDraft.ts';
+
+import { requestPromptDialogOpen } from '../lib/messagePromptDraft';
 
 /**
  * The library's entry in the composer's '+' menu.

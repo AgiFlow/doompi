@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 // @scaffold-generated
 import {
   collapseLines,
@@ -8,12 +9,12 @@ import {
   MessageLines,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+
 import {
   computerStateCallSummary,
   computerStateCollapsedLines,
   computerStateResultLines,
-} from '../lib/computerStateToolRender.ts';
+} from '../lib/computerStateToolRender';
 
 /**
  * The computer_state tool's timeline item: Observe the authorized application window and semantic accessibility state. The shell owns

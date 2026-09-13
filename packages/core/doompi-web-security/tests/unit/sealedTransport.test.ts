@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createHostHandshake } from '../../src/adapters/nodeSealedChannel.ts';
-import { createSealedTransport } from '../../src/adapters/sealedTransport.ts';
-import { createSerialQueue } from '../../src/services/serialQueue.ts';
+
+import { createHostHandshake } from '../../src/services/nodeSealedChannel';
+import { createSealedTransport } from '../../src/services/sealedTransport';
+import { createSerialQueue } from '../../src/services/serialQueue';
 
 /** Brings up both halves of a channel over one handshake. */
 async function pair() {
@@ -108,7 +109,7 @@ describe('createSealedTransport', () => {
 
   it('never returns plaintext after an active channel fails to seal', async () => {
     vi.resetModules();
-    vi.doMock('../../src/adapters/browserSealedChannel.ts', () => ({
+    vi.doMock('../../src/services/browserSealedChannel', () => ({
       connectSealedChannel: async () => ({
         clientPublicKey: 'client-key',
         channel: {
@@ -118,7 +119,7 @@ describe('createSealedTransport', () => {
       }),
     }));
     try {
-      const { createSealedTransport: createFailingTransport } = await import('../../src/adapters/sealedTransport.ts');
+      const { createSealedTransport: createFailingTransport } = await import('../../src/services/sealedTransport');
       const transport = createFailingTransport();
       await expect(transport.connect('host-key')).resolves.toBe('client-key');
       await expect(transport.sealText('private prompt')).rejects.toThrow('message limit');

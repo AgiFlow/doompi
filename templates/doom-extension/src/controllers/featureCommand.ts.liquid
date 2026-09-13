@@ -1,0 +1,13 @@
+import { defineCommand, type DoomPluginCommand } from '@agimon-ai/doompi-core/pi-extension';
+import { {{ commandName | snakeCase | upper }}_COMMAND_NAME, {{ commandName | snakeCase | upper }}_COMMAND_DESCRIPTION } from '../constants/{{ commandName | camelCase }}';
+
+/** {{ commandDescription }} */
+export function create{{ commandName | pascalCase }}Command(execute: () => Promise<string>): DoomPluginCommand {
+  return defineCommand({
+    name: {{ commandName | snakeCase | upper }}_COMMAND_NAME,
+    description: {{ commandName | snakeCase | upper }}_COMMAND_DESCRIPTION,
+    async execute(_args, execution) {
+      await execution.notify({ body: await execute(), level: 'info' });
+    },
+  });
+}

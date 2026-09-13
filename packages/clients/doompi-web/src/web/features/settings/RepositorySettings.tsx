@@ -8,17 +8,18 @@ import {
   SelectValue,
 } from '@agimon-ai/doompi-web-components';
 import { useCallback, useEffect, useState } from 'react';
+
 import type {
   RepositoryCatalogOption,
   RepositorySelectionChanges,
   RepositorySettingsView,
   SettingsOrigin,
   SettingsRepository,
-} from '../../../types/settings.ts';
-import { readRepositorySettings, writeRepositorySelection } from '../../lib/settingsApi.ts';
-import { refreshSessionFacts } from '../../stores/sessionStore.ts';
-import { sessionsStore } from '../../stores/sessionsStore.ts';
-import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
+} from '../../../types/settings';
+import { readRepositorySettings, writeRepositorySelection } from '../../lib/settingsApi';
+import { sessionsStore } from '../../stores/sessionsStore';
+import { refreshSessionFacts } from '../../stores/sessionStore';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 /** Repository selection controls shared with package-owned management panels. */
 

@@ -3,4 +3,4 @@ export {
   type SubagentLaunchContract,
   type SubagentLaunchContractInput,
   type SubagentLaunchContractResult,
-} from '../adapters/subagentLaunchContract';
+} from '../services/subagentLaunchContract';

@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 // The context face reads the same footer status line the composer chips read,
 // so these drive it the way DoomPi really publishes it rather than seeding a
@@ -80,10 +80,8 @@ test.describe('with the synced MCP context contribution', () => {
     await expect(serverRow).toHaveCount(1);
 
     const authorize = serverRow.getByRole('button', { name: 'authorize' });
-    await authorize.focus();
-    await expect(authorize).toBeFocused();
     const commandOffset = cockpit.session.received.length;
-    await page.keyboard.press('Enter');
+    await authorize.press('Enter');
 
     await expect
       .poll(() => cockpit.session.received.slice(commandOffset).filter((frame) => frame.type === 'prompt'))
@@ -218,7 +216,7 @@ test('reports the estimate as an estimate', async ({ page, cockpit }) => {
 });
 
 // A row is a question as much as a figure, so it has to be answerable. The
-// fake session behind these tests serves no package API, which is exactly the
+// headless fixture behind these tests serves no package API, which is exactly the
 // case a reader must not be left staring at a spinner for.
 test('opens a row and says so when the session cannot describe it', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);

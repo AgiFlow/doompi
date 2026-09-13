@@ -8,9 +8,9 @@ afterEach(() => {
 describe('browser performance telemetry', () => {
   it('sends a fixed batch only through the sealed HTTP transport', async () => {
     vi.useFakeTimers();
-    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession.ts');
+    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession');
     const fetch = vi.spyOn(sealedHttpSession, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
-    const { recordBrowserPerformance } = await import('../../src/web/lib/browserTelemetry.ts');
+    const { recordBrowserPerformance } = await import('../../src/web/lib/browserTelemetry');
 
     recordBrowserPerformance({ name: 'web.browser.ready', duration_ms: 14 });
     expect(fetch).not.toHaveBeenCalled();
@@ -25,9 +25,9 @@ describe('browser performance telemetry', () => {
 
   it('bounds queued events and reports aggregate drops rather than exporting each discarded item', async () => {
     vi.useFakeTimers();
-    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession.ts');
+    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession');
     const fetch = vi.spyOn(sealedHttpSession, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
-    const { recordBrowserPerformance } = await import('../../src/web/lib/browserTelemetry.ts');
+    const { recordBrowserPerformance } = await import('../../src/web/lib/browserTelemetry');
 
     for (let event = 0; event < 40; event += 1) {
       recordBrowserPerformance({ name: 'web.browser.reconnect', count: 1 });
@@ -43,9 +43,9 @@ describe('browser performance telemetry', () => {
 
   it('drops permanent client failures instead of retrying forever', async () => {
     vi.useFakeTimers();
-    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession.ts');
+    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession');
     const fetch = vi.spyOn(sealedHttpSession, 'fetch').mockResolvedValue(new Response(null, { status: 404 }));
-    const { recordBrowserPerformance } = await import('../../src/web/lib/browserTelemetry.ts');
+    const { recordBrowserPerformance } = await import('../../src/web/lib/browserTelemetry');
 
     recordBrowserPerformance({ name: 'web.browser.ready' });
     await vi.advanceTimersByTimeAsync(60_000);
@@ -55,14 +55,14 @@ describe('browser performance telemetry', () => {
 
   it('retries rate limits and network failures, then resets after success', async () => {
     vi.useFakeTimers();
-    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession.ts');
+    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession');
     const fetch = vi
       .spyOn(sealedHttpSession, 'fetch')
       .mockResolvedValueOnce(new Response(null, { status: 429 }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
       .mockRejectedValueOnce(new TypeError('network unavailable'))
       .mockResolvedValue(new Response(null, { status: 204 }));
-    const { recordBrowserPerformance } = await import('../../src/web/lib/browserTelemetry.ts');
+    const { recordBrowserPerformance } = await import('../../src/web/lib/browserTelemetry');
 
     recordBrowserPerformance({ name: 'web.browser.ready' });
     await vi.advanceTimersByTimeAsync(2000);
@@ -75,9 +75,9 @@ describe('browser performance telemetry', () => {
 
   it('uses capped exponential backoff for retryable responses', async () => {
     vi.useFakeTimers();
-    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession.ts');
+    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession');
     const fetch = vi.spyOn(sealedHttpSession, 'fetch').mockResolvedValue(new Response(null, { status: 503 }));
-    const { recordBrowserPerformance } = await import('../../src/web/lib/browserTelemetry.ts');
+    const { recordBrowserPerformance } = await import('../../src/web/lib/browserTelemetry');
 
     recordBrowserPerformance({ name: 'web.browser.ready' });
     await vi.advanceTimersByTimeAsync(1000);
@@ -103,9 +103,9 @@ describe('browser performance telemetry', () => {
 describe('browser error telemetry', () => {
   it('reports an uncaught error with its bounded stack and the session it happened in', async () => {
     vi.useFakeTimers();
-    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession.ts');
+    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession');
     const fetch = vi.spyOn(sealedHttpSession, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
-    const { installBrowserErrorReporting } = await import('../../src/web/lib/browserTelemetry.ts');
+    const { installBrowserErrorReporting } = await import('../../src/web/lib/browserTelemetry');
     const target = new EventTarget();
     const stop = installBrowserErrorReporting({ target, sessionId: () => 'session-7' });
 
@@ -132,9 +132,9 @@ describe('browser error telemetry', () => {
 
   it('reports an unhandled rejection of a non-error value without inventing a stack', async () => {
     vi.useFakeTimers();
-    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession.ts');
+    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession');
     const fetch = vi.spyOn(sealedHttpSession, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
-    const { installBrowserErrorReporting } = await import('../../src/web/lib/browserTelemetry.ts');
+    const { installBrowserErrorReporting } = await import('../../src/web/lib/browserTelemetry');
     const target = new EventTarget();
     const stop = installBrowserErrorReporting({ target });
 
@@ -155,9 +155,9 @@ describe('browser error telemetry', () => {
 
   it('stops reporting once uninstalled, so a torn-down page cannot keep posting', async () => {
     vi.useFakeTimers();
-    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession.ts');
+    const { sealedHttpSession } = await import('../../src/web/lib/sealedSession');
     const fetch = vi.spyOn(sealedHttpSession, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
-    const { installBrowserErrorReporting } = await import('../../src/web/lib/browserTelemetry.ts');
+    const { installBrowserErrorReporting } = await import('../../src/web/lib/browserTelemetry');
     const target = new EventTarget();
     installBrowserErrorReporting({ target })();
 

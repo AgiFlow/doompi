@@ -1,5 +1,5 @@
-import type { FileEditsDiffHunk } from '../../types/fileEditsApi.ts';
-import { gutterWidth } from '../lib/fileView.ts';
+import type { FileEditsDiffHunk } from '../../types/fileEditsApi';
+import { gutterWidth } from '../lib/fileView';
 
 /**
  * A diff, drawn the way this cockpit draws every other one: a numbered gutter

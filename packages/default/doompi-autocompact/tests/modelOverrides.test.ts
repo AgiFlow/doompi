@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { resolveModelTokenOverrides } from '../src/adapters/compaction/modelOverrides.ts';
+
+import { resolveModelTokenOverrides } from '../src/services/modelOverrides';
 
 const OPUS = { id: 'claude-opus-4-6', provider: 'anthropic' };
 

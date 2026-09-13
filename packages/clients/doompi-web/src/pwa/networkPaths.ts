@@ -1,5 +1,6 @@
 import { BUNDLE_MANIFEST_ROUTE } from '@agimon-ai/doompi-web-security/browser';
-import { DEV_PROXY_PREFIX } from '../types/devProxy.ts';
+
+import { DEV_PROXY_PREFIX } from '../types/devProxy';
 
 /**
  * Which paths the service worker lets through to the network.

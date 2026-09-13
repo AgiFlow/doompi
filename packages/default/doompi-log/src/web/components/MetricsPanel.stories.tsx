@@ -12,8 +12,8 @@
  * so every dimension and period draws the same report. Widen it only if a story
  * needs to compare two selections side by side.
  */
-import { LOG_API_BASE_PATH, type MetricsReport } from '../../types/webMetrics.ts';
-import { MetricsPanel } from './MetricsPanel.tsx';
+import { LOG_API_BASE_PATH, type MetricsReport } from '../../types/webMetrics';
+import { MetricsPanel } from './MetricsPanel';
 
 const report: MetricsReport = {
   generatedAt: '2025-06-04 09:12',

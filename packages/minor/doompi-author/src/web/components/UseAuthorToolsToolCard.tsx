@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   collapseLines,
   MessageItem,
@@ -7,12 +8,12 @@ import {
   MessageLines,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+
 import {
   useAuthorToolsCallSummary,
   useAuthorToolsCollapsedLines,
   useAuthorToolsResultLines,
-} from '../lib/useAuthorToolsToolRender.ts';
+} from '../lib/useAuthorToolsToolRender';
 
 /**
  * The use_author_tools tool's timeline item: Use one capability of the current Author viewport. The shell owns

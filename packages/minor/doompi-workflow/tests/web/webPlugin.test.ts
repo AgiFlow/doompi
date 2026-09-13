@@ -3,10 +3,17 @@ import {
   renderPlugin,
   slotPropsFixture,
   toolMessagePropsFixture,
-} from '@agimon-ai/doompi-web-contracts/testing';
+} from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it } from 'vitest';
-import { workflows } from '../../src/web/stores/workflowsStore.ts';
-import { webPlugin } from '../../src/web/index.ts';
+
+import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { workflows } from '../../src/web/stores/workflowsStore';
+const webPlugin = {
+  id: scopedWebPlugin.id,
+  ...scopedWebPlugin.global,
+  ...scopedWebPlugin.workspace,
+  ...scopedWebPlugin.session,
+};
 
 /**
  * Every surface this plugin declares, rendered at least once.

@@ -1,8 +1,9 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui';
 import type { ComponentProps, ReactNode } from 'react';
-import { CheckIcon, ChevronRightIcon } from '../icons/icons.ts';
-import { cn } from '../lib/cn.ts';
+
+import { CheckIcon, ChevronRightIcon } from '../icons/icons';
+import { cn } from '../lib/cn';
 
 /** shadcn's DropdownMenu on Radix: roving focus, typeahead, outside click, Escape. */
 export function DropdownMenu(props: ComponentProps<typeof DropdownMenuPrimitive.Root>) {

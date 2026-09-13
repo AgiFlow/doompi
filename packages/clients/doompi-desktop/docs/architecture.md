@@ -1,8 +1,8 @@
 # Desktop architecture
 
-DoomPi Desktop turns the existing browser cockpit into a native application without creating a second control plane. Electron supplies process startup, a constrained renderer, application lifecycle, and release packaging. The cockpit continues to own HTTP serving, sessions, and agents.
+DoomPi Desktop turns the existing browser cockpit into a native application without creating a second control plane. Electron supplies process startup, a constrained renderer, application lifecycle, release packaging, and the native computer-use host. The client-neutral headless server owns sessions and agents. DoomPi Web only presents and proxies that server.
 
-This split keeps browser and desktop behavior on the same protocol and session model. It also means the desktop application inherits the cockpit's authority and operational limits rather than containing them.
+This split keeps browser and desktop behavior on the same protocol and session model. Desktop uses the same authenticated HTTP and WebSocket boundary as other clients, not a desktop-only transport.
 
 ## System topology
 
@@ -11,26 +11,26 @@ Electron application
   │
   ├─ main process
   │    ├─ acquires the single-instance lock
-  │    ├─ selects a loopback port
-  │    ├─ starts and supervises the cockpit child
+  │    ├─ selects loopback ports
+  │    ├─ starts and supervises the headless and web children
   │    └─ owns BrowserWindow and native IPC handlers
   │
   ├─ preload
   │    └─ exposes platform and app version only
   │
   └─ renderer
-       └─ loads http://127.0.0.1:<port>
+       └─ loads http://127.0.0.1:<web-port>
 
-cockpit child
-  └─ DoomPi Web hub
-       ├─ serves the web shell
-       ├─ watches session registry records
-       └─ starts doompi-server processes
-            ├─ publish their session records
-            └─ start agent processes
+headless child: doompi-server
+  ├─ owns the session and agent runtime
+  └─ exposes the authenticated HTTP and WebSocket protocol
+
+presentation child: doompi-web
+  ├─ serves the web shell
+  └─ proxies /api and /api/pi to doompi-server
 ```
 
-The renderer loads a loopback HTTP origin instead of `file://`. The web client derives its socket URLs from the page location and bootstraps through a service worker, both of which require an HTTP origin in this design. The same web application and hub contracts can therefore run in a browser or inside Electron. The hub and session server do not need to know which client opened them.
+The renderer loads a loopback HTTP origin instead of `file://`. The web client derives its protocol URLs from the page location and bootstraps through a service worker, both of which require an HTTP origin. The presentation proxy and headless process therefore use the same web contracts in a browser or inside Electron.
 
 ## Ownership boundaries
 
@@ -40,26 +40,25 @@ The main process owns desktop-only concerns:
 
 - one running desktop application instance
 - loopback port selection
-- cockpit child startup and shutdown
+- headless and presentation child startup and shutdown
 - health-gated window loading
 - window bounds and navigation policy
-- native application IPC
+- native application IPC handlers
 - desktop computer-use host wiring
 
-It does not resolve plugin composition, create DoomPi sessions, or launch agents directly. Those operations stay below the hub boundary.
+It does not resolve plugin composition, create additional sessions, or launch agents directly. Those operations stay in the headless server.
 
-### Cockpit and session processes
+### Headless and presentation processes
 
-The staged `@agimon-ai/doompi-web` CLI remains the cockpit control plane. It serves the web client and launches the staged `@agimon-ai/doompi-server` command when the cockpit creates a session. Each session server owns its registry record and agent process.
+The staged `@agimon-ai/doompi` CLI starts one direct headless session and exposes its client-neutral protocol. It owns session state, server facets, APIs, channels, authorization, history, and the agent runtime.
 
-Session discovery uses the normal DoomPi runtime directory:
+The staged `@agimon-ai/doompi-web` CLI serves browser assets and forwards HTTP and WebSocket requests to the headless endpoint. It does not own sessions or load server extensions.
 
-```text
-DOOMPI_RUNTIME_DIR, when set
-~/.doompi/run, otherwise
-```
+Desktop creates an attach token in the Electron user-data directory for the lifetime of the child processes. The headless child reads the token file, and the web child forwards the token to the headless endpoint. Desktop removes the file after both children stop.
 
-Electron's user-data directory is not a second session registry. Desktop and command-line tooling can observe the same session records.
+### Computer-use host
+
+On supported macOS builds, Electron owns the native computer-use backend. Requests cross the child boundary through the typed versioned computer-use IPC protocol. Desktop attaches that bridge to the headless child, never to the presentation proxy. If the headless child does not expose the required IPC channel, startup fails explicitly instead of falling back to a Unix HTTP transport.
 
 ### Renderer and preload
 
@@ -73,34 +72,33 @@ Node integration is disabled, context isolation and the Chromium sandbox are ena
 ## Startup lifecycle
 
 1. Electron removes command-line `--inspect` flags and acquires a single-instance lock.
-2. The main process resolves the packaged runtime and chooses a loopback port. It prefers `7433` when that port is bindable, otherwise it asks the operating system for a free port.
-3. It creates a hidden window with the constrained web preferences and loads the startup page.
-4. It starts the staged cockpit CLI with `ELECTRON_RUN_AS_NODE=1` and a desktop-specific environment.
-5. It polls `/api/health` until the cockpit answers or the startup deadline expires.
-6. Electron shows the window when the startup page is ready, then replaces that page with the cockpit after the health check succeeds.
-7. Closing the window quits the application. The main process terminates the cockpit child it started.
+2. The main process selects loopback ports, preferring `7433` for the presentation proxy and `7434` for the headless protocol.
+3. It creates a hidden window with constrained web preferences and loads the startup page.
+4. It starts the staged `doompi-server` with `ELECTRON_RUN_AS_NODE=1`, a token file, and the headless protocol port.
+5. It polls the headless `/api/health` endpoint until the server answers or the startup deadline expires.
+6. It starts the staged `doompi-web` proxy with the headless URL and token.
+7. It polls the web proxy `/api/health` endpoint, then replaces the startup page with the proxy origin.
+8. Closing the window quits the application. The main process terminates the presentation child and then the headless child.
 
-If a healthy cockpit appears on the selected port between selection and launch, startup can attach to it. In that case Electron does not own that process and does not stop it on exit. This is a race-safe fallback, not general discovery of an already occupied default port.
-
-A failed startup stops an owned child, closes the window, and surfaces an error dialog before exiting.
+A failed startup stops every owned child, removes the attach token, closes the window, and surfaces an error dialog before exiting.
 
 ## Window and navigation model
 
-The application starts with an in-memory loading page, then replaces it with the loopback cockpit after the health check succeeds. The window uses fixed initial and minimum dimensions. The application does not persist window bounds.
+The application starts with an in-memory loading page, then replaces it with the web proxy after both process health checks succeed. The window uses fixed initial and minimum dimensions. The application does not persist window bounds.
 
-Main-frame navigation is restricted to the initial cockpit origin. New windows are denied. HTTPS links to other origins are handed to the operating system browser only after URL parsing and protocol checks. Other schemes remain blocked.
+Main-frame navigation is restricted to the initial proxy origin. New windows are denied. HTTPS links to other origins are handed to the operating system browser only after URL parsing and protocol checks. Other schemes remain blocked.
 
-This policy limits common renderer escape paths, but it does not make the served cockpit content harmless. The loopback server and the renderer still form one application trust boundary.
+This policy limits common renderer escape paths, but it does not make the served cockpit content harmless. The proxy, headless server, and renderer still form one application trust boundary.
 
 ## Why a shell instead of a fork
 
-A separate desktop session implementation would duplicate lifecycle, authentication, plugin loading, and agent-launch behavior. Keeping those capabilities in the hub has three practical effects:
+A separate desktop session implementation would duplicate lifecycle, authentication, plugin loading, and agent-launch behavior. Keeping session capabilities in the client-neutral headless process has three practical effects:
 
 - browser and desktop clients use the same observable contracts
 - fixes in session and agent orchestration apply to both surfaces
 - the Electron layer stays small enough to audit as native glue
 
-The tradeoff is that desktop startup includes a local HTTP service and a process tree rather than a single renderer process. Diagnostics must consider Electron, the cockpit child, session servers, and agents separately.
+The tradeoff is a multi-process application. Diagnostics must consider Electron, the presentation proxy, the headless server, and the agent runtime separately.
 
 ## Related guides
 
@@ -108,4 +106,3 @@ The tradeoff is that desktop startup includes a local HTTP service and a process
 - [Runtime and packaging](./runtime-and-packaging.md)
 - [Security](./security.md)
 - [Web architecture](../../doompi-web/docs/architecture.md)
-- [Server lifecycle](../../doompi-server/docs/lifecycle.md)

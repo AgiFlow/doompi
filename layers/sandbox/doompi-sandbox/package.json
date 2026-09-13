@@ -3,8 +3,10 @@
   "version": "0.0.1-alpha.68",
   "description": "Container sandbox for DoomPi launches: the agent, extensions, and tools run inside Docker or Podman while the terminal stays on the host",
   "keywords": [
+    "ai",
     "coding-agent",
     "container-sandbox",
+    "developer-tools",
     "doompi",
     "pi-coding-agent",
     "pi-extension",
@@ -55,6 +57,11 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -68,7 +75,7 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2"
   },
   "devDependencies": {
@@ -90,6 +97,17 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiServer": {
+    "entry": "./src/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "session"
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
+    }
   },
   "pi": {
     "extensions": [

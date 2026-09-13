@@ -2,9 +2,10 @@ import type {
   VoiceToolBatchResult,
   VoiceToolCatalogEntry,
   VoiceToolCatalogSnapshot,
-} from '@agimon-ai/doompi-extension-contracts/voice-tools';
+} from '@agimon-ai/doompi-core/voice-tools';
 import { describe, expect, it } from 'vitest';
-import { formatBatch, formatCatalog, formatError } from '../src/services/voiceToolPrompt.ts';
+
+import { formatBatch, formatCatalog, formatError } from '../src/services/voiceToolPrompt';
 
 const TOKEN = 'voice-test:voice-session:2:9';
 

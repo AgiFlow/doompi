@@ -1,5 +1,7 @@
+import type { WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 import { describe, expect, it, vi } from 'vitest';
-import type { WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+
+import type { WorktreeView } from '../../../../src/types/webWorktrees';
 import {
   requestWorktreeClose,
   requestWorktreeCreate,
@@ -7,8 +9,7 @@ import {
   worktreeActivity,
   worktreeActivitySource,
   worktreesChannel,
-} from '../../../../src/web/stores/worktreesActivityStore.ts';
-import type { WorktreeView } from '../../../../src/types/webWorktrees.ts';
+} from '../../../../src/web/stores/worktreesActivityStore';
 
 function runtime(): { host: WebPluginRuntime; sent: Record<string, unknown>[] } {
   const sent: Record<string, unknown>[] = [];

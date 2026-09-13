@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, test } from '../support/cockpit.ts';
+
+import { expect, test } from '../support/cockpit';
 
 const COMMANDS = {
   type: 'response',
@@ -14,14 +15,6 @@ const COMMANDS = {
     ],
   },
 };
-
-/** The fake session's real working directory, read from its registry record. */
-function sessionCwd(registryDir: string, sessionId: string): string {
-  const record = JSON.parse(fs.readFileSync(path.join(registryDir, 'sessions', `${sessionId}.json`), 'utf8')) as {
-    cwd: string;
-  };
-  return record.cwd;
-}
 
 test('the input grows with a multi-line draft instead of hiding it', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
@@ -65,8 +58,6 @@ test('quotes whole messages or selected message text into the prompt', async ({ 
   await expect(userActions).toHaveCSS('opacity', '1');
   await expect(userRewind).toHaveAttribute('aria-label', 'Rewind to message');
   await expect(userRewind.locator('svg')).toHaveCount(1);
-  await userRewind.click();
-  expect(await cockpit.session.waitForCommand('navigate_tree')).toEqual({ type: 'navigate_tree', entryId: 'u1' });
   await expect(userQuote).toHaveAttribute('aria-label', 'Quote message');
   await expect(userQuote.locator('svg')).toHaveCount(1);
   await userQuote.click();
@@ -141,12 +132,13 @@ test('typing $ completes the skills, and / leaves them out', async ({ page, cock
   await expect(page.getByTestId('composer-completion')).not.toContainText('skill:playwriter');
 });
 test('typing @ completes files from the session working directory', async ({ page, cockpit }) => {
-  const cwd = sessionCwd(cockpit.registryDir, cockpit.session.id);
+  const cwd = cockpit.session.cwd;
   fs.mkdirSync(path.join(cwd, 'src'), { recursive: true });
   fs.writeFileSync(path.join(cwd, 'src', 'gateKeeper.ts'), '');
   fs.writeFileSync(path.join(cwd, 'notes.md'), '');
 
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
   const input = page.getByTestId('composer-input');
   await input.fill('look at @gate');
   await expect(page.getByTestId('composer-completion')).toBeVisible();

@@ -1,5 +1,5 @@
-import { REMOTE_API_ROUTE, type RemoteAccessSettings, type RemoteAccessStateView } from '../../types/remoteAccess.ts';
-import { sealedHttpSession } from './sealedSession.ts';
+import { REMOTE_API_ROUTE, type RemoteAccessSettings, type RemoteAccessStateView } from '../../types/remoteAccess';
+import { sealedHttpSession } from './sealedSession';
 
 export type StateResult = { state: RemoteAccessStateView } | { error: string };
 /** Enabling a contained cockpit moves the hub, so the answer says the address is about to change. */
