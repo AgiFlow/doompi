@@ -336,10 +336,14 @@ test('a dialog with an open select dismisses and reopens with working controls',
   await expect(launchDialog).toBeVisible();
   await page.getByTestId('launch-task').fill('Still interactive.');
   await page.getByTestId('launch-fork').click();
-  await expect(page.getByTestId('launch-command')).toHaveText('/run nested-overlay-e2e Still interactive. --fork');
+  await expect(page.getByTestId('launch-fork')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('launch-submit')).toBeEnabled();
 });
 
-test('the catalog lists the agents the session can launch and launches one through /run', async ({ page, cockpit }) => {
+test('the catalog lists the agents the session can launch and launches one through the session API', async ({
+  page,
+  cockpit,
+}) => {
   writeAgentDefinition(cockpit.agentDir, 'reviewer-e2e', 'Reviews a diff for the e2e suite.');
 
   await page.goto(cockpit.url);
@@ -360,10 +364,12 @@ test('the catalog lists the agents the session can launch and launches one throu
   await expect(page.getByTestId('launch-agent')).toHaveText('reviewer-e2e');
   await page.getByTestId('launch-task').fill('Review the diff.');
   await page.getByTestId('launch-fork').click();
-  await expect(page.getByTestId('launch-command')).toHaveText('/run reviewer-e2e Review the diff. --fork');
+  const requestPromise = page.waitForRequest(
+    (request) => request.method() === 'POST' && request.url().endsWith('/api/sessions/s1/plugin/team/run'),
+  );
   await page.getByTestId('launch-submit').click();
-  const sent = await cockpit.session.waitForCommand('prompt');
-  expect(sent.message).toBe('/run reviewer-e2e Review the diff. --fork');
+  const request = await requestPromise;
+  expect(request.postDataJSON()).toEqual({ agent: 'reviewer-e2e', task: 'Review the diff.', fork: true });
   await expect(page.getByTestId('launch-dialog')).toBeHidden();
   await expect(drawer).toBeHidden();
 

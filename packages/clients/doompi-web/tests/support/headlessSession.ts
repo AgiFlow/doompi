@@ -182,6 +182,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
 
   const flushReconnectFrames = (): void => {
     if (!reconnecting) return;
+    console.error('[debug-reconnect] flush', reconnectFrames.length, listeners.size);
     reconnecting = false;
     for (const frame of reconnectFrames.splice(0)) session.emit(frame);
   };
@@ -253,6 +254,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       exitResolve(0);
     },
     readState: async () => {
+      console.error('[debug-reconnect] readState', reconnecting, reconnectFrames.length, listeners.size);
       record({ type: 'get_state' });
       const result = (await answer('get_state', state)) as Frame;
       flushReconnectFrames();
@@ -447,6 +449,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     cwd,
     received,
     emit(frame) {
+      console.error('[debug-reconnect] emit', frame.type, reconnecting, listeners.size);
       if (reconnecting) {
         reconnectFrames.push(frame);
         return;
@@ -576,6 +579,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       });
     },
     dropClient() {
+      console.error('[debug-reconnect] dropClient');
       reconnecting = true;
       restarting ??= options.restartHeadless().finally(() => {
         restarting = undefined;
