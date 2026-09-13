@@ -32,12 +32,11 @@ async function scrollToOldestTurn(page: import('@playwright/test').Page): Promis
           element.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
           element.dispatchEvent(new Event('scroll', { bubbles: true }));
         });
-        return oldest.count();
+        return oldest.isVisible();
       },
       { timeout: 15_000 },
     )
-    .toBeGreaterThan(0);
-  await expect(oldest).toBeVisible();
+    .toBe(true);
 }
 
 test('switches fixed large and small transcripts without losing their contents', async ({ page, cockpit }) => {
