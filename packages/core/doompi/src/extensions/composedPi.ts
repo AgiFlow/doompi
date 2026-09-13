@@ -40,7 +40,10 @@ export async function doomExtension(pi: ExtensionAPI): Promise<void> {
       if (outcome.stale) ctx.ui.notify(STALE_MESSAGE, WARNING);
     });
 
-    pi.on('session_shutdown', async (_event, ctx) => {
+    pi.on('session_shutdown', async (event, ctx) => {
+      // Reload keeps the process and its deterministic run directory alive. The
+      // replacement session reuses both, so only terminal shutdown owns cleanup.
+      if (event.reason === 'reload') return;
       const repoRoot = findSyncedRoot(ctx.cwd);
       if (!repoRoot) return;
       // The state file first, so nothing is left pointing at a path that is
