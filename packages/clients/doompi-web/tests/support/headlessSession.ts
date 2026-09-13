@@ -36,6 +36,7 @@ export interface HeadlessSession {
   readonly cwd: string;
   readonly received: Frame[];
   emit(frame: Frame): void;
+  replaceEntries(entries: readonly Frame[]): void;
   setSessionStats(stats: HeadlessSessionStats): void;
   waitForAttach(timeoutMs?: number): Promise<void>;
   waitForCommand(type: string, timeoutMs?: number): Promise<Frame>;
@@ -107,7 +108,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
   const listeners = new Set<(frame: Frame) => void>();
   const commandWaiters: Array<{ type: string; resolve: (frame: Frame) => void }> = [];
   const pending = new Map<string, PendingResult[]>();
-  const entries: unknown[] = [];
+  const entries: Frame[] = [];
   let usageEntries: unknown[] = [];
   let availableModels: unknown[] = [];
   let stats: Frame = {
@@ -178,6 +179,14 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     for (const frame of reconnectFrames.splice(0)) session.emit(frame);
   };
 
+  const replaceEntries = (next: readonly Frame[]): void => {
+    entries.splice(
+      0,
+      entries.length,
+      ...next.map((entry, index) => ({ ...entry, seq: typeof entry.seq === 'number' ? entry.seq : index + 1 })),
+    );
+  };
+
   const readEntries = async (): Promise<{ entries: unknown[]; leafId: string | null }> => {
     flushReconnectFrames();
     record({ type: 'get_entries' });
@@ -197,8 +206,32 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     session: {} as never,
     harness: {} as never,
     lane: {
-      findEntries: async () => (usageEntries.length > 0 ? usageEntries : entries.toReversed()),
-      getTipId: async () => (await readEntries()).leafId,
+      findEntries: async (query: {
+        order?: 'newestFirst' | 'oldestFirst';
+        limit?: number;
+        cursor?: { seq: number };
+        type?: string;
+        customType?: string;
+      }) => {
+        flushReconnectFrames();
+        record({ type: 'get_entries' });
+        const source = (usageEntries.length > 0 ? usageEntries : entries).filter(
+          (entry): entry is Frame => typeof entry === 'object' && entry !== null,
+        );
+        const cursor = query.cursor?.seq;
+        const filtered = source.filter((entry) => {
+          if (query.type !== undefined && entry.type !== query.type) return false;
+          if (query.customType !== undefined && entry.customType !== query.customType) return false;
+          if (cursor === undefined || typeof entry.seq !== 'number') return true;
+          return query.order === 'oldestFirst' ? entry.seq > cursor : entry.seq < cursor;
+        });
+        const ordered = query.order === 'oldestFirst' ? filtered : filtered.toReversed();
+        return query.limit === undefined ? ordered : ordered.slice(0, query.limit);
+      },
+      getTipId: async () => {
+        const tip = entries.at(-1);
+        return typeof tip?.id === 'string' ? tip.id : null;
+      },
     } as never,
     exited,
     storageQuarantined: false,
@@ -304,7 +337,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
   const activityStops = new Map<DoomHeadlessActivity, () => void | Promise<void>>();
   let activateFacets: (() => Promise<void>) | undefined;
   let activation: Promise<void> | undefined;
-  const selection = { majorMode: 'minimal', activeLayers: [], domains: [], state: {} } as const;
+  const selection = { majorMode: 'minimal', activeLayers: ['team', 'task', 'llm'], domains: [], state: {} } as const;
   const executionContext: DoomHeadlessExecutionContext = {
     cwd,
     repoRoot: options.repoRoot,
@@ -382,6 +415,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
   options.hub.register({
     id,
     workspaceId: options.workspaceId,
+    environment: options.environment,
     webComposition: options.webComposition,
     name,
     cwd,
@@ -418,7 +452,8 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
         }
         if (frame.command === 'get_entries' && frame.success === true && typeof frame.data === 'object') {
           const data = frame.data as Frame;
-          entries.splice(0, entries.length, ...(Array.isArray(data.entries) ? data.entries : []));
+          if (Array.isArray(data.entries))
+            replaceEntries(data.entries.filter((entry): entry is Frame => typeof entry === 'object' && entry !== null));
         }
         if (frame.command === 'get_commands' && frame.success === true && typeof frame.data === 'object') {
           const data = frame.data as Frame;
@@ -470,6 +505,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       }
       for (const listener of listeners) listener(frame);
     },
+    replaceEntries,
     setSessionStats(next) {
       const input = next.tokens.input ?? 0;
       const output = next.tokens.output ?? 0;
@@ -542,7 +578,9 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       await options.restartHeadless();
       const client = await Client.connect({
         serverId: DOOM_COCKPIT_SERVER_ID,
-        transportFactory: websocketTransport(`${options.headlessUrl().replace('http:', 'ws:')}/api/pi`),
+        transportFactory: websocketTransport(
+          `${options.headlessUrl().replace('http:', 'ws:')}/api/pi?token=e2e-headless-token`,
+        ),
       });
       await client.request(
         { serverId: DOOM_COCKPIT_SERVER_ID },

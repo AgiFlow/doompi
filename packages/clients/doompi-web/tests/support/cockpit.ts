@@ -66,10 +66,6 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         }
       });
     }
-    await page.goto(cockpit.url);
-    await page.getByTestId('cockpit').waitFor();
-    await Promise.all(cockpit.sessions.map(async (session) => await session.waitForCommand('get_state')));
-    await page.goto('about:blank');
     for (const session of cockpit.sessions) {
       const waitForAttach = session.waitForAttach.bind(session);
       session.waitForAttach = async (timeoutMs = 5000): Promise<void> => {
@@ -162,10 +158,9 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     });
     const source = resolveServerBundleSource({ registration });
     if (source.kind !== 'descriptor') throw new Error('global setup did not publish a synchronized server bundle');
-    const loadOptions = { ...source, majorMode: 'minimal', activeLayers: [] };
     const [globalBundle, sessionBundle] = await Promise.all([
-      loadServerBundle('global', loadOptions),
-      loadServerBundle('session', loadOptions),
+      loadServerBundle('global', { ...source, majorMode: 'minimal', activeLayers: [] }),
+      loadServerBundle('session', { ...source, majorMode: 'minimal', activeLayers: ['team', 'task', 'llm'] }),
     ]);
     const environment = Object.freeze({
       ...process.env,
@@ -182,7 +177,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       directEvents: hub.directEvents,
       onNotice: (message) => console.error(`[global] ${message}`),
     });
-    const channels = hub.channelTypes();
+    const channels = [...new Set([...hub.channelTypes(), 'subagent_runs', 'task_graph'])];
     const globalComposition = webCompositions.publish({ scope: 'global' }, registration, channels);
     const workspaceComposition = webCompositions.publish({ scope: 'workspace', workspaceId }, registration, channels);
     if (globalComposition === undefined || workspaceComposition === undefined)

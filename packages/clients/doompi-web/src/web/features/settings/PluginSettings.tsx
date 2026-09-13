@@ -1,4 +1,4 @@
-import type { WebPluginDefinition } from '@agimon-ai/doompi-core/web';
+import type { WebPluginContributions, WebPluginDefinition } from '@agimon-ai/doompi-core/web';
 import { Panel, SectionLabel } from '@agimon-ai/doompi-web-components';
 
 import { installedWebPlugins, webPluginDiagnostics } from '../../lib/pluginRegistry';
@@ -7,20 +7,27 @@ import { SettingsSectionHeader } from './SettingsSectionHeader';
 /** What one plugin contributes, as counts: enough to see it landed without opening its code. */
 function contributions(plugin: WebPluginDefinition): string[] {
   const parts: string[] = [];
-  const count = (label: string, list: readonly unknown[] | undefined): void => {
-    if (list !== undefined && list.length > 0) parts.push(`${String(list.length)} ${label}`);
+  const scopes: readonly WebPluginContributions[] = [
+    plugin,
+    ...[plugin.global, plugin.workspace, plugin.session].filter(
+      (scope): scope is WebPluginContributions => scope !== undefined,
+    ),
+  ];
+  const count = (label: string, select: (scope: WebPluginContributions) => readonly unknown[] | undefined): void => {
+    const total = scopes.reduce((sum, scope) => sum + (select(scope)?.length ?? 0), 0);
+    if (total > 0) parts.push(`${String(total)} ${label}`);
   };
-  count('tabs', plugin.tabs);
-  count('channels', plugin.channels);
-  count('tool renderers', plugin.toolRenderers);
-  count('activity groups', plugin.activityGroups);
-  count('activity sections', plugin.activitySections);
-  count('composer menu items', plugin.composerMenuItems);
-  count('minor modes', plugin.minorModes);
-  count('selection axes', plugin.selectionAxes);
-  count('leader bindings', plugin.leaderBindings);
-  count('slots', plugin.slots);
-  count('fills', plugin.fills);
+  count('tabs', (scope) => scope.tabs);
+  count('channels', (scope) => scope.channels);
+  count('tool renderers', (scope) => scope.toolRenderers);
+  count('activity groups', (scope) => scope.activityGroups);
+  count('activity sections', (scope) => scope.activitySections);
+  count('composer menu items', (scope) => scope.composerMenuItems);
+  count('minor modes', (scope) => scope.minorModes);
+  count('selection axes', (scope) => scope.selectionAxes);
+  count('leader bindings', (scope) => scope.leaderBindings);
+  count('slots', (scope) => scope.slots);
+  count('fills', (scope) => scope.fills);
   return parts;
 }
 

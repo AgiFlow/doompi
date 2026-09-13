@@ -53,12 +53,7 @@ export function performanceEntries(workload: PerformanceWorkload): Frame[] {
 }
 
 export function seedPerformanceSession(session: HeadlessSession, workload: PerformanceWorkload): void {
-  session.emit({
-    type: 'response',
-    command: 'get_entries',
-    success: true,
-    data: { entries: performanceEntries(workload) },
-  });
+  session.replaceEntries(performanceEntries(workload));
   const statusFrames = workload === 'large' ? 1_000 : 1;
   for (let index = 0; index < statusFrames; index += 1) {
     session.emit({

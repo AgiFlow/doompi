@@ -8,5 +8,7 @@ function CrashToolMessage({ args }: ToolMessageRenderProps) {
 
 export const webPlugin = defineWebPlugin({
   id: 'crash',
-  toolRenderers: [{ tools: ['crash'], message: CrashToolMessage }],
+  session: {
+    toolRenderers: [{ tools: ['crash'], message: CrashToolMessage }],
+  },
 });

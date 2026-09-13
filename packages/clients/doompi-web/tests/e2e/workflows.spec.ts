@@ -157,13 +157,37 @@ test('a failure moves into the needs-you strip live', async ({ page, cockpit }) 
       { type: 'step', status: 'running', job: 'fix', step: 'implement the fix', at },
     ],
   });
+  const runningRun = {
+    runKey: 'dev-fix',
+    workspace: 'default',
+    displayName: 'Development Fix',
+    workflowName: 'dev-fix',
+    workflowPath: '/workspace/automations/dev-fix.workflow.yml',
+    stage: 'running',
+    startedAt: at,
+    jobs: [],
+  };
+  cockpit.publishSessionEvent('workflow_runs', 's1', { runs: [runningRun] });
   await expect(page.getByTestId('workflow-picker')).toContainText('Development Fix', { timeout: 5000 });
 
+  const finishedAt = new Date().toISOString();
   moveWorkflowRun(cockpit.workflowHome, { workspace: 'default', runKey: 'dev-fix' }, 'running', 'error', {
     outcome: 'failed',
     errorMessage: 'nx test failed: 3 of 41 checks',
     failedJob: 'fix',
-    finishedAt: new Date().toISOString(),
+    finishedAt,
+  });
+  cockpit.publishSessionEvent('workflow_runs', 's1', {
+    runs: [
+      {
+        ...runningRun,
+        stage: 'error',
+        outcome: 'failed',
+        errorMessage: 'nx test failed: 3 of 41 checks',
+        failedJob: 'fix',
+        finishedAt,
+      },
+    ],
   });
 
   await expect(page.getByTestId('workflow-needs-you')).toBeVisible({ timeout: 5000 });

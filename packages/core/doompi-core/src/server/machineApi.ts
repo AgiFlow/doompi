@@ -1,6 +1,6 @@
-import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+
+import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 import type { DoomApi } from '../exports/packageApi';
 import { piAgentDirectory } from '../services/piSettings';
@@ -9,19 +9,6 @@ import { createProviderAuth } from '../services/providerAuth';
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
-
-async function loadHostPiRuntime() {
-  const hostEntry = process.argv[1];
-  if (!hostEntry) throw new Error('The DoomPi server entry is unavailable.');
-  const hostPackage = path.resolve(path.dirname(hostEntry), '../..');
-  const piPackage = path.join(hostPackage, 'node_modules/@earendil-works/pi-coding-agent');
-  const manifest = JSON.parse(fs.readFileSync(path.join(piPackage, 'package.json'), 'utf8')) as {
-    exports: { '.': { import: string } };
-  };
-  const entry = path.resolve(piPackage, manifest.exports['.'].import);
-  return (await import(pathToFileURL(entry).href)) as typeof import('@earendil-works/pi-coding-agent');
-}
-
 /** Machine-owned provider credentials and model catalog, available without a session. */
 export const machineApi: DoomApi = {
   basePath: 'doompi',
@@ -30,7 +17,6 @@ export const machineApi: DoomApi = {
     const auth = createProviderAuth({
       onNotice: (message) => context.onNotice(message),
       runtime: async () => {
-        const { ModelRuntime } = await loadHostPiRuntime();
         const directory = piAgentDirectory(context.environment, context.homeDirectory);
         return ModelRuntime.create({
           authPath: path.join(directory, 'auth.json'),

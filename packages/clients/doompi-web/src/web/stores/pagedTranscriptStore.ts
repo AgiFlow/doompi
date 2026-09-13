@@ -100,6 +100,7 @@ export function createPagedTranscript(
     revision = event.sequence;
     const frame = event.frame;
     if (frame.type === 'navigation_end' || frame.type === 'message_end') {
+      if (frame.type === 'message_end') emit(frame);
       request('latest');
       return;
     }
