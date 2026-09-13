@@ -85,6 +85,7 @@
     "@agimon-ai/doompi": "workspace:*",
     "@agimon-ai/doompi-config": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
+    "@earendil-works/pi-protocol": "0.85.1",
     "@playwright/test": "1.62.1",
     "@types/node": "26.4.1",
     "@types/react": "19.2.18",
