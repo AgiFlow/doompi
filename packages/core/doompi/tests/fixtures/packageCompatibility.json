@@ -554,7 +554,8 @@
       "./types": "tir",
       "./package.json": "esm",
       "./pi-config": "tir",
-      "./config-schema": "tir"
+      "./config-schema": "tir",
+      "./api-contracts": "tir"
     },
     "exportTargets": {
       ".": {
@@ -652,6 +653,11 @@
         "types": "./dist/configSchema.d.mts",
         "import": "./dist/configSchema.mjs",
         "require": "./dist/configSchema.cjs"
+      },
+      "./api-contracts": {
+        "types": "./dist/api-contracts.d.mts",
+        "import": "./dist/api-contracts.mjs",
+        "require": "./dist/api-contracts.cjs"
       }
     },
     "main": "./dist/index.cjs",
@@ -788,11 +794,13 @@
       ".": "tir",
       "./agent-model": "tir",
       "./ask-user": "tir",
+      "./author-tools": "tir",
       "./background-work": "tir",
       "./child-process": "tir",
       "./cockpit-container": "tir",
       "./config": "tir",
       "./context-contributions": "tir",
+      "./delegation": "tir",
       "./cordis-host": "tir",
       "./footer": "tir",
       "./help": "tir",
@@ -820,6 +828,8 @@
       "./tool-overrides": "tir",
       "./tool-surface": "tir",
       "./transition": "tir",
+      "./voice-reload-handoff": "tir",
+      "./voice-tools": "tir",
       "./ui-hub": "tir",
       "./pi-extension": "tir",
       "./web": "tir",
@@ -876,7 +886,8 @@
       "./runtime-protocol": "tir",
       "./runtime-transition": "tir",
       "./main": "tir",
-      "./package.json": "esm"
+      "./package.json": "esm",
+      "./api-contracts": "tir"
     },
     "exportTargets": {
       ".": {
@@ -893,6 +904,11 @@
         "types": "./dist/ask-user.d.mts",
         "import": "./dist/ask-user.mjs",
         "require": "./dist/ask-user.cjs"
+      },
+      "./author-tools": {
+        "types": "./dist/author-tools.d.mts",
+        "import": "./dist/author-tools.mjs",
+        "require": "./dist/author-tools.cjs"
       },
       "./background-work": {
         "types": "./dist/background-work.d.mts",
@@ -918,6 +934,11 @@
         "types": "./dist/context-contributions.d.mts",
         "import": "./dist/context-contributions.mjs",
         "require": "./dist/context-contributions.cjs"
+      },
+      "./delegation": {
+        "types": "./dist/delegation.d.mts",
+        "import": "./dist/delegation.mjs",
+        "require": "./dist/delegation.cjs"
       },
       "./cordis-host": {
         "types": "./dist/cordis-host.d.mts",
@@ -1053,6 +1074,16 @@
         "types": "./dist/transition.d.mts",
         "import": "./dist/transition.mjs",
         "require": "./dist/transition.cjs"
+      },
+      "./voice-reload-handoff": {
+        "types": "./dist/voice-reload-handoff.d.mts",
+        "import": "./dist/voice-reload-handoff.mjs",
+        "require": "./dist/voice-reload-handoff.cjs"
+      },
+      "./voice-tools": {
+        "types": "./dist/voice-tools.d.mts",
+        "import": "./dist/voice-tools.mjs",
+        "require": "./dist/voice-tools.cjs"
       },
       "./ui-hub": {
         "types": "./dist/ui-hub.d.mts",
@@ -1334,7 +1365,12 @@
         "import": "./dist/main.mjs",
         "require": "./dist/main.cjs"
       },
-      "./package.json": "./package.json"
+      "./package.json": "./package.json",
+      "./api-contracts": {
+        "types": "./dist/api-contracts.d.mts",
+        "import": "./dist/api-contracts.mjs",
+        "require": "./dist/api-contracts.cjs"
+      }
     },
     "main": "./dist/index.cjs",
     "types": "./dist/index.d.mts",

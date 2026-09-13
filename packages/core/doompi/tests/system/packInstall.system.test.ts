@@ -1601,22 +1601,19 @@ describe('consumer ownership boundaries', () => {
   });
 
   it(
-    'installs and imports the root with its declared Voice contract dependency closure',
+    'installs and imports the root without selectable package dependencies',
     async () => {
       const isolatedConsumer = createConsumerRoot('dp-core-only-');
       try {
         const rootClosure = packedOwnedRuntimeClosure(['@agimon-ai/doompi']);
-        // Voice owns shared contracts, so its runtime closure is intentionally installed.
-        expect(selectablePackageNames.filter((name) => rootClosure.has(name))).toEqual(['@agimon-ai/doompi-voice']);
+        expect(selectablePackageNames.filter((name) => rootClosure.has(name))).toEqual([]);
         expect(rootClosure.has('@agimon-ai/doompi-web')).toBe(false);
 
         const install = await installLocalPackages(isolatedConsumer, rootClosure);
         const diagnostics = [install.stderr, install.stdout].filter(Boolean).join('\n');
         expect(install.code, diagnostics || 'root consumer installation failed without output').toBe(0);
         for (const name of selectablePackageNames) {
-          expect(fs.existsSync(installedPackageRoot(isolatedConsumer.root, name)), name).toBe(
-            name === '@agimon-ai/doompi-voice',
-          );
+          expect(fs.existsSync(installedPackageRoot(isolatedConsumer.root, name)), name).toBe(false);
         }
         expect(fs.existsSync(installedPackageRoot(isolatedConsumer.root, '@agimon-ai/doompi-web'))).toBe(false);
 
