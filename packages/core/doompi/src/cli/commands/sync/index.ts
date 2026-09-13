@@ -616,9 +616,9 @@ async function stageSync(
       },
     };
 
-    // Runtime planning exposes the compositions before Pi compilation waits, so
-    // Pi, web, and server compilation can run together. All targets settle before
-    // publishing or removing the generation, so no writer races cleanup.
+    // Runtime compilation writes the package dist files consumed by both the web
+    // and server bundlers. Finish it first so a package clean cannot race either
+    // consumer, then run the independent web and server builds together.
     let resolveCompositions!: (compositions: readonly ExtensionComposition[]) => void;
     let rejectCompositions!: (reason?: unknown) => void;
     const compositionsReady = new Promise<readonly ExtensionComposition[]>((resolve, reject) => {
@@ -636,6 +636,7 @@ async function stageSync(
     });
     void runtimeBuild.catch(rejectCompositions);
     const webBuild = (async () => {
+      await runtimeBuild;
       const webProgress = progress.start(WEB_LABEL, 'bundling the web cockpit plugins');
       const web = await syncWebBundle({
         repoRoot: location.root,
@@ -650,6 +651,7 @@ async function stageSync(
     })();
     const serverBuild = (async () => {
       const compositions = await compositionsReady;
+      await runtimeBuild;
       const apiProgress = progress.start(API_LABEL, 'compiling the server bundle');
       const apiDirectory = path.join(directory, 'api');
       const fingerprint = crypto

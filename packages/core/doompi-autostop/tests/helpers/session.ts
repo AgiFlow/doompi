@@ -1,4 +1,4 @@
-import { installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordis-host';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { vi } from 'vitest';
 
@@ -6,6 +6,7 @@ type Handler = (event: unknown, context: ExtensionContext) => Promise<void> | vo
 
 export interface SessionHarness {
   readonly pi: ExtensionAPI;
+  readonly host: Promise<DoomCordisHostController>;
   readonly context: ExtensionContext;
   readonly shutdown: ReturnType<typeof vi.fn>;
   /** Mutable session state the policy reads through the Pi context. */
@@ -26,26 +27,30 @@ export function createSessionHarness(): SessionHarness {
   const handlers = new Map<string, Handler[]>();
   const busHandlers = new Map<string, Set<(payload: unknown) => void>>();
   const shutdown = vi.fn();
+  const pi = {
+    events: {
+      emit(event: string, payload: unknown) {
+        for (const handler of busHandlers.get(event) ?? []) handler(payload);
+      },
+      on(event: string, handler: (payload: unknown) => void) {
+        const listeners = busHandlers.get(event) ?? new Set();
+        listeners.add(handler);
+        busHandlers.set(event, listeners);
+        return () => listeners.delete(handler);
+      },
+    },
+    on(event: string, handler: Handler) {
+      handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+    },
+  } as unknown as ExtensionAPI;
+  const host = installDoomCordisHost(pi, { mode: 'composed', source: 'autostop-test-host' });
   const harness: SessionHarness = {
-    pi: {
-      events: {
-        emit(event: string, payload: unknown) {
-          for (const handler of busHandlers.get(event) ?? []) handler(payload);
-        },
-        on(event: string, handler: (payload: unknown) => void) {
-          const listeners = busHandlers.get(event) ?? new Set();
-          listeners.add(handler);
-          busHandlers.set(event, listeners);
-          return () => listeners.delete(handler);
-        },
-      },
-      on(event: string, handler: Handler) {
-        handlers.set(event, [...(handlers.get(event) ?? []), handler]);
-      },
-    } as unknown as ExtensionAPI,
+    pi,
+    host,
     context: {
       hasPendingMessages: () => harness.state.hasPendingMessages,
       isIdle: () => harness.state.isIdle,
+      sessionManager: { getSessionId: () => 'autostop-test' },
       shutdown,
     } as unknown as ExtensionContext,
     shutdown,
@@ -57,6 +62,5 @@ export function createSessionHarness(): SessionHarness {
     },
     registered: () => [...handlers.keys()],
   };
-  void installDoomCordisHost(harness.pi, { mode: 'composed', source: 'autostop-test-host' });
   return harness;
 }

@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
-import { createAgentServerService, type HeadlessHub, type HeadlessSessionHost } from '@agimon-ai/doompi-core/server';
+import {
+  createAgentServerService,
+  type HeadlessHub,
+  type HeadlessHubSession,
+  type HeadlessSessionHost,
+} from '@agimon-ai/doompi-core/server';
 import { DOOM_COCKPIT_SERVER_ID, DoomSessionManagementService } from '@agimon-ai/doompi-core/session-protocol';
 import { Client, type ByteTransportFactory } from '@earendil-works/pi-client';
 import WebSocket from 'ws';
@@ -24,6 +29,8 @@ export interface HeadlessSessionOptions {
   id?: string;
   name?: string;
   cwd?: string;
+  workspaceId: string;
+  webComposition: NonNullable<HeadlessHubSession['webComposition']>;
   hub: HeadlessHub;
   headlessUrl: () => string;
   restartHeadless: () => Promise<void>;
@@ -249,7 +256,15 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     dispose: () => runtime.dispose(),
   };
   options.onHost?.(id, host);
-  options.hub.register({ id, name, cwd, createdAt: new Date().toISOString(), host });
+  options.hub.register({
+    id,
+    workspaceId: options.workspaceId,
+    webComposition: options.webComposition,
+    name,
+    cwd,
+    createdAt: new Date().toISOString(),
+    host,
+  });
 
   const injectResponse = (frame: Frame): void => {
     const command = typeof frame.command === 'string' ? frame.command : undefined;

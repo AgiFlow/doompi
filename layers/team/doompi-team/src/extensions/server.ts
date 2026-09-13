@@ -22,6 +22,7 @@ import { resolveTrackedRunId } from '../services/asyncJobTracker';
 import { createBackgroundWorkService } from '../services/backgroundWorkService';
 import { loadConfig } from '../services/config';
 import { createDelegationBridge } from '../services/delegationBridge';
+import { registerDirectRunBackgroundWork } from '../services/directRunBackgroundWork';
 import { DoomTeamExpectedError } from '../services/errors';
 import { toModelInfo } from '../services/modelInfo';
 import { subscribeNativeRunProjection } from '../services/nativeRunProjection';
@@ -304,7 +305,9 @@ export const teamServerFacet = defineServerPlugin({
           ...(config.execution.model ? { parentModel: config.execution.model } : {}),
         }),
       );
-      ctx.provide(DOOM_BACKGROUND_WORK_SERVICE, createBackgroundWorkService(ctx));
+      const backgroundWork = createBackgroundWorkService(ctx);
+      ctx.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork);
+      registerDirectRunBackgroundWork(ctx, backgroundWork, config.execution.sessionId, config.runtime.asyncJobTracker);
       ctx.provide(DOOM_SUBAGENT_POLICY_SERVICE, createSubagentPolicyService(config.runtime.capabilityPolicies));
     }
 

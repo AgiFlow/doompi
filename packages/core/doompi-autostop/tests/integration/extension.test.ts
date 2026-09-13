@@ -1,3 +1,8 @@
+import {
+  DOOM_BACKGROUND_WORK_SERVICE,
+  type BackgroundWorkItem,
+  type DoomBackgroundWorkService,
+} from '@agimon-ai/doompi-core/background-work';
 import { installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -37,6 +42,40 @@ describe('auto-stop Pi factory', () => {
 
     vi.advanceTimersByTime(1);
     expect(session.shutdown).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits until both background runners and agents have finished', async () => {
+    const session = createSessionHarness();
+    const host = await session.host;
+    let items: BackgroundWorkItem[] = [
+      { provider: 'doom-runner', id: 'runner-1', sessionId: 'autostop-test', status: 'running' },
+      { provider: 'team-direct-runs', id: 'agent-1', sessionId: 'autostop-test', status: 'running' },
+    ];
+    const backgroundWork = {
+      generation: 'autostop-background-test',
+      register: vi.fn(),
+      snapshot: (sessionId?: string) => ({
+        items: items.filter((item) => sessionId === undefined || item.sessionId === sessionId),
+        errors: [],
+      }),
+    } as unknown as DoomBackgroundWorkService;
+    const provider = host.root.plugin((context) => context.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork));
+    await provider;
+    await autoStopExtension(session.pi);
+
+    await session.fire('agent_settled');
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).not.toHaveBeenCalled();
+
+    items = items.filter((item) => item.provider !== 'doom-runner');
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).not.toHaveBeenCalled();
+
+    items = [];
+    vi.advanceTimersByTime(cooldownMs);
+    expect(session.shutdown).toHaveBeenCalledTimes(1);
+
+    await provider.dispose();
   });
 
   it('leaves a settled session alone while a message is queued', async () => {

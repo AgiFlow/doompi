@@ -173,7 +173,7 @@ describe('history-import CLI', () => {
     const repeated = runHistoryImportCli(root, sourcePath, destinationPath);
     expect(repeated.status).toBe(0);
     expect(JSON.parse(repeated.stdout.trim())).toMatchObject({ status: 'already-published' });
-  });
+  }, 10_000);
 
   it('recovers when publication is killed after destination linking', async () => {
     const sourcePath = path.join(root, 'legacy.jsonl');

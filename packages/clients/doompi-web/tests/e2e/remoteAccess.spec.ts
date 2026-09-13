@@ -25,6 +25,15 @@ function liveState(devices: unknown[] = [], pending: unknown[] = []) {
   };
 }
 
+function offState() {
+  const { publicUrl: _publicUrl, ...state } = liveState().state;
+  return { state: { ...state, status: 'off' } };
+}
+
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/remote', async (route) => await route.fulfill({ json: offState() }));
+});
+
 test('the header button opens remote access on its options, not on a code', async ({ page, cockpit }) => {
   // The bounds belong in front of the decision: turning this on is what puts a
   // shell on this machine within reach of the internet.

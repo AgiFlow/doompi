@@ -112,11 +112,13 @@ describe('standard extension composition', () => {
     const ownEntries = entries.filter((entry) => entry.startsWith(ownDirectory));
 
     expect(ownEntries.length).toBeGreaterThan(0);
-    for (const entry of ownEntries) {
-      expect(fs.existsSync(entry), entry).toBe(true);
-      const module = (await import(pathToFileURL(entry).href)) as { default?: unknown };
-      expect(typeof module.default, entry).toBe('function');
-    }
+    await Promise.all(
+      ownEntries.map(async (entry) => {
+        expect(fs.existsSync(entry), entry).toBe(true);
+        const module = (await import(pathToFileURL(entry).href)) as { default?: unknown };
+        expect(typeof module.default, entry).toBe('function');
+      }),
+    );
   });
 
   it('activates configured defaults before the checked-in copilot feature set', () => {

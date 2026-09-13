@@ -16,6 +16,7 @@ export const runnerServerFacet = defineServerPlugin({
     const dependencies = createRunnerDependencies({ environment: Object.freeze({ ...process.env }) });
     const runtime = createRunnerServerRuntime(dependencies, host.context.directEvents);
     return {
+      services: [runtime.backgroundWorkPlugin],
       api: [api],
       tools: [createHeadlessBashTool({ run: (request) => dependencies.bashRunService.run(request) }, summarizeLog)],
       commands: [createHeadlessRunnersCommand(dependencies)],

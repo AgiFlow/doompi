@@ -228,6 +228,7 @@ test('notifies every controlled tab after a newer verified revision is committed
   };
   context.on('requestfinished', recordDownload);
   publishChangedWebTree(assetPackageRoot);
+  cockpit.republishShell();
 
   const refresh = () =>
     page.evaluate(async () => {

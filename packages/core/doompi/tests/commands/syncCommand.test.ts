@@ -802,62 +802,34 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(await new SyncCommand().execute(['sync', '--check'], environmentFor(root), root, capture().output)).toBe(1);
   });
 
-  it('runs Pi, web, and server compilation together and waits for every target before cleanup', async () => {
+  it('finishes runtime compilation before web and server compilation consume package output', async () => {
     const root = makeRepository();
     const environment = environmentFor(root);
     const location = resolveSyncLocation(root, homeFor(root));
     let failRuntime!: () => void;
-    let finishWeb!: () => void;
-    let failServer!: () => void;
-    let webDirectory = '';
-    const web = vi.spyOn(webSync, 'syncWebBundle').mockImplementation(({ outputDirectory }) => {
-      webDirectory = outputDirectory;
-      return new Promise((resolve) => {
-        finishWeb = () => resolve({ status: 'skipped', reason: 'test' });
-      });
-    });
-    const server = vi.spyOn(serverBundleSync, 'syncServerBundle').mockImplementation(
-      () =>
-        new Promise((_resolve, reject) => {
-          failServer = () => reject(new Error('server compilation stopped'));
-        }),
-    );
+    const web = vi.spyOn(webSync, 'syncWebBundle');
+    const server = vi.spyOn(serverBundleSync, 'syncServerBundle');
     mocks.buildSyncedRuntime.mockImplementationOnce((_repoRoot, _environment, _homeDirectory, options) => {
       options.onCompositionsResolved?.([]);
       return new Promise((_resolve, reject) => {
         failRuntime = () => reject(new Error('runtime compilation failed'));
       });
     });
-    let settled = false;
     const syncing = new SyncCommand().execute(['sync'], environment, root, capture().output);
     const checked = expect(syncing).rejects.toThrow('runtime compilation failed');
-    void syncing.then(
-      () => {
-        settled = true;
-      },
-      () => {
-        settled = true;
-      },
-    );
     try {
-      await vi.waitFor(() => {
-        expect(mocks.buildSyncedRuntime).toHaveBeenCalledOnce();
-        expect(web).toHaveBeenCalledOnce();
-        expect(server).toHaveBeenCalledOnce();
-      });
-      expect(fs.existsSync(path.dirname(webDirectory))).toBe(true);
-      failRuntime();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(settled).toBe(false);
+      await vi.waitFor(() => expect(mocks.buildSyncedRuntime).toHaveBeenCalledOnce());
+      expect(web).not.toHaveBeenCalled();
+      expect(server).not.toHaveBeenCalled();
       expect(fs.existsSync(location.registrationPath)).toBe(false);
-    } finally {
-      finishWeb();
-      failServer();
+      failRuntime();
       await checked;
+      expect(web).not.toHaveBeenCalled();
+      expect(server).not.toHaveBeenCalled();
+    } finally {
       web.mockRestore();
       server.mockRestore();
     }
-    expect(fs.existsSync(path.dirname(webDirectory))).toBe(false);
   });
 
   it('preserves the selected generation when server bundle compilation fails', async () => {

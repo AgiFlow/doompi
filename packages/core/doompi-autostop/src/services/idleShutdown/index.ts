@@ -7,7 +7,10 @@ import type { IdleShutdown } from './type';
 function readActivity(context: ExtensionContext): SessionActivity {
   return { hasPendingMessages: context.hasPendingMessages(), isIdle: context.isIdle() };
 }
-export function createIdleShutdown(delays: AutoStopDelays): IdleShutdown {
+export function createIdleShutdown(
+  delays: AutoStopDelays,
+  hasActiveBackgroundWork: (context: ExtensionContext) => boolean = () => false,
+): IdleShutdown {
   let shutdownTimer: NodeJS.Timeout | undefined;
 
   const cancelScheduledShutdown = (): void => {
@@ -19,6 +22,10 @@ export function createIdleShutdown(delays: AutoStopDelays): IdleShutdown {
   const scheduleShutdown = (context: ExtensionContext, delayMs: number): void => {
     shutdownTimer = setTimeout(() => {
       shutdownTimer = undefined;
+      if (hasActiveBackgroundWork(context)) {
+        scheduleShutdown(context, delays.cooldownMs);
+        return;
+      }
       const decision = decideOnRecheck(readActivity(context), delays);
       if (decision.action === AUTO_STOP_ACTION.shutdown) {
         context.shutdown();

@@ -1,4 +1,9 @@
 import {
+  DOOM_BACKGROUND_WORK_SERVICE,
+  type BackgroundWorkItem,
+  type DoomBackgroundWorkService,
+} from '@agimon-ai/doompi-core/background-work';
+import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessExecutionContext,
   type DoomHeadlessHook,
@@ -8,9 +13,13 @@ import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DEFAULT_AUTO_STOP_DELAYS } from '../../src/exports';
 import { autoStopServerFacet as autoStopHeadlessFacet } from '../../src/extensions/server';
 
-async function fixture(states: Array<{ hasPendingMessages: boolean; isIdle: boolean }>) {
+async function fixture(
+  states: Array<{ hasPendingMessages: boolean; isIdle: boolean }>,
+  backgroundWork?: DoomBackgroundWorkService,
+) {
   const hooks: DoomHeadlessHook[] = [];
   const shutdown = vi.fn();
   const activity = vi.fn(async () => states.shift() ?? { hasPendingMessages: false, isIdle: true });
@@ -41,6 +50,7 @@ async function fixture(states: Array<{ hasPendingMessages: boolean; isIdle: bool
   const context = new Context();
   context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session' });
   context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  if (backgroundWork) context.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork);
   const dispose = await autoStopHeadlessFacet.apply(context);
   const hook = <E extends DoomHeadlessHook['event']>(event: E): Extract<DoomHeadlessHook, { event: E }> => {
     const found = hooks.find((candidate) => candidate.event === event);
@@ -98,6 +108,35 @@ describe('headless auto-stop activity checks', () => {
     await vi.runAllTimersAsync();
     expect(test.shutdown).toHaveBeenCalledTimes(1);
     expect(test.activity).toHaveBeenCalledTimes(3);
+    await test.dispose?.();
+  });
+
+  it('waits for headless runners and agents before shutting down', async () => {
+    let items: BackgroundWorkItem[] = [
+      { provider: 'doom-runner', id: 'runner-1', sessionId: 'autostop-test' },
+      { provider: 'team-direct-runs', id: 'agent-1', sessionId: 'autostop-test' },
+    ];
+    const backgroundWork = {
+      generation: 'headless-autostop-test',
+      register: vi.fn(),
+      snapshot: (sessionId?: string) => ({
+        items: items.filter((item) => sessionId === undefined || item.sessionId === sessionId),
+        errors: [],
+      }),
+    } as unknown as DoomBackgroundWorkService;
+    const test = await fixture([{ hasPendingMessages: false, isIdle: true }], backgroundWork);
+
+    await test.hook('agent_settled').handle({}, test.execution);
+    await vi.advanceTimersByTimeAsync(DEFAULT_AUTO_STOP_DELAYS.cooldownMs);
+    expect(test.shutdown).not.toHaveBeenCalled();
+
+    items = items.filter((item) => item.provider !== 'doom-runner');
+    await vi.advanceTimersByTimeAsync(DEFAULT_AUTO_STOP_DELAYS.cooldownMs);
+    expect(test.shutdown).not.toHaveBeenCalled();
+
+    items = [];
+    await vi.advanceTimersByTimeAsync(DEFAULT_AUTO_STOP_DELAYS.cooldownMs);
+    expect(test.shutdown).toHaveBeenCalledTimes(1);
     await test.dispose?.();
   });
 

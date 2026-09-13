@@ -4,12 +4,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { createHeadlessHub, serveHeadlessServer, type HeadlessSessionHost } from '@agimon-ai/doompi-core/server';
+import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
+import { createWebCompositions } from '@agimon-ai/doompi-core/web-compositions';
 import { test as base } from '@playwright/test';
 
 import { serveWeb } from '../../src/adapters/httpServer';
+import { SYNCED_DIST_ENV, SYNCED_HOME_ENV } from './bundleSetup';
 import { type HeadlessSession, startHeadlessSession } from './headlessSession';
 import { startRunnerApiServer, type RunnerApiServer } from './runnerRuns';
-
 const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
 
 export interface CockpitFixture {
@@ -25,6 +27,8 @@ export interface CockpitFixture {
   agentDir: string;
   /** Isolated temporary root shared by filesystem-backed plugin fixtures. */
   teamTemp: string;
+  /** Publishes the current shell bytes as a fresh synchronized generation. */
+  republishShell(): void;
   url: string;
 }
 
@@ -73,7 +77,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   },
   cockpit: async ({ sessionCount, assets, assetPackageRoot }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-e2e-'));
-    const syncedDist = process.env.DOOMPI_E2E_SYNCED_DIST;
+    const syncedDist = process.env[SYNCED_DIST_ENV];
     if (assets === 'synced' && (syncedDist === undefined || syncedDist === ''))
       throw new Error('global setup did not publish the synchronized web bundle');
 
@@ -86,6 +90,30 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     fs.mkdirSync(teamTemp, { recursive: true });
     fs.mkdirSync(agentDir, { recursive: true });
 
+    const assetsDir = assets === 'synced' ? syncedDist! : path.join(assetPackageRoot ?? packageRoot, 'dist', 'web');
+    const syncedHome = process.env[SYNCED_HOME_ENV];
+    if (syncedHome === undefined || syncedHome === '')
+      throw new Error('global setup did not publish its isolated home');
+    const workspaceRoot = fileURLToPath(new URL('../../../../../', import.meta.url));
+    const registration = readSyncRegistration(workspaceRoot, syncedHome);
+    if (registration?.webDirectory === null || registration?.webDirectory === undefined)
+      throw new Error('global setup did not publish a web registration');
+    const workspaceId = registration.identity.worktreeId;
+    const webCompositions = createWebCompositions(path.join(root, 'web-compositions'), () => undefined);
+    let shellGeneration = 0;
+    const republishShell = (): void => {
+      shellGeneration += 1;
+      webCompositions.publishShell({
+        ...registration,
+        generation: `${registration.generation}-e2e-${String(shellGeneration)}`,
+        webDirectory: assetsDir,
+      });
+    };
+    republishShell();
+    const globalComposition = webCompositions.publish({ scope: 'global' }, registration, []);
+    const workspaceComposition = webCompositions.publish({ scope: 'workspace', workspaceId }, registration, []);
+    if (globalComposition === undefined || workspaceComposition === undefined)
+      throw new Error('global setup did not publish the E2E web compositions');
     const runnerServers = new Map<string, RunnerApiServer>();
     const hosts = new Map<string, HeadlessSessionHost>();
     const manager = {
@@ -117,12 +145,34 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       },
     });
 
-    let headless = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'e2e-headless-token' });
+    let headless = await serveHeadlessServer({
+      headlessHub: hub,
+      port: 0,
+      token: 'e2e-headless-token',
+      requestAsset: (request) => webCompositions.request(request),
+      compositions: () => ({
+        global: globalComposition,
+        publicKey: webCompositions.publicKey(),
+        shell: webCompositions.shellTrust(),
+        workspaces: [{ id: workspaceId, root: workRoot, webComposition: workspaceComposition }],
+      }),
+    });
     const headlessUrl = (): string => headless.url;
     const restartHeadless = async (): Promise<void> => {
       const port = Number(new URL(headless.url).port);
       await headless.close();
-      headless = await serveHeadlessServer({ headlessHub: hub, port, token: 'e2e-headless-token' });
+      headless = await serveHeadlessServer({
+        headlessHub: hub,
+        port,
+        token: 'e2e-headless-token',
+        requestAsset: (request) => webCompositions.request(request),
+        compositions: () => ({
+          global: globalComposition,
+          publicKey: webCompositions.publicKey(),
+          shell: webCompositions.shellTrust(),
+          workspaces: [{ id: workspaceId, root: workRoot, webComposition: workspaceComposition }],
+        }),
+      });
     };
 
     const sessions: HeadlessSession[] = [];
@@ -134,6 +184,12 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
           id,
           name: `session-${index + 1}`,
           cwd: path.join(workRoot, id),
+          workspaceId,
+          webComposition:
+            webCompositions.publish({ scope: 'session', sessionId: id }, registration, []) ??
+            (() => {
+              throw new Error(`global setup did not publish the '${id}' web composition`);
+            })(),
           hub,
           headlessUrl,
           restartHeadless,
@@ -142,7 +198,6 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       );
     }
 
-    const assetsDir = assets === 'synced' ? syncedDist! : path.join(assetPackageRoot ?? packageRoot, 'dist', 'web');
     const web = await serveWeb({
       port: 0,
       assetsDir,
@@ -158,6 +213,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         runnerStore,
         agentDir,
         teamTemp,
+        republishShell,
         url: web.url,
       });
     } finally {
@@ -165,6 +221,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       await headless.close();
       for (const session of sessions) await session.close();
       for (const server of runnerServers.values()) await server.close();
+      webCompositions.close();
       fs.rmSync(root, { recursive: true, force: true });
     }
   },
