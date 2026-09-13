@@ -1,3 +1,19 @@
+## 0.0.1-alpha.66 (2026-09-13)
+
+### 🚀 Features
+
+- refactor DoomPi kernel and server packages ([59fca629](https://github.com/AgiFlow/doompi/commit/59fca629))
+- **doompi:** add scoped mounts and SQLite transcripts ([10ce0acb](https://github.com/AgiFlow/doompi/commit/10ce0acb))
+- **doompi:** complete headless interaction support ([06f151a4](https://github.com/AgiFlow/doompi/commit/06f151a4))
+- **doompi:** complete headless server migration ([0ce9b863](https://github.com/AgiFlow/doompi/commit/0ce9b863))
+- **doompi:** checkpoint bundle and headless host migration ([b01c4a75](https://github.com/AgiFlow/doompi/commit/b01c4a75))
+- **server-facet:** land the server facet contract, hosts, pilots and lockdown ([d170e54c](https://github.com/AgiFlow/doompi/commit/d170e54c))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.65 (2026-09-09)
 
 This was a version bump only for @agimon-ai/vibe-lint-plugin-doom-extension to align it with other projects, there were no code changes.

@@ -1,3 +1,17 @@
+## 0.0.1-alpha.29 (2026-09-13)
+
+### 🚀 Features
+
+- refactor DoomPi kernel and server packages ([59fca629](https://github.com/AgiFlow/doompi/commit/59fca629))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.65
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.28 (2026-09-09)
 
 ### 🧱 Updated Dependencies

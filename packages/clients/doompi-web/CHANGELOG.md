@@ -1,3 +1,44 @@
+## 0.0.1-alpha.34 (2026-09-13)
+
+### 🚀 Features
+
+- add API contracts and expand voice runtime ([99940bd1](https://github.com/AgiFlow/doompi/commit/99940bd1))
+- refactor DoomPi kernel and server packages ([59fca629](https://github.com/AgiFlow/doompi/commit/59fca629))
+- **doompi:** add scoped mounts and SQLite transcripts ([10ce0acb](https://github.com/AgiFlow/doompi/commit/10ce0acb))
+- **doompi:** complete headless interaction support ([06f151a4](https://github.com/AgiFlow/doompi/commit/06f151a4))
+- **doompi:** complete headless server migration ([0ce9b863](https://github.com/AgiFlow/doompi/commit/0ce9b863))
+- **doompi:** checkpoint bundle and headless host migration ([b01c4a75](https://github.com/AgiFlow/doompi/commit/b01c4a75))
+- **server-facet:** land the server facet contract, hosts, pilots and lockdown ([d170e54c](https://github.com/AgiFlow/doompi/commit/d170e54c))
+
+### 🩹 Fixes
+
+- **doompi-web:** rebuild proxied content length ([9519eddf](https://github.com/AgiFlow/doompi/commit/9519eddf))
+- **doompi-web:** stabilize migrated browser fixtures ([06b09288](https://github.com/AgiFlow/doompi/commit/06b09288))
+- **web:** flush frames after reconnect ([c9eeed78](https://github.com/AgiFlow/doompi/commit/c9eeed78))
+- support concurrent cockpit session clients ([524461b1](https://github.com/AgiFlow/doompi/commit/524461b1))
+- guard session client attachment lifecycle ([2ab9ea20](https://github.com/AgiFlow/doompi/commit/2ab9ea20))
+- stabilize server and web integration tests ([5bdc3c8c](https://github.com/AgiFlow/doompi/commit/5bdc3c8c))
+- **doompi-web:** repair browser e2e runtime regressions ([ccdfaa60](https://github.com/AgiFlow/doompi/commit/ccdfaa60))
+- **doompi-web:** preserve streamed session metadata ([36a15fd0](https://github.com/AgiFlow/doompi/commit/36a15fd0))
+- stabilize runtime and web test cleanup ([b9b0454a](https://github.com/AgiFlow/doompi/commit/b9b0454a))
+- stabilize CI runtime checks ([2590e66d](https://github.com/AgiFlow/doompi/commit/2590e66d))
+- keep active sessions alive ([d810f4c6](https://github.com/AgiFlow/doompi/commit/d810f4c6))
+- **doompi-web:** declare protocol test dependency ([370b4eff](https://github.com/AgiFlow/doompi/commit/370b4eff))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.29
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.31
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.65
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.33 (2026-09-09)
 
 ### 🚀 Features
