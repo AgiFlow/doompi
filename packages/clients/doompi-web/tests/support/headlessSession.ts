@@ -37,7 +37,6 @@ export interface HeadlessSession {
   readonly received: Frame[];
   emit(frame: Frame): void;
   setSessionStats(stats: HeadlessSessionStats): void;
-  clearReceived(): void;
   waitForAttach(timeoutMs?: number): Promise<void>;
   waitForCommand(type: string, timeoutMs?: number): Promise<Frame>;
   dropClient(): void;
@@ -182,7 +181,9 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
   const readEntries = async (): Promise<{ entries: unknown[]; leafId: string | null }> => {
     flushReconnectFrames();
     record({ type: 'get_entries' });
-    const result = (await answer('get_entries', { entries, leafId: null })) as {
+    const tip = entries.at(-1);
+    const leafId = typeof tip === 'object' && tip !== null && 'id' in tip && typeof tip.id === 'string' ? tip.id : null;
+    const result = (await answer('get_entries', { entries, leafId })) as {
       entries: unknown[];
       leafId: string | null;
     };
@@ -197,11 +198,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     harness: {} as never,
     lane: {
       findEntries: async () => (usageEntries.length > 0 ? usageEntries : entries.toReversed()),
-      getTipId: async () => {
-        const tip = entries.at(-1);
-        if (typeof tip !== 'object' || tip === null || !('id' in tip) || typeof tip.id !== 'string') return null;
-        return tip.id;
-      },
+      getTipId: async () => (await readEntries()).leafId,
     } as never,
     exited,
     storageQuarantined: false,
@@ -514,9 +511,6 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
           },
         },
       ];
-    },
-    clearReceived() {
-      received.splice(0);
     },
     waitForAttach: async (timeoutMs = 5000) => {
       if (timeoutMs <= 0) throw new Error('Timed out waiting for the cockpit to attach.');

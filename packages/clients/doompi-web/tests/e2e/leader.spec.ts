@@ -126,6 +126,7 @@ test.describe('with the synced bundle, whose plugins declare leader keys', () =>
 
     await page.keyboard.press('Control+k');
     await expect(page.getByTestId('palette')).toBeVisible();
+    await expect(page.locator('[data-testid^="palette-item-"][data-key="w"]')).toHaveCount(1);
     await page.keyboard.press('w');
     await expect(page.getByTestId('palette')).toHaveAttribute('data-path', 'w');
     await page.keyboard.press('e');
@@ -152,6 +153,8 @@ test.describe('with the synced bundle, whose plugins declare leader keys', () =>
     cockpit.session.emit(COMMANDS);
 
     await page.keyboard.press('Control+k');
+    await expect(page.getByTestId('palette')).toBeVisible();
+    await expect(page.locator('[data-testid^="palette-item-"][data-key="a"]')).toHaveCount(1);
     await page.keyboard.press('a');
     await page.keyboard.press('r');
     await expect(page).toHaveURL(/\/subagents-fleet$/);

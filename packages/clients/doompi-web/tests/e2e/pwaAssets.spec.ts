@@ -57,10 +57,36 @@ async function bundleSnapshot(page: Page): Promise<BundleSnapshot> {
     const cacheNames = (await caches.keys()).filter((name) =>
       name.startsWith(`doompi-bundle-${String(envelope.manifest.revision)}-`),
     );
-    if (cacheNames.length !== 1 || cacheNames[0] === undefined) {
-      throw new Error(`Expected one active verified bundle cache, found ${String(cacheNames.length)}.`);
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('doompi-pwa');
+      request.addEventListener('success', () => resolve(request.result), { once: true });
+      request.addEventListener(
+        'error',
+        () => reject(request.error ?? new Error('The PWA database could not be opened.')),
+        {
+          once: true,
+        },
+      );
+    });
+    const transaction = database.transaction('state', 'readonly');
+    const active = await new Promise<{ cacheName?: unknown } | undefined>((resolve, reject) => {
+      const request = transaction.objectStore('state').get('active-bundle');
+      request.addEventListener('success', () => resolve(request.result as { cacheName?: unknown } | undefined), {
+        once: true,
+      });
+      request.addEventListener(
+        'error',
+        () => reject(request.error ?? new Error('The active bundle could not be read.')),
+        {
+          once: true,
+        },
+      );
+    });
+    database.close();
+    if (typeof active?.cacheName !== 'string' || !cacheNames.includes(active.cacheName)) {
+      throw new Error('The active verified bundle cache is unavailable.');
     }
-    const cacheName = cacheNames[0];
+    const cacheName = active.cacheName;
     const cachedPaths = (await (await caches.open(cacheName)).keys()).map((request) => new URL(request.url).pathname);
     return { cacheName, cachedPaths, manifest: envelope.manifest, optionalPaths: policy.optional };
   });

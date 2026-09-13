@@ -71,7 +71,6 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     await Promise.all(cockpit.sessions.map(async (session) => await session.waitForCommand('get_state')));
     await page.goto('about:blank');
     for (const session of cockpit.sessions) {
-      session.clearReceived();
       const waitForAttach = session.waitForAttach.bind(session);
       session.waitForAttach = async (timeoutMs = 5000): Promise<void> => {
         await waitForAttach(timeoutMs);

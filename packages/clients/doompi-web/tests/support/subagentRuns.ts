@@ -30,7 +30,7 @@ export function runsDirFor(sessionId: string): string {
 
 export function publishRunStatuses(sessionId: string): void {
   const runs = [...(statuses.get(sessionId)?.values() ?? [])].map((status) => {
-    const rawState = String(status.state ?? 'queued');
+    const rawState = typeof status.state === 'string' ? status.state : 'queued';
     const state = rawState === 'completed' ? 'done' : rawState;
     return { ...status, state, rawState, tail: Array.isArray(status.tail) ? status.tail : [] };
   });
