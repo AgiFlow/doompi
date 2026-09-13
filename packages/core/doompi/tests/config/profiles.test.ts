@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import {
   applyProfileEnvironment,
   buildPersonaPrompt,
@@ -9,11 +10,12 @@ import {
   replaceProfileEnvironment,
   resolveProfile,
 } from '@agimon-ai/doompi-config/profiles';
-import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-extension-contracts/mcp-session';
+import { DOOM_MCP_SESSION_ENV_VAR } from '@agimon-ai/doompi-core/mcp-session';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createRuntimeExtensionPlan } from '../../src/adapters/runtimeBundle.ts';
-import type { HarnessOptions } from '../../src/types/interfaces/harness';
-import { buildHarnessContext, resolveHarnessProfile } from '../../src/exports/services/harnessContext';
+
+import { createRuntimeExtensionPlan } from '../../src/builders/cli/runtimeBundle';
+import type { HarnessOptions } from '../../src/composition/types/harness';
+import { buildHarnessContext, resolveHarnessProfile } from '../../src/exports/harnessContext';
 
 let root: string;
 

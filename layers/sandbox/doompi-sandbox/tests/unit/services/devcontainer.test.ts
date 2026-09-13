@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   bootstrapCommand,
   containerWorkspacePath,
@@ -6,7 +7,7 @@ import {
   devcontainerExecArgs,
   devcontainerUpArgs,
   parseDevcontainerUp,
-} from '../../../src/services/devcontainer.ts';
+} from '../../../src/services/devcontainer';
 
 describe('devcontainerUpArgs', () => {
   it('brings the workspace container up and asks for machine readable output', () => {

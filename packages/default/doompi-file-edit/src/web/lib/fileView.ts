@@ -1,7 +1,8 @@
 import { grammarKeyOf, mediaKindOf } from '@agimon-ai/doompi-web-components';
-import type { FileEditTool } from '../../types/domain.ts';
-import type { FileEditsDiffHunk } from '../../types/fileEditsApi.ts';
-import type { FilesItemView } from '../../types/webFiles.ts';
+
+import type { FileEditTool } from '../../types/domain';
+import type { FileEditsDiffHunk } from '../../types/fileEditsApi';
+import type { FilesItemView } from '../../types/webFiles';
 
 /**
  * Pure view logic the file surfaces share: how a change is labelled, how a

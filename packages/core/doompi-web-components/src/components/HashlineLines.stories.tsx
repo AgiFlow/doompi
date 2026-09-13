@@ -3,8 +3,8 @@
  * imported. The fixtures are what hashlineBody hands the component: a read is
  * one file's anchored lines, a grep groups matches under each path.
  */
-import type { PresentedLine } from '../lib/hashlineView.ts';
-import { HashlineLines } from './HashlineLines.tsx';
+import type { PresentedLine } from '../lib/hashlineView';
+import { HashlineLines } from './HashlineLines';
 
 const READ_LINES: readonly PresentedLine[] = [
   {
@@ -18,10 +18,10 @@ const READ_LINES: readonly PresentedLine[] = [
 
 const GREP_LINES: readonly PresentedLine[] = [
   { type: 'file', path: 'src/components/Badge.tsx' },
-  { type: 'tagged', value: { line: 3, content: "import { cn } from '../lib/cn.ts';", marker: 'match' } },
+  { type: 'tagged', value: { line: 3, content: "import { cn } from '../lib/cn';", marker: 'match' } },
   { type: 'tagged', value: { line: 4, content: '', marker: 'context' } },
   { type: 'file', path: 'src/components/Tabs.tsx' },
-  { type: 'tagged', value: { line: 5, content: "import { cn } from '../lib/cn.ts';", marker: 'match' } },
+  { type: 'tagged', value: { line: 5, content: "import { cn } from '../lib/cn';", marker: 'match' } },
   { type: 'tagged', value: { line: 6, content: '', marker: 'context' } },
 ];
 

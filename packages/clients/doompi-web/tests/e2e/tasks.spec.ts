@@ -1,35 +1,35 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, test } from '../support/cockpit.ts';
+
+import { expect, test } from '../support/cockpit';
 
 test.use({ assets: 'synced' });
 
-function writeTasks(agentDir: string): void {
+function writeTasks(agentDir: string, publish: (document: Record<string, unknown>) => void): void {
   const storePath = path.join(agentDir, 'doom-task', 's1', 'tasks.json');
+  const document = {
+    version: 1,
+    rev: 1,
+    nextId: 6,
+    tasks: [
+      { id: 1, subject: 'Pending task', description: 'waiting to start', status: 'pending', blockedBy: [] },
+      {
+        id: 2,
+        subject: 'Running task',
+        description: 'original detail',
+        activeForm: 'working now',
+        status: 'in_progress',
+        delegation: { agent: 'worker' },
+        blockedBy: [],
+      },
+      { id: 3, subject: 'Completed task', status: 'completed', blockedBy: [] },
+      { id: 4, subject: 'Failed task', status: 'failed', blockedBy: [] },
+      { id: 5, subject: 'Deleted task', status: 'deleted', blockedBy: [] },
+    ],
+  };
   fs.mkdirSync(path.dirname(storePath), { recursive: true });
-  fs.writeFileSync(
-    storePath,
-    JSON.stringify({
-      version: 1,
-      rev: 1,
-      nextId: 6,
-      tasks: [
-        { id: 1, subject: 'Pending task', description: 'waiting to start', status: 'pending', blockedBy: [] },
-        {
-          id: 2,
-          subject: 'Running task',
-          description: 'original detail',
-          activeForm: 'working now',
-          status: 'in_progress',
-          delegation: { agent: 'worker' },
-          blockedBy: [],
-        },
-        { id: 3, subject: 'Completed task', status: 'completed', blockedBy: [] },
-        { id: 4, subject: 'Failed task', status: 'failed', blockedBy: [] },
-        { id: 5, subject: 'Deleted task', status: 'deleted', blockedBy: [] },
-      ],
-    }),
-  );
+  fs.writeFileSync(storePath, JSON.stringify(document));
+  publish(document);
 }
 
 async function expectLatestPrompt(cockpit: { session: { received: Array<Record<string, unknown>> } }, message: string) {
@@ -39,9 +39,10 @@ async function expectLatestPrompt(cockpit: { session: { received: Array<Record<s
 }
 
 test('task actions use an accessible menu and leave one prompt per command', async ({ page, cockpit }) => {
-  writeTasks(cockpit.agentDir);
+  writeTasks(cockpit.agentDir, (document) => cockpit.publishSessionEvent('task_graph', 's1', document));
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
+  writeTasks(cockpit.agentDir, (document) => cockpit.publishSessionEvent('task_graph', 's1', document));
 
   const pendingMenu = page.getByTestId('activity-task-menu-1');
   const runningMenu = page.getByTestId('activity-task-menu-2');

@@ -5,8 +5,9 @@
  * rather than a hand-rolled stub, so a change to the tool contract breaks this
  * story at the type level instead of silently drifting.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { LsToolMessage } from './LsToolMessage.tsx';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { LsToolMessage } from './LsToolMessage';
 
 const ENTRIES = ['components/', 'lib/', 'stores/', 'index.ts', 'plugin.ts', 'toolRenderers.ts'].join('\n');
 

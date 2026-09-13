@@ -13,23 +13,25 @@
  */
 
 import { homedir } from 'node:os';
+
 import {
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_OVERLAY_ACCENT,
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from '@agimon-ai/doompi-ui/components/doomOverlay';
+} from '@agimon-ai/doompi-ui/doom-overlay';
 import { fitStyledLine } from '@agimon-ai/doompi-ui/rendering';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
-import { MSG_NO_TASKS, TASK_STATUSES } from '../schemas/task.ts';
-import { applyTaskMutation, isCommittingOp, type Op, singleItemOutcome } from '../services/store/reducer.ts';
-import { isBlocked } from '../services/store/taskGraph.ts';
-import type { TaskStore } from '../adapters/store/taskStore';
-import type { Task, TaskItemMutation } from '../services/store/types.ts';
-import { overlayStatusGlyph, STATUS_LABEL } from './format.ts';
-import { countTasks, visibleTasks } from './selectors.ts';
+
+import type { Task, TaskItemMutation } from '../models/task';
+import { isBlocked } from '../models/taskGraph';
+import { MSG_NO_TASKS, TASK_STATUSES } from '../schemas/task';
+import { applyTaskMutation, isCommittingOp, type Op, singleItemOutcome } from '../services/reducer';
+import type { TaskStore } from '../services/taskStore';
+import { overlayStatusGlyph, STATUS_LABEL } from './format';
+import { countTasks, visibleTasks } from './selectors';
 
 export const TASK_SPACE_OVERLAY_OPTIONS = DOOM_FULLSCREEN_UI_OPTIONS.overlayOptions;
 

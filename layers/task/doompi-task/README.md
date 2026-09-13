@@ -130,3 +130,5 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+Named Pi and server factories live in `src/extensions`. Controllers declare commands, tools consume services, and `models` contains the durable task document types and graph. Services own persistence, delegation, and configuration. Public entries are flat files in `src/exports`, with flat package subpaths. Pi shutdown aborts the factory signal to fence pending session initialization immediately; idempotent `onStop` and `onDispose` cleanup awaits pending work before disposing the store and telemetry.

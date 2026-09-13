@@ -15,7 +15,7 @@ export {
   describeSealedFailure,
   infoFor,
   isSealedEnvelope,
-} from '../types/sealedChannel.ts';
+} from '../types/sealedChannel';
 export {
   BUNDLE_MANIFEST_ROUTE,
   BUNDLE_MANIFEST_VERSION,
@@ -27,5 +27,5 @@ export {
   digestFor,
   isBundleManifest,
   isSignedBundleManifest,
-} from '../types/bundleManifest.ts';
-export { type SerialQueue, createSerialQueue } from '../services/serialQueue.ts';
+} from '../types/bundleManifest';
+export { type SerialQueue, createSerialQueue } from '../services/serialQueue';

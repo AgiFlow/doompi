@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 /** What every surface is coloured from; reading it proves a theme actually landed. */
 const BACKGROUND = '--doom-bg';

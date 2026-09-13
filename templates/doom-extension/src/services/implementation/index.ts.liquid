@@ -1,0 +1,13 @@
+import type { {{ capabilityName | pascalCase }}Port } from './type';
+
+/**
+ * {{ capabilityDescription }}
+ *
+ * One implementation per service module. This is where {{ implementationName | kebabCase }} enters the
+ * package; consumers import the interface from this service’s type module.
+ */
+export class {{ implementationName | pascalCase }}{{ capabilityName | pascalCase }}Service implements {{ capabilityName | pascalCase }}Port {
+  async read(): Promise<string | undefined> {
+    return undefined;
+  }
+}

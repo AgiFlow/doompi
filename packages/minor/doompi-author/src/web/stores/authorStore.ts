@@ -1,8 +1,9 @@
-import { defineSessionStore, type SessionChannelContribution } from '@agimon-ai/doompi-web-contracts';
-import { authorChannelType, type AuthorHubMessage, type AuthorWebView } from '../../types/webAuthor.ts';
-import { applyAuthorHubMessage, authorBridgeView, dropAuthorViewportSession } from '../api/authorBrowserBridge.ts';
-import { clearAuthorGridGeometry } from '../lib/authorGrid.ts';
-import { dropAuthorSession } from './authorWorkspaceStore.ts';
+import { defineSessionStore, type SessionChannelContribution } from '@agimon-ai/doompi-core/web';
+
+import { authorChannelType, type AuthorHubMessage, type AuthorWebView } from '../../types/webAuthor';
+import { applyAuthorHubMessage, authorBridgeView, dropAuthorViewportSession } from '../api/authorBrowserBridge';
+import { clearAuthorGridGeometry } from '../lib/authorGrid';
+import { dropAuthorSession } from './authorWorkspaceStore';
 
 export const author = defineSessionStore<AuthorWebView>({ activation: 'inactive', capabilityCount: 0 });
 

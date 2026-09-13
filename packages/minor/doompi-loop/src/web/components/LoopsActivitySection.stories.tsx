@@ -3,9 +3,10 @@
  * looking for a bare `const meta`. The section reads its rows out of one
  * session status string, so each variant is a different value for that key.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { LOOP_VIEW_STATUS_KEY } from '../../types/loopView.ts';
-import { LoopsActivitySection } from './LoopsActivitySection.tsx';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { LOOP_VIEW_STATUS_KEY } from '../../types/loopView';
+import { LoopsActivitySection } from './LoopsActivitySection';
 
 const LOOPS = JSON.stringify([
   { instanceId: 'loop-1', label: 'nightly digest', detail: 'every 30m · next in 12m', state: 'running' },

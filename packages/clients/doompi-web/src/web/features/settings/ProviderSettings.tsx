@@ -1,9 +1,10 @@
 import { Button, Dot, EmptyState, Input, Panel, Spinner } from '@agimon-ai/doompi-web-components';
 import { useCallback, useEffect, useState } from 'react';
-import type { AuthMethodType, LoginFlowSnapshot, ProviderAuthSummary } from '../../../types/auth.ts';
-import { answerLogin, cancelLogin, listProviders, logoutProvider, readLogin, startLogin } from '../../lib/authApi.ts';
-import { LoginFlowDialog, METHOD_LABEL } from './LoginFlowDialog.tsx';
-import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
+
+import type { AuthMethodType, LoginFlowSnapshot, ProviderAuthSummary } from '../../../types/auth';
+import { answerLogin, cancelLogin, listProviders, logoutProvider, readLogin, startLogin } from '../../lib/authApi';
+import { LoginFlowDialog, METHOD_LABEL } from './LoginFlowDialog';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 const FLOW_POLL_MS = 500;
 /** The auth source Pi reports for a credential its own /login stored; the only kind /logout removes. */

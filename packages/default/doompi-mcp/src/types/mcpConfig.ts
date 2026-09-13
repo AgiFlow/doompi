@@ -1,5 +1,5 @@
-import type { DoomMcpProjectionSource } from '@agimon-ai/doompi-extension-contracts/mcp-projection';
-import type { DoomMcpSessionAllowlist, DoomMcpSessionConfig } from '@agimon-ai/doompi-extension-contracts/mcp-session';
+import type { DoomMcpProjectionSource } from '@agimon-ai/doompi-core/mcp-projection';
+import type { DoomMcpSessionAllowlist, DoomMcpSessionConfig } from '@agimon-ai/doompi-core/mcp-session';
 import type { ConfigMergeStrategy, ConfigSourceFormat } from '@agimon-ai/mcp-proxy';
 
 /** Domain policy. An absent or empty list means "keep everything". */

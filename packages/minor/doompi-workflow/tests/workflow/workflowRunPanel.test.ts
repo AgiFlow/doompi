@@ -1,7 +1,8 @@
+import type { DoomOverlayTui } from '@agimon-ai/doompi-ui/doom-overlay';
 import type { Theme } from '@earendil-works/pi-coding-agent';
-import type { DoomOverlayTui } from '@agimon-ai/doompi-ui/components/doomOverlay';
-import { describe, expect, it, vi } from 'vitest';
 import { visibleWidth } from '@earendil-works/pi-tui';
+import { describe, expect, it, vi } from 'vitest';
+
 import {
   runPanelUiOptions,
   WorkflowRunPanelComponent,

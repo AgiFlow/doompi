@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
+
 import {
   AUTHOR_GRID_COLUMNS,
   AUTHOR_GRID_SIZE,
   clearAuthorGridGeometry,
   updateAuthorGridGeometry,
-} from '../lib/authorGrid.ts';
-import type { AuthorWorkspaceDocument } from '../stores/authorWorkspaceStore.ts';
+} from '../lib/authorGrid';
+import type { AuthorWorkspaceDocument } from '../stores/authorWorkspaceStore';
 
 export function autonomousVoiceGridVisible(statuses: Readonly<Record<string, string>>): boolean {
   return statuses['doom-voice']?.trimStart().startsWith('voice auto:') === true;

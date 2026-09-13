@@ -83,3 +83,13 @@ it. It is not selectable from `.doom/modes.yaml`; it reads `.doom/domains.yaml`.
 ## License
 
 MIT
+
+Pi, server, and web entries live in `src/extensions`; the Node entries build directly to
+`/extensions/pi` and `/extensions/server`. Flat public exports expose domain catalogs,
+resource selection, MCP configuration, and plugin materialization helpers.
+
+The Pi declaration installs optional Config, Transition, and Voice service bindings, then
+registers command and event declarations. Session startup waits for the runtime bindings before
+publishing domain status. `onStop` cancels a pending catalog-settle notification and disposes
+handoffs; `onDispose` also handles partial startup cleanup. The heavy picker and domain application
+modules remain lazy imports.

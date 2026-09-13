@@ -1,14 +1,12 @@
 export {
+  DOOM_CONFIG_SERVICE,
   type AutocompactModeConfig,
   type AutocompactOverrideConfig,
   type AutocompactThresholdConfig,
   type AutocompactTokenConfig,
   type ConfigDiagnostic,
-  type LenientParseOptions,
-  type LenientParseResult,
   type ConfigValueOrigin,
   type DeepReadonly,
-  DOOM_CONFIG_SERVICE,
   type DoomConfig,
   type DoomConfigContext,
   type DoomConfigLayer,
@@ -24,6 +22,8 @@ export {
   type HarnessState,
   type IDoomConfigLoader,
   type IDoomConfigService,
+  type LenientParseOptions,
+  type LenientParseResult,
   type PackageAttribution,
   type PlanningAgentConfig,
   type PlanningModeConfig,
@@ -40,4 +40,4 @@ export {
   type VoiceModelConfig,
   type VoiceTtsConfig,
   type VoiceTtsEngine,
-} from '../types/config.ts';
+} from '../types/config';

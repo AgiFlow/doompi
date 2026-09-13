@@ -1,7 +1,8 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { ConfigOverlayComponent, type DoomConfigStoreView } from '../../src/exports/components/configOverlay.ts';
-import type { ConfigField, DoomConfigInvocation, DoomConfigSectionView } from '../../src/exports/config.ts';
+
+import type { ConfigField, DoomConfigInvocation, DoomConfigSectionView } from '../../src/exports/config';
+import { ConfigOverlayComponent, type DoomConfigStoreView } from '../../src/exports/configOverlay';
 
 /** Definite accessor so a fixture drifting out of shape fails loudly here. */
 function fieldOf(list: readonly DoomConfigSectionView[], sectionIndex: number, fieldIndex: number): ConfigField {

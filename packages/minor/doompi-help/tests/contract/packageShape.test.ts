@@ -2,6 +2,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -55,24 +56,26 @@ describe('doompi-help package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).not.toContain('./extensions/doom');
     expect(conditions(exportsMap['.'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/pi'])).toEqual(['types', 'import', 'require']);
+    expect(conditions(exportsMap['./extensions/server'])).toEqual(['types', 'import', 'require']);
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });
 
   it('routes Pi discovery through the sole command and typed-mode factory', async () => {
-    const entrySource = await readFile(path.join(packageDirectory, 'src/exports/extensions/pi.ts'), 'utf8');
-    const factorySource = await readFile(path.join(packageDirectory, 'src/adapters/pi/extension.ts'), 'utf8');
+    const entrySource = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
+    const factorySource = await readFile(path.join(packageDirectory, 'src/controllers/helpPiRuntime.ts'), 'utf8');
 
-    expect(entrySource).toContain("from '../../adapters/pi/extension'");
+    expect(entrySource).toContain('definePiExtension');
     expect(entrySource).not.toContain('doom.ts');
-    expect(factorySource).toContain('registerHelpCommand');
+    expect(factorySource).toContain('createHelpCommand');
     expect(factorySource).toContain('registerHelpModeIntegration');
-    expect(factorySource).toContain('connectDoomCordisHost');
-    expect(factorySource).toContain('connection.root.plugin');
+    expect(factorySource).toContain('services:');
+    expect(factorySource).not.toContain('connectDoomCordisHost');
+    expect(factorySource).toContain('commands:');
     expect(factorySource).not.toContain('new Context()');
   });
 

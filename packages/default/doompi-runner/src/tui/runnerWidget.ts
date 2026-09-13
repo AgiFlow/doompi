@@ -1,10 +1,10 @@
 import type { ExtensionUIContext, Theme } from '@earendil-works/pi-coding-agent';
 import { type TUI, truncateToWidth } from '@earendil-works/pi-tui';
-import type { RunnerRecord } from '../types/runnerRegistry';
-import { formatWidgetHeading, formatWidgetLine, WIDGET_KEY } from './format.ts';
 
-const MAX_LINES = 8;
-const ELLIPSIS = '…';
+import { WIDGET_KEY } from '../constants/format';
+import { ELLIPSIS, MAX_LINES } from '../constants/runnerWidget';
+import type { RunnerRecord } from '../types/runnerRegistry';
+import { formatWidgetHeading, formatWidgetLine } from './format';
 
 export interface RunnerWidgetOptions {
   getRunners: () => readonly RunnerRecord[];

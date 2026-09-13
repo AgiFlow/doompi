@@ -1,4 +1,4 @@
-import type { SavedPromptView } from '../../types/webPrompts.ts';
+import type { SavedPromptView } from '../../types/webPrompts';
 
 /**
  * What the panel does to the library, independent of how it is drawn.

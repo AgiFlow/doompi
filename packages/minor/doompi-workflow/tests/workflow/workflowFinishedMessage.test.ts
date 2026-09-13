@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isWorkflowFinishedRuns,
-  registerWorkflowFinishedRenderer,
+  createWorkflowFinishedRenderer,
   renderWorkflowFinished,
   WORKFLOW_FINISHED_MESSAGE,
   type WorkflowFinishedRun,
@@ -68,7 +68,7 @@ describe('isWorkflowFinishedRuns', () => {
   });
 });
 
-describe('registerWorkflowFinishedRenderer', () => {
+describe('createWorkflowFinishedRenderer', () => {
   function fakePi(): {
     pi: ExtensionAPI;
     registeredType: () => string | undefined;
@@ -95,7 +95,7 @@ describe('registerWorkflowFinishedRenderer', () => {
 
   it('registers under the type the extension sends and renders its runs', () => {
     const host = fakePi();
-    registerWorkflowFinishedRenderer(host.pi);
+    host.pi.registerMessageRenderer(...createWorkflowFinishedRenderer());
 
     const component = host.render({ runs: [run()] }, 'Workflow run … completed.');
 
@@ -105,7 +105,7 @@ describe('registerWorkflowFinishedRenderer', () => {
 
   it('shows the raw summary for a message recorded before runs were attached', () => {
     const host = fakePi();
-    registerWorkflowFinishedRenderer(host.pi);
+    host.pi.registerMessageRenderer(...createWorkflowFinishedRenderer());
 
     const component = host.render({ runIds: ['run-1'] }, 'Workflow run zinc-lynx in workspace default completed.');
 

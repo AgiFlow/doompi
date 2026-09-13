@@ -113,3 +113,9 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+## Extension lifecycle and source layout
+
+`extensions/pi.ts` declares the Autocompact runtime's optional services, typed events, and `onStop` cleanup. Shutdown cancels checkpoint generation and awaits pending work before releasing telemetry and runtime state. Session-tree changes retain their existing generation cancellation behavior. The runtime and policy live in `services/<name>/`, with constants and shared types in dedicated roots.
+
+The direct server entry declares validated configuration resources and a native-fallback status activity from `controllers/serverAutocompact.ts`. The web entry declares settings sections. Flat `exports/` publishes reusable capabilities without forwarding extension entry points.

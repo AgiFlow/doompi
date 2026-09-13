@@ -5,10 +5,11 @@
  * rather than a hand-rolled stub, so a change to the slot contract breaks this
  * story at the type level instead of silently drifting.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { RunnerRunView } from '../../types/webRunners.ts';
-import { runners } from '../stores/runnersStore.ts';
-import { BashToolMessage } from './BashToolMessage.tsx';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import type { RunnerRunView } from '../../types/webRunners';
+import { runners } from '../stores/runnersStore';
+import { BashToolMessage } from './BashToolMessage';
 
 const SESSION_ID = 's1';
 

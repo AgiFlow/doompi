@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+
 import {
   Sheet,
   SheetBody,
@@ -8,7 +9,7 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
-} from '../../src/components/Sheet.tsx';
+} from '../../src/components/Sheet';
 
 describe('sheet composition', () => {
   // Render the semantic sections directly: server rendering does not mount the portal.

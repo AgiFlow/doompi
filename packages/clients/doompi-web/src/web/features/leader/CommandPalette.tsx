@@ -1,3 +1,4 @@
+import type { LeaderBindingContribution, TransientTab } from '@agimon-ai/doompi-core/web';
 import {
   cn,
   CommandEmpty,
@@ -16,18 +17,18 @@ import {
   OptionRow,
   StatusBadge,
 } from '@agimon-ai/doompi-web-components';
-import type { LeaderBindingContribution, TransientTab } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { type LeaderOption, leaderGroup } from '../../lib/leaderTree.ts';
-import { paletteCommands, pluginLeaderBindings } from '../../lib/pluginRegistry.ts';
-import { focusPrompt } from '../../lib/promptFocus.ts';
-import { sendFrame } from '../../lib/transport.ts';
-import { openTransientTab } from '../../stores/transientTabsStore.ts';
-import { useOpenTab } from '../../stores/useOpenTab.ts';
-import { closePalette, paletteStore, setPalettePath, togglePalette } from '../../stores/paletteStore.ts';
-import { runCommand, useActiveSession } from '../../stores/sessionStore.ts';
-import { sessionsStore } from '../../stores/sessionsStore.ts';
+
+import { type LeaderOption, leaderGroup } from '../../lib/leaderTree';
+import { paletteCommands, pluginLeaderBindings } from '../../lib/pluginRegistry';
+import { focusPrompt } from '../../lib/promptFocus';
+import { sendFrame } from '../../lib/transport';
+import { closePalette, paletteStore, setPalettePath, togglePalette } from '../../stores/paletteStore';
+import { sessionsStore } from '../../stores/sessionsStore';
+import { runCommand, useActiveSession } from '../../stores/sessionStore';
+import { openTransientTab } from '../../stores/transientTabsStore';
+import { useOpenTab } from '../../stores/useOpenTab';
 
 const LEADER_PREFIX = 'SPC';
 const SEARCH_KEY = '/';

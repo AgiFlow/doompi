@@ -1,8 +1,9 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { cn } from '../lib/cn.ts';
-import { Dialog, DialogContent, type DialogContentProps, DialogTitle } from './Dialog.tsx';
-import { Input, type InputProps } from './Input.tsx';
-import { OptionLabel, OptionRow, type OptionRowProps } from './OptionList.tsx';
+
+import { cn } from '../lib/cn';
+import { Dialog, DialogContent, type DialogContentProps, DialogTitle } from './Dialog';
+import { Input, type InputProps } from './Input';
+import { OptionLabel, OptionRow, type OptionRowProps } from './OptionList';
 
 /**
  * The command palette's frame, its search strip, its rows, and its hint.

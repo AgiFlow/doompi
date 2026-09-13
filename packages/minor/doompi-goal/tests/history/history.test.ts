@@ -1,12 +1,14 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
-import { acquireHistoryLock } from '../../src/adapters/node/historyLock.ts';
-import { GoalHistoryStore } from '../../src/adapters/node/historyStore.ts';
-import { resolveRepositoryIdentity } from '../../src/adapters/node/repositoryIdentity.ts';
-import { GOAL_HISTORY_MAX_ENTRIES } from '../../src/services/history/historyPolicy.ts';
-import { GoalHistoryService } from '../../src/services/history/historyService.ts';
+
+import { GoalHistoryService } from '../../src/services/history';
+import { GOAL_HISTORY_MAX_ENTRIES } from '../../src/services/history/historyPolicy';
+import { acquireHistoryLock } from '../../src/services/historyLock';
+import { GoalHistoryStore } from '../../src/services/historyStore';
+import { resolveRepositoryIdentity } from '../../src/services/repositoryIdentity';
 
 const temporaryDirectories: string[] = [];
 

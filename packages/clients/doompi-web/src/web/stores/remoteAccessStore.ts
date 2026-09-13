@@ -1,7 +1,6 @@
 import { Store } from '@tanstack/store';
-import type { RemoteAccessSettings, RemoteAccessStateView } from '../../types/remoteAccess.ts';
-import { passkeysAvailable, registerPasskey } from '../lib/webauthnClient.ts';
-import { sealedHttpSession } from '../lib/sealedSession.ts';
+
+import type { RemoteAccessSettings, RemoteAccessStateView } from '../../types/remoteAccess';
 import {
   approvePairing,
   denyPairing,
@@ -11,7 +10,9 @@ import {
   mintPairingCode,
   revokeDevice,
   saveRemoteSettings,
-} from '../lib/remoteApi.ts';
+} from '../lib/remoteApi';
+import { sealedHttpSession } from '../lib/sealedSession';
+import { passkeysAvailable, registerPasskey } from '../lib/webauthnClient';
 
 /** Which panel of the dialog is showing. Options first, then the code to scan. */
 export type RemoteStep = 'closed' | 'options' | 'handover' | 'pairing';

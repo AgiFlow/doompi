@@ -1,6 +1,8 @@
 import path from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HarnessContext } from '../../src/exports/services/harnessContext';
+
+import type { HarnessContext } from '../../src/exports/harnessContext';
 
 const mocks = vi.hoisted(() => ({
   buildHarnessContext: vi.fn(),
@@ -20,36 +22,36 @@ const mocks = vi.hoisted(() => ({
   projectRegistersDoom: vi.fn(),
 }));
 
-vi.mock('../../src/commands/cli/options.ts', () => ({ parseHarnessArgs: mocks.parseHarnessArgs }));
+vi.mock('../../src/cli/options', () => ({ parseHarnessArgs: mocks.parseHarnessArgs }));
 vi.mock('@agimon-ai/doompi-config/domains', () => ({ loadDomains: mocks.loadDomains }));
 vi.mock('@agimon-ai/doompi-config/majorModes', () => ({ loadMajorModesConfig: mocks.loadMajorModesConfig }));
-vi.mock('../../src/adapters/harnessContext.ts', () => ({ buildHarnessContext: mocks.buildHarnessContext }));
-vi.mock('../../src/adapters/layerPackageInstaller.ts', () => ({
+vi.mock('../../src/builders/cli/harnessContext', () => ({ buildHarnessContext: mocks.buildHarnessContext }));
+vi.mock('../../src/composition/layerPackageInstaller', () => ({
   ensureLayerPackages: mocks.ensureLayerPackages,
 }));
-vi.mock('../../src/adapters/runtimeBundle.ts', () => ({ buildRuntimeBundle: mocks.buildRuntimeBundle }));
-vi.mock('../../src/adapters/syncedRuntimeBuilder.ts', () => ({
+vi.mock('../../src/builders/cli/runtimeBundle', () => ({ buildRuntimeBundle: mocks.buildRuntimeBundle }));
+vi.mock('../../src/builders/cli', () => ({
   buildSyncedRuntime: mocks.buildSyncedRuntime,
 }));
-vi.mock('../../src/adapters/syncState.ts', () => ({
+vi.mock('../../src/composition/syncState', () => ({
   computeInputsHash: mocks.computeInputsHash,
   readSyncState: mocks.readSyncState,
   recordResolvedEntries: mocks.recordResolvedEntries,
   syncStateRootMatches: mocks.syncStateRootMatches,
 }));
-vi.mock('../../src/services/extensionAssembler.ts', () => ({
+vi.mock('../../src/builders/cli/extensionAssembler', () => ({
   createLayerResolvers: mocks.createLayerResolvers,
 }));
-vi.mock('../../src/adapters/repository/repository.ts', () => ({
+vi.mock('../../src/composition/repository', () => ({
   resolveDoomConfigurationRoot: mocks.findRepositoryRoot,
 }));
-vi.mock('../../src/commands/syncCommand.ts', () => ({ selectionEnvironment: mocks.selectionEnvironment }));
-vi.mock('../../src/adapters/projectPiSettings.ts', () => ({
+vi.mock('../../src/cli/commands/sync', () => ({ selectionEnvironment: mocks.selectionEnvironment }));
+vi.mock('../../src/builders/cli/projectSettings', () => ({
   DUPLICATE_REGISTRATION_DRIFT: 'duplicate DoomPi registration in .pi/settings.json',
   projectRegistersDoom: mocks.projectRegistersDoom,
 }));
 
-import { BuildCommand, formatBuildResult } from '../../src/commands/buildCommand';
+import { prepareSync, formatBuildResult } from '../../src/cli/commands/sync/prepare';
 
 function capture(): { output: { write(chunk: string): boolean }; text(): string } {
   const chunks: string[] = [];
@@ -113,23 +115,12 @@ describe('BuildCommand', () => {
     });
   });
 
-  it('claims only the build subcommand', () => {
-    const command = new BuildCommand();
-    expect(command.matches(['build'])).toBe(true);
-    expect(command.matches(['sync'])).toBe(false);
-  });
-
   it('warms the selected bundle and always cleans up staged resources', async () => {
     const { output, text } = capture();
     const telemetry = { runInSpan: vi.fn() };
 
     await expect(
-      new BuildCommand(telemetry as never).execute(
-        ['build', '--major-mode', 'copilot'],
-        { DOOMPI_ROOT: './repo' },
-        '/work',
-        output,
-      ),
+      prepareSync(['build', '--major-mode', 'copilot'], { DOOMPI_ROOT: './repo' }, '/work', output, telemetry as never),
     ).resolves.toBe(0);
 
     expect(mocks.findRepositoryRoot).not.toHaveBeenCalled();
@@ -165,7 +156,7 @@ describe('BuildCommand', () => {
     mocks.readSyncState.mockReturnValue(syncedState);
     const { output, text } = capture();
 
-    await new BuildCommand().execute(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', output);
+    await prepareSync(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', output);
 
     expect(mocks.computeInputsHash).toHaveBeenCalledWith('/repo', syncedState.selection, expect.any(String));
     expect(mocks.recordResolvedEntries).toHaveBeenCalledWith(majorModesConfig, layerResolvers);
@@ -179,9 +170,7 @@ describe('BuildCommand', () => {
       throw new Error('sync state version is obsolete');
     });
 
-    await expect(
-      new BuildCommand().execute(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', capture().output),
-    ).resolves.toBe(0);
+    await expect(prepareSync(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', capture().output)).resolves.toBe(0);
 
     expect(mocks.buildSyncedRuntime).not.toHaveBeenCalled();
   });
@@ -190,7 +179,7 @@ describe('BuildCommand', () => {
     mocks.readSyncState.mockReturnValue({ ...syncedState, root: '/other-repository' });
     mocks.syncStateRootMatches.mockReturnValue(false);
 
-    await new BuildCommand().execute(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', capture().output);
+    await prepareSync(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', capture().output);
 
     expect(mocks.syncStateRootMatches).toHaveBeenCalledWith('/repo', '/other-repository');
     expect(mocks.computeInputsHash).not.toHaveBeenCalled();
@@ -201,7 +190,7 @@ describe('BuildCommand', () => {
     mocks.readSyncState.mockReturnValue({ ...syncedState, inputsHash: 'previous-inputs' });
     const { output, text } = capture();
 
-    await new BuildCommand().execute(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', output);
+    await prepareSync(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', output);
 
     expect(mocks.recordResolvedEntries).not.toHaveBeenCalled();
     expect(mocks.buildSyncedRuntime).not.toHaveBeenCalled();
@@ -211,7 +200,7 @@ describe('BuildCommand', () => {
   it('skips synchronized startup output when the composition fingerprint changed', async () => {
     mocks.readSyncState.mockReturnValue({ ...syncedState, compositionFingerprint: 'previous-fingerprint' });
 
-    await new BuildCommand().execute(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', capture().output);
+    await prepareSync(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', capture().output);
 
     expect(mocks.computeInputsHash).not.toHaveBeenCalled();
     expect(mocks.recordResolvedEntries).not.toHaveBeenCalled();
@@ -227,7 +216,7 @@ describe('BuildCommand', () => {
       'local:/repo/extensions/pi.ts': '/repo/extensions/pi.ts',
     });
 
-    await new BuildCommand().execute(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', capture().output);
+    await prepareSync(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', capture().output);
 
     expect(mocks.buildSyncedRuntime).not.toHaveBeenCalled();
   });
@@ -236,7 +225,7 @@ describe('BuildCommand', () => {
     mocks.projectRegistersDoom.mockReturnValue(true);
     const { output, text } = capture();
 
-    await new BuildCommand().execute(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', output);
+    await prepareSync(['build'], { DOOMPI_ROOT: '/repo' }, '/repo', output);
 
     expect(mocks.projectRegistersDoom).toHaveBeenCalledWith('/repo');
     expect(text()).toContain('duplicate DoomPi registration in .pi/settings.json');
@@ -246,9 +235,7 @@ describe('BuildCommand', () => {
   it('cleans up staged resources when package installation fails', async () => {
     mocks.ensureLayerPackages.mockRejectedValue(new Error('install failed'));
 
-    await expect(new BuildCommand().execute(['build'], {}, '/work', capture().output)).rejects.toThrow(
-      'install failed',
-    );
+    await expect(prepareSync(['build'], {}, '/work', capture().output)).rejects.toThrow('install failed');
 
     expect(mocks.buildRuntimeBundle).not.toHaveBeenCalled();
     expect(cleanup).toHaveBeenCalledOnce();
@@ -257,9 +244,7 @@ describe('BuildCommand', () => {
   it('finds the repository and cleans up when compilation fails', async () => {
     mocks.buildRuntimeBundle.mockRejectedValue(new Error('compile failed'));
 
-    await expect(new BuildCommand().execute(['build'], {}, '/work', capture().output)).rejects.toThrow(
-      'compile failed',
-    );
+    await expect(prepareSync(['build'], {}, '/work', capture().output)).rejects.toThrow('compile failed');
 
     expect(mocks.findRepositoryRoot).toHaveBeenCalledWith('/work', expect.any(String));
     expect(cleanup).toHaveBeenCalledOnce();

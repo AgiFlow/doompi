@@ -1,6 +1,8 @@
 import path from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseCompatibilityArgs, parseCompatibilityProvider } from '../../src/exports/cli/compatibilityOptions';
+
+import { parseCompatibilityArgs, parseCompatibilityProvider } from '../../src/exports/compatibilityOptions';
 
 const EMPTY_INLINE_MATRIX_OPTIONS = ['--domain=', '--domains=', '--major-mode='];
 

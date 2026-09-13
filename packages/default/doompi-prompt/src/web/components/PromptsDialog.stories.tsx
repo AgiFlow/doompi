@@ -7,8 +7,8 @@
  * than sit beside it. The states behind the picker (editor, confirmations) are
  * reached by interaction, and their bodies have their own stories.
  */
-import type { SavedPromptView } from '../../types/webPrompts.ts';
-import { PromptsDialog } from './PromptsDialog.tsx';
+import type { SavedPromptView } from '../../types/webPrompts';
+import { PromptsDialog } from './PromptsDialog';
 
 const prompts: readonly SavedPromptView[] = [
   {

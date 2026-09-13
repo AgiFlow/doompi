@@ -1,8 +1,9 @@
 import type { NodeTelemetryHandle, NodeTelemetryOptions } from '@agimon-ai/log-sink-mcp/telemetry/node';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { LogMetricsAggregator } from '../src/services/metrics.ts';
-import { installTelemetryTestRuntime } from './helpers/extensionRuntime.ts';
+
+import { LogMetricsAggregator } from '../src/services/metrics';
+import { installTelemetryTestRuntime } from './helpers/extensionRuntime';
 
 type Handler = (event: Record<string, unknown>, context: ExtensionContext) => Promise<void>;
 

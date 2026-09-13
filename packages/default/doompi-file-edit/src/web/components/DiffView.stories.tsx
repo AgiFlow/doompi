@@ -3,8 +3,8 @@
  * and mounts the exported `render`, so no Storybook runtime is imported and the
  * default export is a bare `const meta`.
  */
-import type { FileEditsDiffHunk } from '../../types/fileEditsApi.ts';
-import { DiffView } from './DiffView.tsx';
+import type { FileEditsDiffHunk } from '../../types/fileEditsApi';
+import { DiffView } from './DiffView';
 
 const NEAR: FileEditsDiffHunk = {
   start: 12,

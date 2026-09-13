@@ -17,8 +17,8 @@ The package declares session API, cockpit client, and web hub entries. Its bridg
 ## Public API
 
 ```ts
+import { activateAuthorExtension } from '@agimon-ai/doompi-author/extensions/pi';
 import {
-  activateAuthorExtension,
   createAuthorCatalog,
   DescribeAuthorToolsInputSchema,
   UseAuthorToolInputSchema,
@@ -35,3 +35,7 @@ pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+## Plugin lifecycle
+
+Author uses the shared [plugin lifecycle contract](../../core/doompi-core/docs/plugins.md). Pi and server entries compose shared tool and command declarations; controllers own Author behavior, and the helpers own registration and disposal. Minor-mode entry and exit are independent of plugin mounting.

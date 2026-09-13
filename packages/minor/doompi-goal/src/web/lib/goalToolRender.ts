@@ -1,5 +1,5 @@
+import type { ToolResultView } from '@agimon-ai/doompi-core/web';
 import type { MessageLine, MessageLineTone } from '@agimon-ai/doompi-web-components';
-import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
 
 /**
  * Purpose-first summaries for the goal tools. The TUI leaves these on Pi's

@@ -1,5 +1,5 @@
-import { startQrScanner, type QrScannerSession } from './qrScanner.ts';
-import { activateVerifiedBundle } from './workerClient.ts';
+import { startQrScanner, type QrScannerSession } from './qrScanner';
+import { activateVerifiedBundle } from './workerClient';
 
 const PAIRING_PATH = '/pair';
 const REQUIRED_FRAGMENT_FIELDS = ['c', 'k', 's', 'r'] as const;

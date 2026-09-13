@@ -5,7 +5,7 @@
  * The row is sized by the composer menu that owns it, so it is drawn inside a
  * panel of that width rather than stretched across the viewport.
  */
-import { PromptsComposerMenuItem } from './PromptsComposerMenuItem.tsx';
+import { PromptsComposerMenuItem } from './PromptsComposerMenuItem';
 
 const meta = {
   title: 'Prompt/PromptsComposerMenuItem',

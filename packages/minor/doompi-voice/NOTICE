@@ -4,8 +4,8 @@ https://github.com/openai/codex
 Source revision: 5ecb3afd1b
 
 Adapted files:
-- src/adapters/realtime/codexAuth.ts, codexLogin.ts, and codexAuthStorage.ts: subscription login, credential storage, and refresh
-- src/adapters/realtime/codexRealtime.ts: realtime call creation
+- src/services/codexAuth/index.ts, src/services/codexLogin/index.ts, and src/services/codexAuthStorage/index.ts: subscription login, credential storage, and refresh
+- src/services/codexRealtime/index.ts: realtime call creation
 - src/services/realtimeProtocol.ts: Frameless realtime events and context messages
 
 These portions were modified for DoomPi and are licensed under Apache-2.0.

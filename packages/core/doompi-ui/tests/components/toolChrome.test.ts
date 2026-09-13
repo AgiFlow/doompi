@@ -1,6 +1,7 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { Text } from '@earendil-works/pi-tui';
 import { describe, expect, it } from 'vitest';
+
 import {
   DoomToolCall,
   DoomToolResult,
@@ -9,7 +10,7 @@ import {
   previousDoomToolResult,
   renderToolBadge,
   renderToolHeading,
-} from '../../src/tui/toolChrome.ts';
+} from '../../src/tui/toolChrome';
 
 const theme = {
   fg: (color: string, text: string) => `<${color}>${text}</${color}>`,

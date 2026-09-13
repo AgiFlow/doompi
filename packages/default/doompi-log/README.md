@@ -61,18 +61,16 @@ headless hosts.
 ## Public API
 
 ```ts
-import {
-  installDoomLogRuntime,
-  deriveFindings,
-  LogMetricsAggregator,
-  openLogMetricsOverlay,
-} from '@agimon-ai/doompi-log';
+import { deriveFindings, LogMetricsAggregator, openLogMetricsOverlay } from '@agimon-ai/doompi-log';
 ```
 
-Normal Pi activation should use the discovered `extensions/pi` entry. Host integrations can call
-`installDoomLogRuntime` to install package resources into the shared runner-scoped Cordis host. The
-extension entry manages its plugin lifecycle and releases the host lease when the Pi session shuts
-down. Focused exports provide metrics types, the metrics source, and the overlay component.
+Normal Pi activation uses `extensions/pi`. Composition hosts await `doomLogExtension.install(context, pi)`
+from that entry. The helper owns registrations and cleanup. Session shutdown flushes final telemetry
+before `onDispose` releases the telemetry handle. Optional UI services follow provider replacement.
+
+`src/extensions/` declares the Pi, server, and web plugins. Controllers handle events and HTTP requests,
+services own aggregation and sink queries, and `src/tui/` owns terminal presentation. Flat `src/exports/`
+modules expose reusable APIs. The overlay component is available through `metrics-overlay`.
 
 ## Development
 

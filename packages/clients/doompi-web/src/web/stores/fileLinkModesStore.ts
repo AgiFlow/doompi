@@ -1,5 +1,5 @@
-import { bindFileLinkModes, minorModes } from '../lib/composition.ts';
-import { sessionStoreFor } from './sessionStore.ts';
+import { bindFileLinkModes, minorModes } from '../lib/composition';
+import { sessionStoreFor } from './sessionStore';
 
 /** Supplies live mode facts to file routing, including already-rendered links. */
 export function bindSessionFileLinkModes(): () => void {

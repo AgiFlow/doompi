@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { SubagentCatalogAgent } from '../../src/types/webSubagents.ts';
-import {
-  agentMeta,
-  filterCatalog,
-  groupCatalog,
-  launchCommand,
-  modelChoices,
-} from '../../src/web/lib/launchCommand.ts';
+
+import type { SubagentCatalogAgent } from '../../src/types/webSubagents';
+import { agentMeta, filterCatalog, groupCatalog, modelChoices } from '../../src/web/lib/launchCommand';
 
 const row = (name: string, source: SubagentCatalogAgent['source'], extra: Partial<SubagentCatalogAgent> = {}) =>
   ({
@@ -21,17 +16,6 @@ const row = (name: string, source: SubagentCatalogAgent['source'], extra: Partia
     filePath: `/x/${name}.md`,
     ...extra,
   }) satisfies SubagentCatalogAgent;
-
-describe('the launch command', () => {
-  it('writes the /run line the session parses: agent[model], the task as the rest, --fork last', () => {
-    expect(launchCommand({ agent: 'reviewer', task: '', fork: false })).toBe('/run reviewer');
-    expect(launchCommand({ agent: 'reviewer', task: '  Review the diff.  ', model: 'x/y', fork: true })).toBe(
-      '/run reviewer[model=x/y] Review the diff. --fork',
-    );
-    expect(launchCommand({ agent: 'r', task: 'line one\nline two', fork: false })).toBe('/run r line one\nline two');
-    expect(launchCommand({ agent: 'r', task: '', fork: true })).toBe('/run r --fork');
-  });
-});
 
 describe('the catalog view helpers', () => {
   const agents = [

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createWebMcpSimulator, type WebMcpSimulator } from '../../src/web/lib/webmcpSimulator.ts';
+
+import { createWebMcpSimulator, type WebMcpSimulator } from '../../src/web/lib/webmcpSimulator';
 
 let simulator: WebMcpSimulator | undefined;
 

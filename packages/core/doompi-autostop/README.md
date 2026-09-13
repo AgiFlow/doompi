@@ -10,19 +10,22 @@ waits, looks again, and only then stops.
 
 ## The policy
 
-| Moment             | Session state     | Outcome              |
-| ------------------ | ----------------- | -------------------- |
-| `agent_settled`    | messages queued   | stand down           |
-| `agent_settled`    | queue empty       | look again in 5s     |
-| the scheduled look | messages queued   | stand down           |
-| the scheduled look | still streaming   | look again in 100ms  |
-| the scheduled look | idle, queue empty | `context.shutdown()` |
+| Moment             | Session state                     | Outcome              |
+| ------------------ | --------------------------------- | -------------------- |
+| `agent_settled`    | messages queued                   | stand down           |
+| `agent_settled`    | queue empty                       | look again in 5s     |
+| the scheduled look | messages queued                   | stand down           |
+| the scheduled look | background runner or agent active | look again in 5s     |
+| the scheduled look | still streaming                   | look again in 100ms  |
+| the scheduled look | idle, queue and background empty  | `context.shutdown()` |
 
 Any `input` or `agent_start` event disarms a pending stop. The cooldown is the grace period;
-the 100 ms recheck waits out a stream that has not finished draining.
+the 100 ms recheck waits out a stream that has not finished draining. Active work and provider
+errors reported through DoomPi's background-work service keep the session alive. This includes
+supervised Doom Runner processes and Team subagents owned by the current session.
 
-`decideOnSettled` and `decideOnRecheck` are the whole policy and take the session state as a
-plain value, so the timing rules are testable without a Pi host.
+`decideOnSettled` and `decideOnRecheck` handle the plain Pi session state. The idle shutdown
+watch adds the authoritative background-work gate before the policy may stop the session.
 
 ## What it registers
 

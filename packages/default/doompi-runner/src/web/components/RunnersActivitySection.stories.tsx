@@ -5,10 +5,11 @@
  * rather than a hand-rolled stub, so a change to the slot contract breaks this
  * story at the type level instead of silently drifting.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { RunnerRunView } from '../../types/webRunners.ts';
-import { runners } from '../stores/runnersStore.ts';
-import { RunnersActivitySection } from './RunnersActivitySection.tsx';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import type { RunnerRunView } from '../../types/webRunners';
+import { runners } from '../stores/runnersStore';
+import { RunnersActivitySection } from './RunnersActivitySection';
 
 /** Its own session id, so a story that seeds this store cannot disturb another's. */
 const SESSION_ID = 'runners-activity';

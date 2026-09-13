@@ -1,7 +1,12 @@
 import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-  entry: { '*': ['src/exports/**/*.ts', '!src/exports/webClient.ts'] },
+  entry: {
+    'api-contracts': 'src/exports/apiContracts.ts',
+    '*': 'src/exports/*.ts',
+    'extensions/pi': 'src/extensions/pi.ts',
+    'extensions/server': 'src/extensions/server.ts',
+  },
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },
   exports: false,

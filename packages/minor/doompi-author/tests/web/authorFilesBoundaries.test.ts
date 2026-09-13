@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   authorKindForPath,
   editableStructuredFragments,
   loadAuthorDocument,
   saveAuthorDocument,
-} from '../../src/web/api/authorFiles.ts';
-import type { AuthorDocumentInput } from '../../src/web/lib/authorViewportTypes.ts';
+} from '../../src/web/api/authorFiles';
+import type { AuthorDocumentInput } from '../../src/web/lib/authorViewportTypes';
 
 const sha = 'a'.repeat(64);
 const document: AuthorDocumentInput = { path: 'a.csv', kind: 'csv', structuredFormat: 'csv', sourceSha256: sha };

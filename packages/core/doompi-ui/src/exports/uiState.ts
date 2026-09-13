@@ -4,4 +4,4 @@ export {
   type LeaderSnapshot,
   projectMinorModeRecords,
   type UiMinorModeStatus,
-} from '../services/state/uiState.ts';
+} from '../models/uiState';

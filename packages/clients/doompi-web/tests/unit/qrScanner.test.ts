@@ -8,7 +8,7 @@ vi.mock('@zxing/browser', () => ({
   },
 }));
 
-import { startQrScanner } from '../../src/pwa/qrScanner.ts';
+import { startQrScanner } from '../../src/pwa/qrScanner';
 
 class FakeMediaStream {
   getTracks(): never[] {

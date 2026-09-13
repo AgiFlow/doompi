@@ -1,12 +1,16 @@
-import { defineSessionChannel, defineSlot, defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineSessionChannel, defineSlot, defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { afterEach, describe, expect, it } from 'vitest';
-import { leaderGroup } from '../../src/web/lib/leaderTree.ts';
+
+import { leaderGroup } from '../../src/web/lib/leaderTree';
 import {
   activateWebPluginSession,
   activityGroupSlot,
   dispatchChannelFrame,
   dropPluginSessionData,
   HOST_SLOTS,
+  installGlobalWebPlugins,
+  installWorkspaceWebPlugins,
+  activateWebPluginWorkspace,
   installSessionWebPlugins,
   installWebPlugins,
   paletteCommands,
@@ -27,8 +31,8 @@ import {
   webPluginDiagnostics,
   webPluginRegistryRevision,
   webTabs,
-} from '../../src/web/lib/pluginRegistry.ts';
-import { settingsSections } from '../../src/web/lib/settingsSections.ts';
+} from '../../src/web/lib/pluginRegistry';
+import { settingsSections } from '../../src/web/lib/settingsSections';
 interface ItemsPayload {
   items: string[];
 }
@@ -212,7 +216,7 @@ describe('the web plugin registry', () => {
   });
 
   it('orders repository management panels without sharing repository ownership with plugins', () => {
-    installWebPlugins([
+    const plugins = [
       defineWebPlugin({
         id: 'later',
         repositorySettingsPanel: { label: 'later', detail: 'later panel', order: 20, component: Other },
@@ -221,7 +225,13 @@ describe('the web plugin registry', () => {
         id: 'first',
         repositorySettingsPanel: { label: 'first', detail: 'first panel', order: 10, component: Panel },
       }),
-    ]);
+    ];
+    installGlobalWebPlugins(plugins.map(({ id, ...contributions }) => ({ id, global: contributions })));
+    installWorkspaceWebPlugins(
+      'repo',
+      plugins.map(({ id, ...contributions }) => ({ id, workspace: contributions })),
+    );
+    activateWebPluginWorkspace('repo');
 
     expect(pluginRepositorySettingsPanels()).toEqual([
       { pluginId: 'first', label: 'first', detail: 'first panel', order: 10, component: Panel },
@@ -230,7 +240,7 @@ describe('the web plugin registry', () => {
   });
 
   it('separates general sections from repository defaults and package panels', () => {
-    installWebPlugins([
+    const plugins = [
       defineWebPlugin({
         id: 'mcp',
         repositorySettingsPanel: { label: 'MCP servers', detail: 'servers and authorization', component: Panel },
@@ -239,7 +249,13 @@ describe('the web plugin registry', () => {
         id: 'planning',
         settingsSections: [{ id: 'planning', label: 'planning', detail: 'plan models', fields: [] }],
       }),
-    ]);
+    ];
+    installGlobalWebPlugins(plugins.map(({ id, ...contributions }) => ({ id, global: contributions })));
+    installWorkspaceWebPlugins(
+      'repo',
+      plugins.map(({ id, ...contributions }) => ({ id, workspace: contributions })),
+    );
+    activateWebPluginWorkspace('repo');
 
     expect(settingsSections('general').map((section) => section.id)).toEqual([
       'providers',
@@ -260,7 +276,7 @@ describe('the web plugin registry', () => {
   });
 
   it('places a self-drawn page in the general workspace only, in menu order', () => {
-    installWebPlugins([
+    const plugins = [
       defineWebPlugin({
         id: 'log',
         settingsPanels: [{ id: 'metrics', label: 'metrics', detail: 'tokens and cost', component: Panel }],
@@ -269,7 +285,12 @@ describe('the web plugin registry', () => {
         id: 'planning',
         settingsSections: [{ id: 'planning', label: 'planning', detail: 'plan models', fields: [] }],
       }),
+    ];
+    installGlobalWebPlugins(plugins.map(({ id, ...contributions }) => ({ id, global: contributions })));
+    installWorkspaceWebPlugins('repo', [
+      { id: 'planning', workspace: { settingsSections: plugins[1].settingsSections } },
     ]);
+    activateWebPluginWorkspace('repo');
 
     expect(settingsSections('general').map((section) => section.id)).toEqual([
       'providers',
@@ -686,6 +707,28 @@ describe('the web plugin registry', () => {
     expect(dispatchChannelFrame({ type: 'shared_channel', sessionId: 'session-b', payload: { items: [] } })).toBe(true);
   });
 
+  it('replaces an active session registry in one notification and drops its prior channels', () => {
+    const log: string[] = [];
+    installSessionWebPlugins('replace', [
+      defineWebPlugin({
+        id: 'before',
+        tabs: [{ id: 'before-tab', label: 'Before', panel: Panel }],
+        channels: [itemsChannel(log, 'before_items', 'before')],
+      }),
+    ]);
+    activateWebPluginSession('replace');
+    const observedTabs: string[][] = [];
+    const unsubscribe = subscribeWebPluginRegistry(() => observedTabs.push(webTabs().map((tab) => tab.label)));
+
+    installSessionWebPlugins('replace', [
+      defineWebPlugin({ id: 'after', tabs: [{ id: 'after-tab', label: 'After', panel: Other }] }),
+    ]);
+    unsubscribe();
+
+    expect(observedTabs).toEqual([['After']]);
+    expect(log).toEqual(['drop:before:replace']);
+  });
+
   it('replays the latest channel snapshot after an asynchronous session registry install', () => {
     const log: string[] = [];
     activateWebPluginSession('late');
@@ -732,6 +775,7 @@ describe('the web plugin registry', () => {
     const stop = startWebPlugins({
       sendSessionFrame: () => undefined,
       sendHubFrame: () => undefined,
+      invokeServerMethod: async () => undefined,
       onHubConnected: () => () => undefined,
     });
     stop();

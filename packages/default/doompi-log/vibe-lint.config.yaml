@@ -20,10 +20,3 @@ overrides:
     rules:
       no-default-export: off
       direct-export-only: off
-  # Reads time, randomness or process state ambiently instead of taking it as a
-  # dependency. Each needs a clock, id factory or env threaded through its
-  # caller; until then the rule stays on for every other module here.
-  - files:
-      - src/services/metrics.ts # Date
-    rules:
-      no-ambient-host-access: off

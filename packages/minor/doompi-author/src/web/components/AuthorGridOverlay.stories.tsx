@@ -3,8 +3,8 @@
  * looking for a bare `const meta`. The overlay is absolutely positioned and
  * measures its parent, so each variant supplies a sized relative host.
  */
-import type { AuthorWorkspaceDocument } from '../stores/authorWorkspaceStore.ts';
-import { AuthorGridOverlay } from './AuthorGridOverlay.tsx';
+import type { AuthorWorkspaceDocument } from '../stores/authorWorkspaceStore';
+import { AuthorGridOverlay } from './AuthorGridOverlay';
 
 const spec: AuthorWorkspaceDocument = {
   path: 'docs/spec.md',

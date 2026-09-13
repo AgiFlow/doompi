@@ -1,3 +1,4 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 /**
  * The '# git' group's body in the activity dock.
  *
@@ -13,11 +14,11 @@
  *   own everything else.
  */
 import { Button, Dot, Spinner, StatusBadge } from '@agimon-ai/doompi-web-components';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
-import type { WorktreeView } from '../../types/webWorktrees.ts';
-import { worktreeActivity } from '../stores/worktreesActivityStore.ts';
-import { worktreesTab } from './WorktreesPanel.tsx';
+
+import type { WorktreeView } from '../../types/webWorktrees';
+import { worktreeActivity } from '../stores/worktreesActivityStore';
+import { worktreesTab } from './WorktreesPanel';
 
 export function WorktreesActivitySection({ sessionId, openTransientTab }: WebPluginSlotProps) {
   const session = useStore(worktreeActivity.store, (state) => worktreeActivity.select(state, sessionId));

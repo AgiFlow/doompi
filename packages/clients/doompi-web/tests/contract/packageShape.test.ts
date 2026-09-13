@@ -1,6 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -50,11 +51,16 @@ describe('doompi-web package contract', () => {
   it('publishes exactly one executable with a closed export surface', async () => {
     const manifest = await readManifest();
 
-    // One package, one command. A second bin here shadowed the one
-    // @agimon-ai/doompi-server publishes under the same name; the hub now
-    // resolves its Server from this dependency tree instead.
+    // The web package owns its command name and resolves the core server separately.
     expect(manifest.bin).toEqual({ 'doompi-web': './dist/bin/serve.mjs' });
-    expect(Object.keys(manifest.exports ?? {})).toEqual(['.', './bundler', './package.json']);
+    expect(manifest.exports).toEqual({
+      '.': {
+        types: './dist/index.d.mts',
+        import: './dist/index.mjs',
+        require: './dist/index.cjs',
+      },
+      './package.json': './package.json',
+    });
   });
 
   it('builds computer-use before the browser fixture syncs the default composition', async () => {
@@ -68,56 +74,35 @@ describe('doompi-web package contract', () => {
     const runtime = Object.keys(manifest.dependencies ?? {});
 
     // The web plugin system rebundles the SPA on the user's machine at
-    // doompi sync time, against whatever plugin packages the composition
-    // installed. That makes the client toolchain a runtime concern: the
-    // bundler subpath must work from an installed package, so Vite, React,
-    // Tailwind, the TanStack runtimes, the plugin contracts, and the shared
-    // component library ship as dependencies alongside the hono trio. Web is
-    // also the user-facing distribution, so it ships the DoomPi agent and the
-    // Server the hub launches sessions with. Plugin packages are still
-    // discovered from manifests rather than depended on.
+    // doompi sync time. That makes the client toolchain a runtime concern:
+    // Vite, React, Tailwind, the browser protocol, plugin contracts, and the
+    // shared component library ship with the presentation client. Headless
+    // session, API, and authorization runtimes do not.
     expect(runtime).toEqual([
       '@agimon-ai/doompi',
-      '@agimon-ai/doompi-config',
-      '@agimon-ai/doompi-extension-contracts',
-      '@agimon-ai/doompi-server',
-      '@agimon-ai/doompi-telemetry',
+      '@agimon-ai/doompi-core',
       '@agimon-ai/doompi-web-components',
-      '@agimon-ai/doompi-web-contracts',
       '@agimon-ai/doompi-web-security',
       '@codemirror/state',
       '@codemirror/view',
       '@earendil-works/chord',
       '@earendil-works/pi-client',
-      '@earendil-works/pi-coding-agent',
-      '@earendil-works/pi-protocol',
-      '@earendil-works/pi-server',
-      '@hono/node-server',
-      '@hono/node-ws',
       '@simplewebauthn/browser',
-      '@simplewebauthn/server',
       '@tailwindcss/vite',
       '@tanstack/react-router',
       '@tanstack/react-store',
+      '@tanstack/react-virtual',
       '@tanstack/store',
       '@vitejs/plugin-react',
       '@zxing/browser',
-      'hono',
       'qrcode-generator',
       'react',
       'react-dom',
-      'react-markdown',
-      'remark-gfm',
       'tailwindcss',
       'vite',
-      'web-push',
-      // The dev proxy's hot-reload relay dials the dev server itself, so the
-      // client half of `ws` ships rather than staying a test-only dependency.
       'ws',
     ]);
     expect(manifest.dependencies?.['@agimon-ai/doompi']).toBe('workspace:*');
-    expect(manifest.dependencies?.['@agimon-ai/doompi-server']).toBe('workspace:*');
-    expect(manifest.dependencies?.['@agimon-ai/doompi-telemetry']).toBe('workspace:*');
     // The bundler compiles src/web from the installed package, so the source
     // has to ship with it.
     expect(manifest.files).toEqual(expect.arrayContaining(['src']));

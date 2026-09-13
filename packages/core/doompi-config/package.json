@@ -1,7 +1,7 @@
 {
   "name": "@agimon-ai/doompi-config",
   "version": "0.0.1-alpha.68",
-  "description": "Typed configuration loading, validation, and host adapters for composing DoomPi sessions.",
+  "description": "Typed configuration loading, validation, and host services for composing DoomPi sessions.",
   "keywords": [
     "agent-configuration",
     "ai",
@@ -57,16 +57,6 @@
       "import": "./dist/config.mjs",
       "require": "./dist/config.cjs"
     },
-    "./config/schema": {
-      "types": "./dist/config/schema.d.mts",
-      "import": "./dist/config/schema.mjs",
-      "require": "./dist/config/schema.cjs"
-    },
-    "./config/piConfig": {
-      "types": "./dist/config/piConfig.d.mts",
-      "import": "./dist/config/piConfig.mjs",
-      "require": "./dist/config/piConfig.cjs"
-    },
     "./configWriter": {
       "types": "./dist/configWriter.d.mts",
       "import": "./dist/configWriter.mjs",
@@ -81,6 +71,11 @@
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
+    },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
     },
     "./harnessState": {
       "types": "./dist/harnessState.d.mts",
@@ -127,7 +122,22 @@
       "import": "./dist/types.mjs",
       "require": "./dist/types.cjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./pi-config": {
+      "types": "./dist/piConfig.d.mts",
+      "import": "./dist/piConfig.mjs",
+      "require": "./dist/piConfig.cjs"
+    },
+    "./config-schema": {
+      "types": "./dist/configSchema.d.mts",
+      "import": "./dist/configSchema.mjs",
+      "require": "./dist/configSchema.cjs"
+    },
+    "./api-contracts": {
+      "types": "./dist/api-contracts.d.mts",
+      "import": "./dist/api-contracts.mjs",
+      "require": "./dist/api-contracts.cjs"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -141,9 +151,10 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
+    "typebox": "1.3.25",
     "yaml": "2.9.0"
   },
   "devDependencies": {
@@ -159,6 +170,19 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiServer": {
+    "entry": "./src/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "global",
+      "workspace",
+      "session"
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
+    }
   },
   "pi": {
     "extensions": [

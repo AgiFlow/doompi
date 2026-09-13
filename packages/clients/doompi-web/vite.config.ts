@@ -1,18 +1,22 @@
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { bundleAssetPolicyPlugin } from '@agimon-ai/doompi/builders/web';
+import { ensureBuiltinWebPluginModules, writeSyncWebPluginModules } from '@agimon-ai/doompi/builders/web';
+import { scanWebPlugins } from '@agimon-ai/doompi/builders/web';
+import { readDevPluginRoots, webPluginCssAlias, webPluginOverridePlugin } from '@agimon-ai/doompi/builders/web';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { type Alias, defineConfig, type Plugin } from 'vite';
-import { bundleAssetPolicyPlugin } from './src/adapters/bundleAssetPolicy.ts';
-import { ensureBuiltinWebPluginModules, writeSyncWebPluginModules } from './src/adapters/webPluginGenerate.ts';
-import { scanWebPlugins } from './src/adapters/webPluginScan.ts';
-import { readDevPluginRoots, webPluginCssAlias, webPluginOverridePlugin } from './src/adapters/webPluginVite.ts';
 
 // Config-load time keeps the committed builtin registry fresh for both build
 // and dev without touching the pinned build script; CI only checks. The full
 // installed plugin set is bundled later, by doompi sync, not here.
-ensureBuiltinWebPluginModules({ check: Boolean(process.env.CI) });
+ensureBuiltinWebPluginModules({
+  packageRoot: fileURLToPath(new URL('.', import.meta.url)),
+  check: Boolean(process.env.CI),
+});
 
 const packageRoot = fileURLToPath(new URL('.', import.meta.url));
 const clientRoot = fileURLToPath(new URL('./src/web', import.meta.url));
@@ -35,15 +39,38 @@ function devPluginOverrides(command: 'build' | 'serve'): { plugins: Plugin[]; al
   };
   const plugins = scanWebPlugins(packageRoot, roots, notice);
   notice(`dev serving ${String(plugins.length)} web plugin(s): ${plugins.map((plugin) => plugin.pluginId).join(', ')}`);
-  const generated = writeSyncWebPluginModules(plugins, path.join(packageRoot, '.dev', 'generated'));
+  const generated = writeSyncWebPluginModules(plugins, path.join(packageRoot, '.dev', 'generated'), packageRoot);
   return { plugins: [webPluginOverridePlugin(clientRoot, generated)], alias: [webPluginCssAlias(generated)] };
 }
 
-export default defineConfig(({ command }) => {
+async function devSigningKey(proxyTarget: string): Promise<string | undefined> {
+  const configured = process.env.VITE_DOOMPI_PLUGIN_PUBLIC_KEY;
+  if (configured) return configured;
+  try {
+    const response = await fetch(new URL('/api/compositions', proxyTarget), {
+      signal: AbortSignal.timeout(2_000),
+    });
+    if (!response.ok) throw new Error(`composition endpoint answered ${String(response.status)}`);
+    const payload = (await response.json()) as { publicKey?: unknown };
+    if (typeof payload.publicKey !== 'string' || !payload.publicKey) {
+      throw new Error('composition endpoint has no signing key');
+    }
+    return payload.publicKey;
+  } catch (error) {
+    console.warn(`[doompi-web] could not load the development signing key: ${String(error)}`);
+    return undefined;
+  }
+}
+
+export default defineConfig(async ({ command }) => {
   const dev = devPluginOverrides(command);
+  const proxyTarget = process.env.DOOMPI_WEB_PROXY_TARGET ?? 'http://127.0.0.1:7433';
+  const signingKey = command === 'serve' ? await devSigningKey(proxyTarget) : undefined;
   return {
     root: clientRoot,
+    publicDir: fileURLToPath(new URL('./src/pwa/public', import.meta.url)),
     plugins: [...dev.plugins, react(), tailwindcss(), bundleAssetPolicyPlugin()],
+    ...(signingKey ? { define: { 'import.meta.env.VITE_DOOMPI_PLUGIN_PUBLIC_KEY': JSON.stringify(signingKey) } } : {}),
     resolve: {
       // One instance of each shared runtime even when a plugin package declares
       // its own copies for typechecking.
@@ -72,7 +99,11 @@ export default defineConfig(({ command }) => {
     server: {
       port: 7434,
       proxy: {
-        '/api': { target: 'http://127.0.0.1:7433', ws: true },
+        '/api': { target: proxyTarget, changeOrigin: true, ws: true },
+        '/sw.js': { target: proxyTarget },
+        '/pwa': { target: proxyTarget },
+        '/bundle-manifest.json': { target: proxyTarget },
+        '/bundle-assets': { target: proxyTarget },
       },
     },
   };

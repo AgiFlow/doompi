@@ -26,7 +26,7 @@ diagnostics.
 ## Contributing skill directories
 
 The package provides the session-owned `doom/skill-sources` Cordis service from
-`@agimon-ai/doompi-extension-contracts/skills`. Extensions register their directories inside
+`@agimon-ai/doompi-core/skills`. Extensions register their directories inside
 `ctx.inject([DOOM_SKILL_SOURCES_SERVICE], ...)`; the returned handle is disposed automatically when
 either the contributor or provider unloads. Contributions are keyed by source, so a replacement
 generation takes the previous package slot without doubling it.
@@ -45,3 +45,5 @@ it. It is not selectable from `.doom/modes.yaml`.
 ## License
 
 MIT
+
+Plugin entries live in `src/extensions`, host event and command controllers in `src/controllers`, and catalog and discovery logic in named `src/services` folders. `src/exports` contains public helpers and types. Pi declares owned service bindings and native events. Its `onStop` invalidates pending discovery generations; final disposal releases the Help view. The server awaits its async declaration factory to discover named skill commands before registration and startup.

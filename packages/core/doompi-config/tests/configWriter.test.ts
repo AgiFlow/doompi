@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { parseDoomConfig } from '../src/exports/config.ts';
-import { setDoomConfigValue, unsetDoomConfigValue, writeDoomConfigValues } from '../src/exports/configWriter.ts';
+
+import { parseDoomConfig } from '../src/exports/config';
+import { setDoomConfigValue, unsetDoomConfigValue, writeDoomConfigValues } from '../src/exports/configWriter';
 
 let directory: string;
 let filePath: string;

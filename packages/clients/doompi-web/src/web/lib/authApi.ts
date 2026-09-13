@@ -4,8 +4,8 @@ import {
   type AuthMethodType,
   type LoginFlowSnapshot,
   type ProviderAuthSummary,
-} from '../../types/auth.ts';
-import { fetchWithStepUp } from './stepUp.ts';
+} from '../../types/auth';
+import { fetchWithStepUp } from './stepUp';
 
 export type ProvidersResult = { providers: ProviderAuthSummary[] } | { error: string };
 export type LoginFlowResult = { flow: LoginFlowSnapshot } | { error: string };

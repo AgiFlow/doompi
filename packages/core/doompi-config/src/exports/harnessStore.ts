@@ -1,12 +1,9 @@
 export {
+  HARNESS_STATE_POINTER,
   createHarnessSession,
   disposeHarnessState,
   getHarnessState,
-  HARNESS_STATE_POINTER,
-  type HarnessStateFile,
-  type HarnessStateTransactionSnapshot,
   harnessRoot,
-  type LoadedHarnessState,
   loadHarnessState,
   requireHarnessPaths,
   requireHarnessRoot,
@@ -14,4 +11,8 @@ export {
   restoreHarnessStateSnapshot,
   snapshotHarnessState,
   updateHarnessState,
-} from '../adapters/harnessStore.ts';
+  type HarnessStateFile,
+  type HarnessStateTransactionSnapshot,
+} from '../services/harnessStore';
+
+export type { LoadedHarnessState } from '../models/harnessCache';

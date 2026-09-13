@@ -1,13 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  configureDpiEnvironment,
-  type DpiRunnerDependencies,
-  runDpi,
-  runDpiInit,
-} from '../../src/adapters/dpiRunner.ts';
+
+import { configureDpiEnvironment, type DpiRunnerDependencies, runDpi, runDpiInit } from '../../src/cli/dpi';
 
 const temporaryRoots: string[] = [];
 const DOOM_CONFIG_FILES = ['config.yaml', 'modes.yaml', 'domains.yaml', 'profiles.yaml'] as const;

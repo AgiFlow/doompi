@@ -1,4 +1,4 @@
-import { DERIVED_TOKENS, PALETTE_TOKENS, type ThemeConfig, type ThemeScheme } from '../types/theme.ts';
+import { DERIVED_TOKENS, PALETTE_TOKENS, type ThemeConfig, type ThemeScheme } from '../types/theme';
 
 const THEME_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 /** A CSS colour as a theme may spell it: hex, a colour function, or a named colour; never a url or an image. */

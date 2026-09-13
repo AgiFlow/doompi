@@ -10,8 +10,10 @@
  */
 
 import { pathToFileURL } from 'node:url';
-import { consumerPackageEntry } from '../adapters/modules/moduleResolution.ts';
-import { findRepositoryRoot } from '../adapters/repository/repository.ts';
+
+import { consumerPackageEntry } from '@agimon-ai/doompi-core/module-resolution';
+
+import { findRepositoryRoot } from '../composition/repository';
 
 const RUNNER_CLI_EXPORT = '@agimon-ai/doompi-runner/bin/cli';
 

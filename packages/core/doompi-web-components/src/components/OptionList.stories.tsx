@@ -3,7 +3,7 @@
  * imported. The cursor is controlled by the surface, so the fixture pins one
  * and the callbacks do nothing.
  */
-import { OptionList } from './OptionList.tsx';
+import { OptionList } from './OptionList';
 
 const MODELS = ['claude sonnet', 'claude opus', 'qwen3 coder', 'gpt-5 codex'] as const;
 

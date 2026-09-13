@@ -3,7 +3,7 @@
  * looking for a bare `const meta`. The controls are fully driven by props, so
  * each variant is one combination of playback, readiness and the draft lock.
  */
-import { AuthorVideoControls } from './AuthorVideoControls.tsx';
+import { AuthorVideoControls } from './AuthorVideoControls';
 
 const noop = () => undefined;
 

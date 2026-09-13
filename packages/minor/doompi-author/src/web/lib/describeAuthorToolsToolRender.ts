@@ -1,5 +1,5 @@
+import { type ToolResultView, toolResultTextLines } from '@agimon-ai/doompi-core/web';
 import type { MessageLine } from '@agimon-ai/doompi-web-components';
-import { type ToolResultView, toolResultTextLines } from '@agimon-ai/doompi-web-contracts';
 
 export const describeAuthorToolsToolName = 'describe_author_tools';
 

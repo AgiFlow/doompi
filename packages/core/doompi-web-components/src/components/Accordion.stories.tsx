@@ -6,7 +6,7 @@
  * Both accordions carry a default value so the open panel paints without a
  * click: the renderer screenshots the first frame.
  */
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './Accordion.tsx';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './Accordion';
 
 const meta = {
   title: 'Components/Accordion',

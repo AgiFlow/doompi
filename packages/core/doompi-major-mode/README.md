@@ -76,3 +76,12 @@ it. It is not selectable from `.doom/modes.yaml`. It is what reads that file.
 ## License
 
 MIT
+
+Pi and server declarations live in `src/extensions` and build directly to `/extensions/pi`
+and `/extensions/server`. Flat root exports expose selection, status, telemetry, and schema helpers.
+Controllers own host integration; text and telemetry services live in named folders.
+
+The Pi declaration installs optional Config, Transition, and Voice service bindings before its
+command and event declarations. Session startup awaits the runtime binding before publishing status.
+The shared helper owns teardown of those bindings. Picker, selection-switch, and journal modules
+remain lazy imports, so registering `/mode` does not load them eagerly.

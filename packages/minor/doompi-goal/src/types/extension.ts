@@ -1,4 +1,4 @@
-import type { GoalHistoryPort } from './history.ts';
+import type { GoalHistoryPort } from './history';
 
 export type GoalNotificationLevel = 'info';
 

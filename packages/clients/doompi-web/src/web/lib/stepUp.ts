@@ -1,6 +1,6 @@
-import { STEP_UP_HEADER } from '../../types/remoteAccess.ts';
-import { sealedHttpSession } from './sealedSession.ts';
-import { assertionFor } from './webauthnClient.ts';
+import { STEP_UP_HEADER } from '../../types/remoteAccess';
+import { sealedHttpSession } from './sealedSession';
+import { assertionFor } from './webauthnClient';
 
 const UNAUTHORIZED = 401;
 

@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -14,7 +15,7 @@ import {
   getMessageActivity,
   getMessageUsageCost,
   getMessageUsageTokens,
-} from '../../src/adapters/process/childTranscript';
+} from '../../src/services/childTranscript';
 
 const temporaryDirs: string[] = [];
 

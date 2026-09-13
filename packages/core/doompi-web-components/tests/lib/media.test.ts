@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mediaKindOf } from '../../src/lib/media.ts';
+
+import { mediaKindOf } from '../../src/lib/media';
 
 describe('mediaKindOf', () => {
   it('names the element for each kind the browser can render', () => {

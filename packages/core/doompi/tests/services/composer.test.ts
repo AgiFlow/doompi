@@ -2,18 +2,25 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
-import { extensionToolSource } from '@agimon-ai/doompi-ui/extensionName';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { acquireCompositionClaim } from '../../src/adapters/compositionState';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
+import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '../../src/adapters/syncRegistration.ts';
-import { HARNESS_STATE_POINTER, readHarnessState, resetHarnessStore } from '../../src/exports/config/harnessState';
+} from '@agimon-ai/doompi-core/sync-registration';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+import { extensionToolSource } from '@agimon-ai/doompi-ui/extensionName';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { acquireCompositionClaim } from '../../src/builders/cli/compositionState';
+import {
+  assembleExtensions,
+  PERSONA_ENTRY,
+  resolveExtensionComposition,
+} from '../../src/builders/cli/extensionAssembler';
 import {
   alreadyComposed,
   applyStartupFlags,
@@ -30,7 +37,8 @@ import {
   readStartupFlags,
   registerDoomFlags,
   startSyncedSession,
-} from '../../src/exports/services/composer';
+} from '../../src/exports/composer';
+import { HARNESS_STATE_POINTER, readHarnessState, resetHarnessStore } from '../../src/exports/harnessState';
 import {
   createMapResolvers,
   recordResolvedEntries,
@@ -38,10 +46,8 @@ import {
   SYNC_STATE_VERSION,
   type SyncState,
   writeSyncState,
-} from '../../src/exports/services/syncState';
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/adapters/syncStateContract.ts';
-import { assembleExtensions, PERSONA_ENTRY, resolveExtensionComposition } from '../../src/services/extensionAssembler';
-import { testMcpProjection } from '../helpers/mcpProjection.ts';
+} from '../../src/exports/syncState';
+import { testMcpProjection } from '../helpers/mcpProjection';
 
 /** Digest a compiler manifest must now record so freshness is judged by content. */
 function sha256Of(file: string): string {
@@ -441,6 +447,7 @@ describe('composeLoadOrder', () => {
     const childExtensions = JSON.parse(environment.DOOMPI_CHILD_EXTENSIONS ?? '[]') as string[];
     expect(childExtensions).toEqual([
       '/own/cordisHost.ts',
+      '/own/terminalChildSession.ts',
       '/pkg/@agimon-ai/doompi-config/extensions/pi',
       ...configuredDefaultPackages.map((name) => `/pkg/${name}`),
       '/pkg/@agimon-ai/doompi-team',
@@ -450,7 +457,6 @@ describe('composeLoadOrder', () => {
       '/pkg/@agimon-ai/doompi-profile/extensions/persona',
       '/own/cordisFinalizer.ts',
     ]);
-    expect(environment.DOOMPI_CORDIS_HOST_REQUIRED).toBe('1');
   });
 });
 

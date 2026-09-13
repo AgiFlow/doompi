@@ -1,24 +1,23 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
-import {
-  createDoomReadinessCoordinator,
-  DOOM_READINESS_SERVICE,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
-import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
+import { createDoomReadinessCoordinator, DOOM_READINESS_SERVICE } from '@agimon-ai/doompi-core/readiness';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHookDocumentReader } from '../../src/adapters/hookDocuments.ts';
-import { hookExtension } from '../../src/adapters/pi/extension.ts';
-import type { HookDocumentReader, HookOutcome } from '../../src/types/hooks.ts';
-import { type PiHarness, piHarness, SESSION_ID, stubRunner, TEST_CORDIS_ROOT } from '../helpers/piSession.ts';
+
+import { hookExtension } from '../../src/extensions/pi';
+import { createHookDocumentReader } from '../../src/services/hookDocuments';
+import type { HookDocumentReader, HookOutcome } from '../../src/types/hooks';
+import { type PiHarness, piHarness, SESSION_ID, stubRunner, TEST_CORDIS_ROOT } from '../helpers/piSession';
 
 const cordisHost = vi.hoisted(() => ({ resolveRoot: (_pi: unknown): unknown => undefined }));
 const cordisRoots: Context[] = [];
 
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
+vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
   connectDoomCordisHost: async (pi: unknown) => ({
     root: cordisHost.resolveRoot(pi),
     runtime: { abiVersion: 1, generation: 'hook-test', hostId: 'hook-test', mode: 'composed' },
@@ -137,7 +136,7 @@ describe('repository hook Pi lifecycle', () => {
     expect(first.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-hook',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-author-hook',

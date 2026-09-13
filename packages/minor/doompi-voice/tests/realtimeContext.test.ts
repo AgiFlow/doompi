@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildRealtimeContext } from '../src/adapters/pi/realtimeContext.ts';
+
+import { buildRealtimeContext } from '../src/controllers/realtimeContext';
 
 function message(messageValue: Record<string, unknown>): Record<string, unknown> {
   return { type: 'message', message: messageValue };

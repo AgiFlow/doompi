@@ -14,12 +14,13 @@ import {
   SelectValue,
   Textarea,
 } from '@agimon-ai/doompi-web-components';
-import type { SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
 import { type KeyboardEvent as ReactKeyboardEvent, useState } from 'react';
-import type { SubagentCatalogAgent } from '../../types/webSubagents.ts';
-import { abbreviateCwd } from '../lib/format.ts';
-import { launchCommand, type LaunchRequest, modelChoices } from '../lib/launchCommand.ts';
-import { requestLaunch } from '../stores/subagentsStore.ts';
+
+import type { SubagentCatalogAgent } from '../../types/webSubagents';
+import { launchAgent } from '../api/catalog';
+import { abbreviateCwd } from '../lib/format';
+import { type LaunchRequest, modelChoices } from '../lib/launchCommand';
+import { clearPendingLaunch, requestLaunch } from '../stores/subagentsStore';
 
 /** The picker's stand-in for "no override"; a Radix item cannot carry an empty value. */
 const AGENT_DEFAULT = 'agent-default';
@@ -31,8 +32,7 @@ function FieldLabel({ children }: { children: string }) {
 
 /**
  * Launches one agent from the catalog: the task, whether the child forks
- * this session, a model override, then the exact /run line the session will
- * parse. Enter launches, since the composer sends the same way.
+ * this session, and a model override. The session server starts the child.
  */
 export function LaunchAgentDialog({
   sessionId,
@@ -41,7 +41,6 @@ export function LaunchAgentDialog({
   models,
   fork: initialFork,
   initialTask,
-  send,
   onClose,
   onLaunched,
 }: {
@@ -51,24 +50,35 @@ export function LaunchAgentDialog({
   models: readonly string[];
   fork: boolean;
   initialTask: string;
-  send: SessionFrameSender;
   onClose: () => void;
   onLaunched: () => void;
 }) {
   const [task, setTask] = useState(initialTask);
   const [fork, setFork] = useState(initialFork);
   const [model, setModel] = useState(AGENT_DEFAULT);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>();
   const request: LaunchRequest = { agent: agent.name, task, fork, ...(model === AGENT_DEFAULT ? {} : { model }) };
-  const command = launchCommand(request);
 
-  const launch = (): void => {
-    requestLaunch(send, sessionId, command, agent.name);
-    onLaunched();
+  const launch = async (): Promise<void> => {
+    if (busy) return;
+    setBusy(true);
+    setError(undefined);
+    requestLaunch(sessionId, agent.name);
+    try {
+      await launchAgent(sessionId, request);
+      onLaunched();
+    } catch (cause) {
+      clearPendingLaunch(sessionId);
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
   };
   const onTaskKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      launch();
+      void launch();
     }
   };
 
@@ -146,7 +156,7 @@ export function LaunchAgentDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <span className="text-2xs text-doom-faint">a pick becomes model=… on the command</span>
+              <span className="text-2xs text-doom-faint">leave unset to use the agent's default</span>
             </div>
             <div className="flex flex-col gap-1.5">
               <FieldLabel>CWD</FieldLabel>
@@ -154,12 +164,11 @@ export function LaunchAgentDialog({
               <span className="text-2xs text-doom-faint">the session's directory</span>
             </div>
           </div>
-          <div className="flex flex-col gap-1 rounded-md border border-doom-border bg-doom-deep px-3 py-2">
-            <FieldLabel>SENT TO THE SESSION</FieldLabel>
-            <pre data-testid="launch-command" className="whitespace-pre-wrap break-words text-xs text-doom-green">
-              {command}
-            </pre>
-          </div>
+          {error ? (
+            <p role="alert" className="text-xs text-doom-red">
+              {error}
+            </p>
+          ) : null}
           <DialogFooter className="flex-wrap sm:flex-nowrap">
             <span className="w-full text-2xs text-doom-faint sm:w-auto">
               the run opens in its own tab once it starts
@@ -168,8 +177,14 @@ export function LaunchAgentDialog({
             <Button variant="outline" size="xs" data-testid="launch-cancel" onClick={onClose}>
               cancel
             </Button>
-            <Button variant="primary" size="xs" data-testid="launch-submit" onClick={launch}>
-              launch
+            <Button
+              variant="primary"
+              size="xs"
+              data-testid="launch-submit"
+              disabled={busy}
+              onClick={() => void launch()}
+            >
+              {busy ? 'launching…' : 'launch'}
             </Button>
           </DialogFooter>
         </DialogBody>

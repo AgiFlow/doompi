@@ -1,6 +1,6 @@
 export {
-  type AgentPluginMcpConfigSource,
   normalizeAgentPluginMcpSource,
+  type AgentPluginMcpConfigSource,
   type NormalizeAgentPluginMcpOptions,
   type NormalizedAgentPluginMcpSource,
-} from '../adapters/agentPluginMcp.ts';
+} from '../services/agentPluginMcp';

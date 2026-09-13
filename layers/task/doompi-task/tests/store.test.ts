@@ -1,16 +1,18 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
+
 import { TASK_EVENT, type TaskErrorSink, type TaskEventSink } from '../src/exports/logSinkTelemetry';
 import {
   ERR_ORPHANED_BY_RESTART,
   ERR_ORPHANED_BY_SESSION,
   reconcileOrphanedDelegations,
-} from '../src/exports/store/reconcile';
-import { applyTaskMutation, isCommittingOp, type Op, singleItemOutcome } from '../src/exports/store/reducer';
-import { TaskStore } from '../src/exports/store/taskStore';
-import { emptyDocument, type TaskDocument } from '../src/exports/store/types';
+} from '../src/exports/storeReconcile';
+import { applyTaskMutation, isCommittingOp, type Op, singleItemOutcome } from '../src/exports/storeReducer';
+import { TaskStore } from '../src/exports/storeTaskStore';
+import { emptyDocument, type TaskDocument } from '../src/exports/storeTypes';
 
 const NOW = '2026-07-31T00:00:00.000Z';
 const DEAD_PID = 2 ** 30;
@@ -246,57 +248,45 @@ describe('TaskStore', () => {
     expect(report.error).toHaveBeenCalledWith(TASK_EVENT.storeReadFailed, expect.anything(), expect.anything());
   });
 
-  it('contains a failing change listener instead of letting it escape the poll timer', async () => {
+  it('contains a failing local change listener instead of letting it escape the mutation', async () => {
     const report = makeReport();
-    const store = new TaskStore({ storePath, pollIntervalMs: 20, report });
+    const store = new TaskStore({ storePath, report });
     store.read();
     const unsubscribe = store.onExternalChange(() => {
       throw new Error('extension context is stale');
     });
 
-    await createTask(new TaskStore({ storePath }), 'external');
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await createTask(store, 'local');
 
     expect(report.error).toHaveBeenCalledWith(TASK_EVENT.storeListenerFailed, expect.any(Error), expect.anything());
     unsubscribe();
     store.dispose();
   });
 
-  it('keeps asynchronous polling checks non-overlapping', async () => {
-    fs.writeFileSync(storePath, JSON.stringify(emptyDocument()), 'utf8');
+  it('does not poll the durable file for live changes', async () => {
     const realReadFile = fs.promises.readFile.bind(fs.promises);
-    let concurrent = 0;
-    let maximumConcurrent = 0;
-    vi.spyOn(fs.promises, 'readFile').mockImplementation(async (...args) => {
-      concurrent += 1;
-      maximumConcurrent = Math.max(maximumConcurrent, concurrent);
-      await new Promise((resolve) => setTimeout(resolve, 40));
-      try {
-        return await realReadFile(...args);
-      } finally {
-        concurrent -= 1;
-      }
-    });
-    const store = new TaskStore({ storePath, pollIntervalMs: 10 });
+    const readFile = vi.spyOn(fs.promises, 'readFile');
+    const store = new TaskStore({ storePath });
+    store.read();
     const unsubscribe = store.onExternalChange(() => undefined);
 
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(maximumConcurrent).toBe(1);
+    expect(readFile).not.toHaveBeenCalled();
+    expect(realReadFile).toBeDefined();
     unsubscribe();
     store.dispose();
   });
 
-  it('notifies listeners when another process writes the file', async () => {
-    const store = new TaskStore({ storePath, pollIntervalMs: 20 });
+  it('does not observe another process write through the durable file', async () => {
+    const store = new TaskStore({ storePath });
     store.read();
     const seen: number[] = [];
     const unsubscribe = store.onExternalChange((document) => seen.push(document.rev));
 
     await createTask(new TaskStore({ storePath }), 'external');
-    await new Promise((resolve) => setTimeout(resolve, 200));
 
-    expect(seen.at(-1)).toBe(1);
+    expect(seen).toEqual([]);
     unsubscribe();
     store.dispose();
   });

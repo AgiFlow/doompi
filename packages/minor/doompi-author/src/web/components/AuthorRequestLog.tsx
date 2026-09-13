@@ -1,4 +1,4 @@
-import type { AuthorNativeAnchor, AuthorRequestRecord } from '../lib/authorViewportTypes.ts';
+import type { AuthorNativeAnchor, AuthorRequestRecord } from '../lib/authorViewportTypes';
 
 const STATUS_LABELS: Record<AuthorRequestRecord['status'], string> = {
   REQUESTED: 'Request queued',

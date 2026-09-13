@@ -1,7 +1,8 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Button } from '@agimon-ai/doompi-web-components';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
-import { parsePlanStatus, PLAN_STATUS_KEY } from '../../types/planApi.ts';
-import { planTab } from './PlanPanel.tsx';
+
+import { parsePlanStatus, PLAN_STATUS_KEY } from '../../types/planApi';
+import { planTab } from './PlanPanel';
 
 /**
  * The plan group's body in the activity dock: the plan this session wrote, and

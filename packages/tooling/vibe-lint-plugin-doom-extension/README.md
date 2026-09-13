@@ -44,17 +44,33 @@ The preset checks the canonical DoomPi source layout, layer dependencies, public
 
 Package-owned Help prompts live at `src/prompts/<prompt-name>/SKILL.md`. The `doom-prompt-shape` rule checks the prompt directory name, frontmatter, `llms.txt` link, and publish allowlist entry. A prompt may keep support material in adjacent `references`, `scripts`, `assets`, and `agents` directories.
 
-### HTTP APIs
+### Source structure and public entries
 
-A package that serves HTTP declares `doompiApi` in `package.json`. The declaration names a base path and an entry for each supported scope: `session` for the session server and `hub` for the cockpit hub.
+- `src/extensions/pi.ts`, `server.ts`, and `web.ts` are direct host entries, built or source-bundled without export wrappers.
+- `src/controllers/` translates API, typed method, and command requests into service calls.
+- `src/services/{serviceName}/index.ts` owns package logic; its `type.ts` owns local service contracts. Filesystem, network, process work, and Cordis service implementations belong here.
+- `src/models/` owns state; `src/tools/` declares tools that consume services and models.
+- `src/constants/`, `src/schemas/`, and `src/types/` hold shared data, validation, and cross-capability types.
+- Flat `src/exports/*.ts` modules expose selected reusable capabilities through pure re-exports. They do not forward extension, browser, or executable entries.
+- `src/web/`, `src/tui/`, and `src/bin/` retain browser presentation, terminal presentation, and standalone executable composition.
 
-`package-api-manifest` checks the base path, each declared entry, and the publish allowlist for the built module imported by the host. `package-api-entry` checks that the entry exports the named `api` value expected by generated route modules. Installation does not validate this manifest, so an invalid published path may not surface until a host loads the package.
+The preset rejects `adapters`, `container`, `containers`, `commands`, and `providers` source roots. It also rejects nested exports and imports through old compatibility wrappers. Relative imports omit file extensions and `/index`; `clean-import-path` is enabled at error severity.
+
+Dependencies point inward: controllers and tools consume services/models, services consume models and other services, models consume schemas/types/constants, schemas consume types/constants, and types consume constants. Extension and executable roots assemble the graph without importing public export wrappers or each other. The direct web entry retains the same browser-safe dependencies as `src/web`.
+
+### Plugin lifecycle and HTTP APIs
+
+Use `definePiExtension`, `defineServerPlugin`, and `defineWebPlugin` at direct host entries. Named contribution objects handle static declarations; typed per-mount factories construct shared state. Pi factories and server scope factories may return a promise, which the helper awaits before registration and readiness. Commands and static tools use declaration arrays instead of registrar callbacks. Pi tools may also supply a `PiToolCollection` with `snapshot()` and `subscribe(listener)` for changing catalogs. Reuse immutable declarations across snapshots. A new declaration for a registered name replaces its implementation and aborts old invocations. Withdrawn tools are cancelled and unavailable, and the helper owns subscription cleanup. Pi minorModes may use PiMinorModeCollection snapshot()/subscribe(listener) for changing catalog availability; the helper owns attachment, withdrawal, provider rebinding, and subscription cleanup. Cordis service implementations are included through the `services` contribution array.
+
+Pi and server lifecycle hooks are optional: `onStart` runs after registration, `onStop` stops work before registrations are removed, and `onDispose` releases final instance resources. Helpers await startup, abort the instance signal during shutdown, own registration cleanup, and roll back failed mounts. Do not generate empty hooks or duplicate host bootstrap and disposal wiring.
+
+HTTP controllers export `DoomApi` declarations for the server plugin's `api` arrays. Declare one `doompiServer` block with `entry: './src/extensions/server.ts'`, its built dist path, and supported `global`, `workspace`, and `session` scopes. The `package-api-manifest` rule rejects the legacy `doompiApi` field. Browser composition lives directly at `src/extensions/web.ts`, referenced by `doompiWeb.client` and bundled from source.
 
 ### Cordis and runtime ownership
 
-The Cordis rules require one runner-owned host. They check host-first and finalizer-last activation, one captured feature lease and plugin fiber, and shutdown of the fiber before its lease. Providers may publish only from the context owned by their mounted plugin or an owned injection. Required services belong in `ctx.inject`. Stable Pi wrappers must identity-check and clear their active binding during injection cleanup when a provider unloads.
+The shared helpers own the runner host, leases, child fibers, and cleanup. Feature entries declare capabilities without creating a Cordis Context or manually acquiring a host lease. Service implementations publish from their owned context. Required service consumption belongs in an owning injection; bindings must be released when their provider disappears.
 
-Pi EventBus use is reserved for the versioned host query and is followed through local aliases and helper parameters. Same-runner runtime protocol imports are rejected except for passive protocol error classes. Live `global` and `globalThis` capability registries are rejected. The reload-handoff and bootstrap-claim modules remain narrow exceptions only while their TTL, generation, identity, or release fences remain intact.
+Pi EventBus use is reserved for the versioned host query. Same-runner runtime protocol imports and live `global` or `globalThis` capability registries are rejected. Reload handoff and bootstrap claims remain narrow runtime exceptions with their existing lifetime and identity checks.
 
 ## Public API
 

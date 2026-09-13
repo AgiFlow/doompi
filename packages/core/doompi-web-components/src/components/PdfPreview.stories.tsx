@@ -1,4 +1,4 @@
-import { PdfPreview } from './PdfPreview.tsx';
+import { PdfPreview } from './PdfPreview';
 
 // A one page PDF with no content stream, so the canvas draws an empty page.
 const PDF =

@@ -1,9 +1,11 @@
 import path from 'node:path';
-import type { FooterStatusPlacement, FooterTextSegment } from '@agimon-ai/doompi-extension-contracts/footer';
+
+import type { FooterStatusPlacement, FooterTextSegment } from '@agimon-ai/doompi-core/footer';
 import type { ExtensionContext, ReadonlyFooterDataProvider, Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
 import { type Component, type TUI, visibleWidth } from '@earendil-works/pi-tui';
-import type { DoomUiState } from '../services/state/uiState.ts';
-import { fitLine, padLine } from './rendering.ts';
+
+import type { DoomUiState } from '../models/uiState';
+import { fitLine, padLine } from './rendering';
 
 const NARROW_FOOTER_WIDTH = 90;
 const SEGMENT_SEPARATOR = ' · ';

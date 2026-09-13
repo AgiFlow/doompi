@@ -1,6 +1,7 @@
 import { ansiSpans } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
-import { fetchRunnerLog, followRunnerLog, type RunnerLogFollow } from '../api/logApi.ts';
+
+import { fetchRunnerLog, followRunnerLog, type RunnerLogFollow } from '../api/logApi';
 
 /**
  * The newest line a running runner has written, for a row that has one line to

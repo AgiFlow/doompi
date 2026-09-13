@@ -1,4 +1,4 @@
-import { collapseLines } from './collapse.ts';
+import { collapseLines } from './collapse';
 
 /**
  * The hashline wire format, parsed the way the TUI's hashlineRendering does:

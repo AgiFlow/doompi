@@ -10,7 +10,7 @@
  * A step the reader goes back to still has what they chose, and the agent is
  * asked once rather than once per question.
  */
-import type { QuestionAnswer } from '../../types/questionnaire.ts';
+import type { QuestionAnswer } from '../../types/questionnaire';
 
 /** The row every question gets, so a reader always has a way past a bad set of options. */
 export const CUSTOM_LABEL = 'Type something.';

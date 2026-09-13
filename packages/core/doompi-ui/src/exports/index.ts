@@ -6,25 +6,25 @@ export {
   type DoomConfigActionInput,
   type DoomConfigContributionHandle,
   type DoomConfigContributionOptions,
-} from '@agimon-ai/doompi-extension-contracts/config';
+} from '@agimon-ai/doompi-core/config';
 export {
   type DoomFooterContributionDefinition,
   type DoomFooterContributionHandle,
   type DoomFooterContributionValue,
-} from '@agimon-ai/doompi-extension-contracts/footer';
+} from '@agimon-ai/doompi-core/footer';
 export {
   type DoomLeaderContributionHandle,
   type LeaderBinding as DoomLeaderBinding,
   type LeaderCommand as DoomLeaderCommand,
   type LeaderContribution as DoomLeaderContribution,
   type LeaderSegment as DoomLeaderSegment,
-} from '@agimon-ai/doompi-extension-contracts/leader';
+} from '@agimon-ai/doompi-core/leader';
 export {
   DOOM_UI_HUB_SERVICE,
   type DoomUiHubService,
   readDoomUiHub,
   requireDoomUiHub,
-} from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-core/ui-hub';
 export {
   createUiTelemetry,
   UI_EVENT,
@@ -32,20 +32,20 @@ export {
   type UiEventName,
   type UiTelemetry,
   type UiTelemetryOptions,
-} from '../adapters/telemetry/logSinkTelemetry.ts';
-export { DoomUiState, type LeaderOption, type LeaderSnapshot } from '../services/state/uiState.ts';
-export { DoomEditor } from '../tui/doomEditor.ts';
-export { DoomFooter } from '../tui/doomFooter.ts';
-export { DoomHeader } from '../tui/doomHeader.ts';
+} from '../services/telemetry';
+export { DoomUiState, type LeaderOption, type LeaderSnapshot } from '../models/uiState';
+export { DoomEditor } from '../tui/doomEditor';
+export { DoomFooter } from '../tui/doomFooter';
+export { DoomHeader } from '../tui/doomHeader';
 export {
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_NAVIGATION_KEYS,
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from '../tui/doomOverlay.ts';
-export { LeaderHints } from '../tui/leaderHints.ts';
-export { DEFAULT_THEME, DEFAULT_THEME_NAME, writeDefaultTheme } from '../tui/theme.ts';
+} from '../tui/doomOverlay';
+export { LeaderHints } from '../tui/leaderHints';
+export { DEFAULT_THEME, DEFAULT_THEME_NAME, writeDefaultTheme } from '../tui/theme';
 export {
   DoomToolCall,
   DoomToolResult,
@@ -55,5 +55,5 @@ export {
   previousDoomToolResult,
   renderToolBadge,
   renderToolHeading,
-} from '../tui/toolChrome.ts';
-export { type DoomHarnessMetadata, readDoomHarnessMetadata } from '../types/harnessMetadata.ts';
+} from '../tui/toolChrome';
+export { type DoomHarnessMetadata, readDoomHarnessMetadata } from '../types/harnessMetadata';

@@ -1,6 +1,7 @@
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { runTuiQuestionnaire } from '../../src/tui/runQuestionnaire.ts';
+
+import { runTuiQuestionnaire } from '../../src/tui/runQuestionnaire';
 
 describe('runTuiQuestionnaire', () => {
   it('uses Pi custom UI inline instead of a detached overlay', async () => {

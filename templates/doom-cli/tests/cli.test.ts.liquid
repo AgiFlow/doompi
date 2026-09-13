@@ -1,0 +1,5 @@
+import { expect, test } from 'vitest';
+import { run } from '../src/exports';
+test('rejects unknown commands', () => {
+  expect(() => run(['missing'])).toThrow('Unknown command');
+});

@@ -44,7 +44,7 @@ When autonomous voice is exactly `active`, the Pi tool set MUST contain the
 two stable façade names `describe_voice_tools` and `use_voice_tools` plus the
 standalone mode-owned `narrate`, while preserving unrelated active tools.
 Contributing extensions register callbacks through
-`@agimon-ai/doompi-extension-contracts/voice-tools`; those callbacks MUST NOT
+`@agimon-ai/doompi-voice/voice-tools`; those callbacks MUST NOT
 become direct Pi tools. `narrate` MUST NOT enter the façade capability catalog.
 
 The catalog token is session-scoped and opaque. A batch MUST use a fresh token,
@@ -394,7 +394,7 @@ Impact on result: prevents an old ASR, worker restart, or playback event from mu
 **Modules:**
 
 - `src/services/captureSession.ts`
-- `src/adapters/audio/infrastructure.ts`
+- `src/services/infrastructure/index.ts`
 
 Responsibilities:
 
@@ -438,7 +438,7 @@ The fail-closed lane remains half-duplex: playback and echo-tail PCM is excluded
 **Modules:**
 
 - `src/services/vad.ts`
-- `src/adapters/audio/silero.ts`
+- `src/services/silero/index.ts`
 - `src/services/autonomousEndpoint.ts`
 
 Responsibilities:
@@ -460,7 +460,7 @@ Impact on result: determines when speech is processed and directly controls perc
 **Modules:**
 
 - `src/services/turnSpool.ts`
-- `src/adapters/process/turnSpool.ts`
+- `src/services/fileTurnSpool/index.ts`
 
 Responsibilities:
 
@@ -515,7 +515,7 @@ Start phrases remain optional leading control phrases during ordinary active lis
 **Modules:**
 
 - `src/services/commandCorrection.ts`
-- `src/adapters/pi/voiceCommandContext.ts`
+- `src/controllers/voiceCommandContext.ts`
 
 Responsibilities:
 
@@ -554,8 +554,8 @@ Impact on result: prevents lost prompts, duplicate prompts, and orphan spools.
 - `src/services/narration.ts`
 - `src/services/narrationPlayback.ts`
 - `src/services/fallbackNarration.ts`
-- `src/adapters/pi/narrationTool.ts`
-- `src/adapters/pi/voice.ts`
+- `src/controllers/narrationTool.ts`
+- `src/controllers/voice.ts`
 
 Responsibilities:
 

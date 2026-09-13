@@ -6,4 +6,4 @@ export {
   type SkillEntry,
   type SkillGroup,
   type SkillOwnerNode,
-} from '../adapters/skillCatalog.ts';
+} from '../services/skillCatalog';

@@ -1,6 +1,7 @@
-import type { LeaderBindingContribution } from '@agimon-ai/doompi-web-contracts';
+import type { LeaderBindingContribution } from '@agimon-ai/doompi-core/web';
 import { describe, expect, it } from 'vitest';
-import { leaderConflicts, leaderGroup } from '../../src/web/lib/leaderTree.ts';
+
+import { leaderConflicts, leaderGroup } from '../../src/web/lib/leaderTree';
 
 const WORKFLOWS = { key: 'w', label: 'workflows', detail: 'multi-step agent runs' };
 const noop = (): void => undefined;

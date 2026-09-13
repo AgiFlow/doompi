@@ -1,6 +1,7 @@
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { openGoalHistoryOverlay } from '../../src/tui/goalHistoryOverlay.ts';
+
+import { openGoalHistoryOverlay } from '../../src/tui/goalHistoryOverlay';
 
 function contextFor(mode: 'tui' | 'rpc', custom: ExtensionContext['ui']['custom']): ExtensionContext {
   return {

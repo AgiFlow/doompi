@@ -1,7 +1,8 @@
 import { cva } from 'class-variance-authority';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
-import type { MessageLineTone as Tone } from '../types/tone.ts';
+
+import { cn } from '../lib/cn';
+import type { MessageLineTone as Tone } from '../types/tone';
 
 /** One line of a message body, with the tone the card's pure view logic chose for it. */
 export type MessageLineTone = Tone;

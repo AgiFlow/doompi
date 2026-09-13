@@ -1,13 +1,14 @@
+import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Badge, Button, EmptyState, Markdown } from '@agimon-ai/doompi-web-components';
-import type { TransientTab, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useEffect, useState } from 'react';
-import type { WorkflowRunView } from '../../types/webWorkflows.ts';
+
+import type { WorkflowRunView } from '../../types/webWorkflows';
 import type {
   WorkflowArtifactContentResponse,
   WorkflowArtifactsResponse,
   WorkflowArtifactView,
-} from '../../types/webWorkflowTerminal.ts';
-import { artifactContentUrl, fetchArtifact, fetchArtifacts } from '../api/terminalApi.ts';
+} from '../../types/webWorkflowTerminal';
+import { artifactContentUrl, fetchArtifact, fetchArtifacts } from '../api/terminalApi';
 
 const TAB_ID_PREFIX = 'workflows-artifact-';
 const BYTES_PER_UNIT = 1024;

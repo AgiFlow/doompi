@@ -2,8 +2,11 @@ import { defineConfig } from 'tsdown';
 
 export default defineConfig({
   entry: {
-    '*': ['src/exports/**/*.ts', '!src/exports/webClient.ts'],
-    voiceWorker: 'src/adapters/process/voiceWorker.ts',
+    'api-contracts': 'src/exports/apiContracts.ts',
+    '*': ['src/exports/*.ts'],
+    'extensions/pi': 'src/extensions/pi.ts',
+    'extensions/server': 'src/extensions/server.ts',
+    voiceWorker: 'src/services/voiceWorker/index.ts',
   },
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },

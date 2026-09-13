@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   describeAuthorToolsCallSummary,
   describeAuthorToolsResultLines,
   describeAuthorToolsToolName,
-} from '../../src/web/lib/describeAuthorToolsToolRender.ts';
+} from '../../src/web/lib/describeAuthorToolsToolRender';
 
 describe('the describe_author_tools tool view', () => {
   it('names the tool the package registers', () => {

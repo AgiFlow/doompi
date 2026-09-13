@@ -13,7 +13,7 @@ import {
   toolBudgetState,
   validateToolBudgetConfig,
   type ResolvedToolBudget,
-} from '../../src/adapters/runs/shared/toolBudget';
+} from '../../src/services/toolBudget';
 
 const savedEnv = new Map<string, string | undefined>();
 

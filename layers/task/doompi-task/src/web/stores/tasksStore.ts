@@ -1,5 +1,6 @@
-import { defineSessionStore, type SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
-import { TASKS_CHANNEL_TYPE, type WebTask, type WebTasksPayload } from '../../types/webTasks.ts';
+import { defineSessionStore, type SessionFrameSender } from '@agimon-ai/doompi-core/web';
+
+import { TASKS_CHANNEL_TYPE, type WebTask, type WebTasksPayload } from '../../types/webTasks';
 
 export interface TasksSession {
   tasks: WebTask[];

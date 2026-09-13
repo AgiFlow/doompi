@@ -3,8 +3,10 @@ import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PiVoiceConfigService } from '../src/adapters/pi/voice.ts';
+
+import { PiVoiceConfigService } from '../src/services/voiceConfig';
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 
@@ -18,12 +20,12 @@ afterEach(() => {
 
 describe('doom voice extension boundaries', () => {
   it('exposes one standard Pi factory with typed host integrations folded into it', async () => {
-    const piEntry = await readSource('src/exports/extensions/pi.ts');
-    const standardFactory = await readSource('src/adapters/pi/extension.ts');
-    const implementation = await readSource('src/adapters/pi/voice.ts');
+    const piEntry = await readSource('src/extensions/pi.ts');
+    const standardFactory = await readSource('src/controllers/voicePlugin.ts');
+    const implementation = await readSource('src/controllers/voice.ts');
     const alternateDoomEntry = await readSource('src/exports/extensions/doom.ts');
 
-    expect(piEntry).toContain('voicePiExtension as default');
+    expect(piEntry).toContain('export default voicePiExtension');
     expect(standardFactory).toMatch(/DOOM_UI_HUB_SERVICE/u);
     expect(standardFactory).toMatch(/register(Footer|Leader|Config)/u);
     expect(implementation).not.toMatch(/\bDoomConfigService\b|doom-pi-ui|createProtocolRuntime/u);
@@ -31,16 +33,16 @@ describe('doom voice extension boundaries', () => {
   });
 
   it('does not load project configuration blindly from the process working directory', async () => {
-    const implementation = await readSource('src/adapters/pi/voice.ts');
+    const implementation = await readSource('src/services/voiceConfig/index.ts');
 
     expect(implementation).not.toMatch(/configs\.load\(process\.cwd\(\)\)/u);
     expect(implementation).toMatch(/projectTrust|trusted|untrusted/u);
   });
 
   it('guards manual voice commands in print, JSON, and RPC hosts', async () => {
-    const implementation = await readSource('src/adapters/pi/voice.ts');
-    const commandStart = implementation.indexOf('pi.registerCommand(COMMAND_NAME');
-    const commandEnd = implementation.indexOf(`pi.registerCommand(AUTO_COMMAND_NAME`, commandStart);
+    const implementation = await readSource('src/controllers/voice.ts');
+    const commandStart = implementation.indexOf('COMMAND_NAME,');
+    const commandEnd = implementation.indexOf(`AUTO_COMMAND_NAME,`, commandStart);
     const commandSection = implementation.slice(commandStart, commandEnd);
 
     expect(commandStart).toBeGreaterThanOrEqual(0);
@@ -49,8 +51,8 @@ describe('doom voice extension boundaries', () => {
   });
 
   it('keeps production manual dictation behind the worker boundary', async () => {
-    const implementation = await readSource('src/adapters/pi/voice.ts');
-    const controller = await readSource('src/adapters/process/voiceWorkerSessionController.ts');
+    const implementation = await readSource('src/services/voiceDependencies/index.ts');
+    const controller = await readSource('src/services/voiceWorkerSessionController/index.ts');
 
     expect(implementation).toMatch(/sessionController:[^\n]*new VoiceWorkerSessionController\(/u);
     expect(controller).toContain('VoiceWorkerClient');
@@ -58,8 +60,8 @@ describe('doom voice extension boundaries', () => {
   });
 
   it('keeps production autonomous capture and STT behind the worker boundary', async () => {
-    const implementation = await readSource('src/adapters/pi/voice.ts');
-    const controller = await readSource('src/adapters/process/voiceWorkerAutoCaptureController.ts');
+    const implementation = await readSource('src/controllers/voice.ts');
+    const controller = await readSource('src/services/voiceWorkerAutoCaptureController/index.ts');
 
     expect(implementation).toMatch(/new VoiceWorkerAutoCaptureController/u);
     expect(controller).toContain('VoiceWorkerClient');
@@ -67,15 +69,15 @@ describe('doom voice extension boundaries', () => {
   });
 
   it('keeps the standalone narration tool behind the controller playback boundary', async () => {
-    const narrationTool = await readSource('src/adapters/pi/narrationTool.ts');
+    const narrationTool = await readSource('src/controllers/narrationTool.ts');
 
     expect(narrationTool).toContain('narrateAgent');
     expect(narrationTool).not.toMatch(/modelRegistry|TtsAdapter|\.complete\(|\.speak\(/u);
   });
 
   it('limits lifecycle narration to the zero-call turn-end fallback', async () => {
-    const implementation = await readSource('src/adapters/pi/voice.ts');
-    const controller = await readSource('src/adapters/process/voiceWorkerAutoCaptureController.ts');
+    const implementation = await readSource('src/controllers/voice.ts');
+    const controller = await readSource('src/services/voiceWorkerAutoCaptureController/index.ts');
     const legacyController = await readSource('src/services/autoCapture.ts');
     const legacyNarration = await readSource('src/services/autonomousNarration.ts');
 
@@ -83,16 +85,16 @@ describe('doom voice extension boundaries', () => {
       /NarrationGenerator|VoiceAutoCaptureAdjudicator|resolveAutoCaptureModelContracts|finalizedAssistantIntent/u,
     );
     expect(implementation).not.toMatch(/pi\.on\('(input|agent_start|message_end|tool_execution_end)'/u);
-    expect(implementation).toContain("pi.on('tool_execution_start'");
-    expect(implementation).toContain("pi.on('turn_end'");
-    expect(implementation).toContain("pi.on('agent_settled'");
+    expect(implementation).toContain('tool_execution_start:');
+    expect(implementation).toContain('turn_end:');
+    expect(implementation).toContain('agent_settled:');
     expect(implementation).toContain('narrateAttempted');
     expect(legacyController).toBe('');
     expect(legacyNarration).toBe('');
   });
 
   it('does not restore the removed Runner PTY protocol', async () => {
-    const implementation = await readSource('src/adapters/pi/voice.ts');
+    const implementation = await readSource('src/controllers/voice.ts');
 
     expect(implementation).not.toMatch(/runner-pty|createProtocolRuntime/u);
     expect(implementation).not.toMatch(/runCommand:\s*async/u);

@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSandboxLauncher } from '../../../src/adapters/harness.ts';
-import { sandboxImageTag } from '../../../src/adapters/sandboxImageTag.ts';
-import type { EngineCaptureResult, EngineProcessRunner } from '../../../src/types/sandboxHarness.ts';
+
+import { createSandboxLauncher } from '../../../src/services/harness';
+import { sandboxImageTag } from '../../../src/services/sandboxImageTag';
+import type { EngineCaptureResult, EngineProcessRunner } from '../../../src/types/sandboxHarness';
 
 const TAG = sandboxImageTag('9.9.9');
 const noLoginPorts = async (): Promise<number[]> => [];

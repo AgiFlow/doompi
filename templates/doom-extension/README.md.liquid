@@ -7,7 +7,7 @@ This package is a composable [DoomPi](https://www.npmjs.com/package/@agimon-ai/d
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- `@earendil-works/pi-coding-agent` 0.85.0
+- `@earendil-works/pi-coding-agent` 0.85.1
 
 ## Install
 
@@ -37,12 +37,12 @@ The published package includes `llms.txt` and the package-owned `src/prompts/doo
 
 Help remains optional. Loading the standalone Pi extension does not require DoomPi Help or any other DoomPi runtime service.
 
-To add another package-owned Help prompt, use the `scaffold-doom-prompt` feature with a `doompi-author-*` or `doompi-use-*` name and a concise description. Then link the generated `SKILL.md` from `llms.txt` and register a matching descriptor through the optional `DOOM_HELP_SERVICE` injection in the Pi adapter. Keep prompts as published resources under `src/prompts`; do not export them or copy them into `dist`.
+To add another package-owned Help prompt, use the `scaffold-doom-prompt` feature with a `doompi-author-*` or `doompi-use-*` name and a concise description. Then link the generated `SKILL.md` from `llms.txt` and add a matching descriptor to the Pi plugin `resources` array. Keep prompts as published resources under `src/prompts`; do not export them or copy them into `dist`.
 
 ## Public API
 
 ```ts
-import { Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService, activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension } from '@agimon-ai/{{ packageName | kebabCase }}';
+import { Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService } from '@agimon-ai/{{ packageName | kebabCase }}';
 ```
 
 The Pi host entry is also available at:
@@ -51,7 +51,25 @@ The Pi host entry is also available at:
 @agimon-ai/{{ packageName | kebabCase }}/extensions/pi
 ```
 
-The service layer is host-neutral. The Pi entrypoint owns only command registration and its runtime-scoped installation guard.
+Source entrypoints live directly in `src/extensions`. Flat `src/exports` modules expose selected services, constants, types, and schemas to other packages. tsdown builds explicit entries from both directories.
+
+## Structure and lifecycle
+
+- `extensions/`: typed Pi/server/web composition.
+- `controllers/`: commands, typed methods, and HTTP request handling.
+- `services/{serviceName}/`: package logic, with `index.ts` and `type.ts`.
+- `models/`: state. `tools/`: tool declarations using services.
+- `constants/` and `schemas/`: shared metadata and validation.
+
+Use a named plugin object for static contributions or a per-mount factory for shared dependencies. Pi factories and server scope factories may be async; the helper awaits their contribution result before registration and readiness. Declare tools with `defineTool`, commands with `defineCommand`, and include the same declarations in Pi and server arrays.
+
+The lifecycle is construct, register, `onStart`, run, `onStop`, unregister, `onDispose`. All hooks are optional and receive one typed context. The helper awaits startup before readiness. Shutdown aborts the context signal, stops work, removes registrations in reverse order, and performs final cleanup. Failed startup awaits rollback. Optional provider replacement rebinds contributions without restarting the plugin. Minor-mode actions are independent of mounting.
+
+Pi tools may be an array or a typed `PiToolCollection` with `snapshot()` and `subscribe(listener)`. Reuse immutable declarations across snapshots. Removing a tool cancels its active executions and makes its registered wrapper unavailable. A new declaration with the same name replaces the implementation and aborts the old invocation signal. The helper owns subscription cleanup. Use collections only when the catalog changes while mounted.
+
+Pi minorModes may use a typed `PiMinorModeCollection` with `snapshot()` and `subscribe(listener)` when catalog availability changes. The helper owns owner attachment, withdrawal, provider rebinding, and subscription cleanup. Use arrays for a fixed catalog.
+
+Factories construct state; `onStart` begins external work. `onStop` runs when the start stage was reached, including a failed `onStart`. Use `onDispose` only for remaining instance resources. Do not add empty hooks or manual registration cleanup.
 
 ## Development
 

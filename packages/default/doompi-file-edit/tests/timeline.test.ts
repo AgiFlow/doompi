@@ -1,16 +1,18 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { SUBAGENT_CHILD_ENV, SUBAGENT_PARENT_SESSION_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';
+
+import { SUBAGENT_CHILD_ENV, SUBAGENT_PARENT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FileEditPaths } from '../src/adapters/FileEditPaths/FileEditPaths.ts';
-import { EditTracker } from '../src/adapters/EditTracker/EditTracker.ts';
-import { NodeSnapshotStoreAdapter } from '../src/adapters/node/snapshotStore.ts';
-import { NodeTreeManifestAdapter } from '../src/adapters/node/treeManifest.ts';
-import { TimelineStore } from '../src/adapters/TimelineStore/TimelineStore.ts';
-import { FileEditOverlayComponent } from '../src/tui/fileEditOverlay.ts';
-import type { TimelineEvent } from '../src/types/domain.ts';
+
+import { EditTracker } from '../src/services/editTracker';
+import { FileEditPaths } from '../src/services/fileEditPaths';
+import { NodeSnapshotStoreAdapter } from '../src/services/snapshotStore';
+import { TimelineStore } from '../src/services/timelineStore';
+import { NodeTreeManifestAdapter } from '../src/services/treeManifest';
+import { FileEditOverlayComponent } from '../src/tui/fileEditOverlay';
+import type { TimelineEvent } from '../src/types/domain';
 
 let directory: string;
 let store: TimelineStore;

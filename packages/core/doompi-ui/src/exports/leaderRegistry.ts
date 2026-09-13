@@ -5,4 +5,4 @@ export {
   type DoomLeaderRegistrationResult,
   DoomLeaderRegistry,
   type DoomLeaderResolvedOption,
-} from '../services/leader/leaderRegistry.ts';
+} from '../services/leaderRegistry';

@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   MessageItem,
   MessageItemBody,
@@ -6,7 +7,7 @@ import {
   type StatusTone,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+
 import {
   STATUS_LABEL,
   type TaskResultTone,
@@ -14,7 +15,7 @@ import {
   type TaskStatus,
   taskCallView,
   taskResultView,
-} from '../lib/taskToolFormat.ts';
+} from '../lib/taskToolFormat';
 
 const STATUS_TONE: Record<TaskStatus, string> = {
   pending: 'text-doom-dim',

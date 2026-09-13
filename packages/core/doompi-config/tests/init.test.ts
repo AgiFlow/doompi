@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parse as parseYaml } from 'yaml';
+
 import {
   DOOM_CONFIG_TEMPLATES,
   GLOBAL_DOOM_SEED_FILES,
@@ -11,7 +13,7 @@ import {
   initializeRepositoryDoomConfig,
   parseDoomConfig,
   REPOSITORY_DOOM_CONFIG_TEMPLATES,
-} from '../src/exports/index.ts';
+} from '../src/exports';
 
 const temporaryRoots: string[] = [];
 const MAJOR_MODES = ['minimal', 'copilot'] as const;

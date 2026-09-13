@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { parseGoalCommand } from '../../src/services/parser.ts';
-import { MAX_OBJECTIVE_LENGTH } from '../../src/types/goal.ts';
-import {
-  budgetHintOf,
-  CLEAR_GOAL_COMMAND,
-  editGoalCommand,
-  normalizeObjective,
-} from '../../src/web/lib/goalCommands.ts';
+
+import { parseGoalCommand } from '../../src/services/parser';
+import { MAX_OBJECTIVE_LENGTH } from '../../src/types/goal';
+import { budgetHintOf, CLEAR_GOAL_COMMAND, editGoalCommand, normalizeObjective } from '../../src/web/lib/goalCommands';
 
 /**
  * What the cockpit's edit form sends.

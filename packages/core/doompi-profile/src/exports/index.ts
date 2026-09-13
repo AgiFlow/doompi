@@ -1,6 +1,4 @@
-export { createProfileTelemetry, type ProfileTelemetryOptions } from '../adapters/telemetry/logSinkTelemetry.ts';
-export { personaExtension } from '../adapters/pi/persona.ts';
-export { profileExtension } from '../adapters/pi/extension.ts';
+export { createProfileTelemetry, type ProfileTelemetryOptions } from '../services/logSinkTelemetry';
 export {
   PROFILE_STATUS_KEY,
   profileDescription,
@@ -8,10 +6,10 @@ export {
   profileStatus,
   profileSummary,
   profileTitle,
-} from '../services/profileText.ts';
+} from '../services/profileText';
 export {
   PROFILE_EVENT,
   type ProfileEventAttributes,
   type ProfileEventName,
   type ProfileTelemetry,
-} from '../types/telemetry.ts';
+} from '../types/telemetry';

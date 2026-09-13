@@ -1,11 +1,13 @@
 import { readFile } from 'node:fs/promises';
-import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+
+import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership.ts';
-import { browserVoiceMediaClientId } from '../src/web/lib/browserMediaIdentity.ts';
-import { VoiceActivitySection } from '../src/web/components/VoiceActivitySection.tsx';
-import { VoiceComposerAction } from '../src/web/components/VoiceComposerAction.tsx';
-import { VoiceToolMessage } from '../src/web/components/VoiceToolMessage.tsx';
+
+import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership';
+import { VoiceActivitySection } from '../src/web/components/VoiceActivitySection';
+import { VoiceComposerAction } from '../src/web/components/VoiceComposerAction';
+import { VoiceToolMessage } from '../src/web/components/VoiceToolMessage';
+import { browserVoiceMediaClientId } from '../src/web/lib/browserMediaIdentity';
 import {
   activeVoiceSession,
   voiceMediaBrowserState,
@@ -13,7 +15,7 @@ import {
   voiceMediaWakes,
   voiceOwnershipChannel,
   waitForVoiceMediaWake,
-} from '../src/web/stores/voiceMediaWakeStore.ts';
+} from '../src/web/stores/voiceMediaWakeStore';
 
 afterEach(() => {
   activeVoiceSession.reset();
@@ -25,9 +27,9 @@ afterEach(() => {
 describe('browser voice media', () => {
   it('reuses page voice state across independently evaluated session compositions', async () => {
     vi.resetModules();
-    const first = await import('../src/web/stores/voiceMediaWakeStore.ts');
+    const first = await import('../src/web/stores/voiceMediaWakeStore');
     vi.resetModules();
-    const second = await import('../src/web/stores/voiceMediaWakeStore.ts');
+    const second = await import('../src/web/stores/voiceMediaWakeStore');
 
     expect(second.activeVoiceSession).toBe(first.activeVoiceSession);
     expect(second.voiceMediaBrowserState).toBe(first.voiceMediaBrowserState);
@@ -38,7 +40,7 @@ describe('browser voice media', () => {
     first.voiceMediaWakes.reset();
   });
   it('publishes both controls and page-lifetime media channels', async () => {
-    const source = await readFile(new URL('../src/web/index.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/extensions/web.ts', import.meta.url), 'utf8');
 
     expect(source).toContain('channels: [voiceMediaWakeChannel, voiceOwnershipChannel]');
     expect(source).toContain('start: startVoiceMediaRuntime');
@@ -56,13 +58,13 @@ describe('browser voice media', () => {
   });
 
   it('does not classify autonomous voice capture as background work', async () => {
-    const source = await readFile(new URL('../src/web/index.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/extensions/web.ts', import.meta.url), 'utf8');
 
     expect(source).toContain('marksBackgroundWork: false');
   });
 
   it('presents narration as readable conversational output', async () => {
-    const source = await readFile(new URL('../src/web/index.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/extensions/web.ts', import.meta.url), 'utf8');
     const rendered = renderPlugin(
       VoiceToolMessage,
       toolMessagePropsFixture({
@@ -133,7 +135,7 @@ describe('browser voice media', () => {
   });
 
   it('keeps process-local manual recording out of the browser minor-mode picker', async () => {
-    const source = await readFile(new URL('../src/adapters/pi/voice.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/controllers/voice.ts', import.meta.url), 'utf8');
     const start = source.indexOf("label: 'Manual voice'");
     const manualAction = source.slice(start, source.indexOf("id: 'deactivate'", start));
 
@@ -195,7 +197,7 @@ describe('browser voice media', () => {
 
     expect(source).toContain('data-testid="composer-voice-action"');
     expect(source).not.toContain('data-testid="composer-voice-error"');
-    expect(source).toContain('new ManualComposerRecorder(appendComposerDraft');
+    expect(source).toMatch(/new ManualComposerRecorder\(\s*appendComposerDraft/u);
     expect(source).toContain('manualRecorder.current?.toggle(sessionId)');
     expect(source).toContain('sessionId === null || autonomous');
     expect(source).toContain('manual voice is unavailable while autonomous voice is active');

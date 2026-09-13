@@ -1,6 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
+
 import { collectSpecifiers, projectPath, readSource } from './moduleGraph.js';
 
 /**

@@ -1,10 +1,16 @@
+import {
+  createDoomToolSurface,
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolSurfaceService,
+} from '@agimon-ai/doompi-core/tool-surface';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { installVoiceRuntime } from '../src/adapters/pi/voice.ts';
-import type { VoiceDependencies } from '../src/types/index.ts';
-import type { RealtimeHost } from '../src/adapters/realtime/realtimeHost.ts';
-import type { RealtimeSignInAttempt } from '../src/adapters/realtime/realtimeRuntime.ts';
+
+import type { RealtimeHost } from '../src/services/realtimeHost';
+import type { RealtimeSignInAttempt } from '../src/services/realtimeRuntime';
+import type { VoiceDependencies } from '../src/types';
+import { voiceRuntime } from './helpers/voiceRuntime';
 
 const disposers: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -14,13 +20,14 @@ afterEach(async () => {
 async function settle() {
   for (let index = 0; index < 30; index += 1) await Promise.resolve();
 }
-function fixture(mode: 'live' | 'legacy' = 'live') {
+async function fixture(mode: 'live' | 'legacy' = 'live') {
   const cordis = new Context();
   const commands = new Map<string, { handler(args: string, context: ExtensionContext): Promise<void> }>();
   const events = new Map<string, (event: object, context: ExtensionContext) => Promise<void>>();
   const tools = new Map<string, { name: string; execute(...args: unknown[]): unknown }>();
   const branch: ReturnType<ExtensionContext['sessionManager']['getBranch']> = [];
   let activeTools = ['read'];
+  let toolSurface: DoomToolSurfaceService | undefined;
   const context = {
     hasUI: true,
     isIdle: () => true,
@@ -37,9 +44,12 @@ function fixture(mode: 'live' | 'legacy' = 'live') {
         await handler(value, ctx);
       });
     },
-    registerTool: (tool: { name: string; execute(...args: unknown[]): unknown }) => tools.set(tool.name, tool),
-    getActiveTools: () => activeTools,
+    registerTool: (tool: { name: string; execute(...args: unknown[]): unknown }) => {
+      tools.set(tool.name, tool);
+      toolSurface?.refresh();
+    },
     getAllTools: () => [...tools.values()],
+    getActiveTools: () => activeTools,
     setActiveTools: vi.fn((names: string[]) => {
       activeTools = names;
     }),
@@ -48,7 +58,7 @@ function fixture(mode: 'live' | 'legacy' = 'live') {
     sendUserMessage: vi.fn(),
   } as unknown as ExtensionAPI;
   const manual = { state: 'idle', toggle: vi.fn(async () => undefined), shutdown: vi.fn(async () => undefined) };
-  const container = {
+  const dependencies = {
     sessionController: manual,
     configs: { load: () => ({ voice: { mode } }) },
     clock: {
@@ -84,7 +94,18 @@ function fixture(mode: 'live' | 'legacy' = 'live') {
   };
   const signIn = vi.fn(async (_signal: AbortSignal) => attempt);
   const waitUntilConfigured = vi.fn(async () => undefined);
-  installVoiceRuntime(cordis, pi, { container, liveHost: host, liveSignIn: signIn, waitUntilConfigured });
+  toolSurface = createDoomToolSurface({
+    generation: 'voice-live-test',
+    // 'read' stands in for the host's own tools: the surface only removes, so it
+    // has to start from the whole registered inventory.
+    allTools: () => ['read', ...tools.keys()],
+    activeTools: () => activeTools,
+    setActiveTools: (names) => {
+      activeTools = [...names];
+    },
+  });
+  cordis.provide(DOOM_TOOL_SURFACE_SERVICE, toolSurface);
+  await voiceRuntime.install(cordis, pi, { dependencies, liveHost: host, liveSignIn: signIn, waitUntilConfigured });
   disposers.push(async () => {
     await cordis.fiber.dispose();
   });
@@ -114,7 +135,7 @@ function fixture(mode: 'live' | 'legacy' = 'live') {
 
 describe('production live voice command wiring', () => {
   it('reports login startup failure without exposing authentication details', async () => {
-    const f = fixture();
+    const f = await fixture();
     f.signIn.mockRejectedValueOnce(new Error('private-provider-credential'));
     await f.command('voice-auto', 'login');
     expect(f.context.ui.notify).toHaveBeenCalledWith(
@@ -125,7 +146,7 @@ describe('production live voice command wiring', () => {
   });
 
   it('reports login completion without activating media', async () => {
-    const f = fixture();
+    const f = await fixture();
     await f.command('voice-auto', 'login');
     f.finishLogin();
     await settle();
@@ -137,7 +158,7 @@ describe('production live voice command wiring', () => {
   });
 
   it('reports login failure but suppresses completion of a cancelled attempt', async () => {
-    const failed = fixture();
+    const failed = await fixture();
     await failed.command('voice-auto', 'login');
     failed.failLogin(new Error('private-login-error'));
     await settle();
@@ -145,7 +166,7 @@ describe('production live voice command wiring', () => {
       'Subscription sign-in failed or timed out. Run /voice-auto login to try again.',
       'error',
     );
-    const cancelled = fixture();
+    const cancelled = await fixture();
     await cancelled.command('voice-auto', 'login');
     await cancelled.command('voice-auto', 'login-cancel');
     vi.mocked(cancelled.context.ui.notify).mockClear();
@@ -155,7 +176,7 @@ describe('production live voice command wiring', () => {
     expect(cancelled.host.start).not.toHaveBeenCalled();
   });
   it('does not gate live tool descriptions or failed narration on local ASR', async () => {
-    const f = fixture();
+    const f = await fixture();
     await f.events.get('session_start')!({}, f.context);
     f.host.poll.mockImplementation(async (activationId) => ({ activationId, state: 'active', cursor: 0, events: [] }));
     await f.command('voice-auto');
@@ -167,7 +188,7 @@ describe('production live voice command wiring', () => {
     await f.command('voice-auto', 'end');
   });
   it('does not sign in or activate during installation or session restoration', async () => {
-    const f = fixture();
+    const f = await fixture();
     await settle();
     await f.events.get('session_start')!({ reason: 'reload' }, f.context);
     expect(f.signIn).not.toHaveBeenCalled();
@@ -175,7 +196,7 @@ describe('production live voice command wiring', () => {
   });
 
   it('starts only explicit subscription login and cancels it without activating capture', async () => {
-    const f = fixture();
+    const f = await fixture();
     await f.command('voice-auto', 'login');
     expect(f.signIn).toHaveBeenCalledOnce();
     expect(f.context.ui.notify).toHaveBeenCalledWith(expect.stringContaining('Microphone capture stays off'), 'info');
@@ -186,7 +207,7 @@ describe('production live voice command wiring', () => {
   });
 
   it('cancels a pending login on session change', async () => {
-    const f = fixture();
+    const f = await fixture();
     await f.command('voice-auto', 'login');
     await f.events.get('session_start')!({ reason: 'switch' }, f.context);
     expect(f.cancel).toHaveBeenCalledOnce();
@@ -194,7 +215,7 @@ describe('production live voice command wiring', () => {
   });
 
   it('bypasses local ASR for explicit live activation and excludes manual capture', async () => {
-    const f = fixture();
+    const f = await fixture();
     await f.command('voice-auto');
     expect(f.waitUntilConfigured).not.toHaveBeenCalled();
     expect(f.host.start).toHaveBeenCalledOnce();
@@ -205,20 +226,20 @@ describe('production live voice command wiring', () => {
   });
 
   it('does not route legacy activation to the live host', async () => {
-    const f = fixture('legacy');
+    const f = await fixture('legacy');
     await f.command('voice-auto');
     expect(f.waitUntilConfigured).toHaveBeenCalledOnce();
     expect(f.host.start).not.toHaveBeenCalled();
   });
 
   it('rejects unknown controls rather than implicitly enabling live capture', async () => {
-    const f = fixture();
+    const f = await fixture();
     await f.command('voice-auto', 'resume');
     expect(f.context.ui.notify).toHaveBeenCalledWith(expect.stringContaining('Usage:'), 'info');
     expect(f.host.start).not.toHaveBeenCalled();
   });
   it('steers the primary Pi agent and returns its actual result without narrate or model switching', async () => {
-    const f = fixture();
+    const f = await fixture();
     await f.events.get('session_start')!({}, f.context);
     vi.spyOn(f.context, 'isIdle').mockReturnValue(false);
     f.host.poll.mockImplementation(async (activationId, after) => ({

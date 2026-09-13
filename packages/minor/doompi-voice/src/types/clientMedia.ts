@@ -1,5 +1,5 @@
-import type { SpeechPresenceDetector } from './clientCaptureActivity.ts';
-import type { RealtimeMediaCommand, RealtimeMediaTransport } from './realtime.ts';
+import type { SpeechPresenceDetector } from './clientCaptureActivity';
+import type { RealtimeMediaCommand, RealtimeMediaTransport } from './realtime';
 
 export const VOICE_MEDIA_API_BASE_PATH = 'voice-media';
 export const VOICE_MEDIA_PROTOCOL_VERSION = 6;
@@ -159,6 +159,7 @@ export interface VoiceMediaTransport extends Partial<RealtimeMediaTransport> {
 }
 
 export interface VoiceMediaCapture {
+  completion?: Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -193,5 +194,18 @@ export interface VoiceMediaDevice {
 
 export function voiceMediaClientUrl(sessionId: string, route: string, params: Record<string, string> = {}): string {
   const search = new URLSearchParams({ session: sessionId, ...params });
-  return `/api/plugin/${VOICE_MEDIA_API_BASE_PATH}${route}?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${VOICE_MEDIA_API_BASE_PATH}${route}?${search.toString()}`;
+}
+
+export interface VoiceMicrophoneConstraints {
+  audio:
+    | boolean
+    | {
+        deviceId: { exact: string };
+        channelCount: number;
+        echoCancellation: boolean;
+        noiseSuppression: boolean;
+        autoGainControl: boolean;
+      };
+  video: false;
 }

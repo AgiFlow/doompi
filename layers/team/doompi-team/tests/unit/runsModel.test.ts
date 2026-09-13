@@ -1,8 +1,10 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { PI_CODING_AGENT_PACKAGE_ROOT_ENV } from '../../src/exports/env';
 import {
   type AvailableModelInfo,
   buildModelCandidates,
@@ -16,12 +18,8 @@ import {
   resolveEffectiveSubagentModel,
   resolveModelCandidate,
   resolveSubagentModelOverride,
-} from '../../src/adapters/runs/shared/modelFallback';
-import {
-  checkModelScope,
-  matchesScopePattern,
-  type ModelScopeViolation,
-} from '../../src/adapters/runs/shared/modelScope';
+} from '../../src/services/modelFallback';
+import { checkModelScope, matchesScopePattern, type ModelScopeViolation } from '../../src/services/modelScope';
 import {
   encodeNestedPathEnv,
   isSafeNestedPathId,
@@ -29,7 +27,7 @@ import {
   type NestedPathEntry,
   parseNestedPathEnv,
   sanitizeNestedPath,
-} from '../../src/adapters/runs/shared/nestedPath';
+} from '../../src/services/nestedPath';
 import {
   assertJsonSchemaObject,
   cleanupStructuredOutputRuntime,
@@ -40,8 +38,7 @@ import {
   STRUCTURED_OUTPUT_SCHEMA_ENV,
   type StructuredOutputRuntime,
   StructuredOutputValidator,
-} from '../../src/adapters/runs/shared/structuredOutput';
-import { PI_CODING_AGENT_PACKAGE_ROOT_ENV } from '../../src/exports/env';
+} from '../../src/services/structuredOutput';
 import type { JsonSchemaObject, ModelScopeConfig } from '../../src/types';
 
 const temporaryDirs: string[] = [];

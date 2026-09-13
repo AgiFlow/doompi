@@ -1,4 +1,5 @@
 import { fileURLToPath, URL } from 'node:url';
+
 import { defineConfig } from 'vitest/config';
 
 const threshold = process.env.THRESHOLD ? Number.parseInt(process.env.THRESHOLD, 10) : 80;
@@ -25,6 +26,9 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: [{ find: /^@agimon-ai\/doompi-ui\/(.*)$/, replacement: `${doomUiExports}$1.ts` }],
+    alias: [
+      { find: '@agimon-ai/doompi-ui/doom-overlay', replacement: `${doomUiExports}doomOverlay.ts` },
+      { find: /^@agimon-ai\/doompi-ui\/(.*)$/, replacement: `${doomUiExports}$1.ts` },
+    ],
   },
 });

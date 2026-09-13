@@ -8,8 +8,9 @@
  * headless renderer has no backend for. What a story can show is the frame:
  * the header naming the job and step, and the empty terminal body.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { StepTerminalPanel, type StepTabTarget } from './StepTerminalPanel.tsx';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { StepTerminalPanel, type StepTabTarget } from './StepTerminalPanel';
 
 const props = slotPropsFixture({ sessionId: 'step-terminal' }).props;
 

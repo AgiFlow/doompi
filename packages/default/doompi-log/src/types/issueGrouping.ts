@@ -1,4 +1,4 @@
-import type { IssueSample } from './webMetrics.ts';
+import type { IssueSample } from './webMetrics';
 
 /**
  * Turning a list of incidents into a ranked list of problems.

@@ -1,4 +1,4 @@
-import type { FakeSession, Frame } from './fakeSession.ts';
+import type { HeadlessSession, Frame } from './headlessSession';
 
 export const PERFORMANCE_BACKLOG_LIMIT = 2_000;
 export const PERFORMANCE_MARKERS = { large: 'PERF_LARGE_READY', small: 'PERF_SMALL_READY' } as const;
@@ -52,13 +52,8 @@ export function performanceEntries(workload: PerformanceWorkload): Frame[] {
   return entries;
 }
 
-export function seedPerformanceSession(session: FakeSession, workload: PerformanceWorkload): void {
-  session.emit({
-    type: 'response',
-    command: 'get_entries',
-    success: true,
-    data: { entries: performanceEntries(workload) },
-  });
+export function seedPerformanceSession(session: HeadlessSession, workload: PerformanceWorkload): void {
+  session.replaceEntries(performanceEntries(workload));
   const statusFrames = workload === 'large' ? 1_000 : 1;
   for (let index = 0; index < statusFrames; index += 1) {
     session.emit({

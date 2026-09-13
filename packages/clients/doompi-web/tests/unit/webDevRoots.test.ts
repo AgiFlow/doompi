@@ -1,5 +1,5 @@
+import { devPluginRoots } from '@agimon-ai/doompi/builders/web';
 import { describe, expect, it } from 'vitest';
-import { devPluginRoots } from '../../src/services/webDevRoots.ts';
 
 describe('devPluginRoots', () => {
   it('prefers the environment list, trimmed and split on the platform delimiter', () => {

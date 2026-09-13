@@ -1,8 +1,6 @@
-import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 const threshold = process.env.THRESHOLD ? Number.parseInt(process.env.THRESHOLD, 10) : 80;
-const doomUiSrc = fileURLToPath(new URL('../../core/doompi-ui/src/', import.meta.url));
 
 export default defineConfig({
   test: {
@@ -20,8 +18,5 @@ export default defineConfig({
       cleanOnRerun: true,
       thresholds: { branches: threshold, functions: threshold, lines: threshold, statements: threshold },
     },
-  },
-  resolve: {
-    alias: [{ find: /^@agimon-ai\/doompi-ui\/(.*)$/, replacement: `${doomUiSrc}$1.ts` }],
   },
 });

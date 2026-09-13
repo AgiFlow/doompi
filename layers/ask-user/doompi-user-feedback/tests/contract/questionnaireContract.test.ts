@@ -1,21 +1,21 @@
 import { Check } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
+
 import {
   MAX_HEADER_LENGTH,
   MAX_LABEL_LENGTH,
   MAX_OPTIONS,
   MAX_QUESTIONS,
   MIN_OPTIONS,
-  type QuestionParams,
-  QuestionParamsSchema,
-} from '../../src/schemas/questionnaire.js';
+} from '../../src/constants/questionnaire';
+import { type QuestionParams, QuestionParamsSchema } from '../../src/schemas/questionnaire';
 import {
   buildQuestionnaireResponse,
   DECLINE_MESSAGE,
   ENVELOPE_PREFIX,
   ENVELOPE_SUFFIX,
-} from '../../src/services/responseService.js';
-import { validateQuestionnaire } from '../../src/services/validationService.js';
+} from '../../src/services/responseService';
+import { validateQuestionnaire } from '../../src/services/validationService';
 
 function option(label: string) {
   return { label, description: `${label} description` };

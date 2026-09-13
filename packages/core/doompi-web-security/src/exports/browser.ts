@@ -5,7 +5,7 @@ export {
   type BundleVerificationResult,
   verifyBundleAsset,
   verifySignedBundleManifest,
-} from '../adapters/browserBundleVerifier.ts';
+} from '../services/browserBundleVerifier';
 export {
   BUNDLE_MANIFEST_ROUTE,
   BUNDLE_MANIFEST_VERSION,
@@ -17,12 +17,12 @@ export {
   digestFor,
   isBundleManifest,
   isSignedBundleManifest,
-} from '../types/bundleManifest.ts';
+} from '../types/bundleManifest';
 export {
   type OpenResult,
   type SealResult,
   type SealedChannel,
   channelFromSecret,
   connectSealedChannel,
-} from '../adapters/browserSealedChannel.ts';
-export { type SealedTransport, createSealedTransport, sealedTransport } from '../adapters/sealedTransport.ts';
+} from '../services/browserSealedChannel';
+export { type SealedTransport, createSealedTransport, sealedTransport } from '../services/sealedTransport';

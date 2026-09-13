@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Skeleton } from './Skeleton.tsx';
+import { Skeleton } from './Skeleton';
 
 const meta = {
   title: 'Components/Skeleton',

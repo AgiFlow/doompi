@@ -8,8 +8,8 @@
  * the states it reaches without one. The rows themselves are covered by
  * WorkflowsPanel, which reads the same registry from a seeded store.
  */
-import type { WorkflowRunView } from '../../types/webWorkflows.ts';
-import { ArtifactsPane } from './ArtifactsPane.tsx';
+import type { WorkflowRunView } from '../../types/webWorkflows';
+import { ArtifactsPane } from './ArtifactsPane';
 
 const MINUTE_MS = 60_000;
 

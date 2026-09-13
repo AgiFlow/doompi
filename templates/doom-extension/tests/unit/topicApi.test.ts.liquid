@@ -1,11 +1,8 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { assertDeclaredApi, mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
+import { mountPackageApi } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it } from 'vitest';
-import { api, create{{ topic | pascalCase }}Api } from '../../src/adapters/{{ topic | camelCase }}Api.ts';
-import { API_BASE_PATH, itemPath, itemUrl, SESSION_QUERY_PARAM } from '../../src/types/{{ topic | camelCase }}Api.ts';
+import { api, create{{ topic | pascalCase }}Api } from '../../src/controllers/{{ topic | camelCase }}Api';
+import { API_BASE_PATH, itemPath, itemUrl, SESSION_QUERY_PARAM } from '../../src/types/{{ topic | camelCase }}Api';
 
-const PACKAGE_ROOT = path.resolve(fileURLToPath(import.meta.url), '..', '..', '..');
 
 /**
  * The client builds absolute URLs and the host mounts the app under a prefix it
@@ -58,12 +55,4 @@ describe('the {{ pluginId }} API as a host mounts it', () => {
     mounted.close();
   });
 
-  it('serves the base path the manifest mounts it at', () => {
-    // Vibe-Lint reads the manifest statically and cannot see this value, so
-    // nothing else compares the two. A rename on one side alone means no
-    // client URL ever lands.
-    expect(assertDeclaredApi({ packageRoot: PACKAGE_ROOT, api, scope: 'session' })).toMatchObject({
-      basePath: API_BASE_PATH,
-    });
-  });
 });

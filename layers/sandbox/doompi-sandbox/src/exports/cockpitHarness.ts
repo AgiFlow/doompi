@@ -3,4 +3,4 @@ export {
   reapCockpitContainer,
   startCockpitContainer,
   type CockpitHarnessDependencies,
-} from '../adapters/cockpitHarness.ts';
+} from '../services/cockpitHarness';

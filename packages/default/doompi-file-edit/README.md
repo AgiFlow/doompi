@@ -27,12 +27,11 @@ same extension:
 pi install npm:@agimon-ai/doompi-file-edit
 ```
 
-| Entry                                       | Purpose                                      |
-| ------------------------------------------- | -------------------------------------------- |
-| `@agimon-ai/doompi-file-edit/extensions/pi` | Timeline and DoomPi Leader shortcut          |
-| `@agimon-ai/doompi-file-edit/session-api`   | HTTP routes the cockpit reads a file through |
-| `@agimon-ai/doompi-file-edit/web-hub`       | Hub channel publishing the changed-file list |
-| `@agimon-ai/doompi-file-edit`               | Library API                                  |
+| Entry                                           | Purpose                                                  |
+| ----------------------------------------------- | -------------------------------------------------------- |
+| `@agimon-ai/doompi-file-edit/extensions/pi`     | Timeline and DoomPi Leader shortcut                      |
+| `@agimon-ai/doompi-file-edit/extensions/server` | Server-owned file API and changed-file channel lifecycle |
+| `@agimon-ai/doompi-file-edit`                   | Library API                                              |
 
 ## Open the timeline
 
@@ -112,7 +111,7 @@ a file this session never changed.
 ## Public API
 
 ```ts
-import { createFileEditContainer, fileEditExtension } from '@agimon-ai/doompi-file-edit';
+import { createFileEditDependencies, fileEditExtension } from '@agimon-ai/doompi-file-edit';
 import type { FileDiff, FileEditEntry } from '@agimon-ai/doompi-file-edit';
 ```
 
@@ -132,3 +131,5 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+The public Pi and server loaders live in `src/extensions`. Controllers declare commands, events, APIs, and tracking activities. Services own filesystem and timeline logic; TUI modules assemble and present the review workflow. Public reusable types and dependency construction are exposed through flat `src/exports` entries. The Pi factory owns its optional UI service and awaits cleanup through `onDispose`.

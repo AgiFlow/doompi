@@ -1,4 +1,4 @@
-import { TerminalView } from './TerminalView.tsx';
+import { TerminalView } from './TerminalView';
 
 const meta = {
   title: 'Components/TerminalView',

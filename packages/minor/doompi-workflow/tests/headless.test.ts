@@ -10,22 +10,23 @@ vi.mock('@agimon-ai/doompi-ui/leader', () => {
 vi.mock('@agimon-ai/doompi-ui/skills', () => {
   throw new Error(missingUiMessage);
 });
-vi.mock('@agimon-ai/doompi-ui/components/doomOverlay', () => {
+vi.mock('@agimon-ai/doompi-ui/doom-overlay', () => {
   throw new Error(missingUiMessage);
 });
 vi.mock('@agimon-ai/doompi-ui/footer', () => {
   throw new Error(missingUiMessage);
 });
 
-import { createPiTestHost } from '@agimon-ai/doompi-extension-contracts/testing';
+import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
 
 describe('doom-workflow headless entry', () => {
   it('loads the sole standard Pi entry without the optional UI provider', async () => {
     vi.resetModules();
-    const standard = await import('../src/exports/extensions/pi.ts');
+    const standard = await import('../src/extensions/pi');
     // A host with no terminal is also a host with no doompi-ui on its module
     // path, and the entry has to survive both at once.
     const host = createPiTestHost({ hasUI: false, mode: 'rpc' });
+    await host.cordis('workflow-headless-test');
 
     await expect(standard.default(host.pi)).resolves.toBeUndefined();
 

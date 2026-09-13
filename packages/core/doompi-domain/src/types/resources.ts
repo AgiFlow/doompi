@@ -1,5 +1,5 @@
 import type { PluginHookSource } from '@agimon-ai/doompi-config/types';
-import type { DoomMcpProjection, DoomMcpProjectionSource } from '@agimon-ai/doompi-extension-contracts/mcp-projection';
+import type { DoomMcpProjection, DoomMcpProjectionSource } from '@agimon-ai/doompi-core/mcp-projection';
 
 /** A JSON document the harness owns on disk, before it is given a shape. */
 export type JsonObject = Record<string, unknown>;

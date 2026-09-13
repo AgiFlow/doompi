@@ -1,8 +1,10 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { HARNESS_STATE_POINTER, resetHarnessStore } from '@agimon-ai/doompi-config';
 import { beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
+
 import { SUBAGENT_PARENT_DEPTH_ENV } from '../src/exports/env';
 
 /**
@@ -74,8 +76,6 @@ process.once('exit', () => {
  * above - silently undoing the per-worker isolation this whole file exists for
  * and putting every worker back on one shared tree.
  */
-const { createSessionScope, setCurrentSessionScope } = await import('../src/adapters/filesystem/paths');
-setCurrentSessionScope(createSessionScope(`test-worker-${process.pid}`));
 
 // Global test setup
 beforeAll(async () => {

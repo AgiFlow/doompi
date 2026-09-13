@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -42,16 +43,16 @@ describe('doompi-user-feedback package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
     expect(Object.keys(exportsMap)).not.toContain('./*');
-    for (const subpath of ['.', './extensions/pi']) {
+    for (const subpath of ['.', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
     expect(await readFile(path.join(packageDirectory, 'src/exports/index.ts'), 'utf8')).not.toContain(
       'registerUserFeedbackExtension',
     );
-    expect(await readFile(path.join(packageDirectory, 'src/exports/extensions/pi.ts'), 'utf8')).not.toMatch(
+    expect(await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8')).not.toMatch(
       /Symbol\.for|installed-hosts|WeakSet/u,
     );
   });
@@ -61,7 +62,7 @@ describe('doompi-user-feedback package contract', () => {
 
     expect(Object.keys(manifest.dependencies ?? {}).some((name) => name.startsWith('@juicesharp/'))).toBe(false);
     expect(manifest.dependencies).toMatchObject({
-      '@agimon-ai/doompi-extension-contracts': 'workspace:*',
+      '@agimon-ai/doompi-core': 'workspace:*',
       '@deepseek-ai/cordis': '4.0.2',
       typebox: '1.3.25',
     });

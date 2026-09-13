@@ -5,8 +5,9 @@
  * rather than a hand-rolled stub, so a change to the slot contract breaks this
  * story at the type level instead of silently drifting.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { LaunchRunnerDialog } from './LaunchRunnerDialog.tsx';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { LaunchRunnerDialog } from './LaunchRunnerDialog';
 
 const { props } = slotPropsFixture({ sessionId: 'runner-launch' });
 

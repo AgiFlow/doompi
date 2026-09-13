@@ -7,10 +7,11 @@
  * so the message half comes from the contracts package's own fixture and only
  * the dialog is written out here; the options come from the shared contract.
  */
-import type { ToolPromptRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { PlanReviewPrompt } from './PlanReviewPrompt.tsx';
-import { PLAN_REVIEW_OPTIONS, PLAN_REVIEW_TITLE } from '../../types/planApi.ts';
+import type { ToolPromptRenderProps } from '@agimon-ai/doompi-core/web';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { PLAN_REVIEW_OPTIONS, PLAN_REVIEW_TITLE } from '../../types/planApi';
+import { PlanReviewPrompt } from './PlanReviewPrompt';
 
 const noop = (): void => undefined;
 

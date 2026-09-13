@@ -1,30 +1,28 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+
+import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordis-host';
 import {
   createDoomMcpProjectionService,
   DOOM_MCP_PROJECTION_SERVICE,
   type DoomMcpProjection,
   type DoomMcpProjectionService,
-} from '@agimon-ai/doompi-extension-contracts/mcp-projection';
-import {
-  DOOM_CORDIS_HOST_REQUIRED_ENV,
-  installDoomCordisHost,
-  type DoomCordisHostController,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { readDoomMcpStatus } from '@agimon-ai/doompi-extension-contracts/mcp-status';
-import { readDoomMcpToolResolver } from '@agimon-ai/doompi-extension-contracts/mcp-tool-resolver';
-import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protocol';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
-import type { Context, Fiber } from '@deepseek-ai/cordis';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+} from '@agimon-ai/doompi-core/mcp-projection';
+import { readDoomMcpStatus } from '@agimon-ai/doompi-core/mcp-status';
+import { readDoomMcpToolResolver } from '@agimon-ai/doompi-core/mcp-tool-resolver';
+import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import type { McpServerStateChange } from '@agimon-ai/mcp-proxy';
+import { Context, type Fiber } from '@deepseek-ai/cordis';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerMcpExtension } from '../src/adapters/pi/extension.ts';
-import { LEADER_GROUP, LEADER_KEY, PACKAGE_SOURCE } from '../src/adapters/pi/mcpConstants.ts';
-import { COMMAND_NAME } from '../src/schemas/mcpCommands.ts';
-import { SESSION_ENV_VAR } from '../src/schemas/sessionConfig.ts';
+
+import { COMMAND_NAME } from '../src/constants/mcp';
+import { LEADER_GROUP, LEADER_KEY, PACKAGE_SOURCE } from '../src/constants/piMcp';
+import { mcpExtension } from '../src/extensions/pi';
+import { SESSION_ENV_VAR } from '../src/schemas/sessionConfig';
 
 const SESSION_ID = 'session-1';
 const DEFERRED_RUNTIME_TIMEOUT_MS = 5_000;
@@ -94,7 +92,7 @@ const registeredExtensions: RegisteredExtension[] = [];
 
 interface RegisterExtensionOptions {
   readonly bus?: TestBus;
-  /** An object selects the composed-host path; omit it for standalone behavior. */
+  /** Optional services contributed to the canonical composed host. */
   readonly host?: {
     readonly service?: DoomMcpProjectionService;
     readonly uiHub?: DoomUiHubService;
@@ -103,6 +101,9 @@ interface RegisterExtensionOptions {
 
 function registerExtension(options: RegisterExtensionOptions | TestBus = {}): RegisteredExtension {
   const normalized = options instanceof TestBus ? { bus: options } : options;
+  const host = normalized.host ?? {
+    service: projectionService(nativeProjection(path.join(repoRoot, '.mcp.json'))),
+  };
   const bus = normalized.bus ?? new TestBus();
   const commands = new Map<string, CommandDefinition>();
   // One list per event: the leader contribution and the session wiring both listen
@@ -121,6 +122,8 @@ function registerExtension(options: RegisterExtensionOptions | TestBus = {}): Re
     registerCommand: vi.fn((name: string, definition: CommandDefinition) => commands.set(name, definition)),
     registerTool: vi.fn((definition: { name: string }) => registeredTools.push(definition.name)),
     getActiveTools: vi.fn(() => [...active]),
+    // The inventory the tool surface recomputes from.
+    getAllTools: vi.fn(() => ['read', ...registeredTools].map((name) => ({ name }))),
     setActiveTools: vi.fn((names: string[]) => {
       active = [...names];
     }),
@@ -133,22 +136,22 @@ function registerExtension(options: RegisterExtensionOptions | TestBus = {}): Re
   let projectionFiber: Fiber | undefined;
   let uiFiber: Fiber | undefined;
   const ready = (async () => {
-    if (normalized.host) {
-      hostController = await installDoomCordisHost(pi, { mode: 'composed', source: 'doompi-mcp-test' });
-      if (normalized.host.service) {
+    hostController = await installDoomCordisHost(pi, { mode: 'composed', source: 'doompi-mcp-test' });
+    if (host) {
+      if (host.service) {
         projectionFiber = hostController.root.plugin((ctx: Context, service: DoomMcpProjectionService) => {
           ctx.provide(DOOM_MCP_PROJECTION_SERVICE, service);
-        }, normalized.host.service);
+        }, host.service);
         await projectionFiber.await();
       }
-      if (normalized.host.uiHub) {
+      if (host.uiHub) {
         uiFiber = hostController.root.plugin((ctx: Context, service: DoomUiHubService) => {
           ctx.provide(DOOM_UI_HUB_SERVICE, service);
-        }, normalized.host.uiHub);
+        }, host.uiHub);
         await uiFiber.await();
       }
     }
-    await registerMcpExtension(pi);
+    await mcpExtension(pi);
   })();
   let shutdown: Promise<void> | undefined;
 
@@ -215,7 +218,6 @@ function nativeProjection(configPath: string, enabled = true): DoomMcpProjection
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubEnv(DOOM_CORDIS_HOST_REQUIRED_ENV, '');
   registeredExtensions.length = 0;
   notify = vi.fn();
   custom = vi.fn().mockResolvedValue(undefined);
@@ -261,6 +263,17 @@ afterEach(async () => {
 });
 
 describe('doom mcp extension', () => {
+  it('rejects installation without the Cordis runtime mode before creating a session', async () => {
+    const root = new Context();
+    try {
+      await expect(mcpExtension.install(root, {} as ExtensionAPI)).rejects.toThrow(
+        'MCP requires the Cordis runtime mode.',
+      );
+    } finally {
+      await root.fiber.dispose();
+    }
+  });
+
   it('registers its command and lifecycle handlers', async () => {
     const { pi, ready } = registerExtension();
     await ready;
@@ -419,7 +432,7 @@ describe('doom mcp extension', () => {
     fs.rmSync(contextRoot, { recursive: true, force: true });
   });
 
-  it('re-reads the current Doom projection at every session start', async () => {
+  it('does not replace the admitted projection from later process environment changes', async () => {
     const nextRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-mcp-next-domain-'));
     fs.writeFileSync(
       path.join(nextRoot, '.mcp.json'),
@@ -439,7 +452,7 @@ describe('doom mcp extension', () => {
 
     expect(createProxyContainer).toHaveBeenCalledWith(
       expect.objectContaining({
-        configSources: [{ path: path.join(nextRoot, '.mcp.json'), format: 'claude' }],
+        configSources: [{ path: path.join(repoRoot, '.mcp.json'), format: 'claude' }],
       }),
     );
     fs.rmSync(nextRoot, { recursive: true, force: true });

@@ -1,24 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { parseServeOptions, serveHelp } from '../../src/services/serveOptions.ts';
+
+import { parseServeOptions, serveHelp } from '../../src/services/serveOptions';
 
 describe('doompi-web command options', () => {
-  it('keeps the no-argument hub defaults', () => {
-    expect(parseServeOptions([])).toMatchObject({
+  it('keeps the no-argument presentation defaults', () => {
+    expect(parseServeOptions([])).toEqual({
       port: 7433,
       host: '127.0.0.1',
-      directory: undefined,
+      assetsDir: undefined,
+      headlessUrl: undefined,
+      headlessToken: undefined,
       help: false,
       version: false,
     });
   });
 
-  it('accepts both forms of every flag', () => {
-    expect(parseServeOptions(['--dir=/workspace/inline']).directory).toBe('/workspace/inline');
-    expect(parseServeOptions(['--dir', '/workspace/separate']).directory).toBe('/workspace/separate');
-    expect(parseServeOptions(['--port=9999']).port).toBe(9999);
-    expect(parseServeOptions(['--port', '9999']).port).toBe(9999);
-    expect(parseServeOptions(['--registry-dir=/tmp/run']).registryDir).toBe('/tmp/run');
-    expect(parseServeOptions(['--host=0.0.0.0']).host).toBe('0.0.0.0');
+  it('accepts the presentation and headless overrides', () => {
+    expect(
+      parseServeOptions([
+        '--port=9999',
+        '--host',
+        '0.0.0.0',
+        '--assets=/tmp/web',
+        '--headless-url',
+        'http://127.0.0.1:9000',
+        '--headless-token=secret',
+      ]),
+    ).toEqual({
+      port: 9999,
+      host: '0.0.0.0',
+      assetsDir: '/tmp/web',
+      headlessUrl: 'http://127.0.0.1:9000',
+      headlessToken: 'secret',
+      help: false,
+      version: false,
+    });
   });
 
   it('rejects unknown flags and bare arguments', () => {
@@ -28,9 +44,22 @@ describe('doompi-web command options', () => {
     expect(() => parseServeOptions(['--port', '8123', 'extra'])).toThrow('Unknown option "extra".');
   });
 
-  it('rejects a port that is not a port', () => {
+  it('rejects an invalid port and missing values', () => {
     expect(() => parseServeOptions(['--port', 'http'])).toThrow('--port expects a port number, received "http".');
     expect(() => parseServeOptions(['--port=70000'])).toThrow('--port expects a port number, received "70000".');
+    expect(() => parseServeOptions(['--headless-url'])).toThrow('--headless-url needs a value');
+  });
+
+  it.each(['--host=', '--assets=', '--headless-token=', '--host=--port'])(
+    'rejects empty or option-shaped values: %s',
+    (flag) => {
+      expect(() => parseServeOptions([flag])).toThrow('needs a value');
+    },
+  );
+
+  it('accepts ephemeral ports and option terminators', () => {
+    expect(parseServeOptions(['--port=0', '--']).port).toBe(0);
+    expect(() => parseServeOptions(['--port=-1'])).toThrow('expects a port number');
   });
 
   it('recognizes standard help and version flags', () => {
@@ -39,40 +68,6 @@ describe('doompi-web command options', () => {
     expect(parseServeOptions(['--version']).version).toBe(true);
     expect(parseServeOptions(['-v']).version).toBe(true);
     expect(serveHelp()).toContain('Usage: doompi-web [options]');
-    expect(serveHelp()).toContain('--dir <path>');
-  });
-
-  it('rejects an empty or missing pinned directory', () => {
-    expect(() => parseServeOptions(['--dir='])).toThrow('--dir needs a value');
-    expect(() => parseServeOptions(['--dir'])).toThrow('--dir needs a value');
-  });
-
-  it('preserves the existing serve overrides', () => {
-    expect(
-      parseServeOptions([
-        '--registry-dir',
-        '/tmp/run',
-        '--spawn-command',
-        'doompi-server',
-        '--port',
-        '8123',
-        '--host',
-        'localhost',
-        '--assets',
-        '/tmp/web',
-        '--state-dir',
-        '/tmp/state',
-        '--cloudflared',
-        '/usr/local/bin/cloudflared',
-      ]),
-    ).toMatchObject({
-      registryDir: '/tmp/run',
-      spawnCommand: 'doompi-server',
-      port: 8123,
-      host: 'localhost',
-      assetsDir: '/tmp/web',
-      stateDir: '/tmp/state',
-      cloudflaredPath: '/usr/local/bin/cloudflared',
-    });
+    expect(serveHelp()).toContain('--headless-url <url>');
   });
 });

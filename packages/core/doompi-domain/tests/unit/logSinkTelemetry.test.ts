@@ -1,7 +1,8 @@
 import type { DoomTelemetryOptions } from '@agimon-ai/doompi-telemetry';
 import { describe, expect, it, vi } from 'vitest';
-import { createDomainTelemetry } from '../../src/adapters/telemetry/logSinkTelemetry.ts';
-import { DOMAIN_EVENT } from '../../src/types/telemetry.ts';
+
+import { createDomainTelemetry } from '../../src/services/logSinkTelemetry';
+import { DOMAIN_EVENT } from '../../src/types/telemetry';
 
 type TelemetryHandle = Awaited<ReturnType<NonNullable<DoomTelemetryOptions['telemetryFactory']>>>;
 

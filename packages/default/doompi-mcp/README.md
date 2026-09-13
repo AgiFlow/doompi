@@ -129,3 +129,7 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+The direct `src/extensions/` entries declare host contributions. MCP session state and connection behavior live in named service folders; controllers handle commands and API requests. `tools/` produces typed declarations, and `exports/` exposes reusable public APIs.
+
+Pi tools use a live collection. The helper subscribes to discovery changes and owns registrations and cleanup. Unchanged tools retain their declaration identity across reconnects. Removed tools are unavailable, and incompatible schema reuse stays hidden until the runtime is relaunched. Renderer callbacks enter through the Pi extension, keeping services independent of terminal presentation.

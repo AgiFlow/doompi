@@ -79,7 +79,7 @@ a download rather than as something that looks editable.
 ## Using it from a plugin's `web/` client
 
 A web plugin's client code may import `react`, the `@tanstack` store packages,
-`@agimon-ai/doompi-web-contracts`, and this package. Declare it as a `workspace:*` dependency and
+`@agimon-ai/doompi-core/web`, and this package. Declare it as a `workspace:*` dependency and
 import the same way the host does; the cockpit bundler dedupes it so one copy renders everywhere.
 Do not import `radix-ui` or `class-variance-authority` directly from plugin code: the doom-web
 vibe-lint rules route every primitive through this package so a theme change reaches all of them.

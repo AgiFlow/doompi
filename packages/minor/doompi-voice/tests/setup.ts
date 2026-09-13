@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import {
   type DoomConfig,
   type IDoomConfigLoader,
@@ -8,15 +9,32 @@ import {
   type VoiceAdapterConfig,
 } from '@agimon-ai/doompi-config';
 import {
+  createDoomToolSurface,
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolSurfaceService,
+} from '@agimon-ai/doompi-core/tool-surface';
+import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   MINOR_MODE_TOOL_NAME,
   type MinorModeActionRequest,
   type MinorModeActionResponse,
   type MinorModeCatalogService,
   type MinorModeRecord,
-} from '@agimon-ai/doompi-extension-contracts/mode';
+} from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  createVoiceDependencies,
+  formatAutoCaptureActivity,
+  formatVoiceActivity,
+  MlxWhisperAdapter,
+  OpenAiWhisperAdapter,
+  TranscriberRegistry,
+  voiceLeaderBindings,
+  VoiceSessionController,
+  WhisperCppAdapter,
+} from '../src/exports';
 import {
   analyzePcmWav,
   ExecutableResolver,
@@ -25,19 +43,7 @@ import {
   PcmWavAnalyzer,
   SystemClock,
   TemporaryWorkspace,
-} from '../src/adapters/audio/infrastructure.ts';
-import {
-  createVoiceContainer,
-  formatAutoCaptureActivity,
-  formatVoiceActivity,
-  MlxWhisperAdapter,
-  OpenAiWhisperAdapter,
-  TranscriberRegistry,
-  voiceLeaderBindings,
-  VoiceSessionController,
-  installVoiceRuntime,
-  WhisperCppAdapter,
-} from '../src/exports';
+} from '../src/services/infrastructure';
 import {
   type IAudioAnalyzer,
   type IClock,
@@ -54,7 +60,8 @@ import {
   type TimerHandle,
   type VoiceActivityUpdate,
   type VoiceUi,
-} from '../src/types/index.ts';
+} from '../src/types';
+import { voiceRuntime } from './helpers/voiceRuntime';
 
 const roots: string[] = [];
 function temporaryRoot(): string {
@@ -353,12 +360,12 @@ describe('transcription adapters and registry', () => {
     ).toMatchObject({ adapter: openAi, config: { model: { id: 'turbo' } } });
   });
   it('shares one instance of each dependency across the graph', () => {
-    const container = createVoiceContainer();
+    const dependencies = createVoiceDependencies();
 
     // The record is the graph, so collaborators are shared by construction.
-    expect(container.sessionController).toBe(container.sessionController);
-    expect(container.spawner).toBe(container.spawner);
-    expect(container.registry).toBeDefined();
+    expect(dependencies.sessionController).toBe(dependencies.sessionController);
+    expect(dependencies.spawner).toBe(dependencies.spawner);
+    expect(dependencies.registry).toBeDefined();
   });
   it('substitutes an override instead of constructing the default', () => {
     const replacementClock: IClock = {
@@ -368,7 +375,7 @@ describe('transcription adapters and registry', () => {
       clear: () => undefined,
     };
 
-    expect(createVoiceContainer({ clock: replacementClock }).clock).toBe(replacementClock);
+    expect(createVoiceDependencies({ clock: replacementClock }).clock).toBe(replacementClock);
   });
   it('reports unusable explicit adapters', async () => {
     const bad: ITranscriberAdapter = {
@@ -622,6 +629,7 @@ describe('voice session controller', () => {
     const getActiveTools = vi.fn(() => []);
     const getAllTools = vi.fn(() => []);
     const pi = {
+      registerTool: vi.fn(),
       registerCommand: (name: string) => {
         commands.push(name);
       },
@@ -633,7 +641,7 @@ describe('voice session controller', () => {
       setActiveTools: vi.fn(),
     };
     const cordis = new Context();
-    installVoiceRuntime(cordis, pi as never);
+    await voiceRuntime.install(cordis, pi as never);
     expect(getActiveTools).not.toHaveBeenCalled();
     expect(getAllTools).not.toHaveBeenCalled();
     expect(commands).toEqual(['voice', 'voice-auto']);
@@ -721,7 +729,7 @@ describe('voice session controller', () => {
         };
       }),
     };
-    const container = createVoiceContainer({
+    const dependencies = createVoiceDependencies({
       sessionController: controller,
       pcmRecorder: recorder,
       registry: transcribers,
@@ -744,11 +752,13 @@ describe('voice session controller', () => {
       },
     });
     let activeTools = ['read'];
+    let toolSurface: DoomToolSurfaceService | undefined;
     const registeredTools = new Map<string, unknown>();
     const pi = {
       events,
       registerTool: (tool: { name: string }) => {
         registeredTools.set(tool.name, tool);
+        toolSurface?.refresh();
       },
       registerCommand: (name: string, command: { handler: (...args: unknown[]) => unknown }) => {
         commands.set(name, command);
@@ -917,11 +927,20 @@ describe('voice session controller', () => {
       dispose: vi.fn(),
     };
     const cordis = new Context();
+    toolSurface = createDoomToolSurface({
+      generation: 'voice-setup-test',
+      allTools: () => pi.getAllTools().map((tool) => tool.name),
+      activeTools: () => activeTools,
+      setActiveTools: (names) => {
+        activeTools = [...names];
+      },
+    });
+    cordis.provide(DOOM_TOOL_SURFACE_SERVICE, toolSurface);
     const catalogFiber = cordis.plugin((catalogContext) =>
       catalogContext.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, modeService),
     );
     await catalogFiber.await();
-    installVoiceRuntime(cordis, pi as never, { footer, container, autoClientFactory });
+    await voiceRuntime.install(cordis, pi as never, { footer, dependencies, autoClientFactory });
     await handlers.get('session_start')?.({}, context);
     expect(modeRegistrations).toEqual(
       expect.arrayContaining([expect.objectContaining({ descriptor: expect.objectContaining({ label: 'Voice' }) })]),

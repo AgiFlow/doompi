@@ -1,6 +1,7 @@
 import { type ComponentProps, Fragment, useMemo } from 'react';
-import { type AnsiSpan, ansiSpans } from '../lib/ansiSpans.ts';
-import { cn } from '../lib/cn.ts';
+
+import { type AnsiSpan, ansiSpans } from '../lib/ansiSpans';
+import { cn } from '../lib/cn';
 
 /**
  * Terminal output with the colours it was written in.

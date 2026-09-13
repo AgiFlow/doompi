@@ -1,6 +1,7 @@
 // @scaffold-generated
 import { describe, expect, it } from 'vitest';
-import { DefaultGitExtensionService } from '../../../src/services/extensionService.ts';
+
+import { DefaultGitExtensionService } from '../../../src/services/extensionService';
 
 describe('DefaultGitExtensionService', () => {
   it('returns the command result without depending on a host API', async () => {

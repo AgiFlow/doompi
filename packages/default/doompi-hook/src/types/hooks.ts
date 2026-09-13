@@ -1,3 +1,4 @@
+import type { HOOK_EVENT } from '../constants/hooks';
 /**
  * The hook document contract and the ports that run it.
  *
@@ -7,13 +8,6 @@
  */
 
 /** Registry event names. Each is used twice per dispatch, so drift would be silent. */
-export const HOOK_EVENT = {
-  sessionStart: 'SessionStart',
-  preToolUse: 'PreToolUse',
-  postToolUse: 'PostToolUse',
-  stop: 'Stop',
-  sessionEnd: 'SessionEnd',
-} as const;
 
 export type HookEventName = (typeof HOOK_EVENT)[keyof typeof HOOK_EVENT];
 

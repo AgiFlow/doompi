@@ -1,10 +1,7 @@
-import {
-  createDoomReadinessCoordinator,
-  DOOM_READINESS_SERVICE,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { createDoomReadinessCoordinator, DOOM_READINESS_SERVICE } from '@agimon-ai/doompi-core/readiness';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { Context } from '@deepseek-ai/cordis';
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const extensionMocks = vi.hoisted(() => ({
@@ -21,7 +18,7 @@ const extensionMocks = vi.hoisted(() => ({
   registerConfig: vi.fn(),
   registerFooter: vi.fn(),
   registerLeader: vi.fn(),
-  installVoiceRuntime: vi.fn(),
+  createVoiceRuntime: vi.fn(),
 }));
 const cordisRoots: Context[] = [];
 
@@ -34,23 +31,12 @@ function testUiHub(): DoomUiHubService {
   } as unknown as DoomUiHubService;
 }
 
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
-  connectDoomCordisHost: async () => {
-    const root = extensionMocks.createCordisRoot() as Context;
-    await extensionMocks.prepareCordisRoot(root);
-    return {
-      root,
-      runtime: { abiVersion: 1, generation: 'voice-test', hostId: 'voice-test', mode: 'composed' },
-      dispose: async () => undefined,
-    };
-  },
+vi.mock('../src/controllers/voice', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/controllers/voice')>()),
+  createVoiceRuntime: extensionMocks.createVoiceRuntime,
 }));
-vi.mock('../src/adapters/pi/voice.ts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/adapters/pi/voice.ts')>()),
-  createVoiceContainer: extensionMocks.createContainer,
-  installVoiceRuntime: extensionMocks.installVoiceRuntime,
-}));
-vi.mock('../src/adapters/pi/voiceConfig', () => ({
+vi.mock('../src/services/voiceDependencies', () => ({ createVoiceDependencies: extensionMocks.createContainer }));
+vi.mock('../src/controllers/voiceConfig', () => ({
   VoiceConfigController: class {
     readonly refresh = extensionMocks.refresh;
     sections(): readonly [] {
@@ -63,10 +49,25 @@ vi.mock('../src/adapters/pi/voiceConfig', () => ({
   },
 }));
 
-import { voicePiExtension } from '../src/adapters/pi/extension.ts';
-import { voiceLeaderBindings } from '../src/adapters/pi/voice.ts';
+import { voicePiExtension as composedVoiceExtension } from '../src/extensions/pi';
+
+async function voicePiExtension(pi: ExtensionAPI): Promise<void> {
+  Object.assign(pi, { registerTool: vi.fn(), registerCommand: vi.fn() });
+  const root = extensionMocks.createCordisRoot() as Context;
+  await extensionMocks.prepareCordisRoot(root);
+  const fiber = root.plugin((context) => composedVoiceExtension.install(context, pi));
+  try {
+    await fiber;
+  } catch (error) {
+    await fiber.dispose();
+    throw error;
+  }
+  pi.on('session_shutdown', () => fiber.dispose());
+}
+import { voiceLeaderBindings } from '../src/controllers/voice';
 
 beforeEach(() => {
+  extensionMocks.createVoiceRuntime.mockReturnValue({ tools: [], commands: [], events: {} });
   extensionMocks.createCordisRoot = () => {
     const root = new Context();
     cordisRoots.push(root);
@@ -115,16 +116,15 @@ describe('standard Voice extension', () => {
       id: 'voice-activity',
       order: 30,
     });
-    expect(extensionMocks.installVoiceRuntime).toHaveBeenCalledOnce();
-    const runtimeCall = extensionMocks.installVoiceRuntime.mock.calls[0];
-    expect(Context.is(runtimeCall?.[0])).toBe(true);
-    expect(runtimeCall?.[1]).toBe(pi);
-    const runtimeOptions = runtimeCall?.[2] as
-      | { footer?: { update(value: unknown): void; dispose(): void }; container?: unknown }
+    expect(extensionMocks.createVoiceRuntime).toHaveBeenCalledOnce();
+    const runtimeCall = extensionMocks.createVoiceRuntime.mock.calls[0];
+    expect(runtimeCall?.[0]).toBe(pi);
+    const runtimeOptions = runtimeCall?.[1] as
+      | { footer?: { update(value: unknown): void; dispose(): void }; dependencies?: unknown }
       | undefined;
     runtimeOptions?.footer?.update({ value: 'activity' });
     expect(extensionMocks.footerUpdate).toHaveBeenCalledWith({ value: 'activity' });
-    expect(runtimeOptions?.container).toBeDefined();
+    expect(runtimeOptions?.dependencies).toBeDefined();
     // Manual dictation is SPC v m. Autonomous voice remains the `e` toggle and
     // republishes the exit variant through the leader proxy when capture starts.
     expect(extensionMocks.registerLeader).toHaveBeenCalledWith(
@@ -143,7 +143,7 @@ describe('standard Voice extension', () => {
         ]),
       }),
     );
-    const runtimeLeader = (runtimeCall?.[2] as { leader?: { update(bindings: readonly unknown[]): void } } | undefined)
+    const runtimeLeader = (runtimeCall?.[1] as { leader?: { update(bindings: readonly unknown[]): void } } | undefined)
       ?.leader;
     runtimeLeader?.update(voiceLeaderBindings(true));
     expect(extensionMocks.leaderUpdate).toHaveBeenCalledWith(voiceLeaderBindings(true));
@@ -194,7 +194,7 @@ describe('standard Voice extension', () => {
     const pi = { on: (name: string, handler: (...args: unknown[]) => unknown) => handlers.set(name, handler) };
 
     await voicePiExtension(pi as never);
-    const runtimeOptions = extensionMocks.installVoiceRuntime.mock.calls[0]?.[2] as
+    const runtimeOptions = extensionMocks.createVoiceRuntime.mock.calls[0]?.[1] as
       | { footer?: { update(value: unknown): void } }
       | undefined;
     runtimeOptions?.footer?.update({ phase: 'first' });
@@ -236,7 +236,7 @@ describe('standard Voice extension', () => {
     const coordinator = createDoomReadinessCoordinator();
 
     await voicePiExtension(pi as never);
-    const runtimeOptions = extensionMocks.installVoiceRuntime.mock.calls[0]?.[2] as
+    const runtimeOptions = extensionMocks.createVoiceRuntime.mock.calls[0]?.[1] as
       | { waitUntilConfigured?: (ctx: ExtensionContext, signal?: AbortSignal) => Promise<void> }
       | undefined;
     await expect(
@@ -244,9 +244,9 @@ describe('standard Voice extension', () => {
     ).resolves.toBeUndefined();
     cordisRoots.at(-1)?.provide(DOOM_READINESS_SERVICE, coordinator);
 
-    expect(handlers.get('session_start')?.({}, context)).toBeUndefined();
+    await handlers.get('session_start')?.({}, context);
     await vi.waitFor(() => expect(extensionMocks.refresh).toHaveBeenCalledOnce());
-    expect(handlers.get('session_start')?.({}, context)).toBeUndefined();
+    await handlers.get('session_start')?.({}, context);
     await Promise.resolve();
     expect(extensionMocks.refresh).toHaveBeenCalledOnce();
     await expect(
@@ -274,7 +274,7 @@ describe('standard Voice extension', () => {
     await coordinator.dispose();
   });
 
-  it('creates a fresh Cordis root and resource container for every factory activation', async () => {
+  it('creates a fresh Cordis root and resource dependencies for every factory activation', async () => {
     const firstHandlers = new Map<string, (...args: unknown[]) => unknown>();
     const secondHandlers = new Map<string, (...args: unknown[]) => unknown>();
     const firstPi = {
@@ -287,8 +287,8 @@ describe('standard Voice extension', () => {
     await voicePiExtension(firstPi as never);
     await voicePiExtension(secondPi as never);
 
-    const firstRoot = extensionMocks.installVoiceRuntime.mock.calls[0]?.[0];
-    const secondRoot = extensionMocks.installVoiceRuntime.mock.calls[1]?.[0];
+    const firstRoot = extensionMocks.createVoiceRuntime.mock.calls[0]?.[0];
+    const secondRoot = extensionMocks.createVoiceRuntime.mock.calls[1]?.[0];
     expect(firstRoot).toBeDefined();
     expect(secondRoot).toBeDefined();
     expect(secondRoot).not.toBe(firstRoot);
@@ -299,7 +299,7 @@ describe('standard Voice extension', () => {
   });
 
   it('rolls back already-owned resources when runtime installation fails', async () => {
-    extensionMocks.installVoiceRuntime.mockImplementationOnce(() => {
+    extensionMocks.createVoiceRuntime.mockImplementationOnce(() => {
       throw new Error('runtime failed');
     });
     const pi = { on: vi.fn() };

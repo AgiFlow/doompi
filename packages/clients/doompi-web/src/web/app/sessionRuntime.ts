@@ -1,9 +1,11 @@
 import { batch } from '@tanstack/store';
+
+import { parseBundleUpdatedMessage } from '../../types/bundle';
 import {
   HISTORY_PAGE_TYPE,
+  SESSION_BACKLOG_TYPE,
   HUB_RESYNCED_TYPE,
   RESOURCE_CATALOG_ENTRY_TYPE,
-  SESSION_BACKLOG_TYPE,
   SESSION_FRAME_TYPE,
   SESSION_REMOVED_TYPE,
   SESSION_UPSERT_TYPE,
@@ -12,38 +14,20 @@ import {
   THREAD_BACKLOG_TYPE,
   THREAD_FRAME_TYPE,
   unsubscribeFrame,
-} from '../../types/hub.ts';
-import { parseBundleUpdatedMessage } from '../../types/bundle.ts';
-import { parseDoomNotificationEntry } from '../../types/notification.ts';
-import {
-  REMOTE_PAIRING_REQUEST_TYPE,
-  REMOTE_STATE_TYPE,
-  type RemoteAccessStateView,
-} from '../../types/remoteAccess.ts';
-import { dispatchChannelFrame } from '../lib/pluginRegistry.ts';
-import { focusSessionWebPlugins, removeSessionWebPluginRuntime } from '../lib/pluginRuntime.ts';
-import { startProtocolRuntime } from './protocolRuntime.ts';
-import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } from '../lib/transport.ts';
-import { applyCaptureFrame, disconnectCaptures } from '../stores/captureStore.ts';
-import { bindSessionFileLinkModes } from '../stores/fileLinkModesStore.ts';
-import { createSessionSocket, sessionSocketUrl } from '../lib/wsClient.ts';
-import { deliverBrowserNotification } from '../lib/browserNotifications.ts';
-import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry.ts';
-import { dropComposerState, restoreComposerDrafts, saveComposerDrafts } from '../stores/composerStore.ts';
-import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore.ts';
-import { applyRemoteState } from '../stores/remoteAccessStore.ts';
-import {
-  applyHistoryPage,
-  applySessionFrame,
-  applyThreadFrame,
-  dropSessionStore,
-  refreshSessionFacts,
-  refreshSessionStats,
-  resetSessionStore,
-  seedHistoryCursor,
-} from '../stores/sessionStore.ts';
-import { dropThreads, resubscribeThreads, threadStoreKey } from '../stores/threadStore.ts';
-import { dropTransientTabs } from '../stores/transientTabsStore.ts';
+} from '../../types/hub';
+import { parseDoomNotificationEntry } from '../../types/notification';
+import { REMOTE_PAIRING_REQUEST_TYPE, REMOTE_STATE_TYPE, type RemoteAccessStateView } from '../../types/remoteAccess';
+import { deliverBrowserNotification } from '../lib/browserNotifications';
+import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry';
+import { dispatchChannelFrame } from '../lib/pluginRegistry';
+import { focusSessionWebPlugins, removeSessionWebPluginRuntime } from '../lib/pluginRuntime';
+import { createProtocolHubSocket } from '../lib/protocolHubSocket';
+import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } from '../lib/transport';
+import { applyCaptureFrame, disconnectCaptures, pendingCaptureSessions } from '../stores/captureStore';
+import { dropComposerState, restoreComposerDrafts, saveComposerDrafts } from '../stores/composerStore';
+import { bindSessionFileLinkModes } from '../stores/fileLinkModesStore';
+import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore';
+import { applyRemoteState } from '../stores/remoteAccessStore';
 import {
   applySessionBacklog,
   applySessionRemoved,
@@ -54,7 +38,22 @@ import {
   markSocketClosed,
   sessionsStore,
   setActiveSession,
-} from '../stores/sessionsStore.ts';
+} from '../stores/sessionsStore';
+import {
+  applyHistoryPage,
+  applySessionFrame,
+  applyThreadFrame,
+  dropSessionStore,
+  beginSessionReplay,
+  endSessionReplay,
+  refreshSessionFacts,
+  refreshSessionStats,
+  resetSessionStore,
+  seedHistoryCursor,
+} from '../stores/sessionStore';
+import { applyThreadTranscriptFrame, dropThreads, resubscribeThreads, threadStoreKey } from '../stores/threadStore';
+import { dropTransientTabs } from '../stores/transientTabsStore';
+import { startProtocolRuntime } from './protocolRuntime';
 
 const VOICE_OWNERSHIP_FRAME_TYPE = 'voice_ownership';
 
@@ -131,15 +130,6 @@ function watchVerifiedBundleUpdates(): () => void {
  * every replay and again once a run settles, because Pi reports model, stats
  * and commands on request rather than pushing them as events.
  */
-/** The journal id of the oldest restored entry, which is where paging back resumes. */
-function oldestEntryId(frames: readonly Record<string, unknown>[]): string | null {
-  for (const frame of frames) {
-    if (frame.type !== 'entry_appended') continue;
-    const entry = frame.entry;
-    if (isRecord(entry) && typeof entry.id === 'string') return entry.id;
-  }
-  return null;
-}
 
 export function startSessionRuntime(): () => void {
   // A bundle update reloads this page mid-sentence; the text it saved is put
@@ -147,21 +137,47 @@ export function startSessionRuntime(): () => void {
   restoreComposerDrafts();
   const stopBundleWatch = watchVerifiedBundleUpdates();
   const stopFileLinkModes = bindSessionFileLinkModes();
-  // The visible session and the autonomous voice owner keep hub subscriptions.
-  // Both die with the socket, which is why a fresh snapshot re-subscribes them.
+  // Focus, voice ownership, and pending captures each own a hub subscription.
+  // Socket loss ends captures; a fresh snapshot restores the remaining owners.
   const subscribed = new Set<string>();
   let currentVoiceOwner: string | null = null;
   let pendingVoiceTransferTarget: string | undefined;
   let pendingVoiceTransferFocus: Promise<void> | undefined;
   let deferredVoiceOwnershipFrame: Record<string, unknown> | undefined;
-  // The transcript comes from Pi's protocol; this socket keeps carrying what
-  // the protocol has no shape for.
-  const protocol = startProtocolRuntime();
+  const applyPresentationFrame = (sessionId: string, frame: Record<string, unknown>, replay: boolean): void => {
+    applySessionFrame(sessionId, frame, { replay });
+    if (replay) return;
+    const notification = parseDoomNotificationEntry(frame);
+    if (notification) void deliverBrowserNotification(sessionId, notification.entryId, notification.data);
+    applyCaptureFrame(sessionId, frame);
+    if (sessionId !== sessionsStore.state.activeId) return;
+    if (frame.type === 'extension_ui_request' && frame.method === 'select')
+      claimDialogMenu(typeof frame.id === 'string' ? frame.id : '');
+    if (frame.type === 'entry_appended') {
+      const entry = isRecord(frame.entry) ? frame.entry : undefined;
+      if (entry?.type === 'custom' && entry.customType === RESOURCE_CATALOG_ENTRY_TYPE) refreshSessionFacts(sessionId);
+    }
+    if (frame.type === 'message_end') refreshSessionStats(sessionId);
+    if (frame.type === 'agent_settled') {
+      clearPendingMenu();
+      refreshSessionFacts(sessionId);
+    }
+  };
+  const protocol = startProtocolRuntime(window.location, applyPresentationFrame);
+
+  const clearSubscriptions = (): void => {
+    for (const sessionId of subscribed) endSessionReplay(sessionId);
+    subscribed.clear();
+  };
 
   const syncSubscription = (force = false): void => {
     const { activeId, byId } = sessionsStore.state;
     const target = activeId !== null && activeId in byId ? activeId : null;
-    const focused = focusSessionWebPlugins(target, target === null ? undefined : byId[target].summary.webComposition);
+    const focused = focusSessionWebPlugins(
+      target,
+      target === null ? undefined : byId[target].summary.webComposition,
+      target === null ? undefined : byId[target].summary.workspaceId,
+    );
     protocol.focus(target);
     if (deferredVoiceOwnershipFrame !== undefined && target !== null && pendingVoiceTransferTarget === target) {
       const deferred = deferredVoiceOwnershipFrame;
@@ -179,10 +195,14 @@ export function startSessionRuntime(): () => void {
     const desired = new Set<string>();
     if (target !== null) desired.add(target);
     if (currentVoiceOwner !== null && currentVoiceOwner in byId) desired.add(currentVoiceOwner);
-    if (force) subscribed.clear();
+    for (const sessionId of pendingCaptureSessions.state) {
+      if (sessionId in byId) desired.add(sessionId);
+    }
+    if (force) clearSubscriptions();
     for (const sessionId of subscribed) {
       if (desired.has(sessionId)) continue;
       subscribed.delete(sessionId);
+      endSessionReplay(sessionId);
       disconnectCaptures(sessionId);
       sendHubFrame(unsubscribeFrame(sessionId));
     }
@@ -199,7 +219,7 @@ export function startSessionRuntime(): () => void {
     if (typeof state === 'object' && state !== null) applyRemoteState(state as RemoteAccessStateView);
   };
 
-  const socket = createSessionSocket(sessionSocketUrl(window.location), {
+  const socket = createProtocolHubSocket(protocol.client, {
     onFrame(frame) {
       switch (frame.type) {
         // Sync rebuilt the bundle this page is running. The trusted worker stages
@@ -243,24 +263,6 @@ export function startSessionRuntime(): () => void {
           syncSubscription();
           return;
         }
-        case SESSION_BACKLOG_TYPE: {
-          if (typeof frame.sessionId !== 'string' || !Array.isArray(frame.frames)) return;
-          const sessionId = frame.sessionId;
-          const frames = frame.frames.filter(isRecord);
-          const dropped = typeof frame.dropped === 'number' ? frame.dropped : 0;
-          recordBrowserPerformance({ name: 'web.browser.backlog', count: Math.min(10_000, frames.length + dropped) });
-          // Publish the completed replay, not every intermediate frame, to store subscribers.
-          batch(() => {
-            applySessionBacklog(sessionId, frames.length, dropped);
-            resetSessionStore(sessionId);
-            for (const replayed of frames) applySessionFrame(sessionId, replayed);
-            // Where the backlog starts is where paging back has to continue
-            // from, so the oldest journal id it carried becomes the cursor.
-            seedHistoryCursor(sessionId, oldestEntryId(frames));
-          });
-          refreshSessionFacts(sessionId);
-          return;
-        }
         case HISTORY_PAGE_TYPE: {
           if (typeof frame.sessionId !== 'string' || !Array.isArray(frame.frames)) return;
           applyHistoryPage(frame.sessionId, frame.frames.filter(isRecord), {
@@ -269,42 +271,40 @@ export function startSessionRuntime(): () => void {
           });
           return;
         }
+        case SESSION_BACKLOG_TYPE: {
+          const sessionId = frame.sessionId;
+          if (typeof sessionId !== 'string' || !Array.isArray(frame.frames)) return;
+          const frames = frame.frames.filter(isRecord);
+          const firstEntry = frames.find((item) => item.type === 'entry_appended' && isRecord(item.entry));
+          const firstEntryId =
+            isRecord(firstEntry?.entry) && typeof firstEntry.entry.id === 'string' ? firstEntry.entry.id : null;
+          beginSessionReplay(sessionId);
+          try {
+            batch(() => {
+              resetSessionStore(sessionId);
+              for (const replayed of frames) applyPresentationFrame(sessionId, replayed, true);
+            });
+          } finally {
+            endSessionReplay(sessionId);
+          }
+          seedHistoryCursor(sessionId, firstEntryId);
+          applySessionBacklog(
+            sessionId,
+            frames.length,
+            typeof frame.dropped === 'number' && Number.isFinite(frame.dropped) ? frame.dropped : 0,
+          );
+          if (sessionId === sessionsStore.state.activeId) refreshSessionFacts(sessionId);
+          return;
+        }
         case SESSION_FRAME_TYPE: {
-          if (typeof frame.sessionId !== 'string' || !isRecord(frame.frame)) return;
-          const notification = parseDoomNotificationEntry(frame.frame);
-          if (notification !== undefined) {
-            void deliverBrowserNotification(frame.sessionId, notification.entryId, notification.data);
-          }
-          applyCaptureFrame(frame.sessionId, frame.frame);
-          applySessionFrame(frame.sessionId, frame.frame);
-          // Only the visible session owns the composer's pending menu. The retained
-          // voice owner may keep streaming in the background while another session is open.
+          // Hub-wide notifications cover sessions that are not the focused presentation.
           if (
-            frame.sessionId === sessionsStore.state.activeId &&
-            frame.frame.type === 'extension_ui_request' &&
-            frame.frame.method === 'select'
-          ) {
-            claimDialogMenu(typeof frame.frame.id === 'string' ? frame.frame.id : '');
-          }
-          // A reload rebuilt the resource catalog, so the commands and skills
-          // this page cached describe the selection it replaced. Pi reports a
-          // reload no other way, which is why the runtime journals this entry.
-          if (frame.frame.type === 'entry_appended') {
-            const entry = isRecord(frame.frame.entry) ? frame.frame.entry : undefined;
-            if (entry?.type === 'custom' && entry.customType === RESOURCE_CATALOG_ENTRY_TYPE) {
-              refreshSessionFacts(frame.sessionId);
-            }
-          }
-          // Cost and context both move when a message lands, and a turn can
-          // run many messages before it settles. Asking for the figures here
-          // is what keeps the status bar current mid-turn.
-          if (frame.frame.type === 'message_end') {
-            refreshSessionStats(frame.sessionId);
-          }
-          if (frame.frame.type === 'agent_settled') {
-            if (frame.sessionId === sessionsStore.state.activeId) clearPendingMenu();
-            refreshSessionFacts(frame.sessionId);
-          }
+            typeof frame.sessionId !== 'string' ||
+            !isRecord(frame.frame) ||
+            frame.sessionId === sessionsStore.state.activeId
+          )
+            return;
+          applyPresentationFrame(frame.sessionId, frame.frame, false);
           return;
         }
         // A thread folds like a session of its own, under a key of its own;
@@ -314,6 +314,10 @@ export function startSessionRuntime(): () => void {
           if (!Array.isArray(frame.frames)) return;
           const key = threadStoreKey(frame.sessionId, frame.threadId);
           const frames = frame.frames.filter(isRecord);
+          if (
+            frames.some((item) => applyThreadTranscriptFrame(frame.sessionId as string, frame.threadId as string, item))
+          )
+            return;
           batch(() => {
             resetSessionStore(key);
             for (const replayed of frames) applyThreadFrame(key, replayed);
@@ -323,6 +327,7 @@ export function startSessionRuntime(): () => void {
         case THREAD_FRAME_TYPE: {
           if (typeof frame.sessionId !== 'string' || typeof frame.threadId !== 'string') return;
           if (!isRecord(frame.frame)) return;
+          if (applyThreadTranscriptFrame(frame.sessionId, frame.threadId, frame.frame)) return;
           applyThreadFrame(threadStoreKey(frame.sessionId, frame.threadId), frame.frame);
           return;
         }
@@ -368,21 +373,27 @@ export function startSessionRuntime(): () => void {
       // The snapshot that follows the hub's hello is the real "connected".
     },
     onClose() {
-      subscribed.clear();
       disconnectCaptures();
       markSocketClosed();
+      clearSubscriptions();
     },
   });
 
-  bindTransport((frame) => socket.send(frame));
+  bindTransport(
+    (frame) => socket.send(frame),
+    (call) => socket.invokePlugin(call),
+  );
   // Focus changes come from routing; the runtime follows them with
   // subscribe/unsubscribe so features never touch the wire protocol.
   const subscription = sessionsStore.subscribe(() => syncSubscription());
+  const captureSubscription = pendingCaptureSessions.subscribe(() => syncSubscription());
 
   return () => {
     stopBundleWatch();
     stopFileLinkModes();
     subscription.unsubscribe();
+    captureSubscription.unsubscribe();
+    clearSubscriptions();
     void focusSessionWebPlugins(null, undefined);
     protocol.stop();
     disconnectCaptures();

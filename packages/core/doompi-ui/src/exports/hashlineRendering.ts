@@ -4,4 +4,4 @@ export {
   renderHashlineCall,
   renderHashlineEditResult,
   renderHashlineResult,
-} from '../tui/hashlineRendering.ts';
+} from '../tui/hashlineRendering';

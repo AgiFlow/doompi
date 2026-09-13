@@ -1,4 +1,4 @@
-import { defineWebPlugin, type ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin, type ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 
 /** Throws when the call asks it to; every other call renders a plain line. */
 function CrashToolMessage({ args }: ToolMessageRenderProps) {
@@ -8,5 +8,7 @@ function CrashToolMessage({ args }: ToolMessageRenderProps) {
 
 export const webPlugin = defineWebPlugin({
   id: 'crash',
-  toolRenderers: [{ tools: ['crash'], message: CrashToolMessage }],
+  session: {
+    toolRenderers: [{ tools: ['crash'], message: CrashToolMessage }],
+  },
 });

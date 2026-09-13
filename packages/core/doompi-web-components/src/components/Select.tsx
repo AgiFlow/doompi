@@ -1,7 +1,8 @@
 import { Select as SelectPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { CheckIcon, ChevronDownIcon } from '../icons/icons.ts';
-import { cn } from '../lib/cn.ts';
+
+import { CheckIcon, ChevronDownIcon } from '../icons/icons';
+import { cn } from '../lib/cn';
 
 /**
  * A single choice from a list, on Radix rather than a native <select>: a

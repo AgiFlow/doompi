@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { author, authorChannel } from '../../src/web/stores/authorStore.ts';
+
+import { author, authorChannel } from '../../src/web/stores/authorStore';
 
 const accepted = { kind: 'accepted', generation: 1, ownerToken: 'owner', leaseMs: 1000 };
 const request = {

@@ -2,12 +2,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
+
 import { defineConfig } from 'vitest/config';
 
 const threshold = process.env.THRESHOLD ? Number.parseInt(process.env.THRESHOLD, 10) : 80;
 const doomConfigExports = fileURLToPath(new URL('../../../packages/core/doompi-config/src/exports/', import.meta.url));
 const doomExtensionContractsExports = fileURLToPath(
-  new URL('../../../packages/core/doompi-extension-contracts/src/exports/', import.meta.url),
+  new URL('../../../packages/core/doompi-core/src/exports/', import.meta.url),
 );
 
 /**
@@ -49,12 +50,16 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: '@agimon-ai/doompi-extension-contracts/cordis-host',
-        replacement: `${doomExtensionContractsExports}cordisHost.ts`,
+        find: '@agimon-ai/doompi-core/runtime-cordis-host',
+        replacement: `${doomExtensionContractsExports}../pi/cordisHost.ts`,
       },
       {
-        find: /^@agimon-ai\/doompi-extension-contracts\/(.*)$/,
-        replacement: `${doomExtensionContractsExports}$1.ts`,
+        find: '@agimon-ai/doompi-core/pi-extension',
+        replacement: `${doomExtensionContractsExports}piExtension.ts`,
+      },
+      {
+        find: '@agimon-ai/doompi-core/cordis-host',
+        replacement: `${doomExtensionContractsExports}cordisHost.ts`,
       },
       { find: '@agimon-ai/doompi-config/layeredConfig', replacement: `${doomConfigExports}layeredConfig.ts` },
       { find: /^@agimon-ai\/doompi-config\/(.*)$/, replacement: `${doomConfigExports}$1.ts` },

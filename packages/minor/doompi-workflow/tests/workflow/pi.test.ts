@@ -1,48 +1,53 @@
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+
 import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProvider,
   type DoomBackgroundWorkService,
-} from '@agimon-ai/doompi-extension-contracts/background-work';
-import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-extension-contracts/child-process';
+} from '@agimon-ai/doompi-core/background-work';
+import { SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
+import {
+  DOOM_NARRATION_SERVICE,
+  type DoomNarrationService,
+  type NarrationRequest,
+} from '@agimon-ai/doompi-core/narration';
+import {
+  createDoomReadinessCoordinator,
+  DOOM_READINESS_SERVICE,
+  type DoomReadinessCoordinator,
+} from '@agimon-ai/doompi-core/readiness';
+import { createDoomToolSurface, DOOM_TOOL_SURFACE_SERVICE } from '@agimon-ai/doompi-core/tool-surface';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import {
   DOOM_MINOR_MODE_CATALOG_SERVICE,
   type MinorModeCatalogService,
   type MinorModeOwnerDefinition,
   type MinorModeOwnerHandle,
   type MinorModeState,
-} from '@agimon-ai/doompi-extension-contracts/mode';
-import {
-  DOOM_NARRATION_SERVICE,
-  type DoomNarrationService,
-  type NarrationRequest,
-} from '@agimon-ai/doompi-extension-contracts/narration';
-import {
-  createDoomReadinessCoordinator,
-  DOOM_READINESS_SERVICE,
-  type DoomReadinessCoordinator,
-} from '@agimon-ai/doompi-extension-contracts/readiness';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+} from '@agimon-ai/doompi-minor-mode';
 import {
   createEmbeddedWorkflowFeature,
   type EmbeddedWorkflowFeature,
   type Workflow,
   type WorkflowRunRecord,
 } from '@agimon-ai/workflow-mcp';
+import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
-import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { WORKFLOW_PI_TOOL_NAMES } from '../../src/constants/workflow';
+import { workflowExtension } from '../../src/extensions/pi';
+import type { WorkflowPiToolDependencies } from '../../src/services/workflowExecution';
+import { createWorkflowTools } from '../../src/tools/workflowTools';
 import {
   compatibleRunners,
-  createWorkflowPiExtension,
   panelHint,
   parseWorkflowCommandArguments,
   shortcutLabel,
-} from '../../src/adapters/pi/workflow/piExtension';
-import { registerWorkflowPiTools, WORKFLOW_PI_TOOL_NAMES } from '../../src/adapters/pi/workflow/piTools';
+} from '../../src/tui/workflowRuntime';
 
 type CommandOptions = {
   description?: string;
@@ -74,6 +79,7 @@ type ToolDefinition = {
 
 const SESSION_ID = 'session-1';
 const WORKFLOW_PACKAGE = '@agimon-ai/doompi-workflow';
+const TEST_ENVIRONMENT = Object.freeze({});
 /** A tool from another extension, so gating has something to preserve. */
 const FOREIGN_TOOL = 'read';
 /** The chords the extension registers, as the tests have to press them. */
@@ -117,11 +123,12 @@ function runRecord(overrides: Partial<WorkflowRunRecord> = {}): WorkflowRunRecor
   };
 }
 
-function createHarness(
+async function createHarness(
   records: WorkflowRunRecord[] = [],
   { monitorIntervalMs = 60_000, launchAckPollMs = 5, launchAckTimeoutMs = 300, provideSharedReadiness = true } = {},
 ) {
   vi.stubEnv(SUBAGENT_ROOT_SESSION_ENV, '');
+  const environment = Object.freeze({ ...process.env });
   const commands = new Map<string, CommandOptions>();
   const handlers = new Map<string, EventHandler>();
   let sessionStarted = false;
@@ -194,7 +201,7 @@ function createHarness(
   const uiHub = {
     registerConfig: vi.fn(),
     registerFooter,
-    registerLeader: vi.fn(),
+    registerLeader: vi.fn(() => ({ update: vi.fn(), dispose: vi.fn() })),
     registerLeaderActions(options: Parameters<DoomUiHubService['registerLeaderActions']>[0]) {
       leaderActions = options;
       let disposed = false;
@@ -277,8 +284,10 @@ function createHarness(
       this.hidden = true;
     },
   };
-  // Pi auto-activates tools as they register, so the fake mirrors that.
+  // Pi auto-activates tools as they register, so the fake mirrors that until
+  // the tool surface recomputes the list from its restrictions.
   let activeTools: string[] = [FOREIGN_TOOL];
+  let refreshToolSurface: (() => void) | undefined;
   const realFeature = createEmbeddedWorkflowFeature();
   const runTool = realFeature.runTool;
   const runToolExecute = vi
@@ -315,6 +324,7 @@ function createHarness(
     registerTool: vi.fn((tool: ToolDefinition) => {
       tools.set(tool.name, tool);
       activeTools = [...new Set([...activeTools, tool.name])];
+      refreshToolSurface?.();
     }),
     sendMessage,
     sendUserMessage,
@@ -374,6 +384,16 @@ function createHarness(
   cordis.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWorkService);
   cordis.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, modeCatalog);
   cordis.provide(DOOM_UI_HUB_SERVICE, uiHub);
+  // The session owns the surface; the package only ever registers restrictions.
+  const toolSurface = createDoomToolSurface({
+    generation: 'workflow-test',
+    allTools: () => [FOREIGN_TOOL, ...tools.keys()],
+    activeTools: () => activeTools,
+    setActiveTools: (names) => pi.setActiveTools([...names]),
+  });
+  refreshToolSurface = () => toolSurface.refresh();
+  cordis.provide(DOOM_TOOL_SURFACE_SERVICE, toolSurface);
+  cordis.effect(() => () => toolSurface.dispose(), `${WORKFLOW_PACKAGE}/test-tool-surface`);
   let narrationProvider: { dispose(): Promise<void> } | undefined;
   const provideNarration = async (generation: string): Promise<void> => {
     const service: DoomNarrationService = {
@@ -402,8 +422,8 @@ function createHarness(
     cordis.effect(() => () => coordinator.dispose(), `${WORKFLOW_PACKAGE}/test-readiness`);
   }
   activeCordisRoots.push(cordis);
-  createWorkflowPiExtension({
-    cordis,
+  await workflowExtension.install(cordis, pi, {
+    environment,
     monitorIntervalMs,
     launchAckPollMs,
     launchAckTimeoutMs,
@@ -417,7 +437,7 @@ function createHarness(
         runTool,
         createRecoverTool: () => recoverTool,
       }) as EmbeddedWorkflowFeature,
-  })(pi);
+  });
 
   const ui = {
     confirm: vi.fn().mockResolvedValue(true),
@@ -472,6 +492,7 @@ function createHarness(
     sessionManager: { getSessionId: () => SESSION_ID },
     ui,
   } as unknown as ExtensionCommandContext;
+  handlers.set(EVENT_SESSION_SHUTDOWN, () => cordis.fiber.dispose());
   const rawSessionStart = handlers.get(EVENT_SESSION_START);
   if (rawSessionStart) {
     handlers.set(EVENT_SESSION_START, async (event, context) => {
@@ -682,20 +703,20 @@ async function pollsSettle(harness: { listRunsPage: ReturnType<typeof vi.fn> }, 
 // calling this function: without these the integration tests would agree with
 // whatever it happened to produce.
 describe('shortcutLabel', () => {
-  it('writes modifiers as the glyphs a macOS keyboard actually shows', () => {
+  it('writes modifiers as the glyphs a macOS keyboard actually shows', async () => {
     expect(shortcutLabel(SHORTCUT_TOGGLE_VIEW, 'darwin')).toBe('⌃⌥W');
     expect(shortcutLabel(SHORTCUT_CLOSE_VIEW, 'darwin')).toBe('⌃⌥Q');
     expect(shortcutLabel('shift+enter', 'darwin')).toBe('⇧ENTER');
   });
 
-  it('spells modifiers out everywhere else', () => {
+  it('spells modifiers out everywhere else', async () => {
     expect(shortcutLabel(SHORTCUT_TOGGLE_VIEW, 'linux')).toBe('Ctrl+Alt+W');
     expect(shortcutLabel(SHORTCUT_CLOSE_VIEW, 'win32')).toBe('Ctrl+Alt+Q');
   });
 
   // A macOS user told to press "alt" has to work out that it means Option, a
   // key most Apple keyboards do not label "alt" at all.
-  it('never shows a mac user the word alt', () => {
+  it('never shows a mac user the word alt', async () => {
     expect(shortcutLabel(SHORTCUT_TOGGLE_VIEW, 'darwin')).not.toContain('alt');
     expect(shortcutLabel(SHORTCUT_TOGGLE_VIEW, 'darwin')).not.toContain('Alt');
   });
@@ -703,17 +724,17 @@ describe('shortcutLabel', () => {
   // Only the label is platform-specific. What Pi registers must stay canonical
   // on every platform, which the harness proves by looking the handler up by
   // its literal binding.
-  it('changes the label without changing the binding', () => {
+  it('changes the label without changing the binding', async () => {
     expect(shortcutLabel(SHORTCUT_TOGGLE_VIEW, 'darwin')).not.toBe(SHORTCUT_TOGGLE_VIEW);
-    expect(createHarness([]).shortcuts.has(SHORTCUT_TOGGLE_VIEW)).toBe(true);
-    expect(createHarness([]).shortcuts.has(SHORTCUT_CLOSE_VIEW)).toBe(true);
+    expect((await createHarness([])).shortcuts.has(SHORTCUT_TOGGLE_VIEW)).toBe(true);
+    expect((await createHarness([])).shortcuts.has(SHORTCUT_CLOSE_VIEW)).toBe(true);
   });
 });
 
 describe('panelHint', () => {
   // The footer is the only exit instruction on screen once the notice has
   // scrolled away, so the failsafe has to be in it, not just in the docs.
-  it('leads with the exit that works on every terminal', () => {
+  it('leads with the exit that works on every terminal', async () => {
     const hint = panelHint(true, 'darwin');
 
     expect(hint.indexOf('Esc Esc')).toBe(0);
@@ -723,7 +744,7 @@ describe('panelHint', () => {
 
   // A run with no terminal behind it must not advertise typing controls, or
   // the user spends the next minute wondering why nothing responds.
-  it('says a view-only panel takes no typing', () => {
+  it('says a view-only panel takes no typing', async () => {
     const hint = panelHint(false, 'darwin');
 
     expect(hint).toContain('view only');
@@ -732,7 +753,7 @@ describe('panelHint', () => {
     expect(hint).not.toContain('Esc Esc');
   });
 
-  it('spells the chords out away from macOS', () => {
+  it('spells the chords out away from macOS', async () => {
     expect(panelHint(true, 'linux')).toContain('Ctrl+Alt+W');
   });
 });
@@ -761,7 +782,7 @@ describe('workflow-mcp Pi extension', () => {
       },
     } as unknown as ExtensionAPI;
 
-    registerWorkflowPiTools(pi, { feature: createHarness().feature });
+    registerWorkflowPiTools(pi, { environment: TEST_ENVIRONMENT, feature: (await createHarness()).feature });
 
     expect([...tools.keys()]).toEqual([...WORKFLOW_PI_TOOL_NAMES]);
     for (const action of ['follow', 'tail', 'open']) {
@@ -782,6 +803,7 @@ describe('workflow-mcp Pi extension', () => {
     const tailRun = vi.fn().mockResolvedValue('raw PTY frame from dependency');
 
     registerWorkflowPiTools(pi, {
+      environment: TEST_ENVIRONMENT,
       feature: createEmbeddedWorkflowFeature(),
       requireSessionRun: vi.fn().mockResolvedValue(record),
       tailRun,
@@ -808,7 +830,7 @@ describe('workflow-mcp Pi extension', () => {
     vi.unstubAllEnvs();
   });
 
-  it('computes runners supported by every mapped workflow step', () => {
+  it('computes runners supported by every mapped workflow step', async () => {
     const workflow = {
       jobs: {
         development: {
@@ -824,7 +846,7 @@ describe('workflow-mcp Pi extension', () => {
     expect(compatibleRunners(workflow)).toEqual(['codex', 'pi']);
   });
 
-  it('parses deterministic launch options', () => {
+  it('parses deterministic launch options', async () => {
     expect(
       parseWorkflowCommandArguments('dev-full --runner pi --launcher tmux --workspace agiflow --name "Auth work"'),
     ).toEqual({
@@ -840,18 +862,18 @@ describe('workflow-mcp Pi extension', () => {
   // verb is that one, and it earns its place by being the only way a cockpit
   // can start a workflow: a browser can send a session a prompt frame and
   // nothing else. If this list grows again, the namespace cost has regressed.
-  it('registers the launch command and nothing else', () => {
-    expect([...createHarness().commands.keys()]).toEqual(['workflow-launch']);
+  it('registers the launch command and nothing else', async () => {
+    expect([...(await createHarness()).commands.keys()]).toEqual(['workflow-launch']);
   });
 
-  it('registers every gated tool name it claims to gate', () => {
-    expect([...createHarness().tools.keys()].sort()).toEqual([...WORKFLOW_PI_TOOL_NAMES].sort());
+  it('registers every gated tool name it claims to gate', async () => {
+    expect([...(await createHarness()).tools.keys()].sort()).toEqual([...WORKFLOW_PI_TOOL_NAMES].sort());
   });
 
   // The tools carry their own context. Nothing is injected into the system
   // prompt, so if a rule is not on a tool the agent never sees it.
-  it('carries the operating rules on the tools themselves', () => {
-    const tools = createHarness().tools as unknown as Map<string, { promptGuidelines?: string[] }>;
+  it('carries the operating rules on the tools themselves', async () => {
+    const tools = (await createHarness()).tools as unknown as Map<string, { promptGuidelines?: string[] }>;
     const guidelines = (name: string) => (tools.get(name)?.promptGuidelines ?? []).join('\n');
 
     expect(guidelines('launch_workflow')).toContain('AGIFLOW_PROJECT_ID, AGIFLOW_JOB_KIND, and AGIFLOW_JOB_ID');
@@ -867,14 +889,14 @@ describe('workflow-mcp Pi extension', () => {
     expect(recover).toContain('verify real process and registry progress');
   });
 
-  it('injects nothing into the system prompt', () => {
-    expect(createHarness().handlers.has('before_agent_start')).toBe(false);
+  it('injects nothing into the system prompt', async () => {
+    expect((await createHarness()).handlers.has('before_agent_start')).toBe(false);
   });
 
   // The package ships this skill itself rather than assuming the host
   // repository supplies one, but the dormant battery mode must stay neutral.
   it('discovers workflow-recovery only while Workflow mode is active', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     const discover = async (): Promise<string[]> => {
       const result = (await harness.handlers.get('resources_discover')?.({}, harness.ctx)) as {
         skillPaths: string[];
@@ -901,7 +923,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('leaves workflow tools inactive until the mode is turned on', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
@@ -910,7 +932,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('activates workflow tools on and strips them off, preserving other extensions', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     await harness.toggle('on');
@@ -918,15 +940,15 @@ describe('workflow-mcp Pi extension', () => {
     expect(harness.activeTools()).toContain(FOREIGN_TOOL);
 
     await harness.toggle('off');
-    // The foreign tool surviving is the regression guard: setActiveTools is a
-    // whole-list setter, so a bare literal here would silently disable it.
+    // The foreign tool surviving is the regression guard: the restriction only
+    // ever removes this package's own names from the surface.
     expect(harness.activeTools()).toEqual([FOREIGN_TOOL]);
   });
 
   // Two actions behind one key: `SPC w e` enters the mode and, once it is on,
   // the same key is republished as the way out.
   it('enables and disables from separate leader actions', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     await harness.toggle('on');
@@ -942,7 +964,7 @@ describe('workflow-mcp Pi extension', () => {
   it('honours WORKFLOW_MCP_MODE=on so non-interactive dispatch keeps its launch tool', async () => {
     vi.stubEnv('WORKFLOW_MCP_MODE', 'on');
     try {
-      const harness = createHarness();
+      const harness = await createHarness();
       await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
       expect(harness.activeTools()).toContain('launch_workflow');
       expect(await harness.handlers.get('resources_discover')?.({}, harness.ctx)).toMatchObject({
@@ -956,7 +978,7 @@ describe('workflow-mcp Pi extension', () => {
   // `/workflow status` is gone: the mode display answers it at a glance. What
   // still has to hold is that each toggle explains the state it just entered.
   it('explains the state it has just entered', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     await harness.toggle('on');
@@ -969,7 +991,7 @@ describe('workflow-mcp Pi extension', () => {
   // The mode line owns the enabled state; the live list owns running work. The
   // extension therefore has no reason to claim Pi's shared status/footer row.
   it('keeps the shared status row unclaimed while workflow mode is on', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     await harness.toggle('on');
@@ -982,7 +1004,7 @@ describe('workflow-mcp Pi extension', () => {
   // editor's badge and the detail in the leader panel, so this extension owns
   // the label and not where it lands.
   it('contributes its mode label while the mode is on', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     expect(harness.latestModeItem()).toBeUndefined();
 
@@ -996,7 +1018,7 @@ describe('workflow-mcp Pi extension', () => {
   // Every republish repaints the shared surfaces for every other mode too, so a
   // label reasserted on each monitor tick would churn the TUI for nothing.
   it('leaves the label alone while the mode is unchanged', async () => {
-    const harness = createHarness([runRecord({ stage: 'running' })], { monitorIntervalMs: 5 });
+    const harness = await createHarness([runRecord({ stage: 'running' })], { monitorIntervalMs: 5 });
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     await harness.toggle('on');
     const published = harness.modePublications();
@@ -1007,7 +1029,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('takes the label off when the session ends', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     await harness.toggle('on');
 
@@ -1017,7 +1039,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('does not contribute running workflows to the doom footer', async () => {
-    const harness = createHarness([runRecord({ stage: 'running' })]);
+    const harness = await createHarness([runRecord({ stage: 'running' })]);
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
@@ -1026,7 +1048,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('shows running work in the live list regardless of workflow mode', async () => {
-    const harness = createHarness([runRecord({ stage: 'running' })]);
+    const harness = await createHarness([runRecord({ stage: 'running' })]);
     harness.writeProgress([{ type: 'job', status: 'running', job: 'plan', index: 0, total: 2, at: 't1' }]);
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
@@ -1037,7 +1059,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('uses a starting fallback before a run emits its first progress event', async () => {
-    const harness = createHarness([runRecord({ stage: 'running' })]);
+    const harness = await createHarness([runRecord({ stage: 'running' })]);
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
@@ -1047,7 +1069,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('registers workflow runs through the injected background-work service', async () => {
-    const harness = createHarness([runRecord({ stage: 'running' })]);
+    const harness = await createHarness([runRecord({ stage: 'running' })]);
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     expect(harness.backgroundWorkSnapshot()).toMatchObject({
@@ -1066,7 +1088,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('keeps one provider generation and refreshes its snapshot when the session restarts', async () => {
-    const harness = createHarness([runRecord({ stage: 'running' })]);
+    const harness = await createHarness([runRecord({ stage: 'running' })]);
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
@@ -1082,7 +1104,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('returns from session_start while initialization continues and makes the first dependent tool wait', async () => {
     const record = runRecord({ stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     let releaseRegistryRead = (_records: WorkflowRunRecord[]): void => undefined;
     harness.listRuns.mockReturnValueOnce(
       new Promise<WorkflowRunRecord[]>((resolveRead) => {
@@ -1111,7 +1133,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('owns readiness locally when installed into standalone Pi without a Doom session root', async () => {
     const record = runRecord({ stage: 'running' });
-    const harness = createHarness([record], { provideSharedReadiness: false });
+    const harness = await createHarness([record], { provideSharedReadiness: false });
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     await expect(harness.callTool('tail_workflow', { runKey: record.runKey })).resolves.toMatchObject({
@@ -1121,7 +1143,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('turns the mode on through the injected minor-mode catalog', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     expect(harness.activeTools()).not.toContain('launch_workflow');
 
@@ -1132,7 +1154,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('rejects unknown minor-mode actions', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     await expect(harness.invokeModeAction('invalid')).rejects.toThrow('Unknown workflow mode action: invalid');
@@ -1141,7 +1163,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('launches through the tool, stamped with the session', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     const onUpdate = vi.fn();
 
     const result = await harness.callTool(
@@ -1175,9 +1197,16 @@ describe('workflow-mcp Pi extension', () => {
   // the caller's turn open for exactly that long. The registry answers earlier
   // and more truthfully: a recorded run is a run that started.
   it('answers a launch when the run registers, not when the launcher chain closes', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
-    harness.runToolExecute.mockImplementation(() => new Promise(() => {}));
+    let finish: (() => void) | undefined;
+    harness.runToolExecute.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ content: [] });
+        }),
+    );
+    harness.runServiceInterrupt.mockImplementation(() => finish?.());
     listRuns(harness, [
       runRecord({
         displayName: 'Dance Production',
@@ -1197,9 +1226,16 @@ describe('workflow-mcp Pi extension', () => {
 
   // Two launches in flight from one session must not report each other's key.
   it('ignores a registered run from a different workflow while acknowledging', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
-    harness.runToolExecute.mockImplementation(() => new Promise(() => {}));
+    let finish: (() => void) | undefined;
+    harness.runToolExecute.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ content: [] });
+        }),
+    );
+    harness.runServiceInterrupt.mockImplementation(() => finish?.());
     listRuns(harness, [
       runRecord({
         runKey: 'other-run',
@@ -1219,7 +1255,7 @@ describe('workflow-mcp Pi extension', () => {
   // Answering early trades the launcher's exit code for timeliness. Dropping
   // that code is not part of the trade.
   it('reports a launch that fails after it was already reported started', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     let failLaunch: ((error: Error) => void) | undefined;
     harness.runToolExecute.mockImplementation(
@@ -1247,7 +1283,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('requires complete and valid Agiflow job identity before launch', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await expect(
       harness.callTool('launch_workflow', {
         env: { AGIFLOW_JOB_KIND: 'task', AGIFLOW_JOB_ID: 'task-1' },
@@ -1268,7 +1304,7 @@ describe('workflow-mcp Pi extension', () => {
   it('allows explicit multi-project identity outside dispatcher-context launches', async () => {
     vi.stubEnv('AGIFLOW_PROJECT_ID', 'default-project');
     try {
-      const harness = createHarness();
+      const harness = await createHarness();
       await harness.callTool('launch_workflow', {
         env: {
           AGIFLOW_JOB_KIND: 'task',
@@ -1294,7 +1330,7 @@ describe('workflow-mcp Pi extension', () => {
     vi.stubEnv('BACKEND_AGIFLOW_API_ENDPOINT', 'https://host.agiflow.test');
     vi.stubEnv('AGIFLOW_DISPATCH_SECRET_FILE', '/tmp/host-secrets.env');
     try {
-      const harness = createHarness();
+      const harness = await createHarness();
       await expect(
         harness.callTool('launch_workflow', {
           env: {
@@ -1315,7 +1351,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('follows cmux output and stops following via the shortcut', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: 'job output\n' });
 
     await harness.callTool('follow_workflow', { runKey: 'auth-run' });
@@ -1336,7 +1372,7 @@ describe('workflow-mcp Pi extension', () => {
   it("never scrapes or foregrounds Pi's own cmux workspace", async () => {
     vi.stubEnv('CMUX_WORKSPACE_ID', 'workspace-host');
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-host' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: 'pi chat frame\n' });
 
     await harness.callTool('follow_workflow', { runKey: 'auth-run' });
@@ -1355,7 +1391,7 @@ describe('workflow-mcp Pi extension', () => {
       launcher: { paneId: '%host', sessionName: 'workflow-host', type: 'tmux' },
       stage: 'running',
     });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: 'pi chat frame\n' });
 
     await harness.callTool('follow_workflow', { runKey: 'auth-run' });
@@ -1371,7 +1407,7 @@ describe('workflow-mcp Pi extension', () => {
     // ~75ms. Every live surface wants it, and the run panel repaints five times
     // a second, so the read is coalesced behind a minimum interval.
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: 'job output\n' });
 
     await harness.callTool('follow_workflow', { runKey: 'auth-run' });
@@ -1387,7 +1423,7 @@ describe('workflow-mcp Pi extension', () => {
     // The roster and the detail pane want the same run. Looking it up twice
     // paged the whole registry a second time on every 750ms tick.
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: 'job output\n' });
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
@@ -1417,7 +1453,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('opens the workflow inspector when no run view is active', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     harness.ui.setWidget.mockClear();
 
@@ -1434,7 +1470,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('launches the catalog cursor workflow with r, through the shared executor', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     const listWorkflowsExecute = vi.spyOn(harness.feature.listWorkflowsTool, 'execute').mockResolvedValue({
       content: [
         {
@@ -1497,7 +1533,7 @@ describe('workflow-mcp Pi extension', () => {
   it('runs the leader manage action only for current-session runs and pauses safely', async () => {
     const mine = runRecord({ executionState: 'running', runKey: 'mine', stage: 'running' });
     const foreign = runRecord({ env: { PI_SESSION_ID: 'other-session' }, runKey: 'foreign', stage: 'running' });
-    const harness = createHarness([mine, foreign]);
+    const harness = await createHarness([mine, foreign]);
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     const managing = harness.invokeLeaderAction('workflow.manage');
     const inspector = await harness.waitForOverlay();
@@ -1521,7 +1557,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('offers resume for a paused run and does not stop it when manager selection is cancelled', async () => {
     const paused = runRecord({ executionState: 'paused', runKey: 'paused', stage: 'running' });
-    const harness = createHarness([paused]);
+    const harness = await createHarness([paused]);
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     const managing = harness.invokeLeaderAction('workflow.manage');
     const inspector = await harness.waitForOverlay();
@@ -1541,7 +1577,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('does not stop when stop confirmation is cancelled', async () => {
-    const harness = createHarness([runRecord({ runKey: 'cancel-stop', stage: 'running' })]);
+    const harness = await createHarness([runRecord({ runKey: 'cancel-stop', stage: 'running' })]);
     harness.ui.confirm.mockResolvedValue(false);
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
@@ -1564,7 +1600,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('revalidates a stop after confirmation before controlling the run', async () => {
     const record = runRecord({ runKey: 'stale-stop', stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.ui.confirm.mockImplementation(async () => {
       listRuns(harness, [{ ...record, stage: 'completed' }]);
       return true;
@@ -1592,7 +1628,7 @@ describe('workflow-mcp Pi extension', () => {
       runKey: 'interrupted-elsewhere',
       stage: 'error',
     });
-    const harness = createHarness([foreign]);
+    const harness = await createHarness([foreign]);
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     const recovering = harness.invokeLeaderAction('workflow.recover');
@@ -1612,7 +1648,7 @@ describe('workflow-mcp Pi extension', () => {
       stage: 'error',
       workspace: 'agiflow"workspace',
     });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     const recovering = harness.invokeLeaderAction('workflow.recover');
@@ -1642,7 +1678,7 @@ describe('workflow-mcp Pi extension', () => {
   it('keeps terminal error records out of the active workflow list', async () => {
     const mine = runRecord({ runKey: 'failed-here', stage: 'error' });
     const foreign = runRecord({ env: { PI_SESSION_ID: 'other-session' }, runKey: 'failed-there', stage: 'error' });
-    const harness = createHarness([mine, foreign]);
+    const harness = await createHarness([mine, foreign]);
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
@@ -1655,7 +1691,7 @@ describe('workflow-mcp Pi extension', () => {
       launcher: { paneId: '%12', sessionId: '$4', sessionName: 'workflow-auth-run', type: 'tmux', windowId: '@8' },
       stage: 'running',
     });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: 'tmux output\n' });
 
     await harness.callTool('follow_workflow', { runKey: 'auth-run' });
@@ -1673,7 +1709,7 @@ describe('workflow-mcp Pi extension', () => {
   // a clean widget and a corrupted one.
   it('fits every widget line within the terminal width', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: `${'x'.repeat(300)}\n` });
 
     await harness.callTool('follow_workflow', { runKey: 'auth-run' });
@@ -1687,7 +1723,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('reads a cmux run in colour through terminal.replay, not the plain-text screen', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({
       code: 0,
       killed: false,
@@ -1715,7 +1751,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('falls back to the plain-text screen when cmux cannot answer terminal.replay', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     // An older cmux: the rpc verb is unknown, the read-screen alias still works.
     harness.exec.mockImplementation(async (_command: string, args: string[]) =>
       args[0] === 'rpc'
@@ -1730,7 +1766,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('sheds header detail on a narrow terminal but keeps the run key', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: 'out\n' });
 
     await harness.callTool('follow_workflow', { runKey: 'auth-run' });
@@ -1749,7 +1785,7 @@ describe('workflow-mcp Pi extension', () => {
   // job expands to its steps. A scraped terminal cannot express this.
   it('renders the job tree when the run recorded progress', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.writeProgress([
       { at: 't1', type: 'job', status: 'running', job: 'plan', index: 0, total: 2 },
       { at: 't2', type: 'step', status: 'completed', job: 'plan', step: 'read spec' },
@@ -1775,7 +1811,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('falls back to the launcher screen when a run recorded no progress', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: 'raw output\n' });
 
     await harness.callTool('follow_workflow', { runKey: 'auth-run' });
@@ -1788,7 +1824,7 @@ describe('workflow-mcp Pi extension', () => {
   // nothing to switch back to.
   it('opens a persistent overlay without blocking the tool call', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
 
     // Resolves on its own: no one closed anything.
     const result = await harness.callTool('open_workflow', { runKey: 'auth-run' });
@@ -1804,7 +1840,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('shows workflow PTY frames in the explicit overlay but not its chat result', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: 'workflow PTY frame\n' });
 
     const result = await harness.callTool('open_workflow', { runKey: 'auth-run' });
@@ -1819,7 +1855,7 @@ describe('workflow-mcp Pi extension', () => {
       launcher: { paneId: '%12', sessionId: '$4', sessionName: 'workflow-auth-run', type: 'tmux', windowId: '@8' },
       stage: 'running',
     });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: 'tmux output\n' });
 
     await harness.callTool('open_workflow', { runKey: 'auth-run' });
@@ -1839,7 +1875,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('leaves a cmux run at its own size, because cmux cannot be told an absolute one', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: 'plain output\n' });
 
     await harness.callTool('open_workflow', { runKey: 'auth-run' });
@@ -1852,7 +1888,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('batches typing and hands escape to the run so its agent can be interrupted', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     await harness.callTool('open_workflow', { runKey: 'auth-run' });
     const component = await harness.waitForOverlay();
 
@@ -1877,7 +1913,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('handles the typing shortcut inside the focused run before the TTY can swallow it', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     await harness.callTool('open_workflow', { runKey: 'auth-run' });
     const component = await harness.waitForOverlay();
 
@@ -1894,7 +1930,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('handles the close shortcut inside the focused run without forwarding it', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     await harness.callTool('open_workflow', { runKey: 'auth-run' });
     const component = await harness.waitForOverlay();
 
@@ -1909,7 +1945,7 @@ describe('workflow-mcp Pi extension', () => {
   // lost to a short terminal — and it is the one carrying the way out.
   it('keeps the escape hatch in the panel footer at every size', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     await harness.callTool('open_workflow', { runKey: 'auth-run' });
     const component = await harness.waitForOverlay();
 
@@ -1925,7 +1961,7 @@ describe('workflow-mcp Pi extension', () => {
   // is what makes it the exit that cannot be taken away.
   it('closes the panel on a quick double escape when the chords cannot be typed', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     await harness.callTool('open_workflow', { runKey: 'auth-run' });
     const component = await harness.waitForOverlay();
 
@@ -1947,7 +1983,7 @@ describe('workflow-mcp Pi extension', () => {
   // there would take the view away from someone who never asked to leave.
   it('keeps the panel open when the escapes are too far apart to be one gesture', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     await harness.callTool('open_workflow', { runKey: 'auth-run' });
     const component = await harness.waitForOverlay();
 
@@ -1965,7 +2001,7 @@ describe('workflow-mcp Pi extension', () => {
   // into a void with no indication anything is wrong.
   it('opens a natively hosted run as a view that never takes the keyboard', async () => {
     const record = runRecord({ launcher: { type: 'native' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
 
     const result = await harness.callTool('open_workflow', { runKey: 'auth-run' });
     await harness.waitForOverlay();
@@ -1983,7 +2019,7 @@ describe('workflow-mcp Pi extension', () => {
   // toggle handing the keyboard to a panel that cannot use it.
   it('refuses to give typing to a view-only panel', async () => {
     const record = runRecord({ launcher: { type: 'native' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     await harness.callTool('open_workflow', { runKey: 'auth-run' });
     await harness.waitForOverlay();
     harness.ui.notify.mockClear();
@@ -1998,7 +2034,7 @@ describe('workflow-mcp Pi extension', () => {
   // A tmux or cmux panel is the interactive case and must keep its focus toggle.
   it('still opens a multiplexed run with the keyboard', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
 
     await harness.callTool('open_workflow', { runKey: 'auth-run' });
     await harness.waitForOverlay();
@@ -2008,7 +2044,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('leaves the close key to Pi when no panel is open', async () => {
-    const harness = createHarness([]);
+    const harness = await createHarness([]);
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     await expect(harness.shortcuts.get(SHORTCUT_CLOSE_VIEW)?.handler(harness.ctx)).resolves.toBeUndefined();
@@ -2018,7 +2054,7 @@ describe('workflow-mcp Pi extension', () => {
   // The task-like widget carries the workflow name, elapsed time, job, and
   // current step without occupying either footer implementation.
   it('publishes running workflows to the live workflow list', async () => {
-    const harness = createHarness([runRecord({ runKey: 'ixx-324', stage: 'running' })]);
+    const harness = await createHarness([runRecord({ runKey: 'ixx-324', stage: 'running' })]);
     harness.writeProgress([
       { type: 'job', status: 'running', job: 'plan', index: 0, total: 2, at: '2026-01-01T00:00:00.000Z' },
     ]);
@@ -2036,7 +2072,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('shows step transitions in the live list without writing chat messages', async () => {
     const record = runRecord({ runKey: 'ixx-324', stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.writeProgress([
       { type: 'step', status: 'running', job: 'verify', step: 'Claim the job', at: '2026-01-01T00:00:00.000Z' },
       { type: 'step', status: 'completed', job: 'verify', step: 'Claim the job', at: '2026-01-01T00:00:12.000Z' },
@@ -2050,7 +2086,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('replaces the progress widget cleanly when session_start repeats', async () => {
     const record = runRecord({ runKey: 'ixx-324', stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.writeProgress([
       { type: 'step', status: 'running', job: 'verify', step: 'Claim the job', at: '2026-01-01T00:00:00.000Z' },
     ]);
@@ -2072,7 +2108,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('keeps progress visible while the agent is mid-turn without steering chat', async () => {
     const record = runRecord({ runKey: 'ixx-324', stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.writeProgress([
       { type: 'step', status: 'running', job: 'verify', step: 'Claim the job', at: '2026-01-01T00:00:00.000Z' },
     ]);
@@ -2087,7 +2123,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('keeps another Pi session out of passive UI and persisted agent context', async () => {
     const foreign = runRecord({ env: { PI_SESSION_ID: 'another-session' }, stage: 'running' });
-    const harness = createHarness([foreign]);
+    const harness = await createHarness([foreign]);
     harness.writeProgress([
       { type: 'step', status: 'running', job: 'verify', step: 'Claim the job', at: '2026-01-01T00:00:00.000Z' },
     ]);
@@ -2107,7 +2143,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('publishes launch, success, and failure narration requests', async () => {
-    const harness = createHarness([], { monitorIntervalMs: 10 });
+    const harness = await createHarness([], { monitorIntervalMs: 10 });
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     const successful = runRecord({
@@ -2144,7 +2180,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('drops narration while the Voice provider is absent and rebinds to its replacement', async () => {
-    const harness = createHarness([], { monitorIntervalMs: 10 });
+    const harness = await createHarness([], { monitorIntervalMs: 10 });
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     const first = runRecord({
@@ -2184,7 +2220,7 @@ describe('workflow-mcp Pi extension', () => {
   // session launched finished" or the notice goes to the wrong agent.
   it('keeps terminal work published until Pi accepts the completion turn', async () => {
     const running = runRecord({ runKey: 'ixx-324', stage: 'running' });
-    const harness = createHarness([running], { monitorIntervalMs: 10 });
+    const harness = await createHarness([running], { monitorIntervalMs: 10 });
     let snapshotAtDelivery: ReturnType<typeof harness.backgroundWorkSnapshot> | undefined;
     harness.sendMessage.mockImplementation((message) => {
       if (message.customType === MESSAGE_TYPE_RUN_FINISHED) snapshotAtDelivery = harness.backgroundWorkSnapshot();
@@ -2209,7 +2245,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('announces a failed run with its pushed job and step evidence', async () => {
     const running = runRecord({ runKey: 'failed-run', stage: 'running' });
-    const harness = createHarness([running], { monitorIntervalMs: 10 });
+    const harness = await createHarness([running], { monitorIntervalMs: 10 });
     harness.writeProgress([
       {
         type: 'step',
@@ -2250,7 +2286,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('announces a run that starts and finishes between monitor polls', async () => {
-    const harness = createHarness([], { monitorIntervalMs: 10 });
+    const harness = await createHarness([], { monitorIntervalMs: 10 });
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     const finished = runRecord({
@@ -2272,7 +2308,7 @@ describe('workflow-mcp Pi extension', () => {
   it('batches terminal runs into one root wake-up', async () => {
     const first = runRecord({ runId: 'run-1', runKey: 'first', stage: 'running' });
     const second = runRecord({ runId: 'run-2', runKey: 'second', stage: 'running' });
-    const harness = createHarness([first, second], { monitorIntervalMs: 10 });
+    const harness = await createHarness([first, second], { monitorIntervalMs: 10 });
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     listRuns(harness, [
@@ -2301,7 +2337,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('retains terminal work and retries after a send failure', async () => {
     const running = runRecord({ runId: 'retry-run-id', runKey: 'retry-run', stage: 'running' });
-    const harness = createHarness([running], { monitorIntervalMs: 10 });
+    const harness = await createHarness([running], { monitorIntervalMs: 10 });
     let acceptDelivery = false;
     harness.sendMessage.mockImplementation((message) => {
       if (!acceptDelivery && message.customType === MESSAGE_TYPE_RUN_FINISHED) throw new Error('send failed');
@@ -2328,7 +2364,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('fences a stale status callback when the session restarts', async () => {
     const running = runRecord({ stage: 'running' });
-    const harness = createHarness([running], { monitorIntervalMs: 10 });
+    const harness = await createHarness([running], { monitorIntervalMs: 10 });
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     const callsBeforeStaleRead = harness.listRunsPage.mock.calls.length;
     let resolveStaleRead = (_value: Awaited<ReturnType<typeof harness.listRunsPage>>): void => undefined;
@@ -2360,7 +2396,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('stays silent when a run belonging to another session finishes', async () => {
     const foreign = runRecord({ env: { PI_SESSION_ID: 'another-session' }, runKey: 'ixx-324', stage: 'running' });
-    const harness = createHarness([foreign], { monitorIntervalMs: 10 });
+    const harness = await createHarness([foreign], { monitorIntervalMs: 10 });
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
     listRuns(harness, [{ ...foreign, stage: 'completed' }]);
@@ -2378,7 +2414,9 @@ describe('workflow-mcp Pi extension', () => {
   // The observer already carries the transition, so updating the transient row
   // must not buy another registry page or append anything to the transcript.
   it('renders a pushed step without extra registry reads or chat messages', async () => {
-    const harness = createHarness([runRecord({ runKey: 'ixx-324', stage: 'running' })], { monitorIntervalMs: 60_000 });
+    const harness = await createHarness([runRecord({ runKey: 'ixx-324', stage: 'running' })], {
+      monitorIntervalMs: 60_000,
+    });
     harness.writeProgress([
       { type: 'step', status: 'running', job: 'verify', step: 'Claim the job', at: '2026-01-01T00:00:00.000Z' },
       { type: 'step', status: 'completed', job: 'verify', step: 'Claim the job', at: '2026-01-01T00:00:05.000Z' },
@@ -2392,7 +2430,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('removes a finished run and emits only its terminal message', async () => {
     const running = runRecord({ runKey: 'ixx-324', stage: 'running' });
-    const harness = createHarness([running], { monitorIntervalMs: 10 });
+    const harness = await createHarness([running], { monitorIntervalMs: 10 });
     harness.writeProgress([
       { type: 'step', status: 'running', job: 'verify', step: 'Claim the job', at: '2026-01-01T00:00:00.000Z' },
     ]);
@@ -2411,8 +2449,8 @@ describe('workflow-mcp Pi extension', () => {
     expect(harness.sendMessage.mock.calls.some(([message]) => message.customType === 'workflow-step')).toBe(false);
   });
 
-  it('retains the legacy renderer for workflow-step cards already in a session', () => {
-    const harness = createHarness([]);
+  it('retains the legacy renderer for workflow-step cards already in a session', async () => {
+    const harness = await createHarness([]);
     const renderer = harness.messageRenderers.get('workflow-step');
     const message = {
       content: '[auth-run]: verify\nSTARTED::Claim the job',
@@ -2433,7 +2471,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('takes the progress row away when nothing is running', async () => {
-    const harness = createHarness([runRecord({ stage: 'completed' })]);
+    const harness = await createHarness([runRecord({ stage: 'completed' })]);
 
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
 
@@ -2447,7 +2485,7 @@ describe('workflow-mcp Pi extension', () => {
   it('sizes the panel to the terminal so the exit hint is never clipped', async () => {
     for (const rows of [12, 24, 40, 80]) {
       const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-      const harness = createHarness([record]);
+      const harness = await createHarness([record]);
       harness.setTerminalRows(rows);
       await harness.callTool('open_workflow', { runKey: 'auth-run' });
       const overlay = await harness.waitForOverlay();
@@ -2461,7 +2499,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('tells the user how to close the panel when it opens', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
 
     const result = await harness.callTool('open_workflow', { runKey: 'auth-run' });
     await harness.waitForOverlay();
@@ -2479,7 +2517,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('falls back to the launcher when there is no UI to render into', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
 
     const result = await harness.callTool('open_workflow', { runKey: 'auth-run' }, { hasUI: false });
 
@@ -2489,7 +2527,7 @@ describe('workflow-mcp Pi extension', () => {
 
   it('returns chat-safe tail status without launcher frames', async () => {
     const record = runRecord({ launcher: { type: 'cmux', workspaceId: 'workspace-id' }, stage: 'running' });
-    const harness = createHarness([record]);
+    const harness = await createHarness([record]);
     harness.exec.mockResolvedValue({ code: 0, killed: false, stderr: '', stdout: 'job output\n' });
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx);
     harness.ui.setWidget.mockClear();
@@ -2503,7 +2541,7 @@ describe('workflow-mcp Pi extension', () => {
   });
 
   it('rejects an unknown run key rather than picking one', async () => {
-    const harness = createHarness([runRecord()]);
+    const harness = await createHarness([runRecord()]);
 
     await expect(harness.callTool('tail_workflow', { runKey: 'nope' })).rejects.toThrow('No workflow run matches');
   });
@@ -2529,7 +2567,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
 
   it('reports status only for a run this session launched', async () => {
     const mine = runRecord({ runKey: 'auth-run', stage: 'running' });
-    const harness = createHarness([mine, foreign, unstamped]);
+    const harness = await createHarness([mine, foreign, unstamped]);
 
     const result = await harness.callTool('workflow_run', { action: 'status', runKey: 'auth-run' });
     const text = result?.content[0].text ?? '';
@@ -2540,7 +2578,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
   });
 
   it('does not expose another session"s or unstamped live runs to status', async () => {
-    const harness = createHarness([foreign, unstamped]);
+    const harness = await createHarness([foreign, unstamped]);
 
     await expect(harness.callTool('workflow_run', { action: 'status', runKey: 'their-run' })).rejects.toThrow(
       'No workflow run matches',
@@ -2552,7 +2590,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
 
   it('keeps generic status and tail scoped for a foreign terminal failure', async () => {
     const failedForeign = { ...foreign, stage: 'error' } as WorkflowRunRecord;
-    const harness = createHarness([failedForeign]);
+    const harness = await createHarness([failedForeign]);
 
     await expect(harness.callTool('workflow_run', { action: 'status', runKey: 'their-run' })).rejects.toThrow(
       'No workflow run matches',
@@ -2564,7 +2602,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
 
   it('reads durable foreign failure evidence only through the recovery action', async () => {
     const failedForeign = { ...foreign, stage: 'error' } as WorkflowRunRecord;
-    const harness = createHarness([failedForeign]);
+    const harness = await createHarness([failedForeign]);
     harness.writeProgress([{ job: 'build', status: 'failed', type: 'job' }]);
 
     const result = await harness.callTool('workflow_run', { action: 'recovery-evidence', runKey: 'their-run' });
@@ -2579,7 +2617,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
   // Stopping is the costly one: `requestStop` writes into the run directory, so
   // the check has to happen before the tool is reached, not after.
   it('refuses to stop a run another session launched', async () => {
-    const harness = createHarness([foreign]);
+    const harness = await createHarness([foreign]);
 
     await expect(harness.callTool('stop_workflow', { runKey: 'their-run' })).rejects.toThrow(
       'No workflow run matches "their-run" in this session',
@@ -2588,7 +2626,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
   });
 
   it('still stops a run this session launched and binds the request to its generation', async () => {
-    const harness = createHarness([runRecord({ stage: 'running' })]);
+    const harness = await createHarness([runRecord({ stage: 'running' })]);
 
     await harness.callTool('stop_workflow', { runKey: 'auth-run' });
 
@@ -2601,7 +2639,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
   });
 
   it('pauses and resumes only a run this session launched', async () => {
-    const harness = createHarness([runRecord({ stage: 'running' }), foreign]);
+    const harness = await createHarness([runRecord({ stage: 'running' }), foreign]);
 
     await harness.callTool('workflow_run', { action: 'pause', reason: 'user requested', runKey: 'auth-run' });
     await harness.callTool('workflow_run', { action: 'resume', runKey: 'auth-run' });
@@ -2623,7 +2661,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
   // action above gains cross-session access.
   it('recovers a failed run another session launched', async () => {
     const failedForeign = { ...foreign, stage: 'error' } as WorkflowRunRecord;
-    const harness = createHarness([failedForeign]);
+    const harness = await createHarness([failedForeign]);
 
     await harness.callTool('recover_workflow', { runKey: 'their-run' });
 
@@ -2631,7 +2669,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
   });
 
   it('does not adopt a running run from another session', async () => {
-    const harness = createHarness([foreign]);
+    const harness = await createHarness([foreign]);
 
     await expect(harness.callTool('recover_workflow', { runKey: 'their-run' })).rejects.toThrow(
       'No failed workflow run matches',
@@ -2640,7 +2678,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
   });
 
   it('still recovers a run this session launched', async () => {
-    const harness = createHarness([runRecord()]);
+    const harness = await createHarness([runRecord()]);
 
     await harness.callTool('recover_workflow', { runKey: 'auth-run' });
 
@@ -2648,7 +2686,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
   });
 
   it('preserves the globally resolved non-default workspace for in-process recovery', async () => {
-    const harness = createHarness([runRecord({ workspace: 'non-default' })]);
+    const harness = await createHarness([runRecord({ workspace: 'non-default' })]);
 
     await harness.callTool('recover_workflow', { runKey: 'auth-run' });
 
@@ -2660,7 +2698,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
   it('fails closed when a recovery key is ambiguous across workspaces', async () => {
     const first = runRecord({ workspace: 'one' });
     const second = runRecord({ workspace: 'two' });
-    const harness = createHarness([first, second]);
+    const harness = await createHarness([first, second]);
 
     await expect(harness.callTool('recover_workflow', { runKey: 'auth-run' })).rejects.toThrow(
       'exists in more than one workspace',
@@ -2676,7 +2714,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
       stage: 'running',
       workspace: 'theirs',
     });
-    const harness = createHarness([theirs, mine]);
+    const harness = await createHarness([theirs, mine]);
 
     const result = await harness.callTool('workflow_run', { action: 'status', runKey: 'shared' });
 
@@ -2684,7 +2722,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
   });
 
   it('fails closed when this session owns the same key in multiple workspaces', async () => {
-    const harness = createHarness([
+    const harness = await createHarness([
       runRecord({ runKey: 'shared', stage: 'running', workspace: 'one' }),
       runRecord({ runKey: 'shared', stage: 'running', workspace: 'two' }),
     ]);
@@ -2707,7 +2745,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
     const directory = mkdtempSync(resolve(tmpdir(), 'workflow-recover-'));
     const workflowPath = resolve(directory, 'auth.workflow.yml');
     writeFileSync(workflowPath, delegatingWorkflowYaml, 'utf8');
-    const harness = createHarness([runRecord({ workflowPath })]);
+    const harness = await createHarness([runRecord({ workflowPath })]);
 
     const result = await harness.callTool('recover_workflow', { runKey: 'auth-run' });
 
@@ -2733,7 +2771,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
     const directory = mkdtempSync(resolve(tmpdir(), 'workflow-recover-'));
     const workflowPath = resolve(directory, 'auth.workflow.yml');
     writeFileSync(workflowPath, delegatingWorkflowYaml, 'utf8');
-    const harness = createHarness([runRecord({ workflowPath })]);
+    const harness = await createHarness([runRecord({ workflowPath })]);
     harness.spawnDetached.mockRejectedValueOnce(new Error('spawn failed'));
 
     await expect(harness.callTool('recover_workflow', { runKey: 'auth-run' })).rejects.toThrow('spawn failed');
@@ -2745,7 +2783,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
     const directory = mkdtempSync(resolve(tmpdir(), 'workflow-recover-'));
     const workflowPath = resolve(directory, 'auth.workflow.yml');
     writeFileSync(workflowPath, delegatingWorkflowYaml.replace(/^launch-command:.*$/m, ''), 'utf8');
-    const harness = createHarness([runRecord({ workflowPath })]);
+    const harness = await createHarness([runRecord({ workflowPath })]);
 
     await harness.callTool('recover_workflow', { runKey: 'auth-run' });
 
@@ -2759,7 +2797,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
     const directory = mkdtempSync(resolve(tmpdir(), 'workflow-recover-'));
     const workflowPath = resolve(directory, 'auth.workflow.yml');
     writeFileSync(workflowPath, delegatingWorkflowYaml, 'utf8');
-    const harness = createHarness([runRecord({ workflowPath })]);
+    const harness = await createHarness([runRecord({ workflowPath })]);
 
     await harness.callTool('recover_workflow', { runKey: 'auth-run', dryRun: true });
 
@@ -2769,7 +2807,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
 
   for (const tool of ['follow_workflow', 'tail_workflow', 'open_workflow']) {
     it(`refuses to ${tool} a run another session launched`, async () => {
-      const harness = createHarness([foreign]);
+      const harness = await createHarness([foreign]);
 
       await expect(harness.callTool(tool, { runKey: 'their-run' })).rejects.toThrow('in this session');
     });
@@ -2778,7 +2816,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
   // An unstamped run is invisible for the same reason a foreign one is, and the
   // message has to point at where it can actually be managed.
   it('points at the CLI for a run it cannot see', async () => {
-    const harness = createHarness([unstamped]);
+    const harness = await createHarness([unstamped]);
 
     await expect(harness.callTool('tail_workflow', { runKey: 'cli-run' })).rejects.toThrow('workflow-mcp CLI');
   });
@@ -2786,7 +2824,7 @@ describe('workflow-mcp Pi extension session ownership', () => {
   // Existence is not leaked: a run that is not this session's reads exactly like
   // one that was never launched, so probing keys tells the agent nothing.
   it('reports a foreign run the same way as a missing one', async () => {
-    const harness = createHarness([foreign]);
+    const harness = await createHarness([foreign]);
     const messageFor = async (runKey: string): Promise<string> => {
       try {
         await harness.callTool('tail_workflow', { runKey });
@@ -2810,7 +2848,7 @@ describe('workflow-mcp Pi extension shutdown', () => {
    * `running` behind a dead pid and nothing owns the run any more.
    */
   it('finalizes an inline run still in flight when the session closes', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     let finish: (() => void) | undefined;
     // Settles only once the engine is interrupted, which is what a real inline
     // run does: `run()` returns after the interrupt unwinds it.
@@ -2828,14 +2866,14 @@ describe('workflow-mcp Pi extension shutdown', () => {
     await harness.handlers.get(EVENT_SESSION_SHUTDOWN)?.({}, harness.ctx as never);
 
     expect(harness.runServiceInterrupt).toHaveBeenCalledWith('SIGTERM', expect.objectContaining({ phase: 'workflow' }));
-    // Shutdown waited for the record to land, rather than racing the process out.
-    await expect(launch).resolves.toBeDefined();
+    // The engine finishes interruption, while retained callers cannot publish a stale result.
+    await expect(launch).rejects.toThrow('no longer active');
   });
 
   // A run handed to tmux or cmux outlives Pi by design, so interrupting the
   // engine on the way out would stop work the user expects to keep going.
   it('leaves a delegated launch alone', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
 
     await harness.callTool('launch_workflow', { workflowPath: '/repo/automations/auth.workflow.yml' });
     await harness.handlers.get(EVENT_SESSION_SHUTDOWN)?.({}, harness.ctx as never);
@@ -2844,7 +2882,7 @@ describe('workflow-mcp Pi extension shutdown', () => {
   });
 
   it('makes repeated session shutdown idempotent', async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.handlers.get(EVENT_SESSION_START)?.({}, harness.ctx as never);
 
     const shutdown = harness.handlers.get(EVENT_SESSION_SHUTDOWN);
@@ -2854,3 +2892,7 @@ describe('workflow-mcp Pi extension shutdown', () => {
     expect(harness.runServiceInterrupt).not.toHaveBeenCalled();
   });
 });
+
+function registerWorkflowPiTools(pi: ExtensionAPI, dependencies: WorkflowPiToolDependencies): void {
+  for (const tool of createWorkflowTools(dependencies)) pi.registerTool(tool);
+}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   BG_THRESHOLD_MS_ENV,
   DEFAULT_BG_THRESHOLD_MS,

@@ -3,8 +3,8 @@
  * and mounts the exported `render`, so no Storybook runtime is imported and the
  * default export is a bare `const meta`.
  */
-import type { FilesItemView } from '../../types/webFiles.ts';
-import { FileActivityRow, FilesBrowser } from './FilesBrowser.tsx';
+import type { FilesItemView } from '../../types/webFiles';
+import { FileActivityRow, FilesBrowser } from './FilesBrowser';
 
 const NOW = Date.parse('2024-05-04T10:00:00Z');
 

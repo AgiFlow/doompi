@@ -77,7 +77,7 @@ boundary.
 ## Public API
 
 ```ts
-import { EditParamsSchema, executeHashlineEdit, registerHashlineEditTool } from '@agimon-ai/doompi-edit';
+import { EditParamsSchema, executeHashlineEdit, createHashlineEditTool } from '@agimon-ai/doompi-edit';
 import type { EditParams, HashlineRange } from '@agimon-ai/doompi-edit';
 ```
 
@@ -95,3 +95,5 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+`src/extensions/pi.ts` declares the typed edit override; the helper owns its claim and cleanup. `src/extensions/server.ts` declares the headless tool. Both tool declarations consume `services/editTool`, and reusable factories and schemas are exposed through flat `src/exports`.

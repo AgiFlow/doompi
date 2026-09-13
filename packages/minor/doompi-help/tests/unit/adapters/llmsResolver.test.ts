@@ -3,10 +3,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { HelpIndexCache, resolveHelpPackageIdentity } from '../../../src/adapters/helpStorage.ts';
-import { DefaultHelpIndexResolver } from '../../../src/adapters/llmsResolver.ts';
-import type { HelpFetch, HelpFetchResponse } from '../../../src/types/help.ts';
+
+import { HelpIndexCache, resolveHelpPackageIdentity } from '../../../src/services/helpStorage';
+import { DefaultHelpIndexResolver } from '../../../src/services/llmsResolver';
+import type { HelpFetch, HelpFetchResponse } from '../../../src/types/help';
 
 const SOURCE = '@agimon-ai/example-help';
 const VERSION = '1.2.3';

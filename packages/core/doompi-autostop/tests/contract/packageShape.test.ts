@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -15,6 +16,7 @@ interface PackageManifest {
   peerDependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
 }
 
 const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
@@ -51,27 +53,28 @@ describe('doompi-autostop package contract', () => {
     ]);
   });
 
-  it('publishes one Pi entry through a closed exports map', async () => {
+  it('publishes Pi and server entries through a closed exports map', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
     expect(Object.keys(exportsMap)).not.toContain('./*');
-    for (const subpath of ['.', './extensions/pi']) {
+    for (const subpath of ['.', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
+    expect(manifest.doompiServer).toMatchObject({
+      entry: './src/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['session'],
+    });
   });
 
   it('routes the Pi entry through a default-exported factory', async () => {
-    const entry = await readFile(path.join(packageDirectory, 'src/exports/extensions/pi.ts'), 'utf8');
-    const factory = await readFile(path.join(packageDirectory, 'src/adapters/pi/extension.ts'), 'utf8');
-
-    expect(entry).toContain("from '../../adapters/pi/extension.ts'");
-    expect(entry).toContain('as default');
-    expect(factory).toContain('registerIdleShutdown');
-    expect(factory).toContain('connectDoomCordisHost');
-    expect(factory).toContain('connection.root.plugin');
+    const factory = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
+    expect(factory).toContain('export default autoStopExtension');
+    expect(factory).toContain('definePiExtension');
+    expect(factory).toContain('events:');
     expect(factory).not.toContain('new Context()');
   });
 
@@ -85,10 +88,7 @@ describe('doompi-autostop package contract', () => {
 
     expect(declared).not.toContain('@agimon-ai/doompi');
     // The idle policy needs only the shared host contract and Cordis lifecycle.
-    expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual([
-      '@agimon-ai/doompi-extension-contracts',
-      '@deepseek-ai/cordis',
-    ]);
+    expect(Object.keys(manifest.dependencies ?? {}).sort()).toEqual(['@agimon-ai/doompi-core', '@deepseek-ai/cordis']);
   });
 
   it('ships an H1-led Help index whose linked resources are allowlisted', async () => {

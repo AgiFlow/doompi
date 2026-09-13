@@ -1,5 +1,6 @@
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
+
 import { isComponentLibrary } from './componentLibrary.js';
 import { projectPath, readSource } from './moduleGraph.js';
 

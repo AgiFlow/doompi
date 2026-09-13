@@ -1,24 +1,24 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-/** The hub refuses a socket path longer than this; see doompi-web serverSpawner. */
-const SOCKET_BUDGET = 103;
-/**
- * What the hub still has to append after the registry directory: a `spawned`
- * segment, a session id prefix, the socket filename, and the `.pi` suffix that
- * the protocol socket adds on top of the longest of those.
- */
-const RESERVED_FOR_SESSION = 40;
-
 export const DEFAULT_PORT = 7433;
+export const DEFAULT_HEADLESS_PORT = 7434;
 export const LOOPBACK_HOST = '127.0.0.1';
 
-/** Locates the bundled cockpit entry in the desktop runtime artifact. */
+/** Locates the bundled presentation entry in the desktop runtime artifact. */
 export function hubEntry(input: { resourcesPath: string; packaged: boolean; projectRoot: string }): string {
   const runtimeRoot = input.packaged
     ? path.join(input.resourcesPath, 'runtime')
     : path.join(input.projectRoot, 'build', 'runtime');
   return path.join(runtimeRoot, 'doompi-web', 'dist', 'bin', 'serve.mjs');
+}
+
+/** Locates the bundled client-neutral headless entry in the desktop runtime artifact. */
+export function headlessEntry(input: { resourcesPath: string; packaged: boolean; projectRoot: string }): string {
+  const runtimeRoot = input.packaged
+    ? path.join(input.resourcesPath, 'runtime')
+    : path.join(input.projectRoot, 'build', 'runtime');
+  return path.join(runtimeRoot, 'doompi', 'dist', 'bin', 'serve.mjs');
 }
 
 /**
@@ -35,7 +35,7 @@ export function hubEnvironment(base: NodeJS.ProcessEnv, entry: string): NodeJS.P
     // Resolve the staged DoomPi package before native-only shims so sync can
     // register its real Pi extension entry instead of the minimal native manifest.
     NODE_PATH: [artifact('node_modules'), artifact('native', 'node_modules')].join(path.delimiter),
-    DOOMPI_SERVER_COMMAND: artifact('doompi-server', 'dist', 'bin', 'serve.mjs'),
+    DOOMPI_SERVER_COMMAND: artifact('doompi', 'dist', 'bin', 'serve.mjs'),
     // Desktop owns an isolated DPI composition rather than changing the user's
     // persisted Pi integration. Sync and sessions must use that same entry point.
     DOOMPI_AGENT_COMMAND: artifact('doompi', 'dist', 'bin', 'dpi.mjs'),
@@ -71,30 +71,36 @@ export function hubEnvironment(base: NodeJS.ProcessEnv, entry: string): NodeJS.P
   };
 }
 
-/**
- * Rejects a registry directory that cannot hold a session socket.
- *
- * macOS caps `sun_path` at 104 bytes, and the failure it produces when a path
- * is too long arrives much later, from the session the user just tried to
- * start. Refusing at startup names the real cause once instead.
- */
-export function assertSocketHeadroom(registryDir: string): void {
-  const available = SOCKET_BUDGET - registryDir.length;
-  if (available >= RESERVED_FOR_SESSION) return;
-  throw new Error(
-    `The session directory ${registryDir} leaves ${String(available)} bytes for a socket name, ` +
-      `below the ${String(RESERVED_FOR_SESSION)} a session needs. Use a shorter home directory or set DOOMPI_RUNTIME_DIR.`,
-  );
+/** The argv for the client-neutral process owned by Desktop. */
+export function headlessArguments(plan: { headlessEntry: string; headlessPort: number; tokenFile: string }): string[] {
+  return [
+    plan.headlessEntry,
+    '--auth-token-file',
+    plan.tokenFile,
+    '--name',
+    'DoomPi Desktop',
+    '--web',
+    String(plan.headlessPort),
+  ];
 }
 
-/** The argv the cockpit expects for a desktop-owned hub. */
-export function hubArguments(plan: HubArgumentInput): string[] {
-  return [plan.entry, '--host', plan.host, '--port', String(plan.port), '--registry-dir', plan.registryDir];
-}
-
-interface HubArgumentInput {
+/** The argv for the presentation-only proxy owned by Desktop. */
+export function hubArguments(plan: {
   entry: string;
   host: string;
   port: number;
-  registryDir: string;
+  headlessPort: number;
+  token: string;
+}): string[] {
+  return [
+    plan.entry,
+    '--host',
+    plan.host,
+    '--port',
+    String(plan.port),
+    '--headless-url',
+    `http://${plan.host}:${String(plan.headlessPort)}`,
+    '--headless-token',
+    plan.token,
+  ];
 }

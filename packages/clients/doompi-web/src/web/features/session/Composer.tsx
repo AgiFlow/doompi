@@ -16,11 +16,13 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { publishComposerSubmission } from '../../lib/composerSubmissions.ts';
-import { searchSessionFiles } from '../../lib/hubApi.ts';
-import type { QueuedEntry } from '../../lib/sessionModel.ts';
-import { HOST_SLOTS } from '../../lib/pluginRegistry.ts';
-import { registerPromptInput } from '../../lib/promptFocus.ts';
+
+import { PluginSurface } from '../../components/PluginSurface';
+import { publishComposerSubmission } from '../../lib/composerSubmissions';
+import { searchSessionFiles } from '../../lib/hubApi';
+import { HOST_SLOTS } from '../../lib/pluginRegistry';
+import { registerPromptInput } from '../../lib/promptFocus';
+import type { QueuedEntry } from '../../lib/sessionModel';
 import {
   clearComposerState,
   type ComposerAttachment,
@@ -32,7 +34,9 @@ import {
   MAX_COMPOSER_TOTAL_TEXT_BYTES,
   updateComposerState,
   useComposerState,
-} from '../../stores/composerStore.ts';
+} from '../../stores/composerStore';
+import { openPalette } from '../../stores/paletteStore';
+import { sessionsStore, useActiveSessionMeta } from '../../stores/sessionsStore';
 import {
   abortRun,
   clearQueuedMessages,
@@ -40,13 +44,10 @@ import {
   queueFollowUp,
   submitMessage,
   useActiveSession,
-} from '../../stores/sessionStore.ts';
-import { sessionsStore, useActiveSessionMeta } from '../../stores/sessionsStore.ts';
-import { openPalette } from '../../stores/paletteStore.ts';
-import { useToolPrompt } from '../../stores/useToolPrompt.ts';
-import { PluginSurface } from '../../components/PluginSurface.tsx';
-import { ComposerPrompt } from './ComposerPrompt.tsx';
-import { QueueSheet } from './QueueSheet.tsx';
+} from '../../stores/sessionStore';
+import { useToolPrompt } from '../../stores/useToolPrompt';
+import { ComposerPrompt } from './ComposerPrompt';
+import { QueueSheet } from './QueueSheet';
 
 /** The input grows with the draft up to this many pixels, then scrolls. */
 const MAX_INPUT_HEIGHT_PX = 192;
@@ -217,15 +218,16 @@ export function Composer() {
 
   useEffect(() => {
     if (editorTextRequest === null) return;
-    updateComposerState(sessionId, (state) => ({
-      ...state,
-      draft: editorTextRequest.text,
-      caret: editorTextRequest.text.length,
-      dismissedToken: null,
-    }));
+    updateComposerState(sessionId, (state) => {
+      const draft = editorTextRequest.append
+        ? `${state.draft}${state.draft && !/\s$/u.test(state.draft) ? ' ' : ''}${editorTextRequest.text}`
+        : editorTextRequest.text;
+      return { ...state, draft, caret: draft.length, dismissedToken: null };
+    });
     requestAnimationFrame(() => {
       inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(editorTextRequest.text.length, editorTextRequest.text.length);
+      const length = inputRef.current?.value.length ?? 0;
+      inputRef.current?.setSelectionRange(length, length);
     });
   }, [editorTextRequest, sessionId]);
 

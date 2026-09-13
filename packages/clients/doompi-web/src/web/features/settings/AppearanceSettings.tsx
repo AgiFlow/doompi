@@ -1,8 +1,9 @@
 import { CheckIcon, RadioGroup, RadioGroupCard } from '@agimon-ai/doompi-web-components';
 import type { ThemeConfig } from '@agimon-ai/doompi-web-components/theme';
 import { useStore } from '@tanstack/react-store';
-import { availableThemes, selectTheme, themeStore } from '../../stores/themeStore.ts';
-import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
+
+import { availableThemes, selectTheme, themeStore } from '../../stores/themeStore';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 /** The accents a swatch previews, in the order the bar shows them. */
 const SWATCH_ACCENTS = ['blue', 'green', 'yellow', 'red', 'magenta', 'cyan'] as const;

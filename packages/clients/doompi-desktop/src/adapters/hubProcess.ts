@@ -2,26 +2,17 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
-import { hubArguments, hubEnvironment } from '../services/hubLaunch.ts';
-import type { ComputerUseHost } from '../services/computerUseHost.ts';
-import type { HubLaunchPlan, RunningHub } from '../types/hub.ts';
-import { attachComputerUseHostBridge } from './computerUseHostBridge.ts';
+
+import type { ComputerUseHost } from '../services/computerUseHost';
+import { headlessArguments, hubArguments, hubEnvironment } from '../services/hubLaunch';
+import type { HubLaunchPlan, RunningHub } from '../types/hub';
+import { attachComputerUseHostBridge } from './computerUseHostBridge';
 
 const HEALTH_TIMEOUT_MS = 10 * 60_000;
 const HEALTH_POLL_MS = 150;
 const STOP_TIMEOUT_MS = 10_000;
 
 const healthUrl = (host: string, port: number): string => `http://${host}:${String(port)}/api/health`;
-
-/** Whether a DoomPi cockpit, rather than something else, holds this address. */
-export async function cockpitAnswers(host: string, port: number): Promise<boolean> {
-  try {
-    const response = await fetch(healthUrl(host, port), { signal: AbortSignal.timeout(1_000) });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
 
 /** Whether this process could bind the address itself. */
 export async function portIsFree(host: string, port: number): Promise<boolean> {
@@ -33,7 +24,7 @@ export async function portIsFree(host: string, port: number): Promise<boolean> {
   });
 }
 
-/** An unused port from the ephemeral range, for when the default is taken. */
+/** An unused port from the ephemeral range. */
 export async function freePort(host: string): Promise<number> {
   return await new Promise((resolve, reject) => {
     const probe = net.createServer();
@@ -51,16 +42,22 @@ export async function freePort(host: string): Promise<number> {
   });
 }
 
-async function waitForHealth(host: string, port: number, child: ChildProcess): Promise<void> {
+async function waitForHealth(host: string, port: number, child: ChildProcess, label: string): Promise<void> {
+  const endpoint = healthUrl(host, port);
   const deadline = Date.now() + HEALTH_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (child.exitCode !== null || child.signalCode !== null) {
-      throw new Error(`The cockpit exited before it finished starting (code ${String(child.exitCode)}).`);
+      throw new Error(`The ${label} process exited before it finished starting (code ${String(child.exitCode)}).`);
     }
-    if (await cockpitAnswers(host, port)) return;
+    try {
+      const response = await fetch(endpoint, { signal: AbortSignal.timeout(1_000) });
+      if (response.ok) return;
+    } catch {
+      // The process is still binding or composing its runtime.
+    }
     await new Promise((resolve) => setTimeout(resolve, HEALTH_POLL_MS));
   }
-  throw new Error(`The cockpit did not answer on ${healthUrl(host, port)} within ${String(HEALTH_TIMEOUT_MS)}ms.`);
+  throw new Error(`The ${label} process did not answer on ${endpoint} within ${String(HEALTH_TIMEOUT_MS)}ms.`);
 }
 
 /** Uses Electron's background helper as Node so child sessions never become Dock apps. */
@@ -82,55 +79,72 @@ export function nodeRuntimeExecutable(
   );
   return exists(helper) ? helper : mainExecutable;
 }
-/**
- * Starts the staged cockpit, or attaches to one that is already serving.
- *
- * Attaching matters more than it looks: a cockpit started from the terminal and
- * this app are the same program over the same session registry, so a second
- * copy would fight the first for the port and the sessions rather than showing
- * the user what is already running.
- */
+
+function stopChild(child: ChildProcess): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.off('exit', finish);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      finish();
+    }, STOP_TIMEOUT_MS);
+    child.once('exit', finish);
+    child.kill('SIGTERM');
+  });
+}
+
+/** Starts the headless server and the presentation proxy as one desktop unit. */
 export async function startHub(
   plan: HubLaunchPlan,
   onNotice: (message: string) => void = () => {},
   computerUseHost?: ComputerUseHost,
 ): Promise<RunningHub> {
   const url = `http://${plan.host}:${String(plan.port)}`;
-  if (await cockpitAnswers(plan.host, plan.port)) {
-    onNotice(`attaching to the cockpit already serving at ${url}`);
-    return { url, owned: false, stop: async () => {} };
-  }
-
-  const child = spawn(nodeRuntimeExecutable(process.execPath), hubArguments(plan), {
+  const headless = spawn(nodeRuntimeExecutable(process.execPath), headlessArguments(plan), {
     cwd: plan.cwd,
     env: hubEnvironment(process.env, plan.entry),
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
-  const computerUseBridge =
-    computerUseHost === undefined ? undefined : attachComputerUseHostBridge(child, computerUseHost, onNotice);
-  child.stdout?.on('data', (chunk: Buffer) => onNotice(chunk.toString().trimEnd()));
-  child.stderr?.on('data', (chunk: Buffer) => onNotice(chunk.toString().trimEnd()));
+  let computerUseBridge: ReturnType<typeof attachComputerUseHostBridge> | undefined;
+  headless.stdout?.on('data', (chunk: Buffer) => onNotice(chunk.toString().trimEnd()));
+  headless.stderr?.on('data', (chunk: Buffer) => onNotice(chunk.toString().trimEnd()));
 
+  let presentation: ChildProcess | undefined;
   try {
-    await waitForHealth(plan.host, plan.port, child);
+    computerUseBridge =
+      computerUseHost === undefined ? undefined : attachComputerUseHostBridge(headless, computerUseHost, onNotice);
+    await waitForHealth(plan.host, plan.headlessPort, headless, 'headless server');
+    presentation = spawn(nodeRuntimeExecutable(process.execPath), hubArguments(plan), {
+      cwd: plan.cwd,
+      env: hubEnvironment(process.env, plan.entry),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    presentation.stdout?.on('data', (chunk: Buffer) => onNotice(chunk.toString().trimEnd()));
+    presentation.stderr?.on('data', (chunk: Buffer) => onNotice(chunk.toString().trimEnd()));
+    await waitForHealth(plan.host, plan.port, presentation, 'web presentation');
   } catch (error) {
     await computerUseBridge?.close();
-    child.kill('SIGKILL');
+    if (presentation !== undefined) presentation.kill('SIGKILL');
+    headless.kill('SIGKILL');
     throw error;
   }
-  onNotice(`cockpit serving at ${url}`);
 
-  const stop = async (): Promise<void> => {
-    await computerUseBridge?.close();
-    if (child.exitCode !== null || child.signalCode !== null) return;
-    const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
-    child.kill('SIGTERM');
-    // A cockpit with live sessions can take a moment to stand them down, but a
-    // quit that hangs on it is worse than one that is abrupt.
-    const timer = setTimeout(() => child.kill('SIGKILL'), STOP_TIMEOUT_MS);
-    await exited;
-    clearTimeout(timer);
+  onNotice(`headless server serving at http://${plan.host}:${String(plan.headlessPort)}`);
+  onNotice(`web presentation serving at ${url}`);
+  return {
+    url,
+    owned: true,
+    stop: async () => {
+      await computerUseBridge?.close();
+      if (presentation !== undefined) await stopChild(presentation);
+      await stopChild(headless);
+    },
   };
-
-  return { url, owned: true, stop };
 }

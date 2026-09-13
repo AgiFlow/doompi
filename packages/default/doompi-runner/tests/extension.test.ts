@@ -1,12 +1,13 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanupLegacyRunnerStore, reconcileActiveRunners } from '../src/exports/reconcile';
-import { formatRunnerFooterContribution, formatRunnerStatus } from '../src/tui/format.ts';
+
 import {
   activeRunnerRecovery,
   appendActiveRunnersToSummary,
-  registerRunnerCompactionRecovery,
+  createRunnerCompactionRecovery,
 } from '../src/exports/compaction';
+import { cleanupLegacyRunnerStore, reconcileActiveRunners } from '../src/exports/reconcile';
+import { formatRunnerFooterContribution, formatRunnerStatus } from '../src/tui/format';
 import type { RunnerRecord } from '../src/types/runnerRegistry';
 
 beforeEach(() => {
@@ -352,10 +353,13 @@ describe('compaction runner recovery', () => {
     } as unknown as ExtensionAPI;
     const listBySession = vi.fn(async () => [active]);
 
-    registerRunnerCompactionRecovery(pi, {
-      getSessionId: () => 'session-a',
-      listBySession,
-    });
+    pi.on(
+      'session_compact',
+      createRunnerCompactionRecovery(pi, {
+        getSessionId: () => 'session-a',
+        listBySession,
+      })!,
+    );
     await handler?.();
 
     expect(listBySession).toHaveBeenCalledWith('session-a');
@@ -380,10 +384,13 @@ describe('compaction runner recovery', () => {
       sendMessage,
     } as unknown as ExtensionAPI;
 
-    registerRunnerCompactionRecovery(pi, {
-      getSessionId: () => 'session-a',
-      listBySession: vi.fn(async () => Promise.reject(new Error('registry unavailable'))),
-    });
+    pi.on(
+      'session_compact',
+      createRunnerCompactionRecovery(pi, {
+        getSessionId: () => 'session-a',
+        listBySession: vi.fn(async () => Promise.reject(new Error('registry unavailable'))),
+      })!,
+    );
 
     await expect(handler?.()).resolves.toBeUndefined();
     expect(sendMessage).not.toHaveBeenCalled();
@@ -398,7 +405,7 @@ describe('compaction runner recovery', () => {
     } as unknown as ExtensionAPI;
     const dependencies = { getSessionId: () => undefined, listBySession: vi.fn(async () => []) };
 
-    registerRunnerCompactionRecovery(pi, dependencies);
+    pi.on('session_compact', createRunnerCompactionRecovery(pi, dependencies)!);
     await handlers[0]?.();
     expect(dependencies.listBySession).not.toHaveBeenCalled();
     expect(sendMessage).not.toHaveBeenCalled();

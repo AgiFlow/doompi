@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import {
   applyProfileEnvironment,
   buildPersonaPrompt,
@@ -10,7 +12,7 @@ import {
   loadProfiles,
   replaceProfileEnvironment,
   resolveProfile,
-} from '../src/exports/profiles.ts';
+} from '../src/exports/profiles';
 
 describe('profile configuration', () => {
   let root: string;

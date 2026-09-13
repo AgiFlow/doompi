@@ -5,5 +5,5 @@ export {
   type ToolInventoryInput,
   type ToolSource,
   type ToolSourceKind,
-} from '../services/tools/toolInventory.ts';
-export { type CountTokens, type ToolCost, tokensForSource, tokensForTool } from '../services/tools/toolCost.ts';
+} from '@agimon-ai/doompi-core/tool-inventory';
+export { type CountTokens, type ToolCost, tokensForSource, tokensForTool } from '@agimon-ai/doompi-core/tool-inventory';

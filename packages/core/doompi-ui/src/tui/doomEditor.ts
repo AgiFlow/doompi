@@ -1,9 +1,10 @@
 import { type AppKeybinding, CustomEditor, type KeybindingsManager, type Theme } from '@earendil-works/pi-coding-agent';
 import { type EditorOptions, type EditorTheme, parseKey, type TUI } from '@earendil-works/pi-tui';
-import { type DoomLeaderAction, type DoomLeaderGroup, DoomLeaderRegistry } from '../services/leader/leaderRegistry.ts';
-import { type DoomUiState, type LeaderSnapshot } from '../services/state/uiState.ts';
-import { readDoomHarnessMetadata } from '../types/harnessMetadata.ts';
-import { alignLine, fitLine, frameLine, padLine } from './rendering.ts';
+
+import { type DoomUiState, type LeaderSnapshot } from '../models/uiState';
+import { type DoomLeaderAction, type DoomLeaderGroup, DoomLeaderRegistry } from '../services/leaderRegistry';
+import { readDoomHarnessMetadata } from '../types/harnessMetadata';
+import { alignLine, fitLine, frameLine, padLine } from './rendering';
 
 export interface DoomEditorLeaderOptions {
   /** Overrides the harness major mode shown while the leader is inactive. */

@@ -1,6 +1,8 @@
 import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
-import { doomGitRoot, hubRegistryDir, registryFile, worktreesRoot } from '../../../../src/adapters/filesystem/paths.ts';
+
+import { doomGitRoot, hubRegistryDir, registryFile, worktreesRoot } from '../../../../src/services/paths';
 
 const ENV_NAME = 'DOOMPI_RUNTIME_DIR';
 const HOME = '/home/tester';

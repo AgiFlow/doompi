@@ -3,11 +3,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
+
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
+import { HARNESS_EVENT, type HarnessTelemetry } from '@agimon-ai/doompi-core/log-sink-telemetry';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LaunchCommand } from '../../src/commands/launchCommand.ts';
-import { HARNESS_EVENT, type HarnessTelemetry } from '../../src/exports/logSinkTelemetry';
-import type { HarnessContext } from '../../src/exports/services/harnessContext';
+
+import { LaunchCommand } from '../../src/cli/commands/launch';
+import type { HarnessContext } from '../../src/exports/harnessContext';
 
 const spawnMock = vi.hoisted(() => vi.fn());
 const runtimeBundleMocks = vi.hoisted(() => ({
@@ -15,7 +17,7 @@ const runtimeBundleMocks = vi.hoisted(() => ({
   createRuntimeExtensionPlan: vi.fn(),
 }));
 vi.mock('cross-spawn', () => ({ default: spawnMock }));
-vi.mock('../../src/adapters/runtimeBundle.ts', () => runtimeBundleMocks);
+vi.mock('../../src/builders/cli/runtimeBundle', () => runtimeBundleMocks);
 
 const realStdin = process.stdin;
 
@@ -149,6 +151,25 @@ describe('LaunchCommand.execute', () => {
     expect(args).toContain(themePath);
     expect(spawnOptions.stdio).toBe('inherit');
     expect(context.environment.ELICITATION_SESSION_ID).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('writes the composition record its caller asked for and points Pi at it', async () => {
+    const child = new FakeChild(false);
+    spawnMock.mockReturnValue(child);
+    const telemetry = createTelemetry();
+    const context = createContext();
+    const recordPath = path.join(repoRoot, 'composition.json');
+    // doompi-server sets this so a mode switch reloads in place.
+    context.environment.DOOMPI_COMPOSITION_RECORD = recordPath;
+
+    const promise = new LaunchCommand().execute(context, telemetry);
+    await waitForSpawn();
+    child.emit('exit', 0, null);
+
+    expect(await promise).toBe(0);
+    const [, , spawnOptions] = spawnMock.mock.calls[0] as [string, string[], { env: NodeJS.ProcessEnv }];
+    expect(spawnOptions.env.DOOMPI_LAUNCHER_COMPOSITION).toBe(recordPath);
+    expect(JSON.parse(fs.readFileSync(recordPath, 'utf8')).root).toBe(repoRoot);
   });
 
   it('adapts canonical activation order to Pi CLI arguments at the launch boundary', async () => {

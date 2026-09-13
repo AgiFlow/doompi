@@ -3,7 +3,7 @@
  * looking for a bare `const meta`. The palette branches on the document kind
  * (markdown adds the formatting tools) and on the active tool.
  */
-import { AuthorToolPalette } from './AuthorToolPalette.tsx';
+import { AuthorToolPalette } from './AuthorToolPalette';
 
 const meta = {
   title: 'Author/AuthorToolPalette',

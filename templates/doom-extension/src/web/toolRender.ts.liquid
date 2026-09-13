@@ -1,5 +1,5 @@
 import type { MessageLine } from '@agimon-ai/doompi-web-components';
-import { type ToolResultView, toolResultTextLines } from '@agimon-ai/doompi-web-contracts';
+import { type ToolResultView, toolResultTextLines } from '@agimon-ai/doompi-core/web';
 
 /** The name this package registers the tool under (registerTool's `name`); web-plugin-tool-renderers checks it. */
 export const {{ toolName | camelCase }}ToolName = '{{ toolName }}' as const;

@@ -1,8 +1,9 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { MentionPreviewAsset } from '../../src/web/features/session/MentionPreviews.tsx';
-import type { SessionAsset } from '../../src/web/lib/sessionAsset.ts';
+
+import { MentionPreviewAsset } from '../../src/web/features/session/MentionPreviews';
+import type { SessionAsset } from '../../src/web/lib/sessionAsset';
 
 const asset = (contentType: string): SessionAsset => ({
   url: 'blob:sealed-file',
@@ -33,5 +34,19 @@ describe('MentionPreviewAsset', () => {
     const markup = renderAsset('src/readme.txt', 'file', 'application/octet-stream');
 
     expect(markup).toContain('href="blob:sealed-file" download="readme.txt"');
+  });
+
+  it('uses a file tab button when a file link provider can open the path', () => {
+    const markup = renderToStaticMarkup(
+      createElement(MentionPreviewAsset, {
+        mention: { path: 'README.md', kind: 'file' },
+        asset: asset('application/octet-stream'),
+        openFile() {},
+      }),
+    );
+
+    expect(markup).toContain('<button type="button"');
+    expect(markup).toContain('README.md');
+    expect(markup).not.toContain('download=');
   });
 });

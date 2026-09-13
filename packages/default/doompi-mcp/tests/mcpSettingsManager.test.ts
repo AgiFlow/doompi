@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { TokenStore } from '@agimon-ai/mcp-proxy';
 import { afterEach, describe, expect, it } from 'vitest';
-import { McpSettingsManager } from '../src/adapters/node/mcpSettingsManager.ts';
-import { mcpHubApi } from '../src/adapters/web/mcpHubApi.ts';
+
+import { mcpHubApi } from '../src/controllers/mcpHubApi';
+import { McpSettingsManager } from '../src/services/mcpSettingsManager';
 
 const temporaryDirectories: string[] = [];
 const REPOSITORY_ID = `repo-${'a'.repeat(24)}`;
@@ -63,7 +65,7 @@ describe('McpSettingsManager', () => {
 describe('mcpHubApi', () => {
   it('accepts host-issued repository ids and rejects repositories the hub has not admitted', async () => {
     const handler = mcpHubApi.start({
-      scope: 'hub',
+      scope: 'global',
       resolveRepository: () => undefined,
       onNotice: () => undefined,
     });
@@ -80,7 +82,7 @@ describe('mcpHubApi', () => {
   it('rejects malformed repository ids before resolution', async () => {
     let resolved = false;
     const handler = mcpHubApi.start({
-      scope: 'hub',
+      scope: 'global',
       resolveRepository: () => {
         resolved = true;
         return '/private/path';

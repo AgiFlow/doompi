@@ -1,3 +1,4 @@
+import type { ToolPromptRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   Badge,
   Button,
@@ -9,9 +10,9 @@ import {
   Separator,
   Textarea,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolPromptRenderProps } from '@agimon-ai/doompi-web-contracts';
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { encodeAnswerEnvelope } from '../../types/askUserWire.ts';
+
+import { encodeAnswerEnvelope } from '../../types/askUserWire';
 import {
   chooseOption,
   CUSTOM_LABEL,
@@ -26,7 +27,7 @@ import {
   readPromptQuestions,
   setCustom,
   setNotes,
-} from '../lib/questionnaireDraft.ts';
+} from '../lib/questionnaireDraft';
 
 /** The step bar: which questions are answered, which one is open, and a click back to any of them. */
 function StepBar({

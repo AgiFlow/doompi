@@ -6,8 +6,8 @@
  * hub. What renders without a hub is exactly the state this story shows: the
  * opener and the line explaining why the detail costs something.
  */
-import type { MetricsTool } from '../../types/webMetrics.ts';
-import { IssuesSection } from './IssuesSection.tsx';
+import type { MetricsTool } from '../../types/webMetrics';
+import { IssuesSection } from './IssuesSection';
 
 const tools: readonly MetricsTool[] = [
   { name: 'bash', calls: 742, p90TotalTokens: 411_200 },

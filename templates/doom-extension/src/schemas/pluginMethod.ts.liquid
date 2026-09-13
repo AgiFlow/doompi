@@ -1,0 +1,22 @@
+import { defineDoomPluginMethod } from '@agimon-ai/doompi-core/plugin-protocol';
+import { Type } from 'typebox';
+import type { {{ methodName | pascalCase }}Input, {{ methodName | pascalCase }}Output } from '../types/{{ methodName | camelCase }}Protocol';
+
+const input = Type.Object({ value: Type.String() }, { additionalProperties: false });
+const output = Type.Object({ value: Type.String() }, { additionalProperties: false });
+
+/** Replace the example payload with this method's real JSON contract. */
+export const {{ methodName | camelCase }}Method = defineDoomPluginMethod({
+  service: '{{ serviceName }}',
+  method: '{{ methodName | camelCase }}',
+  scope: '{{ scope }}',
+  direction: 'client-to-server',
+  input,
+  output,
+});
+
+// Keep both browser-facing types tied to the runtime schemas.
+const _input: {{ methodName | pascalCase }}Input = {} as import('typebox').Static<typeof input>;
+const _output: {{ methodName | pascalCase }}Output = {} as import('typebox').Static<typeof output>;
+void _input;
+void _output;

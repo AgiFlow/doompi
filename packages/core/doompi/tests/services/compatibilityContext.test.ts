@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CompatibilityOptions } from '../../src/types/interfaces/compatibility';
-import { buildCompatibilityContext } from '../../src/exports/services/compatibilityContext';
+
+import type { CompatibilityOptions } from '../../src/cli/commands/compat/types';
+import { buildCompatibilityContext } from '../../src/exports/compatibilityContext';
 
 const LAYERS_YAML = [
   'layers:',

@@ -65,11 +65,18 @@ detached child.
 ## Public API
 
 ```ts
-import { helpExtension, installHelpRuntime } from '@agimon-ai/doompi-help';
+import helpExtension from '@agimon-ai/doompi-help/extensions/pi';
+import { createHelpRuntime, type HelpRuntimeOptions } from '@agimon-ai/doompi-help';
 ```
 
-The root export is intended for host integrations and tests. Users activate Help through the normal
-extension.
+The root exports reusable activation, storage, resolver, and runtime services and their types.
+Pi and server loaders use `/extensions/pi` and `/extensions/server`, built directly from
+`src/extensions`. Public re-exports remain flat under `src/exports`.
+
+The Pi declaration installs a session-bound service plugin before registering its command.
+Help can wait for the optional session provider; a replacement session owns a fresh Help runtime.
+`onStop` withdraws command access to the current activation. Automatic service teardown disposes
+activation work, contributions, and UI integrations through their owning session context.
 
 ## Development
 

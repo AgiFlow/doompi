@@ -1,11 +1,14 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { HubChannelHost, HubSessionScope } from '@agimon-ai/doompi-web-contracts';
+
+import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createWorkflowsChannel } from '../src/adapters/workflowsHubChannel.ts';
-import { watchWorkflowRuns } from '../src/adapters/workflowWatcher.ts';
-import { moveWorkflowRun, writeWorkflowRun } from './support/workflowRuns.ts';
+
+import { createWorkflowsChannel } from '../src/controllers/workflowsHubChannel';
+import { presentWorkflowRuns, runBelongsToSession } from '../src/services/workflowRuns';
+import { readWorkflowRuns } from '../src/services/workflowWatcher';
+import { moveWorkflowRun, writeWorkflowRun } from './support/workflowRuns';
 
 let cleanups: Array<() => void> = [];
 
@@ -19,48 +22,62 @@ function freshHome(): string {
   return home;
 }
 
-interface FakeHost extends HubChannelHost {
+interface FakeHost extends DoomHubChannelHost {
   published: Array<{ sessionId: string; payload: unknown }>;
+  emit(sessionId: string, payload: unknown): void;
 }
 
-function fakeHost(scopes: HubSessionScope[]): FakeHost {
+function fakeHost(scopes: DoomHubSessionScope[]): FakeHost {
   const published: FakeHost['published'] = [];
+  const listeners = new Map<string, Set<(payload: unknown) => void>>();
+  const key = (sessionId: string): string => `workflow_runs:${sessionId}`;
   return {
     published,
     sessions: () => scopes,
+    directEvents: {
+      publish: (frameType, sessionId, payload) => {
+        for (const listener of listeners.get(`${frameType}:${sessionId}`) ?? []) listener(payload);
+      },
+      subscribe: (frameType, sessionId, listener) => {
+        const eventKey = `${frameType}:${sessionId}`;
+        const current = listeners.get(eventKey) ?? new Set<(payload: unknown) => void>();
+        current.add(listener);
+        listeners.set(eventKey, current);
+        return () => {
+          current.delete(listener);
+          if (current.size === 0) listeners.delete(eventKey);
+        };
+      },
+      close: () => listeners.clear(),
+    },
+    emit: (sessionId, payload) => {
+      for (const listener of listeners.get(key(sessionId)) ?? []) listener(payload);
+    },
     publish: (sessionId, payload) => published.push({ sessionId, payload }),
     requestSessionApi: () => Promise.resolve(Response.json({ error: 'not implemented' }, { status: 501 })),
     onNotice: () => undefined,
   };
 }
 
-const waitFor = async (predicate: () => boolean, what: string, timeoutMs = 8000): Promise<void> => {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}.`);
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-};
+function payloadForSession(home: string, sessionId: string) {
+  const parsed = readWorkflowRuns({ homeDir: home }).filter((run) => runBelongsToSession(run, sessionId));
+  return {
+    runs: presentWorkflowRuns(
+      parsed.map((run) => run.view),
+      Date.now(),
+    ),
+  };
+}
 
 function runsOf(payload: unknown): Array<Record<string, unknown>> {
   return (payload as { runs: Array<Record<string, unknown>> }).runs;
 }
 
 describe('the workflows hub channel', () => {
-  it('publishes owned runs per session and answers snapshots, dropping foreign runs', { timeout: 15_000 }, async () => {
+  it('seeds owned runs once and accepts lifecycle updates through direct events', () => {
     const home = freshHome();
-    const host = fakeHost([{ sessionId: 'owner', cwd: '/nowhere' }]);
-    const channel = createWorkflowsChannel({ watch: (onRuns) => watchWorkflowRuns(onRuns, { homeDir: home }) });
-    const source = channel.start(host);
-    cleanups.push(() => source.close());
-    expect(channel.frameType).toBe('workflow_runs');
-
-    writeWorkflowRun(home, {
-      workspace: 'default',
-      stage: 'running',
-      runKey: 'foreign',
-      record: { env: { PI_SESSION_ID: 'someone-else' }, workflowPath: '/elsewhere/wf.workflow.yml' },
-    });
+    const scope = { sessionId: 'owner', cwd: '/nowhere' };
+    const host = fakeHost([scope]);
     writeWorkflowRun(home, {
       workspace: 'default',
       stage: 'running',
@@ -68,49 +85,39 @@ describe('the workflows hub channel', () => {
       record: { env: { PI_SESSION_ID: 'owner' } },
       progress: [{ type: 'job', status: 'running', job: 'build', index: 0, total: 1, at: new Date().toISOString() }],
     });
+    writeWorkflowRun(home, {
+      workspace: 'default',
+      stage: 'running',
+      runKey: 'foreign',
+      record: { env: { PI_SESSION_ID: 'someone-else' } },
+    });
 
-    await waitFor(
-      () => host.published.some((entry) => runsOf(entry.payload).some((run) => run.runKey === 'mine')),
-      'the owned run publishing',
-    );
-    expect(host.published.every((entry) => entry.sessionId === 'owner')).toBe(true);
-    expect(runsOf(host.published.at(-1)?.payload).map((run) => run.runKey)).toEqual(['mine']);
+    const source = createWorkflowsChannel({ read: () => readWorkflowRuns({ homeDir: home }) }).start(host);
+    cleanups.push(() => source.close());
+    source.sessionAdded?.(scope);
 
-    // Snapshot recomputes on demand for a scope the watcher has never seen.
-    const snapshot = source.payloadFor({ sessionId: 'owner', cwd: '/nowhere' });
-    expect(runsOf(snapshot).map((run) => run.runKey)).toEqual(['mine']);
-    expect(runsOf(snapshot)[0]).toMatchObject({ stage: 'running', position: { job: 'build' } });
+    expect(host.published).toHaveLength(1);
+    expect(host.published[0]?.sessionId).toBe('owner');
+    expect(runsOf(host.published[0]?.payload).map((run) => run.runKey)).toEqual(['mine']);
+    expect(runsOf(source.payloadFor(scope)).map((run) => run.runKey)).toEqual(['mine']);
 
-    // A failure moves the run to the error stage and republishes.
     moveWorkflowRun(home, { workspace: 'default', runKey: 'mine' }, 'running', 'error', {
       outcome: 'failed',
       errorMessage: 'boom',
       failedJob: 'build',
       finishedAt: new Date().toISOString(),
     });
-    await waitFor(
-      () => host.published.some((entry) => runsOf(entry.payload).some((run) => run.stage === 'error')),
-      'the failure publishing',
-    );
-    expect(runsOf(source.payloadFor({ sessionId: 'owner', cwd: '/nowhere' }))[0]).toMatchObject({
-      errorMessage: 'boom',
-      failedJob: 'build',
-    });
+    host.emit('owner', payloadForSession(home, 'owner'));
+
+    expect(runsOf(source.payloadFor(scope))[0]).toMatchObject({ errorMessage: 'boom', failedJob: 'build' });
+    expect(host.published).toHaveLength(2);
   });
 
-  it('gives two sessions in one repository only their own runs', { timeout: 15_000 }, async () => {
+  it('keeps two sessions isolated in one repository', () => {
     const home = freshHome();
-    // Both sessions sit on the directory the fixture's workflowPath lives
-    // under, which is the case that used to hand each of them the other's run.
-    const repo = '/workspace';
-    const host = fakeHost([
-      { sessionId: 'first', cwd: repo },
-      { sessionId: 'second', cwd: repo },
-    ]);
-    const channel = createWorkflowsChannel({ watch: (onRuns) => watchWorkflowRuns(onRuns, { homeDir: home }) });
-    const source = channel.start(host);
-    cleanups.push(() => source.close());
-
+    const first = { sessionId: 'first', cwd: '/workspace' };
+    const second = { sessionId: 'second', cwd: '/workspace' };
+    const host = fakeHost([first, second]);
     writeWorkflowRun(home, {
       workspace: 'default',
       stage: 'running',
@@ -124,21 +131,13 @@ describe('the workflows hub channel', () => {
       record: { env: { PI_SESSION_ID: 'second' } },
     });
 
-    await waitFor(
-      () =>
-        host.published.some((entry) => entry.sessionId === 'first' && runsOf(entry.payload).length > 0) &&
-        host.published.some((entry) => entry.sessionId === 'second' && runsOf(entry.payload).length > 0),
-      'both sessions publishing',
-    );
+    const source = createWorkflowsChannel({ read: () => readWorkflowRuns({ homeDir: home }) }).start(host);
+    cleanups.push(() => source.close());
+    source.sessionAdded?.(first);
+    source.sessionAdded?.(second);
 
-    expect(runsOf(source.payloadFor({ sessionId: 'first', cwd: repo })).map((run) => run.runKey)).toEqual([
-      'first-run',
-    ]);
-    expect(runsOf(source.payloadFor({ sessionId: 'second', cwd: repo })).map((run) => run.runKey)).toEqual([
-      'second-run',
-    ]);
-    // Nothing a session was told about names another session's run, at any
-    // point in the stream rather than only in the last frame.
+    expect(runsOf(source.payloadFor(first)).map((run) => run.runKey)).toEqual(['first-run']);
+    expect(runsOf(source.payloadFor(second)).map((run) => run.runKey)).toEqual(['second-run']);
     for (const entry of host.published) {
       const expected = entry.sessionId === 'first' ? 'first-run' : 'second-run';
       expect(runsOf(entry.payload).map((run) => run.runKey)).toEqual([expected]);

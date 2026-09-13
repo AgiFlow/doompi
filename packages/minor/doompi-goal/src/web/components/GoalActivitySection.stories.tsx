@@ -6,9 +6,10 @@
  * The row reads the session's own footer status, so the variants are status
  * lines in the shape `formatGoalStatusView` writes, not hand-built view models.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { GoalActivitySection } from './GoalActivitySection.tsx';
-import { GOAL_VIEW_STATUS_KEY, formatGoalStatusView } from '../../types/goalView.ts';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { GOAL_VIEW_STATUS_KEY, formatGoalStatusView } from '../../types/goalView';
+import { GoalActivitySection } from './GoalActivitySection';
 
 const slot = (status?: string, sessionId: string | null = 's1') =>
   slotPropsFixture({

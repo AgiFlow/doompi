@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 
 const PACKAGE_MANIFEST_NAME = 'package.json';

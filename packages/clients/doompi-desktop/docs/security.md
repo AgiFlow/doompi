@@ -50,7 +50,7 @@ Desktop does not add a second authentication system. When remote access is enabl
 
 ## Process authority
 
-The Electron main process, cockpit, session servers, and agents run as the current operating-system user. Agents may read files, run commands, and access credentials available to that user, subject to DoomPi's own tool and package policies.
+The Electron main process, the headless server, presentation proxy, and agents run as the current operating-system user. Agents may read files, run commands, and access credentials available to that user, subject to DoomPi's own tool and package policies.
 
 The renderer sandbox does not extend to those child processes. `ELECTRON_RUN_AS_NODE=1` changes how Electron's executable starts them, not what permissions they receive.
 
@@ -74,12 +74,9 @@ DoomPi checks Accessibility and Screen Recording authorization without prompting
 
 ## Data locations
 
-Two storage locations have different purposes:
+Electron's user-data directory holds desktop-owned cache data and the short-lived headless attach token used to connect the presentation proxy to the headless process. The token is removed during normal shutdown and replaced on the next launch.
 
-- `~/.doompi/run`, or `DOOMPI_RUNTIME_DIR`, holds the shared DoomPi session registry.
-- Electron's user-data directory holds desktop-owned cache data used by the packaged runtime.
-
-The BrowserWindow session partition is in memory, so Electron does not intentionally persist renderer session storage through a `persist:` partition. This is not a general data-erasure guarantee. The cockpit, browser engine, logs, providers, tools, and agents may write data through their own storage paths.
+The BrowserWindow session partition is in memory, so Electron does not intentionally persist renderer session storage through a `persist:` partition. This is not a general data-erasure guarantee. The headless server, proxy, browser engine, logs, providers, tools, and agents may write data through their own storage paths.
 
 ## Operational guidance
 

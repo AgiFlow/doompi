@@ -1,0 +1,16 @@
+export const LEADER_WIDGET_KEY = 'doom-pi-leader';
+export const TUI_MODE = 'tui';
+export const WIDGET_PLACEMENT = 'belowEditor';
+export const WARNING_STYLE = 'warning';
+export const THEME_ENVIRONMENT_KEY = 'DOOMPI_THEME';
+export const HOTKEYS_COMMAND = 'hotkeys';
+export const TOOLS_COMMAND = 'tools';
+export const CONFIG_COMMAND = 'config';
+export const SESSION_START_EVENT = 'session_start';
+export const SESSION_MESSAGE_ENTRY = 'message';
+export const INPUT_EVENT = 'input';
+export const INTERACTIVE_INPUT_SOURCE = 'interactive';
+export const TITLE_MESSAGE_MAX_LENGTH = 64;
+export const TITLE_PREFIX = 'doom-pi';
+export const BUILTIN_LEADER_COMMANDS: readonly string[] = [HOTKEYS_COMMAND];
+export const PACKAGE_SOURCE = '@agimon-ai/doompi-ui';

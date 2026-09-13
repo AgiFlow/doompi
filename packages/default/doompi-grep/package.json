@@ -27,7 +27,7 @@
   "files": [
     "dist",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "!src/web/**/*.stories.tsx"
   ],
   "type": "module",
@@ -45,6 +45,11 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -58,11 +63,10 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-hashline": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "typebox": "1.3.25"
   },
@@ -96,10 +100,24 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "doompiServer": {
+    "entry": "./src/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "session"
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
+    }
+  },
   "doompiWeb": {
     "pluginId": "grep",
     "channels": [],
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/extensions/web.ts",
+    "scopes": [
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

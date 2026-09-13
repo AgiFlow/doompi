@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#14161a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/pwa/icon-192.png" />
+    <title>Pair with DoomPi</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right))
+          max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+        background: #14161a;
+        color: #e6e8ec;
+        font:
+          16px/1.5 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          sans-serif;
+      }
+      main {
+        width: min(32rem, 100%);
+        text-align: center;
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.35rem;
+      }
+      p {
+        margin: 0 0 1rem;
+        color: #a2a8b4;
+      }
+      #pwa-status[data-tone='good'] {
+        color: #6bd68a;
+      }
+      #pwa-status[data-tone='bad'] {
+        color: #ff7b7b;
+      }
+      video {
+        width: 100%;
+        max-height: 24rem;
+        margin: 0.75rem 0;
+        border: 1px solid #2c313a;
+        border-radius: 0.75rem;
+        background: #090a0c;
+        object-fit: cover;
+      }
+      .actions {
+        display: flex;
+        gap: 0.75rem;
+        margin-top: 1.25rem;
+      }
+      button {
+        flex: 1;
+        min-height: 3rem;
+        border: 1px solid #2f6feb;
+        border-radius: 0.6rem;
+        background: #2f6feb;
+        color: #fff;
+        font: inherit;
+        font-weight: 650;
+      }
+      button.secondary {
+        border-color: #2c313a;
+        background: #1b1e24;
+      }
+      button:disabled {
+        opacity: 0.55;
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body data-marker="doompi-pwa-shell">
+    <main>
+      <h1>Pair this device</h1>
+      <p>This cockpit can run shell commands on the host. Pair only with your own DoomPi.</p>
+      <p id="pwa-status" role="status">Checking browser support.</p>
+      <video id="camera" playsinline muted hidden></video>
+      <div class="actions">
+        <button id="scan" type="button">Scan pairing QR</button>
+        <button id="cancel" class="secondary" type="button" hidden>Cancel</button>
+      </div>
+      <noscript><p>Pairing needs JavaScript.</p></noscript>
+    </main>
+    <script type="module" src="/main.ts"></script>
+  </body>
+</html>

@@ -1,17 +1,18 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Button, ChevronDownIcon, ChevronRightIcon, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
+
 import {
   type WorkflowActivityGroupName,
   type WorkflowActivityRow,
   type WorkflowActivityTone,
   workflowActivityGroups,
   workflowActivityRows,
-} from '../lib/workflowActivity.ts';
-import { openCatalog } from '../stores/catalogStore.ts';
-import { workflowsTab } from './WorkflowsPanel.tsx';
-import { focusRun, workflows } from '../stores/workflowsStore.ts';
+} from '../lib/workflowActivity';
+import { openCatalog } from '../stores/catalogStore';
+import { focusRun, workflows } from '../stores/workflowsStore';
+import { workflowsTab } from './WorkflowsPanel';
 
 const TICK_MS = 10_000;
 

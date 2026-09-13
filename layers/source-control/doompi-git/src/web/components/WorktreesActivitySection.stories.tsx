@@ -5,10 +5,11 @@
  * fixture, and the rows come from the plugin's own session store seeded per
  * session id, which is exactly where the hub channel puts them.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { WorktreeView } from '../../types/webWorktrees.ts';
-import { worktreeActivity } from '../stores/worktreesActivityStore.ts';
-import { WorktreesActivitySection } from './WorktreesActivitySection.tsx';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import type { WorktreeView } from '../../types/webWorktrees';
+import { worktreeActivity } from '../stores/worktreesActivityStore';
+import { WorktreesActivitySection } from './WorktreesActivitySection';
 
 const WORKTREES: WorktreeView[] = [
   {

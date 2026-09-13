@@ -4,9 +4,9 @@
  * default export is a bare `const meta`. The rows come from the real catalog
  * session store, seeded at module scope, which is the drawer's only input.
  */
-import type { SubagentCatalogAgent } from '../../types/webSubagents.ts';
-import { catalog } from '../stores/catalogStore.ts';
-import { AgentCatalogDrawer } from './AgentCatalogDrawer.tsx';
+import type { SubagentCatalogAgent } from '../../types/webSubagents';
+import { catalog } from '../stores/catalogStore';
+import { AgentCatalogDrawer } from './AgentCatalogDrawer';
 
 const agent = (
   overrides: Partial<SubagentCatalogAgent> & Pick<SubagentCatalogAgent, 'name' | 'source' | 'description'>,

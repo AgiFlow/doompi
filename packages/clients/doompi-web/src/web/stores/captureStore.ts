@@ -1,9 +1,11 @@
-import type { CaptureStatusEvent, ComposerCapture, ComposerSubmission } from '@agimon-ai/doompi-web-contracts';
-import { validateComposerCapture } from './composerStore.ts';
-import { sessionStoreFor } from './sessionStore.ts';
-import { sessionsStore } from './sessionsStore.ts';
-import { publishComposerSubmission } from '../lib/composerSubmissions.ts';
-import { sendFrame } from '../lib/transport.ts';
+import type { CaptureStatusEvent, ComposerCapture, ComposerSubmission } from '@agimon-ai/doompi-core/web';
+import { Store } from '@tanstack/store';
+
+import { publishComposerSubmission } from '../lib/composerSubmissions';
+import { sendFrame } from '../lib/transport';
+import { validateComposerCapture } from './composerStore';
+import { sessionsStore } from './sessionsStore';
+import { sessionStoreFor } from './sessionStore';
 
 interface PendingCapture {
   submission: ComposerSubmission;
@@ -17,6 +19,12 @@ interface PendingCapture {
 }
 const pending = new Map<string, PendingCapture>();
 const listeners = new Set<(event: CaptureStatusEvent) => void>();
+/** Pending delivery and execution own a subscription independently of route focus. */
+export const pendingCaptureSessions = new Store<ReadonlySet<string>>(new Set<string>());
+
+function publishPendingSessions(): void {
+  pendingCaptureSessions.setState(() => new Set([...pending.values()].map(({ submission }) => submission.sessionId)));
+}
 
 export function onCaptureStatus(listener: (event: CaptureStatusEvent) => void): () => void {
   listeners.add(listener);
@@ -49,6 +57,7 @@ function status(request: PendingCapture, value: CaptureStatusEvent['status'], er
 function fail(id: string, request: PendingCapture, error: string): void {
   clearTimeout(request.timer);
   pending.delete(id);
+  publishPendingSessions();
   if (request.accepted) status(request, 'error', error);
   else request.reject(new Error(error));
 }
@@ -90,6 +99,7 @@ export async function submitCapture(sessionId: string | null, capture: ComposerC
     };
     pending.set(id, request);
     try {
+      publishPendingSessions();
       sendFrame(sessionId, {
         id,
         type: queued ? 'follow_up' : 'prompt',
@@ -152,6 +162,7 @@ export function applyCaptureFrame(sessionId: string, frame: Record<string, unkno
           ? 'Capture execution failed or was cancelled.'
           : undefined);
       pending.delete(id);
+      publishPendingSessions();
       status(request, failed === undefined ? 'completed' : 'error', failed);
     }
   }

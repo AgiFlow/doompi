@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createProtocolTransport, protocolSocketUrl } from '../../src/web/lib/piTransport.ts';
-import { sealedProtocolSession } from '../../src/web/lib/sealedSession.ts';
+
+import { createProtocolTransport, protocolSocketUrl } from '../../src/web/lib/piTransport';
+import { sealedProtocolSession } from '../../src/web/lib/sealedSession';
 
 type Listener = (event: unknown) => void;
 
@@ -8,6 +9,7 @@ type Listener = (event: unknown) => void;
 class FakeSocket {
   static last: FakeSocket | undefined;
   binaryType = '';
+  bufferedAmount = 0;
   readonly sent: unknown[] = [];
   closed = false;
   private readonly listeners = new Map<string, Listener[]>();
@@ -91,22 +93,24 @@ describe('protocol transport', () => {
     await vi.waitFor(() => expect(sink.onData).toHaveBeenCalledWith(new Uint8Array([1, 2, 3])));
   });
 
-  it('drops a text frame rather than handing on bytes the codec never produced', async () => {
+  it('rejects text frames rather than feeding them to the binary codec', async () => {
     const { socket, sink } = await open();
 
     socket.fire('message', { data: 'hello' });
 
     expect(sink.onData).not.toHaveBeenCalled();
+    expect(sink.onError).toHaveBeenCalledOnce();
+    expect(socket.closed).toBe(true);
   });
 
-  it('reports closure and failure once each', async () => {
+  it('reports exactly one terminal callback', async () => {
     const { socket, sink } = await open();
 
     socket.fire('close');
     socket.fire('error');
 
     expect(sink.onClose).toHaveBeenCalledOnce();
-    expect(sink.onError).toHaveBeenCalledOnce();
+    expect(sink.onError).not.toHaveBeenCalled();
   });
 
   it('sends a plain buffer, which is all the socket will take', async () => {
@@ -134,5 +138,68 @@ describe('protocol transport', () => {
     transport.close();
 
     expect(socket.closed).toBe(true);
+  });
+  it('rejects a connection closed before it opens', async () => {
+    const connecting = createProtocolTransport('ws://cockpit/api/pi')(handlers());
+    FakeSocket.last?.fire('close');
+    await expect(connecting).rejects.toThrow(/failed to open/);
+  });
+
+  it('serializes sealing and never sends a queued frame after closure', async () => {
+    let release!: (value: Uint8Array) => void;
+    const sealing = vi.spyOn(sealedProtocolSession, 'sealBinary').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const { transport, socket, sink } = await open();
+    const first = transport.send(new Uint8Array([1]));
+    const second = transport.send(new Uint8Array([2]));
+    const rejected = Promise.allSettled([first, second]);
+    await vi.waitFor(() => expect(sealing).toHaveBeenCalledTimes(1));
+    transport.close();
+    release(new Uint8Array([1]));
+    expect((await rejected).map((result) => result.status)).toEqual(['rejected', 'rejected']);
+    expect(socket.sent).toEqual([]);
+    expect(sink.onClose).toHaveBeenCalledOnce();
+    expect(sink.onError).not.toHaveBeenCalled();
+  });
+
+  it('does not decrypt a later frame ahead of a pending frame or deliver after close', async () => {
+    let release!: (value: Uint8Array) => void;
+    const decrypt = vi.spyOn(sealedProtocolSession, 'openBinary').mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const { socket, sink } = await open();
+    socket.fire('message', { data: new Uint8Array([1]).buffer });
+    socket.fire('message', { data: new Uint8Array([2]).buffer });
+    await vi.waitFor(() => expect(decrypt).toHaveBeenCalledTimes(1));
+    socket.fire('close');
+    release(new Uint8Array([1]));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sink.onData).not.toHaveBeenCalled();
+    expect(decrypt).toHaveBeenCalledTimes(1);
+  });
+
+  it('terminates once when authentication fails', async () => {
+    vi.spyOn(sealedProtocolSession, 'openBinary').mockResolvedValueOnce(undefined);
+    const { socket, sink } = await open();
+    socket.fire('message', { data: new Uint8Array([1]).buffer });
+    await vi.waitFor(() => expect(sink.onError).toHaveBeenCalledOnce());
+    socket.fire('close');
+    expect(sink.onClose).not.toHaveBeenCalled();
+  });
+
+  it('rejects a slow socket before unbounded buffering', async () => {
+    const { transport, socket, sink } = await open();
+    socket.bufferedAmount = 64 * 1024 * 1024;
+    await expect(transport.send(new Uint8Array([1]))).rejects.toThrow(/queue exhausted/);
+    expect(socket.sent).toEqual([]);
+    expect(sink.onError).toHaveBeenCalledOnce();
   });
 });

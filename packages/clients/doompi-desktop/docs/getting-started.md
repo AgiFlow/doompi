@@ -24,32 +24,23 @@ pnpm cockpit:build
 pnpm --filter @agimon-ai/doompi-desktop start
 ```
 
-`start` builds the Electron main and preload entries, stages the desktop runtime, and launches the generated main entry. It does not provide hot reload. Stop the application normally or interrupt the command.
+`start` builds the Electron main and preload entries, stages the desktop runtime, starts a headless `doompi-server`, starts the presentation-only `doompi-web` proxy, and launches the generated main entry. It does not provide hot reload. Stop the application normally or interrupt the command.
 
-The desktop selects a loopback cockpit port automatically. To move session discovery to another directory, set `DOOMPI_RUNTIME_DIR` before starting:
-
-```bash
-DOOMPI_RUNTIME_DIR=/tmp/doompi-run \
-  pnpm --filter @agimon-ai/doompi-desktop start
-```
-
-The main process removes inherited `DOOMPI_*` variables before starting the packaged cockpit, then supplies its own runtime paths, port, desktop marker, and agent command. `DOOMPI_RUNTIME_DIR` is the explicit exception carried into that environment.
-
-Keep the registry path short. Desktop requires at least 40 bytes of path budget after the registry directory for a session socket. It rejects a path that cannot meet that bound before the cockpit starts, avoiding a later Unix-socket failure with a less useful error.
+Desktop prefers loopback port `7433` for the web proxy and `7434` for the headless protocol. It selects free ports when either preferred port is unavailable. The Electron main process creates the short-lived attach token required by the two children and removes it during shutdown.
 
 ## Run focused checks
 
 From the repository root:
 
 ```bash
-pnpm nx run @agimon-ai/doompi-desktop:lint
-pnpm nx run @agimon-ai/doompi-desktop:typecheck
-pnpm nx run @agimon-ai/doompi-desktop:build
-pnpm nx run @agimon-ai/doompi-desktop:test
-pnpm nx run @agimon-ai/doompi-desktop:test:e2e
+pnpm nx run @agimon-ai/doompi-desktop:lint --skip-nx-cache
+pnpm nx run @agimon-ai/doompi-desktop:typecheck --skip-nx-cache
+pnpm nx run @agimon-ai/doompi-desktop:build --skip-nx-cache
+pnpm nx run @agimon-ai/doompi-desktop:test --skip-nx-cache
+pnpm nx run @agimon-ai/doompi-desktop:test:e2e --skip-nx-cache
 ```
 
-The unit target covers process launch, window restrictions, runtime staging, and native host policy. The end-to-end target launches the generated Electron entry against a fixture cockpit and verifies the application shell.
+The unit target covers child argument construction, process runtime selection, window restrictions, runtime staging, and native host policy. The end-to-end target launches the generated Electron entry against fixture headless and web children and verifies the application shell.
 
 ## Build a release artifact
 
@@ -63,28 +54,25 @@ Release artifacts are written under `packages/clients/doompi-desktop/release`. C
 
 - macOS arm64 DMG and ZIP
 - Linux x64 AppImage and DEB
+- Linux arm64 AppImage and DEB
 
-Packaging is not a portable cross-platform build. Build each target on the corresponding operating system, especially macOS where nested executable signing and Apple notarization are part of the release path.
+Packaging is not a portable cross-platform build. Build each target on the corresponding operating system and architecture, especially macOS where nested executable signing and Apple notarization are part of the release path.
 
 For artifact structure, signing inputs, and the absence of an in-app updater, read [Runtime and packaging](./runtime-and-packaging.md).
 
 ## Troubleshooting
 
-### The cockpit never becomes ready
+### The application never becomes ready
 
-The application waits for the staged hub's `/api/health` endpoint. Check the terminal output for the cockpit child failure. Common causes are an incomplete runtime stage, a missing packaged entry or native binary, a sync or initialization error, or another process taking the selected port before the child binds it.
+Desktop waits for the headless server and then the web proxy `/api/health` endpoint. Check terminal output for either child failure. Common causes are an incomplete runtime stage, a missing packaged entry or native binary, a sync or initialization error, or another process taking a selected port before the child binds it.
 
-### Port 7433 is already in use
+### Port 7433 or 7434 is already in use
 
-This is normally harmless. Desktop selects a free ephemeral port when its preferred port is occupied.
-
-### Desktop and CLI show different sessions
-
-Confirm both processes use the same `DOOMPI_RUNTIME_DIR`. With no override, both use `~/.doompi/run`.
+This is normally harmless. Desktop selects a free ephemeral port when either preferred port is occupied.
 
 ### Computer use reports unavailable
 
-Computer use requires an arm64 Mac running macOS 15 or newer, the packaged native helper, and manually granted Accessibility and Screen Recording permissions. Run the Computer Use Doctor action to inspect the capability probe without requesting permissions. If the helper or either permission is unavailable, target discovery and activation fail closed.
+Computer use requires an arm64 Mac running macOS 15 or newer, the packaged native helper, and manually granted Accessibility and Screen Recording permissions. The headless child must also expose the typed computer-use IPC boundary. Run the Computer Use Doctor action to inspect capability availability without requesting permissions. If the helper, either permission, or the child boundary is unavailable, target discovery and activation fail closed.
 
 ## Next steps
 

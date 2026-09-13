@@ -1,3 +1,4 @@
+import { CHIP_TONES } from '../types/tone';
 /*
  * Story fixtures are plain CSF objects rather than `Meta`/`StoryObj` from
  * Storybook: the renderer parses these files statically and mounts the exported
@@ -7,8 +8,7 @@
  * `Playground` is the name the DoomPi style-system extension renders by default
  * when a story file is written or edited.
  */
-import { Badge } from './Badge.tsx';
-import { CHIP_TONES } from '../types/tone.ts';
+import { Badge } from './Badge';
 
 const SIZES = ['xs', 'sm', 'md', 'lg'] as const;
 

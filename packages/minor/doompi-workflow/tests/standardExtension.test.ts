@@ -1,6 +1,11 @@
-import { childProcessContextEnvironment } from '@agimon-ai/doompi-extension-contracts/child-process';
-import { createPiTestHost, type PiTestHost } from '@agimon-ai/doompi-extension-contracts/testing';
-import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { childProcessContextEnvironment, SUBAGENT_ROOT_SESSION_ENV } from '@agimon-ai/doompi-core/child-process';
+import { createPiTestHost, type PiTestHost } from '@agimon-ai/doompi-core/testing';
+import {
+  createDoomToolSurface,
+  DOOM_TOOL_SURFACE_SERVICE,
+  type DoomToolSurfaceService,
+} from '@agimon-ai/doompi-core/tool-surface';
+import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,27 +15,24 @@ const mocks = vi.hoisted(() => ({
   leaderDispose: vi.fn(),
   leaderSetMode: vi.fn(),
   registerLeader: vi.fn(),
-  createCordisRoot: (): unknown => undefined,
+  createCordisRoot: (): Context => new Context(),
 }));
 
 const cordisRoots: Context[] = [];
 
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
-  connectDoomCordisHost: async () => ({
-    root: mocks.createCordisRoot(),
-    runtime: { abiVersion: 1, generation: 'workflow-test', hostId: 'workflow-test', mode: 'composed' },
-    dispose: async () => undefined,
-  }),
-}));
-
-vi.mock('../src/adapters/pi/leader.ts', () => ({
+vi.mock('../src/tui/leader', () => ({
   registerLeaderContribution: mocks.registerLeader,
 }));
-vi.mock('../src/adapters/pi/workflow/piExtension.ts', () => ({
-  installWorkflowPiRuntime: (options: unknown) => (pi: ExtensionAPI) => mocks.install(pi, options),
+vi.mock('../src/tui/workflowRuntime', () => ({
+  createWorkflowPiRuntime: (pi: ExtensionAPI, options: unknown) => mocks.install(pi, options),
 }));
 
-import { workflowExtension } from '../src/adapters/pi/extension.ts';
+vi.mock('../src/tools/workflowTools', () => ({
+  createWorkflowTools: (tools: unknown) => tools,
+}));
+
+import { workflowExtension } from '../src/extensions/pi';
+import type { WorkflowPiRuntime } from '../src/tui/workflowRuntime';
 
 function deferred(): { promise: Promise<void>; resolve(): void } {
   let resolvePromise: (() => void) | undefined;
@@ -56,24 +58,60 @@ function tool(name: string, execute = vi.fn().mockResolvedValue({ content: [{ ty
   };
 }
 
+interface WorkflowRuntimeFixture extends Omit<WorkflowPiRuntime, 'toolDependencies'> {
+  toolDependencies: ReturnType<typeof tool>[];
+}
+
+function runtime(overrides: Partial<WorkflowRuntimeFixture> = {}): WorkflowRuntimeFixture {
+  return {
+    toolDependencies: [],
+    commands: [],
+    waitForReadiness: async () => undefined,
+    dispose: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
+async function install(): Promise<Context> {
+  const root = mocks.createCordisRoot();
+  await workflowExtension.install(root, host.pi);
+  return root;
+}
+
 /** Everything the extension told the given session, in order. */
 function notified(host: PiTestHost, sessionId: string): string[] {
   return host.notifications.filter((entry) => entry.sessionId === sessionId).map(({ message }) => message);
 }
 
 let host: PiTestHost;
+let toolSurface: DoomToolSurfaceService | undefined;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // A real subagent shell exports this, and it would otherwise decide the root
+  // session these tests are asserting on.
+  vi.stubEnv(SUBAGENT_ROOT_SESSION_ENV, '');
   host = createPiTestHost({ cwd: '/repo' });
+  toolSurface = undefined;
   mocks.createCordisRoot = () => {
     const root = new Context();
     root.provide(DOOM_UI_HUB_SERVICE, {} as DoomUiHubService);
+    // The surface is the session's, not the package's, so the fixture owns it
+    // exactly the way the composed host does.
+    const surface = createDoomToolSurface({
+      generation: 'workflow-test',
+      allTools: () => host.pi.getAllTools().map((entry) => entry.name),
+      activeTools: () => host.pi.getActiveTools(),
+      setActiveTools: (names) => host.pi.setActiveTools([...names]),
+    });
+    toolSurface = surface;
+    root.provide(DOOM_TOOL_SURFACE_SERVICE, surface);
+    root.effect(() => () => surface.dispose(), 'workflow-test-tool-surface');
     cordisRoots.push(root);
     return root;
   };
   mocks.registerLeader.mockReturnValue({ dispose: mocks.leaderDispose, setMode: mocks.leaderSetMode });
-  mocks.install.mockImplementation(() => ({ dispose: vi.fn().mockResolvedValue(undefined) }));
+  mocks.install.mockImplementation(() => runtime());
 });
 
 afterEach(async () => {
@@ -86,36 +124,33 @@ describe('standard workflow factory lifecycle', () => {
   it('creates independent roots when invoked twice on one Pi host', async () => {
     const executes = [vi.fn().mockResolvedValue({ content: [] }), vi.fn().mockResolvedValue({ content: [] })];
     let installation = 0;
-    mocks.install.mockImplementation((pi: ExtensionAPI) => {
-      pi.registerTool(tool('launch_workflow', executes[installation++]));
-      return { dispose: vi.fn().mockResolvedValue(undefined) };
+    mocks.install.mockImplementation(() => {
+      return runtime({ toolDependencies: [tool('launch_workflow', executes[installation++])] });
     });
 
-    await workflowExtension(host.pi);
-    await workflowExtension(host.pi);
+    const firstRoot = await install();
+    await install();
     expect(host.tools).toHaveLength(2);
 
-    const firstShutdown = host.handlers('session_shutdown')[0];
-    await firstShutdown?.({ type: 'session_shutdown' }, host.context({ sessionId: 'session' }));
-    await host.tools[0]?.execute('old', {}, undefined, undefined, host.context({ sessionId: 'session' }));
+    await firstRoot.fiber.dispose();
+    await expect(
+      host.tools[0]?.execute('old', {}, undefined, undefined, host.context({ sessionId: 'session' })),
+    ).rejects.toThrow();
     await host.tools[1]?.execute('new', {}, undefined, undefined, host.context({ sessionId: 'session' }));
 
     expect(executes[0]).not.toHaveBeenCalled();
     expect(executes[1]).toHaveBeenCalledOnce();
   });
 
-  it('awaits one idempotent Cordis disposal for repeated shutdown callbacks', async () => {
+  it('awaits one idempotent Cordis disposal for repeated host shutdown requests', async () => {
     const gate = deferred();
     const disposeRuntime = vi.fn(() => gate.promise);
-    mocks.install.mockReturnValue({ dispose: disposeRuntime });
-    await workflowExtension(host.pi);
+    mocks.install.mockReturnValue(runtime({ dispose: disposeRuntime }));
+    const root = await install();
 
-    const shutdown = host.handlers('session_shutdown').at(-1);
-    const context = host.context({ sessionId: 'session' });
-    const first = shutdown?.({ type: 'session_shutdown' }, context) as Promise<void>;
-    const second = shutdown?.({ type: 'session_shutdown' }, context) as Promise<void>;
-    await Promise.resolve();
-    expect(disposeRuntime).toHaveBeenCalledOnce();
+    const first = root.fiber.dispose();
+    const second = root.fiber.dispose();
+    await vi.waitFor(() => expect(disposeRuntime).toHaveBeenCalledOnce());
 
     gate.resolve();
     await Promise.all([first, second]);
@@ -126,19 +161,22 @@ describe('standard workflow factory lifecycle', () => {
     const gate = deferred();
     let starts = 0;
     mocks.install.mockImplementation((pi: ExtensionAPI) => {
-      pi.on('session_start', async (_event, context) => {
-        starts += 1;
-        if (starts === 1) await gate.promise;
-        context.ui.notify(`session:${context.sessionManager.getSessionId()}`, 'info');
-        pi.sendMessage({
-          customType: 'workflow-test',
-          content: context.sessionManager.getSessionId(),
-          display: true,
-        });
+      return runtime({
+        events: {
+          session_start: async (_event: unknown, context: ExtensionContext) => {
+            starts += 1;
+            if (starts === 1) await gate.promise;
+            context.ui.notify(`session:${context.sessionManager.getSessionId()}`, 'info');
+            pi.sendMessage({
+              customType: 'workflow-test',
+              content: context.sessionManager.getSessionId(),
+              display: true,
+            });
+          },
+        },
       });
-      return { dispose: vi.fn().mockResolvedValue(undefined) };
     });
-    await workflowExtension(host.pi);
+    await install();
 
     const start = host.handlers('session_start').at(-1);
     const oldStart = start?.(
@@ -155,18 +193,17 @@ describe('standard workflow factory lifecycle', () => {
     expect(host.messages[0]?.message).toMatchObject({ content: 'next' });
   });
 
-  it('makes partially registered callbacks inert when installation throws', async () => {
+  it('makes earlier tool callbacks inert when later registration throws', async () => {
     const execute = vi.fn().mockResolvedValue({ content: [] });
-    mocks.install.mockImplementation((pi: ExtensionAPI) => {
-      pi.registerTool(tool('launch_workflow', execute));
-      throw new Error('installation failed');
+    mocks.install.mockReturnValue(runtime({ toolDependencies: [tool('launch_workflow', execute), tool('broken')] }));
+    const register = host.pi.registerTool.bind(host.pi);
+    vi.spyOn(host.pi, 'registerTool').mockImplementation((definition) => {
+      if (definition.name === 'broken') throw new Error('installation failed');
+      register(definition);
     });
-
-    await expect(workflowExtension(host.pi)).rejects.toThrow('installation failed');
-    const result = await host.tools[0]?.execute('stale', {}, undefined, undefined, host.context());
-
+    await expect(install()).rejects.toThrow('installation failed');
+    await expect(host.tools[0]?.execute('stale', {}, undefined, undefined, host.context())).rejects.toThrow();
     expect(execute).not.toHaveBeenCalled();
-    expect(result?.content[0]).toMatchObject({ text: expect.stringContaining('no longer active') });
   });
 
   it('fences retained runtime capabilities after shutdown begins', async () => {
@@ -176,42 +213,36 @@ describe('standard workflow factory lifecycle', () => {
     let installedPi: ExtensionAPI | undefined;
     mocks.install.mockImplementation((pi: ExtensionAPI) => {
       installedPi = pi;
-      pi.registerTool(
-        tool(
-          'launch_workflow',
-          vi.fn(async (_id, _params, _signal, onUpdate, context: ExtensionContext) => {
-            await operation.promise;
-            observations.push(context.ui.theme);
-            observations.push(await context.ui.confirm('Workflow', 'Continue?'));
-            observations.push(await context.ui.select('Workflow', ['continue']));
-            context.ui.notify('late notification', 'info');
-            onUpdate?.({ content: [{ type: 'text', text: 'late update' }], details: undefined });
-            return { content: [{ type: 'text', text: 'completed' }], details: undefined };
-          }),
-        ),
-      );
-      return { dispose: vi.fn().mockResolvedValue(undefined) };
+      return runtime({
+        toolDependencies: [
+          tool(
+            'launch_workflow',
+            vi.fn(async (_id, _params, _signal, onUpdate, context: ExtensionContext) => {
+              await operation.promise;
+              observations.push(context.ui.theme);
+              observations.push(await context.ui.confirm('Workflow', 'Continue?'));
+              observations.push(await context.ui.select('Workflow', ['continue']));
+              context.ui.notify('late notification', 'info');
+              onUpdate?.({ content: [{ type: 'text', text: 'late update' }], details: undefined });
+              return { content: [{ type: 'text', text: 'completed' }], details: undefined };
+            }),
+          ),
+        ],
+      });
     });
-    await workflowExtension(host.pi);
+    const root = await install();
     if (!installedPi) throw new Error('workflow runtime was not installed');
 
     const context = host.context({ sessionId: 'fenced' });
     const execution = host.tools[0]?.execute('call', {}, undefined, update, context);
     await vi.waitFor(() => expect(host.tools[0]).toBeDefined());
-    const shutdown = host.handlers('session_shutdown').at(-1);
-    await shutdown?.({ type: 'session_shutdown' }, context);
+    await root.fiber.dispose();
     operation.resolve();
 
-    await expect(execution).resolves.toMatchObject({
-      content: [{ text: expect.stringContaining('no longer active') }],
-    });
+    await expect(execution).rejects.toThrow('no longer active');
     expect(observations).toEqual([undefined, false, undefined]);
     expect(notified(host, 'fenced')).toEqual([]);
     expect(update).not.toHaveBeenCalled();
-    installedPi.registerTool(tool('late-tool'));
-    installedPi.setActiveTools(['late-tool']);
-
-    expect(installedPi.getActiveTools()).toEqual([]);
     await expect(installedPi.exec('late-command', [])).resolves.toMatchObject({
       code: 1,
       stderr: expect.stringContaining('no longer active'),
@@ -226,24 +257,29 @@ describe('standard workflow factory lifecycle', () => {
       mode: 'agiflow-dispatcher',
     });
     for (const [name, value] of Object.entries(environment)) vi.stubEnv(name, value);
-    mocks.install.mockImplementation((pi: ExtensionAPI) => {
-      pi.registerTool(tool('list_workflows'));
-      pi.registerTool(
-        tool(
-          'launch_workflow',
-          vi.fn(async (_id, _params, _signal, _onUpdate, context: ExtensionContext) => ({
-            content: [{ type: 'text', text: context.sessionManager.getSessionId() }],
-          })),
-        ),
-      );
-      pi.registerTool(tool('workflow_run'));
-      pi.setActiveTools(['list_workflows', 'launch_workflow', 'workflow_run']);
-      return { dispose: vi.fn().mockResolvedValue(undefined) };
+    mocks.install.mockImplementation(() => {
+      return runtime({
+        toolDependencies: [
+          tool('list_workflows'),
+          tool(
+            'launch_workflow',
+            vi.fn(async (_id, _params, _signal, _onUpdate, context: ExtensionContext) => ({
+              content: [{ type: 'text', text: context.sessionManager.getSessionId() }],
+            })),
+          ),
+          tool('workflow_run'),
+        ],
+      });
     });
 
-    await workflowExtension(host.pi);
+    await install();
 
     expect(host.tools.map(({ name }) => name)).toEqual(['list_workflows', 'launch_workflow']);
+    // Registered behind the bridge's back, so only the restriction can hide it.
+    host.pi.registerTool(tool('workflow_run'));
+    await vi.waitFor(() => expect(toolSurface?.active()).toContain('list_workflows'));
+    toolSurface?.refresh();
+    expect(toolSurface?.active()).toEqual(['list_workflows', 'launch_workflow']);
     expect(mocks.registerLeader).not.toHaveBeenCalled();
     expect(mocks.install).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ initialMode: true }));
     const launch = host.tool('launch_workflow');

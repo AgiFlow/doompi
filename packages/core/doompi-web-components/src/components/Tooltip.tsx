@@ -1,6 +1,7 @@
 import { Tooltip as TooltipPrimitive } from 'radix-ui';
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+
+import { cn } from '../lib/cn';
 
 /** Mount once near the root; every Tooltip below shares its delay. */
 export function TooltipProvider({ delayDuration = 300, ...props }: ComponentProps<typeof TooltipPrimitive.Provider>) {

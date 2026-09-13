@@ -1,0 +1,39 @@
+import { Context } from '@deepseek-ai/cordis';
+import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai/doompi-core/server-facet';
+import { describe, expect, it, vi } from 'vitest';
+import { {{ facetName | camelCase }}ServerFacet } from '../../../src/extensions/server';
+
+function fixture(scope: DoomServerHostService['scope']) {
+  const dispose = vi.fn();
+  const registerApi = vi.fn(() => ({ mounted: true, dispose }));
+  const host: DoomServerHostService = {
+    scope,
+    context: { scope, cwd: '/repo' } as DoomServerHostService['context'],
+    registerApi,
+    registerChannel: vi.fn(),
+    registerMethod: vi.fn(),
+    mounted: () => [],
+    mountedChannels: () => [],
+  };
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, host);
+  return { context, registerApi, dispose };
+}
+
+describe('server plugin', () => {
+  it('registers and removes its API through the shared lifecycle', async () => {
+    const test = fixture('{{ scope }}');
+    const dispose = await {{ facetName | camelCase }}ServerFacet.apply(test.context);
+    expect(test.registerApi).toHaveBeenCalledOnce();
+    await dispose?.();
+    await dispose?.();
+    expect(test.dispose).toHaveBeenCalledOnce();
+    await test.context.fiber.dispose();
+  });
+  it('does not register on an undeclared scope', async () => {
+    const test = fixture({% if scope == 'session' %}'global'{% else %}'session'{% endif %});
+    await {{ facetName | camelCase }}ServerFacet.apply(test.context);
+    expect(test.registerApi).not.toHaveBeenCalled();
+    await test.context.fiber.dispose();
+  });
+});

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import {
   createEditToolDefinition,
   createFindToolDefinition,
@@ -15,7 +16,8 @@ import {
   type WriteToolInput,
 } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { registerBuiltinToolUi } from '../../src/adapters/pi/toolOverrides.ts';
+
+import { createBuiltinTools } from '../../src/tui/builtinTools';
 
 const CWD = '/repo/project';
 const EXPECTED_NAMES = ['read', 'edit', 'write', 'grep', 'find', 'ls'];
@@ -33,18 +35,18 @@ function plainTheme(): Theme {
   } as unknown as Theme;
 }
 
-function captureTools(cwd: string, shouldRegister?: (tool: string) => boolean): ToolDefinition[] {
+function captureTools(cwd: string, shouldRegister: (tool: string) => boolean = () => true): ToolDefinition[] {
   const registered: ToolDefinition[] = [];
   const pi = {
-    registerTool: vi.fn((definition: ToolDefinition) => {
+    registerTool: (definition: ToolDefinition) => {
       registered.push(definition);
-    }),
-  } as unknown as ExtensionAPI;
-  registerBuiltinToolUi(pi, cwd, shouldRegister);
+    },
+  } as Pick<ExtensionAPI, 'registerTool'>;
+  for (const tool of createBuiltinTools(cwd)) if (shouldRegister(tool.name)) tool.register(pi);
   return registered;
 }
 
-describe('registerBuiltinToolUi', () => {
+describe('createBuiltinTools', () => {
   it('preserves native definitions while overriding only non-bash rendering', () => {
     const registered = captureTools(CWD);
 

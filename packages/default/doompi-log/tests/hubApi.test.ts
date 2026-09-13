@@ -1,9 +1,10 @@
 import type { LogMetricsReport } from '@agimon-ai/log-sink-mcp';
 import { describe, expect, it, vi } from 'vitest';
-import { createLogHubApi } from '../src/adapters/hubApi.ts';
-import type { IssuesSource } from '../src/types/issuesSource.ts';
-import type { IssuesView, MetricsReport, MetricsUnavailable } from '../src/types/webMetrics.ts';
-import type { MetricsSource } from '../src/types/metricsSource.ts';
+
+import { createLogHubApi } from '../src/controllers/hubApi';
+import type { IssuesSource } from '../src/types/issuesSource';
+import type { MetricsSource } from '../src/types/metricsSource';
+import type { IssuesView, MetricsReport, MetricsUnavailable } from '../src/types/webMetrics';
 
 /**
  * The hub route is the whole browser-facing surface of this package, so these

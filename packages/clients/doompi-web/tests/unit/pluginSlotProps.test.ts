@@ -5,19 +5,20 @@ import {
   type TransientTab,
   type WebPluginContextItem,
   type WebPluginSlotProps,
-} from '@agimon-ai/doompi-web-contracts';
+} from '@agimon-ai/doompi-core/web';
 import { createElement, isValidElement, type ReactElement } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
-import { pluginSlotProps } from '../../src/web/lib/pluginSlotProps.ts';
-import { bindThreadRenderer, releaseThreadRenderer } from '../../src/web/lib/threadRenderer.ts';
-import { bindTransport, releaseTransport } from '../../src/web/lib/transport.ts';
+
+import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry';
+import { pluginSlotProps } from '../../src/web/lib/pluginSlotProps';
+import { bindThreadRenderer, releaseThreadRenderer } from '../../src/web/lib/threadRenderer';
+import { bindTransport, releaseTransport } from '../../src/web/lib/transport';
 import {
   appendComposerDraft,
   composerStore,
   resetComposerStore,
   updateComposerState,
-} from '../../src/web/stores/composerStore.ts';
+} from '../../src/web/stores/composerStore';
 
 function Panel(): null {
   return null;

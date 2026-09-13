@@ -14,10 +14,13 @@ interface PackageManifest {
   peerDependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
 }
 
 const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
 const PROMPT_SUPPORT_DIRECTORIES = new Set(['agents', 'assets', 'references', 'scripts']);
+const SERVER_ENTRY_KINDS = ['server'] as const;
+type ServerEntryKind = (typeof SERVER_ENTRY_KINDS)[number];
 
 async function readManifest(): Promise<PackageManifest> {
   return JSON.parse(await readFile(path.join(packageDirectory, 'package.json'), 'utf8')) as PackageManifest;
@@ -77,15 +80,51 @@ describe('{{ packageName | kebabCase }} package contract', () => {
     expect(keywords).toEqual(keywords.map((keyword) => keyword.toLowerCase()));
   });
 
-  it('keeps closed ESM, CJS, and declaration exports plus Pi discovery metadata', async () => {
+  it('keeps closed ESM, CJS, and declaration exports plus Pi and optional server discovery metadata', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
+    const serverEntryKinds = (
+      await Promise.all(
+        SERVER_ENTRY_KINDS.map(async (kind) =>
+          access(path.join(packageDirectory, `src/extensions/${kind}.ts`))
+            .then(() => kind)
+            .catch(() => undefined),
+        ),
+      )
+    ).filter((kind): kind is ServerEntryKind => kind !== undefined);
+    const expectedExports = [
+      '.',
+      './extensions/pi',
+      ...serverEntryKinds.map((kind) => `./extensions/${kind}`),
+      './package.json',
+    ];
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './package.json']);
+    expect(Object.keys(exportsMap).sort()).toEqual(expectedExports.sort());
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(conditions(exportsMap['.'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/pi'])).toEqual(['types', 'import', 'require']);
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
+
+    for (const kind of serverEntryKinds) {
+      expect(conditions(exportsMap[`./extensions/${kind}`])).toEqual(['types', 'import', 'require']);
+    }
+
+    const server = manifest.doompiServer;
+    if (serverEntryKinds.length === 0) {
+      expect(server).toBeUndefined();
+      return;
+    }
+
+    expect(server).toBeDefined();
+    const serverKind = typeof server?.entry === 'string' ? SERVER_ENTRY_KINDS.find((kind) => server.entry === `./src/extensions/${kind}.ts`) : undefined;
+    expect(serverKind).toBeDefined();
+    expect(server).toMatchObject({
+      entry: `./src/extensions/${serverKind}.ts`,
+      dist: `./dist/extensions/${serverKind}.mjs`,
+    });
+    const scopes = server?.scopes ?? [];
+    expect(scopes.length).toBeGreaterThan(0);
+    expect(scopes.every((scope) => scope === 'session' || scope === 'global' || scope === 'workspace')).toBe(true);
   });
 
   it('ships an H1-led Help index and every linked package resource', async () => {
@@ -136,7 +175,7 @@ describe('{{ packageName | kebabCase }} package contract', () => {
   it('pins matching Pi peer and development versions', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.0');
-    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.0');
+    expect(manifest.peerDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.1');
+    expect(manifest.devDependencies?.['@earendil-works/pi-coding-agent']).toBe('0.85.1');
   });
 });

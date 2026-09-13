@@ -1,5 +1,6 @@
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+
+import { cn } from '../lib/cn';
 
 /**
  * The shape of content that has not arrived. It has no Radix counterpart; it

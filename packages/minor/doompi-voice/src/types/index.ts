@@ -1,14 +1,17 @@
-import type { IDoomConfigLoader } from '@agimon-ai/doompi-config/types';
 import type { ResolvedVoiceConfig, VoiceAdapterConfig, VoiceEngine, VoiceTtsConfig } from '@agimon-ai/doompi-config';
+import type { IDoomConfigLoader } from '@agimon-ai/doompi-config/types';
+
 import type {
   VoiceMediaCaptureActivity,
   VoiceMediaCaptureConfiguration,
   VoiceMediaPlaybackDelivery,
   VoiceMediaPlaybackResult,
-} from './clientMedia.ts';
+} from './clientMedia';
 
 /** Everything the voice runtime is assembled from. */
 export interface VoiceDependencies {
+  /** Optional host-owned browser/device media service. */
+  readonly clientMedia?: IVoiceMediaHostConnection;
   readonly clock: IClock;
   readonly executables: IExecutableResolver;
   readonly spawner: IProcessSpawner;
@@ -211,8 +214,9 @@ export interface VoiceUi {
   notify(message: string, level?: 'info' | 'warning' | 'error'): void;
   setStatus(key: string, value: string | undefined): void;
   setIndicator(update: VoiceActivityUpdate | undefined): void;
-  getEditorText(): string;
-  setEditorText(text: string): void;
+  getEditorText?(): string;
+  setEditorText?(text: string): void;
+  appendText?(text: string): void;
 }
 export interface AutoCaptureUi {
   notify(message: string, level?: 'info' | 'warning' | 'error'): void;

@@ -1,8 +1,9 @@
 import { Button, CloseIcon, Input } from '@agimon-ai/doompi-web-components';
 import type { ChangeEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { Fragment, useEffect, useRef, useState } from 'react';
-import type { FilesItemView } from '../../types/webFiles.ts';
-import { filterFileItems, groupFileItems, groupRowLabel, TOOL_LABEL } from '../lib/fileView.ts';
+
+import type { FilesItemView } from '../../types/webFiles';
+import { filterFileItems, groupFileItems, groupRowLabel, TOOL_LABEL } from '../lib/fileView';
 
 function FileMetadata({ item, label, recent = false }: { item: FilesItemView; label?: string; recent?: boolean }) {
   return (

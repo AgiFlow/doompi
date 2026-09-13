@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { BUNDLE_ASSET_POLICY_PATH, parseBundleAssetPolicy } from '@agimon-ai/doompi-core/web';
 import {
   BUNDLE_MANIFEST_ROUTE,
   type BundleAsset,
@@ -9,7 +10,8 @@ import {
   verifyBundleAsset,
   verifySignedBundleManifest,
 } from '@agimon-ai/doompi-web-security/browser';
-import { BUNDLE_UPDATED_MESSAGE, type BundleUpdatedMessage } from '../types/bundle.ts';
+
+import { BUNDLE_UPDATED_MESSAGE, type BundleUpdatedMessage } from '../types/bundle';
 import {
   clearActiveBundle,
   clearVerifiedPluginComposition,
@@ -20,9 +22,8 @@ import {
   readVerifiedPluginComposition,
   type ActiveBundleState,
   type VerifiedPluginCompositionState,
-} from './bundleCache.ts';
-import { BUNDLE_ASSET_POLICY_PATH, parseBundleAssetPolicy } from '../types/bundleAssetPolicy.ts';
-import { RAW_BUNDLE_PREFIX, trustedNetworkPath } from './networkPaths.ts';
+} from './bundleCache';
+import { RAW_BUNDLE_PREFIX, trustedNetworkPath } from './networkPaths';
 
 const worker = self as unknown as ServiceWorkerGlobalScope;
 const CACHE_PREFIX = 'doompi-bundle-';
@@ -828,6 +829,12 @@ worker.addEventListener('fetch', (event) => {
     return;
   }
   if (trustedNetworkPath(url.pathname)) return;
+  // The development shell stays on Vite; plugin assets above still require verification.
+  if (
+    new URLSearchParams(worker.location.search).get('development') === '1' &&
+    ['localhost', '127.0.0.1', '[::1]'].includes(worker.location.hostname)
+  )
+    return;
   // A navigation is the one moment a returning device is reliably online and
   // between pages, so it is where the pin gets questioned. Scheduled here, while
   // the event is certainly still extendable, and kept off the response path: a

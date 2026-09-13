@@ -1,18 +1,19 @@
-import { defineWebPlugin, type ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+import { defineWebPlugin, type ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import { Store } from '@tanstack/store';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Transcript } from '../../src/web/features/session/Timeline.tsx';
-import { initialSessionState } from '../../src/web/lib/sessionModel.ts';
-import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
-import { sessionStoreFor } from '../../src/web/stores/sessionStore.ts';
 
-vi.mock('../../src/web/features/session/MessageMarkdown.tsx', () => ({
+import { Transcript } from '../../src/web/features/session/Timeline';
+import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry';
+import { initialSessionState } from '../../src/web/lib/sessionModel';
+import { sessionStoreFor } from '../../src/web/stores/sessionStore';
+
+vi.mock('../../src/web/features/session/MessageMarkdown', () => ({
   MessageMarkdown: ({ text }: { text: string }) => createElement('span', null, text),
 }));
 
-vi.mock('../../src/web/features/session/MentionPreviews.tsx', () => ({
+vi.mock('../../src/web/features/session/MentionPreviews', () => ({
   MentionPreviews: () => null,
 }));
 

@@ -1,4 +1,4 @@
-import type { AuthorCatalog } from '../services/authorCatalog.ts';
+import type { AuthorCatalog } from '../services/authorCatalog/type';
 export type AuthorNotificationLevel = 'info';
 
 export interface AuthorExtensionResult {
@@ -12,5 +12,5 @@ export interface AuthorExtensionService {
 
 export interface AuthorExtensionDependencies {
   catalog: AuthorCatalog;
-  service: AuthorExtensionService;
+  service?: AuthorExtensionService;
 }

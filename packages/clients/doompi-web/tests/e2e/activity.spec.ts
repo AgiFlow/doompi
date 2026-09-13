@@ -1,6 +1,6 @@
-import { expect, test } from '../support/cockpit.ts';
-import { appendRunnerLog, writeRunnerRecord } from '../support/runnerRuns.ts';
-import { writeWorkflowRun } from '../support/workflowRuns.ts';
+import { expect, test } from '../support/cockpit';
+import { appendRunnerLog, writeRunnerRecord } from '../support/runnerRuns';
+import { writeWorkflowRun } from '../support/workflowRuns';
 
 // The dock's groups are declared by doompi-team, doompi-runner, and
 // doompi-workflow, so this suite serves the synced-style bundle the Playwright

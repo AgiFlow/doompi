@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   AdaptiveVoiceActivityDetector,
   calculatePcmFrameDbfs,
@@ -146,6 +147,22 @@ describe('adaptive voice activity detection', () => {
 
     expect(first.speechStarted).toBe(false);
     expect(second.speechStarted).toBe(true);
+  });
+
+  it('closes confirmed speech when neural detection rejects sustained high-energy noise', () => {
+    const detector = new AdaptiveVoiceActivityDetector(TEST_CONFIGURATION);
+    detector.push(pcmFrame(8_000), { speechDetected: true });
+    detector.push(pcmFrame(8_000), { speechDetected: true });
+
+    const firstNoise = detector.push(pcmFrame(8_000), { speechDetected: false });
+    const secondNoise = detector.push(pcmFrame(8_000), { speechDetected: false });
+
+    expect(firstNoise.segment).toBeUndefined();
+    expect(secondNoise.segment?.activityHistogram).toMatchObject({
+      voicedMs: 40,
+      trailingSilenceMs: 40,
+      forcedClose: false,
+    });
   });
 
   it('reports a collapsed provisional spike without confirming speech', () => {

@@ -36,7 +36,7 @@ All three tools and their model guidance remain unavailable during setup and are
 import { activateComputerUseExtension, createComputerUseSessionClient } from '@agimon-ai/doompi-computer-use';
 ```
 
-The session API entry is available at `@agimon-ai/doompi-computer-use/session-api`. Its agent and hub routes use separate host-issued context tokens. Grants remain opaque and session-bound inside the request broker.
+The session-scoped server facet owns the agent and hub routes. Their host-issued context tokens remain opaque and session-bound inside the request broker.
 
 ## Development
 
@@ -50,3 +50,7 @@ pnpm build
 ## License
 
 MIT
+
+Direct plugin entries live in `src/extensions`. Controllers coordinate host APIs, commands, and mode actions. Models own computer-use state and projections; named services own Desktop transport, scripts, and configuration dependencies. Flat `src/exports` exposes reusable helpers and types.
+
+The Pi entry declares a live minor-mode collection so the global opt-in controls catalog presence. Its tool restriction is reactive and the helper owns all registration changes. Session startup begins availability polling; `onStop` cancels the timer and final disposal clears status. The server declares its session mode, activity, tools, commands, and API alongside hub channel factories.

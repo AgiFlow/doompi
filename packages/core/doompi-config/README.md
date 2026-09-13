@@ -83,6 +83,14 @@ The snapshot is deeply frozen. It contains validated `settings`, active `harness
 `pendingSelection`, and `requiresRelaunch`. Do not mutate it or retain it across provider or session
 replacement. The next session publishes a new snapshot.
 
+## Plugin structure and lifecycle
+
+Pi and server entries live directly in `src/extensions`. HTTP request handling lives in `src/controllers`, package behavior in `src/services/{serviceName}`, and cached harness state in `src/models`. Public consumption modules remain flat under `src/exports`.
+
+The Pi entry uses `definePiExtension` with a Config service contribution and a typed `session_start` event. The shared helper owns mounting and disposal. Config publishes its readiness coordinator synchronously, loads configuration asynchronously, and waits at the session-start barrier before later features run. Session replacement cancels the prior generation and removes its Config and MCP projection services. Help contributions follow their optional provider without restarting Config.
+
+This session readiness barrier is separate from plugin `onStart`. Awaiting configuration during plugin mounting would block publication of the services that startup consumers need.
+
 ## Selection transitions
 
 Major-mode, domain, and profile packages resolve their own requested changes, then use the shared
@@ -107,6 +115,8 @@ import { loadDoomConfig } from '@agimon-ai/doompi-config';
 
 const settings = loadDoomConfig(process.cwd());
 ```
+
+Pi-specific JSON settings are exposed through `/pi-config`; their types are exposed through `/config-schema`. The removed `/config/piConfig` and `/config/schema` paths have no aliases.
 
 The package also exposes lower-level loaders used by the fixed axis packages. User-facing guidance
 for defining modes, domains, and profiles is intentionally owned by those packages instead of this

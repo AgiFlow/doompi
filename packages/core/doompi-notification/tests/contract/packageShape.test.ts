@@ -1,10 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
-import { notificationExtension } from '../../src/adapters/pi/extension.ts';
-import piEntry, { notificationExtension as piNamedEntry } from '../../src/exports/extensions/pi.ts';
-import * as publicSurface from '../../src/exports/index.ts';
+
+import * as publicSurface from '../../src/exports';
+import { notificationExtension } from '../../src/extensions/pi';
+import piEntry, { notificationExtension as piNamedEntry } from '../../src/extensions/pi';
 
 interface PackageManifest {
   name: string;
@@ -18,6 +20,7 @@ interface PackageManifest {
   peerDependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   pi?: { extensions?: string[] };
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
 }
 
 const packageDirectory = fileURLToPath(new URL('../..', import.meta.url));
@@ -56,36 +59,39 @@ describe('doompi-notification package contract', () => {
     expect(manifest.keywords).toEqual([...(manifest.keywords ?? [])].sort());
   });
 
-  it('publishes one closed set of subpaths and one Pi entry', async () => {
+  it('publishes Pi and server entries through a closed exports map', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
     expect(Object.keys(exportsMap)).not.toContain('./*');
-    for (const subpath of ['.', './extensions/pi']) {
+    for (const subpath of ['.', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
+    expect(manifest.doompiServer).toMatchObject({
+      entry: './src/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['session'],
+    });
   });
 
   it('routes the Pi entry through a default-exported factory', async () => {
-    const entry = await readFile(path.join(packageDirectory, 'src/exports/extensions/pi.ts'), 'utf8');
+    const entry = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
 
-    expect(entry).toContain("from '../../adapters/pi/extension.ts'");
-    expect(entry).toContain('as default');
+    expect(entry).toContain('definePiExtension');
+    expect(entry).toContain('export default notificationExtension');
     expect(piEntry).toBe(notificationExtension);
     expect(piNamedEntry).toBe(notificationExtension);
   });
 
   it('re-exports the whole public surface through src/exports', () => {
-    expect(publicSurface.notificationExtension).toBe(notificationExtension);
     expect(Object.keys(publicSurface).sort()).toEqual([
       'askUserPromptBody',
       'attentionNotification',
       'createMainThreadTitleController',
       'createWorkerTitleController',
       'notificationBody',
-      'notificationExtension',
       'promptTitle',
       'sendSystemNotification',
       'settledNotification',
@@ -97,13 +103,11 @@ describe('doompi-notification package contract', () => {
   });
 
   it('mounts its lifecycle under the shared Cordis host', async () => {
-    const factory = await readFile(path.join(packageDirectory, 'src/adapters/pi/extension.ts'), 'utf8');
+    const factory = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
 
-    expect(factory).toContain('connectDoomCordisHost');
-    expect(factory).toContain('connection.root.plugin');
+    expect(factory).toContain('definePiExtension');
     expect(factory).not.toContain('new Context()');
-    expect(factory).toContain('cordis.effect(');
-    expect(factory).toContain('fiber.dispose()');
+    expect(factory).toContain('createNotificationRuntime');
   });
 
   it('never depends on the host package, which would make the build graph cyclic', async () => {

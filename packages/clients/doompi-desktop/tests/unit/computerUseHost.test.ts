@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ComputerUseHost } from '../../src/services/computerUseHost.ts';
-import type { ComputerUseBackend, ComputerUseDesktopRequest } from '../../src/types/computerUse.ts';
+
+import { ComputerUseHost } from '../../src/services/computerUseHost';
+import type { ComputerUseBackend, ComputerUseDesktopRequest } from '../../src/types/computerUse';
 
 function request(
   sessionId: string,
@@ -269,7 +270,7 @@ describe('ComputerUseHost', () => {
     const pending = host.handle(request('session-a', 'activate', activation()));
     await vi.waitFor(() => expect(finishActivation).toBeTypeOf('function'));
 
-    await host.revoke('hub_disconnected');
+    await host.revoke('headless_disconnected');
     finishActivation?.();
 
     expect(await pending).toMatchObject({ ok: false, code: 'request_cancelled' });
@@ -329,9 +330,9 @@ describe('ComputerUseHost', () => {
   it('revokes on host disconnect', async () => {
     const { backend, host } = fixture();
     await host.handle(request('session-a', 'activate', activation()));
-    await host.revoke('hub_disconnected');
+    await host.revoke('headless_disconnected');
 
-    expect(backend.stop).toHaveBeenCalledWith(expect.objectContaining({ reason: 'hub_disconnected' }));
+    expect(backend.stop).toHaveBeenCalledWith(expect.objectContaining({ reason: 'headless_disconnected' }));
     expect(await host.handle(request('session-a', 'status'))).toMatchObject({ ok: false, code: 'desktop_unavailable' });
   });
 });

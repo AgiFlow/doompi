@@ -1,4 +1,4 @@
-import type { PresentedLine } from './hashlineView.ts';
+import type { PresentedLine } from './hashlineView';
 
 /**
  * Grouping for highlighted hashline bodies.

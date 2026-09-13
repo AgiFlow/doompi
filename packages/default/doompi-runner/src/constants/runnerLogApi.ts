@@ -1,0 +1,12 @@
+export const LOG_DIR_NAME = 'logs';
+export const STATE_EXTENSION = '.json';
+export const RUNNING_STATE = 'running';
+export const STATE_POLL_MS = 1000;
+export const HEARTBEAT_MS = 15_000;
+export const DEFAULT_LINES = 200;
+export const MAX_LINES = 5000;
+export const SAFE_SEGMENT = /^[\w.@-]+$/;
+export const SCREEN_POLL_MS = 100;
+export const RAW_LOG_SUFFIX = '.raw';
+export const MAX_INPUT_CHARS = 4096;
+export const NOT_ATTACHABLE = 'No attachable runner by that name in this session.';

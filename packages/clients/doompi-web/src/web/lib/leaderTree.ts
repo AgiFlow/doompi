@@ -1,4 +1,4 @@
-import type { LeaderBindingContribution } from '@agimon-ai/doompi-web-contracts';
+import type { LeaderBindingContribution } from '@agimon-ai/doompi-core/web';
 
 export interface LeaderOption {
   key: string;

@@ -1,4 +1,5 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
+
 import type {
   CsvDialect,
   DocumentFragment,
@@ -6,8 +7,8 @@ import type {
   DocumentPreflightReport,
   ParsedStructuredDocument,
   StructuredDocumentFormat,
-} from '../../types/structuredDocuments.ts';
-import type { AuthorDocumentInput, AuthorDocumentKind } from '../lib/authorViewportTypes.ts';
+} from '../../types/structuredDocuments';
+import type { AuthorDocumentInput, AuthorDocumentKind } from '../lib/authorViewportTypes';
 
 const IMAGE_EXTENSIONS = new Set(['avif', 'bmp', 'gif', 'jpeg', 'jpg', 'png', 'svg', 'webp']);
 const VIDEO_EXTENSIONS = new Set(['m4v', 'mov', 'mp4', 'webm']);
@@ -39,7 +40,7 @@ export function authorSessionFileUrl(sessionId: string, path: string): string {
 }
 
 function authorDocumentApiUrl(sessionId: string, operation: 'open' | 'preflight' | 'serialize'): string {
-  return `/api/plugin/author/documents/${operation}?session=${encodeURIComponent(sessionId)}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/author/documents/${operation}?session=${encodeURIComponent(sessionId)}`;
 }
 
 async function jsonRequest<T>(url: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {

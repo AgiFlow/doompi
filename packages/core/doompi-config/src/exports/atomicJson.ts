@@ -1,1 +1,1 @@
-export { writePrivateAtomicJson } from '../adapters/atomicJson.ts';
+export { writePrivateAtomicJson } from '../services/atomicJson';

@@ -103,7 +103,7 @@ Rules that make a story renderable:
   to screenshot.
 - Show every rung a `cva` ladder declares, so a collapsed step is visible.
 - A component taking `WebPluginSlotProps` or `ToolMessageRenderProps` gets them
-  from `@agimon-ai/doompi-web-contracts/testing`, which already exports
+  from `@agimon-ai/doompi-core/web/testing`, which already exports
   `slotPropsFixture` and `toolMessagePropsFixture`. A hand-rolled stub drifts
   silently when the contract changes; the fixture breaks at the type level.
 

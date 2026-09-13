@@ -1,9 +1,10 @@
 import { Badge, Button, CloseIcon, Input, Kbd } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { SubagentCatalogAgent } from '../../types/webSubagents.ts';
-import { agentMeta, filterCatalog, groupCatalog } from '../lib/launchCommand.ts';
-import { catalog, selectAgent, setCatalogFilter, toggleInspect } from '../stores/catalogStore.ts';
+
+import type { SubagentCatalogAgent } from '../../types/webSubagents';
+import { agentMeta, filterCatalog, groupCatalog } from '../lib/launchCommand';
+import { catalog, selectAgent, setCatalogFilter, toggleInspect } from '../stores/catalogStore';
 
 const INPUT_TAG = 'INPUT';
 
@@ -195,12 +196,21 @@ export function AgentCatalogDrawer({
         />
       </div>
       <div role="listbox" className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-2">
-        {shown.length === 0 ? (
+        {state.loading ? (
+          <p role="status" className="px-4 py-3 text-xs text-doom-faint">
+            loading agents...
+          </p>
+        ) : null}
+        {state.warning ? (
+          <p role="alert" className="px-4 py-3 text-xs text-doom-red">
+            {state.warning}
+          </p>
+        ) : null}
+        {shown.length === 0 && !state.loading && !state.warning ? (
           <p data-testid="catalog-empty" className="px-4 py-3 text-xs text-doom-faint">
-            {state.warning ??
-              (state.agents.length === 0
-                ? 'no agents found for this session; add one under .doom/agents or ~/.doompi/agent/agents'
-                : 'nothing matches the filter')}
+            {state.agents.length === 0
+              ? 'no agents found for this session; add one under .doom/agents or ~/.doompi/agent/agents'
+              : 'nothing matches the filter'}
           </p>
         ) : null}
         {sections.map((section) => (

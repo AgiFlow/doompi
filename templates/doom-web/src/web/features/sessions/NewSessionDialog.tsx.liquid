@@ -27,14 +27,23 @@ const TRAILING_SEPARATORS = /\/+$/;
  * The directory box completes as it is typed: the hub lists the children of
  * the parent directory whose names match the trailing segment as a regex,
  * and picking one appends a slash so the next level narrows the same way.
- * The recent-cwd chips are just the distinct directories of live sessions;
- * nothing is persisted, because the rail already is the user's working set.
+ * The quick-select chips combine live-session directories with paths configured
+ * for the remote sandbox. The first available path also seeds an otherwise empty
+ * form, which keeps a contained cockpit usable after its host sessions moved.
  */
-export function NewSessionDialog({ onClose }: { onClose: () => void }) {
+export function NewSessionDialog({
+  onClose,
+  suggestedCwds = [],
+}: {
+  onClose: () => void;
+  suggestedCwds?: readonly string[];
+}) {
   const navigate = useNavigate();
   const byId = useStore(sessionsStore, (state) => state.byId);
   const activeId = useStore(sessionsStore, (state) => state.activeId);
-  const [cwd, setCwd] = useState(() => (activeId !== null ? (byId[activeId]?.summary.cwd ?? '') : ''));
+  const [cwd, setCwd] = useState(() =>
+    activeId !== null ? (byId[activeId]?.summary.cwd ?? suggestedCwds[0] ?? '') : (suggestedCwds[0] ?? ''),
+  );
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -42,16 +51,22 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
   const [highlight, setHighlight] = useState(NO_HIGHLIGHT);
   const cwdInput = useRef<HTMLInputElement>(null);
 
-  const recentCwds = [...new Set(Object.values(byId).map((meta) => meta.summary.cwd))].slice(0, 4);
+  const recentCwds = [...new Set([...Object.values(byId).map((meta) => meta.summary.cwd), ...suggestedCwds])].slice(
+    0,
+    4,
+  );
+
+  /** Emptying the field drops the stale matches now; the effect below only fetches. */
+  const changeCwd = (next: string): void => {
+    setCwd(next);
+    if (next.trim() === '') setSuggestions([]);
+  };
 
   useEffect(() => {
     const typed = cwd.trim();
     // Any typing is worth a lookup now: the hub completes a path being drilled
     // into and searches for anything else, so a bare folder name finds itself.
-    if (typed === '') {
-      setSuggestions([]);
-      return;
-    }
+    if (typed === '') return;
     let stale = false;
     const timer = setTimeout(async () => {
       const found = await searchDirectories(typed);
@@ -67,7 +82,7 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
   }, [cwd]);
 
   const pick = (directory: string): void => {
-    setCwd(`${directory}${PATH_SEPARATOR}`);
+    changeCwd(`${directory}${PATH_SEPARATOR}`);
     cwdInput.current?.focus();
   };
 
@@ -124,16 +139,17 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
           <DialogTitle>new session</DialogTitle>
         </DialogHeader>
         <DialogBody>
-          <label className="flex flex-col gap-1">
-            <span className="text-[10px] text-doom-faint">
+          <label htmlFor="new-session-cwd" className="flex flex-col gap-1">
+            <span className="text-xs text-doom-faint">
               working directory <span className="text-doom-faint/70">(type a folder name or paste a path)</span>
             </span>
             <Input
+              id="new-session-cwd"
               ref={cwdInput}
               data-testid="new-session-cwd"
               value={cwd}
               autoFocus
-              onChange={(event) => setCwd(event.target.value)}
+              onChange={(event) => changeCwd(event.target.value)}
               onKeyDown={onCwdKeyDown}
               placeholder="agirepo, or /absolute/path/to/project"
             />
@@ -156,7 +172,7 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
                   onMouseDown={(event) => event.preventDefault()}
                   onMouseEnter={() => setHighlight(index)}
                   onClick={() => pick(directory)}
-                  className="w-full px-2.5 py-1 text-[11px]"
+                  className="w-full px-2.5 py-1 text-sm"
                 >
                   {directory}
                 </OptionRow>
@@ -171,7 +187,7 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
                   variant="outline"
                   size="xs"
                   data-testid="new-session-recent"
-                  onClick={() => setCwd(recent)}
+                  onClick={() => changeCwd(recent)}
                   className="font-normal"
                 >
                   {recent}
@@ -179,16 +195,17 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
               ))}
             </div>
           ) : null}
-          <label className="flex flex-col gap-1">
-            <span className="text-[10px] text-doom-faint">name (optional)</span>
+          <label htmlFor="new-session-name" className="flex flex-col gap-1">
+            <span className="text-xs text-doom-faint">name (optional)</span>
             <Input
+              id="new-session-name"
               data-testid="new-session-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void submit();
               }}
-              placeholder="untitled"
+              placeholder="folder name"
             />
           </label>
           {error ? (
@@ -197,7 +214,7 @@ export function NewSessionDialog({ onClose }: { onClose: () => void }) {
             // worth resizing the dialog for, so it lives in its own scroller.
             <pre
               data-testid="new-session-error"
-              className="max-h-28 overflow-y-auto rounded border border-doom-edge-red bg-doom-tint-red/40 px-2.5 py-2 text-[10px] leading-relaxed whitespace-pre-wrap break-words text-doom-red"
+              className="max-h-28 overflow-y-auto rounded border border-doom-edge-red bg-doom-tint-red/40 px-2.5 py-2 text-xs leading-relaxed whitespace-pre-wrap break-words text-doom-red"
             >
               {error}
             </pre>

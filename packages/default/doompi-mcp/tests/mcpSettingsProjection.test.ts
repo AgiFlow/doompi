@@ -2,11 +2,13 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { DoomRepositorySyncView } from '@agimon-ai/doompi-extension-contracts/package-api';
+
+import type { DoomRepositorySyncView } from '@agimon-ai/doompi-core/package-api';
 import type { TokenStore } from '@agimon-ai/mcp-proxy';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { McpSettingsManager } from '../src/adapters/node/mcpSettingsManager.ts';
-import { McpRuntimeOwner } from '../src/adapters/node/mcpRuntime.ts';
+
+import { McpRuntimeOwner } from '../src/services/mcpRuntime';
+import { McpSettingsManager } from '../src/services/mcpSettingsManager';
 
 const REPOSITORY_ID = `repo-${'b'.repeat(24)}`;
 const temporaryDirectories: string[] = [];

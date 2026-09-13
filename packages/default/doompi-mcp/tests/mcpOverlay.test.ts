@@ -1,7 +1,8 @@
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { McpOverlayComponent } from '../src/tui/mcpOverlay.ts';
-import type { McpOverlayTarget, McpServerView } from '../src/types/mcp.ts';
+
+import { McpOverlayComponent } from '../src/tui/mcpOverlay';
+import type { McpOverlayTarget, McpServerView } from '../src/types/mcp';
 
 const theme = {
   fg: (_color: string, text: string) => text,

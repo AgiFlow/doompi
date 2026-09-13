@@ -10,13 +10,13 @@ vi.mock('@tanstack/react-router', () => ({
     createElement('a', { ...(rest as Record<string, unknown>), href: '#' }, children as never),
   useNavigate: () => () => undefined,
 }));
-vi.mock('../../src/web/components/PluginSurface.tsx', () => ({
+vi.mock('../../src/web/components/PluginSurface', () => ({
   PluginSurface: () => null,
 }));
 
-import type { SessionSummary } from '../../src/types/hub.ts';
-import { SessionRail } from '../../src/web/features/sessions/SessionRail.tsx';
-import { applySessionsSnapshot, resetSessions } from '../../src/web/stores/sessionsStore.ts';
+import type { SessionSummary } from '../../src/types/hub';
+import { SessionRail } from '../../src/web/features/sessions/SessionRail';
+import { applySessionsSnapshot, resetSessions } from '../../src/web/stores/sessionsStore';
 
 function summary(id: string, createdAt: string, overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {
@@ -31,7 +31,6 @@ function summary(id: string, createdAt: string, overrides: Partial<SessionSummar
     pendingMessageCount: 0,
     everPrompted: false,
     awaitingInput: false,
-    socketPath: `/run/${id}.sock`,
     ...overrides,
   };
 }

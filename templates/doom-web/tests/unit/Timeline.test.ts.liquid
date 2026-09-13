@@ -1,0 +1,176 @@
+import { defineWebPlugin, type ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
+import { Store } from '@tanstack/store';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Transcript } from '../../src/web/features/session/Timeline.tsx';
+import { initialSessionState } from '../../src/web/lib/sessionModel.ts';
+import { installWebPlugins, resetWebPlugins } from '../../src/web/lib/pluginRegistry.ts';
+import { sessionStoreFor } from '../../src/web/stores/sessionStore.ts';
+
+vi.mock('../../src/web/features/session/MessageMarkdown.tsx', () => ({
+  MessageMarkdown: ({ text }: { text: string }) => createElement('span', null, text),
+}));
+
+vi.mock('../../src/web/features/session/MentionPreviews.tsx', () => ({
+  MentionPreviews: () => null,
+}));
+
+afterEach(() => resetWebPlugins());
+
+describe('Timeline user-message actions', () => {
+  it('renders contributed actions only for user entries with nonempty text and keeps message controls', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'capture',
+        userMessageActions: [
+          {
+            id: 'save',
+            label: 'Save prompt',
+            icon: () => createElement('svg', { 'data-testid': 'save-prompt-icon' }),
+            run: () => undefined,
+          },
+        ],
+      }),
+    ]);
+    const store = new Store({
+      ...initialSessionState,
+      entries: [
+        { kind: 'user' as const, id: 'user-text', text: 'capture me' },
+        { kind: 'user' as const, id: 'user-image', text: '', images: [{ mimeType: 'image/png', data: 'cG5n' }] },
+        { kind: 'user' as const, id: 'user-whitespace', text: '   ' },
+        { kind: 'assistant' as const, id: 'assistant', text: 'capture me', thinking: '', streaming: false },
+      ],
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(Transcript, {
+        store,
+        sessionId: 'session-1',
+        empty: createElement('div'),
+      }),
+    );
+
+    expect(markup.match(/data-testid="entry-plugin-action"/g)).toHaveLength(1);
+    expect(markup).toContain('aria-label="Save prompt"');
+    expect(markup).toContain('title="Save prompt"');
+    expect(markup).toContain('data-testid="save-prompt-icon"');
+    expect(markup).not.toContain('>Save prompt<');
+    expect(markup.match(/data-testid="entry-rewind"/g)).toHaveLength(4);
+    expect(markup.match(/data-testid="entry-quote"/g)).toHaveLength(4);
+  });
+});
+
+describe('Timeline persona avatar', () => {
+  it('falls back to the fold persona for an assistant entry rebuilt without one', () => {
+    const store = new Store({
+      ...initialSessionState,
+      profileIdentity: { profile: 'ponytail', name: 'Ponytail' },
+      entries: [{ kind: 'assistant' as const, id: 'a1', text: 'hi', thinking: '', streaming: false }],
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(Transcript, { store, sessionId: 'session-1', empty: createElement('div') }),
+    );
+
+    expect(markup).toContain('aria-label="Ponytail"');
+  });
+
+  it('keeps the persona a message was written under over the fold persona', () => {
+    const store = new Store({
+      ...initialSessionState,
+      profileIdentity: { profile: 'ponytail', name: 'Ponytail' },
+      entries: [
+        {
+          kind: 'assistant' as const,
+          id: 'a1',
+          text: 'hi',
+          thinking: '',
+          streaming: false,
+          identity: { profile: 'rhea', name: 'Rhea' },
+        },
+      ],
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(Transcript, { store, sessionId: 'session-1', empty: createElement('div') }),
+    );
+
+    expect(markup).toContain('aria-label="Rhea"');
+    expect(markup).not.toContain('aria-label="Ponytail"');
+  });
+});
+
+describe('Timeline tool props', () => {
+  it('uses active statuses for renderer selection while binding actions to the transcript session', () => {
+    sessionStoreFor('session-bound').setState(() => ({
+      ...initialSessionState,
+      statuses: { 'doom-mcp': 'github' },
+    }));
+    const PluginMessage = (props: ToolMessageRenderProps) =>
+      createElement('span', {
+        'data-testid': 'plugin-tool-message',
+        'data-session-id': props.sessionId,
+        'data-status': props.statuses['doom-mcp'] ?? 'none',
+      });
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'tools',
+        toolRenderers: [
+          {
+            tools: ['exact_tool'],
+            message: PluginMessage,
+          },
+          {
+            tools: [],
+            matches: (name, statuses) =>
+              name === 'github_search' && (statuses['doom-mcp'] ?? '').split(',').includes('github'),
+            message: PluginMessage,
+          },
+        ],
+      }),
+    ]);
+    const store = new Store({
+      ...initialSessionState,
+      entries: [
+        {
+          kind: 'tool' as const,
+          id: 'exact',
+          toolCallId: 'call-exact',
+          name: 'exact_tool',
+          args: {},
+          argSummary: '',
+          result: null,
+          output: '',
+          isError: false,
+          running: false,
+        },
+        {
+          kind: 'tool' as const,
+          id: 'matched',
+          toolCallId: 'call-matched',
+          name: 'github_search',
+          args: {},
+          argSummary: '',
+          result: null,
+          output: '',
+          isError: false,
+          running: false,
+        },
+      ],
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(Transcript, {
+        store,
+        sessionId: 'session-bound',
+        empty: createElement('div'),
+      }),
+    );
+
+    expect(markup).toContain('data-session-id="session-bound"');
+    expect(markup).toContain('data-status="none"');
+    expect(markup.match(/data-tool-renderer="plugin"/g)).toHaveLength(1);
+    expect(markup).toContain('data-tool-name="github_search" data-tool-state="ok" data-tool-renderer="host"');
+  });
+});

@@ -1,0 +1,10 @@
+import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { api } from '{{ apiModule }}';
+
+/** {{ scopeReason }} */
+export const {{ facetName | camelCase }}ServerFacet = defineServerPlugin({
+  name: '{{ facetName | kebabCase }}',
+  {{ scope }}: { api: [api] },
+});
+
+export default {{ facetName | camelCase }}ServerFacet;

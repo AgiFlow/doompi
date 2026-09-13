@@ -1,8 +1,9 @@
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
-import { activationUrl, COMPUTER_USE_DEFAULT_DURATION_MS, computerUseChannelType } from '../../types/computerUseApi.ts';
-import { computerUse } from '../stores/computerUseStore.ts';
+
+import { activationUrl, COMPUTER_USE_DEFAULT_DURATION_MS, computerUseChannelType } from '../../types/computerUseApi';
+import { computerUse } from '../stores/computerUseStore';
 
 function text(value: unknown, fallback: string): string {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : fallback;

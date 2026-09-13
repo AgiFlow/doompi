@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createHostHandshake } from '../../src/adapters/nodeSealedChannel.ts';
-import { createSealedTransport } from '../../src/adapters/sealedTransport.ts';
+
+import { createHostHandshake } from '../../src/services/nodeSealedChannel';
+import { createSealedTransport } from '../../src/services/sealedTransport';
 import {
   SEALED_BODY_HEADER,
   describeSealedFailure,
   isSealedEnvelope,
   type SealedFailure,
-} from '../../src/types/sealedChannel.ts';
+} from '../../src/types/sealedChannel';
 
 const original = globalThis.fetch;
 

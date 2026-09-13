@@ -7,8 +7,8 @@
  * document.body, so the two sides paint at once without overlapping; the
  * wrapper keeps a min-height so the screenshot has room behind them.
  */
-import { Button } from './Button.tsx';
-import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from './Sheet.tsx';
+import { Button } from './Button';
+import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from './Sheet';
 
 const meta = {
   title: 'Components/Sheet',

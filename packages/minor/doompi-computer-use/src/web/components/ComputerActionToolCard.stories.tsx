@@ -3,9 +3,10 @@
  * mounts the exported `render`, so no Storybook runtime is imported and the
  * default export is a bare `const meta`.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { ComputerActionToolCard } from './ComputerActionToolCard.tsx';
-import { computerActionToolName } from '../lib/computerActionToolRender.ts';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { computerActionToolName } from '../lib/computerActionToolRender';
+import { ComputerActionToolCard } from './ComputerActionToolCard';
 
 const props = (overrides: Parameters<typeof toolMessagePropsFixture>[0]) => toolMessagePropsFixture(overrides).props;
 

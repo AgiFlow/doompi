@@ -1,4 +1,4 @@
-import { SyntaxLine, SyntaxText } from './SyntaxText.tsx';
+import { SyntaxLine, SyntaxText } from './SyntaxText';
 
 const TYPESCRIPT = [
   'export function label(session: Session): string {',

@@ -16,7 +16,7 @@ The experimental live path is a focused TypeScript port, not a Codex app-server 
 - `services/realtimeProtocol.ts`: bounded Frameless V3 parsing and correlated context messages.
 - `services/realtimeSession.ts`: one-activation XState lifecycle and explicit delivery admission.
 - `adapters/realtime/realtimeMediaBroker.ts`: existing media lease integration, request identities, event cursor bounds and control-loss cleanup.
-- `adapters/realtime/realtimeHost.ts`: authenticated Unix HTTP signaling from the active Pi session.
+- `adapters/realtime/realtimeHost.ts`: typed realtime signaling through the server-owned Voice host service.
 - `adapters/pi/{liveVoiceController,voiceModeController}.ts`: explicit mode selection, bounded polling, context updates and main-agent requests.
 - `adapters/pi/{realtimeContext,realtimeDelivery}.ts`: bounded visible-branch projection and deduplicated user-text delivery.
 - `web/api/{voiceMediaClient,browserRealtimeSession}.ts`: browser WebRTC capture/playback beneath page-global ownership, separate from legacy PCM.

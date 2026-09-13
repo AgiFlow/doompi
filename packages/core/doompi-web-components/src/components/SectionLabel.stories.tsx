@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { SectionLabel } from './SectionLabel.tsx';
+import { SectionLabel } from './SectionLabel';
 
 const HEADINGS = ['sessions', 'activity', 'minor modes'] as const;
 

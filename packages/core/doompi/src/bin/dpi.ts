@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { runDpi } from '../adapters/dpiRunner.ts';
+import { runDpi } from '../cli/dpi';
 
 runDpi(process.argv.slice(2)).then(
   (exitCode) => {

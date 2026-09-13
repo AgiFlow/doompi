@@ -1,9 +1,10 @@
-import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { registerSkillReadiness } from '../../src/adapters/pi/skillReadiness.ts';
+
+import { createSkillReadiness } from '../../src/controllers/skillReadiness';
 
 type Handler = (event: never, ctx: ExtensionContext) => unknown;
 
@@ -48,7 +49,8 @@ describe('skill readiness edges', () => {
     const loadDeferredSkills = vi.fn(async () => {
       throw new Error('discovery boom');
     }) as never;
-    const readiness = registerSkillReadiness(api, helpSkillView, loadDeferredSkills, () => cordis);
+    const readiness = createSkillReadiness(api, helpSkillView, loadDeferredSkills, () => cordis);
+    for (const [event, handler] of Object.entries(readiness.events)) handlers.set(event, handler as Handler);
 
     handlers.get('session_start')?.({} as never, ctx);
     const snapshot = await readiness.current();
@@ -59,7 +61,7 @@ describe('skill readiness edges', () => {
 
   it('has no snapshot before a session has started', async () => {
     const { api, cordis } = harness({});
-    const readiness = registerSkillReadiness(api, helpSkillView, (async () => ({})) as never, () => cordis);
+    const readiness = createSkillReadiness(api, helpSkillView, (async () => ({})) as never, () => cordis);
 
     expect(await readiness.current()).toBeUndefined();
   });
@@ -75,7 +77,8 @@ describe('skill readiness edges', () => {
       },
       expandDeferredSkillCommand,
     })) as never;
-    registerSkillReadiness(api, helpSkillView, loadDeferredSkills, () => cordis);
+    const readiness = createSkillReadiness(api, helpSkillView, loadDeferredSkills, () => cordis);
+    for (const [event, handler] of Object.entries(readiness.events)) handlers.set(event, handler as Handler);
 
     handlers.get('session_start')?.({} as never, ctx);
     const result = await handlers.get('input')?.(
@@ -89,7 +92,8 @@ describe('skill readiness edges', () => {
 
   it('leaves input that is not a skill invocation alone', async () => {
     const { api, ctx, handlers, cordis } = harness({ getCommands: vi.fn(() => []) as never });
-    registerSkillReadiness(api, helpSkillView, (async () => ({})) as never, () => cordis);
+    const readiness = createSkillReadiness(api, helpSkillView, (async () => ({})) as never, () => cordis);
+    for (const [event, handler] of Object.entries(readiness.events)) handlers.set(event, handler as Handler);
 
     handlers.get('session_start')?.({} as never, ctx);
     expect(

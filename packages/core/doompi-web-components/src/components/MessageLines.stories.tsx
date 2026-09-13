@@ -3,8 +3,8 @@
  * imported. The tone row is generated from MESSAGE_LINE_TONES, so a tone added
  * to the vocabulary shows up here without an edit.
  */
-import { MESSAGE_LINE_TONES } from '../types/tone.ts';
-import { type MessageLine, MessageLines } from './MessageLines.tsx';
+import { MESSAGE_LINE_TONES } from '../types/tone';
+import { type MessageLine, MessageLines } from './MessageLines';
 
 const TONES: readonly MessageLine[] = MESSAGE_LINE_TONES.map((tone) => ({
   text: `${tone} · the quick brown fox jumps`,

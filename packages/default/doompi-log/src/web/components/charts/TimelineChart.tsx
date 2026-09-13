@@ -1,5 +1,5 @@
-import type { MetricsBucket } from '../../../types/webMetrics.ts';
-import { barFraction, formatTokens, seriesMax } from '../../lib/chartScale.ts';
+import type { MetricsBucket } from '../../../types/webMetrics';
+import { barFraction, formatTokens, seriesMax } from '../../lib/chartScale';
 
 /**
  * Tokens per bucket, as columns.

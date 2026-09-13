@@ -39,7 +39,7 @@ UI is attached.
 ## Contribute to Leader Space
 
 ```ts
-import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
 
 export function reviewPlugin(ctx: Context): void {
@@ -69,11 +69,19 @@ The underlying typed contribution registries can still be installed and queried 
 sessions, but UI-only commands have no panel to render. Provide a tool, RPC, or CLI route when a
 capability must also work headlessly.
 
+## Extension lifecycle
+
+`src/extensions/pi.ts` declares the Pi plugin, and `src/extensions/server.ts` declares the session inventory plugin. The browser entry is `src/extensions/web.ts`. Public modules stay flat under `src/exports`; Component exports use flat kebab-case subpaths such as `@agimon-ai/doompi-ui/doom-overlay` and `@agimon-ai/doompi-ui/matrix-picker`.
+
+The Pi helper installs the UI hub service before commands, native event handlers, and tool declarations. Optional minor-mode catalog bindings follow their provider lifetime. `onStop` clears the shell and shuts down telemetry; idempotent `onDispose` also handles registration failure. The TUI runtime owns presentation callbacks, `models/uiState.ts` owns state, and each service has its own `services/<name>/index.ts` entry.
+
+Native builtin tools use `definePiTool` to retain their schema and renderer detail types. Composed sessions install their renderers directly; standalone sessions install each replacement only after its override claim is granted.
+
 ## Theme
 
 The package publishes `@agimon-ai/doompi-ui/themes/doom-pi-dark.json`. DoomPi synchronizes that
 resource and selects it by default. Set `DOOMPI_THEME` to select another available Pi theme for the
-UI adapter.
+UI extension.
 
 ## Public API
 
@@ -83,7 +91,7 @@ and the direct UI hub service live in extension contracts. Use these exports rat
 generated `dist` paths.
 
 ```ts
-import { DOOM_UI_HUB_SERVICE } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { DOOM_UI_HUB_SERVICE } from '@agimon-ai/doompi-core/ui-hub';
 import { DEFAULT_THEME_NAME } from '@agimon-ai/doompi-ui/theme';
 ```
 

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import {
   alignNarrationSpan,
   type EchoProbeInput,
@@ -11,8 +12,8 @@ import {
   normalizeEchoText,
   RollingEchoProbeCoordinator,
   SemanticEchoAdjudicator,
-} from '../src/services/semanticEcho.ts';
-import type { AudioActivityHistogram } from '../src/services/vad.ts';
+} from '../src/services/semanticEcho';
+import type { AudioActivityHistogram } from '../src/services/vad';
 
 const ACTIVITY: AudioActivityHistogram = {
   bucketMs: 100,

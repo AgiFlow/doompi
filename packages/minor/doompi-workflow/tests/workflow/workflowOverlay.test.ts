@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   DOUBLE_ESCAPE_WINDOW_MS,
   DoubleEscapeDetector,

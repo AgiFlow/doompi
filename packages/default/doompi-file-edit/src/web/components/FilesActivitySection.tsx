@@ -1,11 +1,12 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Button } from '@agimon-ai/doompi-web-components';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
-import type { FilesItemView } from '../../types/webFiles.ts';
-import { fileTab } from './FilePanel.tsx';
-import { FileActivityRow, FilesBrowser } from './FilesBrowser.tsx';
-import { files } from '../stores/filesStore.ts';
+
+import type { FilesItemView } from '../../types/webFiles';
+import { files } from '../stores/filesStore';
+import { fileTab } from './FilePanel';
+import { FileActivityRow, FilesBrowser } from './FilesBrowser';
 
 /**
  * The files group's body in the activity dock: what this session has changed.

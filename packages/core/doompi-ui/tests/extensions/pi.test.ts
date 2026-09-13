@@ -1,10 +1,7 @@
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import type { LeaderBinding } from '@agimon-ai/doompi-extension-contracts/leader';
-import {
-  DOOM_NOTIFICATION_SERVICE,
-  type DoomNotificationService,
-} from '@agimon-ai/doompi-extension-contracts/notification';
-import { requireDoomUiHub } from '@agimon-ai/doompi-extension-contracts/ui-hub';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import type { LeaderBinding } from '@agimon-ai/doompi-core/leader';
+import { DOOM_NOTIFICATION_SERVICE, type DoomNotificationService } from '@agimon-ai/doompi-core/notification';
+import { requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type {
   KeybindingsManager as CodingKeybindingsManager,
   ExtensionAPI,
@@ -19,8 +16,9 @@ import {
   TUI_KEYBINDINGS,
 } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import doomPiUiExtension from '../../src/exports/extensions/pi.ts';
-import type { UiTelemetry } from '../../src/exports/logSinkTelemetry.ts';
+
+import type { UiTelemetry } from '../../src/exports/logSinkTelemetry';
+import doomPiUiExtension from '../../src/extensions/pi';
 
 type EventHandler = (event: unknown, context: ExtensionContext) => unknown;
 
@@ -81,6 +79,8 @@ async function registerExtension(
     }),
   } as unknown as ExtensionAPI;
   capturePi?.(pi);
+  await installDoomCordisHost(pi, { mode: 'composed', source: 'ui-test-host' });
+  await connectDoomCordisHost(pi, '@example/ui-test');
   await doomPiUiExtension(pi, telemetry);
   return handlers;
 }

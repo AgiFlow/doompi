@@ -58,7 +58,7 @@ boundary.
 ## Public API
 
 ```ts
-import { GrepParamsSchema, registerHashlineGrepTool } from '@agimon-ai/doompi-grep';
+import { GrepParamsSchema, createHashlineGrepTool } from '@agimon-ai/doompi-grep';
 import type { GrepParams } from '@agimon-ai/doompi-grep';
 ```
 
@@ -76,3 +76,5 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+The Pi and server plugins are declared directly in `src/extensions`. The Pi helper owns the grep override claim and cleanup. Tool factories consume named service folders; reusable declarations and schemas are exposed through flat `src/exports`.

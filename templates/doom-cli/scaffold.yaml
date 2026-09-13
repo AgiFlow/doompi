@@ -1,0 +1,27 @@
+boilerplate:
+  - name: scaffold-doom-cli
+    targetFolder: packages/core
+    description: Create a Doompi cli package with explicit ownership.
+    variables_schema:
+      type: object
+      properties:
+        packageName:
+          type: string
+          pattern: ^doompi-[a-z][a-z0-9-]*$
+        packageDescription:
+          type: string
+          pattern: ^[A-Za-z0-9][A-Za-z0-9 .,;:!?()/-]*$
+      required: [packageName, packageDescription]
+    includes:
+      - README.md
+      - package.json
+      - project.json
+      - src/bin/cli.ts
+      - src/cli/run.ts
+      - src/exports/index.ts
+      - tests/cli.test.ts
+      - tsconfig.json
+      - tsdown.config.ts
+      - vibe-lint.config.yaml
+    instruction: |-
+      Generate only the included files. Keep implementation ownership explicit and use capability exports for package dependencies.

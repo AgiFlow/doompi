@@ -1,15 +1,22 @@
 import os from 'node:os';
+
 import { DoomToolCall, renderToolBadge } from '@agimon-ai/doompi-ui/toolChrome';
 import { highlightCode, type Theme, type ThemeColor } from '@earendil-works/pi-coding-agent';
 import { type Component, truncateToWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui';
-import { formatSize } from '../commands/bash/responseEnvelope.ts';
-import type { BashParams } from '../schemas/bashTool.ts';
 
-const ELLIPSIS = '…';
+import {
+  COLLAPSED_TAIL_LINES,
+  ELLIPSIS,
+  GAP,
+  MAX_COMMAND_LENGTH,
+  SGR_PATTERN,
+  STREAM_TAIL_LINES,
+} from '../constants/bashRender';
+import type { BashParams } from '../schemas/bashTool';
+import { formatSize } from '../services/bashResult';
+
 /** Spaced so the join never glues two words into one unreadable token. */
-const GAP = ' … ';
 /** Wide enough to keep a realistic command intact, short enough to stay under three wrapped rows. */
-const MAX_COMMAND_LENGTH = 160;
 
 /**
  * Syntax highlighter for the command line.
@@ -19,9 +26,7 @@ const MAX_COMMAND_LENGTH = 160;
  */
 export type Highlighter = (code: string, lang?: string) => string[];
 /** Lines of log kept in the collapsed result, before `ctrl+o` reveals the rest. */
-const COLLAPSED_TAIL_LINES = 12;
 /** Live output is unbounded while a command runs, so the running state keeps only a window. */
-const STREAM_TAIL_LINES = 12;
 
 /**
  * Width-aware tool text.
@@ -72,7 +77,6 @@ function renderResultText(lines: readonly string[], wrap: boolean, theme: Theme)
 /** An SGR colour sequence, the only escape the log pipeline is allowed to keep. */
 /* oxlint-disable no-control-regex -- matching SGR requires the ESC control character */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: Matching SGR requires the ESC control character.
-const SGR_PATTERN = /\u001b\[[0-9;]*m/;
 /* oxlint-enable no-control-regex */
 
 /**

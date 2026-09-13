@@ -2,15 +2,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { findVoiceWorkerUrl, VoiceWorkerClient } from '../src/adapters/process/voiceWorkerClient.ts';
+
+import { findVoiceWorkerUrl, VoiceWorkerClient } from '../src/services/voiceWorkerClient';
 import {
   VOICE_WORKER_INTENTIONAL_BARGE_IN_CAPABILITY,
   VOICE_WORKER_PROTOCOL_VERSION,
   VOICE_WORKER_RANKED_BARGE_IN_CAPABILITY,
   VOICE_WORKER_TRANSCRIPTION_TIMEOUT_CAPABILITY,
-} from '../src/services/voiceWorkerProtocol.ts';
-import type { VoiceWorkerHandle } from '../src/services/voiceWorkerSupervisor.ts';
+} from '../src/services/voiceWorkerProtocol';
+import type { VoiceWorkerHandle } from '../src/services/voiceWorkerSupervisor';
 
 type Listener = (value: never) => void;
 const directories: string[] = [];
@@ -555,4 +557,16 @@ describe('VoiceWorkerClient', () => {
     );
     expect(() => findVoiceWorkerUrl(pathToFileURL('/voice-worker-missing/client.mjs'))).toThrow('Cannot find');
   });
+});
+
+it('rejects a synchronous worker launch failure and can shut down without an unhandled startup promise', async () => {
+  const client = new VoiceWorkerClient({
+    spoolDirectory: '/fixture',
+    onEvent() {},
+    workerFactory: () => {
+      throw new Error('worker file missing');
+    },
+  });
+  await expect(client.start()).rejects.toThrow('worker file missing');
+  await expect(client.shutdown('session-shutdown')).resolves.toBeUndefined();
 });

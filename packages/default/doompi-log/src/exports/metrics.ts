@@ -1,5 +1,5 @@
-export type { LogMetricsFinding, LogMetricsFindingSeverity } from '../services/findings.ts';
-export { deriveFindings } from '../services/findings.ts';
+export type { LogMetricsFinding, LogMetricsFindingSeverity } from '../services/findings';
+export { deriveFindings } from '../services/findings';
 export type {
   LogMetricsAggregatorOptions,
   LogMetricsError,
@@ -10,7 +10,7 @@ export type {
   LogMetricsTokenTotals,
   LogMetricsToolCost,
   LogMetricsToolLatency,
-} from '../services/metrics.ts';
+} from '../services/metrics';
 export {
   API_ERROR_RECORD,
   LogMetricsAggregator,
@@ -22,4 +22,4 @@ export {
   TOOL_TOKEN_SAMPLE_RECORD,
   TURN_FAILED_RECORD,
   TURN_FINISHED_RECORD,
-} from '../services/metrics.ts';
+} from '../services/metrics';

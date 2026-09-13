@@ -3,14 +3,8 @@
  * imported. Every card is rendered in the state it should be screenshotted in,
  * so nothing here waits on the expand toggle.
  */
-import { STATUS_TONES } from '../types/tone.ts';
-import {
-  MessageItem,
-  MessageItemBody,
-  MessageItemGroup,
-  MessageItemHeader,
-  MessageItemStatus,
-} from './MessageItem.tsx';
+import { STATUS_TONES } from '../types/tone';
+import { MessageItem, MessageItemBody, MessageItemGroup, MessageItemHeader, MessageItemStatus } from './MessageItem';
 
 const meta = {
   title: 'Components/MessageItem',

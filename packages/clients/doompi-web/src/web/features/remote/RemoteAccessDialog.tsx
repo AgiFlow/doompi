@@ -10,6 +10,7 @@ import {
   Spinner,
 } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
+
 import {
   closeRemoteDialog,
   newPairingCode,
@@ -17,10 +18,10 @@ import {
   showRemoteOptions,
   turnRemoteAccessOff,
   turnRemoteAccessOn,
-} from '../../stores/remoteAccessStore.ts';
-import { HandoverProgress } from './HandoverProgress.tsx';
-import { RemoteAccessOptions } from './RemoteAccessOptions.tsx';
-import { RemoteAccessPairing } from './RemoteAccessPairing.tsx';
+} from '../../stores/remoteAccessStore';
+import { HandoverProgress } from './HandoverProgress';
+import { RemoteAccessOptions } from './RemoteAccessOptions';
+import { RemoteAccessPairing } from './RemoteAccessPairing';
 
 /**
  * Two panels rather than one.
@@ -35,6 +36,10 @@ export function RemoteAccessDialog() {
   const pairing = state.step === 'pairing';
   const moving = state.step === 'handover';
   const starting = state.busy || view?.status === 'starting';
+
+  // The approval prompt is the only action that matters while a device waits.
+  // Two modal roots compete for focus and backdrop ordering when both stay open.
+  if (view?.pending?.length) return null;
 
   return (
     <Dialog open={state.step !== 'closed'} onOpenChange={(next) => (next ? undefined : closeRemoteDialog())}>

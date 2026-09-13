@@ -1,4 +1,4 @@
-import type { PlanPointerRecord } from './planApi.ts';
+import type { PlanPointerRecord } from './planApi';
 
 /**
  * Record and read where write_plan left this session's plan file.

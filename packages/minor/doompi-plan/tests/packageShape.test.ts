@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -10,6 +11,7 @@ interface PackageManifest {
   type?: string;
   files?: string[];
   exports?: Record<string, unknown>;
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
   pi?: { extensions?: string[] };
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -38,7 +40,7 @@ describe('@agimon-ai/doompi-plan package shape', () => {
   });
 
   it('depends on shared Cordis contracts rather than a concrete feedback provider', () => {
-    expect(packageJson.dependencies?.['@agimon-ai/doompi-extension-contracts']).toBe('workspace:*');
+    expect(packageJson.dependencies?.['@agimon-ai/doompi-core']).toBe('workspace:*');
     expect(packageJson.dependencies?.['@agimon-ai/doompi-user-feedback']).toBeUndefined();
   });
 
@@ -54,7 +56,7 @@ describe('@agimon-ai/doompi-plan package shape', () => {
     const config = readConfig('tsdown.config.ts');
     expect(config).toMatch(/format\s*:\s*\[[^\]]*['"]esm['"][^\]]*['"]cjs['"]/u);
     expect(config).toMatch(/dts\s*:\s*\{[^}]*eager/u);
-    expect(config).toContain("'*': ['src/exports/**/*.ts', '!src/exports/webClient.ts']");
+    expect(config).toContain("'extensions/pi': 'src/extensions/pi.ts'");
   });
 
   it('keeps the package export map closed and explicit', () => {
@@ -69,6 +71,17 @@ describe('@agimon-ai/doompi-plan package shape', () => {
     }
     expect(exportsMap['.']).toMatchObject({ import: './dist/index.mjs' });
     expect(exportsMap['./extensions/pi']).toMatchObject({ import: './dist/extensions/pi.mjs' });
+    expect(exportsMap['./extensions/server']).toEqual({
+      types: './dist/extensions/server.d.mts',
+      import: './dist/extensions/server.mjs',
+      require: './dist/extensions/server.cjs',
+    });
+    expect(packageJson.doompiServer).toEqual({
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      entry: './src/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['session'],
+    });
     expect(packageJson.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });
 });

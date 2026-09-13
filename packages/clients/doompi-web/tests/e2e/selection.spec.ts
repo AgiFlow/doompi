@@ -1,4 +1,4 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 
 // Exactly what a live `doompi --mode rpc` session emitted, escapes and all.
 const LIVE =

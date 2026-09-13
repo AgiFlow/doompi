@@ -8,8 +8,9 @@
  * through getUserMedia; the headless renderer has no device to grant, so
  * driving it would be faking the one thing the button reports.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { VoiceComposerAction } from './VoiceComposerAction.tsx';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { VoiceComposerAction } from './VoiceComposerAction';
 
 const slot = (status?: string, sessionId: string | null = 's1') =>
   slotPropsFixture({ sessionId, statuses: status === undefined ? {} : { 'doom-voice': status } }).props;

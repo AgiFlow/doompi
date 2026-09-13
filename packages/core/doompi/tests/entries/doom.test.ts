@@ -1,24 +1,28 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import doomExtension from '../../src/exports/entries/doom';
+
+import doomExtension from '../../src/extensions/composedPi';
 
 const acquireCompositionClaim = vi.hoisted(() => vi.fn());
 const releaseCompositionClaim = vi.hoisted(() => vi.fn());
 const composeDoomSession = vi.hoisted(() => vi.fn());
 const cleanupRunDirectory = vi.hoisted(() => vi.fn());
+const disposeHarnessState = vi.hoisted(() => vi.fn());
 const findSyncedRoot = vi.hoisted(() => vi.fn());
 const registerDoomFlags = vi.hoisted(() => vi.fn());
 
-vi.mock('../../src/adapters/composer.ts', () => ({
+vi.mock('../../src/builders/cli/composition', () => ({
   composeDoomSession,
   cleanupRunDirectory,
   findSyncedRoot,
   registerDoomFlags,
 }));
-vi.mock('../../src/adapters/compositionState.ts', () => ({ acquireCompositionClaim }));
+vi.mock('../../src/builders/cli/compositionState', () => ({ acquireCompositionClaim }));
+vi.mock('@agimon-ai/doompi-config/harnessStore', () => ({ disposeHarnessState }));
 
 type Handler = (event: unknown, ctx: ExtensionContext) => unknown;
 
@@ -90,15 +94,30 @@ describe('doom extension', () => {
     expect(notices[0]?.[0]).toContain('doompi sync');
   });
 
-  it('removes its session directory on shutdown', async () => {
+  it('keeps its session directory across reloads', async () => {
     composeDoomSession.mockResolvedValue({ problems: [], stale: false, loaded: [] });
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doom-entry-')));
     findSyncedRoot.mockReturnValue(root);
     const { pi, handlers, notices } = createPi();
 
     await doomExtension(pi);
-    await handlers.get('session_shutdown')?.({}, createContext(root, notices));
+    await handlers.get('session_shutdown')?.({ reason: 'reload' }, createContext(root, notices));
 
+    expect(disposeHarnessState).not.toHaveBeenCalled();
+    expect(cleanupRunDirectory).not.toHaveBeenCalled();
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('removes its session directory on terminal shutdown', async () => {
+    composeDoomSession.mockResolvedValue({ problems: [], stale: false, loaded: [] });
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doom-entry-')));
+    findSyncedRoot.mockReturnValue(root);
+    const { pi, handlers, notices } = createPi();
+
+    await doomExtension(pi);
+    await handlers.get('session_shutdown')?.({ reason: 'quit' }, createContext(root, notices));
+
+    expect(disposeHarnessState).toHaveBeenCalledOnce();
     expect(cleanupRunDirectory).toHaveBeenCalledWith(root);
     fs.rmSync(root, { recursive: true, force: true });
   });

@@ -1,5 +1,5 @@
-import type { MetricsGroup } from '../../../types/webMetrics.ts';
-import { barFraction, formatTokens, seriesMax } from '../../lib/chartScale.ts';
+import type { MetricsGroup } from '../../../types/webMetrics';
+import { barFraction, formatTokens, seriesMax } from '../../lib/chartScale';
 
 /**
  * Tokens per group, as horizontal bars.

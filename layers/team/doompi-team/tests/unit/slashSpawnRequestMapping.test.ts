@@ -4,7 +4,7 @@ import {
   assertSupportedInlineConfig,
   taskInputFromParsedStep,
   UnsupportedInlineConfigError,
-} from '../../src/adapters/pi/commands/slash/spawnRequestMapping';
+} from '../../src/services/spawnRequestMapping';
 
 describe('assertSupportedInlineConfig', () => {
   it('does not throw for a config with only currently-supported keys set', () => {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   chooseOption,
   draftAnswers,
@@ -11,7 +12,7 @@ import {
   readPromptQuestions,
   setCustom,
   setNotes,
-} from '../../src/web/lib/questionnaireDraft.ts';
+} from '../../src/web/lib/questionnaireDraft';
 
 const args = {
   questions: [

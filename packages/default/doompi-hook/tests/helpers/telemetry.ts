@@ -1,4 +1,4 @@
-import type { HookTelemetry, HookTelemetryAttributes, HookTelemetryEventName } from '../../src/types/telemetry.ts';
+import type { HookTelemetry, HookTelemetryAttributes, HookTelemetryEventName } from '../../src/types/telemetry';
 
 export interface RecordedTelemetry {
   level: 'error' | 'warning';

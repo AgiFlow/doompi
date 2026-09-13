@@ -1,4 +1,4 @@
-import type { SpeechPresenceDetector, SpeechPresenceWindow } from '../../types/clientCaptureActivity.ts';
+import type { SpeechPresenceDetector, SpeechPresenceWindow } from '../../types/clientCaptureActivity';
 
 export interface SpeechWorker {
   onmessage: ((event: { data: unknown }) => void) | null;

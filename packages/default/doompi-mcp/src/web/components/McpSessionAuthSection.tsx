@@ -1,3 +1,4 @@
+import type { SessionFrameSender, WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import {
   Button,
   Dialog,
@@ -9,9 +10,9 @@ import {
   DialogTitle,
   Input,
 } from '@agimon-ai/doompi-web-components';
-import type { SessionFrameSender, WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
 import { useEffect, useRef, useState } from 'react';
-import { MCP_SESSION_AUTH_STATUS_KEY, parseMcpSessionAuthStatus } from '../../types/webMcp.ts';
+
+import { MCP_SESSION_AUTH_STATUS_KEY, parseMcpSessionAuthStatus } from '../../types/webMcp';
 
 /** Requests authorization through Pi's command frame, never through a shell. */
 export function requestMcpSessionAuthorization(
@@ -171,7 +172,7 @@ export function McpSessionAuthSection({
           }
         }}
       >
-        <DialogContent data-testid="mcp-authorization-dialog">
+        <DialogContent data-testid="mcp-authorization-dialog" onInteractOutside={(event) => event.preventDefault()}>
           <DialogHeader className="items-start px-4 py-4 sm:px-5">
             <div className="flex min-w-0 flex-1 flex-col gap-1.5">
               <DialogTitle className="break-words text-base leading-snug">

@@ -1,1 +1,1 @@
-export { applyDomains } from '../adapters/applyDomains.ts';
+export { applyDomains } from '../controllers/applyDomains';

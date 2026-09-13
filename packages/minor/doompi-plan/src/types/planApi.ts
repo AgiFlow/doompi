@@ -79,13 +79,13 @@ export function contentPath(): string {
  */
 export function currentUrl(sessionId: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `/api/plugin/${API_BASE_PATH}${currentPath()}?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${currentPath()}?${search.toString()}`;
 }
 
 /** The absolute URL a page puts a manual save to. */
 export function contentUrl(sessionId: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `/api/plugin/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
+  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
 }
 
 /**

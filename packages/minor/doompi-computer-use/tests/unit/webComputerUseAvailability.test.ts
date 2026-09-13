@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   computerUseSessionApiError,
   MissingComputerUseApiError,
   missingComputerUseApiRetryAt,
-} from '../../src/adapters/webComputerUseAvailability.ts';
+} from '../../src/services/webComputerUseAvailability';
 
 describe('computer-use web hub availability', () => {
   it('classifies an absent opt-in session API for dormant retry', () => {

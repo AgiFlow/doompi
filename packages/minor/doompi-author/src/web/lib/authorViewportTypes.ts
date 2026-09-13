@@ -1,5 +1,5 @@
-import type { AuthorJsonSchema } from '../../types/author.ts';
-import type { CsvDialect, DocumentFragment, StructuredDocumentFormat } from '../../types/structuredDocuments.ts';
+import type { AuthorJsonSchema } from '../../types/author';
+import type { CsvDialect, DocumentFragment, StructuredDocumentFormat } from '../../types/structuredDocuments';
 
 export type AuthorDocumentKind =
   | 'text'

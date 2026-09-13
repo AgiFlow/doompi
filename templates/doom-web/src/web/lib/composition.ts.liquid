@@ -1,6 +1,15 @@
-import type { SelectionAxisContribution } from '@agimon-ai/doompi-web-contracts';
+import type { DockFaceContribution, SelectionAxisContribution, TransientTab } from '@agimon-ai/doompi-core/web';
+import { useCallback, useSyncExternalStore } from 'react';
 import type { MinorModeProjection, MinorModeRecordProjection } from '../../types/hub.ts';
-import { pluginActivityGroups, pluginMinorModes, pluginSelectionAxes } from './pluginRegistry.ts';
+import {
+  pluginActivityGroups,
+  pluginDockFaces,
+  pluginFileLinks,
+  pluginMinorModes,
+  pluginSelectionAxes,
+  subscribeWebPluginRegistry,
+  webPluginRegistryRevision,
+} from './pluginRegistry.ts';
 import { stripAnsi } from './statusLine.ts';
 
 export interface SelectionAxis {
@@ -55,9 +64,11 @@ export interface MinorMode {
   availability: MinorModeAvailability;
   /** What the mode itself is reporting while on. */
   detail: string;
+  /** Activity group to focus instead of invoking the mode command from the cockpit. */
+  activityGroup?: string;
   /**
    * Why the mode cannot be driven from here, in the words of the mode itself.
-   * Empty when it can be. A mode may be installed and still refuse a cockpit:
+   * Empty when it can. A mode may be installed and still refuse a cockpit:
    * autonomous voice captures from the terminal's own microphone, which a
    * browser talking to a headless agent does not have.
    */
@@ -66,9 +77,15 @@ export interface MinorMode {
 
 export interface MinorModeSource {
   name: string;
+  /** The catalog mode this row drives, when the runtime registers it under another id. */
+  modeId?: string;
+  /** Leader Space key path, as the TUI documents it. */
   keys: string;
+  /** Activity group to focus instead of invoking the mode command from the cockpit. */
+  activityGroup?: string;
   statusKey?: string;
   widgetKey?: string;
+  hideWhenMissing?: boolean;
 }
 
 /**
@@ -84,16 +101,27 @@ export interface MinorModeSource {
 export const PACKAGED_MINOR_MODES: readonly MinorModeSource[] = [
   { name: 'help', keys: 'h e' },
   { name: 'plan', keys: 'p e', statusKey: 'plan-mode' },
-  { name: 'loop', keys: 'l l', statusKey: 'doom-loop' },
+  { name: 'loop', keys: 'l l', statusKey: 'doom-loop', activityGroup: 'loops' },
   { name: 'goal', keys: 'g e', statusKey: 'goal' },
+  { name: 'author', keys: 'o a' },
   { name: 'workflow', keys: 'w e', widgetKey: 'workflow-mcp-progress' },
-  { name: 'voice', keys: 'v e', statusKey: 'doom-voice' },
+  // `v e` drives autonomous capture, which the runtime registers as 'voice-auto'.
+  { name: 'voice', modeId: 'voice-auto', keys: 'v e', statusKey: 'doom-voice' },
+  {
+    name: 'computer use',
+    modeId: 'computer-use',
+    keys: 'c e',
+    statusKey: 'doom-computer-use-mode',
+    hideWhenMissing: true,
+  },
 ];
 
 /** The declared source a catalog mode corresponds to, by id, id stem, or label. */
 function sourceFor(sources: readonly MinorModeSource[], mode: MinorModeRecordProjection): MinorModeSource | undefined {
   const candidates = new Set([mode.id.toLowerCase(), mode.id.toLowerCase().split('.')[0], mode.label.toLowerCase()]);
-  return sources.find((source) => candidates.has(source.name.toLowerCase()));
+  return sources.find((source) =>
+    [source.name, source.modeId].some((identity) => identity !== undefined && candidates.has(identity.toLowerCase())),
+  );
 }
 
 /**
@@ -116,18 +144,21 @@ function catalogMinorModes(sources: readonly MinorModeSource[], projection: Mino
       id: mode.id,
       keys: source?.keys ?? '',
       availability: blocked && !on ? 'unavailable' : on ? 'on' : 'off',
+      ...(source?.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
       detail: mode.detail ?? (mode.activation === 'activating' ? 'activating' : ''),
       unavailableReason: reason,
     };
   });
   const seen = new Set(rows.map((row) => row.name));
   for (const source of sources) {
+    if (source.hideWhenMissing === true) continue;
     if (!seen.has(source.name)) {
       rows.push({
         name: source.name,
-        id: source.name,
+        id: source.modeId ?? source.name,
         keys: source.keys,
         availability: 'unavailable',
+        ...(source.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
         detail: '',
         unavailableReason: 'No package in this session registers this mode.',
       });
@@ -144,25 +175,30 @@ export function minorModes(
   const declared = pluginMinorModes();
   const sources: readonly MinorModeSource[] = declared.length > 0 ? declared : PACKAGED_MINOR_MODES;
   if (projection) return catalogMinorModes(sources, projection);
-  return sources.map((source) => {
+  return sources.flatMap((source) => {
     if (source.statusKey !== undefined) {
       const raw = statuses[source.statusKey];
       if (raw === undefined) {
-        return {
-          name: source.name,
-          id: source.name,
-          keys: source.keys,
-          availability: 'unavailable' as const,
-          detail: '',
-          unavailableReason: 'This session has not reported the mode.',
-        };
+        if (source.hideWhenMissing === true) return [];
+        return [
+          {
+            name: source.name,
+            id: source.modeId ?? source.name,
+            keys: source.keys,
+            availability: 'unavailable' as const,
+            ...(source.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
+            detail: '',
+            unavailableReason: 'This session has not reported the mode.',
+          },
+        ];
       }
       const detail = stripAnsi(raw).trim();
       return {
         name: source.name,
-        id: source.name,
+        id: source.modeId ?? source.name,
         keys: source.keys,
         availability: detail ? ('on' as const) : ('off' as const),
+        ...(source.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
         detail,
         unavailableReason: '',
       };
@@ -170,9 +206,10 @@ export function minorModes(
     if (source.widgetKey !== undefined && widgets.includes(source.widgetKey)) {
       return {
         name: source.name,
-        id: source.name,
+        id: source.modeId ?? source.name,
         keys: source.keys,
         availability: 'off' as const,
+        ...(source.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
         detail: '',
         unavailableReason: '',
       };
@@ -182,6 +219,7 @@ export function minorModes(
       id: source.name,
       keys: source.keys,
       availability: 'unavailable' as const,
+      ...(source.activityGroup === undefined ? {} : { activityGroup: source.activityGroup }),
       detail: '',
       unavailableReason: 'This session has not reported the mode.',
     };
@@ -194,29 +232,236 @@ export interface ActivityGroup {
   /** What the publishing extension is reporting, empty when it reports nothing. */
   summary: string;
   active: boolean;
-  /** The plugin tab the group's key chip opens, when its package declares one. */
-  tab?: string;
+  /** The temporary tab the group's name opens, when its package declares one. */
+  transientTab?: () => TransientTab;
+  /** Keeps the group visible below the dock's scrolling ordinary groups. */
+  placement?: 'bottom';
+}
+
+/** Subscribe to package-owned activity sources, rewiring when the focused composition changes. */
+function subscribeActivitySources(listener: () => void): () => void {
+  let subscriptions: (() => void)[] = [];
+  const unsubscribeSources = (): void => {
+    subscriptions.forEach((unsubscribe) => unsubscribe());
+    subscriptions = [];
+  };
+  const subscribeSources = (): void => {
+    subscriptions = pluginActivityGroups().flatMap((source) =>
+      source.activeSource === undefined ? [] : [source.activeSource.subscribe(listener)],
+    );
+  };
+  subscribeSources();
+  const unsubscribeRegistry = subscribeWebPluginRegistry(() => {
+    unsubscribeSources();
+    subscribeSources();
+    listener();
+  });
+  return () => {
+    unsubscribeRegistry();
+    unsubscribeSources();
+  };
+}
+
+function activitySourceFingerprint(sessionId: string | null): string {
+  const activeSources = pluginActivityGroups()
+    .map((source) => (source.activeSource?.isActive(sessionId) === true ? '1' : '0'))
+    .join('');
+  return `${webPluginRegistryRevision()}:${activeSources}`;
 }
 
 /**
- * The declared groups the session actually signals. There is no host-side
- * fallback table: agents, runners, and workflows are each declared by the
- * package that owns them, so a composition without such a package shows no
- * group, and a session that never published a group's signal shows none
- * either.
+ * The groups available in this plugin composition. Status and widget signals
+ * reveal legacy groups. A package-owned active source also reveals its group,
+ * including while idle, so the section can remain a stable launcher.
+ *
+ * A group that declared `hideWhenEmpty` also goes away again once its session
+ * stops reporting. Clearing a status reaches the page as an empty string
+ * rather than as an absent key, because the same map tells the selection bar
+ * which minor modes exist and an absent key means "not reported" there. So
+ * emptiness is read here, where only the dock is looking.
  */
-export function activityGroups(statuses: Record<string, string>, widgets: readonly string[]): ActivityGroup[] {
+export function activityGroups(
+  statuses: Record<string, string>,
+  widgets: readonly string[],
+  sessionId: string | null = null,
+): ActivityGroup[] {
   const groups: ActivityGroup[] = [];
   for (const source of pluginActivityGroups()) {
-    const tab = source.tab === undefined ? {} : { tab: source.tab };
+    const tab = source.transientTab === undefined ? {} : { transientTab: source.transientTab };
+    const placement = source.placement === undefined ? {} : { placement: source.placement };
     if (source.statusKey !== undefined && statuses[source.statusKey] !== undefined) {
       const summary = stripAnsi(statuses[source.statusKey] ?? '').trim();
-      groups.push({ name: source.name, keys: source.keys, summary, active: summary.length > 0, ...tab });
+      if (summary.length === 0 && source.hideWhenEmpty === true) continue;
+      const active =
+        source.activeSource?.isActive(sessionId) ?? (source.marksBackgroundWork !== false && summary.length > 0);
+      groups.push({ name: source.name, keys: source.keys, summary, active, ...tab, ...placement });
       continue;
     }
     if (source.widgetKeys !== undefined && source.widgetKeys.some((key) => widgets.includes(key))) {
-      groups.push({ name: source.name, keys: source.keys, summary: '', active: false, ...tab });
+      const activeKeys = source.activeWidgetKeys ?? source.widgetKeys;
+      const active =
+        source.activeSource?.isActive(sessionId) ??
+        (source.marksBackgroundWork !== false && activeKeys.some((key) => widgets.includes(key)));
+      groups.push({ name: source.name, keys: source.keys, summary: '', active, ...tab, ...placement });
+      continue;
+    }
+    if (source.activeSource !== undefined) {
+      groups.push({
+        name: source.name,
+        keys: source.keys,
+        summary: '',
+        active: source.activeSource.isActive(sessionId),
+        ...tab,
+        ...placement,
+      });
     }
   }
   return groups;
+}
+
+/** Dock faces update when the active session composition changes. */
+export function useDockFaces(sessionId: string | null): readonly DockFaceContribution[] {
+  useSyncExternalStore(subscribeWebPluginRegistry, webPluginRegistryRevision, webPluginRegistryRevision);
+  const subscribe = (listener: () => void) => {
+    const releases = pluginDockFaces().flatMap((face) =>
+      face.visibility ? [face.visibility.subscribe(listener)] : [],
+    );
+    return () => releases.forEach((release) => release());
+  };
+  const snapshot = () =>
+    pluginDockFaces()
+      .map((face) => (face.visibility?.isVisible(sessionId) !== false ? '1' : '0'))
+      .join('');
+  useSyncExternalStore(subscribe, snapshot, snapshot);
+  return pluginDockFaces().filter((face) => face.visibility?.isVisible(sessionId) !== false);
+}
+
+/** Activity groups that update when either host signals or a plugin's session store changes. */
+export function useActivityGroups(
+  statuses: Record<string, string>,
+  widgets: readonly string[],
+  sessionId: string | null,
+): ActivityGroup[] {
+  useSyncExternalStore(
+    subscribeActivitySources,
+    () => activitySourceFingerprint(sessionId),
+    () => activitySourceFingerprint(sessionId),
+  );
+  return activityGroups(statuses, widgets, sessionId);
+}
+
+/** The tab one path opens, or undefined when no installed plugin recognises it. */
+export type FileLinkResolver = (path: string) => TransientTab | undefined;
+
+interface FileLinkModes {
+  active(sessionId: string | null): readonly string[];
+  subscribe(sessionId: string | null, listener: () => void): () => void;
+}
+let fileLinkModes: FileLinkModes | undefined;
+const modeBindings = new Set<() => void>();
+
+/** Binds host session facts without making the composition library own session state. */
+export function bindFileLinkModes(source: FileLinkModes): () => void {
+  fileLinkModes = source;
+  modeBindings.forEach((listener) => listener());
+  return () => {
+    if (fileLinkModes !== source) return;
+    fileLinkModes = undefined;
+    modeBindings.forEach((listener) => listener());
+  };
+}
+function subscribeFileLinks(sessionId: string | null, listener: () => void): () => void {
+  let unsubscribeModes = fileLinkModes?.subscribe(sessionId, listener);
+  const rebindModes = () => {
+    unsubscribeModes?.();
+    unsubscribeModes = fileLinkModes?.subscribe(sessionId, listener);
+    listener();
+  };
+  modeBindings.add(rebindModes);
+  let subscriptions: (() => void)[] = [];
+  const unsubscribeSources = (): void => {
+    subscriptions.forEach((unsubscribe) => unsubscribe());
+    subscriptions = [];
+  };
+  const subscribeSources = (): void => {
+    subscriptions = pluginFileLinks().map((source) => source.subscribe(listener));
+  };
+  subscribeSources();
+  const unsubscribeRegistry = subscribeWebPluginRegistry(() => {
+    unsubscribeSources();
+    subscribeSources();
+    listener();
+  });
+  return () => {
+    modeBindings.delete(rebindModes);
+    unsubscribeModes?.();
+    unsubscribeRegistry();
+    unsubscribeSources();
+  };
+}
+
+function activeFileLinkSources(sessionId: string | null) {
+  const enabled = new Set(fileLinkModes?.active(sessionId) ?? []);
+  return pluginFileLinks().filter(
+    (source) => source.requiredMinorMode === undefined || enabled.has(source.requiredMinorMode),
+  );
+}
+
+function fileLinkFingerprint(sessionId: string | null): string {
+  const sourceFingerprints = activeFileLinkSources(sessionId)
+    .map((source) => `${source.requiredMinorMode ?? ''}:${source.fingerprint(sessionId)}`)
+    .join('\n');
+  return `${webPluginRegistryRevision()}:${sourceFingerprints}`;
+}
+
+/**
+ * The tab a path opens, from the first source that claims it.
+ *
+ * A path no source claims is not a link. The host cannot tell a file name from
+ * a class name, and the plugin that tracks the session's files can, so the
+ * decision belongs there rather than in a heuristic here.
+ */
+export function fileLinkFor(sessionId: string | null, path: string): TransientTab | undefined {
+  for (const source of activeFileLinkSources(sessionId)) {
+    const tab = source.resolve(sessionId, path);
+    if (tab !== undefined) return tab;
+  }
+  return undefined;
+}
+
+/**
+ * The tab a path the caller is sure about opens: a tool call's path argument,
+ * not a token spotted in prose.
+ *
+ * A source that offers `openPath` answers here, and it may claim a file the
+ * session never changed, which `resolve` deliberately will not. Sources
+ * without it fall back to the same guess prose gets.
+ */
+export function fileTabForPath(sessionId: string | null, path: string): TransientTab | undefined {
+  for (const source of activeFileLinkSources(sessionId)) {
+    const tab = source.openPath?.(sessionId, path) ?? source.resolve(sessionId, path);
+    if (tab !== undefined) return tab;
+  }
+  return undefined;
+}
+/**
+ * Resolves the paths a message names against the plugins that track them.
+ *
+ * The resolver's identity is stable while the linkable set is, so a component
+ * that hands it to a renderer does not rebuild that renderer on every frame of
+ * a streaming reply.
+ */
+export function useFileLinks(sessionId: string | null): FileLinkResolver {
+  const fingerprint = useSyncExternalStore(
+    useCallback((listener: () => void) => subscribeFileLinks(sessionId, listener), [sessionId]),
+    () => fileLinkFingerprint(sessionId),
+    () => fileLinkFingerprint(sessionId),
+  );
+  return useCallback(
+    (path: string) => fileLinkFor(sessionId, path),
+    // The fingerprint is the dependency: the same path resolves differently
+    // once the session's set of tracked files changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fingerprint is a deliberate identity buster, not a value the callback reads.
+    [sessionId, fingerprint],
+  );
 }

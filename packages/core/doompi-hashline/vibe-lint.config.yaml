@@ -12,20 +12,20 @@ rules:
   doom-clean-architecture-boundary:
     - error
     - infrastructurePackages:
-        - "@agimon-ai/doompi-extension-contracts"
+        - "@agimon-ai/doompi-core"
         - "@agimon-ai/doompi-telemetry"
         - "@agimon-ai/doompi-hashline"
       foundationPackages:
-        - "@agimon-ai/doompi-extension-contracts"
+        - "@agimon-ai/doompi-core"
         - "@agimon-ai/doompi-hashline"
       nonPiPackages:
-        - "@agimon-ai/doompi-extension-contracts"
+        - "@agimon-ai/doompi-core"
         - "@agimon-ai/doompi-telemetry"
         - "@agimon-ai/doompi-hashline"
   package-layer-order:
     - error
     - packageLayers:
-        "@agimon-ai/doompi-extension-contracts": contracts
+        "@agimon-ai/doompi-core": contracts
         "@agimon-ai/doompi-hashline": contracts
         "@agimon-ai/doompi-telemetry": contracts
         "@agimon-ai/doompi-config": platform

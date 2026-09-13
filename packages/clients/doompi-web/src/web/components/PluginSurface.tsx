@@ -1,4 +1,4 @@
-import { usePluginSlotProps } from '../stores/usePluginSlotProps.ts';
+import { usePluginSlotProps } from '../stores/usePluginSlotProps';
 
 /**
  * Renders every fill placed into one of the host's slots. Host surfaces put

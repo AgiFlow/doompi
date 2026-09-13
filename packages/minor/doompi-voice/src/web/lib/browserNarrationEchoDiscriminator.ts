@@ -1,4 +1,4 @@
-import { VOICE_MEDIA_SAMPLE_RATE } from '../../types/clientMedia.ts';
+import { VOICE_MEDIA_SAMPLE_RATE } from '../../types/clientMedia';
 
 const PCM_BYTES_PER_SAMPLE = 2;
 const PCM_SCALE = 32_768;

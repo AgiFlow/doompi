@@ -1,10 +1,12 @@
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { BashRunRequest, BashRunResult, IBashRunService } from '../../src/types/bashRunService';
-import { formatRunResult, registerBashTool } from '../../src/exports/tool/bashTool';
+
+import type { BashParams } from '../../src/exports/bashSchema';
+import { formatRunResult, createBashTool } from '../../src/exports/bashTool';
 import {
   boundExcerpt,
   boundResultText,
@@ -15,9 +17,9 @@ import {
   formatUptime,
   truncateForResult,
   type ToolResult,
-} from '../../src/exports/tool/responseEnvelope';
-import { estimateTokens } from '../../src/services/TokenEstimate/tokenEstimate';
-import type { BashParams } from '../../src/exports/tool/schema';
+} from '../../src/exports/responseEnvelope';
+import { estimateTokens } from '../../src/services/tokenEstimate';
+import type { BashRunRequest, BashRunResult, IBashRunService } from '../../src/types/bashRunService';
 
 let directory: string;
 
@@ -36,11 +38,11 @@ function captureBashExecute(bashRunService: IBashRunService): BashExecute {
       execute = definition.execute;
     },
   } as unknown as ExtensionAPI;
-  registerBashTool(pi, {
+  createBashTool({
     bashRunService,
     getSessionId: () => 'session-a',
     onRunnerStarted: () => undefined,
-  });
+  }).register(pi);
   if (!execute) throw new Error('bash tool was not registered');
   return execute;
 }
@@ -392,7 +394,7 @@ describe('truncateForResult', () => {
   });
 });
 
-describe('registerBashTool', () => {
+describe('createBashTool', () => {
   it('emits an initial partial result and live foreground output', async () => {
     const logPath = path.join(directory, 'foreground.log');
     fs.writeFileSync(logPath, 'live output\n');

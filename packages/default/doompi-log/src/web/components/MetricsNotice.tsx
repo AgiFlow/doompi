@@ -1,6 +1,7 @@
 import { Button, EmptyState } from '@agimon-ai/doompi-web-components';
-import type { MetricsDimension, MetricsUnavailable, MetricsUnavailableReason } from '../../types/webMetrics.ts';
-import { DIMENSION_LABELS } from './MetricsReportView.tsx';
+
+import type { MetricsDimension, MetricsUnavailable, MetricsUnavailableReason } from '../../types/webMetrics';
+import { DIMENSION_LABELS } from './MetricsReportView';
 
 /**
  * Everything the page says instead of, or above, a report.

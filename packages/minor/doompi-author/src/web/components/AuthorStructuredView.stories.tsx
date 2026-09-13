@@ -3,9 +3,9 @@
  * looking for a bare `const meta`. The view groups fragments differently for
  * cell documents (csv/xlsx) than for slide documents, so both appear here.
  */
-import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes.ts';
-import type { AuthorWorkspaceDocument } from '../stores/authorWorkspaceStore.ts';
-import { AuthorStructuredView } from './AuthorStructuredView.tsx';
+import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes';
+import type { AuthorWorkspaceDocument } from '../stores/authorWorkspaceStore';
+import { AuthorStructuredView } from './AuthorStructuredView';
 
 const base = { annotations: [], revisions: [], saveRequest: 0, version: 1, savedVersion: 1 } as const;
 

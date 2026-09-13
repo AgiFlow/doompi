@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import effortExtension, { effortUsage, parseEffortLevel } from '../../src/exports/entries/effort';
+
+import effortExtension, { effortUsage, parseEffortLevel } from '../../src/extensions/effort';
 
 const setDefaultThinkingLevel = vi.hoisted(() => vi.fn());
 const flush = vi.hoisted(() => vi.fn(async () => undefined));

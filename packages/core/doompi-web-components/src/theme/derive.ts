@@ -1,10 +1,4 @@
-import {
-  ACCENT_TOKENS,
-  type AccentToken,
-  type DerivedToken,
-  type ThemeConfig,
-  type ThemeToken,
-} from '../types/theme.ts';
+import { ACCENT_TOKENS, type AccentToken, type DerivedToken, type ThemeConfig, type ThemeToken } from '../types/theme';
 
 /** How much of an accent goes into its tinted background; the rest is the panel. */
 const TINT_MIX_PERCENT = 16;

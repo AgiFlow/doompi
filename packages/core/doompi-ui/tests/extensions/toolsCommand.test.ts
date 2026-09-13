@@ -1,10 +1,11 @@
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { DOOM_MCP_STATUS_SERVICE, type McpStatusSnapshot } from '@agimon-ai/doompi-extension-contracts/mcp-status';
-import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protocol';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { DOOM_MCP_STATUS_SERVICE, type McpStatusSnapshot } from '@agimon-ai/doompi-core/mcp-status';
+import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
 import type { ExtensionAPI, ExtensionContext, ToolInfo } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import doomPiUiExtension from '../../src/exports/extensions/pi.ts';
-import type { UiTelemetry } from '../../src/exports/logSinkTelemetry.ts';
+
+import type { UiTelemetry } from '../../src/exports/logSinkTelemetry';
+import doomPiUiExtension from '../../src/extensions/pi';
 
 type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
 
@@ -72,8 +73,9 @@ async function register(tools: readonly ToolInfo[]) {
       sessionHandlers.set(event, [...(sessionHandlers.get(event) ?? []), handler]);
     }),
   } as unknown as ExtensionAPI;
-  await doomPiUiExtension(pi, telemetry());
+  await installDoomCordisHost(pi, { mode: 'composed', source: 'ui-tools-test-host' });
   const connection = await connectDoomCordisHost(pi, '@agimon-ai/doompi-ui/tools-test');
+  await doomPiUiExtension(pi, telemetry());
 
   const fire = async (event: string): Promise<void> => {
     for (const handler of sessionHandlers.get(event) ?? []) await handler({}, headlessContext());

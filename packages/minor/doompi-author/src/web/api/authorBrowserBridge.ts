@@ -1,9 +1,9 @@
-import type { WebPluginRuntime } from '@agimon-ai/doompi-web-contracts';
+import type { WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 import { Store } from '@tanstack/store';
-import type { AuthorHubMessage } from '../../types/webAuthor.ts';
-import { authorChannelType } from '../../types/webAuthor.ts';
-import { AuthorRuntime } from './authorRuntime.ts';
-import type { AuthorTrustedProfile } from '../lib/authorViewportTypes.ts';
+
+import type { AuthorBrowserMessage, AuthorHubMessage } from '../../types/webAuthor';
+import type { AuthorTrustedProfile } from '../lib/authorViewportTypes';
+import { AuthorRuntime } from './authorRuntime';
 
 interface ActiveViewport {
   sessionId: string;
@@ -170,8 +170,12 @@ class AuthorBrowserBridge {
     });
   }
 
-  #send(sessionId: string, payload: Record<string, unknown>): void {
-    this.#host.sendHubFrame({ type: authorChannelType, sessionId, payload });
+  #send(sessionId: string, payload: AuthorBrowserMessage): void {
+    const workspaceId = this.#host.mount?.scope === 'session' ? this.#host.mount.workspaceId : undefined;
+    const mount = workspaceId ? { scope: 'workspace' as const, workspaceId } : { scope: 'global' as const };
+    void this.#host
+      .invokeServerMethod({ mount, service: 'author.bridge', method: 'send', input: { sessionId, message: payload } })
+      .catch(() => undefined);
   }
 
   #current(active: ActiveViewport, requestId: string, controller: AbortController): boolean {

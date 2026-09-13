@@ -1,19 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DOOMPI_CHILD_EXTENSIONS_ENV } from '../../src/exports/env';
+import type { ResolvedSubagentCapabilityCeiling } from '../../src/schemas/team/capabilityCeiling';
 import type {
   DiscoveredSkill,
   SkillDiscoveryContract,
   ResolvedSkill,
   SkillResolution,
-} from '../../src/adapters/agents/skills';
-import type { AgentConfig } from '../../src/adapters/agents/types';
-import { DOOMPI_CHILD_EXTENSIONS_ENV } from '../../src/exports/env';
-import type { ResolvedSubagentCapabilityCeiling } from '../../src/schemas/team/capabilityCeiling';
+} from '../../src/services/agentSkills';
 import {
   buildAgentCatalogEntries,
   projectAgentResources,
   type AgentResourceProjectionContext,
-} from '../../src/adapters/pi/tui/agentResourceProjection';
+} from '../../src/tui/agentResourceProjection';
+import type { AgentConfig } from '../../src/types/agent';
 
 function agent(name: string, overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {

@@ -2,7 +2,21 @@
 
 Package-owned guidance for the DoomPi web cockpit.
 
-## Resources
+## Start here
 
-- [Package README](./README.md): Running the cockpit, the bridge's security stance, what each
-  surface renders, and the limits of what Pi RPC exposes.
+- [README](./README.md): installation, command options, runtime behavior, extensions, and security summary.
+- [Getting started](./docs/getting-started.md): setup, synchronization, proxy options, and local development.
+- [Architecture](./docs/architecture.md): browser, presentation proxy, and headless ownership.
+- [Web plugins](./docs/plugins.md): `doompiWeb.client`, `webPlugin`, and UI contributions.
+- [Package APIs](./docs/package-apis.md): headless API scopes, selectors, and request context.
+- [Web bundling and serving](./docs/bundle.md): browser build outputs and presentation serving.
+- [Remote security](./docs/security.md): browser transport and deployment boundaries.
+
+## Facts to preserve
+
+- DoomPi Web is a standalone presentation process, not a Pi extension or a `.doom/modes.yaml` entry.
+- The default URL is `http://127.0.0.1:7433`; the default headless endpoint is `http://127.0.0.1:7434`.
+- The process serves browser assets and forwards `/api` HTTP requests and the `/api/pi` WebSocket to the configured headless endpoint.
+- Session state, server facets, APIs, channels, authorization, history, and replay belong to `doompi-server`.
+- The headless credential is forwarded by the presentation process and never embedded in browser assets.
+- Browser plugins are declared with `doompiWeb.client`; host-side behavior is declared with `doompiServer` and loaded by the headless process.

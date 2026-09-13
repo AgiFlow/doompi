@@ -1,9 +1,10 @@
 import { Input, Spinner, Switch } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
-import { remoteAccessStore, updateRemoteSettings } from '../../stores/remoteAccessStore.ts';
-import { DevProxyTargets } from './DevProxyTargets.tsx';
-import { PairedDeviceList } from './PairedDeviceList.tsx';
-import { SandboxWorkspaces } from './SandboxWorkspaces.tsx';
+
+import { remoteAccessStore, updateRemoteSettings } from '../../stores/remoteAccessStore';
+import { DevProxyTargets } from './DevProxyTargets';
+import { PairedDeviceList } from './PairedDeviceList';
+import { SandboxWorkspaces } from './SandboxWorkspaces';
 
 const MAX_MINUTES = 1440;
 const MAX_HOURS = 720;

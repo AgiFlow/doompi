@@ -1,4 +1,3 @@
-export { fileEditExtension } from '../adapters/pi/extension.ts';
-export { createFileEditContainer } from '../container/index.ts';
+export { createFileEditDependencies } from '../tui/fileEditDependencies';
 export * from '../types/domain';
-export * from '../types/index.ts';
+export * from '../types';

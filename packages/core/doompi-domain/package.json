@@ -30,7 +30,7 @@
   "files": [
     "dist",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "llms.txt",
     "src/prompts",
     "README.md",
@@ -56,6 +56,11 @@
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
+    },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
     },
     "./mcp": {
       "types": "./dist/mcp.d.mts",
@@ -86,15 +91,17 @@
   },
   "dependencies": {
     "@agimon-ai/doompi-config": "workspace:*",
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
+    "@agimon-ai/doompi-minor-mode": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "typebox": "1.3.25",
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-core": "workspace:*",
+    "@agimon-ai/doompi-voice": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "@earendil-works/pi-coding-agent": "0.85.1",
@@ -106,6 +113,7 @@
     "vitest": "5.0.0"
   },
   "peerDependencies": {
+    "@agimon-ai/doompi-core": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1"
   },
@@ -115,15 +123,32 @@
     },
     "@earendil-works/pi-tui": {
       "optional": true
+    },
+    "@agimon-ai/doompi-core": {
+      "optional": true
     }
   },
   "engines": {
     "node": ">=22.19.0"
   },
+  "doompiServer": {
+    "entry": "./src/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "session"
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
+    }
+  },
   "doompiWeb": {
     "pluginId": "domain",
     "channels": [],
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/extensions/web.ts",
+    "scopes": [
+      "session"
+    ]
   },
   "pi": {
     "extensions": [

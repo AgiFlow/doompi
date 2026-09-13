@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { applyTranscriptPolicy } from '../src/services/transcriptPolicy.ts';
-import { VoiceDelivery, type VoiceDeliveryResult } from '../src/services/voiceDelivery.ts';
+
+import { applyTranscriptPolicy } from '../src/services/transcriptPolicy';
+import { VoiceDelivery, type VoiceDeliveryResult } from '../src/services/voiceDelivery';
 
 const request = {
   sessionId: 'session-1',
@@ -270,4 +271,40 @@ describe('VoiceDelivery', () => {
 
     expect(deliver).not.toHaveBeenCalled();
   });
+});
+
+it('waits for asynchronous admission and ignores late settlement after clear', async () => {
+  let resolve!: () => void;
+  const onResult = vi.fn();
+  const delivery = new VoiceDelivery({
+    deliver: () =>
+      new Promise<void>((done) => {
+        resolve = done;
+      }),
+    onResult,
+  });
+  delivery.submit(request);
+  expect(onResult).not.toHaveBeenCalled();
+  resolve();
+  await Promise.resolve();
+  expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ kind: 'delivered' }));
+  onResult.mockClear();
+  delivery.submit(request);
+  delivery.clear();
+  resolve();
+  await Promise.resolve();
+  expect(onResult).not.toHaveBeenCalled();
+});
+
+it('reports asynchronous admission rejection', async () => {
+  const onResult = vi.fn();
+  const delivery = new VoiceDelivery({
+    deliver: async () => {
+      throw new Error('session busy');
+    },
+    onResult,
+  });
+  delivery.submit(request);
+  await Promise.resolve();
+  expect(onResult).toHaveBeenCalledWith(expect.objectContaining({ kind: 'failed', code: 'session busy' }));
 });

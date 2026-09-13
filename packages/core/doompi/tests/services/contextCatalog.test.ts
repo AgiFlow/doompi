@@ -1,7 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
-import { createContextPublisher } from '../../src/services/contextCatalog.ts';
+
+import { createContextPublisher } from '../../src/builders/cli/contextCatalog';
 
 /** Neither the MCP status nor the skill-source service is provided here. */
 const cordis = { get: () => undefined } as unknown as Context;

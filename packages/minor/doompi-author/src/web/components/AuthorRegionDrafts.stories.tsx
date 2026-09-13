@@ -3,9 +3,9 @@
  * looking for a bare `const meta`. The drafts panel renders nothing without a
  * candidate or a draft, so every variant carries one of the two.
  */
-import type { AuthorRegionDraft } from '../lib/authorViewportTypes.ts';
-import type { AuthorSessionWorkspace } from '../stores/authorWorkspaceStore.ts';
-import { AuthorRegionDrafts } from './AuthorRegionDrafts.tsx';
+import type { AuthorRegionDraft } from '../lib/authorViewportTypes';
+import type { AuthorSessionWorkspace } from '../stores/authorWorkspaceStore';
+import { AuthorRegionDrafts } from './AuthorRegionDrafts';
 
 const draft = (id: string, comment: string): AuthorRegionDraft => ({
   id,

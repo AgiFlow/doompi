@@ -1,7 +1,8 @@
-import type { SessionFrameSender } from '@agimon-ai/doompi-web-contracts';
-import { defineSessionStore } from '@agimon-ai/doompi-web-contracts';
-import { WORKFLOW_RUNS_TYPE, type WorkflowRunView } from '../../types/webWorkflows.ts';
-import { workflowRunIdentity } from '../lib/workflowActivity.ts';
+import type { SessionFrameSender } from '@agimon-ai/doompi-core/web';
+import { defineSessionStore } from '@agimon-ai/doompi-core/web';
+
+import { WORKFLOW_RUNS_TYPE, type WorkflowRunView } from '../../types/webWorkflows';
+import { workflowRunIdentity } from '../lib/workflowActivity';
 
 /** One session's record: the hub's last report plus the run this page is looking at. */
 export interface WorkflowsSession {

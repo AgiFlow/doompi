@@ -5,4 +5,4 @@ export {
   isWritableFile,
   resolveInputPath,
   resolveReadInputPath,
-} from '../adapters/node/files.ts';
+} from '../services/files';

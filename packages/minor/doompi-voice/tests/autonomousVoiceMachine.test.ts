@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+
 import {
   type AutonomousTurnIdentity,
   type AutonomousVoiceEffect,
   autonomousVoiceMachine,
   autonomousVoiceState,
-} from '../src/services/autonomousVoiceMachine.ts';
+} from '../src/models/autonomousVoiceMachine';
 
 const firstTurn: AutonomousTurnIdentity = {
   sessionId: 'session-1',

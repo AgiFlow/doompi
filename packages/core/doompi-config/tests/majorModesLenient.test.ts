@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadMajorModesConfig, loadMajorModesConfigLenient } from '../src/exports/majorModes.ts';
+
+import { loadMajorModesConfig, loadMajorModesConfigLenient } from '../src/exports/majorModes';
 
 describe('loadMajorModesConfigLenient', () => {
   let root: string;

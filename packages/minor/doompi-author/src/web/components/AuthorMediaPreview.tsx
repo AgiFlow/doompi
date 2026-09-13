@@ -1,7 +1,8 @@
 import { MediaPreview } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
-import { authorSessionFileUrl } from '../api/authorFiles.ts';
-import { loadAuthorMedia } from '../api/authorMedia.ts';
+
+import { authorSessionFileUrl } from '../api/authorFiles';
+import { loadAuthorMedia } from '../api/authorMedia';
 
 /** Viewing an attachment does not require enabling authoring or its editing tools. */
 export function AuthorMediaPreview({ sessionId, path }: { sessionId: string; path: string }) {

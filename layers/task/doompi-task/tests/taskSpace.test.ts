@@ -1,14 +1,17 @@
-import type { ExtensionAPI, Theme } from '@earendil-works/pi-coding-agent';
-import type { TUI } from '@earendil-works/pi-tui';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import type { Theme } from '@earendil-works/pi-coding-agent';
+import type { TUI } from '@earendil-works/pi-tui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerTasksCommand } from '../src/exports/commands';
-import { TaskStore } from '../src/exports/store/taskStore';
-import { STORE_SCHEMA_VERSION, type Task } from '../src/exports/store/types';
-import { ERR_REQUIRES_INTERACTIVE, TASK_STATUSES } from '../src/exports/tool/schema';
-import { TASK_SPACE_OVERLAY_OPTIONS, TaskSpaceComponent, type TaskSpaceOptions } from '../src/tui/taskSpace.ts';
+
+import { createTasksCommand } from '../src/exports/commands';
+import { TaskStore } from '../src/exports/storeTaskStore';
+import { STORE_SCHEMA_VERSION, type Task } from '../src/exports/storeTypes';
+import { ERR_REQUIRES_INTERACTIVE, TASK_STATUSES } from '../src/exports/toolSchema';
+import { openTaskSpace } from '../src/tui/taskSpace';
+import { TASK_SPACE_OVERLAY_OPTIONS, TaskSpaceComponent, type TaskSpaceOptions } from '../src/tui/taskSpace';
 
 const WIDTH = 120;
 const KEY_UP = '\x1b[A';
@@ -22,8 +25,6 @@ const SELECTION_MARKER = '›';
  */
 const BREADCRUMB_MARKER = 'SPC ›';
 const isSelectedRow = (line: string): boolean => line.includes(SELECTION_MARKER) && !line.includes(BREADCRUMB_MARKER);
-const EXTERNAL_POLL_MS = 20;
-const EXTERNAL_SETTLE_MS = 200;
 let directory: string;
 let storePath: string;
 
@@ -76,15 +77,12 @@ interface Harness {
   closed: () => number;
 }
 
-function createComponent(
-  options: Omit<Partial<TaskSpaceOptions>, 'store'> & { pollIntervalMs?: number } = {},
-): Harness {
-  const { pollIntervalMs, ...spaceOptions } = options;
-  const store = new TaskStore(pollIntervalMs === undefined ? { storePath } : { storePath, pollIntervalMs });
+function createComponent(options: Omit<Partial<TaskSpaceOptions>, 'store'> = {}): Harness {
+  const store = new TaskStore({ storePath });
   store.read();
   const tui = { terminal: { rows: 42, columns: WIDTH }, requestRender: vi.fn() } as unknown as TUI;
   let closeCount = 0;
-  const component = new TaskSpaceComponent(tui, createTheme(), { store, ...spaceOptions }, () => {
+  const component = new TaskSpaceComponent(tui, createTheme(), { store, ...options }, () => {
     closeCount += 1;
   });
   const render = (): string[] => component.render(WIDTH);
@@ -268,15 +266,16 @@ describe('TaskSpaceComponent list panel', () => {
     harness.component.dispose();
   });
 
-  it('refreshes rows from an external write without closing', async () => {
+  it('does not refresh rows from an external durable write', async () => {
     seed([{ subject: 'original subject' }]);
-    const harness = createComponent({ pollIntervalMs: EXTERNAL_POLL_MS });
+    const harness = createComponent();
     expect(harness.text()).toContain('original subject');
 
     seed([{ subject: 'rewritten subject' }]);
-    await new Promise((resolve) => setTimeout(resolve, EXTERNAL_SETTLE_MS));
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(harness.text()).toContain('rewritten subject');
+    expect(harness.text()).toContain('original subject');
+    expect(harness.text()).not.toContain('rewritten subject');
     expect(harness.closed()).toBe(0);
     harness.component.dispose();
   });
@@ -341,7 +340,7 @@ describe('TaskSpaceComponent editing and layout', () => {
     harness.component.handleInput('!');
     expect(harness.text()).toContain('EDIT');
     harness.component.handleInput(KEY_ENTER);
-    await new Promise((resolve) => setTimeout(resolve, EXTERNAL_SETTLE_MS));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(harness.store.read().tasks[0].subject).toBe('ol!');
     harness.component.dispose();
@@ -354,7 +353,7 @@ describe('TaskSpaceComponent editing and layout', () => {
     harness.component.handleInput(KEY_ENTER);
     for (let index = 0; index < 'keep me'.length; index++) harness.component.handleInput('\x7f');
     harness.component.handleInput(KEY_ENTER);
-    await new Promise((resolve) => setTimeout(resolve, EXTERNAL_SETTLE_MS));
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(harness.store.read().tasks[0].subject).toBe('keep me');
     expect(harness.text()).toContain('blank');
@@ -451,33 +450,19 @@ describe('TaskSpaceComponent editing and layout', () => {
   });
 });
 
-describe('registerTasksCommand overlay dispatch', () => {
-  function createPi(): { pi: ExtensionAPI; handler: () => (args: string, ctx: unknown) => Promise<void> } {
-    let registered: ((args: string, ctx: unknown) => Promise<void>) | undefined;
-    const pi = {
-      registerCommand: (_name: string, options: { handler: (args: string, ctx: unknown) => Promise<void> }) => {
-        registered = options.handler;
-      },
-    } as unknown as ExtensionAPI;
-    return {
-      pi,
-      handler: () => {
-        if (!registered) throw new Error('tasks command was not registered');
-        return registered;
-      },
-    };
-  }
-
+describe('createTasksCommand overlay dispatch', () => {
   it('refuses without a UI and never opens the overlay', async () => {
     seed([{ subject: 'anything' }]);
     const store = new TaskStore({ storePath });
     store.read();
-    const { pi, handler } = createPi();
-    registerTasksCommand(pi, store);
+    const handler = createTasksCommand(store, openTaskSpace)[1].handler as (
+      args: string,
+      context: unknown,
+    ) => Promise<void>;
     const custom = vi.fn();
     const notify = vi.fn();
 
-    await handler()('', { hasUI: false, ui: { custom, notify } });
+    await handler('', { hasUI: false, ui: { custom, notify } });
 
     expect(custom).not.toHaveBeenCalled();
     expect(notify).toHaveBeenCalledWith(ERR_REQUIRES_INTERACTIVE, 'error');
@@ -488,11 +473,13 @@ describe('registerTasksCommand overlay dispatch', () => {
     seed([{ subject: 'anything' }]);
     const store = new TaskStore({ storePath });
     store.read();
-    const { pi, handler } = createPi();
-    registerTasksCommand(pi, store);
+    const handler = createTasksCommand(store, openTaskSpace)[1].handler as (
+      args: string,
+      context: unknown,
+    ) => Promise<void>;
     const custom = vi.fn();
 
-    await handler()('', { hasUI: true, ui: { custom, notify: vi.fn() } });
+    await handler('', { hasUI: true, ui: { custom, notify: vi.fn() } });
 
     expect(custom).toHaveBeenCalledOnce();
     expect(custom.mock.calls[0]?.[1]).toEqual({ overlay: true, overlayOptions: TASK_SPACE_OVERLAY_OPTIONS });

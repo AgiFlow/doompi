@@ -1,12 +1,14 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import zlib from 'node:zlib';
-import type { AgentToolResult, ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
+import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { applyImageLimits } from '../src/adapters/pi/readImage.ts';
-import { registerHashlineReadTool } from '../src/adapters/pi/readTool.ts';
+
+import { applyImageLimits } from '../src/services/piReadImage';
+import { createHashlineReadTool } from '../src/tools/piRead';
 
 interface CapturedTool {
   execute(
@@ -80,11 +82,7 @@ beforeEach(async () => {
   process.env.HOME = home;
   delete process.env.PI_CODING_AGENT_DIR;
   tool = undefined;
-  registerHashlineReadTool({
-    registerTool(registered) {
-      tool = registered as unknown as CapturedTool;
-    },
-  } as Pick<ExtensionAPI, 'registerTool'>);
+  tool = createHashlineReadTool() as unknown as CapturedTool;
 });
 
 afterEach(async () => {

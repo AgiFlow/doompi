@@ -1,4 +1,4 @@
-import { CodeEditorView } from './CodeEditorView.tsx';
+import { CodeEditorView } from './CodeEditorView';
 
 const CODE = [
   "import { cn } from './cn.ts';",

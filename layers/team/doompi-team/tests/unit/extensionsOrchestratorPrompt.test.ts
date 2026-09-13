@@ -5,7 +5,7 @@ import {
   ORCHESTRATOR_PROMPT,
   ORCHESTRATOR_PROMPT_MARKER,
   shouldInjectOrchestratorPrompt,
-} from '../../src/adapters/pi/extensions/orchestratorPrompt';
+} from '../../src/services/orchestratorPrompt';
 
 describe('shouldInjectOrchestratorPrompt', () => {
   it('is on by default, because the extension loads in every session and the guidance is the point', () => {

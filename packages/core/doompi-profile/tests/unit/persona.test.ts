@@ -1,13 +1,15 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
+
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
+import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import { Context } from '@deepseek-ai/cordis';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerPersonaHandlers } from '../../src/adapters/pi/persona.ts';
-import type { ProfileTelemetry } from '../../src/types/telemetry.ts';
+
+import { createPersonaEvents } from '../../src/controllers/personaRuntime';
+import type { ProfileTelemetry } from '../../src/types/telemetry';
 
 type BeforeAgentStart = (
   event: { systemPrompt: string },
@@ -25,12 +27,6 @@ const telemetry: ProfileTelemetry = {
 };
 
 function hookFor(personaFile?: string): { hook: BeforeAgentStart; ctx: ExtensionContext } {
-  const handlers = new Map<string, BeforeAgentStart>();
-  const pi = {
-    on(event: string, handler: BeforeAgentStart) {
-      handlers.set(event, handler);
-    },
-  } as unknown as ExtensionAPI;
   const ctx = {
     sessionManager: { getSessionId: () => 'persona-session' },
   } as unknown as ExtensionContext;
@@ -40,13 +36,13 @@ function hookFor(personaFile?: string): { hook: BeforeAgentStart; ctx: Extension
     harness: { ...readHarnessState({}), root, personaFile },
     requiresRelaunch: false,
   });
-  registerPersonaHandlers(pi, telemetry, () => {
+  const events = createPersonaEvents(telemetry, () => {
     if (!cordis) throw new Error('test runtime context is unavailable');
     return cordis;
   });
-  const hook = handlers.get('before_agent_start');
+  const hook = events.before_agent_start;
   if (!hook) throw new Error('persona registered no before_agent_start hook');
-  return { hook, ctx };
+  return { hook: hook as BeforeAgentStart, ctx };
 }
 
 beforeEach(() => {

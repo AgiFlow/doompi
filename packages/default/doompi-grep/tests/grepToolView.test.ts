@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { grepCallView } from '../src/web/lib/grepToolView.ts';
+
+import { grepCallView } from '../src/web/lib/grepToolView';
 
 describe('the grep call view', () => {
   it('lists the pattern, search path, glob, case flag, and limit the way the TUI heading does', () => {

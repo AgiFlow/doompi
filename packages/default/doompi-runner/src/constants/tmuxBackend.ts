@@ -1,0 +1,11 @@
+export const POLL_MS = 100;
+export const LOG_DRAIN_TIMEOUT_MS = 2_000;
+export const LOG_DRAIN_POLL_MS = 25;
+export const PANE_STATE_FORMAT = '#{pane_dead}:#{pane_dead_status}:#{session_name}';
+export const STOP_GRACE_MS = 3_000;
+export const SESSION_PREFIX = 'doom-tmux-';
+export const OWNED_TARGET_PATTERN = /^doom-tmux-[A-Za-z0-9_-]+$/;
+export const TMUX_TARGET_PREFIX = SESSION_PREFIX;
+export const SOCKET_HASH_LENGTH = 12;
+export const SOCKET_PREFIX = 'doom-tmux-';
+export const NON_INTERACTIVE_ENV = { NO_COLOR: '1', CI: '1' };

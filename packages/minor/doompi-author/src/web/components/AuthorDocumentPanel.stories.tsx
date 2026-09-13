@@ -1,14 +1,15 @@
+import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 /*
  * Plain CSF objects; the style-system renderer resolves the default export by
  * looking for a bare `const meta`. The panel loads the document over HTTP when
  * the store has none, so each variant seeds the store first and only the
  * inactive-mode branch is left to the fallback path.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { WebPluginSlotProps } from '@agimon-ai/doompi-web-contracts';
-import type { AuthorDocumentInput } from '../lib/authorViewportTypes.ts';
-import { putAuthorDocument, reviseAuthorDocument } from '../stores/authorWorkspaceStore.ts';
-import { AuthorDocumentPanel } from './AuthorDocumentPanel.tsx';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import type { AuthorDocumentInput } from '../lib/authorViewportTypes';
+import { putAuthorDocument, reviseAuthorDocument } from '../stores/authorWorkspaceStore';
+import { AuthorDocumentPanel } from './AuthorDocumentPanel';
 
 const SPEC: AuthorDocumentInput = {
   path: 'docs/spec.md',

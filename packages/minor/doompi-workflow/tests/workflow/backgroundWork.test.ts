@@ -2,11 +2,11 @@ import {
   DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProvider,
   type DoomBackgroundWorkService,
-} from '@agimon-ai/doompi-extension-contracts/background-work';
+} from '@agimon-ai/doompi-core/background-work';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { registerRunProvider } from '../../src/services/backgroundWork.ts';
+import { registerRunProvider } from '../../src/services/backgroundWork';
 
 const roots: Context[] = [];
 

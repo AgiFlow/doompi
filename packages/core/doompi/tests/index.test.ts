@@ -1,15 +1,16 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const findSyncedRoot = vi.hoisted(() => vi.fn());
 const readStartupBootstrapStatus = vi.hoisted(() => vi.fn());
-vi.mock('../src/adapters/bootstrapLocator.ts', () => ({ findSyncedRoot, readStartupBootstrapStatus }));
+vi.mock('../src/builders/cli/bootstrapLocator', () => ({ findSyncedRoot, readStartupBootstrapStatus }));
 
-import dedicatedPiExtension from '../src/exports/extensions/pi';
-import doomPiPackageExtension from '../src/exports/index';
+import * as publicApi from '../src/exports';
+import doomPiPackageExtension from '../src/extensions/pi';
 
 /** Enough of Pi's surface for the bootstrap to park its release handler on. */
 const pi = { on: vi.fn() } as unknown as ExtensionAPI;
@@ -45,9 +46,9 @@ describe('DoomPi package extension', () => {
     vi.unstubAllEnvs();
   });
 
-  it('shares one callable factory between the public root and dedicated Pi entry', () => {
-    expect(dedicatedPiExtension).toBe(doomPiPackageExtension);
-    expect(typeof dedicatedPiExtension).toBe('function');
+  it('publishes its callable Pi entry separately from reusable public APIs', () => {
+    expect(publicApi).not.toHaveProperty('default');
+    expect(typeof doomPiPackageExtension).toBe('function');
   });
 
   it('loads a fresh synchronized bootstrap dynamically', async () => {

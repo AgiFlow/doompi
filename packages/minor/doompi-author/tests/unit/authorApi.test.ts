@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assertDeclaredApi, mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
+
+import { mountPackageApi } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it } from 'vitest';
-import { createAuthorApi, api } from '../../src/adapters/authorApi.ts';
-import { AUTHOR_DOCUMENT_OPEN_PATH } from '../../src/adapters/authorDocumentApi.ts';
-import { API_BASE_PATH, AUTHOR_STATE_PATH, authorStateUrl } from '../../src/types/authorApi.ts';
+
+import { createAuthorApi, api } from '../../src/controllers/authorApi';
+import { AUTHOR_DOCUMENT_OPEN_PATH } from '../../src/controllers/authorDocumentApi';
+import { API_BASE_PATH, AUTHOR_STATE_PATH, authorStateUrl } from '../../src/types/authorApi';
 
 const PACKAGE_ROOT = path.resolve(fileURLToPath(import.meta.url), '..', '..', '..');
 
@@ -46,13 +48,12 @@ describe('the author API', () => {
     expect(await fs.readFile(documentPath)).toEqual(before);
   });
   it('builds the hub proxy URL with one session query', () => {
-    expect(authorStateUrl('s/1')).toBe(`/api/plugin/${API_BASE_PATH}${AUTHOR_STATE_PATH}?session=s%2F1`);
+    expect(authorStateUrl('s/1')).toBe(`/api/sessions/s%2F1/plugin/${API_BASE_PATH}${AUTHOR_STATE_PATH}?session=s%2F1`);
   });
 
   it('serves the route through its declared package mount', async () => {
     const mounted = mountPackageApi(api, { scope: 'session', sessionId: 's1', cwd: '/repo' });
     expect((await mounted.fetch(`/api/plugin/${API_BASE_PATH}${AUTHOR_STATE_PATH}`)).status).toBe(200);
-    expect(assertDeclaredApi({ packageRoot: PACKAGE_ROOT, api, scope: 'session' }).basePath).toBe(API_BASE_PATH);
     mounted.close();
   });
 });

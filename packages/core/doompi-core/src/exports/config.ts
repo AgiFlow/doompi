@@ -1,0 +1,32 @@
+export type {
+  ConfigAction,
+  ConfigChoice,
+  ConfigField,
+  ConfigFieldKind,
+  ConfigProgress,
+  ConfigSection,
+  ConfigSnapshot,
+  ConfigSourceRef,
+  ConfigStatus,
+  ConfigStep,
+  DoomConfigActionInput,
+  DoomConfigContributionHandle,
+  DoomConfigContributionOptions,
+  DoomConfigInvocation,
+  DoomConfigSectionView,
+  DoomExtensionContext,
+} from '../schemas/config';
+export {
+  CONFIG_ACTION,
+  ConfigActionSchema,
+  ConfigChoiceSchema,
+  ConfigFieldKindSchema,
+  ConfigFieldSchema,
+  ConfigProgressSchema,
+  ConfigSectionSchema,
+  ConfigSourceSchema,
+  ConfigStatusSchema,
+  ConfigStepSchema,
+  DOOM_CONFIG_SERVICE,
+} from '../schemas/config';
+export type { IDoomConfigService } from '../types/config';

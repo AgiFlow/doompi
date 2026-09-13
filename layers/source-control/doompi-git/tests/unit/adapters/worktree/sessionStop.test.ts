@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isAlive, stopSession } from '../../../../src/adapters/worktree/sessionStop.ts';
+
+import { isAlive, stopSession } from '../../../../src/services/sessionStop';
 
 const UNREACHABLE_PID = 0x7ffffffe;
 

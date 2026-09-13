@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   ACCENT_TONES,
   badgeVariants,
@@ -19,7 +20,7 @@ import {
   STATUS_TONES,
   statusBadgeVariants,
   toastVariants,
-} from '../../src/exports/index.ts';
+} from '../../src/exports';
 
 /**
  * The tone unions in src/types/tone.ts are enforced at compile time by the

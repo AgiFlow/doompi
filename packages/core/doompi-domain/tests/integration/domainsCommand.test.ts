@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import {
   createHarnessSession,
   disposeHarnessState,
@@ -10,27 +11,26 @@ import {
   updateHarnessState,
 } from '@agimon-ai/doompi-config/harnessStore';
 import type { HarnessState } from '@agimon-ai/doompi-config/types';
-import type { TransitionOutcome } from '@agimon-ai/doompi-extension-contracts/transition';
-import {
-  createDoomVoiceToolsService,
-  DOOM_VOICE_TOOLS_SERVICE,
-} from '@agimon-ai/doompi-extension-contracts/voice-tools';
+import type { TransitionOutcome } from '@agimon-ai/doompi-core/transition';
 import {
   createVoiceReloadHandoffStore,
   type VoiceReloadHandoffStore,
-} from '@agimon-ai/doompi-extension-contracts/voice-reload-handoff';
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from '@earendil-works/pi-coding-agent';
+} from '@agimon-ai/doompi-core/voice-reload-handoff';
+import { DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-core/voice-tools';
+import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDomainSwitchHandoffStore } from '../../src/adapters/domainSwitchHandoff.ts';
+
 import {
   type DomainCatalogPort,
   type DomainsCommandDependencies,
-  registerDomainsCommand,
-} from '../../src/commands/domainsCommand.ts';
-import { DOMAIN_EVENT, type DomainTelemetry } from '../../src/types/telemetry.ts';
-import { bindStubCoordinator } from '../helpers/coordinator.ts';
-import { bindConfig, harnessContext } from '../helpers/session.ts';
+  createDomainsCommand,
+} from '../../src/controllers/domainsCommand';
+import { createDomainSwitchHandoffStore } from '../../src/models/domainSwitchHandoff';
+import { DOMAIN_EVENT, type DomainTelemetry } from '../../src/types/telemetry';
+import { bindStubCoordinator } from '../helpers/coordinator';
+import { bindConfig, harnessContext } from '../helpers/session';
 
 const persistHarnessSelection = vi.hoisted(() => vi.fn());
 const pickerConstructed = vi.hoisted(() => vi.fn());
@@ -39,7 +39,7 @@ vi.mock('@agimon-ai/doompi-config/piContext', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   persistHarnessSelection,
 }));
-vi.mock('@agimon-ai/doompi-ui/components/matrixPicker', () => ({
+vi.mock('@agimon-ai/doompi-ui/matrix-picker', () => ({
   MatrixPickerComponent: class MatrixPickerComponent {
     constructor(...args: unknown[]) {
       pickerConstructed(...args);
@@ -153,15 +153,17 @@ function setup(
     });
   persistHarnessSelection.mockImplementation(() => order.push('persist'));
 
-  registerDomainsCommand(pi, telemetry, {
-    cordisContext: () => cordis,
-    catalog,
-    handoffs,
-    reloadHandoffs,
-    applyDomains,
-    loadConfigJournal: () => import('@agimon-ai/doompi-config/piContext'),
-    loadPicker: () => import('@agimon-ai/doompi-ui/components/matrixPicker'),
-  });
+  pi.registerCommand(
+    ...createDomainsCommand(pi, telemetry, {
+      cordisContext: () => cordis,
+      catalog,
+      handoffs,
+      reloadHandoffs,
+      applyDomains,
+      loadConfigJournal: () => import('@agimon-ai/doompi-config/piContext'),
+      loadPicker: () => import('@agimon-ai/doompi-ui/matrix-picker'),
+    }),
+  );
 
   const handler = commands.get('domains');
   if (!handler) throw new Error('the domains command was not registered');

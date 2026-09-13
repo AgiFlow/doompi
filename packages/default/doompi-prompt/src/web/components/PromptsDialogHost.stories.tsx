@@ -12,10 +12,12 @@
  * ponytail: the stub answers reads only. Nothing here exercises save or
  * delete; add matching branches if a story needs the mutation states.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { API_BASE_PATH, PROMPTS_PATH, type SavedPromptListResponse } from '../../types/webPrompts.ts';
-import { PromptsDialogHost } from './PromptsDialogHost.tsx';
-import { requestPromptDialogOpen } from '../lib/messagePromptDraft.ts';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { API_BASE_PATH, PROMPTS_PATH } from '../../constants/webPrompts';
+import { type SavedPromptListResponse } from '../../types/webPrompts';
+import { requestPromptDialogOpen } from '../lib/messagePromptDraft';
+import { PromptsDialogHost } from './PromptsDialogHost';
 
 const body: SavedPromptListResponse = {
   prompts: [

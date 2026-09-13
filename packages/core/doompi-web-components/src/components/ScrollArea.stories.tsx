@@ -7,7 +7,7 @@
  * gets an explicit height and more rows than fit. `type` is set away from the
  * default `hover`, which would leave the bar invisible in a screenshot.
  */
-import { ScrollArea } from './ScrollArea.tsx';
+import { ScrollArea } from './ScrollArea';
 
 const meta = {
   title: 'Components/ScrollArea',

@@ -1,14 +1,15 @@
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { createDoomVoiceToolsService } from '@agimon-ai/doompi-extension-contracts/voice-tools';
-import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-extension-contracts/voice-reload-handoff';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { createVoiceReloadHandoffStore } from '@agimon-ai/doompi-voice/voice-reload-handoff';
+import { createDoomVoiceToolsService } from '@agimon-ai/doompi-voice/voice-tools';
 import { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerMajorModeVoiceCapability } from '../../src/adapters/pi/voiceTool.ts';
-import type { MajorModeView } from '../../src/types/majorMode.ts';
-import { bindStubCoordinator } from '../helpers/coordinator.ts';
+
+import { registerMajorModeVoiceCapability } from '../../src/controllers/voiceTool';
+import type { MajorModeView } from '../../src/types/majorMode';
+import { bindStubCoordinator } from '../helpers/coordinator';
 
 const config: MajorModesConfig = {
   defaultMajorMode: 'copilot',

@@ -1,9 +1,10 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ComponentProps, createContext, type ReactNode, useContext, useState } from 'react';
-import { ChevronDownIcon, ChevronUpIcon } from '../icons/icons.ts';
-import { cn } from '../lib/cn.ts';
-import { Button } from './Button.tsx';
-import { STATUS_EDGE, StatusBadge, type StatusTone } from './StatusBadge.tsx';
+
+import { ChevronDownIcon, ChevronUpIcon } from '../icons/icons';
+import { cn } from '../lib/cn';
+import { Button } from './Button';
+import { STATUS_EDGE, StatusBadge, type StatusTone } from './StatusBadge';
 
 /**
  * The message item: the timeline card a tool call, a run, or a notice sits

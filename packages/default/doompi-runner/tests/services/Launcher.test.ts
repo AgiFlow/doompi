@@ -1,12 +1,15 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { RESULT_MAX_BYTES_ENV } from '../../src/exports/config';
-import { runtimeEntry, supervisorPaths } from '../../src/schemas/runnerSpec';
-import { Launcher } from '../../src/adapters/Launcher/Launcher';
-import { FakeClock, FakeLogFile, FakeProcessControl, FakeRunnerPaths, FakeSpawner } from '../doubles.ts';
+import { Launcher } from '../../src/services/launcher';
+import { runtimeEntry, supervisorPaths } from '../../src/services/runnerSupervisor';
+import { FakeClock, FakeLogFile, FakeProcessControl, FakeRunnerPaths, FakeSpawner } from '../doubles';
 
 let previousMaxBytes: string | undefined;
 let previousNoColor: string | undefined;
@@ -100,7 +103,7 @@ describe('Launcher.launch', () => {
     expect(spawner.last.request.command).toContain('exec ');
     expect(spawner.last.request.command).toContain('runnerHost');
     expect(spawner.last.request.command).toContain(supervisor.spec);
-    expect(runtimeEntry('runnerHost')).toContain(`${path.sep}bin${path.sep}runnerHost.ts`);
+    expect(runtimeEntry('runnerHost')).toContain(`${path.sep}bin${path.sep}runnerHost.mjs`);
     expect(runtimeEntry('runnerHost')).not.toContain(`${path.sep}schemas${path.sep}bin${path.sep}`);
     // Nothing has to attach before a native run starts, so its gate opens at once.
     expect(fs.existsSync(supervisor.gate)).toBe(true);
@@ -115,6 +118,19 @@ describe('Launcher.launch', () => {
 
     expect(runtimeEntry('runnerHost', pathToFileURL(builtModule).href)).toBe(path.join(builtBin, 'runnerHost.mjs'));
     expect(runtimeEntry('logSink', pathToFileURL(builtModule).href)).toBe(path.join(builtBin, 'logSink.mjs'));
+  });
+
+  it.each(['runnerHost', 'logSink'] as const)('executes %s through a symlinked package root', (name) => {
+    const real = path.join(directory, 'real');
+    const alias = path.join(directory, 'alias');
+    fs.mkdirSync(path.join(real, 'bin'), { recursive: true });
+    fs.symlinkSync(real, alias, 'junction');
+    fs.writeFileSync(
+      path.join(real, 'bin', `${name}.mjs`),
+      'import { pathToFileURL } from "node:url"; if (import.meta.url === pathToFileURL(process.argv[1]).href) process.stdout.write("executed");',
+    );
+    const entry = runtimeEntry(name, pathToFileURL(path.join(alias, 'schemas', 'runnerSpec.mjs')).href);
+    expect(execFileSync(process.execPath, [entry], { encoding: 'utf8' })).toBe('executed');
   });
 
   it('reports the module it searched from when no executable entry ships beside it', () => {

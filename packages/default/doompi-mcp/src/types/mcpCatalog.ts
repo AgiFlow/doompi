@@ -1,4 +1,4 @@
-import type { McpServerSnapshot, McpStatusSnapshot } from '@agimon-ai/doompi-extension-contracts/mcp-status';
+import type { McpServerSnapshot, McpStatusSnapshot } from '@agimon-ai/doompi-core/mcp-status';
 
 export interface McpCatalogToolInput {
   name: string;

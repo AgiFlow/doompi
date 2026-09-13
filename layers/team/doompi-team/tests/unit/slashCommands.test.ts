@@ -1,21 +1,14 @@
 import * as fs from 'node:fs';
+
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 
-import type { AgentConfig, AgentDiscoveryContract } from '../../src/adapters/agents/types';
-import type { ExtensionConfig } from '../../src/adapters/pi/extensions/config';
-import type {
-  SpawnPlannerContract,
-  SpawnPlanRequest,
-  SpawnPlanResult,
-} from '../../src/adapters/pi/extensions/spawnPlan';
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/adapters/asyncJobTracker';
-import type { PollSchedulerContract, PollSubscription } from '../../src/adapters/pollScheduler';
-import {
-  registerSlashCommands,
-  type SlashCommandDeps,
-  startSingleAgentRun,
-} from '../../src/adapters/pi/commands/slash/slashCommands';
+import { createSlashCommands, type SlashCommandDeps, startSingleAgentRun } from '../../src/controllers/slashCommands';
+import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
+import type { ExtensionConfig } from '../../src/services/config';
+import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
+import type { SpawnPlannerContract, SpawnPlanRequest, SpawnPlanResult } from '../../src/services/spawnPlan';
+import type { AgentConfig, AgentDiscoveryContract } from '../../src/types/agent';
 
 interface FakeHost {
   pi: ExtensionAPI;
@@ -53,6 +46,17 @@ function makeCtx(hasUI = true): FakeCtx {
     sessionManager: {
       getSessionFile: () => '/sessions/session-under-test.jsonl',
       getSessionId: () => 'session-under-test',
+      getLeafId: () => 'settled-leaf',
+      getLeafEntry: () => ({
+        type: 'message',
+        id: 'settled-leaf',
+        parentId: null,
+        message: { role: 'user', content: [] },
+      }),
+      getHeader: () => ({ type: 'session', version: 3, id: 'session-under-test' }),
+      getBranch: () => [
+        { type: 'message', id: 'settled-leaf', parentId: null, message: { role: 'user', content: [] } },
+      ],
     },
     ui: {
       notify: (message: string, kind: string) => notifications.push({ message, kind }),
@@ -167,6 +171,7 @@ function makeDeps(overrides: Partial<SlashCommandDeps> = {}): {
       skills: unusedByThisCommand as SlashCommandDeps['skills'],
       management: unusedByThisCommand as SlashCommandDeps['management'],
       loadConfig: () => config,
+      environment: {},
       ...overrides,
     },
     spawnPlanner,
@@ -182,7 +187,9 @@ function register(
   deps?: ReturnType<typeof makeDeps>,
 ) {
   const resolved = deps ?? makeDeps();
-  registerSlashCommands(host.pi, state, resolved.deps);
+  createSlashCommands(host.pi, state, resolved.deps).forEach(([name, options]) =>
+    host.pi.registerCommand(name, options),
+  );
   return resolved;
 }
 
@@ -298,6 +305,15 @@ describe('/run', () => {
           parentId: 'prior-leaf',
           message: { role: 'assistant', content: [] },
         }),
+        getHeader: () => ({ type: 'session', version: 3, id: 'session-under-test' }),
+        getBranch: () => [
+          {
+            type: 'message',
+            id: 'settled-leaf',
+            parentId: 'prior-leaf',
+            message: { role: 'assistant', content: [] },
+          },
+        ],
       },
     } as unknown as ExtensionContext;
 
@@ -410,11 +426,12 @@ describe('/subagents-steer', () => {
     steerError: Error | undefined;
     steerState: 'delivered' | 'failed' | 'pending' = 'delivered';
 
+    bindSessionScope(): void {}
+
     async steer(id: string, message: string) {
       if (this.steerError) throw this.steerError;
       this.steerCalls.push({ id, message });
       return {
-        requestPath: `/tmp/${id}/steer.json`,
         requestId: 'request-1',
         index: 0,
         state: this.steerState,
@@ -425,7 +442,9 @@ describe('/subagents-steer', () => {
 
   function registerWithManagement(host: FakeHost, management: FakeManagement) {
     const resolved = makeDeps({ management: management as unknown as SlashCommandDeps['management'] });
-    registerSlashCommands(host.pi, { baseCwd: '/work' }, resolved.deps);
+    createSlashCommands(host.pi, { baseCwd: '/work' }, resolved.deps).forEach(([name, options]) =>
+      host.pi.registerCommand(name, options),
+    );
   }
 
   it('passes the run id and full guidance to ManagementActions and reports its acknowledgment', async () => {
@@ -474,17 +493,21 @@ describe('/subagents-stop', () => {
     stopCalls: string[] = [];
     stopError: Error | undefined;
 
-    stop(id: string): { requestPath: string } {
+    bindSessionScope(): void {}
+
+    async stop(id: string): Promise<{ requestId: string }> {
       if (this.stopError) throw this.stopError;
       this.stopCalls.push(id);
-      return { requestPath: `/tmp/${id}/stop.json` };
+      return { requestId: 'request-1' };
     }
   }
 
   function registerWithManagement(host: FakeHost, management: FakeManagement) {
     const resolved = makeDeps({ management: management as unknown as SlashCommandDeps['management'] });
     resolved.tracker.jobs.set('run-1', { runId: 'run-1', status: 'running' });
-    registerSlashCommands(host.pi, { baseCwd: '/work' }, resolved.deps);
+    createSlashCommands(host.pi, { baseCwd: '/work' }, resolved.deps).forEach(([name, options]) =>
+      host.pi.registerCommand(name, options),
+    );
     return resolved;
   }
 

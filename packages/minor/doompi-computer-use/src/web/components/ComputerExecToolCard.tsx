@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   collapseLines,
   MessageItem,
@@ -7,12 +8,12 @@ import {
   MessageLines,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+
 import {
   computerExecCallSummary,
   computerExecCollapsedLines,
   computerExecResultLines,
-} from '../lib/computerExecToolRender.ts';
+} from '../lib/computerExecToolRender';
 
 export function ComputerExecToolCard({ toolName, args, result, running, isError }: ToolMessageRenderProps) {
   const lines = computerExecResultLines(result);

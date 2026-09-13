@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Checkbox } from './Checkbox.tsx';
+import { Checkbox } from './Checkbox';
 
 /** Every checked state Radix models; passing `checked` with no handler keeps the story static. */
 const STATES = [

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseRunnersCommand } from '../../src/services/runs/runnersCommand.ts';
+
+import { parseRunnersCommand } from '../../src/services/runnersCommand';
 
 describe('parseRunnersCommand', () => {
   it('opens Runner Space for anything but the stop verb', () => {

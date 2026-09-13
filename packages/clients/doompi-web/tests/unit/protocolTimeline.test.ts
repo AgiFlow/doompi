@@ -1,94 +1,17 @@
-import type {
-  AssistantTranscriptItem,
-  SessionServiceState,
-  TranscriptItem,
-  UserTranscriptItem,
-} from '@agimon-ai/doompi-extension-contracts/session-protocol';
+import type { TranscriptItem, UserTranscriptItem } from '@agimon-ai/doompi-core/session-protocol';
 import { describe, expect, it } from 'vitest';
-import { createProtocolTimeline, toQueuedEntries, toTimelineEntries } from '../../src/web/lib/protocolTimeline.ts';
+
+import { toQueuedEntries, toTimelineEntries } from '../../src/web/lib/protocolTimeline';
 
 const MODEL = { provider: 'anthropic', id: 'opus' };
 
 describe('protocol transcript projection', () => {
-  it('renders live progress beside history, retains concurrent tools, and commits without duplicates', () => {
-    const project = createProtocolTimeline();
-    const user: UserTranscriptItem = {
-      id: 'u',
-      role: 'user',
-      content: [{ type: 'text', text: 'continue' }],
-      timestamp: 1,
-    };
-    const state: SessionServiceState = {
-      snapshot: {
-        id: 'session',
-        cwd: '/',
-        createdAt: 1,
-        updatedAt: 1,
-        phase: 'turn',
-        model: MODEL,
-        thinkingLevel: 'medium',
-        attached: true,
-        locked: false,
-        revision: 1,
-        transcript: [user],
-        queuedSteer: [],
-        queuedSteerCount: 0,
-      },
-      progress: null,
-    };
-    const assistant: AssistantTranscriptItem = {
-      id: 'a',
-      role: 'assistant',
-      content: [{ type: 'text', text: 'working' }],
-      model: MODEL,
-      status: 'streaming',
-      timestamp: 2,
-    };
-    expect(project({ ...state, progress: { type: 'item_started', item: assistant } })).toMatchObject([
-      { kind: 'user' },
-      { kind: 'assistant', text: 'working', streaming: true },
-    ]);
-    const updated = { ...assistant, content: [{ type: 'text' as const, text: 'working now' }] };
-    expect(project({ ...state, progress: { type: 'item_updated', item: updated } })[1]).toMatchObject({
-      text: 'working now',
-    });
-    const tool: TranscriptItem = {
-      id: 't',
-      role: 'tool',
-      toolCallId: 't',
-      toolName: 'read',
-      input: {},
-      content: [],
-      status: 'running',
-      isError: false,
-      timestamp: 3,
-    };
-    expect(project({ ...state, progress: { type: 'item_started', item: tool } }).map((entry) => entry.id)).toEqual([
-      'u',
-      'a',
-      't',
-    ]);
-    expect(project(state).map((entry) => entry.id)).toEqual(['u', 'a', 't']);
-    const finished = { ...updated, status: 'complete' as const };
-    const committed = { ...state.snapshot, transcript: [user, finished] };
-    expect(project({ snapshot: committed, progress: { type: 'item_finished', item: finished } })).toMatchObject([
-      { id: 'u' },
-      { id: 'a', streaming: false },
-      { id: 't', running: true },
-    ]);
-    expect(project({ snapshot: { ...committed, phase: 'idle' }, progress: null }).map((entry) => entry.id)).toEqual([
-      'u',
-      'a',
-    ]);
-    expect(createProtocolTimeline()(state).map((entry) => entry.id)).toEqual(['u']);
-  });
-
   it('renders a user message as its text', () => {
     const items: TranscriptItem[] = [
       { id: 'u1', role: 'user', content: [{ type: 'text', text: 'do the thing' }], timestamp: 1 },
     ];
 
-    expect(toTimelineEntries(items)).toEqual([{ kind: 'user', id: 'u1', text: 'do the thing' }]);
+    expect(toTimelineEntries(items)).toEqual([{ kind: 'user', id: 'u1', text: 'do the thing', timestamp: 1 }]);
   });
 
   it('retains supported user images and drops image content with unsupported MIME types', () => {
@@ -106,7 +29,13 @@ describe('protocol transcript projection', () => {
     ];
 
     expect(toTimelineEntries(items)).toEqual([
-      { kind: 'user', id: 'u1', text: 'review this', images: [{ data: 'cG5n', mimeType: 'image/png' }] },
+      {
+        kind: 'user',
+        id: 'u1',
+        text: 'review this',
+        timestamp: 1,
+        images: [{ data: 'cG5n', mimeType: 'image/png' }],
+      },
     ]);
   });
 
@@ -126,7 +55,7 @@ describe('protocol transcript projection', () => {
     ];
 
     expect(toTimelineEntries(items)).toEqual([
-      { kind: 'assistant', id: 'a1', text: 'here is why', thinking: 'weighing it', streaming: true },
+      { kind: 'assistant', id: 'a1', text: 'here is why', thinking: 'weighing it', streaming: true, timestamp: 2 },
     ]);
   });
 
@@ -174,6 +103,7 @@ describe('protocol transcript projection', () => {
       output: 'file body',
       isError: false,
       running: false,
+      timestamp: 3,
     });
   });
 

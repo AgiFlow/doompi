@@ -1,5 +1,5 @@
-import { REMOTE_PUSH_KEY_ROUTE, REMOTE_PUSH_ROUTE } from '../../types/remoteAccess.ts';
-import { sealedHttpSession } from './sealedSession.ts';
+import { REMOTE_PUSH_KEY_ROUTE, REMOTE_PUSH_ROUTE } from '../../types/remoteAccess';
+import { sealedHttpSession } from './sealedSession';
 
 export type LivePushStatus = 'enabled' | 'disabled' | 'denied' | 'unsupported' | 'error';
 

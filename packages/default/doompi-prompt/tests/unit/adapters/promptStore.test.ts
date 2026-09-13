@@ -1,8 +1,10 @@
 import { mkdtemp, readFile, rm, stat, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it } from 'vitest';
-import { createNodeSavedPromptStore, resolvePromptsDirectory } from '../../../src/adapters/node/promptStore.ts';
+
+import { createNodeSavedPromptStore, resolvePromptsDirectory } from '../../../src/services/promptStore';
 
 const roots: string[] = [];
 

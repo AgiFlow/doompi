@@ -1,16 +1,18 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
-import { afterEach, describe, expect, it } from 'vitest';
-import { computeWebSourcesHash } from '../../src/adapters/syncState.ts';
-import { resolveSyncLocation, syncGenerationDirectory } from '../../src/adapters/syncLocation';
+import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
-} from '../../src/adapters/syncRegistration.ts';
-import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '../../src/adapters/syncStateContract';
+} from '@agimon-ai/doompi-core/sync-registration';
+import { BUNDLED_PRECOMPILE_STRATEGY, PRECOMPILE_STATE_VERSION } from '@agimon-ai/doompi-core/sync-state-contract';
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { computeWebSourcesHash } from '../../src/composition/syncState';
 import {
   computeInputsHash,
   createMapResolvers,
@@ -32,8 +34,8 @@ import {
   settingsRelativePath,
   runDirectory as stateRunDirectory,
   writeSyncState as writeState,
-} from '../../src/exports/services/syncState';
-import { testMcpProjection } from '../helpers/mcpProjection.ts';
+} from '../../src/exports/syncState';
+import { testMcpProjection } from '../helpers/mcpProjection';
 
 const REPO_ROOT = path.resolve(__dirname, '..', 'fixtures', 'repository');
 const SELECTION: SyncSelection = { majorMode: 'dev', domains: ['development'], preset: 'default' };
@@ -500,6 +502,18 @@ describe('web sources hash', () => {
 });
 
 describe('inputs hash', () => {
+  it('hashes a symlinked repository identically to the canonical sync root', () => {
+    const root = makeRoot();
+    const alias = path.join(makeRoot(), 'alias');
+    fs.symlinkSync(root, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    const home = homeFor(root);
+    const original = computeInputsHash(root, SELECTION, home);
+    expect(computeInputsHash(alias, SELECTION, home)).toBe(original);
+    fs.writeFileSync(path.join(root, '.mcp.json'), '{"mcpServers":{}}');
+    expect(computeInputsHash(alias, SELECTION, home)).toBe(computeInputsHash(root, SELECTION, home));
+    expect(computeInputsHash(alias, SELECTION, home)).not.toBe(original);
+  });
+
   it('changes when a .doom file changes', () => {
     const root = makeRoot();
     const before = computeInputsHash(root, SELECTION);

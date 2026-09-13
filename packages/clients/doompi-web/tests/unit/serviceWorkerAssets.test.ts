@@ -1,7 +1,9 @@
 import { webcrypto } from 'node:crypto';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { BundleManifest } from '@agimon-ai/doompi-web-security/browser';
-import type { ActiveBundleState, VerifiedPluginCompositionState } from '../../src/pwa/bundleCache.ts';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { ActiveBundleState, VerifiedPluginCompositionState } from '../../src/pwa/bundleCache';
 
 const mocks = vi.hoisted(() => ({
   active: undefined as ActiveBundleState | undefined,
@@ -24,7 +26,7 @@ vi.mock('@agimon-ai/doompi-web-security/browser', () => ({
   ),
 }));
 
-vi.mock('../../src/pwa/bundleCache.ts', () => ({
+vi.mock('../../src/pwa/bundleCache', () => ({
   readActiveBundle: vi.fn(async () => mocks.active),
   commitActiveBundle: mocks.commitActiveBundle,
   clearActiveBundle: mocks.clearActiveBundle,
@@ -234,7 +236,7 @@ beforeEach(async () => {
       },
     },
   });
-  await import('../../src/pwa/serviceWorker.ts');
+  await import('../../src/pwa/serviceWorker');
 });
 
 describe('verified bundle activation', () => {

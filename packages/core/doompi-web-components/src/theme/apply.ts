@@ -1,5 +1,5 @@
-import { PALETTE_TOKENS, type ThemeConfig, themeVariable } from '../types/theme.ts';
-import { derivedTokens, tokenValue } from './derive.ts';
+import { PALETTE_TOKENS, type ThemeConfig, themeVariable } from '../types/theme';
+import { derivedTokens, tokenValue } from './derive';
 
 /** The attribute the active theme's name is stamped on, for CSS that keys off a theme. */
 export const THEME_ATTRIBUTE = 'data-theme';

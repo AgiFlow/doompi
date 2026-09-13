@@ -2,7 +2,7 @@ export type {
   DoomSkillSourcesService,
   SkillSourceContribution,
   SkillSourceContributionHandle,
-} from '@agimon-ai/doompi-extension-contracts/skills';
+} from '@agimon-ai/doompi-core/skills';
 export {
   createDoomSkillSourcesService,
   DOOM_SKILL_SOURCES_SERVICE,
@@ -10,4 +10,4 @@ export {
   requireDoomSkillSourcesService,
   SkillSourceContributionSchema,
   SkillSourceNameSchema,
-} from '@agimon-ai/doompi-extension-contracts/skills';
+} from '@agimon-ai/doompi-core/skills';

@@ -1,14 +1,17 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { loadDoomConfig } from '@agimon-ai/doompi-config';
 import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItem, shell } from 'electron';
-import { createMacOsComputerUseBackend } from '../adapters/macos/computerUseBackend.ts';
-import { freePort, portIsFree, startHub } from '../adapters/hubProcess.ts';
-import { createMainWindow, showCockpit } from '../adapters/mainWindow.ts';
-import { ComputerUseHost } from '../services/computerUseHost.ts';
-import { assertSocketHeadroom, DEFAULT_PORT, hubEntry, LOOPBACK_HOST } from '../services/hubLaunch.ts';
-import type { RunningHub } from '../types/hub.ts';
+
+import { freePort, portIsFree, startHub } from '../adapters/hubProcess';
+import { createMacOsComputerUseBackend } from '../adapters/macos/computerUseBackend';
+import { createMainWindow, showCockpit } from '../adapters/mainWindow';
+import { ComputerUseHost } from '../services/computerUseHost';
+import { DEFAULT_HEADLESS_PORT, DEFAULT_PORT, headlessEntry, hubEntry, LOOPBACK_HOST } from '../services/hubLaunch';
+import type { RunningHub } from '../types/hub';
 
 const EXTERNAL_PROTOCOLS = new Set(['https:']);
 
@@ -18,31 +21,13 @@ function notice(message: string): void {
   if (message !== '') process.stderr.write(`[doompi-desktop] ${message}\n`);
 }
 
-/**
- * The session registry stays in the home directory, not in the app's own
- * storage.
- *
- * The reason is that this app and the `doompi` CLI are one program over one
- * registry: a session started here should be visible from a terminal, and the
- * reverse. Using `app.getPath('userData')` would split them in two.
- *
- * It also keeps the unix socket budget comfortable. Application Support does
- * usually fit inside the 104-byte `sun_path` cap, so this is a margin argument
- * rather than an impossibility one, which is why the check below is a
- * measurement instead of a rule against a particular directory.
- */
-function registryDirectory(): string {
-  const configured = process.env.DOOMPI_RUNTIME_DIR;
-  return configured !== undefined && configured !== '' ? configured : path.join(os.homedir(), '.doompi', 'run');
-}
-
 function startupIconPath(): string {
   return app.isPackaged
     ? path.join(process.resourcesPath, 'startup-icon.png')
     : path.resolve(app.getAppPath(), '..', 'doompi-web', 'src', 'web', 'public', 'icon-512.png');
 }
 
-/** Allows local E2E runs to replace the staged hub without weakening packaged startup. */
+/** Allows local E2E runs to replace the staged presentation without weakening packaged startup. */
 function launchHubEntry(): string {
   const developmentEntry = process.env.DOOMPI_DESKTOP_E2E_HUB_ENTRY;
   if (!app.isPackaged && developmentEntry !== undefined && developmentEntry !== '') return developmentEntry;
@@ -52,9 +37,33 @@ function launchHubEntry(): string {
     projectRoot: app.getAppPath(),
   });
 }
+
+/** Allows local E2E runs to replace the staged headless process without weakening packaged startup. */
+function launchHeadlessEntry(): string {
+  const developmentEntry = process.env.DOOMPI_DESKTOP_E2E_HEADLESS_ENTRY;
+  if (!app.isPackaged && developmentEntry !== undefined && developmentEntry !== '') return developmentEntry;
+  return headlessEntry({
+    resourcesPath: process.resourcesPath,
+    packaged: app.isPackaged,
+    projectRoot: app.getAppPath(),
+  });
+}
+
+function headlessCredential(): { token: string; tokenFile: string; cleanup: () => void } {
+  const token = randomUUID();
+  const tokenFile = path.join(app.getPath('userData'), 'headless-token');
+  fs.writeFileSync(tokenFile, token, { mode: 0o600 });
+  fs.chmodSync(tokenFile, 0o600);
+  return {
+    token,
+    tokenFile,
+    cleanup: () => fs.rmSync(tokenFile, { force: true }),
+  };
+}
+
 /** The default port when it is usable, so pairing keeps a stable origin. */
-async function resolvePort(): Promise<number> {
-  if (await portIsFree(LOOPBACK_HOST, DEFAULT_PORT)) return DEFAULT_PORT;
+async function resolvePort(defaultPort: number): Promise<number> {
+  if (await portIsFree(LOOPBACK_HOST, defaultPort)) return defaultPort;
   return await freePort(LOOPBACK_HOST);
 }
 
@@ -83,8 +92,6 @@ function registerBridgeHandlers(): void {
 async function start(): Promise<void> {
   const preloadPath = path.join(__dirname, 'preload.cjs');
   const window = createMainWindow({ preloadPath, startupIconPath: startupIconPath() });
-  const registryDir = registryDirectory();
-  assertSocketHeadroom(registryDir);
   const computerUseHost =
     app.isPackaged && process.platform === 'darwin'
       ? new ComputerUseHost({
@@ -124,23 +131,42 @@ async function start(): Promise<void> {
     );
     Menu.setApplicationMenu(menu);
   }
-  hub = await startHub(
-    {
-      entry: launchHubEntry(),
-      host: LOOPBACK_HOST,
-      port: await resolvePort(),
-      registryDir,
-      cwd: os.homedir(),
-    },
-    notice,
-    computerUseHost,
-  );
 
-  if (!window.isDestroyed()) showCockpit(window, hub.url);
+  const credential = headlessCredential();
+  try {
+    const started = await startHub(
+      {
+        entry: launchHubEntry(),
+        headlessEntry: launchHeadlessEntry(),
+        host: LOOPBACK_HOST,
+        port: await resolvePort(DEFAULT_PORT),
+        headlessPort: await resolvePort(DEFAULT_HEADLESS_PORT),
+        tokenFile: credential.tokenFile,
+        token: credential.token,
+        cwd: os.homedir(),
+      },
+      notice,
+      computerUseHost,
+    );
+    hub = {
+      ...started,
+      stop: async () => {
+        try {
+          await started.stop();
+        } finally {
+          credential.cleanup();
+        }
+      },
+    };
+  } catch (error) {
+    credential.cleanup();
+    throw error;
+  }
+
+  if (!window.isDestroyed() && hub !== undefined) showCockpit(window, hub.url);
 }
 
-// A second launch has to reach the first one: two cockpits over one session
-// registry would compete for the same sessions.
+// A second launch is already prevented by the single-instance lock.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {

@@ -1,5 +1,6 @@
-import type { ModelContext, ModelContextBinding, ModelContextToolDescriptor } from '@agimon-ai/doompi-web-contracts';
-import type { WebMcpSimulator } from './webmcpSimulator.ts';
+import type { ModelContext, ModelContextBinding, ModelContextToolDescriptor } from '@agimon-ai/doompi-core/web';
+
+import type { WebMcpSimulator } from './webmcpSimulator';
 
 interface ModelContextDocument {
   readonly modelContext?: unknown;
@@ -54,7 +55,7 @@ export function acquireModelContext(host: ModelContextDocument = browserDocument
     const native = host.modelContext;
     if (isCompleteModelContext(native)) return { kind: 'native', modelContext: bindNative(native) };
 
-    const { createWebMcpSimulator } = await import('./webmcpSimulator.ts');
+    const { createWebMcpSimulator } = await import('./webmcpSimulator');
     const created = createWebMcpSimulator();
     if (acquiredGeneration === generation) simulator = created;
     else created.dispose();

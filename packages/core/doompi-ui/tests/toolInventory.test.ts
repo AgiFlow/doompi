@@ -1,8 +1,10 @@
 import { fileURLToPath } from 'node:url';
+
+import { buildToolSources, type McpServerStatus, type ToolInfo } from '@agimon-ai/doompi-core/tool-inventory';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
-import { extensionName, extensionToolSource, withExtensionSource } from '../src/adapters/pi/extensionName.ts';
-import { buildToolSources, type McpServerStatus, type ToolInfo } from '../src/services/tools/toolInventory.ts';
+
+import { extensionName, extensionToolSource, withExtensionSource } from '../src/services/extensionSource';
 
 function tool(name: string, source: string, path = `<${source}>`): ToolInfo {
   return {
@@ -149,11 +151,9 @@ describe('buildToolSources', () => {
   it('keeps bundled tools grouped by their original extension entries', () => {
     const bundlePath = '/repo/.pi/doom/dist/copilot.1234.mjs';
     const taskEntry = fileURLToPath(
-      new URL('../../../../layers/task/doompi-task/src/exports/extensions/pi.ts', import.meta.url),
+      new URL('../../../../layers/task/doompi-task/src/exports/extensions/pi', import.meta.url),
     );
-    const loopEntry = fileURLToPath(
-      new URL('../../../minor/doompi-loop/src/exports/extensions/pi.ts', import.meta.url),
-    );
+    const loopEntry = fileURLToPath(new URL('../../../minor/doompi-loop/src/exports/extensions/pi', import.meta.url));
     const pi = { registerTool: () => undefined } as unknown as ExtensionAPI;
     const register = (name: string, entry: string): void => {
       const definition = { name } as Parameters<ExtensionAPI['registerTool']>[0];

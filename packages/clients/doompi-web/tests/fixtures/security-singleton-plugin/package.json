@@ -7,6 +7,9 @@
   },
   "doompiWeb": {
     "pluginId": "security-singleton-probe",
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/exports/webClient.ts",
+    "scopes": [
+      "session"
+    ]
   }
 }

@@ -1,16 +1,18 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import { provideDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
-import { profileExtension } from '../../src/adapters/pi/extension.ts';
-import type { ProfileTelemetry } from '../../src/types/telemetry.ts';
-import { bindStubCoordinator } from '../helpers/coordinator.ts';
+
+import { profileExtension } from '../../src/extensions/pi';
+import type { ProfileTelemetry } from '../../src/types/telemetry';
+import { bindStubCoordinator } from '../helpers/coordinator';
 
 const telemetry: ProfileTelemetry = {
   recordError: async () => undefined,
@@ -38,6 +40,7 @@ function harness(registerCommand = vi.fn()) {
       handlers.set(event, handler);
     },
   } as unknown as ExtensionAPI;
+  void installDoomCordisHost(pi, { mode: 'composed', source: 'profile-test-host' });
   return { pi, handlers, registerCommand };
 }
 
@@ -122,7 +125,7 @@ describe('profile Pi factory', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-profile',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-author-profile',

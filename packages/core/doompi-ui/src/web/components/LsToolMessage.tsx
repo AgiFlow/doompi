@@ -1,7 +1,8 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import { MessageItem, MessageItemHeader, toolTone } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { lsCallView } from '../lib/builtinToolView.ts';
-import { ListingBody, listingExpandable } from './ListingBody.tsx';
+
+import { lsCallView } from '../lib/builtinToolView';
+import { ListingBody, listingExpandable } from './ListingBody';
 
 const LIMIT_KEY = 'entryLimitReached';
 const LIMIT_UNIT = 'entries';

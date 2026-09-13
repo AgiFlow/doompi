@@ -3,7 +3,7 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Panel, PanelBody, PanelHeader } from './Panel.tsx';
+import { Panel, PanelBody, PanelHeader } from './Panel';
 
 const meta = {
   title: 'Components/Panel',

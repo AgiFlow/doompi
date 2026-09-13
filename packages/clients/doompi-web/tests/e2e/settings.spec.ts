@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, test } from '../support/cockpit.ts';
+
+import { expect, test } from '../support/cockpit';
 
 // The hub composes Pi's provider catalog on the first providers request;
 // that first read is the slow one.
@@ -168,7 +169,7 @@ test('lists no plugins for the packaged bundle and nothing to resolve', async ({
 
 test('reads and writes the image limits on the images page', async ({ page, cockpit }) => {
   let images = { autoResize: true, maxDimension: 2000, minDimension: 256, maxAllowedDimension: 2000 };
-  await page.route('**/api/settings/images', async (route) => {
+  await page.route('**/api/global/plugin/config/images', async (route) => {
     if (route.request().method() === 'PUT') {
       const patch = route.request().postDataJSON() as { autoResize?: boolean; maxDimension?: number };
       images = { ...images, ...patch };
@@ -182,9 +183,12 @@ test('reads and writes the image limits on the images page', async ({ page, cock
 
   // A typed cap saves on its own button, so the field is dirty until then.
   await page.getByTestId('image-max-dimension').fill('1024');
+  const saveRequest = page.waitForRequest(
+    (request) => request.method() === 'PUT' && request.url().endsWith('/api/global/plugin/config/images'),
+  );
   await page.getByTestId('image-max-dimension-save').click();
+  expect((await saveRequest).postDataJSON()).toEqual({ maxDimension: 1024 });
   await expect(page.getByTestId('image-max-dimension-save')).toBeDisabled();
-  expect(images.maxDimension).toBe(1024);
 
   // The toggle applies at once, and turning it off locks the cap with it.
   await page.getByTestId('image-auto-resize').click();

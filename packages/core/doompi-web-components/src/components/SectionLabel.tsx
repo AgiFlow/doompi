@@ -1,5 +1,6 @@
 import type { ComponentProps } from 'react';
-import { cn } from '../lib/cn.ts';
+
+import { cn } from '../lib/cn';
 
 /** The tiny tracked-out caps that head every cockpit section (SESSIONS, ACTIVITY, MINOR MODES). */
 export function SectionLabel({ className, ...props }: ComponentProps<'span'>) {

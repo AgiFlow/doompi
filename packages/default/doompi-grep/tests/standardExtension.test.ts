@@ -8,11 +8,11 @@ const hostMocks = vi.hoisted(() => ({
   plugin: vi.fn(),
 }));
 
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
+vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
   connectDoomCordisHost: hostMocks.connect,
 }));
 
-const { activateDoomPiGrepExtension } = await import('../src/adapters/pi/extension.ts');
+const { activateDoomPiGrepExtension } = await import('../src/extensions/pi');
 
 function createPi(): {
   readonly pi: ExtensionAPI;

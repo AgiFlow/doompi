@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { registerGoalCommand } from '../../src/commands/goalCommand.ts';
+
 import {
   assistantUsageTokens,
   checkpointGoalActiveTime,
@@ -9,36 +9,22 @@ import {
   nonNegativeFiniteNumber,
   normalizeTokenBudget,
   updateGoalUsage,
-} from '../../src/services/accounting.ts';
-import {
-  completeGoalArguments,
-  parseGoalCommand,
-  parseTokenBudget,
-  validateObjective,
-} from '../../src/services/parser.ts';
-import {
-  buildContinuePrompt,
-  buildGoalPrompt,
-  buildGoalSystemPrompt,
-  buildObjectiveUpdatedPrompt,
-  buildResumePrompt,
-} from '../../src/services/prompts.ts';
-import { GoalRuntimeModel } from '../../src/services/runtime.ts';
+} from '../../src/models/accounting';
+import { GoalRuntimeModel } from '../../src/models/runtime';
 import {
   nextToolFreeRepeatState,
   outputFingerprint,
   resetGoalSafetyEpoch,
   safetyLimitReached,
   shouldPauseForSafety,
-} from '../../src/services/safety.ts';
-import { DEFAULT_GOAL_SETTINGS, decodeGoalSettings, normalizeGoalSettings } from '../../src/services/settings.ts';
+} from '../../src/models/safety';
 import {
   decodeGoalStateEntries,
   isCanonicalGoalState,
   loadGoalStateFromSession,
   normalizeLoadedGoal,
   serializeGoalState,
-} from '../../src/services/stateCodec.ts';
+} from '../../src/models/stateCodec';
 import {
   createGoal,
   editedGoalStatus,
@@ -54,7 +40,22 @@ import {
   isRetainedGoalStatus,
   nextGoalInstance,
   transitionGoal,
-} from '../../src/services/stateMachine.ts';
+} from '../../src/models/stateMachine';
+import { GoalHistoryService } from '../../src/services/history';
+import {
+  completeGoalArguments,
+  parseGoalCommand,
+  parseTokenBudget,
+  validateObjective,
+} from '../../src/services/parser';
+import {
+  buildContinuePrompt,
+  buildGoalPrompt,
+  buildGoalSystemPrompt,
+  buildObjectiveUpdatedPrompt,
+  buildResumePrompt,
+} from '../../src/services/prompts';
+import { DEFAULT_GOAL_SETTINGS, decodeGoalSettings, normalizeGoalSettings } from '../../src/services/settings';
 import {
   addGoalTools,
   filterGoalTools,
@@ -62,10 +63,9 @@ import {
   validateBlockedInput,
   validateCompletionInput,
   validateGoalId,
-} from '../../src/services/tools.ts';
-import { GoalHistoryService } from '../../src/services/history/historyService.ts';
-import type { ActiveGoal } from '../../src/types/goal.ts';
-import type { GoalHistoryEntry, GoalHistoryPort } from '../../src/types/history.ts';
+} from '../../src/services/tools';
+import type { ActiveGoal } from '../../src/types/goal';
+import type { GoalHistoryEntry, GoalHistoryPort } from '../../src/types/history';
 
 describe('accounting and parser branches', () => {
   it('normalizes malformed usage and updates elapsed/token accounting', () => {
@@ -390,26 +390,5 @@ describe('history service delegation', () => {
     await expect(service.restart('without-budget')).resolves.not.toHaveProperty('budget');
     list.mockResolvedValue([]);
     await expect(service.restart('missing')).rejects.toThrow('not found');
-  });
-});
-
-describe('command registration branches', () => {
-  it('notifies UI callers and stays quiet for headless callers', async () => {
-    const registrations: Array<{
-      handler: (
-        args: string,
-        ctx: { hasUI: boolean; ui: { notify: (message: string, level: string) => void } },
-      ) => Promise<void>;
-    }> = [];
-    registerGoalCommand(
-      { registerCommand: (_name, definition) => registrations.push(definition as (typeof registrations)[number]) },
-      { execute: async () => ({ message: 'goal result', level: 'info' as const }) },
-    );
-    const notify = vi.fn();
-    const handler = registrations[0]?.handler;
-    expect(handler).toBeDefined();
-    await handler?.('', { hasUI: true, ui: { notify } });
-    await handler?.('', { hasUI: false, ui: { notify } });
-    expect(notify).toHaveBeenCalledOnce();
   });
 });

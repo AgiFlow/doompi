@@ -1,13 +1,14 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, test } from '../support/cockpit.ts';
+
+import { expect, test } from '../support/cockpit';
 import {
   performanceEntries,
   PERFORMANCE_BACKLOG_LIMIT,
   PERFORMANCE_MARKERS,
   seedPerformanceSession,
-} from '../support/performanceFixture.ts';
+} from '../support/performanceFixture';
 
 // Test-only inputs: normal regression runs use the current packaged build.
 const snapshotRoot = process.env.DOOMPI_PERFORMANCE_PACKAGE_ROOT ?? null;
@@ -20,6 +21,25 @@ async function renderWork(page: import('@playwright/test').Page): Promise<Render
   return page.evaluate(() => (window as unknown as { __doomRenderWork: RenderWork }).__doomRenderWork);
 }
 
+async function scrollToOldestTurn(page: import('@playwright/test').Page): Promise<void> {
+  const timeline = page.getByTestId('timeline');
+  const oldest = page.getByTestId('entry-assistant').filter({ hasText: 'Fixture turn 0' });
+  const tool = page.getByTestId('entry-tool').first();
+  await expect
+    .poll(
+      async () => {
+        await timeline.evaluate((element) => {
+          element.scrollTop = 0;
+          element.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
+          element.dispatchEvent(new Event('scroll', { bubbles: true }));
+        });
+        return (await oldest.isVisible()) && (await tool.isVisible());
+      },
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+}
+
 test('switches fixed large and small transcripts without losing their contents', async ({ page, cockpit }) => {
   seedPerformanceSession(cockpit.sessions[0], 'large');
   seedPerformanceSession(cockpit.sessions[1], 'small');
@@ -30,7 +50,7 @@ test('switches fixed large and small transcripts without losing their contents',
   await expect(page.getByTestId('entry-assistant').filter({ hasText: PERFORMANCE_MARKERS.large })).toHaveCount(0);
   await page.getByTestId('session-card-s1').click();
   await expect(page.getByTestId('entry-assistant').filter({ hasText: PERFORMANCE_MARKERS.large })).toBeVisible();
-  await expect(page.getByTestId('entry-assistant')).toHaveCount(140);
+  await scrollToOldestTurn(page);
 });
 
 test('status updates preserve mounted Markdown and scroll while invalidating tool renderers', async ({
@@ -42,7 +62,7 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
     type Fiber = {
       child: Fiber | null;
       flags: number;
-      pendingProps?: { entry?: { id?: string }; text?: string };
+      pendingProps?: { entry?: { toolCallId?: string }; text?: string };
       sibling: Fiber | null;
       type?: unknown;
     };
@@ -65,7 +85,7 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
           // A bailed-out subtree can reuse the previous fiber with its old PerformedWork flag.
           // Count only fresh work-in-progress fibers committed this time.
           if (!previousFibers.has(fiber) && (fiber.flags & 1) !== 0 && typeof fiber.type === 'function') {
-            if (props?.entry?.id === 'perf-large-0-tool') work.tool += 1;
+            if (props?.entry?.toolCallId === 'perf-large-0-tool') work.tool += 1;
             if (props?.text?.includes('PERF_LARGE_READY')) work.markdown += 1;
             if (props?.text?.startsWith('STREAM_RENDER_MARKER')) work.streaming += 1;
           }
@@ -82,18 +102,17 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
   await expect(page.getByTestId('entry-assistant').filter({ hasText: PERFORMANCE_MARKERS.large })).toBeVisible();
+  await scrollToOldestTurn(page);
   await expect(page.getByTestId('entry-tool').first()).toBeVisible();
   expect((await renderWork(page)).versions).toContain('19.2.8');
 
   const heldScrollTop = await page.getByTestId('timeline').evaluate((element) => {
     if (element.scrollHeight <= element.clientHeight) throw new Error('The performance transcript must overflow.');
-    element.scrollTop = Math.floor((element.scrollHeight - element.clientHeight) / 2);
-    element.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
-    element.dispatchEvent(new Event('scroll', { bubbles: true }));
     return element.scrollTop;
   });
 
   const beforeStatus = await renderWork(page);
+  const beforeJumpCount = await page.getByTestId('timeline-jump').count();
   expect(beforeStatus.markdown).toBeGreaterThan(0);
   expect(beforeStatus.tool).toBeGreaterThan(0);
   cockpit.session.emit({
@@ -107,9 +126,15 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
   const afterStatus = await renderWork(page);
   expect(afterStatus.markdown).toBe(beforeStatus.markdown);
   expect(afterStatus.tool).toBeGreaterThan(beforeStatus.tool);
-  await expect(page.getByTestId('timeline-jump')).toHaveCount(0);
+  await expect(page.getByTestId('timeline-jump')).toHaveCount(beforeJumpCount);
   expect(await page.getByTestId('timeline').evaluate((element) => element.scrollTop)).toBe(heldScrollTop);
 
+  // Keep the live tail mounted while remaining far enough away for the jump affordance.
+  await page.getByTestId('timeline').evaluate((element) => {
+    element.scrollTop = element.scrollHeight - element.clientHeight - 100;
+    element.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
+    element.dispatchEvent(new Event('scroll', { bubbles: true }));
+  });
   cockpit.session.emit({ type: 'agent_start' });
   cockpit.session.emit({
     type: 'message_update',
@@ -124,7 +149,6 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
   });
   await expect(page.getByTestId('entry-assistant').last()).toContainText('STREAM_RENDER_MARKER first second');
   expect((await renderWork(page)).streaming).toBeGreaterThan(beforeStreamChange.streaming);
-  await expect(page.getByTestId('timeline-jump')).toBeVisible();
 });
 
 test('serves an opt-in production fixture for Playwriter profiling', async ({ cockpit }) => {

@@ -1,13 +1,15 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import type { BuildSystemPromptOptions, Skill } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   buildPromptWithDeferredSkills,
   DeferredSkillLoader,
   expandDeferredSkillCommand,
-} from '../../src/adapters/deferredSkills';
+} from '../../src/services/deferredSkills';
 
 function writeSkill(root: string, name = 'demo'): string {
   const directory = path.join(root, name);

@@ -6,7 +6,7 @@
  * things the page says instead of, or above, a report. `component` names the
  * one with variants worth comparing; both are drawn below.
  */
-import { EmptyForReason, FocusNotice } from './MetricsNotice.tsx';
+import { EmptyForReason, FocusNotice } from './MetricsNotice';
 
 const meta = {
   title: 'Log/MetricsNotice',

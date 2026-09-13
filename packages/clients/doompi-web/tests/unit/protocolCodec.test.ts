@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks';
+
 import { parseServerMessage, type ServerMessage } from '@earendil-works/pi-protocol';
 import { describe, expect, it } from 'vitest';
 

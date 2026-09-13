@@ -1,5 +1,6 @@
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
+
 import { projectPath, readSource } from './moduleGraph.js';
 
 /** A Tailwind arbitrary colour: the `bg-[#312A1C]` shape, in any utility. */

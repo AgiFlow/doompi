@@ -14,7 +14,7 @@ const { resolveLogSinkInstance, execFile } = vi.hoisted(() => ({
 vi.mock('@agimon-ai/log-sink-mcp', () => ({ resolveLogSinkInstance }));
 vi.mock('node:child_process', () => ({ execFile }));
 
-const { createIssuesSource } = await import('../src/adapters/node/issuesSource.ts');
+const { createIssuesSource } = await import('../src/services/issuesSource');
 
 const INSTANCE = { scope: 'local', dbPath: '/tmp/sink/session.db', registeredName: '@agimon-ai/doompi-log' };
 

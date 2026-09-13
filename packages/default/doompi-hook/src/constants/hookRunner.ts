@@ -1,0 +1,10 @@
+export const HOOK_SHELL = '/bin/bash';
+export const HOOK_SHELL_COMMAND_FLAG = '-c';
+export const HOOK_TERMINATION_GRACE_MS = 2_000;
+export const DEFAULT_HOOK_TIMEOUT_SECONDS = 10;
+export const MILLISECONDS_PER_SECOND = 1_000;
+export const PROCESS_NOT_FOUND_ERROR = 'ESRCH';
+export const WINDOWS_PLATFORM = 'win32';
+export const UNKNOWN_EXIT_CODE = -1;
+export const JSON_LINE_START = '{';
+export const LINE_BREAK = /\r?\n/;

@@ -1,13 +1,23 @@
 import { Badge, FileIcon } from '@agimon-ai/doompi-web-components';
 import { useEffect, useState } from 'react';
-import type { FileMention } from '../../lib/fileMentions.ts';
-import { loadSessionAsset, type SessionAsset } from '../../lib/sessionAsset.ts';
+
+import type { FileMention } from '../../lib/fileMentions';
+import { loadSessionAsset, type SessionAsset } from '../../lib/sessionAsset';
+import type { MessageFileLinkHandler } from './MessageMarkdown';
 
 function downloadName(filePath: string): string {
   return filePath.split('/').at(-1) || 'download';
 }
 
-export function MentionPreviewAsset({ mention, asset }: { mention: FileMention; asset: SessionAsset }) {
+export function MentionPreviewAsset({
+  mention,
+  asset,
+  openFile,
+}: {
+  mention: FileMention;
+  asset: SessionAsset;
+  openFile?: () => void;
+}) {
   if (mention.kind === 'image') {
     const image = (
       <img src={asset.url} alt={mention.path} className="max-h-[360px] max-w-full rounded border border-doom-border" />
@@ -53,6 +63,16 @@ export function MentionPreviewAsset({ mention, asset }: { mention: FileMention; 
       />
     );
   }
+  if (openFile) {
+    return (
+      <Badge asChild size="md" className="self-start bg-doom-panel text-doom-text hover:border-doom-blue/50">
+        <button type="button" onClick={openFile}>
+          <FileIcon className="h-3 w-3 shrink-0 text-doom-faint" />
+          {mention.path}
+        </button>
+      </Badge>
+    );
+  }
   return (
     <Badge asChild size="md" className="self-start bg-doom-panel text-doom-text hover:border-doom-blue/50">
       <a href={asset.url} download={downloadName(mention.path)}>
@@ -63,7 +83,15 @@ export function MentionPreviewAsset({ mention, asset }: { mention: FileMention; 
   );
 }
 
-function MentionPreview({ sessionId, mention }: { sessionId: string; mention: FileMention }) {
+function MentionPreview({
+  sessionId,
+  mention,
+  onFileLink,
+}: {
+  sessionId: string;
+  mention: FileMention;
+  onFileLink?: MessageFileLinkHandler;
+}) {
   // Mounted under a key that carries the session and the path, so a different
   // file arrives as a fresh component already in its loading state.
   const [asset, setAsset] = useState<SessionAsset | null>();
@@ -88,7 +116,7 @@ function MentionPreview({ sessionId, mention }: { sessionId: string; mention: Fi
     };
   }, [mention.path, sessionId]);
 
-  if (asset) return <MentionPreviewAsset mention={mention} asset={asset} />;
+  if (asset) return <MentionPreviewAsset mention={mention} asset={asset} openFile={onFileLink?.(mention.path, true)} />;
   return (
     <Badge size="md" className="self-start bg-doom-panel text-doom-faint">
       <FileIcon className="h-3 w-3 shrink-0" />
@@ -98,7 +126,15 @@ function MentionPreview({ sessionId, mention }: { sessionId: string; mention: Fi
 }
 
 /** The cwd-scoped files mentioned by a message, fetched through the sealed HTTP channel. */
-export function MentionPreviews({ sessionId, mentions }: { sessionId: string; mentions: FileMention[] }) {
+export function MentionPreviews({
+  sessionId,
+  mentions,
+  onFileLink,
+}: {
+  sessionId: string;
+  mentions: FileMention[];
+  onFileLink?: MessageFileLinkHandler;
+}) {
   // A folder has no asset to fetch, so it is named in the message and left out
   // of the previews rather than fetched and reported as unloadable.
   const previewable = mentions.filter((mention) => mention.kind !== 'directory');
@@ -107,7 +143,12 @@ export function MentionPreviews({ sessionId, mentions }: { sessionId: string; me
     <div data-testid="mention-previews" className="flex flex-col gap-2">
       {previewable.map((mention) => (
         <div key={mention.path} data-testid="mention-preview" data-kind={mention.kind} data-path={mention.path}>
-          <MentionPreview key={`${sessionId}\u0000${mention.path}`} sessionId={sessionId} mention={mention} />
+          <MentionPreview
+            key={`${sessionId}\u0000${mention.path}`}
+            sessionId={sessionId}
+            mention={mention}
+            onFileLink={onFileLink}
+          />
         </div>
       ))}
     </div>

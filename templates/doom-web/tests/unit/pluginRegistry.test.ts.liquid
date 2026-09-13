@@ -1,25 +1,34 @@
-import { defineSessionChannel, defineSlot, defineWebPlugin } from '@agimon-ai/doompi-web-contracts';
+import { defineSessionChannel, defineSlot, defineWebPlugin } from '@agimon-ai/doompi-core/web';
 import { afterEach, describe, expect, it } from 'vitest';
 import { leaderGroup } from '../../src/web/lib/leaderTree.ts';
 import {
+  activateWebPluginSession,
   activityGroupSlot,
   dispatchChannelFrame,
   dropPluginSessionData,
   HOST_SLOTS,
+  installSessionWebPlugins,
   installWebPlugins,
   paletteCommands,
   pluginActivityGroups,
+  pluginContextActions,
+  pluginDockFaces,
   pluginLeaderBindings,
+  pluginUserMessageActions,
   pluginMinorModes,
+  pluginRepositorySettingsPanels,
   pluginSelectionAxes,
   pluginToolRenderer,
+  removeSessionWebPlugins,
   resetWebPlugins,
   slotFills,
   startWebPlugins,
+  subscribeWebPluginRegistry,
   webPluginDiagnostics,
+  webPluginRegistryRevision,
   webTabs,
 } from '../../src/web/lib/pluginRegistry.ts';
-
+import { settingsSections } from '../../src/web/lib/settingsSections.ts';
 interface ItemsPayload {
   items: string[];
 }
@@ -93,6 +102,27 @@ describe('the web plugin registry', () => {
     expect(webPluginDiagnostics()[0]?.message).toContain("tool 'bash' is already provided by 'one'");
   });
 
+  it('orders dock faces, keeps the first collision, and reserves host faces', () => {
+    installWebPlugins([
+      defineWebPlugin({ id: 'later', dockFaces: [{ id: 'notes', label: 'notes', order: 20, panel: Other }] }),
+      defineWebPlugin({ id: 'first', dockFaces: [{ id: 'authoring', label: 'authoring', order: 10, panel: Panel }] }),
+      defineWebPlugin({ id: 'collision', dockFaces: [{ id: 'notes', label: 'other notes', panel: Panel }] }),
+    ]);
+
+    expect(pluginDockFaces().map(({ id, label }) => [id, label])).toEqual([
+      ['authoring', 'authoring'],
+      ['notes', 'notes'],
+    ]);
+    expect(kinds()).toEqual([['collision', 'duplicate-dock-face']]);
+
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({ id: 'bad', dockFaces: [{ id: 'activity', label: 'activity', panel: Panel }] }),
+      ]),
+    ).toThrow(/reserved by the host/);
+  });
+
   it('installs contributions once and serves them per host slot', () => {
     installWebPlugins([
       defineWebPlugin({
@@ -100,24 +130,183 @@ describe('the web plugin registry', () => {
         tabs: [{ id: 'demo', label: 'demo', panel: Panel }],
         overlays: [{ id: 'demo-overlay', component: Panel }],
         railSections: [{ id: 'demo-rail', component: Panel }],
+        contextSections: [{ id: 'demo-context', component: Panel }],
         selectionBarItems: [{ id: 'demo-selection', component: Panel }],
+        composerActions: [{ id: 'demo-composer', component: Panel }],
+        composerMenuItems: [{ id: 'demo-menu', component: Panel }],
         activitySections: [{ id: 'demo-activity', component: Panel }],
         paletteCommands: [{ id: 'demo-command', title: 'demo command', run: () => undefined }],
+        contextActions: [
+          { id: 'launch', label: 'Launch', detail: 'launch work', kinds: ['work-item'], run: () => undefined },
+        ],
       }),
     ]);
     expect(webTabs().map((tab) => tab.id)).toEqual(['demo']);
     expect(slotFills(HOST_SLOTS.overlay).map((fill) => fill.id)).toEqual(['demo-overlay']);
     expect(slotFills(HOST_SLOTS.rail).map((fill) => fill.id)).toEqual(['demo-rail']);
+    expect(slotFills(HOST_SLOTS.context).map((fill) => fill.id)).toEqual(['demo-context']);
     expect(slotFills(HOST_SLOTS.selectionBar).map((fill) => fill.id)).toEqual(['demo-selection']);
+    expect(slotFills(HOST_SLOTS.composerActions).map((fill) => fill.id)).toEqual(['demo-composer']);
+    expect(slotFills(HOST_SLOTS.composerMenu).map((fill) => fill.id)).toEqual(['demo-menu']);
     // No group is named demo-activity, so the section lands in the activity tail.
     expect(slotFills(HOST_SLOTS.activity).map((fill) => [fill.pluginId, fill.id, fill.order])).toEqual([
       ['demo', 'demo-activity', 1000],
     ]);
     expect(slotFills('nobody.declared')).toEqual([]);
     expect(paletteCommands().map((command) => command.id)).toEqual(['demo-command']);
+    expect(pluginContextActions().map(({ pluginId, id, label }) => [pluginId, id, label])).toEqual([
+      ['demo', 'launch', 'Launch'],
+    ]);
     expect(webPluginDiagnostics()).toEqual([]);
 
     expect(() => installWebPlugins([])).toThrow(/already installed/);
+  });
+
+  it('collects user-message actions in stable display order and keeps plugin ids', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'zeta',
+        userMessageActions: [
+          { id: 'later', label: 'Later', order: 20, run: () => undefined },
+          { id: 'same-order', label: 'Same order', run: () => undefined },
+        ],
+      }),
+      defineWebPlugin({
+        id: 'alpha',
+        userMessageActions: [{ id: 'first', label: 'First', order: 10, run: () => undefined }],
+      }),
+    ]);
+
+    expect(pluginUserMessageActions().map(({ pluginId, id }) => [pluginId, id])).toEqual([
+      ['alpha', 'first'],
+      ['zeta', 'later'],
+      ['zeta', 'same-order'],
+    ]);
+  });
+
+  it('separates user-message action ids by plugin and rejects duplicates inside one plugin', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'one',
+        userMessageActions: [{ id: 'capture', label: 'Capture', run: () => undefined }],
+      }),
+      defineWebPlugin({
+        id: 'two',
+        userMessageActions: [{ id: 'capture', label: 'Capture again', run: () => undefined }],
+      }),
+    ]);
+    expect(pluginUserMessageActions()).toHaveLength(2);
+
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({
+          id: 'one',
+          userMessageActions: [
+            { id: 'capture', label: 'Capture', run: () => undefined },
+            { id: 'capture', label: 'Again', run: () => undefined },
+          ],
+        }),
+      ]),
+    ).toThrow(/user message action 'capture' twice/);
+  });
+
+  it('orders repository management panels without sharing repository ownership with plugins', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'later',
+        repositorySettingsPanel: { label: 'later', detail: 'later panel', order: 20, component: Other },
+      }),
+      defineWebPlugin({
+        id: 'first',
+        repositorySettingsPanel: { label: 'first', detail: 'first panel', order: 10, component: Panel },
+      }),
+    ]);
+
+    expect(pluginRepositorySettingsPanels()).toEqual([
+      { pluginId: 'first', label: 'first', detail: 'first panel', order: 10, component: Panel },
+      { pluginId: 'later', label: 'later', detail: 'later panel', order: 20, component: Other },
+    ]);
+  });
+
+  it('separates general sections from repository defaults and package panels', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'mcp',
+        repositorySettingsPanel: { label: 'MCP servers', detail: 'servers and authorization', component: Panel },
+      }),
+      defineWebPlugin({
+        id: 'planning',
+        settingsSections: [{ id: 'planning', label: 'planning', detail: 'plan models', fields: [] }],
+      }),
+    ]);
+
+    expect(settingsSections('general').map((section) => section.id)).toEqual([
+      'providers',
+      'appearance',
+      'notifications',
+      'images',
+      'remote',
+      'plugins',
+      'planning',
+    ]);
+    // A contributed page is offered in both workspaces: the repository copy edits
+    // the same keys in the selected repository's config.
+    expect(settingsSections('repository').map((section) => section.id)).toEqual([
+      'repositories',
+      'repository-mcp',
+      'repository-planning',
+    ]);
+  });
+
+  it('places a self-drawn page in the general workspace only, in menu order', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'log',
+        settingsPanels: [{ id: 'metrics', label: 'metrics', detail: 'tokens and cost', component: Panel }],
+      }),
+      defineWebPlugin({
+        id: 'planning',
+        settingsSections: [{ id: 'planning', label: 'planning', detail: 'plan models', fields: [] }],
+      }),
+    ]);
+
+    expect(settingsSections('general').map((section) => section.id)).toEqual([
+      'providers',
+      'appearance',
+      'notifications',
+      'images',
+      'remote',
+      'plugins',
+      'planning',
+      'metrics',
+    ]);
+    // A drawn page reports rather than writes, so unlike a contributed section
+    // it has no repository copy to offer.
+    expect(settingsSections('repository').map((section) => section.id)).toEqual([
+      'repositories',
+      'repository-planning',
+    ]);
+    expect(settingsSections('general').find((section) => section.id === 'metrics')?.panel?.pluginId).toBe('log');
+  });
+
+  it('refuses a panel whose id a section already claimed', () => {
+    installWebPlugins([
+      defineWebPlugin({
+        id: 'planning',
+        settingsSections: [{ id: 'metrics', label: 'metrics', detail: 'fields', fields: [] }],
+      }),
+      defineWebPlugin({
+        id: 'log',
+        settingsPanels: [{ id: 'metrics', label: 'metrics', detail: 'drawn', component: Panel }],
+      }),
+    ]);
+
+    // Both would route at /settings/metrics, so the second is a diagnostic and
+    // the first keeps the id.
+    expect(settingsSections('general').filter((section) => section.id === 'metrics')).toHaveLength(1);
+    expect(settingsSections('general').find((section) => section.id === 'metrics')?.panel).toBeUndefined();
+    expect(webPluginDiagnostics().map((diagnostic) => diagnostic.kind)).toContain('duplicate-settings-section');
   });
 
   it('collects leader bindings in install order and refuses keys the TUI would', () => {
@@ -386,6 +575,27 @@ describe('the web plugin registry', () => {
     expect(() =>
       installWebPlugins([defineWebPlugin({ id: 'filler', fills: [{ slot: 'x.y', id: '', component: Panel }] })]),
     ).toThrow(/empty id/);
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({
+          id: 'filler',
+          contextActions: [
+            { id: 'launch', label: 'Launch', kinds: ['work-item'], run: () => undefined },
+            { id: 'launch', label: 'Again', kinds: ['work-item'], run: () => undefined },
+          ],
+        }),
+      ]),
+    ).toThrow(/context action 'launch' twice/);
+    resetWebPlugins();
+    expect(() =>
+      installWebPlugins([
+        defineWebPlugin({
+          id: 'filler',
+          contextActions: [{ id: 'launch', label: 'Launch', kinds: [], run: () => undefined }],
+        }),
+      ]),
+    ).toThrow(/needs non-empty kinds/);
   });
 
   it("routes an activity section into its group's keyed slot, from any plugin, and the rest into the activity tail", () => {
@@ -438,6 +648,91 @@ describe('the web plugin registry', () => {
     expect(log).toEqual(['drop:one:s9', 'drop:two:s9']);
   });
 
+  it('isolates contributions and channels by session', () => {
+    const log: string[] = [];
+    installSessionWebPlugins('session-a', [
+      defineWebPlugin({
+        id: 'shared-id',
+        tabs: [{ id: 'session-tab', label: 'A', panel: Panel }],
+        channels: [itemsChannel(log, 'shared_channel', 'a')],
+      }),
+    ]);
+    installSessionWebPlugins('session-b', [
+      defineWebPlugin({
+        id: 'shared-id',
+        tabs: [{ id: 'session-tab', label: 'B', panel: Other }],
+        channels: [itemsChannel(log, 'shared_channel', 'b')],
+      }),
+    ]);
+
+    activateWebPluginSession('session-a');
+    expect(webTabs().map((tab) => tab.label)).toEqual(['A']);
+    activateWebPluginSession('session-b');
+    expect(webTabs().map((tab) => tab.label)).toEqual(['B']);
+
+    expect(dispatchChannelFrame({ type: 'shared_channel', sessionId: 'session-a', payload: { items: ['one'] } })).toBe(
+      true,
+    );
+    expect(dispatchChannelFrame({ type: 'shared_channel', sessionId: 'session-b', payload: { items: ['two'] } })).toBe(
+      true,
+    );
+    expect(log).toEqual(['apply:a:session-a:one', 'apply:b:session-b:two']);
+
+    removeSessionWebPlugins('session-a');
+    expect(log.at(-1)).toBe('drop:a:session-a');
+    expect(dispatchChannelFrame({ type: 'shared_channel', sessionId: 'session-a', payload: { items: [] } })).toBe(
+      false,
+    );
+    expect(dispatchChannelFrame({ type: 'shared_channel', sessionId: 'session-b', payload: { items: [] } })).toBe(true);
+  });
+
+  it('replaces an active session registry in one notification and drops its prior channels', () => {
+    const log: string[] = [];
+    installSessionWebPlugins('replace', [
+      defineWebPlugin({
+        id: 'before',
+        tabs: [{ id: 'before-tab', label: 'Before', panel: Panel }],
+        channels: [itemsChannel(log, 'before_items', 'before')],
+      }),
+    ]);
+    activateWebPluginSession('replace');
+    const observedTabs: string[][] = [];
+    const unsubscribe = subscribeWebPluginRegistry(() => observedTabs.push(webTabs().map((tab) => tab.label)));
+
+    installSessionWebPlugins('replace', [
+      defineWebPlugin({ id: 'after', tabs: [{ id: 'after-tab', label: 'After', panel: Other }] }),
+    ]);
+    unsubscribe();
+
+    expect(observedTabs).toEqual([['After']]);
+    expect(log).toEqual(['drop:before:replace']);
+  });
+
+  it('replays the latest channel snapshot after an asynchronous session registry install', () => {
+    const log: string[] = [];
+    activateWebPluginSession('late');
+    expect(dispatchChannelFrame({ type: 'late_items', sessionId: 'late', payload: { items: ['first'] } })).toBe(false);
+    expect(dispatchChannelFrame({ type: 'late_items', sessionId: 'late', payload: { items: ['latest'] } })).toBe(false);
+
+    installSessionWebPlugins('late', [defineWebPlugin({ id: 'late', channels: [itemsChannel(log, 'late_items')] })]);
+
+    expect(log).toEqual(['apply:late_items:late:latest']);
+  });
+
+  it('notifies contribution readers when the active session registry changes', () => {
+    const revisions: number[] = [];
+    const unsubscribe = subscribeWebPluginRegistry(() => revisions.push(webPluginRegistryRevision()));
+    installSessionWebPlugins('session-a', [defineWebPlugin({ id: 'a' })]);
+    activateWebPluginSession('session-a');
+    installSessionWebPlugins('session-a', [defineWebPlugin({ id: 'a-next' })]);
+    removeSessionWebPlugins('session-a');
+    unsubscribe();
+
+    expect(revisions).toHaveLength(3);
+    expect(revisions[0]).toBeLessThan(revisions[1] ?? 0);
+    expect(revisions[1]).toBeLessThan(revisions[2] ?? 0);
+  });
+
   it('starts runtimes in install order and disposes in reverse', () => {
     const log: string[] = [];
     installWebPlugins([
@@ -456,7 +751,11 @@ describe('the web plugin registry', () => {
         },
       }),
     ]);
-    const stop = startWebPlugins({ sendSessionFrame: () => undefined, sendHubFrame: () => undefined });
+    const stop = startWebPlugins({
+      sendSessionFrame: () => undefined,
+      sendHubFrame: () => undefined,
+      onHubConnected: () => () => undefined,
+    });
     stop();
     expect(log).toEqual(['start:a', 'start:b', 'stop:b', 'stop:a']);
   });

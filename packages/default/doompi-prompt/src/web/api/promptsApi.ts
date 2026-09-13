@@ -1,11 +1,12 @@
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
+
 import {
   isPromptErrorResponse,
   promptsUrl,
   promptUrl,
   type SavedPromptListResponse,
   type SavedPromptView,
-} from '../../types/webPrompts.ts';
+} from '../../types/webPrompts';
 
 /**
  * The browser half of the prompt library API.

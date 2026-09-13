@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   canSaveDraft,
   filterPrompts,
@@ -8,7 +9,7 @@ import {
   EMPTY_DRAFT,
   type PromptsMutationApi,
   renamedFrom,
-} from '../../src/web/lib/promptsActions.ts';
+} from '../../src/web/lib/promptsActions';
 
 function api(overrides: Partial<PromptsMutationApi> = {}): PromptsMutationApi {
   return {

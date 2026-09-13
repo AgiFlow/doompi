@@ -1,6 +1,6 @@
 {
   "name": "@agimon-ai/doompi-workflow",
-  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "$schema": "../../../node_modules/.pnpm/nx@23.2.0/node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "packages/minor/doompi-workflow/src",
   "projectType": "library",
   "tags": ["stage:active"],

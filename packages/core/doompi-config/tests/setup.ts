@@ -1,10 +1,11 @@
-import { Context } from '@deepseek-ai/cordis';
-import { DoomConfigService } from '../src/providers/doomConfigService.ts';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   acknowledgeDoomConfigTransition,
   createDoomConfigContext,
@@ -39,7 +40,8 @@ import {
   restoreHarnessStateSnapshot,
   snapshotHarnessState,
   updateHarnessState,
-} from '../src/exports/index.ts';
+} from '../src/exports';
+import { DoomConfigService } from '../src/services/doomConfigService';
 
 const roots: string[] = [];
 const ACTIVE_COMPOSITION_FINGERPRINT = 'a'.repeat(64);
@@ -421,6 +423,7 @@ describe('Doom configuration', () => {
     vi.stubEnv('DOOMPI_ROOT', repo);
     vi.stubEnv('DOOMPI_MAJOR_MODE', 'copilot');
     vi.stubEnv('DOOMPI_DOMAINS', 'default');
+    vi.stubEnv('DOOMPI_PROFILE', '');
 
     const selected = configContext(repo, {
       version: 1,
@@ -450,6 +453,7 @@ describe('Doom configuration', () => {
     vi.stubEnv('DOOMPI_ROOT', repo);
     vi.stubEnv('DOOMPI_MAJOR_MODE', 'copilot');
     vi.stubEnv('DOOMPI_DOMAINS', 'default');
+    vi.stubEnv('DOOMPI_PROFILE', '');
 
     const context = configContext(repo, { version: 1, majorMode: 'copilot', domains: ['default'] });
 
@@ -464,6 +468,7 @@ describe('Doom configuration', () => {
     vi.stubEnv('DOOMPI_ROOT', repo);
     vi.stubEnv('DOOMPI_MAJOR_MODE', 'copilot');
     vi.stubEnv('DOOMPI_DOMAINS', 'default');
+    vi.stubEnv('DOOMPI_PROFILE', '');
     vi.stubEnv('DOOMPI_COMPOSITION_FINGERPRINT', TARGET_COMPOSITION_FINGERPRINT);
     const pendingSelection: DoomConfigPendingSelection = {
       version: 1,

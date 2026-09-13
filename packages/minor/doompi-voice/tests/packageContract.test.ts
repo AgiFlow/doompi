@@ -1,10 +1,12 @@
 import { access, readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { assertDeclaredApi, mountPackageApi } from '@agimon-ai/doompi-extension-contracts/testing';
-import { describe, expect, it } from 'vitest';
-import { api } from '../src/exports/sessionApi.ts';
-import { MANUAL_TRANSCRIPTION_DURATION_HEADER, MANUAL_TRANSCRIPTION_ROUTE } from '../src/types/manualTranscription.ts';
+import { fileURLToPath } from 'node:url';
+
+import { mountPackageApi } from '@agimon-ai/doompi-core/testing';
+import { describe, expect, it, vi } from 'vitest';
+
+import { api } from '../src/controllers/voiceSessionApi';
+import { MANUAL_TRANSCRIPTION_DURATION_HEADER, MANUAL_TRANSCRIPTION_ROUTE } from '../src/types/manualTranscription';
 
 interface PackageManifest {
   name: string;
@@ -18,6 +20,7 @@ interface PackageManifest {
   peerDependencies?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
   doompiWeb?: { channels?: string[] };
 }
 
@@ -90,6 +93,22 @@ describe('doom voice package boundary', () => {
     expect(manifest.doompiWeb?.channels).toEqual(['voice_media_wake', 'voice_ownership']);
   });
 
+  it('declares its server facet', async () => {
+    const manifest = await readManifest();
+
+    expect(manifest.exports?.['./extensions/server']).toEqual({
+      types: './dist/extensions/server.d.mts',
+      import: './dist/extensions/server.mjs',
+      require: './dist/extensions/server.cjs',
+    });
+    expect(manifest.doompiServer).toEqual({
+      entry: './src/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['global', 'workspace', 'session'],
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+    });
+  });
+
   it('does not depend on private rig packages from package-local configuration', async () => {
     for (const file of expectedConfigurationFiles) {
       const contents = await readFile(path.join(packageDirectory, file), 'utf8').catch(() => '');
@@ -120,7 +139,16 @@ describe('doom voice package boundary', () => {
     const publicEntries = Object.entries(exportsMap).filter(([subpath]) => subpath !== './package.json');
 
     expect(publicEntries.length).toBeGreaterThan(0);
-    expect(exportsMap['./voice-tools']).toBeUndefined();
+    expect(exportsMap['./voice-tools']).toEqual({
+      types: './dist/voiceTools.d.mts',
+      import: './dist/voiceTools.mjs',
+      require: './dist/voiceTools.cjs',
+    });
+    expect(exportsMap['./voice-reload-handoff']).toEqual({
+      types: './dist/voiceReloadHandoff.d.mts',
+      import: './dist/voiceReloadHandoff.mjs',
+      require: './dist/voiceReloadHandoff.cjs',
+    });
     expect(Object.keys(exportsMap)).not.toContain('./*');
 
     for (const [subpath, target] of publicEntries) {
@@ -135,9 +163,9 @@ describe('doom voice package boundary', () => {
   it('builds the voice worker as a private artifact', async () => {
     const manifest = await readManifest();
     const buildConfig = await readFile(path.join(packageDirectory, 'tsdown.config.ts'), 'utf8');
-    const client = await readFile(path.join(packageDirectory, 'src/adapters/process/voiceWorkerClient.ts'), 'utf8');
+    const client = await readFile(path.join(packageDirectory, 'src/services/voiceWorkerClient/index.ts'), 'utf8');
 
-    expect(buildConfig).toContain('src/adapters/process/voiceWorker.ts');
+    expect(buildConfig).toContain('src/services/voiceWorker/index.ts');
     expect(client).toContain('findVoiceWorkerUrl(import.meta.url)');
     expect(client).not.toMatch(/new URL\(['"]\.\.\//u);
     expect(Object.keys(manifest.exports ?? {}).some((subpath) => subpath.includes('voiceWorker'))).toBe(false);
@@ -181,16 +209,22 @@ describe('doom voice package boundary', () => {
       expect(await readFile(path.join(packageDirectory, file), 'utf8'), file).not.toMatch(forbidden);
     }
 
-    const webEntry = await readFile(path.join(packageDirectory, 'src/web/index.ts'), 'utf8');
+    const webEntry = await readFile(path.join(packageDirectory, 'src/extensions/web.ts'), 'utf8');
     expect(webEntry).not.toContain("id: 'voice.capture'");
     expect(webEntry).not.toContain("command: 'voice'");
   });
 
   it('mounts the manual route at the API path declared by the package', async () => {
-    expect(assertDeclaredApi({ packageRoot: packageDirectory, api, scope: 'session' })).toMatchObject({
-      basePath: 'voice-media',
+    const mounted = mountPackageApi(api, {
+      scope: 'session',
+      sessionId: 's1',
+      cwd: packageDirectory,
+      directEvents: {
+        publish: vi.fn(),
+        subscribe: vi.fn(() => () => undefined),
+        close: vi.fn(),
+      },
     });
-    const mounted = mountPackageApi(api, { scope: 'session', sessionId: 's1', cwd: packageDirectory });
     try {
       const response = await mounted.fetch(`/api/plugin/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=s1`, {
         method: 'POST',

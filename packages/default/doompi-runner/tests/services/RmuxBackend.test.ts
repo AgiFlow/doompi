@@ -1,6 +1,7 @@
 import { access, readFile, stat } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface RmuxPackageManifest {

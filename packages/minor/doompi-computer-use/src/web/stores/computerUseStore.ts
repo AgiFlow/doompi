@@ -1,6 +1,7 @@
-import { defineSessionStore } from '@agimon-ai/doompi-web-contracts';
-import { computerUseChannelType } from '../../types/computerUseApi.ts';
-import type { ComputerUseChannelPayload } from '../../types/computerUseApi.ts';
+import { defineSessionStore } from '@agimon-ai/doompi-core/web';
+
+import { computerUseChannelType } from '../../types/computerUseApi';
+import type { ComputerUseChannelPayload } from '../../types/computerUseApi';
 
 export interface ComputerUseSession extends ComputerUseChannelPayload {}
 

@@ -1,5 +1,5 @@
+import type { ToolResultView } from '@agimon-ai/doompi-core/web';
 import type { MessageLine, MessageLineTone } from '@agimon-ai/doompi-web-components';
-import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
 
 /**
  * The cockpit half of src/tui/workflow/workflowToolRender.ts: the same

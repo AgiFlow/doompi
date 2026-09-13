@@ -5,8 +5,8 @@
  * The report is typed as MetricsReport rather than left inferred, so a change
  * to the wire contract breaks this story instead of drawing stale fields.
  */
-import type { MetricsReport } from '../../types/webMetrics.ts';
-import { MetricsReportView } from './MetricsReportView.tsx';
+import type { MetricsReport } from '../../types/webMetrics';
+import { MetricsReportView } from './MetricsReportView';
 
 const report: MetricsReport = {
   generatedAt: '2025-06-04 09:12',

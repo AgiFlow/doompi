@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { type GrammarKey, loadGrammar } from '../../src/lib/editorLanguage.ts';
+
+import { type GrammarKey, loadGrammar } from '../../src/lib/editorLanguage';
 
 /**
  * Every key resolves to a real grammar.

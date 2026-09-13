@@ -1,4 +1,4 @@
-import type { MediaKind } from '../types/editor.ts';
+import type { MediaKind } from '../types/editor';
 
 /**
  * Which files a browser can show without help.

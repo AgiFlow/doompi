@@ -16,13 +16,14 @@
 
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey } from '@earendil-works/pi-tui';
+
 import {
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_OVERLAY_ACCENT,
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from './doomOverlay.ts';
+} from './doomOverlay';
 import { CURSOR_BLOCK, fit, isControlInput, matchesQuery, pathTail, SELECTION_MARKER } from './overlayText';
 
 export const WORKFLOW_PICKER_OVERLAY_OPTIONS = DOOM_FULLSCREEN_UI_OPTIONS.overlayOptions;

@@ -5,7 +5,7 @@ import {
   EXTENSION_ERROR_EVENT,
   recordNonBlockingExtensionError,
   type ExtensionHookFailure,
-} from '../../src/services/runs/extensionErrorTelemetry';
+} from '../../src/services/extensionErrorTelemetry';
 
 const failure: ExtensionHookFailure = {
   extensionPath: '/workspace/.pi/extensions/repositoryHooks.mjs',

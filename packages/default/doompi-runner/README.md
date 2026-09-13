@@ -208,7 +208,7 @@ metadata. RMUX is dual-licensed under MIT or Apache-2.0. RTK v0.45.0 is licensed
 
 ```ts
 import {
-  createRunnerContainer,
+  createRunnerDependencies,
   DEFAULT_BG_THRESHOLD_MS,
   DEFAULT_LOG_MAX_BYTES,
   DEFAULT_LOG_TTL_MS,
@@ -234,3 +234,11 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+## Extension lifecycle and source layout
+
+`extensions/pi.ts` assembles the Runner UI runtime and native Bash tool declaration. `onStart` resolves the lazy service graph, subscribes to registry updates, and starts retention/status polling. `onStop` awaits initialization and pending operations, stops owned processes, closes PTYs and the registry, and releases telemetry. Partial startup closes an already opened registry.
+
+The Pi UI orchestration is in `tui/runnerRuntime.ts`; process and filesystem implementations live in `services/<name>/`. Controllers implement HTTP, CLI, and server command handling. `extensions/server.ts` composes the per-session supervision activity with those controllers. Model state, constants, and schemas have dedicated roots. The browser declaration lives directly in `extensions/web.ts`.
+
+Public capabilities use flat kebab-case subpaths such as `runner-dependencies`, `rmux-backend`, `runner-paths`, `bash-tool`, and `response-envelope`. Flat `src/exports/` files only forward these capabilities. Executable `bin/*` paths remain unchanged. The former nested service aliases and container entry are removed.

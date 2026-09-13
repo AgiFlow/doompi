@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { deriveFindings } from '../src/services/findings.ts';
-import { LogMetricsAggregator } from '../src/services/metrics.ts';
+
+import { deriveFindings } from '../src/services/findings';
+import { LogMetricsAggregator } from '../src/services/metrics';
 
 /**
  * Findings are asserted through the aggregator rather than a hand-built

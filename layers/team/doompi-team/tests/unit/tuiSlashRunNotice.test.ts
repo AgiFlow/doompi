@@ -1,9 +1,8 @@
+import type { ExtensionAPI, MessageRenderOptions, Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 
-import type { ExtensionAPI, MessageRenderOptions, Theme } from '@earendil-works/pi-coding-agent';
-
-import { SLASH_RESULT_CUSTOM_TYPE, type SlashRunDetail } from '../../src/adapters/pi/commands/slash/slashCommands';
-import { registerSlashRunRenderer, renderSlashRunNotice } from '../../src/adapters/pi/tui/slashRunNotice';
+import { SLASH_RESULT_CUSTOM_TYPE, type SlashRunDetail } from '../../src/models/slashResult';
+import { createSlashRunRenderer, renderSlashRunNotice } from '../../src/tui/slashRunNotice';
 
 /** Identity theme: every assertion is about WHAT text is emitted, never about colour codes. */
 const theme = {
@@ -82,14 +81,14 @@ describe('registerSlashRunRenderer', () => {
   it('registers under the same custom type the slash commands send', () => {
     const host = fakePi();
 
-    registerSlashRunRenderer(host.pi);
+    host.pi.registerMessageRenderer(...createSlashRunRenderer());
 
     expect(host.registeredType()).toBe(SLASH_RESULT_CUSTOM_TYPE);
   });
 
   it('renders the detail lines when details are present', () => {
     const host = fakePi();
-    registerSlashRunRenderer(host.pi);
+    host.pi.registerMessageRenderer(...createSlashRunRenderer());
 
     const component = host.render([detail({ status: 'completed' })], '## Subagent completed') as {
       render: (width: number) => string[];
@@ -100,7 +99,7 @@ describe('registerSlashRunRenderer', () => {
 
   it('shows raw content verbatim for a message that carries no details', () => {
     const host = fakePi();
-    registerSlashRunRenderer(host.pi);
+    host.pi.registerMessageRenderer(...createSlashRunRenderer());
 
     const component = host.render(undefined, 'Subagent diagnostics report') as {
       render: (width: number) => string[];

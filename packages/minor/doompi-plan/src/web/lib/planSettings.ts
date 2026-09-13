@@ -1,5 +1,6 @@
-import type { SettingsSectionContribution } from '@agimon-ai/doompi-web-contracts';
-import { PLAN_CONFIG_SECTION_ID, PLAN_SETTING_SHAPES } from '../../types/planSettings.ts';
+import type { SettingsSectionContribution } from '@agimon-ai/doompi-core/web';
+
+import { PLAN_CONFIG_SECTION_ID, PLAN_SETTING_SHAPES } from '../../types/planSettings';
 
 /**
  * The planning settings, as the cockpit's settings page renders them.

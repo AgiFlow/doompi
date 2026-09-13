@@ -2,17 +2,13 @@ import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { currentRunsDir } from '../../src/adapters/filesystem/paths';
-import {
-  TerminalPersistenceService,
-  type TerminalTrigger,
-} from '../../src/adapters/runs/background/terminalPersistence';
-import type {
-  CoalescedStatusWriterContract,
-  StatusWithRecentEntries,
-} from '../../src/adapters/runs/background/statusWriter';
+import { scopeRunsDir, type SessionScope } from '../../src/services/sessionPaths';
+import type { CoalescedStatusWriterContract, StatusWithRecentEntries } from '../../src/services/statusWriter';
+import { TerminalPersistenceService, type TerminalTrigger } from '../../src/services/terminalPersistence';
+import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 /**
  * A status writer that records what was flushed instead of touching disk.
@@ -28,7 +24,7 @@ class RecordingStatusWriter implements CoalescedStatusWriterContract {
   status: StatusWithRecentEntries = {};
   throwOnFlush: Error | undefined;
 
-  open(_runId: string, initialStatus: StatusWithRecentEntries): void {
+  open(_scope: SessionScope, _runId: string, initialStatus: StatusWithRecentEntries): void {
     this.status = initialStatus;
   }
   update(mutator: (status: StatusWithRecentEntries) => void): void {
@@ -120,12 +116,12 @@ const trackedRunDirs: string[] = [];
 
 function makeRunId(label: string): string {
   const runId = `${label}-${randomUUID()}`;
-  trackedRunDirs.push(path.join(currentRunsDir(), runId));
+  trackedRunDirs.push(path.join(scopeRunsDir(TEST_SESSION_SCOPE), runId));
   return runId;
 }
 
 function crashMarkerFile(runId: string): string {
-  return path.join(currentRunsDir(), runId, 'runner-crash-marker.json');
+  return path.join(scopeRunsDir(TEST_SESSION_SCOPE), runId, 'runner-crash-marker.json');
 }
 
 afterEach(() => {
@@ -139,7 +135,7 @@ describe('begin', () => {
   it('writes a crash marker recording this process before anything else runs', () => {
     const service = new TestTerminalPersistenceService();
     const runId = makeRunId('begin');
-    service.begin(runId, () => undefined);
+    service.begin(TEST_SESSION_SCOPE, runId, () => undefined);
 
     const marker = JSON.parse(fs.readFileSync(crashMarkerFile(runId), 'utf-8')) as {
       version: number;
@@ -152,7 +148,7 @@ describe('begin', () => {
 
   it('installs handlers for SIGTERM, SIGINT, SIGHUP, uncaughtException and unhandledRejection', () => {
     const service = new TestTerminalPersistenceService();
-    service.begin(makeRunId('handlers'), () => undefined);
+    service.begin(TEST_SESSION_SCOPE, makeRunId('handlers'), () => undefined);
 
     expect(service.signalHandlers.has('SIGTERM')).toBe(true);
     expect(service.signalHandlers.has('SIGINT')).toBe(true);
@@ -164,12 +160,12 @@ describe('begin', () => {
   it('resets a previous run when called again, clearing its tracked children', () => {
     const service = new TestTerminalPersistenceService();
     const firstRunId = makeRunId('reset-first');
-    service.begin(firstRunId, () => undefined);
+    service.begin(TEST_SESSION_SCOPE, firstRunId, () => undefined);
     service.trackChild(111);
 
     const secondRunId = makeRunId('reset-second');
     const persist = vi.fn();
-    service.begin(secondRunId, persist);
+    service.begin(TEST_SESSION_SCOPE, secondRunId, persist);
     service.finalize();
 
     // The child tracked against the first run must not be killed by the
@@ -183,7 +179,7 @@ describe('finalize', () => {
   it('calls persist exactly once with no trigger for the normal path', () => {
     const service = new TestTerminalPersistenceService();
     const persist = vi.fn();
-    service.begin(makeRunId('normal'), persist);
+    service.begin(TEST_SESSION_SCOPE, makeRunId('normal'), persist);
 
     service.finalize();
 
@@ -193,7 +189,7 @@ describe('finalize', () => {
   it('is idempotent: a second call produces no second persist', () => {
     const service = new TestTerminalPersistenceService();
     const persist = vi.fn();
-    service.begin(makeRunId('twice'), persist);
+    service.begin(TEST_SESSION_SCOPE, makeRunId('twice'), persist);
 
     service.finalize();
     service.finalize();
@@ -210,7 +206,7 @@ describe('finalize', () => {
   it('clears the crash marker once persist succeeds', () => {
     const service = new TestTerminalPersistenceService();
     const runId = makeRunId('clears-marker');
-    service.begin(runId, () => undefined);
+    service.begin(TEST_SESSION_SCOPE, runId, () => undefined);
     expect(fs.existsSync(crashMarkerFile(runId))).toBe(true);
 
     service.finalize();
@@ -221,7 +217,7 @@ describe('finalize', () => {
   it('leaves the crash marker in place when persist throws, and still propagates the throw', () => {
     const service = new TestTerminalPersistenceService();
     const runId = makeRunId('persist-throws');
-    service.begin(runId, () => {
+    service.begin(TEST_SESSION_SCOPE, runId, () => {
       throw new Error('status writer unavailable');
     });
 
@@ -231,7 +227,7 @@ describe('finalize', () => {
 
   it('removes the installed handlers so a later signal cannot be swallowed silently', () => {
     const service = new TestTerminalPersistenceService();
-    service.begin(makeRunId('removes-handlers'), () => undefined);
+    service.begin(TEST_SESSION_SCOPE, makeRunId('removes-handlers'), () => undefined);
 
     service.finalize();
 
@@ -242,7 +238,7 @@ describe('finalize', () => {
 
   it('kills every tracked child and then forgets them, even when persist throws', () => {
     const service = new TestTerminalPersistenceService();
-    service.begin(makeRunId('kills-children'), () => {
+    service.begin(TEST_SESSION_SCOPE, makeRunId('kills-children'), () => {
       throw new Error('boom');
     });
     service.trackChild(101);
@@ -258,7 +254,7 @@ describe('finalize', () => {
 
   it('stops tracking a child that exited on its own before finalize', () => {
     const service = new TestTerminalPersistenceService();
-    service.begin(makeRunId('untrack'), () => undefined);
+    service.begin(TEST_SESSION_SCOPE, makeRunId('untrack'), () => undefined);
     service.trackChild(201);
     service.untrackChild(201);
 
@@ -272,7 +268,7 @@ describe('finalize', () => {
     // implementation against a pid that cannot plausibly exist - the direct
     // proof that it swallows ESRCH rather than letting finalize throw.
     const service = new FakeSignalsTerminalPersistenceService();
-    service.begin(makeRunId('dead-child'), () => undefined);
+    service.begin(TEST_SESSION_SCOPE, makeRunId('dead-child'), () => undefined);
     service.trackChild(2 ** 31 - 1);
 
     expect(() => service.finalize()).not.toThrow();
@@ -284,7 +280,7 @@ describe('dispose', () => {
     const service = new TestTerminalPersistenceService();
     const runId = makeRunId('dispose');
     const persist = vi.fn();
-    service.begin(runId, persist);
+    service.begin(TEST_SESSION_SCOPE, runId, persist);
 
     service.dispose();
 
@@ -295,7 +291,7 @@ describe('dispose', () => {
 
   it('is safe to call more than once', () => {
     const service = new TestTerminalPersistenceService();
-    service.begin(makeRunId('dispose-twice'), () => undefined);
+    service.begin(TEST_SESSION_SCOPE, makeRunId('dispose-twice'), () => undefined);
     expect(() => {
       service.dispose();
       service.dispose();
@@ -309,7 +305,9 @@ describe('signal handling', () => {
     (signal) => {
       const service = new TestTerminalPersistenceService();
       const seenTriggers: Array<TerminalTrigger | undefined> = [];
-      service.begin(makeRunId(`signal-${signal}`), (_status, trigger) => seenTriggers.push(trigger));
+      service.begin(TEST_SESSION_SCOPE, makeRunId(`signal-${signal}`), (_status, trigger) =>
+        seenTriggers.push(trigger),
+      );
 
       const handler = service.signalHandlers.get(signal);
       if (!handler) throw new Error(`expected a handler for ${signal}`);
@@ -323,7 +321,7 @@ describe('signal handling', () => {
   it('finalizes with an uncaughtException trigger and exits 1', () => {
     const service = new TestTerminalPersistenceService();
     const seenTriggers: Array<TerminalTrigger | undefined> = [];
-    service.begin(makeRunId('uncaught'), (_status, trigger) => seenTriggers.push(trigger));
+    service.begin(TEST_SESSION_SCOPE, makeRunId('uncaught'), (_status, trigger) => seenTriggers.push(trigger));
 
     const error = new Error('boom');
     service.uncaughtHandler?.(error, 'uncaughtException');
@@ -335,7 +333,7 @@ describe('signal handling', () => {
   it('finalizes with an unhandledRejection trigger and exits 1', () => {
     const service = new TestTerminalPersistenceService();
     const seenTriggers: Array<TerminalTrigger | undefined> = [];
-    service.begin(makeRunId('unhandled'), (_status, trigger) => seenTriggers.push(trigger));
+    service.begin(TEST_SESSION_SCOPE, makeRunId('unhandled'), (_status, trigger) => seenTriggers.push(trigger));
 
     const promise = Promise.reject(new Error('rejected')).catch(() => undefined);
     service.unhandledHandler?.('rejected reason', promise);
@@ -347,7 +345,7 @@ describe('signal handling', () => {
   it('does not corrupt state when a signal fires again after a normal finalize already ran', () => {
     const service = new TestTerminalPersistenceService();
     const persist = vi.fn();
-    service.begin(makeRunId('post-finalize-signal'), persist);
+    service.begin(TEST_SESSION_SCOPE, makeRunId('post-finalize-signal'), persist);
     const handler = service.signalHandlers.get('SIGTERM');
     if (!handler) throw new Error('expected a SIGTERM handler');
 
@@ -388,7 +386,7 @@ describe('real process seams', () => {
 
     try {
       // begin() also exercises the real now() through the crash marker write.
-      service.begin(makeRunId('real-seams'), () => undefined);
+      service.begin(TEST_SESSION_SCOPE, makeRunId('real-seams'), () => undefined);
       expect(process.listenerCount('SIGTERM')).toBe(before.sigterm + 1);
       expect(process.listenerCount('SIGINT')).toBe(before.sigint + 1);
       expect(process.listenerCount('SIGHUP')).toBe(before.sighup + 1);

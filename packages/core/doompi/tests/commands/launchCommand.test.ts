@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ensureElicitationSessionId, overridePiThemes } from '../../src/adapters/launchPlan.ts';
-import {
-  buildVibeLintPiArgs,
-  formatVibeLintResponse,
-  parseVibeLintInvocation,
-} from '../../src/commands/launchCommand.ts';
+
+import { ensureElicitationSessionId, overridePiThemes } from '../../src/builders/cli/launchPlan';
+import { buildVibeLintPiArgs, formatVibeLintResponse, parseVibeLintInvocation } from '../../src/cli/commands/launch';
 
 describe('doompi launch identity', () => {
   it('creates one stable elicitation session ID when the caller did not provide one', () => {

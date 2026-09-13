@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 // @scaffold-generated
 import {
   collapseLines,
@@ -8,12 +9,12 @@ import {
   MessageLines,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
+
 import {
   computerActionCallSummary,
   computerActionCollapsedLines,
   computerActionResultLines,
-} from '../lib/computerActionToolRender.ts';
+} from '../lib/computerActionToolRender';
 
 /**
  * The computer_action tool's timeline item: Perform one constrained semantic action in the authorized application window. The shell owns

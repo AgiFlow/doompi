@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BrowserRealtimeSession } from '../src/web/api/browserRealtimeSession.ts';
+
+import { BrowserRealtimeSession } from '../src/web/api/browserRealtimeSession';
 
 class FakeTrack {
   public readonly kind = 'audio';
@@ -280,7 +281,7 @@ describe('BrowserRealtimeSession', () => {
       () => 'resolved',
       (error: unknown) => String(error),
     );
-    await flush();
+    await vi.waitFor(() => expect(FakePeer.instances).toHaveLength(1));
     const peer = FakePeer.instances[0]!;
 
     session.close();
@@ -404,7 +405,7 @@ describe('BrowserRealtimeSession', () => {
       onState: vi.fn(),
     });
     const started = session.start();
-    await flush();
+    await vi.waitFor(() => expect(FakePeer.instances).toHaveLength(1));
     const peer = FakePeer.instances[0]!;
     expect(peer.listenerCount('icegatheringstatechange')).toBe(1);
 

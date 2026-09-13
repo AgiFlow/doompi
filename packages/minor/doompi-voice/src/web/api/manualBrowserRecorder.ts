@@ -1,7 +1,8 @@
+import type { VoiceMicrophoneConstraints } from '../../types/clientMedia';
 import {
   MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,
   MANUAL_TRANSCRIPTION_MAX_DURATION_MS,
-} from '../../types/manualTranscription.ts';
+} from '../../types/manualTranscription';
 
 const DATA_TIMESLICE_MS = 1_000;
 const SILENCE_SAMPLE_INTERVAL_MS = 100;
@@ -37,7 +38,7 @@ export class ManualRecordingSilenceGate {
 type RecorderState = 'inactive' | 'recording' | 'paused';
 
 interface ManualMediaStream {
-  getTracks(): Array<{ stop(): void }>;
+  getTracks(): Array<{ stop(): void; onended?: (() => void) | null }>;
 }
 
 interface ManualMediaRecorder {
@@ -90,7 +91,7 @@ interface BrowserAudioContextConstructor {
 interface BrowserMediaGlobals {
   AudioContext?: BrowserAudioContextConstructor;
   MediaRecorder?: BrowserRecorderConstructor;
-  navigator?: { mediaDevices?: { getUserMedia(options: { audio: boolean }): Promise<ManualMediaStream> } };
+  navigator?: { mediaDevices?: { getUserMedia(options: VoiceMicrophoneConstraints): Promise<ManualMediaStream> } };
 }
 
 export interface ManualBrowserRecordingResult {
@@ -137,7 +138,7 @@ function watchBrowserSilence(stream: ManualMediaStream, onSilence: (speechDetect
   };
 }
 
-function browserDependencies(): ManualRecorderDependencies {
+function browserDependencies(constraints: VoiceMicrophoneConstraints): ManualRecorderDependencies {
   const browser = globalThis as unknown as BrowserMediaGlobals;
   const Recorder = browser.MediaRecorder;
   const mediaDevices = browser.navigator?.mediaDevices;
@@ -145,7 +146,7 @@ function browserDependencies(): ManualRecorderDependencies {
     throw new Error('This browser cannot record microphone audio.');
   }
   return {
-    getUserMedia: async () => await mediaDevices.getUserMedia({ audio: true }),
+    getUserMedia: async () => await mediaDevices.getUserMedia(constraints),
     createRecorder: (stream, options) => new Recorder(stream, options),
     isTypeSupported: (type) => Recorder.isTypeSupported(type),
     setTimer: (callback, delay) => setTimeout(callback, delay),
@@ -157,8 +158,10 @@ function browserDependencies(): ManualRecorderDependencies {
 
 /** Owns one standalone browser recording. It has no connection to autonomous voice capture. */
 export async function startManualBrowserRecording(
-  dependencies: ManualRecorderDependencies = browserDependencies(),
+  dependencies?: ManualRecorderDependencies,
+  constraints: VoiceMicrophoneConstraints = { audio: true, video: false },
 ): Promise<ManualBrowserRecording> {
+  dependencies ??= browserDependencies(constraints);
   const mimeType = MEDIA_TYPES.find((type) => dependencies.isTypeSupported(type));
   const stream = await dependencies.getUserMedia();
   let recorder: ManualMediaRecorder;
@@ -189,7 +192,10 @@ export async function startManualBrowserRecording(
     recorder.ondataavailable = null;
     recorder.onerror = null;
     recorder.onstop = null;
-    for (const track of stream.getTracks()) track.stop();
+    for (const track of stream.getTracks()) {
+      track.onended = null;
+      track.stop();
+    }
   };
   const settle = (audio?: Blob, error?: Error): void => {
     if (finished) return;
@@ -213,7 +219,7 @@ export async function startManualBrowserRecording(
   const stopRecorder = (): void => {
     if (finished || stopping) return;
     if (recorder.state === 'inactive') {
-      settle(cancelled || sizeError !== undefined ? undefined : audioBlob(), sizeError);
+      // Native stop queues the final data event before onstop, even after state becomes inactive.
       return;
     }
     stopping = true;
@@ -224,6 +230,9 @@ export async function startManualBrowserRecording(
     }
   };
   const timer = dependencies.setTimer(stopRecorder, MANUAL_TRANSCRIPTION_MAX_DURATION_MS);
+
+  for (const track of stream.getTracks())
+    track.onended = () => settle(undefined, new Error('The selected microphone was disconnected.'));
 
   recorder.ondataavailable = (event) => {
     if (finished || cancelled || sizeError !== undefined || event.data.size === 0) return;

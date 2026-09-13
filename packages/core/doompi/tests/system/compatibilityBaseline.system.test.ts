@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
-import { PACKAGE_MATRIX, packageRootFor, RMUX_TARGETS, RTK_TARGETS } from './packageMatrix.ts';
+
+import { PACKAGE_MATRIX, packageRootFor, RMUX_TARGETS, RTK_TARGETS } from './packageMatrix';
 
 interface PackageBaseline {
   exports: Record<string, string>;
@@ -19,7 +21,7 @@ interface PackageBaseline {
 }
 
 const FIXTURE_ROOT = fileURLToPath(new URL('../fixtures', import.meta.url));
-const CONTRACTS_SOURCE = fileURLToPath(new URL('../../../doompi-extension-contracts/src', import.meta.url));
+const CONTRACTS_SOURCE = fileURLToPath(new URL('../../../doompi-core/src', import.meta.url));
 const conditionCodes: Readonly<Record<string, string>> = { types: 't', import: 'i', require: 'r', default: 'd' };
 const packageBaseline = JSON.parse(
   fs.readFileSync(path.join(FIXTURE_ROOT, 'packageCompatibility.json'), 'utf8'),

@@ -28,9 +28,9 @@
   "files": [
     "dist",
     "src/web",
-    "src/exports/webClient.ts",
+    "src/extensions/web.ts",
     "src/types/autocompactSettings.ts",
-    "src/types/constants.ts"
+    "src/constants/autocompact.ts"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -47,6 +47,11 @@
       "import": "./dist/extensions/pi.mjs",
       "require": "./dist/extensions/pi.cjs"
     },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -61,9 +66,8 @@
   },
   "dependencies": {
     "@agimon-ai/doompi-config": "workspace:*",
-    "@agimon-ai/doompi-extension-contracts": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
-    "@agimon-ai/doompi-web-contracts": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "minimatch": "10.2.6"
   },
@@ -85,10 +89,25 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "doompiServer": {
+    "entry": "./src/extensions/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "session"
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
+    }
+  },
   "doompiWeb": {
     "pluginId": "autocompact",
     "channels": [],
-    "client": "./src/exports/webClient.ts"
+    "client": "./src/extensions/web.ts",
+    "scopes": [
+      "global",
+      "workspace"
+    ]
   },
   "pi": {
     "extensions": [

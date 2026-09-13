@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   baselineOf,
   foldEntries,
@@ -6,7 +7,7 @@ import {
   isDiffable,
   parseTimeline,
   parseTimelineEvent,
-} from '../../../src/services/fileChanges.ts';
+} from '../../../src/services/fileChanges';
 
 const line = (value: unknown): string => JSON.stringify(value);
 

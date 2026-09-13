@@ -2,21 +2,20 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {
-  installDoomCordisHost,
-  type DoomCordisHostController,
-} from '@agimon-ai/doompi-extension-contracts/cordis-host';
+
+import { installDoomCordisHost, type DoomCordisHostController } from '@agimon-ai/doompi-core/cordis-host';
 import {
   createDoomMcpProjectionService,
   DOOM_MCP_PROJECTION_SERVICE,
   type DoomMcpProjection,
   type DoomMcpProjectionService,
-} from '@agimon-ai/doompi-extension-contracts/mcp-projection';
-import type { EventBusLike } from '@agimon-ai/doompi-extension-contracts/protocol';
+} from '@agimon-ai/doompi-core/mcp-projection';
+import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
 import type { Context, Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { registerMcpExtension } from '../src/adapters/pi/extension.ts';
+
+import { mcpExtension } from '../src/extensions/pi';
 
 const DEFERRED_RUNTIME_TIMEOUT_MS = 5_000;
 
@@ -30,8 +29,8 @@ vi.mock('@agimon-ai/mcp-proxy', async (importOriginal) => ({
   createProxyContainer: (...argumentsValue: unknown[]) => mocks.createProxyContainer(...argumentsValue),
 }));
 
-vi.mock('@agimon-ai/doompi-extension-contracts/mcp-projection', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agimon-ai/doompi-extension-contracts/mcp-projection')>();
+vi.mock('@agimon-ai/doompi-core/mcp-projection', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agimon-ai/doompi-core/mcp-projection')>();
   return {
     ...actual,
     readDoomMcpProjectionService: (context: Context) => {
@@ -41,7 +40,7 @@ vi.mock('@agimon-ai/doompi-extension-contracts/mcp-projection', async (importOri
   };
 });
 
-vi.mock('../src/adapters/pi/leader.ts', () => ({
+vi.mock('../src/controllers/leader', () => ({
   registerLeaderContribution: () => () => undefined,
 }));
 
@@ -71,11 +70,14 @@ interface ExtensionHarness {
 async function extensionHarness(context: ExtensionContext): Promise<ExtensionHarness> {
   const listeners = new Map<string, SessionListener[]>();
   let activeTools = ['read'];
+  const registeredTools: string[] = [];
   const pi = {
     events: new TestBus(),
     registerCommand: vi.fn(),
-    registerTool: vi.fn(),
+    registerTool: vi.fn((definition: { name: string }) => registeredTools.push(definition.name)),
     getActiveTools: vi.fn(() => [...activeTools]),
+    // The inventory the tool surface recomputes from.
+    getAllTools: vi.fn(() => ['read', ...registeredTools].map((name) => ({ name }))),
     setActiveTools: vi.fn((tools: string[]) => {
       activeTools = [...tools];
     }),
@@ -85,7 +87,7 @@ async function extensionHarness(context: ExtensionContext): Promise<ExtensionHar
   } as unknown as ExtensionAPI;
 
   const controller = await installDoomCordisHost(pi, { mode: 'composed', source: 'doompi-mcp-hot-reload-test' });
-  await registerMcpExtension(pi);
+  await mcpExtension(pi);
   const fire = async (event: string): Promise<void> => {
     for (const listener of listeners.get(event) ?? []) await listener({}, context);
   };

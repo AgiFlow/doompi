@@ -1,0 +1,9 @@
+export const BYTES_PER_MIB = 1_048_576;
+export const RTK_STDIN_MAX_BYTES = 10_485_760;
+export const DEFAULT_RTK_TIMEOUT_MS = 10_000;
+export const RTK_KILL_WAIT_MS = 1_000;
+export const OUTPUT_BUFFER_FACTOR = 2;
+export const EXECUTABLE_MODE = 0o755;
+export const SIMPLE_TOKEN_PATTERN = /^[A-Za-z0-9_./:@%+=,-]+$/u;
+export const SHELL_CONTROL_PATTERN = /[\r\n;&|<>`$\\'"(){}*?!]/u;
+export const RTK_BINARY_ENV = 'DOOMPI_RTK_BINARY';

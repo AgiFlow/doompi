@@ -5,11 +5,12 @@
  * package's own testing fixture, whose `thread` option stands in for the host's
  * transcript; the fleet comes from the real session store seeded at module scope.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import type { ReactNode } from 'react';
-import type { SubagentRun } from '../../types/webSubagents.ts';
-import { subagents } from '../stores/subagentsStore.ts';
-import { SubagentsPanel } from './SubagentsPanel.tsx';
+
+import type { SubagentRun } from '../../types/webSubagents';
+import { subagents } from '../stores/subagentsStore';
+import { SubagentsPanel } from './SubagentsPanel';
 
 const NOW = Date.now();
 const MINUTE = 60_000;
@@ -71,7 +72,7 @@ const thread = (threadId: string): ReactNode => (
   <div className="flex flex-col gap-1 px-3 py-2 text-2xs text-doom-dim">
     <span className="text-doom-faint">{threadId}</span>
     <span className="text-doom-text">read src/web/components/SubagentsPanel.tsx</span>
-    <span className="text-doom-text">grep slotPropsFixture packages/core/doompi-web-contracts</span>
+    <span className="text-doom-text">grep slotPropsFixture packages/core/doompi-core</span>
     <span className="text-doom-text">bash pnpm exec oxlint src/web/components</span>
   </div>
 );

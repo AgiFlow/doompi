@@ -1,12 +1,13 @@
-import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-extension-contracts/testing';
-import { connectDoomCordisHost } from '@agimon-ai/doompi-extension-contracts/cordis-host';
-import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-extension-contracts/help';
+import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
+import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
+import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it } from 'vitest';
-import { COMMAND_NAME as PROMPT_SAVE_COMMAND } from '../../../src/commands/promptSaveCommand.ts';
-import { COMMAND_NAME } from '../../../src/commands/promptsCommand.ts';
-import { createRecentPrompts } from '../../../src/services/recentPrompts.ts';
-import { activatePromptExtension } from '../../../src/adapters/pi/extension.ts';
-import type { PromptExtensionDependencies, SavedPrompt } from '../../../src/types/prompt.ts';
+
+import { COMMAND_NAME } from '../../../src/constants/prompts';
+import { COMMAND_NAME as PROMPT_SAVE_COMMAND } from '../../../src/constants/promptSave';
+import { activatePromptExtension } from '../../../src/extensions/pi';
+import { createRecentPrompts } from '../../../src/models/recentPrompts';
+import type { PromptExtensionDependencies, SavedPrompt } from '../../../src/types/prompt';
 
 /** A store that never touches the developer's own prompts directory. */
 function memoryDependencies(): PromptExtensionDependencies {
@@ -52,6 +53,7 @@ describe('doompi-prompt Pi extension', () => {
     // The picker itself is exercised in tests/integration/commands: the shared
     // host never resolves a custom component, so opening it here would hang.
     const host = createPiTestHost();
+    await host.cordis();
     const dependencies = memoryDependencies();
 
     await activatePromptExtension(host.pi, dependencies);
@@ -63,6 +65,7 @@ describe('doompi-prompt Pi extension', () => {
 
   it('ignores input an extension injected', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     const dependencies = memoryDependencies();
 
     await activatePromptExtension(host.pi, dependencies);
@@ -75,6 +78,7 @@ describe('doompi-prompt Pi extension', () => {
   it('says nothing where there is no UI to say it in', async () => {
     // The cockpit and the RPC runtime both load extensions with no terminal.
     const host = createPiTestHost({ hasUI: false, mode: 'rpc' });
+    await host.cordis();
 
     await activatePromptExtension(host.pi, memoryDependencies());
     await host.runCommand(COMMAND_NAME);
@@ -85,6 +89,7 @@ describe('doompi-prompt Pi extension', () => {
 
   it('follows optional Help provider replacement and withdraws its contribution on shutdown', async () => {
     const host = createPiTestHost();
+    await host.cordis();
     await activatePromptExtension(host.pi, memoryDependencies());
     const connection = await connectDoomCordisHost(host.pi, 'doompi-prompt-help-test');
     const firstService = createDoomHelpService('doompi-prompt-help-first');
@@ -94,7 +99,7 @@ describe('doompi-prompt Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-prompt',
-        moduleUrl: expect.stringMatching(/extension\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
         skills: [
           {
             name: 'doompi-use-prompt',

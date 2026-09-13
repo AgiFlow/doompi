@@ -7,7 +7,7 @@ import {
   runFileSystemOperationWithRetry,
   runFileSystemOperationWithRetryAsync,
   waitForFileSystemRetry,
-} from '../../src/adapters/filesystem/fileSystemRetry';
+} from '../../src/services/fileSystemRetry';
 
 /** An error carrying an errno-style `code`, since that is all the retry logic reads. */
 function errnoError(code: string): NodeJS.ErrnoException {

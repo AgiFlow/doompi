@@ -1,4 +1,5 @@
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
+
 import { collectSpecifiers, locate, readSource, relativeTarget } from './moduleGraph.js';
 
 export const noCrossFeatureImport: RuleDefinition = {

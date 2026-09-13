@@ -1,3 +1,11 @@
+import {
+  DOOM_FULLSCREEN_UI_OPTIONS,
+  DOOM_NAVIGATION_KEYS,
+  DOOM_OVERLAY_ACCENT,
+  DoomOverlay,
+  type DoomOverlayChrome,
+  type DoomOverlayTui,
+} from '@agimon-ai/doompi-ui/doom-overlay';
 /**
  * Runner Space: the `SPC r l` overlay.
  *
@@ -6,32 +14,22 @@
  * terminal and forwards keystrokes to it, which is the whole reason PTY runs
  * exist. Rendering is pure, so the surface can be asserted as text.
  */
-
-import {
-  DOOM_FULLSCREEN_UI_OPTIONS,
-  DOOM_NAVIGATION_KEYS,
-  DOOM_OVERLAY_ACCENT,
-  DoomOverlay,
-  type DoomOverlayChrome,
-  type DoomOverlayTui,
-} from '@agimon-ai/doompi-ui/components/doomOverlay';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
+
+import {
+  ATTACH_FOOTER,
+  ELLIPSIS,
+  EMPTY_MESSAGE,
+  KEY_ENTER,
+  KEY_NEWLINE,
+  LOG_FOOTER,
+  LOG_REFRESH_MS,
+  TITLE,
+} from '../constants/runnerSpace';
 import type { PtyRun } from '../types/ptyHost';
 import type { RunnerRecord } from '../types/runnerRegistry';
-import { toRunnerRows } from './format.ts';
-
-export const RUNNER_SPACE_OVERLAY_OPTIONS = DOOM_FULLSCREEN_UI_OPTIONS.overlayOptions;
-
-const KEY_ENTER = '\r';
-const KEY_NEWLINE = '\n';
-const TITLE = 'RUNNER SPACE';
-const EMPTY_MESSAGE = 'No background runners. bash backgrounds anything that outlives the threshold.';
-const LIST_FOOTER = `${DOOM_NAVIGATION_KEYS.list} select · enter open · s stop · r reason · esc close`;
-const ATTACH_FOOTER = 'esc back · everything else goes to the runner';
-const LOG_FOOTER = 'esc back · live stdout/stderr';
-const LOG_REFRESH_MS = 250;
-const ELLIPSIS = '…';
+import { toRunnerRows } from './format';
 
 export interface RunnerSpaceOptions {
   getRunners: () => readonly RunnerRecord[];
@@ -282,3 +280,6 @@ export async function openRunnerSpace(ctx: ExtensionContext, options: RunnerSpac
     DOOM_FULLSCREEN_UI_OPTIONS,
   );
 }
+
+export const RUNNER_SPACE_OVERLAY_OPTIONS = DOOM_FULLSCREEN_UI_OPTIONS.overlayOptions;
+export const LIST_FOOTER = `${DOOM_NAVIGATION_KEYS.list} select · enter open · s stop · r reason · esc close`;

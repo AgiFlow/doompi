@@ -1,16 +1,20 @@
+import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-telemetry';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { HarnessContext } from '../../src/adapters/harnessContext.ts';
-import type { HarnessTelemetry } from '../../src/adapters/telemetry/logSinkTelemetry.ts';
-import { CliApp } from '../../src/commands/cli/cliApp.ts';
-import type { HarnessOptions } from '../../src/types/interfaces/harness.ts';
+
+import type { HarnessContext } from '../../src/builders/cli/harnessContext';
+import { CliApp } from '../../src/cli/cliApp';
+import type { HarnessOptions } from '../../src/composition/types/harness';
 
 const mocks = vi.hoisted(() => ({
   buildHarnessContext: vi.fn(),
   ensureLayerPackages: vi.fn(),
+  execute: vi.fn(),
 }));
 
-vi.mock('../../src/adapters/harnessContext.ts', () => ({ buildHarnessContext: mocks.buildHarnessContext }));
-vi.mock('../../src/adapters/layerPackageInstaller.ts', () => ({
+vi.mock('../../src/cli/commands/launch', () => ({ runLaunch: mocks.execute }));
+
+vi.mock('../../src/builders/cli/harnessContext', () => ({ buildHarnessContext: mocks.buildHarnessContext }));
+vi.mock('../../src/composition/layerPackageInstaller', () => ({
   ensureLayerPackages: mocks.ensureLayerPackages,
 }));
 
@@ -39,7 +43,7 @@ function options(): HarnessOptions {
 
 describe('CliApp package provisioning', () => {
   const cleanup = vi.fn();
-  const execute = vi.fn();
+  const execute = mocks.execute;
   const telemetry = {
     recordError: vi.fn(),
     recordWarning: vi.fn(),
@@ -66,7 +70,6 @@ describe('CliApp package provisioning', () => {
 
   it('installs the active configured package set before command execution', async () => {
     const app = new CliApp(telemetry);
-    vi.spyOn(app, 'selectCommand').mockResolvedValue({ execute } as never);
 
     await expect(app.runHarness(options())).resolves.toBe(0);
 
@@ -82,7 +85,6 @@ describe('CliApp package provisioning', () => {
 
   it('cleans up and reports the failure when installation fails', async () => {
     const app = new CliApp(telemetry);
-    vi.spyOn(app, 'selectCommand').mockResolvedValue({ execute } as never);
     mocks.ensureLayerPackages.mockRejectedValue(new Error('install failed'));
 
     await expect(app.runHarness(options())).rejects.toThrow('install failed');

@@ -1,8 +1,11 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
+
 import { piDiscoveryEntryStems, projectPath, sourceStem } from './manifestEntries.js';
+import { hasPluginHelperCall } from './pluginWiring.js';
 
 const PACKAGE_MANIFEST_NAME = 'package.json';
 const PI_VERSION = '0.85.1';
@@ -23,8 +26,9 @@ const SUPERSEDED_CONTAINER_IMPORT =
   /(?:^|\n)\s*import\s[^;]*?from\s*['"](inversify|reflect-metadata)['"]|(?:^|\n)\s*import\s*['"](inversify|reflect-metadata)['"]/;
 const DOOM_PACKAGE_NAME = '@agimon-ai/doompi';
 const DOOM_PACKAGE_PREFIX = `${DOOM_PACKAGE_NAME}-`;
-const CORDIS_CONTRACTS_PACKAGE = '@agimon-ai/doompi-extension-contracts';
-const CORDIS_HOST_ADAPTER_PATH = 'src/adapters/pi/cordisHost.ts';
+const NATIVE_DIRECT_HARNESS_RUNTIME_PATH = 'src/controllers/directHarnessRuntime.ts';
+const CORDIS_CONTRACTS_PACKAGE = '@agimon-ai/doompi-core';
+const CORDIS_HOST_ADAPTER_PATH = 'src/controllers/cordisHost.ts';
 const CORDIS_PROTOCOL_EXPORT = `${CORDIS_CONTRACTS_PACKAGE}/protocol`;
 const CORDIS_HOST_QUERY_CHANNEL_IDENTIFIER = 'DOOM_CORDIS_HOST_QUERY_CHANNEL';
 const CORDIS_HOST_QUERY_CHANNEL = 'doom:cordis:host:v1:query';
@@ -70,19 +74,14 @@ const SAME_RUNNER_PROTOCOL_EXPORTS = new Set([
 type ProcessGlobalBoundaryKind = 'claim' | 'reload';
 
 const LEGITIMATE_PROCESS_GLOBAL_BOUNDARIES = new Map<string, ReadonlyMap<string, ProcessGlobalBoundaryKind>>([
-  [
-    CORDIS_CONTRACTS_PACKAGE,
-    new Map([
-      ['src/schemas/transitionContext.ts', 'reload'],
-      ['src/schemas/voiceReloadHandoff.ts', 'reload'],
-    ]),
-  ],
-  ['@agimon-ai/doompi-domain', new Map([['src/adapters/domainSwitchHandoff.ts', 'reload']])],
+  ['@agimon-ai/doompi-minor-mode', new Map([['src/services/reloadHandoff/index.ts', 'reload']])],
+  ['@agimon-ai/doompi-voice', new Map([['src/services/voiceReloadHandoff/index.ts', 'reload']])],
+  ['@agimon-ai/doompi-domain', new Map([['src/models/domainSwitchHandoff.ts', 'reload']])],
   [
     DOOM_PACKAGE_NAME,
     new Map([
-      ['src/adapters/bootstrapClaim.ts', 'claim'],
-      ['src/adapters/compositionState.ts', 'claim'],
+      ['src/models/bootstrapClaim.ts', 'claim'],
+      ['src/models/compositionState.ts', 'claim'],
     ]),
   ],
 ]);
@@ -384,6 +383,18 @@ function eventBusCallMethod(node: ts.CallExpression, analysis: EventBusAnalysis)
   return undefined;
 }
 
+function isNativeHarnessEventCall(node: ts.CallExpression, analysis: EventBusAnalysis): boolean {
+  if (eventBusCallMethod(node, analysis) !== 'on') return false;
+  if (!ts.isPropertyAccessExpression(node.expression) && !ts.isElementAccessExpression(node.expression)) return false;
+  const receiver = unwrapExpression(node.expression.expression);
+  return (
+    ts.isPropertyAccessExpression(receiver) &&
+    receiver.name.text === 'events' &&
+    ts.isIdentifier(receiver.expression) &&
+    receiver.expression.text === 'harness'
+  );
+}
+
 function hasExactHostQueryConstant(sourceFile: ts.SourceFile): boolean {
   return sourceFile.statements.some(
     (statement) =>
@@ -414,14 +425,21 @@ function isCordisHostDiscoveryCall(
   );
 }
 
-function containsEventBusCall(sourceFile: ts.SourceFile, allowCordisHostDiscovery: boolean): boolean {
+function containsEventBusCall(
+  sourceFile: ts.SourceFile,
+  allowCordisHostDiscovery: boolean,
+  allowNativeHarness: boolean,
+): boolean {
   let found = false;
   const analysis = eventBusAnalysis(sourceFile);
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
       eventBusCallMethod(node, analysis) !== undefined &&
-      !(allowCordisHostDiscovery && isCordisHostDiscoveryCall(node, sourceFile, analysis))
+      !(
+        (allowCordisHostDiscovery && isCordisHostDiscoveryCall(node, sourceFile, analysis)) ||
+        (allowNativeHarness && isNativeHarnessEventCall(node, analysis))
+      )
     ) {
       found = true;
     }
@@ -444,6 +462,11 @@ function containsUnsafeProcessGlobal(sourceFile: ts.SourceFile): boolean {
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) && ['global', 'globalThis'].includes(node.text) && !isInTypePosition(node)) {
       const parent = node.parent;
+      const isPropertyName =
+        ((ts.isPropertyAssignment(parent) || ts.isPropertySignature(parent) || ts.isPropertyDeclaration(parent)) &&
+          parent.name === node) ||
+        (ts.isPropertyAccessExpression(parent) && parent.name === node);
+      if (isPropertyName) return;
       const isHostRuntime =
         ts.isPropertyAccessExpression(parent) &&
         parent.expression === node &&
@@ -602,6 +625,8 @@ export const thinPiAdapter: RuleDefinition = {
     if (!stem || !piDiscoveryEntryStems(configRoot).has(stem)) return null;
     const text = readText(filePath);
     if (!text) return null;
+    if (hasPluginHelperCall(ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true), 'definePiExtension'))
+      return null;
     const lines = text.split('\n').length;
     const ownsImplementation = /\b(class|interface)\s+\w+|registerTool\s*\(\s*\{/.test(text);
     return lines > 80 || ownsImplementation
@@ -612,7 +637,7 @@ export const thinPiAdapter: RuleDefinition = {
 
 export const noRawPiEvents: RuleDefinition = {
   preflight: true,
-  rule: 'Only the versioned Cordis host discovery boundary may use Pi EventBus directly',
+  rule: 'Only the versioned Cordis host discovery boundary and core-owned AgentHarness runtime may use EventBus directly',
   rationale:
     'Pi EventBus is the bootstrap transport because a standard factory receives no Cordis Context. Once connected, same-runner packages share the host Context: direct EventBus calls bypass provider ownership, dependency injection, and fiber disposal.',
   check(filePath, configRoot) {
@@ -621,9 +646,11 @@ export const noRawPiEvents: RuleDefinition = {
     const relativePath = projectPath(filePath, configRoot);
     const isCordisHostAdapter =
       manifest?.name === CORDIS_CONTRACTS_PACKAGE && relativePath === CORDIS_HOST_ADAPTER_PATH;
+    const isNativeHarnessRuntime =
+      manifest?.name === DOOM_PACKAGE_NAME && relativePath === NATIVE_DIRECT_HARNESS_RUNTIME_PATH;
     const sourceFile = readSource(filePath);
-    return sourceFile && containsEventBusCall(sourceFile, isCordisHostAdapter)
-      ? `Raw Pi EventBus access is reserved for ${CORDIS_CONTRACTS_PACKAGE}/cordis-host discovery. Publish or consume a provider-owned Cordis service instead.`
+    return sourceFile && containsEventBusCall(sourceFile, isCordisHostAdapter, isNativeHarnessRuntime)
+      ? `Raw Pi EventBus access is reserved for ${CORDIS_CONTRACTS_PACKAGE}/cordis-host discovery or the core-owned AgentHarness runtime. Publish or consume a provider-owned Cordis service instead.`
       : null;
   },
 };
@@ -675,34 +702,82 @@ export const noLiveGlobalRegistry: RuleDefinition = {
 
 export const noProtocolChannelLiterals: RuleDefinition = {
   preflight: true,
-  rule: 'Doom protocol channel literals may only be declared in doompi-extension-contracts',
+  rule: 'Doom protocol channel literals may only be declared in doompi-core',
   rationale: 'Central channel ownership makes versioning and cross-extension discovery type-safe.',
   check(filePath) {
     if (!['.ts', '.tsx', '.mts', '.cts'].includes(path.extname(filePath))) return null;
     const text = readText(filePath);
-    if (!text || filePath.includes(`${path.sep}doompi-extension-contracts${path.sep}`)) return null;
+    if (!text || filePath.includes(`${path.sep}doompi-core${path.sep}`)) return null;
     return /['"`]doom:[^'"`]+['"`]/.test(text)
-      ? 'Move Doom protocol channel literals to @agimon-ai/doompi-extension-contracts.'
+      ? 'Move Doom protocol channel literals to @agimon-ai/doompi-core.'
       : null;
   },
 };
+
+function hasNativeHarnessDisposal(text: string): boolean {
+  return (
+    /(?:const|let)\s+unsubscribe\s*=\s*[^;]*\bharness\.events\.on\s*\(/.test(text) &&
+    /\bconst\s+dispose\s*=\s*(?:async\s*)?\(\)\s*(?::\s*[^=]+)?=>[\s\S]*?for\s*\(\s*const\s+\w+\s+of\s+unsubscribe\s*\)\s+\w+\s*\(\s*\)[\s\S]*?\bdispose\s*\(\s*\)/.test(
+      text,
+    )
+  );
+}
 
 export const disposeExternalSubscriptions: RuleDefinition = {
   preflight: true,
   rule: 'External event subscriptions must retain and invoke their disposer during shutdown',
   rationale: 'Pi can reload extensions in-process, so leaked listeners duplicate work and retain stale session state.',
-  check(filePath) {
+  check(filePath, configRoot) {
     const text = readText(filePath);
     if (!text || !/\.events\.on\s*\(/.test(text)) return null;
+    const manifest = readManifest(path.join(configRoot, PACKAGE_MANIFEST_NAME));
+    const relativePath = projectPath(filePath, configRoot);
+    const isNativeHarnessRuntime =
+      manifest?.name === DOOM_PACKAGE_NAME && relativePath === NATIVE_DIRECT_HARNESS_RUNTIME_PATH;
     const retainsDisposer =
       /(?:(?:const|let)\s+)?\w*(?:dispose|unsubscribe|cleanup)\w*\s*=\s*[^;]*\.events\.on\s*\(/i.test(text);
-    const hasShutdown = /['"]session_shutdown['"]/.test(text);
+    const hasShutdown =
+      /['"]session_shutdown['"]/.test(text) || (isNativeHarnessRuntime && hasNativeHarnessDisposal(text));
     return retainsDisposer && hasShutdown
       ? null
       : 'Retain the external subscription disposer and invoke it from session_shutdown.';
   },
 };
 
+/**
+ * Files that are allowed to call the host setter, because they are the arbiter
+ * itself or the fake host tests drive it with.
+ */
+const TOOL_SURFACE_OWNER_PATHS = new Set([
+  CORDIS_HOST_ADAPTER_PATH,
+  'src/services/toolSurface/index.ts',
+  'src/controllers/piTestHost.ts',
+]);
+
+export const noDirectToolActivation: RuleDefinition = {
+  preflight: true,
+  rule: 'Tool visibility is a Doom tool-surface restriction, not a direct setActiveTools call',
+  rationale:
+    'Several packages hide tools at once. A direct setActiveTools call replaces the whole list, so the last writer silently restores what another owner had removed. The surface merges ordered restrictions and re-applies them, which makes removal reversible without a snapshot.',
+  check(filePath, configRoot) {
+    if (!isDoomProductionSource(filePath, configRoot)) return null;
+    const manifest = readManifest(path.join(configRoot, PACKAGE_MANIFEST_NAME));
+    const relativePath = projectPath(filePath, configRoot);
+    const isNativeHarnessRuntime =
+      manifest?.name === DOOM_PACKAGE_NAME && relativePath === NATIVE_DIRECT_HARNESS_RUNTIME_PATH;
+    const text = readText(filePath);
+    if (!text || !/\.setActiveTools\s*\(/.test(text)) return null;
+    if (
+      (manifest?.name === CORDIS_CONTRACTS_PACKAGE &&
+        relativePath !== null &&
+        TOOL_SURFACE_OWNER_PATHS.has(relativePath)) ||
+      (isNativeHarnessRuntime && /\blane\.setActiveTools\s*\(/.test(text))
+    ) {
+      return null;
+    }
+    return `Register a DoomToolRestriction on DOOM_TOOL_SURFACE_SERVICE from ${CORDIS_CONTRACTS_PACKAGE}/tool-surface instead of calling setActiveTools.`;
+  },
+};
 export const providerOwnedPolicy: RuleDefinition = {
   preflight: true,
   rule: 'Consumers register semantic subagent policy and must not mutate foreign tool calls',

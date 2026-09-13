@@ -1,3 +1,4 @@
+import type { ToolPromptDialog, ToolPromptRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   Button,
   handleOptionListKey,
@@ -6,9 +7,9 @@ import {
   optionListHint,
   SectionLabel,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolPromptDialog, ToolPromptRenderProps } from '@agimon-ai/doompi-web-contracts';
 import { useEffect, useRef, useState } from 'react';
-import { PLAN_REVIEW_OPTIONS, PLAN_REVIEW_TITLE } from '../../types/planApi.ts';
+
+import { PLAN_REVIEW_OPTIONS, PLAN_REVIEW_TITLE } from '../../types/planApi';
 
 /** Claims only the selector opened by complete_plan, leaving unrelated extension dialogs alone. */
 export function claimsPlanReviewPrompt(dialog: ToolPromptDialog): boolean {

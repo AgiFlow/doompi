@@ -30,6 +30,6 @@
     "coverage",
     "tests/browserMediaDeviceRecovery.test.ts",
     "src/web",
-    "src/exports/webClient.ts"
+    "src/extensions/web.ts"
   ]
 }

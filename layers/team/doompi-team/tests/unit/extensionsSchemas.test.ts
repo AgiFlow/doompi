@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { SUBAGENT_ACTIONS, SubagentParams } from '@agimon-ai/doompi-extension-contracts/subagent-tool';
+import { SUBAGENT_ACTIONS, SubagentParams } from '../../src/exports/subagentTool';
 
 interface VariantSchema {
   additionalProperties?: boolean;

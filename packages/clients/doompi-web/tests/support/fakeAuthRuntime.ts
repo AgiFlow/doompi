@@ -1,4 +1,4 @@
-import type { AuthRuntime, AuthRuntimeProvider, LoginInteraction } from '../../src/types/auth.ts';
+import type { AuthRuntime, AuthRuntimeProvider, LoginInteraction } from '../../src/types/auth';
 
 /**
  * A stand-in for Pi's ModelRuntime with three providers: one with both

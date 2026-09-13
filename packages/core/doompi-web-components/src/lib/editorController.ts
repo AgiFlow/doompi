@@ -1,4 +1,4 @@
-import type { EditorEdit, EditorTextRange } from '../types/editor.ts';
+import type { EditorEdit, EditorTextRange } from '../types/editor';
 
 /** Validate and order offset ranges before they reach CodeMirror. */
 export function boundedEditorRanges<T extends EditorTextRange>(

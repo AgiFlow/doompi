@@ -7,15 +7,15 @@
  * the config file on everyone's behalf and hands each contributed field the
  * result through props.
  */
-import type { RepositorySettingsRepository } from '@agimon-ai/doompi-web-contracts';
+import type { RepositorySettingsRepository } from '@agimon-ai/doompi-core/web';
 
-export const SETTINGS_CONFIG_API_ROUTE = '/api/settings/config';
-export const SETTINGS_VALUE_API_ROUTE = '/api/settings/value';
-export const SETTINGS_REPOSITORIES_API_ROUTE = '/api/settings/repositories';
-export const SETTINGS_MODELS_API_ROUTE = '/api/settings/models';
-export const SETTINGS_REPOSITORY_API_ROUTE = '/api/settings/repository';
-export const SETTINGS_REPOSITORY_SELECTION_API_ROUTE = '/api/settings/repository/selection';
-export const SETTINGS_IMAGES_API_ROUTE = '/api/settings/images';
+export const SETTINGS_CONFIG_API_ROUTE = '/api/global/plugin/config/config';
+export const SETTINGS_VALUE_API_ROUTE = '/api/global/plugin/config/value';
+export const SETTINGS_REPOSITORIES_API_ROUTE = '/api/global/plugin/config/repositories';
+export const SETTINGS_MODELS_API_ROUTE = '/api/global/plugin/doompi/models';
+export const SETTINGS_REPOSITORY_API_ROUTE = '/api/global/plugin/config/repository';
+export const SETTINGS_REPOSITORY_SELECTION_API_ROUTE = '/api/global/plugin/config/repository/selection';
+export const SETTINGS_IMAGES_API_ROUTE = '/api/global/plugin/config/images';
 
 /**
  * The image limits, which live in Pi's settings.json rather than the Doom
@@ -82,8 +82,16 @@ export interface SettingsWriteRequest {
   repoRoot: string;
   scope: SettingsScope;
   keyPath: readonly string[];
-  value: string | null;
+  value: string | number | null;
   /** The hash of the target file when the page read it. */
+  expectedHash: string;
+}
+
+/** One atomic save, validated as a whole before replacing the configuration file. */
+export interface SettingsBatchWriteRequest {
+  repoRoot: string;
+  scope: SettingsScope;
+  edits: readonly Pick<SettingsWriteRequest, 'keyPath' | 'value'>[];
   expectedHash: string;
 }
 

@@ -1,13 +1,14 @@
 import type { MajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
+import { applyMajorMode } from '@agimon-ai/doompi-config/selectionSwitch';
 import { afterEach, describe, expect, it } from 'vitest';
+
 import {
   getHarnessState,
   HARNESS_STATE_KEYS,
   projectHarnessEnvironment,
   refreshHarnessState,
-} from '../../src/exports/config/harnessState';
-import { applyMajorMode } from '@agimon-ai/doompi-config/selectionSwitch';
-import { extensionLayers, needsRelaunch } from '../../src/exports/services/matrixSwitcher';
+} from '../../src/exports/harnessState';
+import { extensionLayers, needsRelaunch } from '../../src/exports/matrixSwitcher';
 
 const config: MajorModesConfig = {
   layers: {

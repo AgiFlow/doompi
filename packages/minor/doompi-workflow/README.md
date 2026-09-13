@@ -128,3 +128,16 @@ The hub-side data source ships behind the `./web-hub` subpath and reads the work
 
 MIT, except the `src/web` directory, which is source available under the DoomPi Web License (see
 `src/web/LICENSE`): free to use, including commercially, but not to redistribute.
+
+Workflow's host entries live in `src/extensions/pi.ts`, `server.ts`, and `web.ts`.
+`src/exports` exposes reusable package APIs. Controllers declare server APIs and
+contributions, tools declare native tools, and each service has its own folder.
+Terminal presentation and its session coordinator live in `src/tui`.
+
+The Pi helper owns registrations and service fibers. The Workflow runtime returns
+commands, events, mode ownership, and tool dependencies. Session startup begins
+readiness discovery; dependent calls await that session's readiness. On shutdown,
+`onStop` interrupts inline runs and clears session resources, while `onDispose`
+also handles startup failure. Both use the same idempotent cleanup. A generation
+fence prevents retired callbacks from sending messages or updating the UI; only
+explicit resource teardown may use a retired UI context.

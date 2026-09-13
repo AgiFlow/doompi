@@ -1,7 +1,7 @@
-import { fenceGrammarOf, fenceLanguageOf, MERMAID_LANGUAGE } from '../lib/fenceGrammar.ts';
-import { CopyButton } from './CopyButton.tsx';
-import { MermaidDiagram } from './MermaidDiagram.tsx';
-import { SyntaxText } from './SyntaxText.tsx';
+import { fenceGrammarOf, fenceLanguageOf, MERMAID_LANGUAGE } from '../lib/fenceGrammar';
+import { CopyButton } from './CopyButton';
+import { MermaidDiagram } from './MermaidDiagram';
+import { SyntaxText } from './SyntaxText';
 
 /**
  * A fenced code block: coloured, copyable, and a picture when it is mermaid.

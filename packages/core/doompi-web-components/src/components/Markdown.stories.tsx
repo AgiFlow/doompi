@@ -1,4 +1,4 @@
-import { Markdown } from './Markdown.tsx';
+import { Markdown } from './Markdown';
 
 const DOC = [
   '## Release notes',

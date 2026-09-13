@@ -1,0 +1,178 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { SessionSummary } from '../../src/types/hub.ts';
+import {
+  applySessionRemoved,
+  applySessionUpsert,
+  applySessionsSnapshot,
+  resetSessions,
+  resolveParentId,
+  sessionsStore,
+} from '../../src/web/stores/sessionsStore.ts';
+
+/** A summary with an explicit creation time, because ordering is the subject here. */
+function summary(id: string, createdAt: string, overrides: Partial<SessionSummary> = {}): SessionSummary {
+  return {
+    id,
+    name: id,
+    cwd: `/workspace/${id}`,
+    createdAt,
+    updatedAt: createdAt,
+    phase: 'idle',
+    phaseSince: createdAt,
+    attach: 'attached',
+    pendingMessageCount: 0,
+    everPrompted: false,
+    awaitingInput: false,
+    ...overrides,
+  };
+}
+
+function at(seconds: number): string {
+  return `2026-08-24T00:00:${String(seconds).padStart(2, '0')}.000Z`;
+}
+
+function snapshot(...sessions: SessionSummary[]): void {
+  applySessionsSnapshot({ type: 'sessions_snapshot', sessions });
+}
+
+beforeEach(() => {
+  resetSessions();
+});
+
+describe('rail order without lineage', () => {
+  it('is exactly the flat creation sort it replaced', () => {
+    // The no-op proof: nothing in this snapshot names a parent, so the
+    // depth-first walk must produce the same list the old flat sort did.
+    const sessions = [summary('c', at(30)), summary('a', at(10)), summary('d', at(40)), summary('b', at(20))];
+    snapshot(...sessions);
+
+    const flat = [...sessions]
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id))
+      .map((entry) => entry.id);
+    expect(sessionsStore.state.order).toEqual(flat);
+    expect(sessionsStore.state.order).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('breaks a creation tie by id, so the rail never reshuffles between frames', () => {
+    snapshot(summary('zulu', at(10)), summary('alpha', at(10)), summary('mike', at(10)));
+    expect(sessionsStore.state.order).toEqual(['alpha', 'mike', 'zulu']);
+  });
+
+  it('reports no parent for every session', () => {
+    snapshot(summary('a', at(10)), summary('b', at(20)));
+    const byId = sessionsStore.state.byId;
+    expect(resolveParentId(byId, 'a')).toBeUndefined();
+    expect(resolveParentId(byId, 'b')).toBeUndefined();
+  });
+});
+
+describe('rail order with lineage', () => {
+  it('puts a child immediately after its parent, before the next root', () => {
+    snapshot(
+      summary('root-a', at(10)),
+      summary('root-b', at(20)),
+      // Created last, but it belongs under the first root.
+      summary('child-a', at(30), { parentSessionId: 'root-a', sessionProvenance: 'worktree' }),
+    );
+    expect(sessionsStore.state.order).toEqual(['root-a', 'child-a', 'root-b']);
+    expect(resolveParentId(sessionsStore.state.byId, 'child-a')).toBe('root-a');
+  });
+
+  it('orders siblings by creation, then by id on a tie', () => {
+    snapshot(
+      summary('root', at(10)),
+      summary('second', at(30), { parentSessionId: 'root' }),
+      summary('zulu', at(20), { parentSessionId: 'root' }),
+      summary('alpha', at(20), { parentSessionId: 'root' }),
+    );
+    expect(sessionsStore.state.order).toEqual(['root', 'alpha', 'zulu', 'second']);
+  });
+
+  it('walks depth first, so a grandchild follows its own parent and not the eldest root', () => {
+    snapshot(
+      summary('root', at(10)),
+      summary('child', at(20), { parentSessionId: 'root' }),
+      summary('grandchild', at(30), { parentSessionId: 'child' }),
+      summary('sibling', at(40), { parentSessionId: 'root' }),
+      summary('other-root', at(50)),
+    );
+    expect(sessionsStore.state.order).toEqual(['root', 'child', 'grandchild', 'sibling', 'other-root']);
+  });
+
+  it('keeps ordinals positional, so a worktree lands on the digit after its parent', () => {
+    // Ordinal shortcuts index order[] positionally: index + 1 is the key.
+    snapshot(
+      summary('first', at(10)),
+      summary('second', at(20)),
+      summary('third', at(30)),
+      summary('fork-of-first', at(40), { parentSessionId: 'first', sessionProvenance: 'worktree' }),
+    );
+    const order = sessionsStore.state.order;
+    expect(order).toEqual(['first', 'fork-of-first', 'second', 'third']);
+    expect(order.indexOf('fork-of-first')).toBe(order.indexOf('first') + 1);
+    // Every session still holds exactly one ordinal.
+    expect(new Set(order).size).toBe(order.length);
+  });
+
+  it('re-roots an orphan when its parent leaves the rail', () => {
+    snapshot(summary('root', at(10)), summary('child', at(30), { parentSessionId: 'root' }), summary('other', at(20)));
+    expect(sessionsStore.state.order).toEqual(['root', 'child', 'other']);
+
+    applySessionRemoved({ type: 'session_removed', sessionId: 'root' });
+    expect(sessionsStore.state.order).toEqual(['other', 'child']);
+    expect(resolveParentId(sessionsStore.state.byId, 'child')).toBeUndefined();
+  });
+
+  it('nests a child that arrives by upsert after its parent is already listed', () => {
+    snapshot(summary('root', at(10)), summary('other', at(20)));
+    applySessionUpsert({
+      type: 'session_upsert',
+      session: summary('child', at(30), { parentSessionId: 'root', sessionProvenance: 'worktree' }),
+    });
+    expect(sessionsStore.state.order).toEqual(['root', 'child', 'other']);
+  });
+});
+
+describe('lineage that cannot be trusted', () => {
+  it('renders a session whose named parent is not on the rail as a root', () => {
+    snapshot(summary('a', at(10)), summary('orphan', at(20), { parentSessionId: 'gone' }));
+    expect(sessionsStore.state.order).toEqual(['a', 'orphan']);
+    expect(resolveParentId(sessionsStore.state.byId, 'orphan')).toBeUndefined();
+  });
+
+  it('renders a session that names itself as a root', () => {
+    snapshot(summary('a', at(10)), summary('selfie', at(20), { parentSessionId: 'selfie' }));
+    expect(sessionsStore.state.order).toEqual(['a', 'selfie']);
+    expect(resolveParentId(sessionsStore.state.byId, 'selfie')).toBeUndefined();
+  });
+
+  it('renders both halves of a two-session cycle as roots', () => {
+    snapshot(summary('a', at(10), { parentSessionId: 'b' }), summary('b', at(20), { parentSessionId: 'a' }));
+    expect(sessionsStore.state.order).toEqual(['a', 'b']);
+    expect(resolveParentId(sessionsStore.state.byId, 'a')).toBeUndefined();
+    expect(resolveParentId(sessionsStore.state.byId, 'b')).toBeUndefined();
+  });
+
+  it('loses nobody to a longer cycle, and still nests the honest child hanging off it', () => {
+    snapshot(
+      summary('a', at(10), { parentSessionId: 'c' }),
+      summary('b', at(20), { parentSessionId: 'a' }),
+      summary('c', at(30), { parentSessionId: 'b' }),
+      summary('honest', at(40), { parentSessionId: 'd' }),
+      summary('d', at(50)),
+    );
+    const order = sessionsStore.state.order;
+    // Every session appears exactly once, none hidden by the cycle.
+    expect([...order].sort()).toEqual(['a', 'b', 'c', 'd', 'honest']);
+    expect(new Set(order).size).toBe(order.length);
+    expect(order.indexOf('honest')).toBe(order.indexOf('d') + 1);
+    for (const id of ['a', 'b', 'c']) {
+      expect(resolveParentId(sessionsStore.state.byId, id)).toBeUndefined();
+    }
+  });
+
+  it('answers undefined for a session the rail does not hold', () => {
+    snapshot(summary('a', at(10)));
+    expect(resolveParentId(sessionsStore.state.byId, 'ghost')).toBeUndefined();
+  });
+});

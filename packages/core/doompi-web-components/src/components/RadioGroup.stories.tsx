@@ -3,7 +3,7 @@
  * imported. Each group carries a `defaultValue` so the checked state paints
  * without a click.
  */
-import { RadioGroup, RadioGroupCard, RadioGroupItem } from './RadioGroup.tsx';
+import { RadioGroup, RadioGroupCard, RadioGroupItem } from './RadioGroup';
 
 const meta = {
   title: 'Components/RadioGroup',

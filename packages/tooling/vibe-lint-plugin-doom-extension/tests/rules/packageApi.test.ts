@@ -1,8 +1,10 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { packageApiEntry, packageApiManifest } from '../../src/rules/packageApi.js';
+
+import { packageApiManifest } from '../../src/rules/packageApi.js';
 
 describe('Doom package API rules', () => {
   let root: string;
@@ -26,131 +28,232 @@ describe('Doom package API rules', () => {
     return write('package.json', JSON.stringify(manifest));
   }
 
-  const session = { entry: './src/exports/sessionApi.ts', dist: './dist/sessionApi.mjs' };
-  const apiSource = "export { api } from '../adapters/runnerLogApi.ts';\n";
-
-  /** A package that declares one session API and ships its built entry. */
-  function wellFormed(block: Record<string, unknown> = { basePath: 'runner', session }): string {
-    write('src/exports/sessionApi.ts', apiSource);
-    return writeManifest({ name: 'demo', files: ['dist'], doompiApi: block });
-  }
-
   describe('package-api-manifest', () => {
-    it('says nothing about a package that declares no API', () => {
+    it('says nothing about a package that declares no legacy API', () => {
       const manifest = writeManifest({ name: 'demo', files: ['dist'] });
       expect(packageApiManifest.check?.(manifest, root)).toBeNull();
     });
 
-    it('accepts a block whose entry exists and whose built entry is published', () => {
-      expect(packageApiManifest.check?.(wellFormed(), root)).toBeNull();
+    it('rejects the legacy doompiApi declaration', () => {
+      const manifest = writeManifest({ name: 'demo', doompiApi: { basePath: 'runner', session: {} } });
+      expect(packageApiManifest.check?.(manifest, root)).toMatch(
+        /Remove the legacy doompiApi manifest declaration.*DoomServerFacet/,
+      );
     });
 
-    it('accepts both scopes at once', () => {
-      write('src/exports/hubApi.ts', apiSource);
-      const manifest = wellFormed({
-        basePath: 'runner',
-        session,
-        hub: { entry: './src/exports/hubApi.ts', dist: './dist/hubApi.mjs' },
+    it('allows the native doompiServer declaration when its canonical source and export are present', () => {
+      write('src/extensions/server.ts', 'export default defineServerPlugin({ name: "demo", session: {} });');
+      const manifest = writeManifest({
+        name: 'demo',
+        exports: {
+          './extensions/server': {
+            types: './dist/extensions/server.d.mts',
+            import: './dist/extensions/server.mjs',
+            require: './dist/extensions/server.cjs',
+          },
+        },
+        doompiServer: {
+          entry: './src/extensions/server.ts',
+          dist: './dist/extensions/server.mjs',
+          scopes: ['global', 'workspace', 'session'],
+        },
       });
       expect(packageApiManifest.check?.(manifest, root)).toBeNull();
     });
 
-    it('rejects a base path that is not kebab-case', () => {
-      const manifest = wellFormed({ basePath: 'Not Kebab', session });
-      expect(packageApiManifest.check?.(manifest, root)).toMatch(/must be kebab-case/);
-    });
-
-    it('rejects a block no host could mount', () => {
-      const manifest = wellFormed({ basePath: 'runner' });
-      expect(packageApiManifest.check?.(manifest, root)).toMatch(/names neither a session nor a hub entry/);
-    });
-
-    it('rejects an entry that does not exist', () => {
+    it('accepts a direct server extension entry', () => {
+      write('src/extensions/server.ts', 'export const serverFacet = {}; export default serverFacet;');
       const manifest = writeManifest({
         name: 'demo',
-        files: ['dist'],
-        doompiApi: { basePath: 'runner', session },
+        exports: {
+          './extensions/server': {
+            types: './dist/extensions/server.d.mts',
+            import: './dist/extensions/server.mjs',
+            require: './dist/extensions/server.cjs',
+          },
+        },
+        doompiServer: {
+          entry: './src/extensions/server.ts',
+          dist: './dist/extensions/server.mjs',
+          scopes: ['session'],
+        },
       });
-      expect(packageApiManifest.check?.(manifest, root)).toMatch(/session\.entry '.*' does not exist/);
+      expect(packageApiManifest.check?.(manifest, root)).toBeNull();
     });
 
-    it('rejects a path that could reach outside the package', () => {
-      const manifest = wellFormed({ basePath: 'runner', session: { entry: '../evil.ts', dist: './dist/x.mjs' } });
-      expect(packageApiManifest.check?.(manifest, root)).toMatch(/session\.entry must be a package-relative/);
+    it('requires a server declaration for a server implementation', () => {
+      write('src/adapters/server/runnerApi.ts', 'export const api = {};');
+      const manifest = writeManifest({ name: 'demo' });
+
+      expect(packageApiManifest.check?.(manifest, root)).toContain(
+        'server composition implementation requires package.json doompiServer',
+      );
+
+      write('src/extensions/server.ts', 'export default defineServerPlugin({ name: "demo", session: {} });');
+      const completeManifest = writeManifest({
+        name: 'demo',
+        exports: {
+          './extensions/server': {
+            types: './dist/extensions/server.d.mts',
+            import: './dist/extensions/server.mjs',
+            require: './dist/extensions/server.cjs',
+          },
+        },
+        doompiServer: {
+          entry: './src/extensions/server.ts',
+          dist: './dist/extensions/server.mjs',
+          scopes: ['session'],
+        },
+      });
+      expect(packageApiManifest.check?.(completeManifest, root)).toBeNull();
     });
 
-    it('requires a built entry, which is what a host imports', () => {
-      const manifest = wellFormed({ basePath: 'runner', session: { entry: session.entry } });
-      expect(packageApiManifest.check?.(manifest, root)).toMatch(/session\.dist must be the package-relative/);
+    it('requires a server declaration when a server implementation is present', () => {
+      write('src/adapters/server/facet.ts', 'export const serverFacet = {};');
+      const manifest = writeManifest({ name: 'demo' });
+
+      expect(packageApiManifest.check?.(manifest, root)).toContain(
+        'server composition implementation requires package.json doompiServer',
+      );
     });
 
-    it('rejects a built entry the files allowlist does not publish', () => {
-      write('src/exports/sessionApi.ts', apiSource);
-      const manifest = writeManifest({ name: 'demo', files: ['src'], doompiApi: { basePath: 'runner', session } });
-      expect(packageApiManifest.check?.(manifest, root)).toMatch(/is not in the files allowlist/);
+    it('rejects the legacy headless server category while allowing a TUI-only package', () => {
+      write(
+        'src/exports/extensions/headless.ts',
+        'export { headlessFacet as default } from "../../adapters/headless/facet.ts";',
+      );
+      const manifest = writeManifest({
+        name: 'headless-demo',
+        exports: {
+          './extensions/headless': {
+            types: './dist/extensions/headless.d.mts',
+            import: './dist/extensions/headless.mjs',
+            require: './dist/extensions/headless.cjs',
+          },
+        },
+        doompiServer: {
+          entry: './src/exports/extensions/headless.ts',
+          dist: './dist/extensions/headless.mjs',
+          scopes: ['session'],
+        },
+      });
+      const violation = packageApiManifest.check?.(manifest, root) ?? '';
+      expect(violation).toContain('doompiServer.entry must be ./src/extensions/server.ts');
+      expect(violation).toContain('Remove legacy package export ./extensions/headless');
+
+      fs.rmSync(path.join(root, 'src'), { recursive: true, force: true });
+      const tuiManifest = writeManifest({ name: 'tui-only-demo' });
+      write('src/tui/status.ts', 'export const status = true;');
+      expect(packageApiManifest.check?.(tuiManifest, root)).toBeNull();
     });
 
-    it('checks every block when a package declares several', () => {
-      write('src/exports/sessionApi.ts', apiSource);
+    it('rejects web-owned hub runtime, legacy loader exports, and executable surface entries', () => {
+      write('src/extensions/pi.ts', 'export default function extension(): void {}');
+      write('src/exports/webClient.ts', 'export const webPlugin = {};');
+      const manifest = writeManifest({
+        name: 'legacy-demo',
+        files: ['src/web', 'src/exports/webClient.ts'],
+        exports: {
+          './extensions/pi': './dist/extensions/pi.mjs',
+          './package-api-loader': './dist/packageApiLoader.mjs',
+          './session-api': './dist/sessionApi.mjs',
+          './sessionApi': './dist/sessionApi.mjs',
+          './hub-api': './dist/hubApi.mjs',
+          './api/git': './dist/hubApi.mjs',
+        },
+        pi: { extensions: ['./dist/extensions/pi.mjs'] },
+        doompiWeb: {
+          pluginId: 'legacy-demo',
+          client: './src/exports/webClient.ts',
+          hub: { entry: './src/exports/webHub.ts', dist: './dist/webHub.mjs' },
+        },
+      });
+
+      const violation = packageApiManifest.check?.(manifest, root) ?? '';
+      expect(violation).toContain('Remove doompiWeb.hub');
+      expect(violation).toContain('Remove legacy package export ./package-api-loader');
+      expect(violation).toContain('Remove legacy package export ./session-api');
+      expect(violation).toContain('Remove legacy package export ./sessionApi');
+      expect(violation).toContain('Remove legacy package export ./hub-api');
+      expect(violation).toContain('Remove legacy package export ./api/git');
+      expect(violation).toContain('Canonical surface entry ./src/exports/webClient.ts');
+    });
+
+    it('requires a default server export and accepts an explicit alias of the named plugin', () => {
+      const source = write(
+        'src/extensions/server.ts',
+        'export const serverPlugin = defineServerPlugin({ name: "demo" });',
+      );
       const manifest = writeManifest({
         name: 'demo',
-        files: ['dist'],
-        doompiApi: [
-          { basePath: 'one', session },
-          { basePath: 'Two', session },
-        ],
+        doompiServer: {
+          entry: './src/extensions/server.ts',
+          dist: './dist/extensions/server.mjs',
+          scopes: ['session'],
+        },
+        exports: {
+          './extensions/server': {
+            types: './dist/extensions/server.d.mts',
+            import: './dist/extensions/server.mjs',
+            require: './dist/extensions/server.cjs',
+          },
+        },
       });
-      expect(packageApiManifest.check?.(manifest, root)).toMatch(/basePath 'Two' must be kebab-case/);
+      expect(packageApiManifest.check?.(manifest, root)).toContain(
+        'must export its defineServerPlugin value as default',
+      );
+      fs.appendFileSync(source, '\nexport { serverPlugin as default };');
+      expect(packageApiManifest.check?.(manifest, root)).toBeNull();
     });
 
-    it('only looks at a package.json', () => {
-      wellFormed();
-      expect(packageApiManifest.check?.(path.join(root, 'src/exports/sessionApi.ts'), root)).toBeNull();
+    it('rejects the removed nested server source even when that file exists', () => {
+      write('src/exports/extensions/server.ts', 'export default {};');
+      const manifest = writeManifest({
+        name: 'demo',
+        doompiServer: {
+          entry: './src/exports/extensions/server.ts',
+          dist: './dist/extensions/server.mjs',
+          scopes: ['session'],
+        },
+        exports: { './extensions/server': './dist/extensions/server.mjs' },
+      });
+      expect(packageApiManifest.check?.(manifest, root)).toContain(
+        'doompiServer.entry must be ./src/extensions/server.ts',
+      );
+    });
+
+    it('requires a matching published export and rejects noncanonical server paths', () => {
+      write('src/extensions/server.ts', 'export default defineServerPlugin({ name: "demo", session: {} });');
+      const missingExport = writeManifest({
+        name: 'demo',
+        doompiServer: {
+          entry: './src/extensions/server.ts',
+          dist: './dist/extensions/server.mjs',
+          scopes: ['session'],
+        },
+      });
+      expect(packageApiManifest.check?.(missingExport, root)).toContain(
+        'package.json exports must publish ./extensions/server',
+      );
+
+      fs.writeFileSync(
+        missingExport,
+        JSON.stringify({
+          name: 'demo',
+          doompiServer: {
+            entry: './src/extensions/server.ts',
+            dist: './dist/extensions/server.mjs',
+            scopes: ['session'],
+          },
+        }),
+      );
+      expect(packageApiManifest.check?.(missingExport, root)).toContain('package.json exports must publish');
     });
   });
 
-  describe('package-api-entry', () => {
-    it('accepts an entry that re-exports api', () => {
-      const entryPath = write('src/exports/sessionApi.ts', apiSource);
-      writeManifest({ name: 'demo', files: ['dist'], doompiApi: { basePath: 'runner', session } });
-      expect(packageApiEntry.check?.(entryPath, root)).toBeNull();
-    });
-
-    it('accepts an entry that declares api directly', () => {
-      const entryPath = write(
-        'src/exports/sessionApi.ts',
-        "export const api = { basePath: 'runner', start: () => x };\n",
-      );
-      writeManifest({ name: 'demo', files: ['dist'], doompiApi: { basePath: 'runner', session } });
-      expect(packageApiEntry.check?.(entryPath, root)).toBeNull();
-    });
-
-    it('rejects an entry that exports something else', () => {
-      const entryPath = write('src/exports/sessionApi.ts', "export const webHubApi = { basePath: 'runner' };\n");
-      writeManifest({ name: 'demo', files: ['dist'], doompiApi: { basePath: 'runner', session } });
-      expect(packageApiEntry.check?.(entryPath, root)).toMatch(/must export api/);
-    });
-
-    it('names the scope the entry was declared for', () => {
-      const entryPath = write('src/exports/hubApi.ts', 'export const other = 1;\n');
-      writeManifest({
-        name: 'demo',
-        files: ['dist'],
-        doompiApi: { basePath: 'runner', hub: { entry: './src/exports/hubApi.ts', dist: './dist/hubApi.mjs' } },
-      });
-      expect(packageApiEntry.check?.(entryPath, root)).toMatch(/doompiApi hub entry/);
-    });
-
-    it('ignores a file the manifest never declared', () => {
-      const other = write('src/exports/elsewhere.ts', 'export const other = 1;\n');
-      writeManifest({ name: 'demo', files: ['dist'], doompiApi: { basePath: 'runner', session } });
-      expect(packageApiEntry.check?.(other, root)).toBeNull();
-    });
-
-    it('ignores a package that declares no API', () => {
-      const entryPath = write('src/exports/sessionApi.ts', 'export const other = 1;\n');
-      writeManifest({ name: 'demo', files: ['dist'] });
-      expect(packageApiEntry.check?.(entryPath, root)).toBeNull();
-    });
+  it('only looks at a package.json', () => {
+    const source = write('src/controllers/runnerApi.ts', 'export const api = {} as unknown;\n');
+    writeManifest({ name: 'demo', doompiApi: {} });
+    expect(packageApiManifest.check?.(source, root)).toBeNull();
   });
 });

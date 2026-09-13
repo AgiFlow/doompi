@@ -2,9 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { type MajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { afterEach, describe, expect, it } from 'vitest';
-import { assembleExtensions, createLayerResolvers } from '../../src/services/extensionAssembler.ts';
+
+import { assembleExtensions, createLayerResolvers } from '../../src/builders/cli/extensionAssembler';
 
 const WORKSPACE_ROOT = fileURLToPath(new URL('../../../../../', import.meta.url));
 const PACKAGE_MANIFEST = fileURLToPath(new URL('../../package.json', import.meta.url));
@@ -15,7 +17,7 @@ const FIXED_CORE_DEPENDENCIES = [
   '@agimon-ai/doompi-cache',
   '@agimon-ai/doompi-config',
   '@agimon-ai/doompi-domain',
-  '@agimon-ai/doompi-extension-contracts',
+  '@agimon-ai/doompi-core',
   '@agimon-ai/doompi-major-mode',
   '@agimon-ai/doompi-notification',
   '@agimon-ai/doompi-profile',

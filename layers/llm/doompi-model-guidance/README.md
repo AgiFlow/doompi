@@ -8,7 +8,11 @@ spreading them through every package's prompt.
 
 ## Configuration
 
-Guidance lives in `model-guidance.yaml`, read from two scopes:
+Listing the package in `modes.yaml` activates its built-in `default` preset. The
+preset currently supplies guidance for `gpt-6-astra` to continue agreed plans and
+scoped tasks without pausing for minor decisions.
+
+Custom guidance lives in `model-guidance.yaml`, read from two scopes:
 
 | Scope      | Path                                     |
 | ---------- | ---------------------------------------- |
@@ -26,8 +30,8 @@ modelGuidance:
 ### Matching
 
 Model ids match exactly, against the id Pi reports for the active model. Use the
-value shown by `/model`. A model with no entry gets no guidance, which is never
-an error, so missing guidance usually means the id does not match.
+value shown by `/model`. A model with no custom entry uses its built-in preset
+entry when one exists; otherwise it gets no guidance.
 
 Exact matching is deliberate: it keeps the file honest about which model a piece
 of text was written for. The cost is that a provider shipping a new versioned id
@@ -35,8 +39,8 @@ needs a new entry.
 
 ### Merge rule
 
-Both scopes apply. A repository entry wins for the model ids it names, and
-global entries for ids the repository does not mention still apply.
+The built-in preset applies first. Global guidance overrides the preset one model
+id at a time, then repository guidance overrides global guidance the same way.
 
 | Model id        | Global          | Repository            | Result                |
 | --------------- | --------------- | --------------------- | --------------------- |
@@ -44,8 +48,8 @@ global entries for ids the repository does not mention still apply.
 | `gpt-6-astra`   | "Batch tools."  | absent                | "Batch tools."        |
 | `local-qwen-3`  | absent          | "Short answers only." | "Short answers only." |
 
-A malformed or unreadable guidance file warns on stderr and yields no guidance,
-rather than ending the session.
+A malformed or unreadable guidance file warns on stderr and falls back to the
+built-in preset rather than ending the session.
 
 ## Activation
 
@@ -72,9 +76,10 @@ default:
     - '@agimon-ai/doompi-model-guidance'
 ```
 
-A layer only activates when the selected major mode lists it, so add `llm` to
-every major mode that should carry guidance. The `default` route avoids that but
-makes ordering depend on list position.
+A bare package entry automatically uses the built-in `default` preset. A layer
+only activates when the selected major mode lists it, so add `llm` to every major
+mode that should carry guidance. The top-level `default` route enables it for all
+modes.
 
 ## Behaviour
 
@@ -92,3 +97,8 @@ pnpm nx run @agimon-ai/doompi-model-guidance:test
 ```
 
 Pi entrypoint: `./dist/extensions/pi.mjs`.
+
+The Pi and server declarations live in `src/extensions` and build directly to
+`/extensions/pi` and `/extensions/server`. Controllers handle host events and call the
+named guidance services. Flat root exports expose guidance loading, merging, and types.
+The shared helpers own registration and cleanup; this stateless plugin needs no lifecycle hooks.

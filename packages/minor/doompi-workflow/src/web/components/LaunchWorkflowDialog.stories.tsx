@@ -5,9 +5,10 @@
  * rather than a hand-rolled stub, so a change to the slot contract breaks this
  * story at the type level instead of silently drifting.
  */
-import { slotPropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import type { WorkflowCatalogEntryView } from '../../types/webWorkflows.ts';
-import { LaunchWorkflowDialog } from './LaunchWorkflowDialog.tsx';
+import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import type { WorkflowCatalogEntryView } from '../../types/webWorkflows';
+import { LaunchWorkflowDialog } from './LaunchWorkflowDialog';
 
 const SESSION_ID = 'workflow-launch';
 const CWD = '/Users/doom/workspace/doompi';

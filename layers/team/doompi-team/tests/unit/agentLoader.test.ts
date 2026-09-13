@@ -1,8 +1,10 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { parseFrontmatter, parseFrontmatterList } from '../../src/services/agentFrontmatter';
 import {
   buildRuntimeName,
   defaultInheritProjectContext,
@@ -14,10 +16,9 @@ import {
   parsePackageName,
   pluginAgentDirs,
   splitToolList,
-} from '../../src/adapters/agents/loader';
-import { parseFrontmatter, parseFrontmatterList } from '../../src/adapters/agents/frontmatter';
-import type { AgentConfig } from '../../src/adapters/agents/types';
-import { getProjectConfigDir } from '../../src/adapters/filesystem/configDir';
+} from '../../src/services/agentLoader';
+import { getProjectConfigDir } from '../../src/services/configDir';
+import type { AgentConfig } from '../../src/types/agent';
 
 const temporaryDirs: string[] = [];
 

@@ -13,13 +13,14 @@
 import { currentWorkflowPosition, type WorkflowProgressJob } from '@agimon-ai/workflow-mcp';
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { matchesKey, truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+
 import {
   DOOM_FULLSCREEN_UI_OPTIONS,
   DOOM_OVERLAY_ACCENT,
   DoomOverlay,
   type DoomOverlayChrome,
   type DoomOverlayTui,
-} from './doomOverlay.ts';
+} from './doomOverlay';
 import { fitTerminalLine } from './overlayText';
 import { humanizeDuration } from './workflowStatusRow';
 

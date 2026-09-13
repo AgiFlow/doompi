@@ -3,7 +3,7 @@ import {
   VOICE_MEDIA_CHANNELS,
   VOICE_MEDIA_SAMPLE_RATE,
   type VoiceMediaCaptureActivity,
-} from './clientMedia.ts';
+} from './clientMedia';
 
 const DEFAULT_ENDPOINT_SILENCE_MS = 600;
 const MINIMUM_SPEECH_SAMPLES = (VOICE_MEDIA_SAMPLE_RATE * 120) / 1_000;

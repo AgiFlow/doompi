@@ -1,15 +1,21 @@
-/** Where the staged cockpit payload lives and how it should be started. */
+/** Where the staged presentation and headless payloads live and how they should be started. */
 export interface HubLaunchPlan {
-  /** Absolute path to the hub's `dist/bin/serve.mjs`. */
+  /** Absolute path to the staged doompi-web presentation entry. */
   entry: string;
-  /** Loopback host the cockpit binds and the window loads. */
+  /** Absolute path to the staged doompi-server headless entry. */
+  headlessEntry: string;
+  /** Loopback host the presentation binds and the window loads. */
   host: string;
-  /** Port the cockpit binds. */
+  /** Port the presentation binds. */
   port: number;
-  /** Session registry directory, kept short for unix socket budget reasons. */
-  registryDir: string;
+  /** Port the headless process binds for its HTTP and WebSocket protocol. */
+  headlessPort: number;
+  /** File read by doompi-server for its attach credential. */
+  tokenFile: string;
+  /** Credential forwarded by doompi-web to the headless process. */
+  token: string;
   /**
-   * Working directory for the cockpit process.
+   * Working directory for the child processes.
    *
    * Set deliberately rather than inherited: DoomPi prefers a DoomPi pinned by
    * the repository it is standing in, so a cockpit that happened to be launched
@@ -19,10 +25,9 @@ export interface HubLaunchPlan {
   cwd: string;
 }
 
-/** A hub this app is responsible for, or one it decided to share. */
+/** The pair of processes this app is responsible for. */
 export interface RunningHub {
   url: string;
-  /** False when an existing cockpit answered and this app attached instead. */
   owned: boolean;
   stop: () => Promise<void>;
 }

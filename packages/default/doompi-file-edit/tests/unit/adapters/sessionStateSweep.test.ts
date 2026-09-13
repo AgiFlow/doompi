@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { STATE_MAX_AGE_MS, sweepSessionState } from '../../../src/adapters/node/sessionStateSweep.ts';
+
+import { STATE_MAX_AGE_MS, sweepSessionState } from '../../../src/services/sessionStateSweep';
 
 let directory: string;
 

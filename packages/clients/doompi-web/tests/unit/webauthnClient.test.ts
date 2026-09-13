@@ -5,12 +5,7 @@ vi.mock('@simplewebauthn/browser', () => ({
   startAuthentication: vi.fn(async () => ({ id: 'authenticated' })),
   startRegistration: vi.fn(async () => ({ id: 'registered' })),
 }));
-import {
-  assertionFor,
-  passkeysAvailable,
-  registerPasskey,
-  signInWithPasskey,
-} from '../../src/web/lib/webauthnClient.ts';
+import { assertionFor, passkeysAvailable, registerPasskey, signInWithPasskey } from '../../src/web/lib/webauthnClient';
 
 const originalFetch = globalThis.fetch;
 

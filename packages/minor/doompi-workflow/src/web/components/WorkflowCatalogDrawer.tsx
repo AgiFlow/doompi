@@ -1,8 +1,9 @@
 import { Badge, Button, CloseIcon, Input, Kbd } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { WorkflowCatalogEntryView } from '../../types/webWorkflows.ts';
-import { catalog, filterCatalog, selectWorkflow, setCatalogFilter, toggleInspect } from '../stores/catalogStore.ts';
+
+import type { WorkflowCatalogEntryView } from '../../types/webWorkflows';
+import { catalog, filterCatalog, selectWorkflow, setCatalogFilter, toggleInspect } from '../stores/catalogStore';
 
 const INPUT_TAG = 'INPUT';
 

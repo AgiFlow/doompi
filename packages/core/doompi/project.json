@@ -4,5 +4,10 @@
   "sourceRoot": "packages/core/doompi/src",
   "projectType": "library",
   "tags": ["stage:active"],
-  "sourceTemplate": "doom-extension"
+  "sourceTemplate": "doom-cli",
+  "targets": {
+    "test": {
+      "dependsOn": ["build"]
+    }
+  }
 }

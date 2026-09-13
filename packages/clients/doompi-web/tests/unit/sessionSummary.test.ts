@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   abbreviateCwd,
   formatRunDuration,
   runningCount,
   sessionStatusLine,
   type StatusLineInput,
-} from '../../src/web/lib/sessionSummary.ts';
+} from '../../src/web/lib/sessionSummary';
 
 const NOW = Date.parse('2026-08-24T10:12:00.000Z');
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   LIST_COLLAPSED_LINES,
   WRITE_COLLAPSED_LINES,
@@ -8,7 +9,7 @@ import {
   lsCallView,
   resultText,
   writeCallView,
-} from '../src/web/lib/builtinToolView.ts';
+} from '../src/web/lib/builtinToolView';
 
 const text = (value: string, details?: unknown) => ({ content: [{ type: 'text', text: value }], details });
 

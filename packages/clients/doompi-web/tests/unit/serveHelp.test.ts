@@ -2,11 +2,15 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+
 import { describe, expect, it } from 'vitest';
 
 const run = promisify(execFile);
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const ENTRY = path.join(PACKAGE_ROOT, 'src/bin/serve.ts');
+const ENTRY = path.join(PACKAGE_ROOT, 'dist/bin/serve.mjs');
+const childEnvironment = { ...process.env };
+delete childEnvironment.FORCE_COLOR;
+delete childEnvironment.NO_COLOR;
 
 /**
  * Spawned rather than imported: the point of the lazy imports in serve.ts is
@@ -17,13 +21,19 @@ const ENTRY = path.join(PACKAGE_ROOT, 'src/bin/serve.ts');
  */
 describe('doompi-web informational flags', () => {
   it('prints help on stdout and nothing on stderr', async () => {
-    const { stdout, stderr } = await run(process.execPath, [ENTRY, '--help'], { cwd: PACKAGE_ROOT });
+    const { stdout, stderr } = await run(process.execPath, [ENTRY, '--help'], {
+      cwd: PACKAGE_ROOT,
+      env: childEnvironment,
+    });
     expect(stdout).toContain('Usage: doompi-web [options]');
     expect(stderr).toBe('');
   });
 
   it('prints the version on stdout and nothing on stderr', async () => {
-    const { stdout, stderr } = await run(process.execPath, [ENTRY, '--version'], { cwd: PACKAGE_ROOT });
+    const { stdout, stderr } = await run(process.execPath, [ENTRY, '--version'], {
+      cwd: PACKAGE_ROOT,
+      env: childEnvironment,
+    });
     expect(stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
     expect(stderr).toBe('');
   });

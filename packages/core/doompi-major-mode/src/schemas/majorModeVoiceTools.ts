@@ -1,4 +1,4 @@
-import { VOICE_TOOL_MAX_IDENTIFIER_LENGTH } from '@agimon-ai/doompi-extension-contracts/voice-tools';
+import { VOICE_TOOL_MAX_IDENTIFIER_LENGTH } from '@agimon-ai/doompi-core/voice-tools';
 import { type Static, Type } from 'typebox';
 
 export const MAJOR_MODE_VOICE_TOOL_NAME = 'major_mode';

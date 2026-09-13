@@ -1,0 +1,26 @@
+import { type Context, Service } from '@deepseek-ai/cordis';
+import { {{ providerName | snakeCase | upper }}_SERVICE } from '../../constants/{{ providerName | camelCase }}';
+import type { {{ providerName | pascalCase }}Snapshot } from './type';
+
+/** {{ providerDescription }} */
+export class {{ providerName | pascalCase }}Service extends Service {
+  constructor(context: Context, private readonly source: () => {{ providerName | pascalCase }}Snapshot) {
+    super(context, {{ providerName | snakeCase | upper }}_SERVICE);
+  }
+  snapshot(): {{ providerName | pascalCase }}Snapshot { return this.source(); }
+}
+
+/** Include in the extension services array. The helper owns the child fiber. */
+export function create{{ providerName | pascalCase }}Plugin(source: () => {{ providerName | pascalCase }}Snapshot): (context: Context) => void {
+  return (context: Context): void => { new {{ providerName | pascalCase }}Service(context, source); };
+}
+
+export function require{{ providerName | pascalCase }}(context: Context): {{ providerName | pascalCase }}Service {
+  const service = context.get({{ providerName | snakeCase | upper }}_SERVICE);
+  if (!service) throw new Error('{{ providerName | pascalCase }} service is not available.');
+  return service;
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context { 'doom/{{ providerName | kebabCase }}': {{ providerName | pascalCase }}Service; }
+}

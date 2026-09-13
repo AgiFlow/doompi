@@ -1,3 +1,4 @@
+.git
 node_modules
 .pnpm-store
 .nx
@@ -5,6 +6,7 @@ node_modules
 coverage
 **/dist
 **/vendor
+**/build
 packages/clients/doompi-web/.dev
 test-results
 playwright-report

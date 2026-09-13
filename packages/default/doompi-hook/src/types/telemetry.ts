@@ -1,8 +1,5 @@
+import type { HOOK_TELEMETRY_EVENT } from '../constants/telemetry';
 /** Telemetry events this package reports, and the port that records them. */
-export const HOOK_TELEMETRY_EVENT = {
-  hookFailed: 'doom_pi_hook.failed',
-  hookRegistryReadFailed: 'doom_pi_hook.registry_read_failed',
-} as const;
 
 export type HookTelemetryEventName = (typeof HOOK_TELEMETRY_EVENT)[keyof typeof HOOK_TELEMETRY_EVENT];
 export type HookTelemetryAttributes = Record<string, string | number | boolean>;

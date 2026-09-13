@@ -1,9 +1,10 @@
 import type { AppKeybinding, KeybindingsManager as CodingKeybindingsManager } from '@earendil-works/pi-coding-agent';
 import { KeybindingsManager, TUI_KEYBINDINGS, type EditorTheme, type TUI } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DoomEditor, type DoomEditorLeaderOptions } from '../../src/exports/components/doomEditor.ts';
-import { createDoomLeaderRegistry } from '../helpers/leader.ts';
-import { DoomUiState } from '../../src/exports/uiState.ts';
+
+import { DoomEditor, type DoomEditorLeaderOptions } from '../../src/exports/doomEditor';
+import { DoomUiState } from '../../src/exports/uiState';
+import { createDoomLeaderRegistry } from '../helpers/leader';
 
 const APP_CHORDS: Array<{ keys: string[]; action: AppKeybinding }> = [
   { keys: ['m', 'm'], action: 'app.model.select' },

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { BREADCRUMB_ELLIPSIS, Breadcrumb, breadcrumbSegments } from '../../src/exports/index.ts';
+
+import { BREADCRUMB_ELLIPSIS, Breadcrumb, breadcrumbSegments } from '../../src/exports';
 
 describe('breadcrumbSegments', () => {
   it('keeps a shallow path whole', () => {

@@ -1,6 +1,7 @@
 import type { ComponentProps } from 'react';
-import { LoaderIcon } from '../icons/icons.ts';
-import { cn } from '../lib/cn.ts';
+
+import { LoaderIcon } from '../icons/icons';
+import { cn } from '../lib/cn';
 
 export interface SpinnerProps extends ComponentProps<'svg'> {
   /**

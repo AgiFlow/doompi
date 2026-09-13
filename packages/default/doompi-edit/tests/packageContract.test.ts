@@ -1,6 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -86,7 +87,7 @@ describe('doompi-edit package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
     expect(exportsMap['./package.json']).toBeDefined();
-    expect(manifest.files).toEqual(['dist', 'src/web', 'src/exports/webClient.ts', '!src/web/**/*.stories.tsx']);
+    expect(manifest.files).toEqual(['dist', 'src/web', 'src/extensions/web.ts', '!src/web/**/*.stories.tsx']);
     expect(manifest.files).not.toContain('src');
     expect(manifest.files).not.toContain('tests');
     await expect(access(path.join(packageDirectory, 'dist'))).resolves.toBeUndefined();

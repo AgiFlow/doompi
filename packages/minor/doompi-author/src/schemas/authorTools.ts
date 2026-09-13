@@ -1,8 +1,4 @@
-import {
-  AuthorDescribeToolsInputSchema,
-  AuthorUseToolsInputSchema,
-  type AuthorUseToolsInput,
-} from '@agimon-ai/doompi-extension-contracts/author-facade';
+import { AuthorDescribeToolsInputSchema, AuthorUseToolsInputSchema, type AuthorUseToolsInput } from './authorFacade';
 
 export const OpenAuthoringFileInputSchema = {
   type: 'object',

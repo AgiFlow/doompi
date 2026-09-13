@@ -1,13 +1,14 @@
-import { expect, test } from '../support/cockpit.ts';
+import { expect, test } from '../support/cockpit';
 import {
   appendRunJournal,
   journalEntry,
   removeRunsScope,
+  publishRunStatuses,
   setTeamRunsTempRoot,
   writeAgentDefinition,
   writeRunJournal,
   writeRunStatus,
-} from '../support/subagentRuns.ts';
+} from '../support/subagentRuns';
 
 // The fixture's first session is always 's1'; its doom-team scope is global
 // per session id, so every test starts and ends with it clean. That same
@@ -18,7 +19,9 @@ import {
 test.use({ assets: 'synced' });
 test.describe.configure({ mode: 'serial' });
 test.beforeEach(({ cockpit }) => {
-  setTeamRunsTempRoot(cockpit.teamTemp);
+  setTeamRunsTempRoot(cockpit.teamTemp, (sessionId, payload) =>
+    cockpit.publishSessionEvent('subagent_runs', sessionId, payload),
+  );
   removeRunsScope('s1');
 });
 test.afterEach(() => removeRunsScope('s1'));
@@ -33,7 +36,7 @@ test('shows the session fleet in the subagents tab', async ({ page, cockpit }) =
       role: 'assistant',
       content: [
         { type: 'text', text: 'Reading the hub adapter first.' },
-        { type: 'toolCall', id: 'call-d', name: 'read', arguments: { path: 'src/adapters/sessionHub.ts' } },
+        { type: 'toolCall', id: 'call-d', name: 'read', arguments: { path: 'src/adapters/server/headlessHub.ts' } },
       ],
     }),
   ]);
@@ -65,6 +68,8 @@ test('shows the session fleet in the subagents tab', async ({ page, cockpit }) =
     tokens: 85_380,
   });
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  publishRunStatuses('s1');
   await page.getByTestId('activity-open-agents').click();
   await expect(page).toHaveURL(/\/session\/s1\/subagents-fleet$/);
   await expect(page.getByTestId('run-card-run-a')).toHaveAttribute('data-run-state', 'running');
@@ -111,6 +116,8 @@ test('shows the session fleet in the subagents tab', async ({ page, cockpit }) =
 
 test('a run started while watching appears live', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  publishRunStatuses('s1');
   await page.getByTestId('activity-open-agents').click();
   await expect(page.getByTestId('subagents-empty')).toBeVisible();
 
@@ -147,6 +154,8 @@ test('a long prompt truncates inside the card instead of widening the grid', asy
   });
 
   await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+  publishRunStatuses('s1');
   await page.getByTestId('activity-open-agents').click();
   const card = page.getByTestId('run-card-run-wide');
   await expect(card).toBeVisible();
@@ -181,6 +190,7 @@ test('stop asks the runtime and clear hides a finished run', async ({ page, cock
 
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
+  publishRunStatuses('s1');
   await page.getByTestId('activity-open-agents').click();
 
   await page.getByTestId('run-menu-run-stop').click();
@@ -222,7 +232,7 @@ test('the activity dock lists the runs and opens one in a temporary agent tab', 
       role: 'assistant',
       content: [
         { type: 'text', text: 'Reading the hub adapter first.' },
-        { type: 'toolCall', id: 'call-1', name: 'read', arguments: { path: 'src/adapters/sessionHub.ts' } },
+        { type: 'toolCall', id: 'call-1', name: 'read', arguments: { path: 'src/adapters/server/headlessHub.ts' } },
       ],
     }),
   ]);
@@ -243,6 +253,7 @@ test('the activity dock lists the runs and opens one in a temporary agent tab', 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
+  publishRunStatuses('s1');
   // The runtime's footer status is what makes the group exist; the plugin
   // section then replaces its one-line summary.
   cockpit.session.emit({
@@ -305,6 +316,7 @@ test('a dialog with an open select dismisses and reopens with working controls',
 
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
+  publishRunStatuses('s1');
   await page.getByTestId('activity-open-agents').click();
   await page.getByTestId('subagents-launch').click();
   await page.getByTestId('catalog-filter').fill('nested-overlay-e2e');
@@ -324,14 +336,19 @@ test('a dialog with an open select dismisses and reopens with working controls',
   await expect(launchDialog).toBeVisible();
   await page.getByTestId('launch-task').fill('Still interactive.');
   await page.getByTestId('launch-fork').click();
-  await expect(page.getByTestId('launch-command')).toHaveText('/run nested-overlay-e2e Still interactive. --fork');
+  await expect(page.getByTestId('launch-fork')).toHaveAttribute('data-active', 'true');
+  await expect(page.getByTestId('launch-submit')).toBeEnabled();
 });
 
-test('the catalog lists the agents the session can launch and launches one through /run', async ({ page, cockpit }) => {
+test('the catalog lists the agents the session can launch and launches one through the session API', async ({
+  page,
+  cockpit,
+}) => {
   writeAgentDefinition(cockpit.agentDir, 'reviewer-e2e', 'Reviews a diff for the e2e suite.');
 
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
+  publishRunStatuses('s1');
   await page.getByTestId('activity-open-agents').click();
   await page.getByTestId('subagents-launch').click();
   const drawer = page.getByTestId('catalog-drawer');
@@ -346,11 +363,16 @@ test('the catalog lists the agents the session can launch and launches one throu
   await expect(page.getByTestId('launch-dialog')).toBeVisible();
   await expect(page.getByTestId('launch-agent')).toHaveText('reviewer-e2e');
   await page.getByTestId('launch-task').fill('Review the diff.');
-  await page.getByTestId('launch-fork').click();
-  await expect(page.getByTestId('launch-command')).toHaveText('/run reviewer-e2e Review the diff. --fork');
+  await page.getByTestId('launch-fresh').click();
+  await page.route('**/api/sessions/s1/plugin/team/run', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runId: 'run-launched' }) }),
+  );
+  const requestPromise = page.waitForRequest(
+    (request) => request.method() === 'POST' && request.url().endsWith('/api/sessions/s1/plugin/team/run'),
+  );
   await page.getByTestId('launch-submit').click();
-  const sent = await cockpit.session.waitForCommand('prompt');
-  expect(sent.message).toBe('/run reviewer-e2e Review the diff. --fork');
+  const request = await requestPromise;
+  expect(request.postDataJSON()).toEqual({ agent: 'reviewer-e2e', task: 'Review the diff.', fork: false });
   await expect(page.getByTestId('launch-dialog')).toBeHidden();
   await expect(drawer).toBeHidden();
 

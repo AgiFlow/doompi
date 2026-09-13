@@ -1,39 +1,49 @@
-import { createRemoteServiceBinding, type RemoteServiceBinding } from '@earendil-works/chord';
-import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
-import { Client, createClientServiceTransport } from '@earendil-works/pi-client';
 import {
   DOOM_COCKPIT_SERVER_ID,
   DoomSessionManagementService,
   DoomSessionService,
-  type SessionServiceState,
-} from '@agimon-ai/doompi-extension-contracts/session-protocol';
-import { createProtocolTransport, protocolSocketUrl } from '../lib/piTransport.ts';
-import { recordBrowserPerformance } from '../lib/browserTelemetry.ts';
-import { createProtocolTimeline, toQueuedEntries } from '../lib/protocolTimeline.ts';
-import { applyProtocolQueue, applyProtocolTranscript, releaseProtocolTranscript } from '../stores/sessionStore.ts';
+} from '@agimon-ai/doompi-core/session-protocol';
+import { createRemoteServiceBinding, type RemoteServiceBinding } from '@earendil-works/chord';
+import { BACKGROUND_CONTEXT, withCancel } from '@earendil-works/chord/context';
+import { Client, createClientServiceTransport } from '@earendil-works/pi-client';
+
+import { recordBrowserPerformance } from '../lib/browserTelemetry';
+import { createProtocolTransport, protocolSocketUrl } from '../lib/piTransport';
+import { bindSessionProtocol } from '../lib/sessionProtocolCommands';
+import { createPagedTranscript } from '../stores/pagedTranscriptStore';
+import { releaseProtocolTranscript, applySessionFrame, refreshSessionFacts } from '../stores/sessionStore';
+import { bindThreadReader } from '../stores/threadStore';
 
 /** How long to wait before dialling again after the protocol socket drops. */
 const RECONNECT_MS = 700;
 
 export interface ProtocolRuntime {
+  readonly client: Client;
   /** Points the runtime at the session the page is showing, or at none. */
   focus(sessionId: string | null): void;
   stop(): void;
 }
 
 /** Runs Pi 0.85's routed client and Chord session binding for the visible session. */
-export function startProtocolRuntime(location: Location = window.location): ProtocolRuntime {
+export function startProtocolRuntime(
+  location: Location = window.location,
+  onFrame: (sessionId: string, frame: Record<string, unknown>, replay: boolean) => void = (sessionId, frame, replay) =>
+    applySessionFrame(sessionId, frame, { replay }),
+): ProtocolRuntime {
   const client = new Client({
     serverId: DOOM_COCKPIT_SERVER_ID,
     transportFactory: createProtocolTransport(protocolSocketUrl(location)),
   });
   let binding: RemoteServiceBinding | undefined;
   let unsubscribe: (() => void) | undefined;
+  let releaseCommands: (() => void) | undefined;
+  let releaseTranscript: (() => void) | undefined;
   let boundSessionId: string | null = null;
   let focused: string | null = null;
   let retry: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
   let generation = 0;
+  let cancelOpening: ((reason?: unknown) => void) | undefined;
 
   const schedule = (action: () => Promise<void>): void => {
     if (retry) clearTimeout(retry);
@@ -45,6 +55,12 @@ export function startProtocolRuntime(location: Location = window.location): Prot
   };
 
   const release = async (): Promise<void> => {
+    cancelOpening?.(new Error('The session attachment was replaced.'));
+    cancelOpening = undefined;
+    releaseTranscript?.();
+    releaseTranscript = undefined;
+    releaseCommands?.();
+    releaseCommands = undefined;
     unsubscribe?.();
     unsubscribe = undefined;
     const previous = binding;
@@ -59,12 +75,15 @@ export function startProtocolRuntime(location: Location = window.location): Prot
   const open = async (sessionId: string): Promise<void> => {
     const mine = ++generation;
     let next: RemoteServiceBinding | undefined;
+    await release();
+    if (stopped || mine !== generation || !client.connected) return;
+    const opening = withCancel(BACKGROUND_CONTEXT);
+    cancelOpening = opening.cancel;
     try {
-      await release();
-      if (stopped || mine !== generation || !client.connected) return;
       await client.request(
         { serverId: DOOM_COCKPIT_SERVER_ID },
         { serviceId: DoomSessionManagementService.id, member: 'attach', args: [sessionId] },
+        opening.context.abortSignal,
       );
       if (stopped || mine !== generation) return;
       next = createRemoteServiceBinding({
@@ -72,28 +91,34 @@ export function startProtocolRuntime(location: Location = window.location): Prot
         transport: createClientServiceTransport(client, () => client.attachment),
       });
       const service = next.use(DoomSessionService);
-      await next.ready(BACKGROUND_CONTEXT);
+      await next.ready(opening.context);
       if (stopped || mine !== generation) return;
       binding = next;
       next = undefined;
       boundSessionId = sessionId;
-      const timeline = createProtocolTimeline();
-      const publish = (state: SessionServiceState): void => {
-        applyProtocolTranscript(sessionId, timeline(state), state.snapshot.phase !== 'idle');
-        applyProtocolQueue(sessionId, toQueuedEntries(state.snapshot.queuedSteer));
+      releaseCommands = bindSessionProtocol(sessionId, service, (frame) => onFrame(sessionId, frame, false));
+      const transcript = createPagedTranscript(sessionId, service, onFrame, opening.context);
+      const releaseThreads = bindThreadReader(sessionId, service, opening.context);
+      releaseTranscript = () => {
+        transcript.dispose();
+        releaseThreads();
       };
-      const initial = service.state.value;
-      if (initial) publish(initial);
-      unsubscribe = service.state.subscribe(publish);
+      unsubscribe = service.state.subscribe((state) => transcript.publish(state));
+      if (service.state.value) transcript.publish(service.state.value);
+      await transcript.initialize();
+      if (stopped || mine !== generation) return;
+      onFrame(sessionId, { type: 'bridge_status', state: 'attached' }, false);
+      refreshSessionFacts(sessionId);
     } catch {
       if (stopped || mine !== generation) return;
-      releaseProtocolTranscript(sessionId);
+      await release();
       // A replacement process may not have published its registry record yet.
       if (client.connected)
         schedule(async () => {
           if (focused !== null) await open(focused);
         });
     } finally {
+      if (cancelOpening === opening.cancel) cancelOpening = undefined;
       // Failed or superseded openings never become the active binding.
       await next?.dispose(BACKGROUND_CONTEXT).catch(() => undefined);
     }
@@ -134,6 +159,7 @@ export function startProtocolRuntime(location: Location = window.location): Prot
   void connect();
 
   return {
+    client,
     focus(sessionId) {
       if (sessionId === focused) return;
       focused = sessionId;

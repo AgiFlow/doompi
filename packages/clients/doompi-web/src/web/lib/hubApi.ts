@@ -1,6 +1,6 @@
-import { DIRECTORIES_API_ROUTE, type PiSessionHistoryItem, SESSIONS_API_ROUTE } from '../../types/hub.ts';
-import { sealedHttpSession } from './sealedSession.ts';
-import { fetchWithStepUp } from './stepUp.ts';
+import { DIRECTORIES_API_ROUTE, type PiSessionHistoryItem, SESSIONS_API_ROUTE } from '../../types/hub';
+import { sealedHttpSession } from './sealedSession';
+import { fetchWithStepUp } from './stepUp';
 
 export type CreateSessionResult = { sessionId: string } | { error: string };
 
@@ -66,9 +66,8 @@ export type RestartSessionResult = { ok: true } | { error: string };
 /**
  * Asks the hub to replace a session's server, keeping its id.
  *
- * A running server reads the composition once, so a rebuilt extension or a new
- * package API only reaches a session this way. The hub syncs first, so what
- * comes back is built from the source as it stands now.
+ * A running server reads the composition once. Restart syncs workspace changes
+ * before reopening the session, so changed extensions and APIs take effect.
  */
 export async function restartSession(sessionId: string): Promise<RestartSessionResult> {
   let response: Response;
@@ -142,7 +141,7 @@ export async function resumeSession(sessionId: string, targetSessionId: string):
 export async function searchSessionFiles(sessionId: string, query: string): Promise<string[]> {
   try {
     const response = await sealedHttpSession.fetch(
-      `/api/sessions/${encodeURIComponent(sessionId)}/files?q=${encodeURIComponent(query)}`,
+      `/api/sessions/${encodeURIComponent(sessionId)}/plugin/files/?q=${encodeURIComponent(query)}`,
     );
     if (!response.ok) return [];
     const body = (await response.json()) as { files?: unknown };

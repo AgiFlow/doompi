@@ -1,3 +1,4 @@
+import type { SettingsFieldContribution, SettingsSectionContribution } from '@agimon-ai/doompi-core/web';
 import {
   Badge,
   Button,
@@ -11,25 +12,25 @@ import {
   SelectValue,
   Switch,
 } from '@agimon-ai/doompi-web-components';
-import type { SettingsFieldContribution, SettingsSectionContribution } from '@agimon-ai/doompi-web-contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+
 import type {
   SettingsConfigView,
   SettingsModel,
   SettingsOrigin,
   SettingsScope,
   SettingsValueView,
-} from '../../../types/settings.ts';
-import { listSettingsModels, readSettingsConfig, writeSettingsValue } from '../../lib/settingsApi.ts';
+} from '../../../types/settings';
+import { listSettingsModels, readSettingsConfig, writeSettingsValue } from '../../lib/settingsApi';
 import {
   canSaveSettings,
   plannedSettingsWrites,
   settingsKeyOf as keyOf,
   settingsLockedReason as lockedReason,
-} from '../../lib/settingsDraft.ts';
-import { refreshSessionFacts } from '../../stores/sessionStore.ts';
-import { sessionsStore } from '../../stores/sessionsStore.ts';
-import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
+} from '../../lib/settingsDraft';
+import { sessionsStore } from '../../stores/sessionsStore';
+import { refreshSessionFacts } from '../../stores/sessionStore';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
 
 /**
  * A settings page a package contributed, rendered by the host.
@@ -162,6 +163,7 @@ function FieldRow({ field, view, scope, models, draft, busy, onDraft }: FieldRow
         <Input
           data-testid={`settings-input-${field.id}`}
           value={value}
+          type={kind === 'number' ? 'number' : 'text'}
           spellCheck={false}
           disabled={busy || locked !== undefined}
           placeholder={field.placeholder ?? 'inherit'}
@@ -218,9 +220,10 @@ interface ContributedSettingsProps {
   scope: SettingsScope;
   /** The repository whose config is being edited; empty at global scope. */
   repoRoot?: string;
+  workspaceId?: string;
 }
 
-export function ContributedSettings({ section, scope, repoRoot = '' }: ContributedSettingsProps) {
+export function ContributedSettings({ section, scope, repoRoot = '', workspaceId }: ContributedSettingsProps) {
   const [models, setModels] = useState<readonly SettingsModel[]>([]);
   const [config, setConfig] = useState<SettingsConfigView | undefined>(undefined);
   const [drafts, setDrafts] = useState<Record<string, string | null>>({});
@@ -250,7 +253,7 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
   // The global file stands on its own, so this runs with or without a
   // repository; only the repository half of the answer depends on one.
   const reload = useCallback(async (): Promise<void> => {
-    const result = await readSettingsConfig(repoRoot, keys);
+    const result = await readSettingsConfig(repoRoot, keys, workspaceId);
     if (result.ok) {
       setConfig(result.config);
       setError('');
@@ -258,7 +261,7 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
     }
     setConfig(undefined);
     setError(result.error);
-  }, [keys, repoRoot]);
+  }, [keys, repoRoot, workspaceId]);
 
   useEffect(() => {
     // eslint-disable-next-line react/set-state-in-effect -- reads the hub's settings config file over HTTP; the state is the response.
@@ -279,9 +282,6 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
     if (config === undefined || !canSaveSettings({ dirty: dirtyFields.length, scope, repoRoot })) return;
     setBusy(true);
     setError('');
-    // One request per field, in order, so a refusal names the field that caused
-    // it and everything before it has already landed. Each write answers with
-    // the file's new hash, which the next one must carry.
     const planned = plannedSettingsWrites({
       fields: section.fields,
       drafts,
@@ -289,17 +289,17 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
       repoRoot,
       startingHash: config.hashes[scope],
     });
-    let hash = config.hashes[scope];
-    let saved = 0;
-    for (const [index, write] of planned.entries()) {
-      const result = await writeSettingsValue({ ...write, expectedHash: hash });
-      if (!result.ok) {
-        setError(`${dirtyFields[index]?.label ?? 'setting'}: ${result.error}`);
-        break;
-      }
-      hash = result.config.hashes[scope];
-      saved += 1;
-    }
+    const result = await writeSettingsValue(
+      {
+        repoRoot,
+        scope,
+        expectedHash: config.hashes[scope],
+        edits: planned.map(({ keyPath, value }) => ({ keyPath, value })),
+      },
+      workspaceId,
+    );
+    const saved = result.ok ? planned.length : 0;
+    if (!result.ok) setError(result.error);
     setBusy(false);
     if (saved > 0) {
       setDrafts({});
@@ -310,7 +310,7 @@ export function ContributedSettings({ section, scope, repoRoot = '' }: Contribut
       for (const sessionId of Object.keys(sessionsStore.state.byId)) refreshSessionFacts(sessionId);
     }
     await reload();
-  }, [config, dirtyFields, drafts, reload, repoRoot, scope, section.fields]);
+  }, [config, dirtyFields, drafts, reload, repoRoot, scope, section.fields, workspaceId]);
 
   const discard = useCallback((): void => {
     setDrafts({});

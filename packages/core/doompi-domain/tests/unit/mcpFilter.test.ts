@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
+
 import {
   applyMcpAllowlist,
   filterMcpServers,
@@ -10,7 +12,7 @@ import {
   persistMcpConfig,
   PROXY_SERVER_NAME,
   resolveMcpAllowlist,
-} from '../../src/adapters/mcpFilter.ts';
+} from '../../src/services/mcpFilter';
 
 const PROXY_YAML = `# comment
 proxy:

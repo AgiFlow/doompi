@@ -1,3 +1,4 @@
+import type { ToolMessageRenderProps } from '@agimon-ai/doompi-core/web';
 import {
   MessageItem,
   MessageItemBody,
@@ -5,8 +6,8 @@ import {
   MessageItemStatus,
   toolTone,
 } from '@agimon-ai/doompi-web-components';
-import type { ToolMessageRenderProps } from '@agimon-ai/doompi-web-contracts';
-import { askCallSummary, askResultView } from '../lib/askUserText.ts';
+
+import { askCallSummary, askResultView } from '../lib/askUserText';
 
 /** The answered list, or the outcome that stood in for it. */
 function AskUserQuestionBody({ result, output, running, isError }: ToolMessageRenderProps) {

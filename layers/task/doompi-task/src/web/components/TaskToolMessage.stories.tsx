@@ -5,8 +5,9 @@
  * rather than a hand-rolled stub, so a change to the tool contract breaks this
  * story at the type level instead of silently drifting.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { TaskToolMessage } from './TaskToolMessage.tsx';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { TaskToolMessage } from './TaskToolMessage';
 
 const TASKS = [
   { id: 1, subject: 'Seed the plugin story files', status: 'completed', blockedBy: [] },

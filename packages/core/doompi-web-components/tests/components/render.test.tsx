@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+
 import {
   Accordion,
   AccordionContent,
@@ -74,7 +75,7 @@ import {
   Tooltip,
   TooltipProvider,
   TooltipTrigger,
-} from '../../src/exports/index.ts';
+} from '../../src/exports';
 
 const html = (node: React.ReactElement): string => renderToStaticMarkup(node);
 

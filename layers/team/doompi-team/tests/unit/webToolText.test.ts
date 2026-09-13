@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import {
   COLLAPSED_RESULT_LINES,
   intercomCallSummary,
@@ -6,7 +7,7 @@ import {
   resultLines,
   shapeResult,
   subagentCallDetail,
-} from '../../src/web/lib/toolText.ts';
+} from '../../src/web/lib/toolText';
 
 describe('the subagent card text', () => {
   it('words the call detail per action the way the TUI does', () => {

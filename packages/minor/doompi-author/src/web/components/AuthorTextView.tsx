@@ -1,13 +1,14 @@
 import { CodeEditor, Markdown, type CodeEditorController } from '@agimon-ai/doompi-web-components';
 import { useEffect, useRef } from 'react';
-import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes.ts';
-import { registerAuthorGridResolver } from '../lib/authorGrid.ts';
+
+import { registerAuthorGridResolver } from '../lib/authorGrid';
+import type { AuthorDisplayedRegion } from '../lib/authorViewportTypes';
 import {
   authorDocument,
   reviseAuthorDocument,
   setAuthorRegionCandidate,
   type AuthorWorkspaceDocument,
-} from '../stores/authorWorkspaceStore.ts';
+} from '../stores/authorWorkspaceStore';
 
 export function AuthorTextView({
   sessionId,

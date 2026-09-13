@@ -1,43 +1,67 @@
 import { defineConfig } from 'tsdown';
 
-// Public entries mirror package exports. Internal dynamic entrypoints are
-// listed explicitly as well so a source import cannot point outside the tarball.
-
-const output = {
-  exports: false,
-  format: ['esm', 'cjs'] as ('esm' | 'cjs')[],
-  minify: {
-    compress: true,
-    mangle: { toplevel: true },
-    codegen: { removeWhitespace: true },
-  },
-  platform: 'node' as const,
-  sourcemap: true,
-};
-
 export default defineConfig({
-  ...output,
-  name: 'package',
   entry: {
-    '*': 'src/exports/**/*.ts',
-    // Executables and dynamically imported private modules keep their own
-    // entries: a facade would re-export them instead of running them, and the
-    // tarball has to contain every module a source import can reach.
+    'api-contracts': 'src/exports/apiContracts.ts',
+    'builders/web': 'src/exports/webBuilder.ts',
+    'extensions/context-catalog': 'src/extensions/contextCatalog.ts',
+    index: 'src/exports/index.ts',
     'bin/cli': 'src/bin/cli.ts',
     'bin/doomRunner': 'src/bin/doomRunner.ts',
     'bin/dpi': 'src/bin/dpi.ts',
-    // Keyed with the src/ prefix on purpose. Unbundled chunks are emitted
-    // under dist/src, and ownEntry() locates sibling entries relative to its
-    // own compiled path, so an entry keyed without the prefix lands outside
-    // the directory the runtime looks in.
-    'src/adapters/syncedRuntimeBuilder': 'src/adapters/syncedRuntimeBuilder.ts',
-    // Pi loads this one by path, so it has to exist as its own module rather
-    // than folded into whichever entry happens to reference it.
-    'src/extensions/entries/launcherBootstrap': 'src/extensions/entries/launcherBootstrap.ts',
-    'src/extensions/entries/transitionCoordinator': 'src/extensions/entries/transitionCoordinator.ts',
-    'src/services/extensionAssembler': 'src/services/extensionAssembler.ts',
+    cli: 'src/exports/cli.ts',
+    'cli-app': 'src/exports/cliApp.ts',
+    'compatibility-options': 'src/exports/compatibilityOptions.ts',
+    help: 'src/exports/help.ts',
+    'matrix-options': 'src/exports/matrixOptions.ts',
+    options: 'src/exports/options.ts',
+    commands: 'src/exports/commands.ts',
+    'base-command': 'src/exports/baseCommand.ts',
+    'compatibility-command': 'src/exports/compatibilityCommand.ts',
+    'emit-mcp-command': 'src/exports/emitMcpCommand.ts',
+    'explain-command': 'src/exports/explainCommand.ts',
+    'init-command': 'src/exports/initCommand.ts',
+    'launch-command': 'src/exports/launchCommand.ts',
+    'sync-command': 'src/exports/syncCommand.ts',
+    config: 'src/exports/config.ts',
+    'harness-state': 'src/exports/harnessState.ts',
+    'project-trust': 'src/exports/projectTrust.ts',
+    'extensions/pi': 'src/extensions/pi.ts',
+    'extensions/server': 'src/extensions/server.ts',
+    'extensions/agent-model': 'src/extensions/agentModel.ts',
+    'extensions/cordis-finalizer': 'src/extensions/cordisFinalizer.ts',
+    'extensions/cordis-host': 'src/extensions/cordisHost.ts',
+    'extensions/composed-pi': 'src/extensions/composedPi.ts',
+    'extensions/effort': 'src/extensions/effort.ts',
+    'extensions/terminal-child-session': 'src/extensions/terminalChildSession.ts',
+    'extensions/ollama-provider': 'src/extensions/ollamaProvider.ts',
+    'extensions/style-system': 'src/extensions/styleSystem.ts',
+    services: 'src/exports/services.ts',
+    compatibility: 'src/exports/compatibility.ts',
+    antigravity: 'src/exports/antigravity.ts',
+    codex: 'src/exports/codex.ts',
+    process: 'src/exports/process.ts',
+    shared: 'src/exports/shared.ts',
+    'compatibility-context': 'src/exports/compatibilityContext.ts',
+    composer: 'src/exports/composer.ts',
+    'harness-context': 'src/exports/harnessContext.ts',
+    'matrix-switcher': 'src/exports/matrixSwitcher.ts',
+    'mcp-filter': 'src/exports/mcpFilter.ts',
+    'resource-collector': 'src/exports/resourceCollector.ts',
+    'sync-state': 'src/exports/syncState.ts',
+    utils: 'src/exports/utils.ts',
+    repository: 'src/exports/repository.ts',
+    'extensions/launcher-bootstrap': 'src/extensions/launcherBootstrap.ts',
+    'extensions/transition-coordinator': 'src/extensions/transitionCoordinator.ts',
+    'bin/serve': 'src/bin/serve.ts',
+    'builders/cli/index': 'src/builders/cli/index.ts',
+    'builders/cli/extensionAssembler/index': 'src/builders/cli/extensionAssembler/index.ts',
   },
   clean: true,
   dts: { incremental: true, parallel: false, eager: true },
+  exports: false,
+  format: ['esm', 'cjs'],
+  platform: 'node',
+  sourcemap: true,
   unbundle: true,
 });

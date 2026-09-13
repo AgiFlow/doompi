@@ -1,4 +1,4 @@
-import type { SessionPhase } from '../../types/hub.ts';
+import type { SessionPhase } from '../../types/hub';
 
 /** The rail's view of one session's attach state; offline means the page lost the hub. */
 export type AttachPhase = 'offline' | 'connecting' | 'attached' | 'refused' | 'detached' | 'closed';

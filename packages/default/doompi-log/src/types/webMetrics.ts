@@ -231,7 +231,7 @@ export function issuesUrl(focus?: string): string {
   const search = new URLSearchParams();
   if (focus !== undefined && focus !== '') search.set(METRICS_QUERY_PARAMS.focus, focus);
   const query = search.toString();
-  return `/api/plugin/${LOG_API_BASE_PATH}/issues${query === '' ? '' : `?${query}`}`;
+  return `/api/global/plugin/${LOG_API_BASE_PATH}/issues${query === '' ? '' : `?${query}`}`;
 }
 
 /** The absolute URL the page reads one report from; `focus` narrows it to one group. */
@@ -241,5 +241,5 @@ export function metricsUrl(dimension: MetricsDimension, period: MetricsPeriod, f
     [METRICS_QUERY_PARAMS.period]: period,
   });
   if (focus !== undefined && focus !== '') search.set(METRICS_QUERY_PARAMS.focus, focus);
-  return `/api/plugin/${LOG_API_BASE_PATH}/metrics?${search.toString()}`;
+  return `/api/global/plugin/${LOG_API_BASE_PATH}/metrics?${search.toString()}`;
 }

@@ -12,7 +12,7 @@ import {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from './Select.tsx';
+} from './Select';
 
 const meta = {
   title: 'Components/Select',

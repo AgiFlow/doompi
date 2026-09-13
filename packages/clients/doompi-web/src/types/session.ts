@@ -1,7 +1,7 @@
 /** One newline-delimited JSON frame, kept opaque so Pi can evolve its protocol. */
 export type SessionFrame = Record<string, unknown>;
 
-/** Handshake vocabulary published by @agimon-ai/doompi-server. */
+/** Handshake vocabulary published by the DoomPi core server. */
 export const ATTACH_TYPE = 'attach';
 export const ATTACHED_TYPE = 'attached';
 export const ATTACH_ERROR_TYPE = 'attach_error';

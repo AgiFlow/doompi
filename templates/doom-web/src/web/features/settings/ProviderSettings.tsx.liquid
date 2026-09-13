@@ -1,8 +1,9 @@
-import { Badge, Button, Dot, EmptyState, Input, Panel, Spinner } from '@agimon-ai/doompi-web-components';
+import { Button, Dot, EmptyState, Input, Panel, Spinner } from '@agimon-ai/doompi-web-components';
 import { useCallback, useEffect, useState } from 'react';
 import type { AuthMethodType, LoginFlowSnapshot, ProviderAuthSummary } from '../../../types/auth.ts';
 import { answerLogin, cancelLogin, listProviders, logoutProvider, readLogin, startLogin } from '../../lib/authApi.ts';
 import { LoginFlowDialog, METHOD_LABEL } from './LoginFlowDialog.tsx';
+import { SettingsSectionHeader } from './SettingsSectionHeader.tsx';
 
 const FLOW_POLL_MS = 500;
 /** The auth source Pi reports for a credential its own /login stored; the only kind /logout removes. */
@@ -28,16 +29,27 @@ function ProviderRow({
 }) {
   const authenticated = provider.authenticated !== undefined;
   return (
-    <Panel asChild className="flex items-center gap-3 px-3.5 py-2.5 transition-colors hover:border-doom-blue/30">
+    <Panel
+      asChild
+      className="flex flex-col items-stretch gap-2.5 px-3.5 py-3 transition-colors hover:border-doom-blue/30 min-[560px]:flex-row min-[560px]:items-center"
+    >
       <li data-testid={`provider-${provider.id}`} data-authenticated={authenticated}>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-[12px] font-bold text-doom-hi">{provider.name}</span>
-          <span className="truncate text-[10px] text-doom-faint">{provider.id}</span>
+          <span className="truncate text-sm font-bold text-doom-hi">{provider.name}</span>
+          <span className="truncate text-xs text-doom-faint">{provider.id}</span>
         </div>
-        <Badge tone={authenticated ? 'green' : 'neutral'} data-testid={`provider-status-${provider.id}`}>
+        {/* State is read, not pressed. It used to wear the same outlined chip as
+            the sign-in button beside it, so forty rows offered what looked like
+            two buttons each. Only the actions keep a border. */}
+        <span
+          data-testid={`provider-status-${provider.id}`}
+          className={`flex shrink-0 items-center gap-1.5 self-start text-xs min-[560px]:self-auto ${
+            authenticated ? 'text-doom-green' : 'text-doom-faint'
+          }`}
+        >
           <Dot tone={authenticated ? 'green' : 'neutral'} />
           {statusText(provider)}
-        </Badge>
+        </span>
         {provider.methods.map((method) => (
           <Button
             key={method.type}
@@ -64,7 +76,7 @@ function ProviderRow({
           </Button>
         ) : null}
         {provider.methods.length === 0 ? (
-          <span className="text-[10px] text-doom-faint">ambient credentials only</span>
+          <span className="text-xs text-doom-faint">ambient credentials only</span>
         ) : null}
       </li>
     </Panel>
@@ -95,6 +107,7 @@ export function ProviderSettings() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react/set-state-in-effect -- reads the hub's provider auth list over HTTP; the state is the response.
     void reload();
   }, [reload]);
 
@@ -168,28 +181,25 @@ export function ProviderSettings() {
   const authenticatedCount = (providers ?? []).filter((provider) => provider.authenticated !== undefined).length;
 
   return (
-    <div data-testid="provider-settings" className="flex max-w-[780px] flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-[13px] font-bold text-doom-hi">providers</h2>
-        <p className="text-[11px] leading-relaxed text-doom-dim">
-          sign in to the model providers Pi can use. credentials land in Pi&apos;s auth.json on this machine, so every
-          session shares them.
-        </p>
-      </div>
+    <div data-testid="provider-settings" className="flex flex-col gap-4">
+      <SettingsSectionHeader
+        title="providers"
+        detail="sign in to the model providers Pi can use. credentials land in Pi's auth.json on this machine, so every session shares them."
+      />
       {error ? (
-        <p data-testid="provider-settings-error" className="text-[11px] leading-relaxed text-doom-red">
+        <p data-testid="provider-settings-error" className="text-sm leading-relaxed text-doom-red">
           {error}
         </p>
       ) : null}
       {providers === null && !error ? (
-        <p className="flex items-center gap-2 text-[11px] text-doom-faint">
+        <p className="flex items-center gap-2 text-sm text-doom-faint">
           <Spinner label="reading providers" />
           reading providers…
         </p>
       ) : null}
       {providers ? (
         <>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col items-stretch gap-2 min-[480px]:flex-row min-[480px]:items-center min-[480px]:gap-3">
             <Input
               data-testid="provider-filter"
               value={filter}
@@ -197,7 +207,7 @@ export function ProviderSettings() {
               onChange={(event) => setFilter(event.target.value)}
               className="flex-1"
             />
-            <span className="shrink-0 text-[10px] text-doom-faint">
+            <span className="shrink-0 text-right text-xs text-doom-faint">
               {authenticatedCount} of {providers.length} signed in
             </span>
           </div>

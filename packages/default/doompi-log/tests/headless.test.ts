@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const cordisRoots: Context[] = [];
 
-vi.mock('@agimon-ai/doompi-extension-contracts/cordis-host', () => ({
+vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
   connectDoomCordisHost: async () => {
     const root = new Context();
     cordisRoots.push(root);
@@ -22,7 +22,7 @@ afterEach(async () => {
 
 describe('doom-log headless entry', () => {
   it('loads and registers when the optional UI provider is unavailable', async () => {
-    const { default: register } = await import('../src/exports/extensions/pi.ts');
+    const { default: register } = await import('../src/extensions/pi');
     const pi = {
       on: vi.fn(),
       registerCommand: vi.fn(),

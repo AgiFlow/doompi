@@ -1,6 +1,7 @@
 import { access, readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
 interface PackageManifest {
@@ -13,6 +14,7 @@ interface PackageManifest {
   publishConfig?: { access?: string };
   peerDependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  doompiServer?: { entry?: string; dist?: string; scopes?: string[] };
 }
 
 interface ProjectConfiguration {
@@ -105,6 +107,19 @@ describe('doom file edit package boundary', () => {
 
       for (const output of targetPaths(target)) await expectFile(output);
     }
+    expect(exportsMap['./extensions/server']).toEqual({
+      types: './dist/extensions/server.d.mts',
+      import: './dist/extensions/server.mjs',
+      require: './dist/extensions/server.cjs',
+    });
+    expect(manifest.doompiServer).toEqual({
+      contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
+      entry: './src/extensions/server.ts',
+      dist: './dist/extensions/server.mjs',
+      scopes: ['session', 'global', 'workspace'],
+    });
+    expect(exportsMap['./session-api']).toBeUndefined();
+    expect(exportsMap['./web-hub']).toBeUndefined();
   });
 
   it('keeps exports closed and resolves every allowlisted package resource', async () => {

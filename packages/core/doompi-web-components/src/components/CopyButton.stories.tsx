@@ -6,7 +6,7 @@
  * The control owns its own clipboard call, so it takes no callback: rendered
  * and never clicked, nothing reaches `navigator.clipboard`.
  */
-import { CopyButton } from './CopyButton.tsx';
+import { CopyButton } from './CopyButton';
 
 const meta = {
   title: 'Components/CopyButton',

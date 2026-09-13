@@ -3,8 +3,9 @@
  * looking for a bare `const meta`. Props come from the contracts package's own
  * testing fixture rather than a hand-rolled stub.
  */
-import { toolMessagePropsFixture } from '@agimon-ai/doompi-web-contracts/testing';
-import { UseAuthorToolsToolCard } from './UseAuthorToolsToolCard.tsx';
+import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
+
+import { UseAuthorToolsToolCard } from './UseAuthorToolsToolCard';
 
 const SHORT = ['applied revision to docs/spec.md', 'fragment slide2 updated'].join('\n');
 

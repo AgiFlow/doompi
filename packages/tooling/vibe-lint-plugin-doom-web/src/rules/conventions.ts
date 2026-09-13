@@ -1,5 +1,7 @@
 import * as path from 'node:path';
+
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
+
 import { projectPath } from './moduleGraph.js';
 
 const COMPONENT_NAME = /^[A-Z][A-Za-z0-9]*$/;

@@ -1,4 +1,5 @@
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
+
 import { type WebLocation, collectSpecifiers, locate, readSource, relativeTarget } from './moduleGraph.js';
 
 const CLIENT_LAYER_ORDER: Readonly<Record<string, number | undefined>> = {

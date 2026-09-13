@@ -1,4 +1,4 @@
-import { type GrammarKey, grammarKeyOf } from './editorLanguage.ts';
+import { type GrammarKey, grammarKeyOf } from './editorLanguage';
 
 /**
  * What a fenced code block's info string means.

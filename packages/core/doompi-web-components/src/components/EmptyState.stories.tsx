@@ -3,8 +3,8 @@
  * imported. `Playground` is the story the DoomPi style-system extension renders
  * by default.
  */
-import { Button } from './Button.tsx';
-import { EmptyState } from './EmptyState.tsx';
+import { Button } from './Button';
+import { EmptyState } from './EmptyState';
 
 const meta = {
   title: 'Components/EmptyState',

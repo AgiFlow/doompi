@@ -2,7 +2,9 @@ import { Buffer } from 'node:buffer';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { EXTRA_SKILL_DIRS_ENV } from '../../src/exports/env';
 import {
   AGENT_MEMORY_FILE,
@@ -12,7 +14,7 @@ import {
   parseMemoryFrontmatter,
   readMemoryFile,
   resolveMemoryDir,
-} from '../../src/adapters/agents/memory';
+} from '../../src/services/agentMemory';
 import {
   findConfiguredProjectRoot,
   findNearestGitRoot,
@@ -25,7 +27,7 @@ import {
   readProjectRootResolution,
   resolveNearestProjectAgentDirs,
   userAgentDirs,
-} from '../../src/adapters/agents/projectRoot';
+} from '../../src/services/agentProjectRoot';
 import {
   buildSkillInjection,
   normalizeSkillInput,
@@ -33,9 +35,9 @@ import {
   type ResolvedSkill,
   SkillDiscoveryService,
   stripSkillFrontmatter,
-} from '../../src/adapters/agents/skills';
-import type { AgentConfig } from '../../src/adapters/agents/types';
-import { getAgentDir, getProjectConfigDir } from '../../src/adapters/filesystem/configDir';
+} from '../../src/services/agentSkills';
+import { getAgentDir, getProjectConfigDir } from '../../src/services/configDir';
+import type { AgentConfig } from '../../src/types/agent';
 
 const temporaryDirs: string[] = [];
 

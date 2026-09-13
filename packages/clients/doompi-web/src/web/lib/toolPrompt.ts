@@ -1,6 +1,7 @@
-import type { ToolPromptContribution, ToolPromptDialog } from '@agimon-ai/doompi-web-contracts';
-import { pluginToolRenderer } from './pluginRegistry.ts';
-import type { DialogRequest, SessionState, ToolEntry } from './sessionModel.ts';
+import type { ToolPromptContribution, ToolPromptDialog } from '@agimon-ai/doompi-core/web';
+
+import { pluginToolRenderer } from './pluginRegistry';
+import type { DialogRequest, SessionState, ToolEntry } from './sessionModel';
 
 /**
  * Which running tool, if any, owns the open extension UI request.

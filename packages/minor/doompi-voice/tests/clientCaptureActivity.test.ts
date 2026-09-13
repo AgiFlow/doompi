@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { VOICE_MEDIA_SAMPLE_RATE } from '../src/exports/clientMedia.ts';
+
+import { VOICE_MEDIA_SAMPLE_RATE } from '../src/exports/clientMedia';
 import {
   ClientCaptureActivityLifecycle,
   calculateClientPcmDbfs,
   type SpeechPresenceWindow,
-} from '../src/types/clientCaptureActivity.ts';
+} from '../src/types/clientCaptureActivity';
 
 function pcmChunk(amplitude: number, durationMs = 32): Uint8Array {
   const pcm = new Uint8Array((VOICE_MEDIA_SAMPLE_RATE * durationMs * 2) / 1_000);

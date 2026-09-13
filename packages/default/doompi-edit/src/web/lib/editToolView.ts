@@ -1,4 +1,4 @@
-import type { ToolResultView } from '@agimon-ai/doompi-web-contracts';
+import type { ToolResultView } from '@agimon-ai/doompi-core/web';
 
 /** Pi emits `+12 text`, `-12 text`, ` 12 text`, and a blank-numbered ` ... ` elision between hunks. */
 const DIFF_ROW_PATTERN = /^([+\- ])( *\d*) (.*)$/u;

@@ -58,10 +58,7 @@ cleanup callback. Cordis removes that launcher when either package or the sessio
 registers it again when the provider returns.
 
 ```ts
-import {
-  DOOM_LOOP_LAUNCHERS_SERVICE,
-  requireDoomLoopLaunchers,
-} from '@agimon-ai/doompi-extension-contracts/loop-launchers';
+import { DOOM_LOOP_LAUNCHERS_SERVICE, requireDoomLoopLaunchers } from '@agimon-ai/doompi-loop/loop-launchers';
 import type { Context } from '@deepseek-ai/cordis';
 
 export function myLoopPlugin(ctx: Context): void {
@@ -83,10 +80,10 @@ export function myLoopPlugin(ctx: Context): void {
 
 Mount that plugin on the runner's shared Doom Cordis root. Loop owns the registry and default
 launcher. Consumers depend only on
-`@agimon-ai/doompi-extension-contracts/loop-launchers`; there is no process-global registry or
+`@agimon-ai/doompi-loop/loop-launchers`; there is no process-global registry or
 session-ID lookup API.
 
-The package root exports `installLoopRuntime` for composition tests, plus the service contract
+The package root exports the service contract
 types. Normal Pi activation uses the discovered `extensions/pi` entry.
 
 ## Development
@@ -103,3 +100,5 @@ Maintained by [Agimon](https://agimon.ai/about).
 ## License
 
 MIT
+
+Pi and server entries live directly in `src/extensions/`. They declare commands, minor mode owners, and optional services. The helpers own registration and cleanup; `onDispose` clears UI state, while session service disposal stops pending launches and timers. Services live in named folders and public exports remain flat.

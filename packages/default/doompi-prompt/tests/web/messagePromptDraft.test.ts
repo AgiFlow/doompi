@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import {
   requestMessagePromptDraft,
   requestPromptDialogOpen,
   subscribePromptDialogRequest,
-} from '../../src/web/lib/messagePromptDraft.ts';
+} from '../../src/web/lib/messagePromptDraft';
 
 describe('prompt dialog requests', () => {
   it('copies user message text into an editable unnamed draft', () => {

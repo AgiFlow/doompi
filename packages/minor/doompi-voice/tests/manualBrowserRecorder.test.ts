@@ -1,18 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import {
   MANUAL_TRANSCRIPTION_DURATION_HEADER,
   MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,
   MANUAL_TRANSCRIPTION_MAX_DURATION_MS,
   MANUAL_TRANSCRIPTION_ROUTE,
-} from '../src/types/manualTranscription.ts';
+} from '../src/types/manualTranscription';
 import {
   ManualRecordingSilenceGate,
   startManualBrowserRecording,
   type ManualBrowserRecording,
   type ManualBrowserRecordingResult,
-} from '../src/web/api/manualBrowserRecorder.ts';
-import { ManualComposerRecorder } from '../src/web/api/manualComposerRecorder.ts';
-import { transcribeManualRecording } from '../src/web/api/manualTranscriptionClient.ts';
+} from '../src/web/api/manualBrowserRecorder';
+import { ManualComposerRecorder } from '../src/web/api/manualComposerRecorder';
+import { transcribeManualRecording } from '../src/web/api/manualTranscriptionClient';
 
 function recorderFixture() {
   const stopTrack = vi.fn();
@@ -361,15 +362,18 @@ describe('manual transcription client', () => {
     );
 
     expect(request).toHaveBeenCalledOnce();
-    expect(request).toHaveBeenCalledWith(`/api/plugin/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=session-1`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'audio/webm',
-        [MANUAL_TRANSCRIPTION_DURATION_HEADER]: '125',
+    expect(request).toHaveBeenCalledWith(
+      `/api/sessions/session-1/plugin/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=session-1`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'audio/webm',
+          [MANUAL_TRANSCRIPTION_DURATION_HEADER]: '125',
+        },
+        body: audio,
+        signal: controller.signal,
       },
-      body: audio,
-      signal: controller.signal,
-    });
+    );
   });
 
   it('rejects oversized audio and malformed or failed responses', async () => {
@@ -405,4 +409,43 @@ describe('manual transcription client', () => {
       transcribeManualRecording(audio, 'session-1', 125, async () => Response.json({ transcript: 42 })),
     ).rejects.toThrow('invalid response');
   });
+});
+
+it('returns to idle after initial silence cancels the recording', async () => {
+  const recording = deferred<ManualBrowserRecordingResult | undefined>();
+  const append = vi.fn();
+  const transcribe = vi.fn();
+  const controller = new ManualComposerRecorder(append, vi.fn(), {
+    start: async () => ({ result: recording.promise, stop() {}, cancel() {} }),
+    transcribe,
+  });
+  await controller.toggle('session');
+  recording.resolve(undefined);
+  await vi.waitFor(() => expect(controller.snapshot()).toEqual({ phase: 'idle' }));
+  expect(transcribe).not.toHaveBeenCalled();
+  expect(append).not.toHaveBeenCalled();
+});
+
+it('waits for the final data event when native state is already inactive', async () => {
+  const fixture = recorderFixture();
+  const recording = await startManualBrowserRecording(fixture.dependencies);
+  fixture.recorder.state = 'inactive';
+  recording.stop();
+  fixture.recorder.ondataavailable?.({ data: new Blob(['final audio']) });
+  fixture.recorder.onstop?.();
+  expect((await recording.result)?.audio.size).toBe(11);
+});
+
+it('reports a disconnected physical microphone and releases the recording', async () => {
+  const fixture = recorderFixture();
+  const track = { stop: vi.fn(), onended: null as (() => void) | null };
+  const recording = await startManualBrowserRecording({
+    ...fixture.dependencies,
+    getUserMedia: async () => ({ getTracks: () => [track] }),
+  });
+  const failed = expect(recording.result).rejects.toThrow('disconnected');
+  track.onended?.();
+  await failed;
+  expect(track.stop).toHaveBeenCalledOnce();
+  expect(track.onended).toBeNull();
 });

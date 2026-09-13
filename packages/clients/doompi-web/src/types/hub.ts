@@ -1,4 +1,4 @@
-import type { BridgeState, SessionFrame } from './session.ts';
+import type { BridgeState, SessionFrame } from './session';
 
 /**
  * Wire vocabulary between the hub and its pages.
@@ -81,6 +81,7 @@ export interface SessionWebComposition {
  * Everything the rail needs to render one session without subscribing to it.
  */
 export interface SessionSummary {
+  workspaceId?: string;
   id: string;
   name: string;
   cwd: string;
@@ -102,10 +103,6 @@ export interface SessionSummary {
   awaitingInput: boolean;
   /** ISO 8601 of the last settled run, once one finished. */
   lastSettledAt?: string;
-  /** Shown in the refused overlay so the user can find the competing client. */
-  socketPath: string;
-  /** Where this session serves its package APIs, when it serves any; the hub proxies there. */
-  apiSocketPath?: string;
   /** Omitted when the cwd is not a git repository or git is unavailable. */
   git?: SessionGitStatus;
   /** Signed plugin composition independently resolved for this session. */
@@ -121,13 +118,6 @@ export interface SessionSummary {
    */
   sessionProvenance?: string;
 }
-
-/**
- * Per-plugin session data travels as ChannelFrame: the channel name is the
- * frame type and the payload shape belongs to the plugin. Re-exported so in-package code keeps importing wire shapes
- * from this one root.
- */
-export type { ChannelFrame } from '@agimon-ai/doompi-web-contracts';
 
 export const HUB_HELLO_TYPE = 'hub_hello';
 export const SESSIONS_SNAPSHOT_TYPE = 'sessions_snapshot';
@@ -149,14 +139,14 @@ export const HUB_RESYNCED_TYPE = 'hub_resynced';
 /**
  * The custom session entry the DoomPi runtime journals with its minor-mode
  * catalog projection; it arrives inside Pi's entry_appended frames. The shape
- * mirrors MinorModeProjection in doompi-extension-contracts.
+ * mirrors MinorModeProjection in doompi-minor-mode.
  */
 export const MINOR_MODE_ENTRY_TYPE = 'doom-minor-modes';
 
 /**
  * The custom session entry the DoomPi runtime journals when the agent's model
  * changes without a client having asked for it. The shape mirrors
- * AgentModelProjection in doompi-extension-contracts.
+ * AgentModelProjection in doompi-core.
  *
  * Pi reports a thinking-level switch on the wire, so that field follows from
  * the frame alone. It has no wire event for the model, so plan mode applying
@@ -176,7 +166,7 @@ export const CONTEXT_ENTRY_TYPE = 'doom-context';
 /**
  * The custom session entry doompi-profile journals naming the persona the
  * session speaks as. The shape mirrors ProfileIdentityProjection in
- * doompi-extension-contracts.
+ * doompi-core.
  *
  * Unlike the entries above, this one is transcript rather than projection: it
  * stays in journal order and is never collapsed to the latest record, because a
@@ -187,7 +177,7 @@ export const PROFILE_IDENTITY_ENTRY_TYPE = 'doom-profile-identity';
 /**
  * The custom session entry doompi-domain journals once Pi has rebuilt its
  * resource catalog for a reload; it mirrors DOOM_RESOURCE_CATALOG_ENTRY_TYPE in
- * doompi-extension-contracts.
+ * doompi-core.
  *
  * A reload is what changes the skills the composer offers under `$`, and Pi
  * reports nothing else for one, so this entry is the cockpit's only notice that
@@ -246,6 +236,7 @@ export interface ContextGroupProjection {
 export interface ContextProjection {
   version: 1;
   revision: number;
+  selection?: { majorMode: string; domains: string[]; profile?: string };
   groups: ContextGroupProjection[];
   totalTokens: number;
   inactiveTokens: number;

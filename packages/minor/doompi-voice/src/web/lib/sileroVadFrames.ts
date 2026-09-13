@@ -1,4 +1,4 @@
-import type { SpeechPresenceWindow } from '../../types/clientCaptureActivity.ts';
+import type { SpeechPresenceWindow } from '../../types/clientCaptureActivity';
 
 export const SILERO_FRAME_SAMPLES = 512;
 export const SILERO_CONTEXT_SAMPLES = 64;

@@ -2,9 +2,12 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { parseDoomConfig } from '@agimon-ai/doompi-config';
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { VoiceConfigController } from '../src/controllers/voiceConfig';
 import {
   catalogEntryById,
   ENGINE_TOOLING,
@@ -13,11 +16,10 @@ import {
   MAX_GROUP_LENGTH,
   resolveInstaller,
   VOICE_CATALOG,
-} from '../src/services/catalog.ts';
-import { downloadModelFile, isDownloaded } from '../src/adapters/audio/download.ts';
-import { planBlocker, planInstall, UNSUPPORTED_PLATFORM } from '../src/adapters/audio/install.ts';
-import type { IExecutableResolver, IProcessSpawner, ProcessResult, RunningProcess } from '../src/types/index.ts';
-import { VoiceConfigController } from '../src/adapters/pi/voiceConfig';
+} from '../src/services/catalog';
+import { downloadModelFile, isDownloaded } from '../src/services/download';
+import { planBlocker, planInstall, UNSUPPORTED_PLATFORM } from '../src/services/install';
+import type { IExecutableResolver, IProcessSpawner, ProcessResult, RunningProcess } from '../src/types';
 
 const WHISPER_CPP_TURBO = 'whisper-cpp/large-v3-turbo';
 const MLX_TURBO = 'mlx-community/whisper-large-v3-turbo';
@@ -400,7 +402,7 @@ describe('VoiceConfigController', () => {
     const present = new Set(['ffmpeg', 'brew']);
     const terminal = fakeTerminal({ commands, provides: { set: present, binaries: ['whisper-cli'] } });
     const { instance } = controller({ present, terminal, fetchImpl: fetchServing(bytes) });
-    vi.spyOn(await import('../src/services/catalog.ts'), 'catalogEntryById').mockReturnValue(patched);
+    vi.spyOn(await import('../src/services/catalog'), 'catalogEntryById').mockReturnValue(patched);
 
     await instance.refresh();
     await instance.handlers().install?.({ fieldId: 'model', value: WHISPER_CPP_TURBO });
@@ -676,7 +678,7 @@ describe('VoiceConfigController', () => {
     const sha256 = createHash('sha256').update(bytes).digest('hex');
     const entry = catalogEntryById(WHISPER_CPP_TURBO);
     const patched = { ...entry!, sizeBytes: bytes.byteLength, download: { ...entry!.download!, sha256 } };
-    const catalog = await import('../src/services/catalog.ts');
+    const catalog = await import('../src/services/catalog');
     vi.spyOn(catalog, 'catalogEntryById').mockReturnValue(patched);
 
     // Hold the download open so a second install arrives mid-flight.
@@ -704,7 +706,7 @@ describe('VoiceConfigController', () => {
 
   it('aborts a running install without writing config', async () => {
     const entry = catalogEntryById(WHISPER_CPP_TURBO);
-    const catalog = await import('../src/services/catalog.ts');
+    const catalog = await import('../src/services/catalog');
     vi.spyOn(catalog, 'catalogEntryById').mockReturnValue(entry!);
     const neverResolving = (async () => {
       await new Promise((resolve) => setTimeout(resolve, 50));

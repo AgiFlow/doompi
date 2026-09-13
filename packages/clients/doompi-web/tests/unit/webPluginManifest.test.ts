@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import { scanWebPlugins } from '@agimon-ai/doompi/builders/web';
+import { declaredPluginsOf, orderDeclaredPlugins, pluginBlocksOf } from '@agimon-ai/doompi/builders/web';
 import { afterEach, describe, expect, it } from 'vitest';
-import { scanWebPlugins } from '../../src/adapters/webPluginScan.ts';
-import { declaredPluginsOf, orderDeclaredPlugins, pluginBlocksOf } from '../../src/services/webPluginManifest.ts';
 
 let cleanups: Array<() => void> = [];
 
@@ -24,7 +25,7 @@ function pluginPackage(manifest: Record<string, unknown>, entries: string[] = ['
 }
 
 function block(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return { pluginId: 'demo', registrationOrder: 1, client: './web/index.ts', ...overrides };
+  return { scopes: ['session'], pluginId: 'demo', registrationOrder: 1, client: './web/index.ts', ...overrides };
 }
 
 const declare = (overrides: Record<string, unknown>, dir = '/a'): ReturnType<typeof declaredPluginsOf> =>
@@ -46,25 +47,22 @@ describe('the doompiWeb manifest vocabulary', () => {
     expect(at(block({ pluginId: 'Bad Case' }))).toThrow(/kebab-case/);
     expect(at(block({ registrationOrder: -1 }))).toThrow(/non-negative integer/);
     expect(at(block({ registrationOrder: 1.5 }))).toThrow(/non-negative integer/);
-    expect(at(block({ channels: [''] }))).toThrow(/non-empty strings/);
     expect(at(block({ client: 'web/index.ts' }))).toThrow(/package-relative/);
     expect(at(block({ client: './../escape.ts' }))).toThrow(/package-relative/);
     expect(at(block({ client: 42 }))).toThrow(/must be a path/);
-    expect(at(block({ hub: { entry: './src/hub.ts' } }))).toThrow(/hub\.dist is required/);
-    expect(at(block({ hub: { entry: './src/hub.ts', dist: 'dist/hub.mjs' } }))).toThrow(
-      /dist must be a package-relative/,
-    );
   });
-
-  it('lets the host omit hub.dist but requires it from externals', () => {
-    const hostOnly = declaredPluginsOf('/pkg', { doompiWeb: block({ hub: { entry: './src/hub.ts' } }) }, true);
-    expect(hostOnly[0]?.hub).toEqual({ entry: './src/hub.ts' });
-  });
-
   it('defaults registrationOrder to 1000 and ignores keys it does not know', () => {
     const [plugin] = declaredPluginsOf(
       '/pkg',
-      { doompiWeb: { pluginId: 'demo', client: './web/index.ts', dependencies: ['ghost'], extra: true } },
+      {
+        doompiWeb: {
+          scopes: ['session'],
+          pluginId: 'demo',
+          client: './web/index.ts',
+          dependencies: ['ghost'],
+          extra: true,
+        },
+      },
       false,
     );
     expect(plugin?.registrationOrder).toBe(1000);
@@ -77,7 +75,11 @@ describe('the doompiWeb manifest vocabulary', () => {
       ...declare({ pluginId: 'alpha', registrationOrder: 5 }, '/a'),
       ...declare({ pluginId: 'late' }, '/l'),
       ...declare({ pluginId: 'first', registrationOrder: 1 }, '/f'),
-      ...declaredPluginsOf('/d', { doompiWeb: { pluginId: 'defaulted', client: './web/index.ts' } }, false),
+      ...declaredPluginsOf(
+        '/d',
+        { doompiWeb: { scopes: ['session'], pluginId: 'defaulted', client: './web/index.ts' } },
+        false,
+      ),
     ]);
     expect(ordered.map((plugin) => plugin.pluginId)).toEqual(['first', 'late', 'alpha', 'zeta', 'defaulted']);
   });
@@ -91,19 +93,6 @@ describe('the doompiWeb manifest vocabulary', () => {
     expect(ordered.map((plugin) => plugin.packageDir)).toEqual(['/first']);
     expect(notices).toEqual(["web plugin 'demo' from /second is skipped: /first already declares it."]);
   });
-
-  it('notices a channel two packages both declare and keeps both plugins', () => {
-    const notices: string[] = [];
-    const ordered = orderDeclaredPlugins(
-      [
-        ...declare({ channels: ['shared'] }),
-        ...declare({ pluginId: 'two', registrationOrder: 2, channels: ['shared', 'own'] }, '/b'),
-      ],
-      (message) => notices.push(message),
-    );
-    expect(ordered.map((plugin) => plugin.pluginId)).toEqual(['demo', 'two']);
-    expect(notices).toEqual(["web plugin 'two' channel 'shared' is already claimed by 'demo'; the first keeps it."]);
-  });
 });
 
 describe('the manifest scanner', () => {
@@ -115,45 +104,22 @@ describe('the manifest scanner', () => {
     expect(plugins[0]?.isHost).toBe(false);
   });
 
-  it('accepts an external package that ships its built hub entry without its hub source', () => {
-    const host = pluginPackage({ name: 'host' });
-    const plugin = pluginPackage(
-      {
-        name: 'published',
-        doompiWeb: block({ hub: { entry: './src/hub.ts', dist: './dist/hub.mjs' } }),
-      },
-      ['web/index.ts', 'dist/hub.mjs'],
-    );
-
-    expect(scanWebPlugins(host, [plugin]).map(({ pluginId }) => pluginId)).toEqual(['demo']);
-  });
-
   it('skips a plugin root with a missing entry, a malformed block, or an unreadable manifest, with a notice', () => {
     const host = pluginPackage({ name: 'host' });
     const fine = pluginPackage({ name: 'fine', doompiWeb: block({ pluginId: 'fine' }) });
     const missingClient = pluginPackage({ name: 'p', doompiWeb: block() }, []);
-    const missingHub = pluginPackage(
-      {
-        name: 'p',
-        doompiWeb: block({ pluginId: 'hubless', hub: { entry: './src/hub.ts', dist: './dist/hub.mjs' } }),
-      },
-      ['web/index.ts', 'src/hub.ts'],
-    );
     const malformed = pluginPackage({ name: 'p', doompiWeb: block({ pluginId: 'Bad Case' }) });
     const broken = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-broken-'));
     cleanups.push(() => fs.rmSync(broken, { recursive: true, force: true }));
     fs.writeFileSync(path.join(broken, 'package.json'), 'not json');
 
     const notices: string[] = [];
-    const plugins = scanWebPlugins(host, [missingClient, fine, missingHub, malformed, broken], (message) =>
-      notices.push(message),
-    );
+    const plugins = scanWebPlugins(host, [missingClient, fine, malformed, broken], (message) => notices.push(message));
     expect(plugins.map((p) => p.pluginId)).toEqual(['fine']);
-    expect(notices).toHaveLength(4);
+    expect(notices).toHaveLength(3);
     expect(notices[0]).toMatch(/skipped: .*client\.entry '\.\/web\/index\.ts' does not exist/);
-    expect(notices[1]).toMatch(/skipped: .*hub\.dist '\.\/dist\/hub\.mjs' does not exist/);
-    expect(notices[2]).toMatch(/skipped: .*kebab-case/);
-    expect(notices[3]).toMatch(/skipped: .*package\.json is unreadable/);
+    expect(notices[1]).toMatch(/skipped: .*kebab-case/);
+    expect(notices[2]).toMatch(/skipped: .*package\.json is unreadable/);
   });
 
   it("still throws on the host package's own manifest", () => {

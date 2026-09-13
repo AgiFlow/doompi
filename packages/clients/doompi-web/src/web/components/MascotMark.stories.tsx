@@ -3,7 +3,7 @@
  * looking for a bare `const meta`, so the export is not named at the point of
  * definition.
  */
-import { MascotMark } from './MascotMark.tsx';
+import { MascotMark } from './MascotMark';
 
 const meta = {
   title: 'Web/MascotMark',

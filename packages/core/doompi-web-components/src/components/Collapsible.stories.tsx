@@ -6,7 +6,7 @@
  * `open` is passed rather than `defaultOpen` so both states paint side by side
  * without a click.
  */
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './Collapsible.tsx';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './Collapsible';
 
 const meta = {
   title: 'Components/Collapsible',

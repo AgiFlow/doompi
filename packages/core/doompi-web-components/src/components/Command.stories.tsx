@@ -13,7 +13,7 @@ import {
   CommandItem,
   CommandItemLabel,
   CommandList,
-} from './Command.tsx';
+} from './Command';
 
 const meta = {
   title: 'Components/Command',

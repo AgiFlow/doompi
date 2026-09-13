@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { RemoteAccessStateView } from '../../src/types/remoteAccess';
 import {
   applyRemoteState,
   closeRemoteDialog,
@@ -9,8 +11,7 @@ import {
   turnRemoteAccessOff,
   turnRemoteAccessOn,
   updateRemoteSettings,
-} from '../../src/web/stores/remoteAccessStore.ts';
-import type { RemoteAccessStateView } from '../../src/types/remoteAccess.ts';
+} from '../../src/web/stores/remoteAccessStore';
 
 const originalFetch = globalThis.fetch;
 

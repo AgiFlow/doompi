@@ -1,10 +1,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CliApp } from '../../src/exports/cli/cliApp';
-import { InitCommand } from '../../src/commands/initCommand.ts';
-import { SyncPipeline } from '../../src/commands/syncPipeline.ts';
+
+import * as harnessContext from '../../src/builders/cli/harnessContext';
+import * as initCommand from '../../src/cli/commands/init';
+import * as syncCommand from '../../src/cli/commands/sync/workflow';
+import { CliApp } from '../../src/exports/cliApp';
 
 const findRepositoryRoot = vi.hoisted(() =>
   vi.fn(() => {
@@ -12,8 +15,8 @@ const findRepositoryRoot = vi.hoisted(() =>
   }),
 );
 
-vi.mock('../../src/exports/utils/repository', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/exports/utils/repository')>()),
+vi.mock('../../src/exports/repository', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/exports/repository')>()),
   findRepositoryRoot,
 }));
 
@@ -23,7 +26,7 @@ afterEach(() => {
 
 describe('raw CLI entry dispatch', () => {
   it('dispatches init before repository discovery', async () => {
-    const execute = vi.spyOn(InitCommand.prototype, 'execute').mockResolvedValue(0);
+    const execute = vi.spyOn(initCommand, 'runInit').mockResolvedValue(0);
 
     await expect(new CliApp().run(['init'])).resolves.toBe(0);
     expect(execute).toHaveBeenCalledWith(['init']);
@@ -41,11 +44,13 @@ describe('raw CLI entry dispatch', () => {
   });
 
   it('dispatches sync through the build-then-sync pipeline', async () => {
-    const execute = vi.spyOn(SyncPipeline.prototype, 'execute').mockResolvedValue(0);
+    const execute = vi.spyOn(syncCommand, 'runSync').mockResolvedValue(0);
 
     await expect(new CliApp({} as never).run(['sync', '--major-mode', 'minimal'])).resolves.toBe(0);
 
-    expect(execute).toHaveBeenCalledWith(['sync', '--major-mode', 'minimal']);
+    expect(execute).toHaveBeenCalledWith(['sync', '--major-mode', 'minimal'], undefined, undefined, undefined, {
+      telemetry: {},
+    });
     expect(findRepositoryRoot).not.toHaveBeenCalled();
   });
 
@@ -66,25 +71,31 @@ describe('raw CLI entry dispatch', () => {
     process.env.DOOMPI_ROOT = root;
     delete process.env.DOOMPI_MAJOR_MODE;
     delete process.env.DOOMPI_DOMAINS;
-    const app = new CliApp();
-    const runHarness = vi.spyOn(app, 'runHarness').mockResolvedValue(0);
+    const stop = new Error('stop after options resolution');
+    const app = new CliApp({
+      runInSpan: async (_name: string, _attributes: unknown, run: () => Promise<number>) => run(),
+    } as never);
+    const buildContext = vi.spyOn(harnessContext, 'buildHarnessContext').mockRejectedValue(stop);
 
     try {
-      await expect(app.run([])).resolves.toBe(0);
-      expect(runHarness).toHaveBeenLastCalledWith(
+      await expect(app.run([])).rejects.toBe(stop);
+      expect(buildContext).toHaveBeenLastCalledWith(
         expect.objectContaining({ repoRoot: root, majorMode: 'minimal', domains: ['development', 'qa'] }),
+        expect.any(Object),
       );
 
       process.env.DOOMPI_MAJOR_MODE = 'copilot';
       process.env.DOOMPI_DOMAINS = 'marketing';
-      await expect(app.run([])).resolves.toBe(0);
-      expect(runHarness).toHaveBeenLastCalledWith(
+      await expect(app.run([])).rejects.toBe(stop);
+      expect(buildContext).toHaveBeenLastCalledWith(
         expect.objectContaining({ majorMode: 'copilot', domains: ['marketing'] }),
+        expect.any(Object),
       );
 
-      await expect(app.run(['--major-mode', 'dev', '--domains', 'product,pm'])).resolves.toBe(0);
-      expect(runHarness).toHaveBeenLastCalledWith(
+      await expect(app.run(['--major-mode', 'dev', '--domains', 'product,pm'])).rejects.toBe(stop);
+      expect(buildContext).toHaveBeenLastCalledWith(
         expect.objectContaining({ majorMode: 'dev', domains: ['product', 'pm'] }),
+        expect.any(Object),
       );
       expect(findRepositoryRoot).not.toHaveBeenCalled();
     } finally {

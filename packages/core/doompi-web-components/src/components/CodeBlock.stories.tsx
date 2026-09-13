@@ -1,4 +1,4 @@
-import { CodeBlock } from './CodeBlock.tsx';
+import { CodeBlock } from './CodeBlock';
 
 const TYPESCRIPT = [
   'export function label(session: Session): string {',

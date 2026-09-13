@@ -1,10 +1,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+import { AMBIENT_EXTENSION_FILTER, DOOM_EXTENSION, readPiSettings } from '@agimon-ai/doompi-core/runtime-pi-settings';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { piExtensionAliasPath } from '../../src/adapters/piExtensionAlias.ts';
-import { AMBIENT_EXTENSION_FILTER, DOOM_EXTENSION, readPiSettings } from '../../src/adapters/piSettings.ts';
-import { InitCommand } from '../../src/commands/initCommand.ts';
+
+import { piExtensionAliasPath } from '../../src/builders/cli/piExtensionAlias';
+import { InitCommand } from '../../src/cli/commands/init';
 
 const temporaryRoots: string[] = [];
 
