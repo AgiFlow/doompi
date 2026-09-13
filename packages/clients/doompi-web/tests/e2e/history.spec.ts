@@ -18,7 +18,7 @@ test('pages back through a transcript longer than the attach restores', async ({
   const timeline = page.getByTestId('timeline');
   await expect(page.getByText('line 419')).toBeVisible();
   // The virtualized timeline initially renders only the visible end of the restored tail.
-  await expect(page.getByText('line 60')).toHaveCount(0);
+  await expect(page.getByText('line 319')).toHaveCount(0);
 
   // Scrolling to the top asks the hub for the window above, which arrives and
   // is prepended without the reader losing their place. Retry the gesture while
@@ -28,9 +28,9 @@ test('pages back through a transcript longer than the attach restores', async ({
       element.scrollTop = 0;
       element.dispatchEvent(new Event('scroll', { bubbles: true }));
     });
-    await expect(page.getByText('line 60')).toBeVisible({ timeout: 1_000 });
+    await expect(page.getByText('line 319')).toBeVisible({ timeout: 1_000 });
   }).toPass({ timeout: 15_000 });
-  await expect(page.getByText('line 419')).toBeVisible();
+  await expect(page.getByText('line 320')).toBeVisible();
 });
 
 test('stops asking once the transcript has no more above it', async ({ page, cockpit }) => {

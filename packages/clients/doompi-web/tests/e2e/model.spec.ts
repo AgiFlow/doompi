@@ -51,10 +51,12 @@ test('picks a model from the chip popup and asks the session to switch', async (
   const modelRequests = () => cockpit.session.received.filter((frame) => frame.type === 'get_available_models').length;
   const levelRequests = () =>
     cockpit.session.received.filter((frame) => frame.type === 'get_available_thinking_levels').length;
+  const modelRequestCount = modelRequests();
+  const levelRequestCount = levelRequests();
   await page.getByTestId('axis-model').click();
-  await expect.poll(modelRequests).toBe(2);
+  await expect.poll(modelRequests).toBe(modelRequestCount + 1);
   cockpit.session.emit(MODELS);
-  await expect.poll(levelRequests).toBe(2);
+  await expect.poll(levelRequests).toBe(levelRequestCount + 1);
   cockpit.session.emit(LEVELS);
   await expect(popup).toBeVisible();
 

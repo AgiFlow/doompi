@@ -169,7 +169,7 @@ test('lists no plugins for the packaged bundle and nothing to resolve', async ({
 
 test('reads and writes the image limits on the images page', async ({ page, cockpit }) => {
   let images = { autoResize: true, maxDimension: 2000, minDimension: 256, maxAllowedDimension: 2000 };
-  await page.route('**/api/settings/images', async (route) => {
+  await page.route('**/api/global/plugin/config/images', async (route) => {
     if (route.request().method() === 'PUT') {
       const patch = route.request().postDataJSON() as { autoResize?: boolean; maxDimension?: number };
       images = { ...images, ...patch };

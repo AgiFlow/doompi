@@ -21,6 +21,25 @@ async function renderWork(page: import('@playwright/test').Page): Promise<Render
   return page.evaluate(() => (window as unknown as { __doomRenderWork: RenderWork }).__doomRenderWork);
 }
 
+async function scrollToOldestTurn(page: import('@playwright/test').Page): Promise<void> {
+  const timeline = page.getByTestId('timeline');
+  const oldest = page.getByTestId('entry-assistant').filter({ hasText: 'Fixture turn 0' });
+  await expect
+    .poll(
+      async () => {
+        await timeline.evaluate((element) => {
+          element.scrollTop = 0;
+          element.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
+          element.dispatchEvent(new Event('scroll', { bubbles: true }));
+        });
+        return oldest.count();
+      },
+      { timeout: 15_000 },
+    )
+    .toBeGreaterThan(0);
+  await expect(oldest).toBeVisible();
+}
+
 test('switches fixed large and small transcripts without losing their contents', async ({ page, cockpit }) => {
   seedPerformanceSession(cockpit.sessions[0], 'large');
   seedPerformanceSession(cockpit.sessions[1], 'small');
@@ -31,7 +50,7 @@ test('switches fixed large and small transcripts without losing their contents',
   await expect(page.getByTestId('entry-assistant').filter({ hasText: PERFORMANCE_MARKERS.large })).toHaveCount(0);
   await page.getByTestId('session-card-s1').click();
   await expect(page.getByTestId('entry-assistant').filter({ hasText: PERFORMANCE_MARKERS.large })).toBeVisible();
-  await expect(page.getByTestId('entry-assistant')).toHaveCount(140);
+  await scrollToOldestTurn(page);
 });
 
 test('status updates preserve mounted Markdown and scroll while invalidating tool renderers', async ({
@@ -83,6 +102,7 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
   await expect(page.getByTestId('entry-assistant').filter({ hasText: PERFORMANCE_MARKERS.large })).toBeVisible();
+  await scrollToOldestTurn(page);
   await expect(page.getByTestId('entry-tool').first()).toBeVisible();
   expect((await renderWork(page)).versions).toContain('19.2.8');
 

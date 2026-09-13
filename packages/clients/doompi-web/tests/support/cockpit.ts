@@ -171,8 +171,9 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const source = resolveServerBundleSource({ registration });
     if (source.kind !== 'descriptor') throw new Error('global setup did not publish a synchronized server bundle');
     const activeLayers = ['team', 'task', 'llm'];
-    const [globalBundle, sessionBundle] = await Promise.all([
+    const [globalBundle, workspaceBundle, sessionBundle] = await Promise.all([
       loadServerBundle('global', { ...source, majorMode: 'minimal', activeLayers }),
+      loadServerBundle('workspace', { ...source, majorMode: 'minimal', activeLayers }),
       loadServerBundle('session', { ...source, majorMode: 'minimal', activeLayers }),
     ]);
     const environment = Object.freeze({
@@ -182,13 +183,35 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       PI_CODING_AGENT_DIR: agentDir,
       WORKFLOW_MCP_HOME: workflowHome,
     });
+    const repositories = () =>
+      hub.workspaces().map((workspace) => ({
+        id: workspace.id,
+        path: workspace.root,
+        name: path.basename(workspace.root),
+        active: hub.snapshot().some((session) => session.workspaceId === workspace.id),
+      }));
     await hub.mountFacets(globalBundle.facets, {
       scope: 'global',
       homeDirectory: root,
       environment,
       sessionService: hub.sessionService,
       directEvents: hub.directEvents,
+      repositories,
+      resolveRepository: (id) => hub.workspaces().find((workspace) => workspace.id === id)?.root,
       onNotice: (message) => console.error(`[global] ${message}`),
+    });
+    await hub.mountFacets(workspaceBundle.facets, {
+      scope: 'workspace',
+      workspaceId,
+      workspaceRoot: workRoot,
+      cwd: workRoot,
+      homeDirectory: root,
+      environment,
+      sessionService: hub.sessionService,
+      directEvents: hub.directEvents,
+      repositories,
+      resolveRepository: (id) => (id === workspaceId ? workRoot : undefined),
+      onNotice: (message) => console.error(`[workspace] ${message}`),
     });
     const channels = hub.channelTypes();
     const globalComposition = webCompositions.publish({ scope: 'global' }, registration, channels);

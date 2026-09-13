@@ -117,7 +117,7 @@ test('keeps unfinished composer input scoped to each session', async ({ page, co
   await expect(input).toHaveValue('draft for session two');
 });
 
-test('keeps the focused session usable while another client is attached elsewhere', async ({ page, cockpit }) => {
+test('keeps both sessions usable while another authenticated client is attached', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();
   await expect(page.getByTestId('session-card-s1')).toHaveAttribute('data-active', 'true');
@@ -127,5 +127,9 @@ test('keeps the focused session usable while another client is attached elsewher
   await expect(page.getByTestId('refused-card')).toBeHidden();
   await expect(page.getByTestId('composer-input')).toBeEnabled();
 
+  await page.getByTestId('session-card-s2').click();
+  await cockpit.sessions[1].waitForAttach();
+  await expect(page.getByTestId('refused-card')).toBeHidden();
+  await expect(page.getByTestId('composer-input')).toBeEnabled();
   await release();
 });
