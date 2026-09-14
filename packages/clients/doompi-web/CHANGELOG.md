@@ -1,3 +1,19 @@
+## 0.0.1-alpha.35 (2026-09-14)
+
+### 🚀 Features
+
+- **doompi-web:** start a headless server when none answers ([b05c3ffe](https://github.com/AgiFlow/doompi/commit/b05c3ffe))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.71
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.34 (2026-09-13)
 
 ### 🚀 Features
