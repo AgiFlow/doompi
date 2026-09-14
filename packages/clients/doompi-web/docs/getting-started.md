@@ -15,7 +15,7 @@ doompi-web
 
 Open <http://127.0.0.1:7433>. One command is enough: the presentation process starts a headless `doompi-server` on `127.0.0.1:7434`, generates a single-use credential in a private file, forwards it on every proxied request, and stops the child when it exits.
 
-It starts nothing when the endpoint already answers, or when `--headless-url` or `--headless-token` names a headless process someone else runs:
+If port `7434` is occupied, it starts its own authenticated backend on an available port. It starts nothing when `--headless-url` or `--headless-token` explicitly names a headless process someone else runs:
 
 ```bash
 # terminal 1

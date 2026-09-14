@@ -71,12 +71,6 @@ export function createWorkflowServerRuntime(
     }
   };
   const feature = createEmbeddedWorkflowFeature();
-  const statuses = feature.createListStatusesTool({
-    recordFilter: (record) => {
-      const sessionId = host.context.sessionId;
-      return record.env?.PI_SESSION_ID === undefined || record.env.PI_SESSION_ID === sessionId;
-    },
-  });
   let control: ReturnType<typeof feature.createRunControl> | undefined;
   let modeOwner: MinorModeOwner | undefined;
   const modeSelected = (): boolean => (host.context.selection.state?.['minor-mode'] ?? []).includes(WORKFLOW_MODE_ID);
@@ -254,8 +248,24 @@ export function createWorkflowServerRuntime(
             reason?: string;
             expectedRunId?: string;
           };
-          if (input.action === 'status')
-            return callResult(await statuses.execute({ workspace: input.workspace, pageSize: 100 }));
+          const runs = readWorkflowRuns({ environment: host.context.environment }).filter(
+            (run) =>
+              runBelongsToSession(run, host.context.sessionId) &&
+              run.view.runKey === input.runKey &&
+              (input.workspace === undefined || run.view.workspace === input.workspace),
+          );
+          if (runs.length !== 1)
+            return {
+              ...callResult({
+                error:
+                  runs.length === 0
+                    ? 'Workflow run was not found in this session.'
+                    : 'Specify the workspace for this run key.',
+              }),
+              isError: true,
+            };
+          const run = runs[0]!.view;
+          if (input.action === 'status') return callResult(run);
           if (!control) return callResult({ error: 'Workflow activity is not active.' });
           if (typeof input.expectedRunId !== 'string' || input.expectedRunId.length === 0) {
             return callResult({ error: 'expectedRunId is required for workflow control.' });

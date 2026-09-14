@@ -73,7 +73,9 @@ test('saves a named tunnel on the remote control settings page and reuses it aft
   await page.getByTestId('remote-tunnel-token-file').fill('/Users/me/.cloudflared/doompi.token');
   await page.getByText('locally managed tunnel options').click();
   await page.getByTestId('remote-tunnel-name').fill('doompi');
+  const saved = page.waitForResponse('**/api/remote/settings');
   await page.getByTestId('remote-tunnel-save').click();
+  await saved;
   await expect(page.getByTestId('remote-tunnel-save')).toBeDisabled();
 
   await page.reload();
@@ -197,6 +199,28 @@ test('reads and writes the image limits on the images page', async ({ page, cock
 });
 test.describe('with the synced bundle', () => {
   test.use({ assets: 'synced' });
+
+  test('keeps a contributed settings deep link while its composition loads', async ({ page, cockpit }) => {
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/api/compositions', async (route) => {
+      await ready;
+      await route.continue();
+    });
+    try {
+      await page.goto(`${cockpit.url}/settings/planning`);
+      await expect(page.getByTestId('settings')).toBeVisible();
+      await expect(page).toHaveURL(/\/settings\/planning$/);
+    } finally {
+      release();
+    }
+    await expect(page.getByTestId('settings-select-main.thinking')).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId('settings-select-main.thinking')).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/planning$/);
+  });
 
   test('lists every bundled plugin with its contributions and no diagnostics', async ({ page, cockpit }) => {
     await page.goto(`${cockpit.url}/settings/plugins`);

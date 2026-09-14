@@ -250,8 +250,8 @@ it('replays projections, context, and live drafts only at the latest page', asyn
     } as unknown as SessionServiceState);
     await transcript.initialize();
     expect(frames.map((frame) => frame.type)).toEqual([
-      'status',
       'entry_appended',
+      'status',
       'message_update',
       'message_update',
       'tool_execution_start',

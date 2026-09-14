@@ -3,6 +3,29 @@ import { describe, expect, it } from 'vitest';
 import { createSessionPresentation } from '../../../../../src/services/sessionPresentation';
 
 describe('session presentation replay', () => {
+  it('retains the current model and thinking after transient events have been evicted', () => {
+    const projection = createSessionPresentation();
+    projection.record({
+      type: 'response',
+      command: 'get_state',
+      success: true,
+      data: { model: { id: 'planner', provider: 'test' } },
+    });
+    const restored = {
+      type: 'response',
+      command: 'get_state',
+      success: true,
+      data: { model: { id: 'chat', provider: 'test' } },
+    };
+    projection.record(restored);
+    projection.record({ type: 'thinking_level_changed', level: 'medium' });
+    let state;
+    for (let index = 0; index < 100; index++) state = projection.record({ type: 'agent_settled' });
+    expect(state?.projections.map((event) => event.frame)).toEqual([
+      restored,
+      { type: 'thinking_level_changed', level: 'medium' },
+    ]);
+  });
   it('keeps current statuses and unresolved dialogs when the event ring wraps', () => {
     const projection = createSessionPresentation();
     projection.record({ type: 'extension_ui_request', method: 'setStatus', statusKey: 'mode', statusText: 'active' });

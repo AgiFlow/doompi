@@ -14,6 +14,7 @@ import { RemoteControlSettings } from '../features/settings/RemoteControlSetting
 import { RepositoryWorkspace } from '../features/settings/RepositoryWorkspace';
 import { SettingsMenu } from '../features/settings/SettingsMenu';
 import { SettingsPanelHost } from '../features/settings/SettingsPanelHost';
+import { refreshWebPluginCompositions } from '../lib/pluginRuntime';
 import {
   DEFAULT_REPOSITORY_SETTINGS_SECTION,
   DEFAULT_SETTINGS_SECTION,
@@ -33,17 +34,31 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const activeId = useStore(sessionsStore, (state) => state.activeId);
   const [railOpen, setRailOpen] = useState(false);
+  const [loadError, setLoadError] = useState<string>();
+  const [repositoryReady, setRepositoryReady] = useState(false);
   const current = settingsSection(section);
-  const workspace = current?.workspace ?? 'general';
+  const workspace = current?.workspace ?? (section?.startsWith('repository-') ? 'repository' : 'general');
 
   useEffect(() => {
     if (current) return;
-    void navigate({
-      to: '/settings/$section',
-      params: { section: DEFAULT_SETTINGS_SECTION },
-      replace: true,
-    });
-  }, [current, navigate]);
+    if (workspace === 'repository' && !repositoryReady) return;
+    let cancelled = false;
+    void refreshWebPluginCompositions()
+      .then(() => {
+        if (cancelled || settingsSection(section)) return;
+        void navigate({
+          to: '/settings/$section',
+          params: { section: DEFAULT_SETTINGS_SECTION },
+          replace: true,
+        });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [current, section, navigate, workspace, repositoryReady]);
 
   return (
     <div data-testid="settings" className="relative flex h-full min-w-0 overflow-hidden">
@@ -124,8 +139,11 @@ export function SettingsPage() {
             )}
           </Button>
         </header>
-        {current?.workspace === 'repository' ? (
-          <RepositoryWorkspace current={current} />
+        {workspace === 'repository' ? (
+          <RepositoryWorkspace
+            current={current ?? { id: section ?? '', label: '', detail: '', workspace: 'repository' }}
+            onReady={setRepositoryReady}
+          />
         ) : (
           <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
             <SettingsMenu active={current?.id} workspace="general" />
@@ -136,6 +154,7 @@ export function SettingsPage() {
               {/* One column width for every page, so moving between sections does
                   not re-flow the reading line. */}
               <div className="flex w-full max-w-[780px] flex-col gap-4">
+                {!current && loadError ? <p role="alert">{loadError}</p> : null}
                 {current?.id === 'providers' ? <ProviderSettings /> : null}
                 {current?.id === 'appearance' ? <AppearanceSettings /> : null}
                 {current?.id === 'notifications' ? <NotificationSettings /> : null}

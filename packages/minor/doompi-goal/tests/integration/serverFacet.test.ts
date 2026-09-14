@@ -60,6 +60,7 @@ async function fixture() {
   const host = {
     context: execution,
     assertActive: vi.fn(),
+    subscribeSelection: vi.fn(() => () => undefined),
     changeSelection: async (change: { axis: 'state'; key: string; values: string[] }) => {
       selection = { ...selection, state: { ...selection.state, [change.key]: change.values } };
     },
@@ -141,7 +142,7 @@ describe('goal server facet', () => {
     ]);
     expect(test.execution.client.notify).toHaveBeenCalledWith({ body: 'Goal started.', level: 'info' });
     expect(hook.handle({ systemPrompt: 'Base prompt' }, test.execution)).toMatchObject({
-      systemPrompt: expect.stringContaining('[GOAL ACTIVE]\nShip the feature'),
+      systemPrompt: expect.stringMatching(/\[GOAL ACTIVE\]\nGoal ID: .+\nGoal: Ship the feature/),
     });
     expect(await resource.read(test.execution)).toContain('goal');
     await command.execute('status', test.execution);

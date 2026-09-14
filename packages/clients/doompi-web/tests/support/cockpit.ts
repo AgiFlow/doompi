@@ -132,7 +132,9 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     if (registration?.webDirectory === null || registration?.webDirectory === undefined)
       throw new Error('global setup did not publish a web registration');
     const workspaceId = registration.identity.worktreeId;
-    const webCompositions = createWebCompositions(path.join(root, 'web-compositions'), () => undefined);
+    const webCompositions = createWebCompositions(path.join(root, 'web-compositions'), (message) => {
+      console.warn(`[cockpit fixture] ${message}`);
+    });
     let shellGeneration = 0;
     const republishShell = (): void => {
       shellGeneration += 1;
@@ -168,6 +170,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const hub = createHeadlessHub({
       manager,
       createSession: (request) => createSession(request),
+      admitWorkspace: async () => ({ id: workspaceId, root: workRoot }),
       hubToken: () => E2E_HEADLESS_TOKEN,
       requestSessionApi: async (scope, request) => {
         const server = sessionApis.get(scope.sessionId);

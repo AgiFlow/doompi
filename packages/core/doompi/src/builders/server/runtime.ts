@@ -30,6 +30,8 @@ import WebSocket from 'ws';
 
 import { HARNESS_STATE_KEYS, HARNESS_STATE_POINTER } from '../../composition/harnessState';
 import { findRepositoryRoot } from '../../composition/repository';
+import { readSyncDrift } from '../../composition/syncDrift';
+import { readSyncState } from '../../composition/syncState';
 import { buildHarnessContext } from '../cli/harnessContext';
 import { publishHeadlessSelectionStatus } from './selectionStatus';
 import { resolveSessionIdentity } from './sessionArguments';
@@ -229,6 +231,13 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             active: hub.snapshot().some((session) => session.workspaceId === workspace.id),
           })),
         resolveRepository: (id: string) => hub.workspaces().find((workspace) => workspace.id === id)?.root,
+        readRepositorySync: (id: string) => {
+          const root = hub.workspaces().find((workspace) => workspace.id === id)?.root;
+          if (!root) return undefined;
+          const drift = readSyncDrift({ repoRoot: root, homeDirectory, requireWebBundle: true });
+          const state = readSyncState(root, homeDirectory);
+          return { ...drift, mcpProjection: state?.fileState.mcpProjection };
+        },
         onNotice: notice,
       };
       const globalBundle = await loadComposition(globalRoot, 'global');

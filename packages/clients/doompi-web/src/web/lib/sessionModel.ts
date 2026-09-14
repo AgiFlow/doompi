@@ -432,7 +432,7 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
   if (command === 'get_state') {
     const model = isRecord(data.model) ? asString(data.model.id ?? data.model.name, 'unknown') : 'unknown';
     const provider = isRecord(data.model) ? asString(data.model.provider) : '';
-    const streaming = data.isStreaming === true;
+    const streaming = data.isStreaming === undefined ? state.streaming : data.isStreaming === true;
     return {
       ...state,
       streaming,
@@ -440,10 +440,10 @@ function applyResponse(state: SessionState, frame: Frame): SessionState {
       agent: {
         model,
         provider,
-        thinkingLevel: asString(data.thinkingLevel, 'unknown'),
-        sessionId: asString(data.sessionId),
-        sessionName: asString(data.sessionName),
-        messageCount: asNumber(data.messageCount) ?? 0,
+        thinkingLevel: asString(data.thinkingLevel, state.agent?.thinkingLevel ?? 'unknown'),
+        sessionId: asString(data.sessionId, state.agent?.sessionId ?? ''),
+        sessionName: asString(data.sessionName, state.agent?.sessionName ?? ''),
+        messageCount: asNumber(data.messageCount) ?? state.agent?.messageCount ?? 0,
         isStreaming: streaming,
       },
     };

@@ -45,9 +45,10 @@ export function createPagedTranscript(
     beginSessionReplay(sessionId);
     try {
       resetSessionStore(sessionId);
-      for (const event of latestState?.presentation?.projections ?? []) emit(event.frame, true);
       for (const entry of pages[0]?.context ?? []) emit({ type: 'entry_appended', entry }, true);
       for (const page of pages) for (const entry of page.entries) emit({ type: 'entry_appended', entry }, true);
+      // Current projections win over historical configuration in the transcript page.
+      for (const event of latestState?.presentation?.projections ?? []) emit(event.frame, true);
       if (atLatest())
         for (const draft of drafts) {
           if (draft.role === 'assistant') {

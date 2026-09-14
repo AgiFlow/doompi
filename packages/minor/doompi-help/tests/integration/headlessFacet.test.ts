@@ -36,6 +36,7 @@ describe('help headless facet', () => {
         minorModes.splice(0, minorModes.length, ...(selected ?? []));
       }),
       assertActive: vi.fn(),
+      subscribeSelection: vi.fn(() => () => undefined),
       registerResource: (resource: DoomHeadlessResource) => {
         resources.push(resource);
         return { dispose };

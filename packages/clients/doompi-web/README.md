@@ -15,7 +15,7 @@ doompi-web
 
 Open <http://127.0.0.1:7433>. The presentation process starts a headless `doompi-server` on `127.0.0.1:7434`, forwards a generated credential to it, and stops it on exit.
 
-Pass `--headless-url` or `--headless-token` to attach to a headless process someone else runs; the presentation process then starts nothing. It also attaches, rather than starting a second child, when the endpoint already answers. The credential is forwarded by the proxy and never embedded in browser assets.
+Pass `--headless-url` or `--headless-token` to attach to a headless process someone else runs; the presentation process then starts nothing. If the default backend port is occupied, it starts its own authenticated child on an available port. The credential is forwarded by the proxy and never embedded in browser assets.
 
 ## Extension surfaces
 

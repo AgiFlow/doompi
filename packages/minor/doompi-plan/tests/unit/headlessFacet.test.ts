@@ -35,10 +35,13 @@ async function fixture() {
   const dispose = vi.fn();
   const registration = () => ({ dispose });
   const execution = {
+    repoRoot: '/fixture-repository',
+    environment: { HOME: '/fixture-home' },
+    session: { entries: async () => [] },
     get selection() {
       return selection;
     },
-  } as DoomHeadlessExecutionContext;
+  } as unknown as DoomHeadlessExecutionContext;
   const registerOwner = vi.fn((value: DoomHeadlessMinorMode) => {
     mode = value;
     return { publish, dispose };
@@ -49,6 +52,7 @@ async function fixture() {
       selection = { ...selection, state: { ...selection.state, [change.key]: change.values } };
     },
     assertActive: vi.fn(),
+    subscribeSelection: vi.fn(() => () => undefined),
     registerToolRestriction: registration,
     registerResource: (value: DoomHeadlessResource) => {
       resources.push(value);
@@ -84,14 +88,18 @@ describe('headless planning resources and selection', () => {
     expect(await test.resources[0]!.read(test.execution)).toBe(
       await readFile(new URL('../../src/prompts/doompi-use-plan/SKILL.md', import.meta.url), 'utf8'),
     );
-    for (const contribution of [...test.resources, ...test.tools, ...test.hooks]) {
+    for (const contribution of [
+      ...test.resources,
+      ...test.tools,
+      ...test.hooks.filter((hook) => hook.event === 'before_agent_start'),
+    ]) {
       expect(contribution.when).toEqual({
         state: { 'minor-mode': 'plan' },
         attribution: { kind: 'minor', mode: 'plan' },
       });
     }
     await test.close?.();
-    expect(test.dispose).toHaveBeenCalledTimes(8);
+    expect(test.dispose).toHaveBeenCalledTimes(9);
   });
 
   it.each(['normal', 'debug', 'fable'])(

@@ -630,6 +630,15 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       },
     },
     session: {
+      async readModelSettings() {
+        const model = await runtime.lane.getModel(BACKGROUND_CONTEXT);
+        const thinkingLevel = await runtime.lane.getThinkingLevel(BACKGROUND_CONTEXT);
+        return { ...(model ? { model: modelIdentity(model) } : {}), thinkingLevel };
+      },
+      async setModelSettings(settings) {
+        if (settings.model) await runtime.setModel(settings.model);
+        if (settings.thinkingLevel !== undefined) await runtime.setThinkingLevel(settings.thinkingLevel);
+      },
       async forkSource() {
         const metadata = runtime.session.metadata as unknown as { path?: unknown };
         if (typeof metadata.path !== 'string') throw new Error('The parent session has no persisted journal.');

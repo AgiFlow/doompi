@@ -9,6 +9,7 @@ interface SocketHandlers {
 }
 
 const socketState = vi.hoisted(() => ({
+  protocolReady: true,
   handlers: undefined as SocketHandlers | undefined,
   sent: [] as Record<string, unknown>[],
   presentation: undefined as ((sessionId: string, frame: Record<string, unknown>, replay: boolean) => void) | undefined,
@@ -43,6 +44,7 @@ vi.mock('../../src/web/app/protocolRuntime', () => ({
 
 // ProtocolRuntime is stubbed above, so record its command boundary separately.
 vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({
+  hasSessionProtocol: () => socketState.protocolReady,
   sendSessionProtocolFrame: (sessionId: string, frame: Record<string, unknown>) => {
     socketState.sent.push({ type: 'session_command', sessionId, frame });
   },
@@ -84,6 +86,7 @@ import {
 import { threadStoreKey } from '../../src/web/stores/threadStore';
 
 afterEach(() => {
+  socketState.protocolReady = true;
   socketState.handlers = undefined;
   socketState.presentation = undefined;
   vi.useRealTimers();
@@ -108,6 +111,27 @@ function sessionSubscriptionFrames(): Record<string, unknown>[] {
   return socketState.sent.filter((frame) => frame.type === 'subscribe' || frame.type === 'unsubscribe');
 }
 describe('session runtime backlog publication', () => {
+  it('does not query session facts before the independent protocol attachment is ready', () => {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+    socketState.protocolReady = false;
+    const stop = startSessionRuntime();
+    try {
+      socketState.handlers?.onFrame({
+        type: 'sessions_snapshot',
+        sessions: [{ id: 's1', name: 'test', createdAt: '1' }],
+      });
+      setActiveSession('s1');
+      socketState.handlers?.onFrame({ type: 'session_backlog', sessionId: 's1', frames: [], dropped: 0 });
+      socketState.presentation?.('s1', { type: 'agent_settled' }, false);
+      expect(sentCommandTypes('s1')).toEqual([]);
+      socketState.protocolReady = true;
+      socketState.presentation?.('s1', { type: 'agent_settled' }, false);
+      expect(sentCommandTypes('s1')).toEqual(['get_state', 'get_session_stats', 'get_commands']);
+    } finally {
+      stop();
+      dropSessionStore('s1');
+    }
+  });
   it.each(['session', 'protocol', 'thread'] as const)('publishes only the completed %s replay', (kind) => {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
     const sessionId = `backlog-${kind}`;

@@ -21,7 +21,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
 
-async function setup() {
+async function setup(withSkill = false) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-domain-headless-'));
   roots.push(root);
   const home = path.join(root, 'home');
@@ -31,11 +31,32 @@ async function setup() {
     path.join(root, '.doom/domains.yaml'),
     JSON.stringify({ domains: { default: { description: 'Default' }, web: { description: 'Web' } } }),
   );
+  if (withSkill) {
+    const plugin = path.join(root, 'plugins', 'web');
+    fs.mkdirSync(path.join(plugin, '.claude-plugin'), { recursive: true });
+    fs.mkdirSync(path.join(plugin, 'skills', 'web-guide'), { recursive: true });
+    fs.writeFileSync(
+      path.join(plugin, '.claude-plugin/plugin.json'),
+      JSON.stringify({ name: 'web', skills: './skills/' }),
+    );
+    fs.writeFileSync(
+      path.join(plugin, 'skills/web-guide/SKILL.md'),
+      '---\nname: web-guide\ndescription: Web guide\n---\n# Web guidance',
+    );
+    fs.writeFileSync(
+      path.join(root, '.doom/domains.yaml'),
+      JSON.stringify({
+        plugins: { roots: ['plugins'] },
+        domains: { default: {}, web: { plugins: ['web'] } },
+      }),
+    );
+  }
   const commands: DoomHeadlessCommand[] = [];
   const resources: DoomHeadlessResource[] = [];
   const disposed = vi.fn();
   const changeSelection = vi.fn(async () => undefined);
   const host = {
+    context: { repoRoot: root, environment: { HOME: home } },
     registerResource: (resource: DoomHeadlessResource) => {
       resources.push(resource);
       return { dispose: disposed };
@@ -71,6 +92,12 @@ async function setup() {
 }
 
 describe('headless domains command', () => {
+  it('loads configured plugin skill content and gates it on its domain', async () => {
+    const { resources, execution } = await setup(true);
+    const skill = resources.find((resource) => resource.name === 'web-guide');
+    expect(skill?.when).toEqual({ domain: 'web', attribution: { kind: 'domain', mode: 'web' } });
+    expect(await skill?.read(execution)).toContain('# Web guidance');
+  });
   it('opens a typed toggle picker and applies the resulting domain set', async () => {
     const { changeSelection, command, execution } = await setup();
     vi.mocked(execution.client.request).mockResolvedValue('[ ] web');

@@ -21,7 +21,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { loopServerFacet } from '../../src/extensions/server';
 
-async function fixture() {
+async function fixture(autoStart = false) {
+  let stopStartedActivity: (() => void | Promise<void>) | undefined;
   let selection: DoomHeadlessSelection = {
     majorMode: 'copilot',
     activeLayers: [],
@@ -68,8 +69,11 @@ async function fixture() {
     context: execution,
     changeSelection: async (change: { axis: 'state'; key: string; values: string[] }) => {
       selection = { ...selection, state: { ...selection.state, [change.key]: change.values } };
+      if (autoStart && !stopStartedActivity && change.values.includes('loop.active'))
+        stopStartedActivity = await activity.start(execution);
     },
     assertActive: vi.fn(),
+    subscribeSelection: vi.fn(() => () => undefined),
     registerResource: (value: DoomHeadlessResource) => {
       resources.push(value);
       return registration();
@@ -91,10 +95,35 @@ async function fixture() {
   context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session', context: {} });
   context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
   const close = await mountFacet(loopServerFacet, context, host, registerOwner);
-  return { execution, selection: () => selection, commands, hooks, resources, activity, mode, close };
+  return {
+    execution,
+    selection: () => selection,
+    commands,
+    hooks,
+    resources,
+    activity,
+    mode,
+    close: async () => {
+      await stopStartedActivity?.();
+      await close?.();
+    },
+  };
 }
 
 describe('loop headless facet', () => {
+  it('launches the default loop while inactive without prompting for a launcher', async () => {
+    const test = await fixture(true);
+    try {
+      await test.commands.find((command) => command.name === 'loop')!.execute('doompi.default', test.execution);
+      expect(test.selection().state?.['minor-mode']).toContain('loop.active');
+      expect(test.execution.session.prompt).toHaveBeenCalledWith('Check status');
+      expect(test.execution.client.request).not.toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Choose a loop launcher' }),
+      );
+    } finally {
+      await test.close();
+    }
+  });
   it('starts the default loop through its activity and lists the active instance', async () => {
     const test = await fixture();
     const start = test.commands.find(({ name }) => name === 'loop');
@@ -105,6 +134,8 @@ describe('loop headless facet', () => {
     const resource = test.resources[0];
     if (!start || !list || !shutdown || !resource) throw new Error('Loop registrations were not created');
 
+    expect(start.when).toBeUndefined();
+    expect(list.when).toBeUndefined();
     expect(await resource.read(test.execution)).toContain('loop');
     const stopActivity = await test.activity.start(test.execution);
     await start.execute('', test.execution);

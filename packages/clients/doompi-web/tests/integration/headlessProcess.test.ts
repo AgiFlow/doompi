@@ -67,7 +67,9 @@ describe('startHeadless', () => {
     await expect(fetch(`http://127.0.0.1:${String(port)}/api/anything`)).rejects.toThrow();
   });
 
-  it('proxies to an endpoint that already answers instead of starting a second one', async () => {
+  it('starts its own authenticated child when the default endpoint already answers', async () => {
+    const entry = path.join(scratch(), 'fake-server.mjs');
+    fs.writeFileSync(entry, FAKE_HEADLESS);
     const existing = createServer((_request, response) => response.end('ok'));
     servers.push(existing);
     await new Promise<void>((resolve) => existing.listen(0, '127.0.0.1', resolve));
@@ -76,12 +78,19 @@ describe('startHeadless', () => {
 
     const headless = await startHeadless({
       url: `http://127.0.0.1:${String(port)}`,
-      environment: { ...process.env, DOOMPI_SERVER_COMMAND: '/does/not/exist.mjs' },
+      environment: { ...process.env, DOOMPI_SERVER_COMMAND: entry },
       onNotice: (message) => notices.push(message),
     });
 
-    expect(headless).toBeUndefined();
-    expect(notices).toContain(`using the headless server already listening on http://127.0.0.1:${String(port)}`);
+    expect(headless).toBeDefined();
+    try {
+      expect(headless?.url).not.toBe(`http://127.0.0.1:${String(port)}`);
+      const answer = await fetch(`${headless!.url}/api/anything`);
+      expect(await answer.json()).toEqual({ token: headless?.token });
+    } finally {
+      await headless?.close();
+    }
+    expect(await (await fetch(`http://127.0.0.1:${String(port)}`)).text()).toBe('ok');
   });
 
   it('keeps serving assets when the headless entry cannot start', async () => {

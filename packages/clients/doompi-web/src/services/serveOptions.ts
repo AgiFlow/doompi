@@ -80,5 +80,5 @@ export function parseServeOptions(argv: readonly string[]): ServeOptions {
 }
 
 export function serveHelp(): string {
-  return `Usage: doompi-web [options]\n\nStarts a headless doompi-server on 127.0.0.1:7434 unless --headless-url or\n--headless-token names one, or that endpoint already answers.\n\nOptions:\n  --port <number>          HTTP port (default: 7433)\n  --host <address>         Bind address (default: 127.0.0.1)\n  --assets <path>          Override the built SPA directory\n  --headless-url <url>     Attach to an existing headless endpoint\n  --headless-token <token> Credential forwarded to the headless server\n  -h, --help               Show this help\n  -v, --version            Show the package version\n`;
+  return `Usage: doompi-web [options]\n\nStarts a headless doompi-server on 127.0.0.1:7434 unless --headless-url or\n--headless-token names one. Uses an available backend port if 7434 is occupied.\n\nOptions:\n  --port <number>          HTTP port (default: 7433)\n  --host <address>         Bind address (default: 127.0.0.1)\n  --assets <path>          Override the built SPA directory\n  --headless-url <url>     Attach to an existing headless endpoint\n  --headless-token <token> Credential forwarded to the headless server\n  -h, --help               Show this help\n  -v, --version            Show the package version\n`;
 }

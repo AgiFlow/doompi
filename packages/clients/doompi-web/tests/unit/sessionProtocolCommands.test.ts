@@ -2,7 +2,11 @@ import type { SessionService } from '@agimon-ai/doompi-core/session-protocol';
 import type { Context } from '@earendil-works/chord';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { bindSessionProtocol, sendSessionProtocolFrame } from '../../src/web/lib/sessionProtocolCommands';
+import {
+  bindSessionProtocol,
+  hasSessionProtocol,
+  sendSessionProtocolFrame,
+} from '../../src/web/lib/sessionProtocolCommands';
 
 const releases: (() => void)[] = [];
 
@@ -15,6 +19,15 @@ function service(overrides: Record<string, unknown>): SessionService {
 }
 
 describe('session protocol command lifecycle', () => {
+  it('reports readiness only while a session command binding is live', () => {
+    expect(hasSessionProtocol('s1')).toBe(false);
+    const release = bindSessionProtocol('s1', service({}), vi.fn());
+    releases.push(release);
+    expect(hasSessionProtocol('s1')).toBe(true);
+    release();
+    expect(hasSessionProtocol('s1')).toBe(false);
+    expect(() => sendSessionProtocolFrame('s1', { type: 'prompt', message: 'test' })).toThrow('not connected');
+  });
   it('cancels an in-flight short RPC and skips short commands queued behind it', async () => {
     let resolveState!: (value: never) => void;
     let stateContext: Parameters<SessionService['getState']>[0] | undefined;
