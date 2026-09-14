@@ -77,7 +77,7 @@
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
-    "@agimon-ai/workflow-mcp": "0.23.24",
+    "@agimon-ai/workflow-mcp": "0.23.26",
     "@deepseek-ai/cordis": "4.0.2",
     "@modelcontextprotocol/sdk": "1.30.0",
     "hono": "4.13.7",

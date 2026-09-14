@@ -41,7 +41,7 @@ const additionalToolingPackageNames = [
 // the resolved `workspace:*` version, so a released package that points at an
 // unreleased one ships a dependency npm cannot install.
 const unreleasedOwnedPackageNames = new Set(['@agimon-ai/doompi-desktop']);
-const vibeLintVersion = '0.0.1-alpha.34';
+const vibeLintVersion = '0.0.1-alpha.35';
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));

@@ -249,7 +249,7 @@
     "@agimon-ai/doompi-ui": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
-    "@agimon-ai/foundation-process-registry": "0.29.24",
+    "@agimon-ai/foundation-process-registry": "0.29.25",
     "@deepseek-ai/cordis": "4.0.2",
     "@rmux/sdk": "0.6.5",
     "@xterm/headless": "6.0.0",
