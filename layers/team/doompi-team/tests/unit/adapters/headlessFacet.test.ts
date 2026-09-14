@@ -14,6 +14,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TEAM_API_BASE_PATH } from '../../../src/controllers/teamSessionApi';
+import { SUBAGENT_ACTIONS } from '../../../src/exports/subagentTool';
 import { teamServerFacet as teamHeadlessFacet } from '../../../src/extensions/server';
 import { sessionScopeDir } from '../../../src/services/sessionPaths';
 import * as runtimeModule from '../../../src/services/teamRuntime';
@@ -258,6 +259,21 @@ describe('teamHeadlessFacet', () => {
     }
   });
 
+  it('declares a subagent schema that survives the Anthropic adapter', async () => {
+    const test = await fixture();
+    try {
+      const subagent = test.tools.find((tool) => tool.name === 'subagent');
+      if (!subagent) throw new Error('subagent headless tool was not registered');
+      // Pi's Anthropic Messages adapter rebuilds tool input as
+      // `{type:'object', properties: schema.properties ?? {}, required: schema.required ?? []}`.
+      // Declaring a top-level union here sent the model an empty object while
+      // the host kept validating calls against the union.
+      const declared = subagent.parameters as { properties?: Record<string, { enum?: string[] }> };
+      expect(declared.properties?.action?.enum).toEqual(Object.values(SUBAGENT_ACTIONS));
+    } finally {
+      await test.dispose();
+    }
+  });
   it('dispatches headless subagent actions without a Pi ExtensionAPI', async () => {
     const test = await fixture();
     expect(test.serverHost.registerApi).toHaveBeenCalledWith(expect.objectContaining({ basePath: TEAM_API_BASE_PATH }));

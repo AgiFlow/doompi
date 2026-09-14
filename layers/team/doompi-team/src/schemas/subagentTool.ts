@@ -148,7 +148,7 @@ function acceptingActions(field: string): string {
 export const SubagentToolSchema = Type.Object(
   {
     action: Type.String({
-      enum: [...Object.values(SUBAGENT_ACTIONS)],
+      enum: Object.values(SUBAGENT_ACTIONS),
       description: 'The operation to run. Every other field is accepted only by the actions its description names.',
     }),
     name: Type.Optional(
