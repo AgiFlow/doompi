@@ -98,7 +98,7 @@ export function desktopRuntimePlugin(options: DesktopRuntimePluginOptions): Plug
         path.join(options.outDir, 'node_modules'),
         new Set([
           ...DOOMPI_RUNTIME_PACKAGES,
-          `@agimon-ai/doompi-runner-rmux-${target}`,
+          `@agimon-ai/doompi-runner-doompi-runner-rmux-${target}`,
           `@agimon-ai/doompi-runner-rtk-${target}`,
           `@tursodatabase/database-${napiTarget}`,
           `sqlite-vec-${process.platform === 'win32' ? `windows-${process.arch}` : target}`,

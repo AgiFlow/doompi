@@ -33,8 +33,8 @@ describe('core web capability package boundary', () => {
     expect(manifest.pi).toBeUndefined();
     expect(manifest.peerDependencies).toMatchObject({
       '@tanstack/store': '0.11.1',
-      react: '19.2.8',
-      'react-dom': '19.2.8',
+      react: '19.3.0',
+      'react-dom': '19.3.0',
     });
     expect(manifest.peerDependenciesMeta).toMatchObject({
       react: { optional: true },

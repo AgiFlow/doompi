@@ -281,6 +281,9 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         const pending = admissions.get(id);
         if (pending) return pending;
         const admission = (async () => {
+          const syncEnvironment: NodeJS.ProcessEnv = { ...baseEnvironment, DOOMPI_ROOT: root };
+          for (const key of [HARNESS_STATE_POINTER, ...Object.values(HARNESS_STATE_KEYS)]) delete syncEnvironment[key];
+          await syncWorkspace(root, syncEnvironment);
           const bundle = await loadComposition(root, 'workspace');
           await hub.mountFacets(bundle.facets, {
             ...sharedApiContext,

@@ -80,7 +80,7 @@ function resourceBindingFor(
 ): CompileExtensionResourceBinding | undefined {
   const optional = manifest.optionalDependencies;
   if (optional === null || typeof optional !== 'object' || Array.isArray(optional)) return undefined;
-  const currentPlatformPackage = `@agimon-ai/doompi-runner-rmux-${process.platform}-${process.arch}`;
+  const currentPlatformPackage = `@agimon-ai/doompi-runner-doompi-runner-rmux-${process.platform}-${process.arch}`;
   const require = createRequire(path.join(declaration.packageDir, 'package.json'));
   for (const packageName of Object.keys(optional)) {
     if (packageName !== currentPlatformPackage) continue;

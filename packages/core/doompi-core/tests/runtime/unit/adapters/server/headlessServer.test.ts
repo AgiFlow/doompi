@@ -276,6 +276,18 @@ describe('serveHeadlessServer', () => {
       ).json(),
     ).toEqual({ directories: [path.join(directory, 'Alpha'), path.join(directory, 'alpine')] });
     expect(
+      await (await fetch(`${server.url}/api/directories?q=${encodeURIComponent(`${directory}/`)}`, { headers })).json(),
+    ).toEqual({ directories: [path.join(directory, 'Alpha'), path.join(directory, 'alpine')] });
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(path.join(directory, 'current'));
+    try {
+      const sibling = await fetch(`${server.url}/api/directories?q=al`, { headers });
+      expect(await sibling.json()).toEqual({
+        directories: [path.join(directory, 'Alpha'), path.join(directory, 'alpine')],
+      });
+    } finally {
+      cwd.mockRestore();
+    }
+    expect(
       await (
         await fetch(`${server.url}/api/directories?q=${encodeURIComponent(path.join(directory, 'absent', 'x'))}`, {
           headers,
@@ -459,7 +471,8 @@ describe('serveHeadlessServer', () => {
     const directories = await fetch(`${server.url}/api/directories?q=repo`, {
       headers: { authorization: 'Bearer secret' },
     });
-    expect(await directories.json()).toEqual({ directories: ['/repo'] });
+    const directoryBody = (await directories.json()) as { directories: string[] };
+    expect(directoryBody.directories).toContain('/repo');
 
     const retired = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/frame`, {
       method: 'POST',

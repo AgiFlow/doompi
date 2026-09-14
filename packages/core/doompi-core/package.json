@@ -543,10 +543,10 @@
     "@simplewebauthn/server": "^14.0.1",
     "cross-spawn": "7.0.6",
     "gpt-tokenizer": "4.0.0",
-    "hono": "4.13.5",
+    "hono": "4.13.7",
     "minimatch": "10.2.6",
     "protobufjs": "8.8.0",
-    "typebox": "1.3.25",
+    "typebox": "1.3.30",
     "ws": "8.21.3",
     "yaml": "2.9.0"
   },
@@ -559,21 +559,21 @@
     "@earendil-works/pi-tui": "0.85.1",
     "@tanstack/store": "0.11.1",
     "@types/cross-spawn": "6.0.6",
-    "@types/node": "26.4.1",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.7",
+    "@types/node": "26.5.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "@types/ws": "8.18.1",
     "@vitest/coverage-v8": "5.0.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vitest": "5.0.0"
   },
   "peerDependencies": {
     "@tanstack/store": "0.11.1",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "peerDependenciesMeta": {
     "@tanstack/store": {

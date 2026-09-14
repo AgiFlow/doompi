@@ -75,19 +75,19 @@
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
-    "hono": "4.13.5",
-    "typebox": "1.3.25"
+    "hono": "4.13.7",
+    "typebox": "1.3.30"
   },
   "devDependencies": {
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",
-    "@types/node": "26.4.1",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.7",
+    "@types/node": "26.5.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "@vitest/coverage-v8": "5.0.0",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vitest": "5.0.0"

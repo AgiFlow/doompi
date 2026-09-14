@@ -153,19 +153,28 @@ async function directorySuggestions(query: string, sessions: readonly HeadlessHu
   if (typed === '') return [];
   const matches = (value: string): boolean => value.toLowerCase().includes(typed.toLowerCase());
   const known = [...new Set([process.cwd(), ...sessions.map((session) => session.cwd)])].filter(matches);
-  if (!path.isAbsolute(typed)) return known.slice(0, 12);
-  const parent = path.dirname(typed);
-  const partial = path.basename(typed).toLowerCase();
-  try {
-    const entries = await fs.promises.readdir(parent, { withFileTypes: true });
-    const completed = entries
-      .filter((entry) => entry.isDirectory() && entry.name.toLowerCase().includes(partial))
-      .map((entry) => path.join(parent, entry.name))
-      .sort((left, right) => left.localeCompare(right));
-    return [...new Set([...known, ...completed])].slice(0, 12);
-  } catch {
-    return known.slice(0, 12);
+  const candidates = path.isAbsolute(typed)
+    ? [typed]
+    : typed.includes(path.sep)
+      ? [path.resolve(process.cwd(), typed)]
+      : [path.join(path.dirname(process.cwd()), typed), path.join(process.cwd(), typed)];
+  const completed: string[] = [];
+  for (const candidate of candidates) {
+    const drilling = typed.endsWith(path.sep);
+    const parent = drilling ? candidate : path.dirname(candidate);
+    const partial = drilling ? '' : path.basename(candidate).toLowerCase();
+    try {
+      const entries = await fs.promises.readdir(parent, { withFileTypes: true });
+      completed.push(
+        ...entries
+          .filter((entry) => entry.isDirectory() && entry.name.toLowerCase().includes(partial))
+          .map((entry) => path.join(parent, entry.name)),
+      );
+    } catch {
+      // A missing or unreadable parent simply has no completions.
+    }
   }
+  return [...new Set([...known, ...completed.sort((left, right) => left.localeCompare(right))])].slice(0, 12);
 }
 
 async function readBody(request: IncomingMessage): Promise<Uint8Array> {
