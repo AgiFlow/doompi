@@ -1,3 +1,32 @@
+## 0.0.1-alpha.72 (2026-09-14)
+
+### 🚀 Features
+
+- **doompi-web:** start a headless server when none answers ([b05c3ffe](https://github.com/AgiFlow/doompi/commit/b05c3ffe))
+
+### 🩹 Fixes
+
+- **doompi-core:** load bundle asset policy from a node-safe entry ([f7f5e09e](https://github.com/AgiFlow/doompi/commit/f7f5e09e))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.48
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.71
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.71 (2026-09-13)
 
 ### 🚀 Features

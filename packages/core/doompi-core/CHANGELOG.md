@@ -1,3 +1,13 @@
+## 0.0.1-alpha.71 (2026-09-14)
+
+### 🩹 Fixes
+
+- **doompi-core:** load bundle asset policy from a node-safe entry ([f7f5e09e](https://github.com/AgiFlow/doompi/commit/f7f5e09e))
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.70 (2026-09-13)
 
 ### 🚀 Features
