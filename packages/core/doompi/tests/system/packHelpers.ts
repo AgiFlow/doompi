@@ -31,7 +31,6 @@ const NON_SOURCE_FILE_SUFFIXES = ['.map', '.d.mts', '.d.cts'] as const;
 const UTF8_ENCODING = 'utf8';
 const NEWLINE = '\n';
 const PNPM_WORKSPACE_FILE = 'pnpm-workspace.yaml';
-const INSTALL_BUILD_DEPENDENCIES = ['better-sqlite3', 'protobufjs'] as const;
 const INSTALL_BUILD_POLICIES: Readonly<Record<string, boolean>> = {
   '@google/genai': false,
   'better-sqlite3': true,
@@ -270,36 +269,67 @@ export function writeConsumerDependencies(consumer: ConsumerRoot, dependencies: 
   fs.writeFileSync(consumer.packageJsonPath, `${JSON.stringify(packageJson, null, 2)}${NEWLINE}`);
 }
 
+function linkPackedDependencies(
+  dependencies: Record<string, string> | undefined,
+  tarballs: ReadonlyMap<string, string>,
+): Record<string, string> | undefined {
+  if (!dependencies) return undefined;
+  return Object.fromEntries(
+    Object.entries(dependencies).map(([name, version]) => [
+      name,
+      tarballs.has(name) ? `file:${tarballs.get(name)}` : version,
+    ]),
+  );
+}
+
 export async function installLocalPackages(
   consumer: ConsumerRoot,
   packages: ReadonlyMap<string, PackedPackage>,
 ): Promise<CommandResult> {
-  const tarballs = new Map([...packages.entries()].map(([name, packed]) => [name, packed.tarball]));
+  const tarballRoot = path.join(consumer.root, 'packed-tarballs');
+  fs.mkdirSync(tarballRoot, { recursive: true });
+  const tarballs = new Map(
+    [...packages.keys()].map((name) => [
+      name,
+      path.join(tarballRoot, `${name.replaceAll('/', '__').replace(/^@/, '')}.tgz`),
+    ]),
+  );
+  for (const [name, packed] of packages) {
+    const stagingRoot = path.join(consumer.root, 'packed-staging', name.replaceAll('/', '__').replace(/^@/, ''));
+    const packageRoot = path.join(stagingRoot, PACKAGE_DIRECTORY_NAME);
+    fs.mkdirSync(stagingRoot, { recursive: true });
+    fs.cpSync(packed.unpackedRoot, packageRoot, { recursive: true });
+    const manifest: PackageManifest = {
+      ...packed.packedManifest,
+      dependencies: linkPackedDependencies(packed.packedManifest.dependencies, tarballs),
+      optionalDependencies: linkPackedDependencies(packed.packedManifest.optionalDependencies, tarballs),
+    };
+    fs.writeFileSync(packageManifestPath(packageRoot), `${JSON.stringify(manifest, null, 2)}${NEWLINE}`);
+    const tarball = tarballs.get(name);
+    if (!tarball) throw new Error(`Missing tarball path for ${name}`);
+    const packResult = await runCommand(
+      'tar',
+      ['-czf', tarball, '-C', stagingRoot, PACKAGE_DIRECTORY_NAME],
+      consumer.root,
+      { ...process.env, COPYFILE_DISABLE: '1' },
+    );
+    if (packResult.code !== 0) throw new Error(`Local tarball creation failed for ${name}: ${packResult.stderr}`);
+  }
   writeConsumerDependencies(consumer, tarballs);
   const workspacePath = path.join(consumer.root, PNPM_WORKSPACE_FILE);
-  const overrides = [...tarballs.entries()].map(
-    ([name, tarball]) => `  ${JSON.stringify(name)}: ${JSON.stringify(`file:${tarball}`)}`,
-  );
-  const allowedBuilds = INSTALL_BUILD_DEPENDENCIES.map((name) => `  - ${name}`).join(NEWLINE);
   const buildPolicies = Object.entries(INSTALL_BUILD_POLICIES)
     .map(([name, allowed]) => `  ${JSON.stringify(name)}: ${allowed}`)
     .join(NEWLINE);
   fs.writeFileSync(
     workspacePath,
-    `packages:${NEWLINE}  - '.'${NEWLINE}overrides:${NEWLINE}${overrides.join(NEWLINE)}${NEWLINE}allowBuilds:${NEWLINE}${buildPolicies}${NEWLINE}onlyBuiltDependencies:${NEWLINE}${allowedBuilds}${NEWLINE}`,
+    `packages:${NEWLINE}  - '.'${NEWLINE}allowBuilds:${NEWLINE}${buildPolicies}${NEWLINE}autoInstallPeers: false${NEWLINE}strictDepBuilds: false${NEWLINE}`,
   );
   try {
     // Reuse pnpm's content-addressed cache; resolution and node_modules remain isolated in the consumer root.
     // Keep the lockfile inside the throwaway consumer root for deterministic installs.
     return runCommand(
       PNPM_COMMAND,
-      [
-        'install',
-        '--no-frozen-lockfile',
-        '--prefer-offline',
-        '--config.auto-install-peers=false',
-        '--config.strict-dep-builds=false',
-      ],
+      ['install', '--no-frozen-lockfile', '--prefer-offline', '--ignore-scripts'],
       consumer.root,
     );
   } finally {
