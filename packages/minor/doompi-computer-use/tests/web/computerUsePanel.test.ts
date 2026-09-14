@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { driveChannel, renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -44,8 +47,8 @@ describe('computer-use panel', () => {
           artifactId: 'artifact-1',
           status: 'ready',
           actionCount: 4,
-          previewUrl: '/api/sessions/s1/computer-use/artifacts/artifact-1',
-          downloadUrl: '/api/sessions/s1/computer-use/artifacts/artifact-1?download=1',
+          previewUrl: '/api/workspaces/test-workspace/sessions/s1/computer-use/artifacts/artifact-1',
+          downloadUrl: '/api/workspaces/test-workspace/sessions/s1/computer-use/artifacts/artifact-1?download=1',
         },
       },
       targets: [],

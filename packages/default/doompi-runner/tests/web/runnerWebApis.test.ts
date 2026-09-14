@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,7 +54,7 @@ describe('runner log HTTP API', () => {
       slice,
     });
     expect(fetch).toHaveBeenCalledWith(
-      '/api/sessions/session%2Fa/plugin/runner/runners/run%20one/log?session=session%2Fa&grep=done',
+      '/api/workspaces/test-workspace/sessions/session%2Fa/plugins/runner/runners/run%20one/log?session=session%2Fa&grep=done',
       {
         signal: controller.signal,
       },
@@ -143,7 +146,7 @@ describe('runner screen API', () => {
 
     await expect(sendRunnerInput('session/a', 'run one', 'x')).resolves.toBe(true);
     expect(fetch).toHaveBeenCalledWith(
-      '/api/sessions/session%2Fa/plugin/runner/runners/run%20one/screen/input?session=session%2Fa',
+      '/api/workspaces/test-workspace/sessions/session%2Fa/plugins/runner/runners/run%20one/screen/input?session=session%2Fa',
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

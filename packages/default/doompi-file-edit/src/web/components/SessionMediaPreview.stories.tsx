@@ -17,8 +17,8 @@ const SVG = [
   '</svg>',
 ].join('');
 
-const IMAGE_SRC = '/api/sessions/s1/file?path=assets/logo.svg';
-const DOWNLOAD_SRC = '/api/sessions/s1/file?path=assets/bundle.zip';
+const IMAGE_SRC = '/api/workspaces/test-workspace/sessions/s1/file?path=assets/logo.svg';
+const DOWNLOAD_SRC = '/api/workspaces/test-workspace/sessions/s1/file?path=assets/bundle.zip';
 
 /**
  * `sealedTransport.fetch` is a pass-through off a tunnel, so replacing the
@@ -34,7 +34,8 @@ globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Respo
   if (url === DOWNLOAD_SRC) {
     return Promise.resolve(new Response(new Blob(['PK\u0003\u0004'], { type: 'application/zip' })));
   }
-  if (url.startsWith('/api/sessions/')) return Promise.resolve(new Response('not found', { status: 404 }));
+  if (url.startsWith('/api/workspaces/test-workspace/sessions/'))
+    return Promise.resolve(new Response('not found', { status: 404 }));
   return realFetch(input, init);
 };
 
@@ -64,7 +65,7 @@ export const Playground = {
       <div className="flex flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">the route refused</span>
         <SessionMediaPreview
-          src="/api/sessions/s1/file?path=assets/missing.png"
+          src="/api/workspaces/test-workspace/sessions/s1/file?path=assets/missing.png"
           path="assets/missing.png"
           data-testid="story-media-error"
         />

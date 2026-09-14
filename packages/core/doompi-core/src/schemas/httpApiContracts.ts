@@ -141,28 +141,39 @@ export const headlessHttpContracts: DoomHttpContract[] = [
     }),
   ),
   host('directories', '/api/directories', 'GET', Type.Object({ directories: Strings }), { parameters: [query('q')] }),
-  host('sessions.list', '/api/sessions', 'GET', Type.Object({ sessions: Type.Array(SessionSummarySchema) })),
-  host('sessions.create', '/api/sessions', 'POST', Type.Object({ sessionId: Text }), {
-    body: body(Type.Object({ cwd: Type.String({ minLength: 1 }), name: Optional(Text) })),
+  host(
+    'sessions.list',
+    '/api/workspaces/{workspaceId}/sessions',
+    'GET',
+    Type.Object({ sessions: Type.Array(SessionSummarySchema) }),
+  ),
+  host('sessions.create', '/api/workspaces/{workspaceId}/sessions', 'POST', Type.Object({ sessionId: Text }), {
+    body: body(Type.Object({ name: Optional(Text) })),
     responses: jsonApiResponses(Type.Object({ sessionId: Text }), 201),
   }),
-  host('sessions.get', '/api/sessions/{sessionId}', 'GET', SessionSummarySchema),
-  host('sessions.delete', '/api/sessions/{sessionId}', 'DELETE', ApiOkSchema),
+  host('sessions.get', '/api/workspaces/{workspaceId}/sessions/{sessionId}', 'GET', SessionSummarySchema),
+  host('sessions.delete', '/api/workspaces/{workspaceId}/sessions/{sessionId}', 'DELETE', ApiOkSchema),
   host(
     'sessions.history',
-    '/api/sessions/{sessionId}/history',
+    '/api/workspaces/{workspaceId}/sessions/{sessionId}/history',
     'GET',
     Type.Object({ sessions: Type.Array(SavedSession) }),
     { availability: 'Host provides sessionHistory' },
   ),
-  host('sessions.restart', '/api/sessions/{sessionId}/restart', 'POST', ApiOkSchema, {
+  host('sessions.restart', '/api/workspaces/{workspaceId}/sessions/{sessionId}/restart', 'POST', ApiOkSchema, {
     availability: 'Host provides restartSession',
   }),
-  host('sessions.resume', '/api/sessions/{sessionId}/resume', 'POST', Type.Object({ sessionId: Text }), {
-    availability: 'Host provides resumeSession',
-    body: body(Type.Object({ targetSessionId: Type.String({ pattern: '^[A-Za-z0-9_-]+$' }) })),
-  }),
-  host('sessions.file', '/api/sessions/{sessionId}/file', 'GET', Binary, {
+  host(
+    'sessions.resume',
+    '/api/workspaces/{workspaceId}/sessions/{sessionId}/resume',
+    'POST',
+    Type.Object({ sessionId: Text }),
+    {
+      availability: 'Host provides resumeSession',
+      body: body(Type.Object({ targetSessionId: Type.String({ pattern: '^[A-Za-z0-9_-]+$' }) })),
+    },
+  ),
+  host('sessions.file', '/api/workspaces/{workspaceId}/sessions/{sessionId}/file', 'GET', Binary, {
     parameters: [query('path', Text, true)],
     responses: {
       ...jsonApiResponses(Binary),
@@ -171,20 +182,27 @@ export const headlessHttpContracts: DoomHttpContract[] = [
   }),
   host(
     'sessions.channels',
-    '/api/sessions/{sessionId}/channels',
+    '/api/workspaces/{workspaceId}/sessions/{sessionId}/channels',
     'GET',
     Type.Object({ channels: Type.Array(Type.Object({ type: Text, sessionId: Text, payload: Json })) }),
   ),
-  host('sessions.channel.send', '/api/sessions/{sessionId}/channel/{frameType}', 'POST', ApiOkSchema, {
-    body: body(Json),
-    responses: jsonApiResponses(ApiOkSchema, 202),
-    description: 'Deliver a payload to the selected channel contract identified by frameType.',
-  }),
+  host(
+    'sessions.channel.send',
+    '/api/workspaces/{workspaceId}/sessions/{sessionId}/channel/{frameType}',
+    'POST',
+    ApiOkSchema,
+    {
+      body: body(Json),
+      responses: jsonApiResponses(ApiOkSchema, 202),
+      description: 'Deliver a payload to the selected channel contract identified by frameType.',
+    },
+  ),
   host('workspaces.list', '/api/workspaces', 'GET', Type.Object({ workspaces: Type.Array(Workspace) })),
   host('workspaces.admit', '/api/workspaces', 'POST', Type.Object({ workspace: Workspace }), {
     body: body(Type.Object({ root: Text })),
     responses: jsonApiResponses(Type.Object({ workspace: Workspace }), 201),
   }),
+  host('workspaces.get', '/api/workspaces/{workspaceId}', 'GET', Type.Object({ workspace: Workspace })),
   host('workspaces.remove', '/api/workspaces/{workspaceId}', 'DELETE', ApiOkSchema),
   host('events', '/api/events', 'GET', Text, {
     responses: {

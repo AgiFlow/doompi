@@ -1,61 +1,26 @@
 # Package APIs
 
-A package API is server code contributed by a package in the active DoomPi composition. It gives a web plugin an HTTP-shaped boundary without putting filesystem access, process control, credentials, or long-running server resources in browser code.
-
-The first design choice is placement. Run the handler in the process that owns the data.
-
-## Two execution scopes
-
-```text
-Browser plugin
-      |
-      | /api/plugin/<basePath>
-      v
-DoomPi Web hub
-      |
-      +-- hub API --------------------> hub-owned machine or repository state
-      |
-      +-- session proxy over api.sock -> session API beside one agent
-```
-
-| Scope     | Runs in                 | Use it for                                                                        |
-| --------- | ----------------------- | --------------------------------------------------------------------------------- |
-| `hub`     | DoomPi Web process      | Repository discovery, machine settings, provider state, or work spanning sessions |
-| `session` | `doompi-server` process | State and operations owned by one agent session or its working directory          |
-
-A session API remains beside the agent even though the browser reaches it through the hub. The hub authenticates the browser, selects the session, and proxies the request over a Unix socket. Moving the handler into the hub would blur lifecycle and filesystem ownership.
-
-Hub APIs have the opposite problem: a session ID alone is not authority to read an arbitrary repository. They use host-issued repository identities and resolvers instead of accepting browser filesystem paths.
+Package APIs are server facets from a synchronized DoomPi composition. DoomPi Web serves the browser and proxies API traffic to the headless listener. The headless process owns global, workspace, and session mounts and dispatches package requests in process.
 
 ## Routing model
 
-All package APIs share one public prefix:
+| Scope     | Package prefix                                                           | Settings                                  | WebSocket                                                 |
+| --------- | ------------------------------------------------------------------------ | ----------------------------------------- | --------------------------------------------------------- |
+| Global    | `/api/plugins/<package>`                                                 | `/api/settings`                           | `/api/ws`                                                 |
+| Workspace | `/api/workspaces/<workspace-id>/plugins/<package>`                       | `/api/workspaces/<workspace-id>/settings` | `/api/workspaces/<workspace-id>/ws`                       |
+| Session   | `/api/workspaces/<workspace-id>/sessions/<session-id>/plugins/<package>` | Not mounted                               | `/api/workspaces/<workspace-id>/sessions/<session-id>/ws` |
 
-```text
-/api/plugin/<basePath>/<package route>
-```
+Scope comes from the path. Query parameters cannot select another mount. A session must belong to the workspace named in its path. Unknown workspaces, sessions, or package APIs return `404`, with no parent-scope fallback. Retired flat session routes and singular plugin routes have no compatibility aliases.
 
-The query selector chooses the execution scope and composition:
+The global WebSocket carries the aggregate routed hub protocol. Workspace and session sockets restrict session attachments and package calls to their addressed scope. See the [protocol guide](../../../core/doompi/docs/server/ipc.md).
 
-| Selector          | Destination                      | Composition used                                     |
-| ----------------- | -------------------------------- | ---------------------------------------------------- |
-| `session=<id>`    | That session server's API socket | Session APIs loaded when the server started          |
-| `hubSession=<id>` | Hub process                      | Hub APIs from that session's selected web generation |
-| none              | Hub process                      | Deterministic default hub API generation             |
+## Synchronized compositions
 
-The hub removes `session` or `hubSession` before calling the package handler. A request cannot contain both. That returns `400`. An unknown session, unavailable API, or missing selected generation returns `404`. A handler exception returns a generic `500` without stopping other APIs or the cockpit.
+`doompi sync` publishes a global generation and a workspace generation containing eligible workspace and session facets. Each generation includes `api/server.bundle.json` and pinned facet modules. Startup loads global facets; workspace admission loads that workspace's facets; session startup selects session facets from the owning workspace generation.
 
-`hubSession` selects a composition. It does not make a hub handler session-scoped and does not add a `sessionId` to its context.
+Hosts filter scope and mode/layer ownership before importing facets. Global and workspace defaults are independent; session composition follows its own selection. A missing or stale generation requires synchronization. A request never silently selects another repository or generation.
 
-## Why APIs follow the composition
-
-`doompi sync` discovers `doompiServer` declarations across the repository's configured candidate packages. It writes one `api/server.bundle.json` descriptor referencing independently compiled, generation-pinned facet modules.
-
-The candidate list is not the active composition. Hosts filter scope and effective mode/layer ownership before importing facets or starting their handlers. A session-associated hub request uses that session's owning repository, pinned generation and effective selection, never another repository or newer sync defaults.
-
-An empty composition still produces a valid descriptor. Optional package load failures are attributed and isolated; required failures prevent readiness. A malformed selected descriptor never silently falls back. Legacy route and facet aggregates are read only for explicitly admitted older generations, never generated or combined with a new descriptor.
-
-See [Web bundling and serving](bundle.md) for generation selection and publication.
+See [Web bundling and serving](bundle.md) for generation publication and [contract export](../../../core/doompi/docs/server/api-export.md) for OpenAPI and AsyncAPI.
 
 ## Declare an API
 
@@ -71,7 +36,7 @@ Declare one server facet in the package manifest:
 }
 ```
 
-Use `hub`, `session`, or both scopes. Each package has one facet declaration with package-relative source and built paths that cannot escape the package. Publish its built entry and matching package export. Do not add a separate `doompiApi` field.
+Use `global`, `workspace`, `session`, or any combination of those scopes. Each package has one facet declaration with package-relative source and built paths that cannot escape the package. Publish its built entry and matching package export. Do not add a separate `doompiApi` field.
 
 The built entry default-exports a Cordis object plugin. For example, re-export this adapter from `src/exports/extensions/server.ts`:
 
@@ -118,10 +83,10 @@ export const api: DoomApi = {
 
 `start(context)` runs once when the host mounts that API. It returns a Fetch-compatible handler and `close()`. A Hono application can return `fetch: (request) => app.fetch(request)`. `close()` releases everything created by `start`, including timers, file watchers, streams, and child resources.
 
-The host strips `/api/plugin/<basePath>` before calling `fetch`. A request to:
+The host strips the complete scope and package prefix before calling `fetch`. A request to:
 
 ```text
-/api/plugin/runner/runners/run-1/log
+/api/workspaces/<workspace-id>/sessions/<session-id>/plugins/runner/runners/run-1/log
 ```
 
 arrives at the `runner` handler as `/runners/run-1/log` with the original method, body, and ordinary headers.
@@ -132,33 +97,31 @@ arrives at the `runner` handler as `/runners/run-1/log` with the original method
 
 A session context may include the session ID, working directory, internal session credential, hub credential, and notice callback. These credentials are process capabilities for trusted package code. They are not automatically applied as route authorization and are never sent to the browser.
 
-A hub context may include an opaque repository resolver and synchronized repository view. Use the resolver with a `repositoryId` issued by the hub. Do not reinterpret a path or repository ID from the request as authority.
+A global or workspace context may include an opaque repository resolver and synchronized repository view. Use the resolver with a `repositoryId` issued by the hub. Do not reinterpret a path or repository ID from the request as authority.
 
-## Caller identity and step-up
+## Authentication and caller context
 
-Before forwarding a browser request, the hub discards incoming copies of its trusted caller headers. It then stamps locality, paired-device identity when remote, and the result of any required passkey step-up.
+The listener authenticates incoming requests. Remote sensitive operations additionally use the passkey step-up policy. Caller-supplied host, authorization, and trusted caller identity headers are stripped before package dispatch. Packages still validate their own bodies, file paths, and operations against the trusted `DoomApiContext`.
 
-A handler can read that context with `doomApiCallerFrom(request.headers)` from `@agimon-ai/doompi-core/package-api`.
+## Browser requests
 
-This metadata answers who reached the handler and through which boundary. It does not replace operation-specific authorization. A package that writes credentials, starts processes, or opens new paths must still validate the request and enforce its own scope.
+Session URL builders use the shared web contract:
 
-## Session request example
+```ts
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 
-```text
-GET /api/plugin/runner/runners/run-1/log?session=<session-id>
+const url = `${sessionApiPath(sessionId)}/plugins/runner/runners/${encodeURIComponent(runId)}/log`;
 ```
 
-The hub classifies the caller as local or remote and authenticates a remote device. A local caller has passed the listener's Host and Origin policy but has no device identity. The hub removes `session`, stamps this trusted caller context, and forwards the request to that server's `api.sock`. The session server selects the `runner` handler and passes `/runners/run-1/log` to it. The browser never receives the session attach token.
+DoomPi Web binds the session-to-workspace lookup from its authoritative session summaries. Unknown ownership throws instead of constructing a route in another scope. Standalone browser hosts and test fixtures bind that lookup with `bindSessionApiWorkspace`.
 
-A session server loads its API registry at startup. Build and run `doompi sync`, then restart the session when a session API changes.
-
-## Hub request example
+A workspace request uses its admitted workspace ID directly:
 
 ```text
-GET /api/plugin/mcp/repository?repositoryId=<repository-id>&hubSession=<session-id>
+GET /api/workspaces/<workspace-id>/plugins/mcp/repository
 ```
 
-The headless hub uses `hubSession` only to select the matching admitted server-facet generation. It removes the selector, then invokes the handler in the headless process. A hub module is built server code, so build and sync it before restarting the headless process.
+The listener selects the exact mounted composition and invokes the handler with its package-relative path. Build, run `doompi sync`, and restart the owning runtime when server APIs change.
 
 ## Failure and trust boundaries
 

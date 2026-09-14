@@ -1,3 +1,4 @@
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 /**
  * The wire vocabulary this package's API shares with whatever calls it.
  *
@@ -12,7 +13,7 @@
  * file through these URLs.
  */
 
-/** Where a host mounts this package's API; the segment after /api/plugin/. */
+/** Where a host mounts this package's API; the segment after /api/plugins/. */
 export const API_BASE_PATH = 'plans';
 
 /** Query parameter the cockpit hub reads to pick which session server to proxy to. */
@@ -79,13 +80,13 @@ export function contentPath(): string {
  */
 export function currentUrl(sessionId: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${currentPath()}?${search.toString()}`;
+  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${currentPath()}?${search.toString()}`;
 }
 
 /** The absolute URL a page puts a manual save to. */
 export function contentUrl(sessionId: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
+  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
 }
 
 /**

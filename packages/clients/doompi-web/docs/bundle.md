@@ -45,7 +45,7 @@ Browser entries may contain TypeScript, React, CSS, and Tailwind classes. Shared
 The production presentation server has two responsibilities:
 
 1. Serve the selected SPA and PWA assets.
-2. Forward `/api` HTTP requests and the `/api/pi` protocol WebSocket to the configured headless endpoint.
+2. Forward `/api` HTTP requests and the `/api/ws` protocol WebSocket to the configured headless endpoint.
 
 It does not inspect session frames, retain replay state, select server modules, or authorize API requests. The headless endpoint owns those behaviors.
 

@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -236,19 +239,23 @@ describe('the plan status line', () => {
  */
 describe('the plans API as a host mounts it', () => {
   it('builds one query carrying the session the hub should proxy to', () => {
-    expect(currentUrl('s1')).toBe(`/api/sessions/s1/plugin/${API_BASE_PATH}${currentPath()}?${SESSION_QUERY_PARAM}=s1`);
-    expect(contentUrl('s1')).toBe(`/api/sessions/s1/plugin/${API_BASE_PATH}${contentPath()}?${SESSION_QUERY_PARAM}=s1`);
+    expect(currentUrl('s1')).toBe(
+      `/api/workspaces/test-workspace/sessions/s1/plugins/${API_BASE_PATH}${currentPath()}?${SESSION_QUERY_PARAM}=s1`,
+    );
+    expect(contentUrl('s1')).toBe(
+      `/api/workspaces/test-workspace/sessions/s1/plugins/${API_BASE_PATH}${contentPath()}?${SESSION_QUERY_PARAM}=s1`,
+    );
     expect(currentUrl('s1').match(/\?/gu)).toHaveLength(1);
   });
 
   it('answers on the full path, and refuses one outside its mount', async () => {
     const mounted = mountPackageApi(api, { scope: 'session', sessionId: 's1', cwd: '/repo' });
 
-    expect(mounted.mountPath).toBe(`/api/plugin/${API_BASE_PATH}`);
+    expect(mounted.mountPath).toBe(`/api/plugins/${API_BASE_PATH}`);
     // No pointer exists for this made-up session, so the route is reached and
     // answers 404 from its own logic rather than from the mount missing it.
-    expect((await mounted.fetch(`/api/plugin/${API_BASE_PATH}${currentPath()}`)).status).toBe(404);
-    expect((await mounted.fetch('/api/plugin/elsewhere/current')).status).toBe(404);
+    expect((await mounted.fetch(`/api/plugins/${API_BASE_PATH}${currentPath()}`)).status).toBe(404);
+    expect((await mounted.fetch('/api/plugins/elsewhere/current')).status).toBe(404);
     mounted.close();
   });
 });

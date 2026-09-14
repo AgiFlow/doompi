@@ -1,3 +1,4 @@
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
 import type {
@@ -36,11 +37,11 @@ export function authorKindForPath(path: string): AuthorDocumentKind {
 }
 
 export function authorSessionFileUrl(sessionId: string, path: string): string {
-  return `/api/sessions/${encodeURIComponent(sessionId)}/file?path=${encodeURIComponent(path)}`;
+  return `${sessionApiPath(sessionId)}/file?path=${encodeURIComponent(path)}`;
 }
 
 function authorDocumentApiUrl(sessionId: string, operation: 'open' | 'preflight' | 'serialize'): string {
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/author/documents/${operation}?session=${encodeURIComponent(sessionId)}`;
+  return `${sessionApiPath(sessionId)}/plugins/author/documents/${operation}?session=${encodeURIComponent(sessionId)}`;
 }
 
 async function jsonRequest<T>(url: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {

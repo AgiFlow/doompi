@@ -28,9 +28,9 @@ describe('the API surface', () => {
 
     // A run that does not exist is the cheapest route that proves the mount:
     // the answer comes from the package's own handler, not from the harness.
-    const response = await mounted.fetch('/api/plugin/runner/runners/absent-run/log');
+    const response = await mounted.fetch('/api/plugins/runner/runners/absent-run/log');
 
-    expect(mounted.mountPath).toBe('/api/plugin/runner');
+    expect(mounted.mountPath).toBe('/api/plugins/runner');
     expect(response.status).toBe(404);
     mounted.close();
   });
@@ -38,7 +38,7 @@ describe('the API surface', () => {
   it('refuses a path outside its own mount', async () => {
     const mounted = mountPackageApi(api, { scope: 'session', sessionId: 's1' });
 
-    expect((await mounted.fetch('/api/plugin/workflow/runs')).status).toBe(404);
+    expect((await mounted.fetch('/api/plugins/workflow/runs')).status).toBe(404);
     mounted.close();
   });
 });

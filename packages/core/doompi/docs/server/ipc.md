@@ -1,6 +1,6 @@
 # Client protocol and in-process APIs
 
-The canonical server has one client-neutral listener. It exposes HTTP routes and an authenticated WebSocket at `/api/pi`; the server keeps the Pi harness, typed session services, and package APIs in process.
+The canonical server has one client-neutral listener. It exposes HTTP routes and an authenticated WebSocket at `/api/ws`; the server keeps the Pi harness, typed session services, and package APIs in process.
 
 ## The transport design
 
@@ -10,7 +10,7 @@ The canonical server has one client-neutral listener. It exposes HTTP routes and
           +------------------+------------------+
           |                                     |
           v                                     v
-   HTTP control surface                 /api/pi WebSocket
+   HTTP control surface                 /api/ws WebSocket
  health, sessions, APIs                Pi 0.85 Chord services
           |                                     |
           +------------------+------------------+
@@ -24,23 +24,23 @@ The listener binds to loopback by default. It is a network listener with an expl
 
 The server exposes these client-neutral routes:
 
-| Route                                    | Contract                                    |
-| ---------------------------------------- | ------------------------------------------- |
-| `GET /api/health`                        | Unauthenticated readiness and session count |
-| `GET /api/sessions`                      | Session metadata for the headless hub       |
-| `GET /api/sessions/<id>`                 | One session's metadata                      |
-| `GET /api/events`                        | Server-sent session and channel events      |
-| `GET /api/sessions/<id>/channels`        | Current channel projections                 |
-| `POST /api/sessions/<id>/channel/<type>` | Deliver a channel operation                 |
-| `/api/sessions/<id>/api/<base-path>/...` | Dispatch a session package API in process   |
+| Route                                                                  | Contract                                    |
+| ---------------------------------------------------------------------- | ------------------------------------------- |
+| `GET /api/health`                                                      | Unauthenticated readiness and session count |
+| `GET /api/workspaces/<workspace-id>/sessions`                          | Session metadata for the headless hub       |
+| `GET /api/workspaces/<workspace-id>/sessions/<id>`                     | One session's metadata                      |
+| `GET /api/events`                                                      | Server-sent session and channel events      |
+| `GET /api/workspaces/<workspace-id>/sessions/<id>/channels`            | Current channel projections                 |
+| `POST /api/workspaces/<workspace-id>/sessions/<id>/channel/<type>`     | Deliver a channel operation                 |
+| `/api/workspaces/<workspace-id>/sessions/<id>/plugins/<base-path>/...` | Dispatch a session package API in process   |
 
 All routes other than health require the configured token. HTTP clients should send `Authorization: Bearer <token>` or `x-doompi-token`. The WebSocket may use the same capability in its authorization header or query string; avoid query strings when a header is available because URLs can be logged.
 
 The old raw command route is not part of this surface. Session control uses the typed protocol described below.
 
-## `/api/pi` protocol
+## `/api/ws` protocol
 
-`/api/pi` carries the Pi 0.85 byte protocol over an already-authenticated WebSocket. The server hosts the stable cockpit server identity and publishes these typed services:
+`/api/ws` carries the Pi 0.85 byte protocol over an already-authenticated WebSocket. The server hosts the stable cockpit server identity and publishes these typed services:
 
 - `doompi.hub.v1` lists sessions, subscribes to channel events, and sends typed channel operations;
 - `doompi.session-management.v1` attaches and detaches a session; and
@@ -72,7 +72,7 @@ The hub's session and channel event history is also bounded to 1,024 events. The
 
 ## Session package APIs
 
-A package API is registered by a server facet and called through the in-process `Request` adapter. The listener strips `/api/sessions/<id>/api/<base-path>` before invoking the handler, so a request to `/api/sessions/one/api/runner/runs/r1/log` reaches the `runner` handler as `/runs/r1/log`.
+A package API is registered by a server facet and called through the in-process `Request` adapter. The listener strips `/api/workspaces/<workspace-id>/sessions/<id>/plugins/<base-path>` before invoking the handler, so a request to `/api/workspaces/<workspace-id>/sessions/one/plugins/runner/runs/r1/log` reaches the `runner` handler as `/runs/r1/log`.
 
 Package handlers run with the session's trusted host context. They still validate request bodies, bound reads and streams, constrain paths, and avoid returning secrets merely because the caller passed the listener token.
 
@@ -81,3 +81,17 @@ Package handlers run with the session's trusted host context. They still validat
 - [Lifecycle](lifecycle.md) explains startup, readiness, and shutdown.
 - [Session APIs](api.md) defines descriptor loading and the TypeScript surface.
 - [Security](security.md) explains token validation, listener exposure, and trusted code.
+
+## Scoped route hierarchy
+
+| Scope     | REST resource                                          | Package APIs                                                             | WebSocket                                                 |
+| --------- | ------------------------------------------------------ | ------------------------------------------------------------------------ | --------------------------------------------------------- |
+| Global    | `/api/settings`                                        | `/api/plugins/<package>`                                                 | `/api/ws`                                                 |
+| Workspace | `/api/workspaces/<workspace-id>`                       | `/api/workspaces/<workspace-id>/plugins/<package>`                       | `/api/workspaces/<workspace-id>/ws`                       |
+| Session   | `/api/workspaces/<workspace-id>/sessions/<session-id>` | `/api/workspaces/<workspace-id>/sessions/<session-id>/plugins/<package>` | `/api/workspaces/<workspace-id>/sessions/<session-id>/ws` |
+
+Workspace settings are at `/api/workspaces/<workspace-id>/settings`. Create or admit a workspace with `POST /api/workspaces` and a `root`, then create a session with `POST /api/workspaces/<workspace-id>/sessions` and an optional `name`. The admitted workspace selects the session working directory. Session listing returns only that workspace's sessions. A session ID addressed through another workspace returns `404`.
+
+The global socket retains the aggregate hub protocol used by DoomPi Web. Workspace sockets expose only sessions in that workspace; session sockets expose only the named session. Both restrict session attachments, subscriptions, thread reads, and package calls to their addressed scope. All transports use the same Pi/Chord framing. Old flat session routes, singular plugin mounts, and `/api/pi` are removed without aliases.
+
+`doompi sync` publishes the global generation and the workspace generation. Startup loads global facets from the global generation, workspace facets when that workspace is admitted, and session facets from the owning workspace generation with the session's selected composition. REST requests dispatch only to that mount; there is no fallback to another scope.

@@ -45,7 +45,7 @@ There is no `doompiWeb.hub` or web-owned server plugin loader. A browser plugin 
 
 ## HTTP and WebSocket boundary
 
-DoomPi Web serves non-API paths from the selected asset directory. It forwards `/api/*` requests to the configured headless URL and adds the configured headless credential. It relays the binary `/api/pi` protocol WebSocket without interpreting or retaining frames.
+DoomPi Web serves non-API paths from the selected asset directory. It forwards `/api/*` requests to the configured headless URL and adds the configured headless credential. It relays the binary `/api/ws` protocol WebSocket without interpreting or retaining frames.
 
 The headless process authenticates callers, routes package APIs and channels, owns replay, and performs disconnect cleanup. Browser code never receives the proxy credential.
 

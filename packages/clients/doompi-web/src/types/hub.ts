@@ -14,7 +14,7 @@ export const HUB_PROTOCOL_VERSION = 2;
 export const HUB_ROLE = 'hub';
 
 /** REST endpoint for creating sessions and browsing resumable Pi history. */
-export const SESSIONS_API_ROUTE = '/api/sessions';
+export const SESSIONS_API_ROUTE = '/api/workspaces/:workspaceId/sessions';
 
 /** One inactive Pi thread available to resume in a live session's workspace. */
 export interface PiSessionHistoryItem {

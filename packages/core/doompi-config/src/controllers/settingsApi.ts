@@ -21,7 +21,7 @@ import type { SettingsRepository } from '../types/settings';
 
 /** Config handlers are bound to their mount. Request paths cannot choose a different repository. */
 export const settingsApi: DoomApi = {
-  basePath: 'config',
+  basePath: 'settings',
   start(context) {
     if (context.scope === 'session') throw new Error('Configuration settings require a global or workspace mount.');
     const { homeDirectory } = context;
@@ -45,7 +45,7 @@ export const settingsApi: DoomApi = {
       if (closed) return Response.json({ error: 'Configuration mount is closed.' }, { status: 503 });
       const url = new URL(request.url);
       const currentRepository = repository();
-      if (url.pathname === '/config' && request.method === 'GET')
+      if (url.pathname === '/' && request.method === 'GET')
         return Response.json(configView(context, url.searchParams.getAll('key')));
       if (url.pathname === '/repositories' && request.method === 'GET')
         return Response.json({ repositories: context.repositories?.() ?? [] });

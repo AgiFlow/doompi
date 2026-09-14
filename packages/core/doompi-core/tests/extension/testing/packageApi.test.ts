@@ -36,11 +36,11 @@ describe('mounting a package API the way a host does', () => {
   it('strips its own mount before the package sees the path', async () => {
     const mounted = mountPackageApi(demoApi());
 
-    const response = await mounted.fetch('/api/plugin/demo/items');
+    const response = await mounted.fetch('/api/plugins/demo/items');
 
     // The package declared '/items'; the client asked for the full mount. Both
     // are right, and this is the translation that makes them agree.
-    expect(mounted.mountPath).toBe('/api/plugin/demo');
+    expect(mounted.mountPath).toBe('/api/plugins/demo');
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ scope: 'global' });
   });
@@ -48,7 +48,7 @@ describe('mounting a package API the way a host does', () => {
   it('answers 404 outside its mount, as the host does for an unclaimed prefix', async () => {
     const mounted = mountPackageApi(demoApi());
 
-    const other = await mounted.fetch('/api/plugin/elsewhere/items');
+    const other = await mounted.fetch('/api/plugins/elsewhere/items');
     const bare = await mounted.fetch('/api/health');
 
     expect(other.status).toBe(404);
@@ -64,26 +64,26 @@ describe('mounting a package API the way a host does', () => {
       }),
     });
 
-    expect(await (await mounted.fetch('/api/plugin/demo')).json()).toEqual({ path: '/' });
+    expect(await (await mounted.fetch('/api/plugins/demo')).json()).toEqual({ path: '/' });
   });
 
   it('hands a session-scoped API its session and cwd, and a hub-scoped one neither', async () => {
     const session = mountPackageApi(demoApi(), { scope: 'session', sessionId: 's1', cwd: '/repo' });
     const hub = mountPackageApi(demoApi(), { scope: 'global' });
 
-    expect(await (await session.fetch('/api/plugin/demo/items')).json()).toMatchObject({
+    expect(await (await session.fetch('/api/plugins/demo/items')).json()).toMatchObject({
       sessionId: 's1',
       scope: 'session',
     });
     // A hub-scoped API that reads sessionId anyway should see the same
     // undefined it would see in the real hub, not a helpful default.
-    expect(await (await hub.fetch('/api/plugin/demo/items')).json()).toMatchObject({ sessionId: null });
+    expect(await (await hub.fetch('/api/plugins/demo/items')).json()).toMatchObject({ sessionId: null });
   });
 
   it('collects what the API told its host', async () => {
     const mounted = mountPackageApi(demoApi());
 
-    await mounted.fetch('/api/plugin/demo/notice');
+    await mounted.fetch('/api/plugins/demo/notice');
 
     expect(mounted.notices).toEqual(['the registry is unreachable']);
   });
@@ -93,7 +93,7 @@ describe('mounting a package API the way a host does', () => {
 
     mounted.close();
 
-    expect(await (await mounted.fetch('/api/plugin/demo/items')).json()).toMatchObject({ closed: true });
+    expect(await (await mounted.fetch('/api/plugins/demo/items')).json()).toMatchObject({ closed: true });
   });
 
   it('carries the method and body through to the package', async () => {
@@ -105,7 +105,7 @@ describe('mounting a package API the way a host does', () => {
       }),
     });
 
-    const response = await mounted.fetch('/api/plugin/demo/items', { method: 'POST', body: 'payload' });
+    const response = await mounted.fetch('/api/plugins/demo/items', { method: 'POST', body: 'payload' });
 
     expect(await response.json()).toEqual({ method: 'POST', body: 'payload' });
   });

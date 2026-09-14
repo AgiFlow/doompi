@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { loadAuthorMedia } from '../../src/web/api/authorMedia';
@@ -22,7 +25,7 @@ afterEach(() => {
   hooks.value = undefined;
   vi.clearAllMocks();
 });
-const source = '/api/sessions/s/file?path=clip.mp4';
+const source = '/api/workspaces/test-workspace/sessions/s/file?path=clip.mp4';
 describe('read-only Author media', () => {
   it('loads and releases media without enabling Author mode', async () => {
     const dispose = vi.fn();

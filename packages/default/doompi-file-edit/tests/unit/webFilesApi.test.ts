@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deleteFile, fetchFileDetail, saveFileContent, sessionFileUrl } from '../../src/web/api/filesApi';
@@ -43,7 +46,9 @@ afterEach(() => {
 
 describe('sessionFileUrl', () => {
   it('points at the hub route that serves a session file, by its cwd-relative path', () => {
-    expect(sessionFileUrl('s1', 'docs/report.pdf')).toBe('/api/sessions/s1/file?path=docs%2Freport.pdf');
+    expect(sessionFileUrl('s1', 'docs/report.pdf')).toBe(
+      '/api/workspaces/test-workspace/sessions/s1/file?path=docs%2Freport.pdf',
+    );
   });
 
   it('encodes a path a URL would otherwise read as structure', () => {
@@ -54,7 +59,7 @@ describe('sessionFileUrl', () => {
   });
 
   it('encodes the session id too, since it lands in a path segment', () => {
-    expect(sessionFileUrl('a/b', 'x.png')).toContain('/api/sessions/a%2Fb/file');
+    expect(sessionFileUrl('a/b', 'x.png')).toContain('/api/workspaces/test-workspace/sessions/a%2Fb/file');
   });
 });
 

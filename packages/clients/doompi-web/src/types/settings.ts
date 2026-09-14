@@ -9,13 +9,13 @@
  */
 import type { RepositorySettingsRepository } from '@agimon-ai/doompi-core/web';
 
-export const SETTINGS_CONFIG_API_ROUTE = '/api/plugins/config/config';
-export const SETTINGS_VALUE_API_ROUTE = '/api/plugins/config/value';
-export const SETTINGS_REPOSITORIES_API_ROUTE = '/api/plugins/config/repositories';
+export const SETTINGS_CONFIG_API_ROUTE = '/api/settings';
+export const SETTINGS_VALUE_API_ROUTE = '/api/settings/value';
+export const SETTINGS_REPOSITORIES_API_ROUTE = '/api/settings/repositories';
 export const SETTINGS_MODELS_API_ROUTE = '/api/plugins/doompi/models';
-export const SETTINGS_REPOSITORY_API_ROUTE = '/api/plugins/config/repository';
-export const SETTINGS_REPOSITORY_SELECTION_API_ROUTE = '/api/plugins/config/repository/selection';
-export const SETTINGS_IMAGES_API_ROUTE = '/api/plugins/config/images';
+export const SETTINGS_REPOSITORY_API_ROUTE = '/api/settings/repository';
+export const SETTINGS_REPOSITORY_SELECTION_API_ROUTE = '/api/settings/repository/selection';
+export const SETTINGS_IMAGES_API_ROUTE = '/api/settings/images';
 
 /**
  * The image limits, which live in Pi's settings.json rather than the Doom

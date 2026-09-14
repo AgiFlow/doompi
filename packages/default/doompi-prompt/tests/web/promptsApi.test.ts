@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -30,7 +33,10 @@ describe('reading the library', () => {
 
     await fetchSavedPrompts(undefined, 'session/a');
 
-    expect(transport).toHaveBeenCalledWith('/api/sessions/session%2Fa/plugin/prompts/prompts', {});
+    expect(transport).toHaveBeenCalledWith(
+      '/api/workspaces/test-workspace/sessions/session%2Fa/plugins/prompts/prompts',
+      {},
+    );
   });
 
   it('passes the abort signal through', async () => {
@@ -98,8 +104,8 @@ describe('writing the library', () => {
     await deleteSavedPrompt('review', 'session-a');
 
     expect(transport.mock.calls.map(([url]) => url)).toEqual([
-      '/api/sessions/session-a/plugin/prompts/prompts/review',
-      '/api/sessions/session-a/plugin/prompts/prompts/review',
+      '/api/workspaces/test-workspace/sessions/session-a/plugins/prompts/prompts/review',
+      '/api/workspaces/test-workspace/sessions/session-a/plugins/prompts/prompts/review',
     ]);
   });
 

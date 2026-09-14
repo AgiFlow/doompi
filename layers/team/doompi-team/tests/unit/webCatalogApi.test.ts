@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,11 +17,14 @@ describe('web Team launch', () => {
     vi.mocked(sealedTransport.fetch).mockResolvedValue(Response.json({ runId: 'run-1' }, { status: 201 }));
 
     await expect(launchAgent('session-1', { agent: 'reviewer', task: 'Review', fork: false })).resolves.toBe('run-1');
-    expect(sealedTransport.fetch).toHaveBeenCalledWith('/api/sessions/session-1/plugin/team/run', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ agent: 'reviewer', task: 'Review', fork: false }),
-    });
+    expect(sealedTransport.fetch).toHaveBeenCalledWith(
+      '/api/workspaces/test-workspace/sessions/session-1/plugins/team/run',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ agent: 'reviewer', task: 'Review', fork: false }),
+      },
+    );
   });
 
   it('surfaces the server reason instead of treating a failed launch as pending', async () => {

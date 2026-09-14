@@ -37,7 +37,7 @@ const body: SavedPromptListResponse = {
 const liveFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-  if (!url.includes(`/api/plugin/${API_BASE_PATH}${PROMPTS_PATH}`)) return liveFetch(input, init);
+  if (!url.includes(`/api/plugins/${API_BASE_PATH}${PROMPTS_PATH}`)) return liveFetch(input, init);
   return Promise.resolve(
     new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }),
   );

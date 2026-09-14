@@ -1,5 +1,7 @@
 export {
   doomApiCallerFrom,
+  parseDoomSocketPath,
+  type DoomSocketMount,
   doomApiMountPath,
   type DoomApiMount,
   type DoomWebComposition,

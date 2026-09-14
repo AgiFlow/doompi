@@ -21,6 +21,7 @@ import {
 } from '../exports/sessionProtocol';
 import { createAgentServerService, type DoomSessionMetadata } from '../pi/piSessionRuntime';
 import { createPiWebSocketListener, type PiListenerSocket } from '../pi/piWebSocketListener';
+import type { DoomSocketMount } from '../schemas/packageApi';
 import type { ServerTelemetry } from '../services/serverTelemetry';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
 import { createThreadJournals, type ThreadJournals } from './threadJournals';
@@ -83,7 +84,16 @@ function frameOf(event: HeadlessHubEvent): HubFrame {
   }
 }
 
-function managementHost(hub: HeadlessHub, threads: ThreadJournals): RoutedServerServiceHost {
+function permitsSession(hub: HeadlessHub, mount: DoomSocketMount, sessionId: string): boolean {
+  const session = hub.session(sessionId);
+  return (
+    session !== undefined &&
+    (mount.scope === 'global' ||
+      (session.workspaceId === mount.workspaceId && (mount.scope === 'workspace' || mount.sessionId === sessionId)))
+  );
+}
+
+function managementHost(hub: HeadlessHub, threads: ThreadJournals, mount: DoomSocketMount): RoutedServerServiceHost {
   return {
     attachClient(presentation) {
       const connectionId = randomUUID();
@@ -98,8 +108,27 @@ function managementHost(hub: HeadlessHub, threads: ThreadJournals): RoutedServer
         if (state.state.events.length > MAX_HUB_EVENTS) state.state.events.shift();
         state.publish(BACKGROUND_CONTEXT);
       };
-      publish({ type: 'sessions_snapshot', sessions: hub.snapshot().map(sessionView) });
+      const visible = new Set(
+        hub
+          .snapshot()
+          .filter((session) => permitsSession(hub, mount, session.id))
+          .map((session) => session.id),
+      );
+      publish({
+        type: 'sessions_snapshot',
+        sessions: hub
+          .snapshot()
+          .filter((session) => visible.has(session.id))
+          .map(sessionView),
+      });
       const stopEvents = hub.onEvent((event) => {
+        if (event.kind === 'removed') {
+          if (!visible.delete(event.sessionId)) return;
+        } else {
+          const id = event.kind === 'upsert' ? event.session.id : event.sessionId;
+          if (!permitsSession(hub, mount, id)) return;
+          if (event.kind === 'upsert') visible.add(id);
+        }
         if (event.kind === 'channel') {
           if (!subscriptions.has(event.sessionId)) return;
           if (event.connectionId !== undefined && event.connectionId !== connectionId) return;
@@ -119,6 +148,8 @@ function managementHost(hub: HeadlessHub, threads: ThreadJournals): RoutedServer
         state,
         async send(frame) {
           const sessionId = typeof frame.sessionId === 'string' ? frame.sessionId : undefined;
+          if (mount.scope !== 'global' && sessionId !== undefined && !permitsSession(hub, mount, sessionId))
+            throw new Error('Session is outside this WebSocket scope.');
           if (frame.type === 'subscribe' && sessionId !== undefined) {
             if (!hub.session(sessionId)) return;
             subscriptions.add(sessionId);
@@ -158,6 +189,15 @@ function managementHost(hub: HeadlessHub, threads: ThreadJournals): RoutedServer
       provider.provide(DoomHubService, service);
       provider.provide(DoomPluginService, {
         async invoke(call) {
+          if (mount.scope !== 'global') {
+            const permitted =
+              call.mount.scope === 'session'
+                ? permitsSession(hub, mount, call.mount.sessionId)
+                : mount.scope === 'workspace' &&
+                  call.mount.scope === 'workspace' &&
+                  call.mount.workspaceId === mount.workspaceId;
+            if (!permitted) throw new Error('Plugin is outside this WebSocket scope.');
+          }
           return (await hub.invokePlugin(call, 'client-to-server', { connectionId })) as JsonValue;
         },
       });
@@ -192,18 +232,21 @@ function managementHost(hub: HeadlessHub, threads: ThreadJournals): RoutedServer
 function protocolHost(
   hub: HeadlessHub,
   threads: ThreadJournals,
-  telemetry?: ServerTelemetry,
+  telemetry: ServerTelemetry | undefined,
+  mount: DoomSocketMount,
 ): ServerHost<DoomSessionMetadata> {
   return {
-    serverServices: managementHost(hub, threads),
+    serverServices: managementHost(hub, threads, mount),
     async resolveSession(sessionId) {
       const session = hub.session(sessionId);
-      if (!session) throw new SessionNotFoundError(`No session ${sessionId}`);
+      if (!session || !permitsSession(hub, mount, session.id))
+        throw new SessionNotFoundError(`No session ${sessionId}`);
       return metadataOf(session);
     },
     async openSession(metadata, context): Promise<RoutedSessionHandle> {
       const session = hub.session(metadata.id);
-      if (!session) throw new SessionNotFoundError(`No session ${metadata.id}`);
+      if (!session || !permitsSession(hub, mount, session.id))
+        throw new SessionNotFoundError(`No session ${metadata.id}`);
       const service = createAgentServerService({
         runtime: session.host.runtime,
         onPresentationFrame: (listener) => session.host.onPresentationFrame(listener),
@@ -236,6 +279,7 @@ export interface HeadlessProtocol {
 /** Hosts the browser's Pi 0.85 connection directly over the process-local hub. */
 export async function createHeadlessProtocol(options: {
   hub: HeadlessHub;
+  mount?: DoomSocketMount;
   telemetry?: ServerTelemetry;
   onNotice?: (message: string) => void;
 }): Promise<HeadlessProtocol> {
@@ -243,16 +287,23 @@ export async function createHeadlessProtocol(options: {
   const threads = createThreadJournals({
     resolve: (sessionId, threadId) => options.hub.threadJournal(sessionId, threadId),
   });
-  const server = await new Server(protocolHost(options.hub, threads, options.telemetry), {
-    listeners: [listener],
-    serverId: DOOM_COCKPIT_SERVER_ID,
-    onError: (error) => options.onNotice?.(`headless protocol error (${error.message})`),
-  }).start();
+  const server = await new Server(
+    protocolHost(options.hub, threads, options.telemetry, options.mount ?? { scope: 'global' }),
+    {
+      listeners: [listener],
+      serverId: DOOM_COCKPIT_SERVER_ID,
+      onError: (error) => options.onNotice?.(`headless protocol error (${error.message})`),
+    },
+  ).start();
+  let closing: Promise<void> | undefined;
   return {
     accept: (socket) => listener.accept(socket),
-    async close() {
-      threads.close();
-      await server.close();
+    close() {
+      closing ??= (async () => {
+        threads.close();
+        await server.close();
+      })();
+      return closing;
     },
   };
 }

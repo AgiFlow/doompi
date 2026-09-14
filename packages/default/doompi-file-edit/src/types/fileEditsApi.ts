@@ -1,3 +1,5 @@
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
+
 import type { FileEditOrigin, FileEditTool } from './domain';
 
 /**
@@ -13,7 +15,7 @@ import type { FileEditOrigin, FileEditTool } from './domain';
  * the session never changed, which has no history to answer with.
  */
 
-/** Where a host mounts this package's API; the segment after /api/plugin/. */
+/** Where a host mounts this package's API; the segment after /api/plugins/. */
 export const API_BASE_PATH = 'file-edits';
 
 /** Query parameter the cockpit hub reads to pick which session server to proxy to. */
@@ -43,25 +45,25 @@ export function previewPath(): string {
  */
 export function detailUrl(sessionId: string, filePath: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [PATH_QUERY_PARAM]: filePath });
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${detailPath()}?${search.toString()}`;
+  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${detailPath()}?${search.toString()}`;
 }
 
 /** The absolute URL a page puts a manual save to. */
 export function contentUrl(sessionId: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
+  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
 }
 
 /** The absolute URL a page reads an unchanged file through. */
 export function previewUrl(sessionId: string, filePath: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [PATH_QUERY_PARAM]: filePath });
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${previewPath()}?${search.toString()}`;
+  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${previewPath()}?${search.toString()}`;
 }
 
 /** The absolute URL a page deletes a file through; the path rides the query, not a body. */
 export function deleteUrl(sessionId: string, filePath: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [PATH_QUERY_PARAM]: filePath });
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
+  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
 }
 
 /**

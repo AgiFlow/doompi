@@ -246,9 +246,9 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           headers.set('x-doompi-token', attachToken);
           return fetch(new URL(`${from.pathname}${from.search}`, cockpit.url), new Request(request, { headers }));
         },
-        connectProtocol: () => {
+        connectProtocol: (pathname) => {
           if (!cockpit || !attachToken) throw new Error('The headless protocol listener is not ready.');
-          const url = new URL('/api/pi', cockpit.url);
+          const url = new URL(pathname, cockpit.url);
           url.protocol = 'ws:';
           return new WebSocket(url, { headers: { 'x-doompi-token': attachToken } });
         },
@@ -400,7 +400,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           return Response.json({ error: 'Invalid session API path.' }, { status: 400 });
         const body = request.body === null || request.body === undefined ? undefined : request.body;
         return artifacts.apis.request(
-          new Request(`http://doompi.local/api/plugin/${request.basePath}${request.path}`, {
+          new Request(`http://doompi.local/api/plugins/${request.basePath}${request.path}`, {
             method: request.method,
             headers: request.headers,
             ...(body === undefined ? {} : { body }),
@@ -525,7 +525,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       telemetry,
       onNotice: notice,
     });
-    notice(`protocol on ${cockpit.url}/api/pi`);
+    notice(`protocol on ${cockpit.url}/api/ws`);
     let resolveShutdown!: (exitCode: number) => void;
     const shutdown = new Promise<number>((resolve) => {
       resolveShutdown = resolve;

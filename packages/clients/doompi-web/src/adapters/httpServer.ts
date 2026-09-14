@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 
+import { parseDoomSocketPath } from '@agimon-ai/doompi-core/package-api';
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
 
 import { DEFAULT_HEADLESS_URL } from '../services/headlessLaunch';
@@ -229,7 +230,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const webSockets = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (request, socket, head) => {
-    if (requestUrl(request).pathname !== '/api/pi') {
+    if (!parseDoomSocketPath(requestUrl(request).pathname)) {
       socket.destroy();
       return;
     }

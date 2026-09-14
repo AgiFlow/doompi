@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,10 +40,10 @@ describe('workflow hub API bundle routing', () => {
     followScreen('repo/a', 'run one', () => undefined, 'session/a');
 
     expect(eventSourceUrls).toEqual([
-      '/api/sessions/session%2Fa/plugin/workflow/runs/repo%2Fa/run%20one/screen/stream',
+      '/api/workspaces/test-workspace/sessions/session%2Fa/plugins/workflow/runs/repo%2Fa/run%20one/screen/stream',
     ]);
     expect(artifactContentUrl('repo/a', 'run one', 'reports/a b.md', false, 'session/a')).toBe(
-      '/api/sessions/session%2Fa/plugin/workflow/runs/repo%2Fa/run%20one/artifacts/reports/a%20b.md?raw=1',
+      '/api/workspaces/test-workspace/sessions/session%2Fa/plugins/workflow/runs/repo%2Fa/run%20one/artifacts/reports/a%20b.md?raw=1',
     );
     expect(artifactContentUrl('repo/a', 'run one', 'report.md', true, 'session/a')).toContain('?raw=1&download=1');
   });
@@ -59,11 +62,11 @@ describe('workflow hub API bundle routing', () => {
     await deleteWorkflowRun('repo', 'run', 'session-a');
 
     expect(fetch.mock.calls.map(([url]) => url)).toEqual([
-      '/api/sessions/session-a/plugin/workflow/runs/repo/run/control',
-      '/api/sessions/session-a/plugin/workflow/runs/repo/run/keys',
-      '/api/sessions/session-a/plugin/workflow/runs/repo/run/artifacts',
-      '/api/sessions/session-a/plugin/workflow/runs/repo/run/artifacts/report.md',
-      '/api/sessions/session-a/plugin/workflow/runs/repo/run',
+      '/api/workspaces/test-workspace/sessions/session-a/plugins/workflow/runs/repo/run/control',
+      '/api/workspaces/test-workspace/sessions/session-a/plugins/workflow/runs/repo/run/keys',
+      '/api/workspaces/test-workspace/sessions/session-a/plugins/workflow/runs/repo/run/artifacts',
+      '/api/workspaces/test-workspace/sessions/session-a/plugins/workflow/runs/repo/run/artifacts/report.md',
+      '/api/workspaces/test-workspace/sessions/session-a/plugins/workflow/runs/repo/run',
     ]);
   });
 });

@@ -3,6 +3,7 @@
 After syncing the global configuration and the workspace, run this in the workspace:
 
 ```sh
+doompi sync
 doompi api-export --out ./api-schema --strict
 # Select a different session composition:
 doompi api-export --out ./api-schema --major-mode copilot --strict
@@ -74,3 +75,12 @@ export default defineApiContract({
 ```
 
 Source schemas use JSON Schema draft-07, including TypeBox output. The exporter namespaces local references and translates tuple keywords for OpenAPI 3.1. Use self-contained local references, without `$id` or remote references. An API-free facet should declare empty `http` and `sockets` arrays. Use `gaps` for known missing declarations; never use an unconstrained schema to hide missing coverage.
+
+The exporter is a separate `api-export` command, not a `sync` flag. For a local distribution build:
+
+```sh
+node packages/core/doompi/dist/bin/cli.mjs sync
+node packages/core/doompi/dist/bin/cli.mjs api-export --out /tmp/doompi-api-schema --strict
+```
+
+OpenAPI uses direct settings routes, plural `plugins` mounts, and workspace-nested session resources. AsyncAPI declares `/api/ws`, `/api/workspaces/{workspaceId}/ws`, and `/api/workspaces/{workspaceId}/sessions/{sessionId}/ws`. The global channel also declares the routed workspace and session operations available through the aggregate hub connection. `x-doompi.transportScope` identifies the addressed channel separately from the operation's composition scope.

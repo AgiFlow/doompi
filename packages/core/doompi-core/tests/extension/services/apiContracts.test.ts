@@ -66,7 +66,7 @@ describe('compiled API documents', () => {
     expect(documents.openapi).toMatchObject({
       openapi: '3.1.1',
       paths: {
-        '/api/workspaces/{workspaceId}/plugin/example/items/{itemId}': {
+        '/api/workspaces/{workspaceId}/plugins/example/items/{itemId}': {
           post: {
             parameters: expect.arrayContaining([
               expect.objectContaining({ name: 'workspaceId', in: 'path', required: true }),

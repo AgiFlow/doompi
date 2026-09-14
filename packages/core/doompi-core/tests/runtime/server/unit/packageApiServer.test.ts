@@ -58,11 +58,11 @@ describe('serving a session package APIs', () => {
     cleanups.push(() => server.close());
 
     // The mount prefix is stripped, so a package declares routes relative to itself.
-    expect(await request(server, '/api/plugin/runner/runners/r1/log')).toEqual({
+    expect(await request(server, '/api/plugins/runner/runners/r1/log')).toEqual({
       status: 200,
       body: JSON.stringify({ basePath: 'runner', path: '/runners/r1/log' }),
     });
-    expect(JSON.parse((await request(server, '/api/plugin/other/x')).body)).toMatchObject({
+    expect(JSON.parse((await request(server, '/api/plugins/other/x')).body)).toMatchObject({
       basePath: 'other',
     });
   });
@@ -99,7 +99,7 @@ describe('serving a session package APIs', () => {
     });
     cleanups.push(() => server.close());
 
-    expect((await request(server, '/api/plugin/runner/x')).status).toBe(404);
+    expect((await request(server, '/api/plugins/runner/x')).status).toBe(404);
   });
 
   it('answers 404 for a base path no package claims', async () => {
@@ -112,7 +112,7 @@ describe('serving a session package APIs', () => {
     });
     cleanups.push(() => server.close());
 
-    expect((await request(server, '/api/plugin/absent/x')).status).toBe(404);
+    expect((await request(server, '/api/plugins/absent/x')).status).toBe(404);
     expect((await request(server, '/elsewhere')).status).toBe(404);
   });
 
@@ -138,9 +138,9 @@ describe('serving a session package APIs', () => {
     });
     cleanups.push(() => server.close());
 
-    expect((await request(server, '/api/plugin/boom/x')).status).toBe(500);
+    expect((await request(server, '/api/plugins/boom/x')).status).toBe(500);
     expect(notices.join('\n')).toMatch(/'boom' failed/u);
-    expect((await request(server, '/api/plugin/runner/x')).status).toBe(200);
+    expect((await request(server, '/api/plugins/runner/x')).status).toBe(200);
   });
 
   it('reports an API that will not start, and mounts the rest', async () => {
@@ -163,7 +163,7 @@ describe('serving a session package APIs', () => {
     cleanups.push(() => server.close());
 
     expect(notices.join('\n')).toMatch(/'bad' did not start/u);
-    expect((await request(server, '/api/plugin/runner/x')).status).toBe(200);
+    expect((await request(server, '/api/plugins/runner/x')).status).toBe(200);
   });
 
   // A fast success is fully described by the request span, so the completion span is skipped.
@@ -202,7 +202,7 @@ describe('serving a session package APIs', () => {
     });
     cleanups.push(() => server.close());
 
-    expect(await request(server, '/api/plugin/stream/read')).toEqual({ status: 200, body: 'done' });
+    expect(await request(server, '/api/plugins/stream/read')).toEqual({ status: 200, body: 'done' });
     expect(spans).toEqual(['doompi_server.package_api.request']);
   });
 
@@ -236,7 +236,7 @@ describe('serving a session package APIs', () => {
     });
     cleanups.push(() => server.close());
 
-    expect((await request(server, '/api/plugin/stream/read')).status).toBe(503);
+    expect((await request(server, '/api/plugins/stream/read')).status).toBe(503);
     expect(spans).toEqual(['doompi_server.package_api.request', 'doompi_server.package_api.complete']);
     expect(attributes.at(-1)).toMatchObject({ status_code: 503 });
   });
@@ -273,7 +273,7 @@ describe('serving a session package APIs', () => {
     });
     cleanups.push(() => server.close());
 
-    const response = await request(server, '/api/plugin/runner/log');
+    const response = await request(server, '/api/plugins/runner/log');
     expect(response.status).toBe(200);
     expect(JSON.parse(response.body)).toMatchObject({ path: '/log' });
   });
@@ -394,7 +394,7 @@ describe('serving a session package APIs', () => {
     });
     cleanups.push(() => server.close());
 
-    expect((await request(server, '/api/plugin/runner/log')).status).toBe(200);
+    expect((await request(server, '/api/plugins/runner/log')).status).toBe(200);
   });
 
   it('keeps the legacy API as the first owner during dual registration', async () => {
@@ -422,7 +422,7 @@ describe('serving a session package APIs', () => {
     });
     cleanups.push(() => server.close());
 
-    expect(JSON.parse((await request(server, '/api/plugin/shared/status')).body)).toMatchObject({
+    expect(JSON.parse((await request(server, '/api/plugins/shared/status')).body)).toMatchObject({
       basePath: 'shared',
     });
     expect(notices.join('\n')).toMatch(/another facet already claims it/u);
@@ -457,7 +457,7 @@ describe('serving a session package APIs', () => {
     cleanups.push(() => server.close());
 
     expect(notices.join('\n')).toMatch(/server facet did not install.*facet failed/u);
-    expect((await request(server, '/api/plugin/healthy/status')).status).toBe(200);
+    expect((await request(server, '/api/plugins/healthy/status')).status).toBe(200);
   });
 
   it('closes facet handlers and runs facet disposers on shutdown', async () => {
@@ -511,7 +511,7 @@ describe('serving a session package APIs', () => {
       onNotice: () => undefined,
     });
 
-    expect((await request(server, '/api/plugin/runner/x')).status).toBe(404);
+    expect((await request(server, '/api/plugins/runner/x')).status).toBe(404);
     await server.close();
   });
 });

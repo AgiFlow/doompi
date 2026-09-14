@@ -73,7 +73,7 @@ test('records once and appends the returned transcript without invoking autonomo
     });
   });
 
-  await page.route('**/api/sessions/*/plugin/voice-media/manual/**', async (route) => {
+  await page.route('**/api/workspaces/*/sessions/*/plugins/voice-media/manual/**', async (route) => {
     const request = route.request();
     mediaRequests.push({
       url: request.url(),
@@ -116,7 +116,7 @@ test('records once and appends the returned transcript without invoking autonomo
     method: 'POST',
     contentType: 'audio/webm;codecs=opus',
   });
-  expect(mediaRequests[0]?.url).toContain('/api/sessions/s1/plugin/voice-media/manual/transcribe?session=s1');
+  expect(mediaRequests[0]?.url).toContain('/sessions/s1/plugins/voice-media/manual/transcribe?session=s1');
   expect(Number(mediaRequests[0]?.duration)).toBeGreaterThanOrEqual(0);
   expect(mediaRequests[0]?.bodyLength).toBeGreaterThan(0);
   expect(
@@ -188,7 +188,7 @@ test('cleans up after a failed transcription and retries successfully', async ({
     });
   });
 
-  await page.route('**/api/sessions/*/plugin/voice-media/manual/**', async (route) => {
+  await page.route('**/api/workspaces/*/sessions/*/plugins/voice-media/manual/**', async (route) => {
     const request = route.request();
     const pathname = new URL(request.url()).pathname;
     mediaRequests.push({

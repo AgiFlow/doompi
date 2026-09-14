@@ -29,9 +29,9 @@ describe('the API surface', () => {
 
     // A run that does not exist is the cheapest route that proves the mount:
     // the 404 is the package's own, not the harness refusing to route.
-    const response = await mounted.fetch('/api/plugin/workflow/runs/repo/absent-run/artifacts');
+    const response = await mounted.fetch('/api/plugins/workflow/runs/repo/absent-run/artifacts');
 
-    expect(mounted.mountPath).toBe('/api/plugin/workflow');
+    expect(mounted.mountPath).toBe('/api/plugins/workflow');
     expect(response.status).toBe(404);
     expect(await response.json()).toMatchObject({ error: expect.stringContaining('absent-run') });
     mounted.close();
@@ -40,7 +40,7 @@ describe('the API surface', () => {
   it('refuses a path outside its own mount', async () => {
     const mounted = mountPackageApi(api, { scope: 'global' });
 
-    expect((await mounted.fetch('/api/plugin/runner/runs')).status).toBe(404);
+    expect((await mounted.fetch('/api/plugins/runner/runs')).status).toBe(404);
     mounted.close();
   });
 });

@@ -9,7 +9,7 @@
  * of Node imports so a browser can hold it too.
  */
 
-/** Where a host mounts this package's API; the segment after /api/plugin/. */
+/** Where a host mounts this package's API; the segment after /api/plugins/. */
 export const API_BASE_PATH = 'context';
 
 /** The session a proxied request belongs to; the hub strips it before forwarding. */

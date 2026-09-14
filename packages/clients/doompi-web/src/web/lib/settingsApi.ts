@@ -34,7 +34,7 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
 function workspaceRoute(route: string, workspaceId: string | undefined): string {
   return workspaceId === undefined
     ? route
-    : route.replace('/api/global/', `/api/workspaces/${encodeURIComponent(workspaceId)}/`);
+    : route.replace('/api/', `/api/workspaces/${encodeURIComponent(workspaceId)}/`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

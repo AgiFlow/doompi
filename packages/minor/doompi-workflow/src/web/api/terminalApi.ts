@@ -1,3 +1,4 @@
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
 import {
@@ -21,7 +22,7 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
 
 function sessionUrl(path: string, sessionId?: string | null): string {
   if (sessionId === undefined || sessionId === null) return path;
-  return path.replace('/api/plugins/', `/api/sessions/${encodeURIComponent(sessionId)}/plugin/`);
+  return path.replace('/api/plugins/', `${sessionApiPath(sessionId)}/plugins/`);
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

@@ -1,3 +1,4 @@
+export { bindSessionApiWorkspace, sessionApiPath } from '../web/services/apiRoutes';
 export { defineSessionChannel, defineSlot, defineWebPlugin } from '../extensions/webPlugin';
 export { defineGlobalStore } from '../web/models/globalStore';
 export { defineSessionStore } from '../web/models/sessionStore';

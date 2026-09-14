@@ -1,3 +1,5 @@
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
+
 import { PROMPTS_PATH } from '../constants/webPrompts';
 /**
  * The vocabulary this package's HTTP API and its cockpit plugin share.
@@ -12,7 +14,7 @@ import { PROMPTS_PATH } from '../constants/webPrompts';
  * - Importing anything from src/services or src/adapters here.
  */
 
-/** Where a host mounts this package's API; the segment after /api/plugin/. */
+/** Where a host mounts this package's API; the segment after /api/plugins/. */
 
 /** The collection, relative to the API's own mount. */
 
@@ -22,7 +24,7 @@ export function promptPath(name: string): string {
 }
 
 function apiRoot(sessionId?: string | null): string {
-  return sessionId == null ? '/api/plugins/prompts' : `/api/sessions/${encodeURIComponent(sessionId)}/plugin/prompts`;
+  return sessionId == null ? '/api/plugins/prompts' : `${sessionApiPath(sessionId)}/plugins/prompts`;
 }
 
 /** The absolute URL a page fetches for the collection. */

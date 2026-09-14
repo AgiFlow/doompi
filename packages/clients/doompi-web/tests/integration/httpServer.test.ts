@@ -167,7 +167,7 @@ describe('the web presentation server', () => {
   });
 
   it('relays the browser protocol WebSocket without owning session state', async () => {
-    const socket = new WebSocket(`${presentation.url.replace('http', 'ws')}/api/pi`);
+    const socket = new WebSocket(`${presentation.url.replace('http', 'ws')}/api/ws`);
     const received = new Promise<string>((resolve, reject) => {
       socket.once('error', reject);
       socket.once('message', (data) => {

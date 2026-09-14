@@ -10,6 +10,11 @@ import WebSocket from 'ws';
 
 import type { DoomHubChannel } from '../../../../../src/exports/hubChannel';
 import {
+  DOOM_SERVER_HOST_SERVICE,
+  requireDoomServerHost,
+  type DoomServerFacet,
+} from '../../../../../src/exports/serverFacet';
+import {
   DOOM_COCKPIT_SERVER_ID,
   DoomHubService,
   DoomSessionManagementService,
@@ -109,11 +114,17 @@ afterEach(async () => {
 describe('serveHeadlessServer', () => {
   it('closes active Pi clients before waiting for the HTTP server', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
     const server = await serveHeadlessServer({ headlessHub: hub, port: 0 });
     servers.push(server);
     const client = await Client.connect({
       serverId: DOOM_COCKPIT_SERVER_ID,
-      transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}/api/pi`),
+      transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}/api/ws`),
     });
 
     await server.close();
@@ -132,11 +143,17 @@ describe('serveHeadlessServer', () => {
     fs.truncateSync(path.join(cwd, 'large.bin'), 25 * 1024 * 1024 + 1);
 
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
-    hub.register({ id: 'one', name: 'One', cwd, createdAt: 'now', host: host().host });
+    hub.register({ workspaceId: 'test-workspace', id: 'one', name: 'One', cwd, createdAt: 'now', host: host().host });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
     const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
     servers.push(server);
     const file = (relativePath: string) =>
-      fetch(`${server.url}/api/sessions/one/file?path=${encodeURIComponent(relativePath)}`, {
+      fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/file?path=${encodeURIComponent(relativePath)}`, {
         headers: { 'x-doompi-token': 'secret' },
       });
 
@@ -146,13 +163,22 @@ describe('serveHeadlessServer', () => {
     expect((await file('linked.md')).status).toBe(403);
     expect((await file('missing.md')).status).toBe(404);
     expect((await file('large.bin')).status).toBe(413);
-    expect((await fetch(`${server.url}/api/sessions/one/file?path=README.md`)).status).toBe(401);
+    expect((await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/file?path=README.md`)).status).toBe(
+      401,
+    );
     await hub.close();
   });
 
   it('routes restart, history, and resume through the live session lifecycle', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
-    hub.register({ id: 'current', name: 'Current', cwd: '/repo', createdAt: '2025-01-01', host: host().host });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'current',
+      name: 'Current',
+      cwd: '/repo',
+      createdAt: '2025-01-01',
+      host: host().host,
+    });
     const sessionHistory = vi.fn(async () => [
       {
         id: 'saved',
@@ -164,6 +190,12 @@ describe('serveHeadlessServer', () => {
     ]);
     const restartSession = vi.fn(async () => undefined);
     const resumeSession = vi.fn(async () => 'saved');
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
     const server = await serveHeadlessServer({
       headlessHub: hub,
       port: 0,
@@ -172,18 +204,20 @@ describe('serveHeadlessServer', () => {
       resumeSession,
     });
     servers.push(server);
-    expect(await (await fetch(`${server.url}/api/sessions/current/history`)).json()).toEqual({
+    expect(await (await fetch(`${server.url}/api/workspaces/test-workspace/sessions/current/history`)).json()).toEqual({
       sessions: await sessionHistory.mock.results[0]?.value,
     });
-    expect((await fetch(`${server.url}/api/sessions/current/restart`, { method: 'POST' })).status).toBe(200);
+    expect(
+      (await fetch(`${server.url}/api/workspaces/test-workspace/sessions/current/restart`, { method: 'POST' })).status,
+    ).toBe(200);
     expect(restartSession).toHaveBeenCalledWith(expect.objectContaining({ id: 'current' }));
-    const invalid = await fetch(`${server.url}/api/sessions/current/resume`, {
+    const invalid = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/current/resume`, {
       method: 'POST',
       body: JSON.stringify({ targetSessionId: '../other' }),
     });
     expect(invalid.status).toBe(400);
     expect(resumeSession).not.toHaveBeenCalled();
-    const resumed = await fetch(`${server.url}/api/sessions/current/resume`, {
+    const resumed = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/current/resume`, {
       method: 'POST',
       body: JSON.stringify({ targetSessionId: 'saved' }),
     });
@@ -209,6 +243,12 @@ describe('serveHeadlessServer', () => {
     const requestAsset = vi.fn(async (request: Request) =>
       new URL(request.url).pathname.endsWith('/found') ? new Response('asset') : undefined,
     );
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
     const server = await serveHeadlessServer({
       headlessHub: hub,
       port: 0,
@@ -249,11 +289,20 @@ describe('serveHeadlessServer', () => {
     const admitWorkspace = vi.fn(async (root: string) => ({ id: 'one', root }));
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never, admitWorkspace });
     await hub.mountFacets([], { scope: 'workspace', workspaceId: 'one', workspaceRoot: '/one', onNotice: vi.fn() });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
     const server = await serveHeadlessServer({ headlessHub: hub, port: 0 });
     servers.push(server);
     const post = (body: string) => fetch(`${server.url}/api/workspaces`, { method: 'POST', body });
     expect(await (await fetch(`${server.url}/api/workspaces`)).json()).toEqual({
-      workspaces: [{ id: 'one', root: '/one' }],
+      workspaces: [
+        { id: 'one', root: '/one' },
+        { id: 'test-workspace', root: '/repo' },
+      ],
     });
     for (const body of ['', 'null', '[]', '{}', '{"root":1}']) {
       const result = await post(body);
@@ -268,7 +317,7 @@ describe('serveHeadlessServer', () => {
     expect((await fetch(`${server.url}/api/workspaces/one`, { method: 'DELETE' })).status).toBe(409);
     await hub.closeSession('session');
     expect((await fetch(`${server.url}/api/workspaces/one`, { method: 'DELETE' })).status).toBe(200);
-    expect(hub.workspaces()).toEqual([]);
+    expect(hub.workspaces()).toEqual([{ id: 'test-workspace', root: '/repo' }]);
     await hub.close();
   });
 
@@ -278,6 +327,12 @@ describe('serveHeadlessServer', () => {
     const telemetry = { recordEvent, runInSpan } as never;
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn() } as never });
     const requestApi = vi.spyOn(hub, 'requestApi').mockResolvedValue(Response.json({ ok: true }));
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
     const server = await serveHeadlessServer({ headlessHub: hub, port: 0, telemetry });
     servers.push(server);
     const post = (value: unknown) =>
@@ -329,16 +384,22 @@ describe('serveHeadlessServer', () => {
   it('creates a root session through the global service without inventing a parent', async () => {
     const createSession = vi.fn(async () => ({ sessionId: 'created', cwd: '/repo' }));
     const hub = createHeadlessHub({ manager: {} as never, createSession });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
     const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
     servers.push(server);
     const request = (body: unknown, authenticated = true) =>
-      fetch(`${server.url}/api/sessions`, {
+      fetch(`${server.url}/api/workspaces/test-workspace/sessions`, {
         method: 'POST',
         headers: authenticated ? { authorization: 'Bearer secret' } : {},
         body: JSON.stringify(body),
       });
     expect((await request({ cwd: '/repo' }, false)).status).toBe(401);
-    expect((await request({ cwd: '' })).status).toBe(400);
+    expect((await request({ name: 1 })).status).toBe(400);
     expect(createSession).not.toHaveBeenCalled();
     const response = await request({ cwd: '/repo', name: 'test', parentSessionId: 'forged' });
     expect(response.status).toBe(201);
@@ -355,17 +416,33 @@ describe('serveHeadlessServer', () => {
       manager: { closeSession } as never,
       requestSessionApi,
     });
-    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: '2025-01-01T00:00:00.000Z', host: session.host });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: '2025-01-01T00:00:00.000Z',
+      host: session.host,
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
     const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
     servers.push(server);
 
-    const unauthorized = await fetch(`${server.url}/api/sessions`);
+    const unauthorized = await fetch(`${server.url}/api/workspaces/test-workspace/sessions`);
     expect(unauthorized.status).toBe(401);
-    const response = await fetch(`${server.url}/api/sessions`, { headers: { authorization: 'Bearer secret' } });
+    const response = await fetch(`${server.url}/api/workspaces/test-workspace/sessions`, {
+      headers: { authorization: 'Bearer secret' },
+    });
     expect(await response.json()).toEqual({
       sessions: [
         {
           id: 'one',
+          workspaceId: 'test-workspace',
           name: 'One',
           cwd: '/repo',
           createdAt: '2025-01-01T00:00:00.000Z',
@@ -384,21 +461,24 @@ describe('serveHeadlessServer', () => {
     });
     expect(await directories.json()).toEqual({ directories: ['/repo'] });
 
-    const retired = await fetch(`${server.url}/api/sessions/one/frame`, {
+    const retired = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/frame`, {
       method: 'POST',
       headers: { authorization: 'Bearer secret', 'content-type': 'application/json' },
       body: JSON.stringify({ type: 'prompt', text: 'hello' }),
     });
     expect(retired.status).toBe(404);
 
-    const apiResponse = await fetch(`${server.url}/api/sessions/one/plugin/test-api/value?x=1`, {
-      method: 'POST',
-      headers: { authorization: 'Bearer secret' },
-      body: 'payload',
-    });
+    const apiResponse = await fetch(
+      `${server.url}/api/workspaces/test-workspace/sessions/one/plugins/test-api/value?x=1`,
+      {
+        method: 'POST',
+        headers: { authorization: 'Bearer secret' },
+        body: 'payload',
+      },
+    );
     expect(await apiResponse.json()).toEqual({ ok: true });
     expect(requestSessionApi).toHaveBeenCalledWith(
-      { sessionId: 'one', cwd: '/repo' },
+      { sessionId: 'one', workspaceId: 'test-workspace', cwd: '/repo' },
       expect.objectContaining({
         basePath: 'test-api',
         path: '/value?x=1',
@@ -412,7 +492,7 @@ describe('serveHeadlessServer', () => {
     });
     expect(plugin.status).toBe(404);
 
-    const stopped = await fetch(`${server.url}/api/sessions/one`, {
+    const stopped = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one`, {
       method: 'DELETE',
       headers: { authorization: 'Bearer secret' },
     });
@@ -477,13 +557,26 @@ describe('serveHeadlessServer', () => {
       createdAt: '2025-01-01T00:00:00.000Z',
       host: first.host,
     });
-    hub.register({ id: 'two', name: 'Two', cwd: '/two', createdAt: 'invalid', host: second.host });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'two',
+      name: 'Two',
+      cwd: '/two',
+      createdAt: 'invalid',
+      host: second.host,
+    });
     hub.registerChannel(channel);
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
     const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
     servers.push(server);
     const client = await Client.connect({
       serverId: DOOM_COCKPIT_SERVER_ID,
-      transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}/api/pi?token=secret`),
+      transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}/api/ws?token=secret`),
     });
     const hubBinding = createRemoteServiceBinding({
       services: [DoomHubService],
@@ -521,6 +614,7 @@ describe('serveHeadlessServer', () => {
         },
         {
           id: 'two',
+          workspaceId: 'test-workspace',
           name: 'Two',
           cwd: '/two',
           createdAt: 'invalid',
@@ -603,7 +697,14 @@ describe('serveHeadlessServer', () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(hubService.state.value?.events).toHaveLength(targetedCount ?? 0);
 
-    hub.register({ id: 'three', name: 'Three', cwd: '/three', createdAt: 'now', host: third.host });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'three',
+      name: 'Three',
+      cwd: '/three',
+      createdAt: 'now',
+      host: third.host,
+    });
     await vi.waitFor(() =>
       expect(
         hubService.state.value?.events.some(
@@ -659,12 +760,25 @@ describe('serveHeadlessServer', () => {
         }),
       } as never,
     });
-    hub.register({ id: 'one', name: 'First', cwd: '/repo', createdAt: 'now', host: first.host });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'First',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: first.host,
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
     const server = await serveHeadlessServer({ headlessHub: hub, port: 0 });
     servers.push(server);
     const client = await Client.connect({
       serverId: DOOM_COCKPIT_SERVER_ID,
-      transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}/api/pi`),
+      transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}/api/ws`),
     });
     const attach = () =>
       client.request(
@@ -682,7 +796,14 @@ describe('serveHeadlessServer', () => {
 
     await hub.closeSession('one');
     await vi.waitFor(() => expect(client.attachment).toBeUndefined());
-    hub.register({ id: 'one', name: 'Second', cwd: '/repo', createdAt: 'later', host: second.host });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'Second',
+      cwd: '/repo',
+      createdAt: 'later',
+      host: second.host,
+    });
     await attach();
     const secondBinding = createRemoteServiceBinding({
       services: [DoomSessionService],
@@ -710,7 +831,14 @@ describe('serveHeadlessServer', () => {
       manager: { closeSession: vi.fn(async () => undefined) } as never,
       requestSessionApi,
     });
-    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: session.host });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: session.host,
+    });
     hub.registerChannel({
       frameType: 'updates',
       receive: (scope, payload, connection) => receive(scope, payload, connection),
@@ -718,6 +846,12 @@ describe('serveHeadlessServer', () => {
         channelHost = hostApi;
         return { payloadFor: () => ({ ready: true }), close: () => undefined };
       },
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
     });
     const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
     servers.push(server);
@@ -728,21 +862,31 @@ describe('serveHeadlessServer', () => {
     });
     expect((await fetch(`${server.url}/missing`, { headers: { 'x-doompi-token': 'secret' } })).status).toBe(404);
     expect(
-      (await fetch(`${server.url}/api/sessions/missing`, { headers: { 'x-doompi-token': 'secret' } })).status,
+      (
+        await fetch(`${server.url}/api/workspaces/test-workspace/sessions/missing`, {
+          headers: { 'x-doompi-token': 'secret' },
+        })
+      ).status,
     ).toBe(404);
     expect(
-      await (await fetch(`${server.url}/api/sessions/one`, { headers: { 'x-doompi-token': 'secret' } })).json(),
+      await (
+        await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one`, {
+          headers: { 'x-doompi-token': 'secret' },
+        })
+      ).json(),
     ).toMatchObject({
       id: 'one',
     });
     expect(
       await (
-        await fetch(`${server.url}/api/sessions/one/channels`, { headers: { 'x-doompi-token': 'secret' } })
+        await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/channels`, {
+          headers: { 'x-doompi-token': 'secret' },
+        })
       ).json(),
     ).toEqual({ channels: [{ type: 'updates', sessionId: 'one', payload: { ready: true } }] });
     expect(
       (
-        await fetch(`${server.url}/api/sessions/one/channel/updates`, {
+        await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/channel/updates`, {
           method: 'POST',
           headers: { 'x-doompi-token': 'secret', 'x-doompi-connection': 'http-client' },
           body: JSON.stringify({ action: 'refresh' }),
@@ -750,20 +894,20 @@ describe('serveHeadlessServer', () => {
       ).status,
     ).toBe(202);
     expect(receive).toHaveBeenCalledWith(
-      { sessionId: 'one', cwd: '/repo' },
+      { sessionId: 'one', workspaceId: 'test-workspace', cwd: '/repo' },
       { action: 'refresh' },
       { connectionId: 'http-client' },
     );
     expect(
       (
-        await fetch(`${server.url}/api/sessions/one/plugin/INVALID/value`, {
+        await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/plugins/INVALID/value`, {
           headers: { 'x-doompi-token': 'secret' },
         })
       ).status,
     ).toBe(400);
     expect(
       (
-        await fetch(`${server.url}/api/sessions/one/plugin/test/value`, {
+        await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/plugins/test/value`, {
           method: 'HEAD',
           headers: { 'x-doompi-token': 'secret' },
         })
@@ -791,11 +935,24 @@ describe('serveHeadlessServer', () => {
       manager: { closeSession: vi.fn(async () => undefined) } as never,
       requestSessionApi,
     });
-    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: session.host });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: session.host,
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
     const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
     servers.push(server);
 
-    const malformed = await fetch(`${server.url}/api/sessions/one/channel/updates`, {
+    const malformed = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/channel/updates`, {
       method: 'POST',
       headers: { authorization: 'Bearer secret' },
       body: 'not-json',
@@ -803,7 +960,7 @@ describe('serveHeadlessServer', () => {
     expect(malformed.status).toBe(500);
     expect(await malformed.json()).toEqual({ error: expect.any(String) });
 
-    const backendFailure = await fetch(`${server.url}/api/sessions/one/plugin/test/value`, {
+    const backendFailure = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/one/plugins/test/value`, {
       headers: { authorization: 'Bearer secret' },
     });
     expect(backendFailure.status).toBe(500);
@@ -816,6 +973,12 @@ describe('serveHeadlessServer', () => {
 
   it('rejects unauthorized Pi connections and retires the JSON socket route', async () => {
     const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
     const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
     servers.push(server);
 
@@ -825,8 +988,117 @@ describe('serveHeadlessServer', () => {
         socket.once('unexpected-response', (_request, response) => resolve(response.statusCode ?? 0));
         socket.once('error', () => resolve(0));
       });
-    await expect(connect('/api/pi')).resolves.toBe(401);
+    await expect(connect('/api/ws')).resolves.toBe(401);
     await expect(connect('/api/session?token=secret')).resolves.toBe(404);
+    await hub.close();
+  });
+});
+
+describe('canonical scoped routes', () => {
+  it('rejects retired routes and cross-workspace REST and WebSocket access', async () => {
+    const requestSessionApi = vi.fn(async () => Response.json({ ok: true }));
+    const hub = createHeadlessHub({
+      manager: { closeSession: vi.fn(async () => undefined) } as never,
+      requestSessionApi,
+    });
+    for (const id of ['alpha', 'beta']) {
+      await hub.mountFacets([], { scope: 'workspace', workspaceId: id, workspaceRoot: `/${id}`, onNotice: vi.fn() });
+      hub.register({
+        id: `${id}-session`,
+        workspaceId: id,
+        name: id,
+        cwd: `/${id}`,
+        createdAt: 'now',
+        host: host().host,
+      });
+    }
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0 });
+    servers.push(server);
+    const root = '/api/workspaces/alpha/sessions/alpha-session';
+    expect((await fetch(`${server.url}${root}`)).status).toBe(200);
+    expect(await (await fetch(`${server.url}/api/workspaces/alpha/sessions`)).json()).toEqual({
+      sessions: [expect.objectContaining({ id: 'alpha-session', workspaceId: 'alpha' })],
+    });
+    expect((await fetch(`${server.url}${root}/plugins/test/value`)).status).toBe(200);
+    for (const route of [
+      '/api/sessions',
+      '/api/sessions/alpha-session',
+      '/api/global/plugin/test',
+      '/api/workspaces/beta/sessions/alpha-session',
+      '/api/workspaces/beta/sessions/alpha-session/plugins/test/value',
+    ]) {
+      expect((await fetch(`${server.url}${route}`)).status).toBe(404);
+    }
+    expect(requestSessionApi).toHaveBeenCalledTimes(1);
+    const rejected = (route: string) =>
+      new Promise<number>((resolve, reject) => {
+        const socket = new WebSocket(`${server.url.replace('http:', 'ws:')}${route}`);
+        socket.on('unexpected-response', (_request, response) => {
+          response.resume();
+          socket.terminate();
+          resolve(response.statusCode!);
+        });
+        socket.on('open', () => {
+          socket.close();
+          reject(new Error('Unexpected upgrade'));
+        });
+        socket.on('error', () => undefined);
+      });
+    expect(await rejected('/api/pi')).toBe(404);
+    expect(await rejected('/api/workspaces/beta/sessions/alpha-session/ws')).toBe(404);
+    for (const route of ['/api/workspaces/alpha/ws', `${root}/ws`]) {
+      const client = await Client.connect({
+        serverId: DOOM_COCKPIT_SERVER_ID,
+        transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}${route}`),
+      });
+      const binding = createRemoteServiceBinding({
+        services: [DoomHubService, DoomSessionManagementService],
+        transport: createClientServiceTransport(client, () => ({ serverId: DOOM_COCKPIT_SERVER_ID })),
+      });
+      const scopedHub = binding.use(DoomHubService);
+      const management = binding.use(DoomSessionManagementService);
+      await binding.ready(BACKGROUND_CONTEXT);
+      expect(scopedHub.state.value?.events[0]?.frame).toEqual({
+        type: 'sessions_snapshot',
+        sessions: [expect.objectContaining({ id: 'alpha-session' })],
+      });
+      await expect(management.attach('beta-session', BACKGROUND_CONTEXT)).rejects.toThrow();
+      await management.attach('alpha-session', BACKGROUND_CONTEXT);
+      await binding.dispose(BACKGROUND_CONTEXT);
+      await client.dispose();
+    }
+    await hub.close();
+  });
+
+  it('mounts settings directly in the selected global or workspace composition', async () => {
+    const hub = createHeadlessHub({ manager: {} as never });
+    const facet: DoomServerFacet = {
+      inject: [DOOM_SERVER_HOST_SERVICE],
+      apply(context) {
+        const registration = requireDoomServerHost(context).registerApi({
+          basePath: 'settings',
+          start: () => ({
+            fetch: (request: Request) => Response.json({ path: new URL(request.url).pathname }),
+            close() {},
+          }),
+        });
+        return () => registration.dispose();
+      },
+    };
+    await hub.mountFacets([facet]);
+    await hub.mountFacets([facet], {
+      scope: 'workspace',
+      workspaceId: 'alpha',
+      workspaceRoot: '/alpha',
+      onNotice: vi.fn(),
+    });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0 });
+    servers.push(server);
+    for (const route of ['/api/settings', '/api/workspaces/alpha/settings']) {
+      expect(await (await fetch(`${server.url}${route}`)).json()).toEqual({ path: '/' });
+    }
+    expect((await fetch(`${server.url}/api/plugins/settings`)).status).toBe(404);
+    expect((await fetch(`${server.url}/api/workspaces/missing/settings`)).status).toBe(404);
     await hub.close();
   });
 });

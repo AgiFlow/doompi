@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -97,7 +100,7 @@ async function readApiDetail(filePath: string): Promise<FileEditsDetailView> {
   const app = createFileEditsApi({ sessionId: SESSION_ID, cwd });
   const response = await app.fetch(
     new Request(
-      `http://host${detailUrl(SESSION_ID, filePath).replace(/^\/api\/sessions\/[^/]+\/plugin\/file-edits/, '')}`,
+      `http://host${detailUrl(SESSION_ID, filePath).replace(/^\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/plugins\/file-edits/, '')}`,
     ),
   );
   expect(response.status).toBe(200);

@@ -48,7 +48,7 @@ const PENDING_PATH = '/Users/dev/project/src/slow.ts';
 const realFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = String(input instanceof Request ? input.url : input);
-  if (!url.includes('/api/plugin/file-edits/preview')) return realFetch(input, init);
+  if (!url.includes('/api/plugins/file-edits/preview')) return realFetch(input, init);
   const filePath = new URL(url, globalThis.location.origin).searchParams.get('path') ?? '';
   if (filePath === PENDING_PATH) return new Promise<Response>(() => {});
   const preview = PREVIEWS[filePath];

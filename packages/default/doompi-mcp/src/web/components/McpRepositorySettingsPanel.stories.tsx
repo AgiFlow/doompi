@@ -44,7 +44,7 @@ const catalog: McpRepositoryCatalog = {
 
 const request: RepositorySettingsPanelProps['request'] = (input) =>
   Promise.resolve(
-    input.includes('/api/plugin/mcp/repository')
+    input.includes('/api/plugins/mcp/repository')
       ? new Response(JSON.stringify(catalog), { status: 200, headers: { 'content-type': 'application/json' } })
       : new Response('{}', { status: 404, headers: { 'content-type': 'application/json' } }),
   );

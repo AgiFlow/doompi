@@ -174,7 +174,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         if (server === undefined) return Response.json({ error: 'Session API unavailable.' }, { status: 404 });
         const body = request.body === undefined || request.body === null ? undefined : request.body;
         return server.request(
-          new Request(`http://session.local/api/plugin/${request.basePath}${request.path}`, {
+          new Request(`http://session.local/api/plugins/${request.basePath}${request.path}`, {
             method: request.method,
             headers: request.headers,
             ...(body === undefined ? {} : { body }),

@@ -77,10 +77,10 @@ globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Respo
   const url = String(input instanceof Request ? input.url : input);
   const filePath = new URL(url, globalThis.location.origin).searchParams.get('path') ?? '';
   const detail = DETAILS[filePath];
-  if (url.includes('/api/plugin/file-edits/detail') && detail !== undefined) {
+  if (url.includes('/api/plugins/file-edits/detail') && detail !== undefined) {
     return Promise.resolve(new Response(JSON.stringify(detail), { status: 200 }));
   }
-  if (url.includes('/api/sessions/')) {
+  if (url.includes('/api/workspaces/test-workspace/sessions/')) {
     return Promise.resolve(new Response(new Blob(['\u0000\u0001binary'], { type: 'application/octet-stream' })));
   }
   return realFetch(input, init);

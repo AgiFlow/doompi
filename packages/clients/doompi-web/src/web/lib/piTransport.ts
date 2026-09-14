@@ -2,7 +2,7 @@ import type { ByteTransport, ByteTransportFactory, ByteTransportHandlers } from 
 
 import { sealedProtocolSession } from './sealedSession';
 
-const PROTOCOL_PATH = '/api/pi';
+const PROTOCOL_PATH = '/api/ws';
 const MAX_PENDING_BYTES = 64 * 1024 * 1024;
 
 /** The cockpit's protocol endpoint for this page. */

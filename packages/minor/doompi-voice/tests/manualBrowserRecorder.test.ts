@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -363,7 +366,7 @@ describe('manual transcription client', () => {
 
     expect(request).toHaveBeenCalledOnce();
     expect(request).toHaveBeenCalledWith(
-      `/api/sessions/session-1/plugin/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=session-1`,
+      `/api/workspaces/test-workspace/sessions/session-1/plugins/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=session-1`,
       {
         method: 'POST',
         headers: {

@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,12 +51,14 @@ describe('the author API', () => {
     expect(await fs.readFile(documentPath)).toEqual(before);
   });
   it('builds the hub proxy URL with one session query', () => {
-    expect(authorStateUrl('s/1')).toBe(`/api/sessions/s%2F1/plugin/${API_BASE_PATH}${AUTHOR_STATE_PATH}?session=s%2F1`);
+    expect(authorStateUrl('s/1')).toBe(
+      `/api/workspaces/test-workspace/sessions/s%2F1/plugins/${API_BASE_PATH}${AUTHOR_STATE_PATH}?session=s%2F1`,
+    );
   });
 
   it('serves the route through its declared package mount', async () => {
     const mounted = mountPackageApi(api, { scope: 'session', sessionId: 's1', cwd: '/repo' });
-    expect((await mounted.fetch(`/api/plugin/${API_BASE_PATH}${AUTHOR_STATE_PATH}`)).status).toBe(200);
+    expect((await mounted.fetch(`/api/plugins/${API_BASE_PATH}${AUTHOR_STATE_PATH}`)).status).toBe(200);
     mounted.close();
   });
 });

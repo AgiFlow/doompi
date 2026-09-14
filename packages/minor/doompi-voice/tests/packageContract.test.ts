@@ -226,7 +226,7 @@ describe('doom voice package boundary', () => {
       },
     });
     try {
-      const response = await mounted.fetch(`/api/plugin/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=s1`, {
+      const response = await mounted.fetch(`/api/plugins/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=s1`, {
         method: 'POST',
         headers: {
           'content-type': 'audio/ogg',
@@ -239,7 +239,7 @@ describe('doom voice package boundary', () => {
         code: 'unsupported_media_type',
         error: 'Audio must be WebM/Opus or MP4/AAC.',
       });
-      expect((await mounted.fetch('/api/plugin/elsewhere/manual/transcribe')).status).toBe(404);
+      expect((await mounted.fetch('/api/plugins/elsewhere/manual/transcribe')).status).toBe(404);
     } finally {
       mounted.close();
     }

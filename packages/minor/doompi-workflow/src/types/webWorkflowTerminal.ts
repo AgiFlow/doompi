@@ -8,7 +8,7 @@
 
 import { DOOM_HUB_API_SESSION_QUERY_PARAM } from '@agimon-ai/doompi-core/package-api';
 
-/** Segment this package's API is mounted under, below /api/plugin/. */
+/** Segment this package's API is mounted under, below /api/plugins/. */
 export const WORKFLOW_API_BASE_PATH = 'workflow';
 /** Host query parameter that selects the focused session's hub API bundle. */
 export const WORKFLOW_HUB_SESSION_QUERY_PARAM = DOOM_HUB_API_SESSION_QUERY_PARAM;

@@ -1,9 +1,12 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { MediaPreview } from '../../src/exports';
 
-const SRC = '/api/sessions/s1/file?path=docs%2Freport.pdf';
+const SRC = '/api/workspaces/test-workspace/sessions/s1/file?path=docs%2Freport.pdf';
 
 describe('MediaPreview', () => {
   it('renders an image inside a link to the full-size bytes', () => {

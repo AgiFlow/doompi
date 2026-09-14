@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { builtinApiContract, canonicalContractJson, createApiDocuments } from '@agimon-ai/doompi-core/api-contracts';
 import { createHeadlessHub } from '@agimon-ai/doompi-core/headless-hub';
 import { serveHeadlessServer } from '@agimon-ai/doompi-core/headless-server';
@@ -51,7 +54,14 @@ async function server() {
       closeSession: async () => undefined,
       close: async () => undefined,
     },
+    admitWorkspace: async (root) => ({ id: 'test-workspace', root }),
     createSession: async (request) => ({ sessionId: 'created-session', cwd: request.cwd }),
+  });
+  await hub.mountFacets([], {
+    scope: 'workspace',
+    workspaceId: 'test-workspace',
+    workspaceRoot: process.cwd(),
+    onNotice() {},
   });
   cleanups.push(() => hub.close());
   const listening = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'contract-test' });
@@ -62,9 +72,12 @@ async function server() {
 describe('web client against exported API schemas', () => {
   it('validates the real session-create request and server response', async () => {
     const listening = await server();
-    const operation = exported.paths['/api/sessions'].post;
     gateway.fetch.mockImplementation(async (target, init) => {
-      expect(target).toBe('/api/sessions');
+      const operation =
+        target === '/api/workspaces'
+          ? exported.paths['/api/workspaces'].post
+          : exported.paths['/api/workspaces/{workspaceId}/sessions'].post;
+      expect(['/api/workspaces', '/api/workspaces/test-workspace/sessions']).toContain(target);
       expect(init?.method).toBe('POST');
       if (typeof target !== 'string' || typeof init?.body !== 'string')
         throw new Error('Expected a JSON client request');
@@ -84,7 +97,7 @@ describe('web client against exported API schemas', () => {
     expect(await createSession({ cwd: process.cwd(), name: 'Contract test' })).toEqual({
       sessionId: 'created-session',
     });
-    expect(gateway.fetch).toHaveBeenCalledOnce();
+    expect(gateway.fetch).toHaveBeenCalledTimes(2);
   });
 
   it('checks a second real client request and a server error against exported responses', async () => {
@@ -102,19 +115,20 @@ describe('web client against exported API schemas', () => {
       return response;
     });
     expect(Array.isArray(await searchDirectories('/does-not-exist/'))).toBe(true);
-    const refused = await fetch(new URL('/api/sessions', listening.url));
+    const refused = await fetch(new URL('/api/workspaces/test-workspace/sessions', listening.url));
     expect(refused.status).toBe(401);
     expect(
       accepts(
-        exported.paths['/api/sessions'].get.responses['401'].content['application/json'].schema,
+        exported.paths['/api/workspaces/{workspaceId}/sessions'].get.responses['401'].content['application/json']
+          .schema,
         await refused.json(),
       ),
     ).toBe(true);
   });
 
   it('detects incompatible client payloads and server response changes', () => {
-    const operation = exported.paths['/api/sessions'].post;
-    expect(accepts(operation.requestBody.content['application/json'].schema, { cwd: 42 })).toBe(false);
+    const operation = exported.paths['/api/workspaces/{workspaceId}/sessions'].post;
+    expect(accepts(operation.requestBody.content['application/json'].schema, { name: 42 })).toBe(false);
     expect(accepts(operation.responses['201'].content['application/json'].schema, { id: 'renamed-field' })).toBe(false);
     expect(accepts(operation.responses['201'].content['application/json'].schema, { sessionId: 42 })).toBe(false);
   });

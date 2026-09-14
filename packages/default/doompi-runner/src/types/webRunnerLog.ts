@@ -1,3 +1,5 @@
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
+
 import { RUNNER_API_BASE_PATH, SESSION_QUERY_PARAM } from '../constants/webRunnerLog';
 import type { LogSlice } from './logReader';
 
@@ -13,7 +15,7 @@ import type { LogSlice } from './logReader';
  * the server alone.
  */
 
-/** Where this package's API is mounted; the segment after /api/plugin/. */
+/** Where this package's API is mounted; the segment after /api/plugins/. */
 
 /** Query parameter the hub reads to pick which session server to proxy to. */
 
@@ -34,7 +36,7 @@ export function runnerLogUrl(sessionId: string, runId: string, params: RunnerLog
   if (params.grep !== undefined && params.grep !== '') search.set(RUNNER_LOG_PARAMS.grep, params.grep);
   if (params.ignoreCase === true) search.set(RUNNER_LOG_PARAMS.ignoreCase, 'true');
   if (params.contextLines !== undefined) search.set(RUNNER_LOG_PARAMS.contextLines, String(params.contextLines));
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${RUNNER_API_BASE_PATH}${runnerLogPath(runId)}?${search.toString()}`;
+  return `${sessionApiPath(sessionId)}/plugins/${RUNNER_API_BASE_PATH}${runnerLogPath(runId)}?${search.toString()}`;
 }
 
 /**
@@ -46,7 +48,7 @@ export function runnerLogUrl(sessionId: string, runId: string, params: RunnerLog
  */
 export function runnerLogStreamUrl(sessionId: string, runId: string, from: number): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [RUNNER_LOG_PARAMS.from]: String(from) });
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${RUNNER_API_BASE_PATH}${runnerLogPath(runId)}/stream?${search.toString()}`;
+  return `${sessionApiPath(sessionId)}/plugins/${RUNNER_API_BASE_PATH}${runnerLogPath(runId)}/stream?${search.toString()}`;
 }
 
 /** One runner's attached screen, relative to the API's own mount. */
@@ -64,13 +66,13 @@ export function runnerScreenPath(runId: string): string {
  */
 export function runnerScreenStreamUrl(sessionId: string, runId: string, from = 0): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [RUNNER_LOG_PARAMS.from]: String(from) });
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${RUNNER_API_BASE_PATH}${runnerScreenPath(runId)}/stream?${search.toString()}`;
+  return `${sessionApiPath(sessionId)}/plugins/${RUNNER_API_BASE_PATH}${runnerScreenPath(runId)}/stream?${search.toString()}`;
 }
 
 /** The URL a page POSTs keystrokes to, for a runner that is waiting on input. */
 export function runnerInputUrl(sessionId: string, runId: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${RUNNER_API_BASE_PATH}${runnerScreenPath(runId)}/input?${search.toString()}`;
+  return `${sessionApiPath(sessionId)}/plugins/${RUNNER_API_BASE_PATH}${runnerScreenPath(runId)}/input?${search.toString()}`;
 }
 
 /**
