@@ -82,6 +82,7 @@ export function createPiTelemetryRuntime(
   const env = options.env ?? process.env;
   const metrics = options.metrics;
   const toolStartedAt = new Map<string, number>();
+  const turnStartedAt = new Map<number, number>();
   let active = true;
   let sessionGeneration = 0;
   let agentStartedAt: number | undefined;
@@ -188,6 +189,7 @@ export function createPiTelemetryRuntime(
         if (!active) return undefined;
         const ownGeneration = ++sessionGeneration;
         toolStartedAt.clear();
+        turnStartedAt.clear();
         agentStartedAt = undefined;
         const initialize = async (signal?: AbortSignal): Promise<void> => {
           signal?.throwIfAborted();
@@ -245,6 +247,9 @@ export function createPiTelemetryRuntime(
 
       turn_start: (event, ctx) => {
         if (!active) return;
+        // Stamped as the event fires, not inside the queue, so a backed-up queue
+        // cannot inflate the turn duration this records.
+        turnStartedAt.set(event.turnIndex, Date.now());
         return enqueueForSession(ctx, async () => {
           getTelemetry(ctx);
           await emit('debug', 'pi.turn.started', {
@@ -256,6 +261,9 @@ export function createPiTelemetryRuntime(
 
       turn_end: (event, ctx) => {
         if (!active) return;
+        const turnStart = turnStartedAt.get(event.turnIndex);
+        turnStartedAt.delete(event.turnIndex);
+        const turnDurationMs = turnStart === undefined ? undefined : Date.now() - turnStart;
         return enqueueForSession(ctx, async () => {
           getTelemetry(ctx);
           const usage = usageAttributes(event.message);
@@ -263,6 +271,7 @@ export function createPiTelemetryRuntime(
             ...contextAttributes(ctx),
             'pi.turn.index': event.turnIndex,
             'pi.tool_result.count': event.toolResults.length,
+            ...(turnDurationMs === undefined ? {} : { 'pi.turn.duration_ms': turnDurationMs }),
             ...usage,
           });
           if (event.message.role === 'assistant' && FAILURE_STOP_REASONS.includes(event.message.stopReason)) {
@@ -370,6 +379,7 @@ export function createPiTelemetryRuntime(
       sessionGeneration += 1;
       sessionReadiness = undefined;
       toolStartedAt.clear();
+      turnStartedAt.clear();
       agentStartedAt = undefined;
       const ownedTelemetry = telemetry;
       telemetry = undefined;

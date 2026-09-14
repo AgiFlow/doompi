@@ -104,6 +104,12 @@ export class EditTracker implements IEditTracker {
   private readonly contents = new Map<string, string>();
   private readonly now: () => number;
   private readonly git: GitStatusPort | undefined;
+  /**
+   * The scan deferred by the last bash call. Every bracket joins this chain, so
+   * at most one walk runs at a time and each one sees the baseline the previous
+   * one left behind.
+   */
+  private scanning: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly timeline: ITimelineStore,
@@ -124,11 +130,22 @@ export class EditTracker implements IEditTracker {
     this.bracketed.clear();
     this.contents.clear();
     this.manifest = undefined;
+    this.scanning = Promise.resolve();
     this.excluded = options.exclude ?? [];
     this.isIgnored = options.isIgnored;
   }
 
+  /**
+   * Awaits a scan still running in the background. A caller that is about to
+   * clear the timeline needs this, or the scan appends after the clear.
+   */
+  async flush(): Promise<void> {
+    await this.scanning;
+  }
   async start(id: string, tool: string, args: unknown, cwd: string): Promise<void> {
+    // A deferred scan still owns the baseline manifest, so it settles before
+    // this bracket reads or replaces it.
+    await this.scanning;
     if (tool === EDIT_TOOL || tool === WRITE_TOOL) {
       const supplied = objectValue(args, 'path');
       if (!supplied) return;
@@ -166,7 +183,18 @@ export class EditTracker implements IEditTracker {
     // A failed command may still have written before it failed. Skipping the
     // walk would leave the baseline stale and hand those writes to whichever
     // call closes next.
-    if (startedAt !== undefined) await this.recordScan(cwd, startedAt);
+    if (startedAt === undefined) return;
+    // The walk is the expensive half of this hook and pi awaits the hook before
+    // it hands the tool result back to the model. Deferring it onto the chain
+    // moves that cost into the model's own thinking time instead of the user's
+    // wait; start() joins the same chain, so ordering still holds.
+    this.scanning = this.scanning.then(async () => {
+      try {
+        await this.recordScan(cwd, startedAt);
+      } catch {
+        // One failed scan must not poison the chain for every later call.
+      }
+    });
   }
 
   /** An `edit` or `write` whose file was read on both sides of the call. */

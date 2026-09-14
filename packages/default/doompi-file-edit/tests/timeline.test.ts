@@ -107,11 +107,14 @@ describe('TimelineStore', () => {
     await tracker.start('edit-1', 'edit', { path: filePath }, directory);
     fs.writeFileSync(filePath, 'after');
     await tracker.end('edit-1', false, directory);
+    await tracker.flush();
     await tracker.start('write-1', 'write', { path: 'created.ts' }, directory);
     fs.writeFileSync(path.join(directory, 'created.ts'), 'new file');
     await tracker.end('write-1', false, directory);
+    await tracker.flush();
     await tracker.start('failed', 'edit', { path: filePath }, directory);
     await tracker.end('failed', true, directory);
+    await tracker.flush();
     expect((await store.list()).map((entry) => [entry.path, entry.tool])).toEqual(
       expect.arrayContaining([
         [path.join(directory, 'created.ts'), 'write'],
@@ -127,6 +130,7 @@ describe('TimelineStore', () => {
     await tracker.start('edit-1', 'edit', { path: filePath }, directory);
     fs.writeFileSync(filePath, 'one\ntwo\nthree\n');
     await tracker.end('edit-1', false, directory);
+    await tracker.flush();
     const [version] = await store.versions(filePath);
     expect(version?.origin).toBe('tool');
     expect(version?.before).toMatch(/^[0-9a-f]{64}$/u);
@@ -141,6 +145,7 @@ describe('TimelineStore', () => {
     fs.writeFileSync(filePath, 'same');
     await tracker.start('edit-1', 'edit', { path: filePath }, directory);
     await tracker.end('edit-1', false, directory);
+    await tracker.flush();
     expect(await store.list()).toEqual([]);
   });
 
@@ -155,6 +160,7 @@ describe('TimelineStore', () => {
     await tracker.start('bash-1', 'bash', { command: 'python3 fix.py' }, directory);
     fs.writeFileSync(target, 'after');
     await tracker.end('bash-1', false, directory);
+    await tracker.flush();
     expect((await store.list()).map((entry) => entry.path)).toEqual([target]);
     const [version] = await store.versions(target);
     expect(version?.origin).toBe('scan');
@@ -168,14 +174,39 @@ describe('TimelineStore', () => {
     fs.writeFileSync(filePath, 'before');
     await tracker.start('bash-0', 'bash', { command: 'ls' }, directory);
     await tracker.end('bash-0', false, directory);
+    await tracker.flush();
     await tracker.start('edit-1', 'edit', { path: filePath }, directory);
     fs.writeFileSync(filePath, 'after');
     await tracker.end('edit-1', false, directory);
+    await tracker.flush();
     await tracker.start('bash-1', 'bash', { command: 'ls' }, directory);
     await tracker.end('bash-1', false, directory);
+    await tracker.flush();
     expect((await store.list()).map((entry) => [entry.path, entry.tool, entry.count])).toEqual([[filePath, 'edit', 1]]);
   });
 
+  it('finishes the scan it deferred before the next call reads the baseline', async () => {
+    // `end` returns before the walk so a tool result is not held behind it. The
+    // next `start` joins the same chain, which is the only thing keeping the
+    // deferred walk from attributing the next call's writes to this one.
+    const tracker = createTracker();
+    const first = path.join(directory, 'first.txt');
+    const second = path.join(directory, 'second.txt');
+    fs.writeFileSync(first, 'before');
+
+    await tracker.start('bash-1', 'bash', { command: 'one.sh' }, directory);
+    fs.writeFileSync(first, 'after');
+    await tracker.end('bash-1', false, directory);
+
+    // No flush: the next bracket is what has to wait, not this test.
+    await tracker.start('bash-2', 'bash', { command: 'two.sh' }, directory);
+    expect((await store.list()).map((entry) => entry.path)).toEqual([first]);
+
+    fs.writeFileSync(second, 'new');
+    await tracker.end('bash-2', false, directory);
+    await tracker.flush();
+    expect((await store.list()).map((entry) => entry.path).sort()).toEqual([first, second].sort());
+  });
   it('serialises concurrent appends behind its lock, losing none of them', async () => {
     // Subagents fold into the parent's timeline, so several writers really do
     // append at once; the lock is what stops one truncating another's line.

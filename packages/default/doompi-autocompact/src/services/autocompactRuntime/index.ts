@@ -15,7 +15,7 @@ import {
 import type { DoomFooterContributionHandle } from '@agimon-ai/doompi-core/footer';
 import { DOOM_UI_HUB_SERVICE, requireDoomUiHub } from '@agimon-ai/doompi-core/ui-hub';
 import type { Context } from '@deepseek-ai/cordis';
-import type { ExtensionAPI, ExtensionContext, SessionEntry } from '@earendil-works/pi-coding-agent';
+import type { ContextEvent, ExtensionAPI, ExtensionContext, SessionEntry } from '@earendil-works/pi-coding-agent';
 import {
   buildSessionContext,
   DEFAULT_COMPACTION_SETTINGS,
@@ -39,6 +39,7 @@ import {
   FOOTER_ORDER,
   STATUS_KEY,
   STATE_PHASE,
+  SLOW_CONTEXT_HOOK_MS,
 } from '../../constants/runtime';
 import type {
   AutocompactContextDetails,
@@ -893,43 +894,66 @@ export function createAutocompactRuntime(
     processProgress(ctx);
   };
 
+  /**
+   * Replaces the messages pi is about to send with the projection the last
+   * applied checkpoint describes. Split out from the hook so the hook can time
+   * it without threading a duration through three return paths.
+   */
+  const shapeContext = (event: ContextEvent, ctx: ExtensionContext) => {
+    if (!active) return undefined;
+    const projection = projectContextMessages(event.messages, ctx.sessionManager.getBranch());
+    if (projection.invalidMarker) {
+      const leafId = ctx.sessionManager.getLeafId() ?? ROOT_WORKING_LEAF;
+      if (!invalidContextLeaves.has(leafId)) {
+        invalidContextLeaves.add(leafId);
+        void telemetry.recordError(
+          AUTOCOMPACT_EVENT.contextMarkerInvalid,
+          new Error('Doom autocompact context marker is malformed.'),
+          telemetryAttributes(ctx, { 'autocompact.leaf_id': leafId }),
+        );
+      }
+      return undefined;
+    }
+    if (!projection.marker) return undefined;
+    if (!appliedContextRequests.has(projection.marker.requestId)) {
+      appliedContextRequests.add(projection.marker.requestId);
+      void telemetry.recordEvent(
+        AUTOCOMPACT_EVENT.contextApplied,
+        telemetryAttributes(ctx, {
+          'autocompact.request.id': projection.marker.requestId,
+          'autocompact.cycle': projection.marker.cycle,
+          'autocompact.pass': projection.marker.pass,
+          'autocompact.snapshot_leaf_id': projection.marker.snapshotLeafId,
+          'autocompact.tokens_before': projection.marker.tokensBefore,
+          'autocompact.message_count.before': event.messages.length,
+          'autocompact.message_count.after': projection.messages.length,
+          'autocompact.message_count.retained': projection.retainedMessageCount,
+        }),
+      );
+    }
+    return { messages: projection.messages };
+  };
   return {
     plugin,
     stop,
     events: {
       context: (event, ctx) => {
-        if (!active) return undefined;
-        const projection = projectContextMessages(event.messages, ctx.sessionManager.getBranch());
-        if (projection.invalidMarker) {
-          const leafId = ctx.sessionManager.getLeafId() ?? ROOT_WORKING_LEAF;
-          if (!invalidContextLeaves.has(leafId)) {
-            invalidContextLeaves.add(leafId);
-            void telemetry.recordError(
-              AUTOCOMPACT_EVENT.contextMarkerInvalid,
-              new Error('Doom autocompact context marker is malformed.'),
-              telemetryAttributes(ctx, { 'autocompact.leaf_id': leafId }),
+        // pi awaits this hook inside every request and the body walks the whole
+        // branch, so it is one of the few costs that can grow with a session's
+        // length. Reported only past the threshold: a hook this hot would
+        // otherwise emit an event per request.
+        const hookStartedAt = Date.now();
+        try {
+          return shapeContext(event, ctx);
+        } finally {
+          const hookMs = Date.now() - hookStartedAt;
+          if (hookMs >= SLOW_CONTEXT_HOOK_MS) {
+            void telemetry.recordEvent(
+              AUTOCOMPACT_EVENT.contextHookSlow,
+              telemetryAttributes(ctx, { hook_ms: hookMs, 'autocompact.message_count': event.messages.length }),
             );
           }
-          return undefined;
         }
-        if (!projection.marker) return undefined;
-        if (!appliedContextRequests.has(projection.marker.requestId)) {
-          appliedContextRequests.add(projection.marker.requestId);
-          void telemetry.recordEvent(
-            AUTOCOMPACT_EVENT.contextApplied,
-            telemetryAttributes(ctx, {
-              'autocompact.request.id': projection.marker.requestId,
-              'autocompact.cycle': projection.marker.cycle,
-              'autocompact.pass': projection.marker.pass,
-              'autocompact.snapshot_leaf_id': projection.marker.snapshotLeafId,
-              'autocompact.tokens_before': projection.marker.tokensBefore,
-              'autocompact.message_count.before': event.messages.length,
-              'autocompact.message_count.after': projection.messages.length,
-              'autocompact.message_count.retained': projection.retainedMessageCount,
-            }),
-          );
-        }
-        return { messages: projection.messages };
       },
 
       session_start: (_event, ctx) => beginSessionGeneration(ctx),

@@ -114,6 +114,7 @@ describe('a session’s file changes, end to end', () => {
     await tracker.start('call-1', 'edit', { path: filePath }, cwd);
     fs.writeFileSync(filePath, 'one\ntwo\nthree\n');
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
 
     // The hub finds the timeline from the session id and cwd alone.
     expect(readHubRows()).toEqual([
@@ -143,6 +144,7 @@ describe('a session’s file changes, end to end', () => {
     await tracker.start('call-1', 'bash', { command: 'node scripts/codemod.mjs' }, cwd);
     fs.writeFileSync(filePath, 'after the script ran');
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
 
     expect(readHubRows()).toEqual([
       { path: filePath, relPath: 'generated.txt', tool: 'bash', at: expect.any(Number), count: 1, diffable: false },
@@ -163,12 +165,14 @@ describe('a session’s file changes, end to end', () => {
     await tracker.start('call-1', 'bash', { command: 'node scripts/codemod.mjs' }, cwd);
     fs.writeFileSync(filePath, 'after the script ran');
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
 
     // The second call rewrites the identical bytes, which moves the modification
     // time the walk reads and nothing a reader would call an edit.
     await tracker.start('call-2', 'bash', { command: 'touch generated.txt' }, cwd);
     fs.writeFileSync(filePath, 'after the script ran');
     await tracker.end('call-2', false, cwd);
+    await tracker.flush();
 
     expect(readHubRows()).toEqual([
       { path: filePath, relPath: 'generated.txt', tool: 'bash', at: expect.any(Number), count: 1, diffable: false },
@@ -188,6 +192,7 @@ describe('a session’s file changes, end to end', () => {
 
     await tracker.start('call-1', 'bash', { command: 'ls' }, cwd);
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
 
     fs.writeFileSync(outside, 'written by someone else entirely');
     const aWhileAgo = new Date(Date.now() - 60_000);
@@ -196,6 +201,7 @@ describe('a session’s file changes, end to end', () => {
     await tracker.start('call-2', 'bash', { command: 'node scripts/codemod.mjs' }, cwd);
     fs.writeFileSync(mine, 'written by the command');
     await tracker.end('call-2', false, cwd);
+    await tracker.flush();
 
     expect(readHubRows().map((row) => row.relPath)).toEqual(['mine.ts']);
   });
@@ -213,6 +219,7 @@ describe('a session’s file changes, end to end', () => {
     fs.writeFileSync(clean, 'committed');
     fs.writeFileSync(ignored, 'log line two');
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
 
     expect(readHubRows().map((row) => row.relPath)).toEqual(['temp.log']);
   });
@@ -224,9 +231,11 @@ describe('a session’s file changes, end to end', () => {
     await tracker.start('call-1', 'edit', { path: filePath }, cwd);
     fs.writeFileSync(filePath, 'a\nb\n');
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
     await tracker.start('call-2', 'edit', { path: filePath }, cwd);
     fs.writeFileSync(filePath, 'a\nb\nc\n');
     await tracker.end('call-2', false, cwd);
+    await tracker.flush();
 
     expect(readHubRows()[0]?.count).toBe(2);
     const detail = await readApiDetail(filePath);
@@ -249,8 +258,10 @@ describe('a session’s file changes, end to end', () => {
     await tracker.start('call-1', 'bash', { command: 'true' }, cwd);
     fs.writeFileSync(filePath, 'after');
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
     await tracker.start('call-2', 'bash', { command: 'true' }, cwd);
     await tracker.end('call-2', false, cwd);
+    await tracker.flush();
 
     // The second call recorded nothing: the first call's own bookkeeping is
     // not a change, and neither is the file it already accounted for.
@@ -267,9 +278,11 @@ describe('a session’s file changes, end to end', () => {
     await tracker.start('call-1', 'edit', { path: kept }, cwd);
     fs.writeFileSync(kept, 'a\nb\n');
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
     await tracker.start('call-2', 'bash', { command: 'rm removed.ts' }, cwd);
     fs.rmSync(removed);
     await tracker.end('call-2', false, cwd);
+    await tracker.flush();
 
     // The dock drops it, because there is nothing left to open.
     expect(readHubRows().map((row) => row.relPath)).toEqual(['kept.ts']);
@@ -297,6 +310,7 @@ describe('a session’s file changes, end to end', () => {
     await tracker.start('call-1', 'bash', { command: 'pnpm test' }, cwd);
     touch(filePath);
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
 
     // Nothing proved the content moved, so no surface claims it did.
     expect(readHubRows()).toEqual([]);
@@ -316,6 +330,7 @@ describe('a session’s file changes, end to end', () => {
     await tracker.start('call-1', 'bash', { command: 'node scripts/build.mjs' }, cwd);
     fs.writeFileSync(filePath, 'produced by the script\n');
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
 
     expect(readHubRows().map((row) => row.relPath)).toEqual(['built.txt']);
   });
@@ -331,6 +346,7 @@ describe('a session’s file changes, end to end', () => {
     await tracker.start('call-1', 'bash', { command: 'node scripts/append.mjs' }, cwd);
     fs.writeFileSync(filePath, 'much longer than it was before');
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
 
     expect(readHubRows().map((row) => row.relPath)).toEqual(['grown.txt']);
   });
@@ -349,6 +365,7 @@ describe('a session’s file changes, end to end', () => {
     fs.writeFileSync(disowned, 'a bundle nobody edited');
     fs.writeFileSync(kept, 'source the script also rewrote');
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
 
     expect(readHubRows().map((row) => row.relPath)).toEqual(['src.js']);
     // Dropped before it cost a read, so its content was never copied either.
@@ -366,6 +383,7 @@ describe('a session’s file changes, end to end', () => {
     await tracker.start('call-1', 'bash', { command: 'git checkout .' }, cwd);
     touch(filePath);
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
 
     expect(readHubRows()).toEqual([]);
     // Asking git first is what keeps this file out of the blob store entirely.
@@ -380,6 +398,7 @@ describe('a session’s file changes, end to end', () => {
     await tracker.start('call-1', 'bash', { command: 'node scripts/flaky.mjs' }, cwd);
     fs.writeFileSync(filePath, 'written before the command gave up\n');
     await tracker.end('call-1', true, cwd);
+    await tracker.flush();
 
     // A command that failed can still have written, and skipping the walk would
     // also leave the baseline stale for whichever call closes next.
@@ -407,6 +426,7 @@ describe('a session’s file changes, end to end', () => {
       fs.writeFileSync(artifact, 'run output');
     }
     await tracker.end('call-1', false, cwd);
+    await tracker.flush();
 
     expect(readHubRows().map((row) => row.relPath)).toEqual([path.join('src', 'app.spec.ts')]);
   });
