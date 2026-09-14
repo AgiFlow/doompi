@@ -62,7 +62,7 @@ function packageWithServerDependency(root: string, name: string) {
 
 function packageWithRmuxResource(root: string, name: string) {
   const pkg = installedPackage(root, name);
-  const resourcePackage = `@agimon-ai/doompi-runner-doompi-runner-rmux-${process.platform}-${process.arch}`;
+  const resourcePackage = `@agimon-ai/doompi-runner-rmux-${process.platform}-${process.arch}`;
   const resourceDirectory = path.join(root, 'node_modules', ...resourcePackage.split('/'));
   fs.mkdirSync(path.join(resourceDirectory, 'vendor', 'bin'), { recursive: true });
   fs.writeFileSync(
