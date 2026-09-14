@@ -10,9 +10,9 @@ import { z } from 'zod';
 
 import { createWorkflowCatalogReader, presentWorkflowCatalog } from '../services/webWorkflowCatalog';
 import { defaultCatalogDeps } from '../services/workflowCatalogDeps';
-import { parseWorkflowLaunchCommand } from '../services/workflowLaunchCommand';
+import { parseWorkflowLaunchCommand, resolveWorkflowEntry } from '../services/workflowLaunchCommand';
 import { readWorkflowSkill as skill } from '../services/workflowResource';
-import { presentWorkflowRuns, runBelongsToSession } from '../services/workflowRuns';
+import { PI_SESSION_ENV, presentWorkflowRuns, runBelongsToSession } from '../services/workflowRuns';
 import { readWorkflowRuns } from '../services/workflowWatcher';
 import { WORKFLOW_CATALOG_TYPE, WORKFLOW_RUNS_TYPE } from '../types/webWorkflows';
 
@@ -188,7 +188,18 @@ export function createWorkflowServerRuntime(
         when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: SOURCE,
         async start(executionContext) {
-          control = feature.createRunControl({});
+          control = feature.createRunControl({
+            recordFilter: (record) => record.env?.[PI_SESSION_ENV] === executionContext.sessionId,
+          });
+          const activeControl = control;
+          const publishRun = (): void => {
+            if (control === activeControl) void publishLifecycle(executionContext);
+          };
+          activeControl.on('runStarted', publishRun);
+          activeControl.on('runUpdated', publishRun);
+          activeControl.on('runFinished', publishRun);
+          activeControl.on('job', publishRun);
+          activeControl.on('step', publishRun);
           await control.start();
           await publishLifecycle(executionContext);
           return () => {
@@ -222,9 +233,15 @@ export function createWorkflowServerRuntime(
         description: 'Start a workflow run and return its recorded launch result.',
         parameters: z.toJSONSchema(feature.runTool.getInputSchema()),
         executionMode: 'serial',
-        async execute(_toolCallId, parameters, signal) {
+        async execute(_toolCallId, parameters, signal, _onUpdate, execution) {
           signal?.throwIfAborted();
-          return callResult(await feature.runTool.execute(parameters as Parameters<typeof feature.runTool.execute>[0]));
+          const input = parameters as Parameters<typeof feature.runTool.execute>[0];
+          return callResult(
+            await feature.runTool.execute({
+              ...input,
+              env: { ...input.env, [PI_SESSION_ENV]: execution.sessionId },
+            }),
+          );
         },
       },
       {
@@ -281,11 +298,20 @@ export function createWorkflowServerRuntime(
             await execution.client.notify({ body: parsed.error, level: 'error' });
             return;
           }
+          const entry = resolveWorkflowEntry(await catalogReader.read(execution.cwd), parsed.workflow);
+          if (entry === undefined) {
+            await execution.client.notify({
+              body: `No workflow matches '${parsed.workflow}' under ${execution.cwd}.`,
+              level: 'error',
+            });
+            return;
+          }
           const result = await feature.runTool.execute({
-            workflowPath: parsed.workflow,
+            workflowPath: entry.path,
             ...(parsed.runner === undefined ? {} : { runner: parsed.runner }),
             ...(Object.keys(parsed.inputs).length === 0 ? {} : { inputs: parsed.inputs }),
             ...(parsed.prompt === undefined ? {} : { prompt: parsed.prompt }),
+            env: { [PI_SESSION_ENV]: execution.sessionId },
           });
           const rendered = callResult(result).content.find((entry) => entry.type === 'text');
           await execution.client.notify({

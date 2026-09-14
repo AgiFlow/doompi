@@ -23,6 +23,7 @@ import { workflowServerFacet } from '../../../src/extensions/server';
 
 const embeddedFeature = vi.hoisted(() => {
   const control = {
+    on: vi.fn((_event: string, _callback: () => void) => vi.fn()),
     start: vi.fn(async () => undefined),
     pause: vi.fn(async () => ({ ok: 'paused' })),
     resume: vi.fn(async () => ({ ok: 'resumed' })),
@@ -60,6 +61,18 @@ vi.mock('@agimon-ai/workflow-mcp', () => ({
   createEmbeddedWorkflowFeature: () => embeddedFeature.feature,
 }));
 vi.mock('zod', () => ({ z: { toJSONSchema: vi.fn(() => ({ type: 'object' })) } }));
+vi.mock('../../../src/services/webWorkflowCatalog', () => ({
+  createWorkflowCatalogReader: () => ({
+    read: async () => [
+      {
+        name: 'Blog Writing',
+        path: '/repo/automations/workflows/blog-writing.workflow.yml',
+        relativePath: 'automations/workflows/blog-writing.workflow.yml',
+      },
+    ],
+  }),
+  presentWorkflowCatalog: (entries: unknown) => entries,
+}));
 
 async function fixture() {
   let minorModes: string[] = [];
@@ -89,6 +102,7 @@ async function fixture() {
   const hooks: DoomHeadlessHook[] = [];
   const registration = { dispose: vi.fn() };
   const publish = vi.fn();
+  const directPublish = vi.fn();
   const modeDispose = vi.fn();
   const registerOwner = vi.fn((mode: DoomHeadlessMinorMode) => {
     modes.push(mode);
@@ -125,13 +139,26 @@ async function fixture() {
   const serverHost = {
     scope: 'session',
     registerApi: () => ({ dispose() {} }),
-    context: { directEvents: { publish: vi.fn() } },
+    context: { directEvents: { publish: directPublish } },
   } as unknown as DoomServerHostService;
   const context = new Context();
   context.provide(DOOM_SERVER_HOST_SERVICE, serverHost);
   context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
   const close = await mountFacet(workflowServerFacet, context, host, registerOwner);
-  return { execution, modes, activities, tools, resources, commands, hooks, publish, modeDispose, registration, close };
+  return {
+    execution,
+    modes,
+    activities,
+    tools,
+    resources,
+    commands,
+    hooks,
+    publish,
+    directPublish,
+    modeDispose,
+    registration,
+    close,
+  };
 }
 
 function operation(execution: DoomHeadlessExecutionContext) {
@@ -186,6 +213,9 @@ describe('workflow headless facet', () => {
       content: [{ type: 'text', text: 'workflow launched' }],
       details: { content: [{ type: 'text', text: 'workflow launched' }] },
     });
+    expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith({
+      env: { PI_SESSION_ID: 'workflow-headless-test' },
+    });
     expect(
       await run.execute('run-status', { action: 'status', runKey: 'run-1' }, undefined, undefined, test.execution),
     ).toEqual({
@@ -207,6 +237,16 @@ describe('workflow headless facet', () => {
 
     const stopActivity = await activity.start(test.execution);
     expect(embeddedFeature.control.start).toHaveBeenCalledOnce();
+    expect(embeddedFeature.control.on.mock.calls.map(([event]) => event)).toEqual([
+      'runStarted',
+      'runUpdated',
+      'runFinished',
+      'job',
+      'step',
+    ]);
+    const publishedBeforeRun = test.directPublish.mock.calls.length;
+    embeddedFeature.control.on.mock.calls.find(([event]) => event === 'runStarted')?.[1]();
+    await vi.waitFor(() => expect(test.directPublish.mock.calls.length).toBeGreaterThan(publishedBeforeRun));
     await expect(
       run.execute('run-missing-id', { action: 'pause', runKey: 'run-1' }, undefined, undefined, test.execution),
     ).resolves.toMatchObject({
@@ -242,14 +282,20 @@ describe('workflow headless facet', () => {
       body: 'Usage: /workflow-launch <workflow> [key=value …] [prompt]',
       level: 'error',
     });
-    await command.execute('build runner=local environment=prod Deploy now', test.execution);
+    await command.execute('"Blog Writing" runner=local environment=prod Deploy now', test.execution);
     expect(embeddedFeature.feature.runTool.execute).toHaveBeenLastCalledWith({
-      workflowPath: 'build',
+      workflowPath: '/repo/automations/workflows/blog-writing.workflow.yml',
       runner: 'local',
       inputs: { environment: 'prod' },
       prompt: 'Deploy now',
+      env: { PI_SESSION_ID: 'workflow-headless-test' },
     });
     expect(test.execution.client.notify).toHaveBeenLastCalledWith({ body: 'workflow launched', level: 'info' });
+    await command.execute('missing', test.execution);
+    expect(test.execution.client.notify).toHaveBeenLastCalledWith({
+      body: `No workflow matches 'missing' under ${process.cwd()}.`,
+      level: 'error',
+    });
 
     await shutdown.handle({}, test.execution);
     expect(embeddedFeature.control.dispose).toHaveBeenCalledOnce();
