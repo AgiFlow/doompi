@@ -164,8 +164,6 @@ function acquireDirectoryWatch(directory: string): DirectoryWatch {
     // A watcher that cannot report is a watcher whose slices time out, which the
     // caller's own probe already covers.
     entry.watcher.on('error', () => undefined);
-    // Watching a sidecar is not work of its own, so it does not hold the loop open.
-    entry.watcher.unref?.();
   } catch {
     entry.watcher = undefined;
   }
@@ -228,10 +226,9 @@ export function watchForFile(filePath: string): FileWatch {
           settle();
           resolve(found);
         }, withinMs);
-        // A pending wait is not a reason to keep the process alive: the poll it
-        // replaced was unref'd, and a caller that has nothing else left to do
-        // should still be able to exit.
-        timer.unref?.();
+        // Deliberately left holding the event loop. A run still being waited on
+        // is work, and a process that exits during the gap between two probes
+        // drops the result its caller is awaiting.
         notify = () => {
           clearTimeout(timer);
           notify = undefined;
