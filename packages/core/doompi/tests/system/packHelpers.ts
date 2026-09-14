@@ -30,13 +30,6 @@ const PACKAGE_JSON_FILE = 'package.json';
 const NON_SOURCE_FILE_SUFFIXES = ['.map', '.d.mts', '.d.cts'] as const;
 const UTF8_ENCODING = 'utf8';
 const NEWLINE = '\n';
-const PNPM_WORKSPACE_FILE = 'pnpm-workspace.yaml';
-const INSTALL_BUILD_POLICIES: Readonly<Record<string, boolean>> = {
-  '@google/genai': false,
-  'better-sqlite3': true,
-  esbuild: true,
-  protobufjs: true,
-};
 const PUBLIC_HOST_DEPENDENCIES: Readonly<Record<string, string>> = {
   '@earendil-works/pi-agent-core': '0.85.1',
   '@earendil-works/pi-ai': '0.85.1',
@@ -316,25 +309,16 @@ export async function installLocalPackages(
     if (packResult.code !== 0) throw new Error(`Local tarball creation failed for ${name}: ${packResult.stderr}`);
   }
   writeConsumerDependencies(consumer, tarballs);
-  const workspacePath = path.join(consumer.root, PNPM_WORKSPACE_FILE);
-  const buildPolicies = Object.entries(INSTALL_BUILD_POLICIES)
-    .map(([name, allowed]) => `  ${JSON.stringify(name)}: ${allowed}`)
-    .join(NEWLINE);
-  fs.writeFileSync(
-    workspacePath,
-    `packages:${NEWLINE}  - '.'${NEWLINE}allowBuilds:${NEWLINE}${buildPolicies}${NEWLINE}autoInstallPeers: false${NEWLINE}strictDepBuilds: false${NEWLINE}`,
+  // Reuse pnpm's content-addressed cache; resolution and node_modules remain isolated in the consumer root.
+  // Keep the lockfile inside the throwaway consumer root for deterministic installs.
+  const result = await runCommand(
+    PNPM_COMMAND,
+    ['install', '--no-frozen-lockfile', '--prefer-offline', '--ignore-scripts', '--config.auto-install-peers=false'],
+    consumer.root,
   );
-  try {
-    // Reuse pnpm's content-addressed cache; resolution and node_modules remain isolated in the consumer root.
-    // Keep the lockfile inside the throwaway consumer root for deterministic installs.
-    return runCommand(
-      PNPM_COMMAND,
-      ['install', '--no-frozen-lockfile', '--prefer-offline', '--ignore-scripts'],
-      consumer.root,
-    );
-  } finally {
-    fs.rmSync(workspacePath, { force: true });
-  }
+  // pnpm may create workspace metadata when it updates temporary install settings.
+  fs.rmSync(path.join(consumer.root, 'pnpm-workspace.yaml'), { force: true });
+  return result;
 }
 
 export function installedPackageRoot(consumerRoot: string, name: string): string {
