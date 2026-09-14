@@ -22,9 +22,7 @@ export function promptPath(name: string): string {
 }
 
 function apiRoot(sessionId?: string | null): string {
-  return sessionId == null
-    ? '/api/global/plugin/prompts'
-    : `/api/sessions/${encodeURIComponent(sessionId)}/plugin/prompts`;
+  return sessionId == null ? '/api/plugins/prompts' : `/api/sessions/${encodeURIComponent(sessionId)}/plugin/prompts`;
 }
 
 /** The absolute URL a page fetches for the collection. */

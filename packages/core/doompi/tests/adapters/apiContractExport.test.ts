@@ -110,7 +110,7 @@ it('exports the global default, workspace default, and selected session mode wit
   expect(read('manifest.json')).toBe(first);
   const document = JSON.parse(read('openapi.json')) as { paths: Record<string, unknown> };
   expect(Object.keys(document.paths).sort()).toEqual([
-    '/api/global/plugin/global/read',
+    '/api/plugins/global/read',
     '/api/sessions/{sessionId}/plugin/workspace/read',
     '/api/workspaces/{workspaceId}/plugin/workspace/read',
   ]);

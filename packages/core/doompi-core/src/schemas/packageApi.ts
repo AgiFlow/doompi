@@ -43,7 +43,7 @@ export interface DoomWebComposition {
 
 /** Canonical public prefix. Scope selection never falls through to a parent. */
 export function doomApiMountPath(mount: DoomApiMount): string {
-  if (mount.scope === 'global') return '/api/global/plugin';
+  if (mount.scope === 'global') return '/api/plugins';
   if (mount.scope === 'workspace') return `/api/workspaces/${encodeURIComponent(mount.workspaceId)}/plugin`;
   return `/api/sessions/${encodeURIComponent(mount.sessionId)}/plugin`;
 }

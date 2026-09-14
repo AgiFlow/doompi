@@ -210,7 +210,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const headlessUrl = new URL(options.headlessUrl ?? DEFAULT_HEADLESS_URL);
   const server = createServer((request, response) => {
     const url = requestUrl(request);
-    if (url.pathname === '/api/remote/frontend' || url.pathname === '/api/global/plugin/remote/frontend') {
+    if (url.pathname === '/api/remote/frontend' || url.pathname === '/api/plugins/remote/frontend') {
       response.writeHead(404, { 'content-type': 'application/json; charset=utf-8' });
       response.end(JSON.stringify({ error: 'Not found.' }));
       return;

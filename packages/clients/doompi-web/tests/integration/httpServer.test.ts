@@ -139,7 +139,7 @@ describe('the web presentation server', () => {
     });
     expect(health.status).toBe(200);
     expect(await health.json()).toEqual({ ok: true, token: 'test-token' });
-    for (const path of ['/api/remote/frontend', '/api/global/plugin/remote/frontend']) {
+    for (const path of ['/api/remote/frontend', '/api/plugins/remote/frontend']) {
       expect((await fetch(`${presentation.url}${path}`, { method: 'POST' })).status).toBe(404);
     }
   });

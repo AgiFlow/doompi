@@ -400,9 +400,10 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       json(response, 200, { ok: true });
       return;
     }
-    const pluginMatch = /^\/api\/(global|workspaces\/([^/]+)|sessions\/([^/]+))\/plugin\/([^/]+)(?:\/(.*))?$/u.exec(
-      url.pathname,
-    );
+    const pluginMatch =
+      /^\/api\/(plugins|workspaces\/([^/]+)\/plugin|sessions\/([^/]+)\/plugin)\/([^/]+)(?:\/(.*))?$/u.exec(
+        url.pathname,
+      );
     if (pluginMatch !== null && request.method !== 'CONNECT') {
       const mount: DoomApiMount =
         pluginMatch[2] !== undefined

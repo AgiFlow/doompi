@@ -47,7 +47,7 @@ const componentName = (value: string): string =>
   value.replace(/[^a-zA-Z0-9.-]/gu, (character) => `_${character.codePointAt(0)!.toString(16)}_`);
 const pluginPrefix = (scope: DoomApiScope): string =>
   scope === 'global'
-    ? '/api/global/plugin'
+    ? '/api/plugins'
     : scope === 'workspace'
       ? '/api/workspaces/{workspaceId}/plugin'
       : '/api/sessions/{sessionId}/plugin';

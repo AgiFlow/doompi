@@ -304,7 +304,7 @@ describe('serveHeadlessServer', () => {
     ).toBe(200);
     expect(recordEvent).toHaveBeenCalledWith('web.browser.open', { duration_ms: 12, count: 2 });
     expect(recordEvent).toHaveBeenCalledWith('web.browser.close', {});
-    const plugin = await fetch(`${server.url}/api/global/plugin/test/path?query=yes`, {
+    const plugin = await fetch(`${server.url}/api/plugins/test/path?query=yes`, {
       method: 'POST',
       headers: { 'x-doompi-api-caller-locality': 'forged', 'x-extra': 'allowed' },
       body: 'content',

@@ -3,7 +3,7 @@ import { expect, test } from '../support/cockpit';
 test.use({ assets: 'synced' });
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/api/global/plugin/voice/clients/**', async (route) => {
+  await page.route('**/api/plugins/voice/clients/**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

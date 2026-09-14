@@ -675,17 +675,12 @@ describe('RmuxBackend.stop', () => {
     });
 
     expect(handle).toMatchObject({ pid: RMUX_PID, backend: 'rmux', backendTarget: RMUX_TARGET });
-    // new-session and pipe-pane. The pane is no longer told to remain on exit,
-    // so it ends its own session instead of leaving one behind.
-    expect(rmuxMocks.cmd).toHaveBeenCalledTimes(2);
-    expect(rmuxMocks.cmd).not.toHaveBeenCalledWith(
-      expect.stringContaining('set-window-option'),
-      expect.anything(),
-      expect.anything(),
-      'remain-on-exit',
-      expect.anything(),
-      expect.anything(),
-    );
+    // Preserve the pane before attaching the log reader and releasing the shell.
+    expect(rmuxMocks.cmd.mock.calls).toEqual([
+      expect.arrayContaining(['new-session']),
+      ['set-option', '-t', RMUX_TARGET, 'remain-on-exit', 'on', { check: true }],
+      expect.arrayContaining(['pipe-pane']),
+    ]);
     await vi.advanceTimersByTimeAsync(2_100);
     await expect(handle?.completion()).resolves.toEqual({ code: 143, signal: null });
     expect(rmuxMocks.sessionKill).toHaveBeenCalled();

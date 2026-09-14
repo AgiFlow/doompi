@@ -47,7 +47,7 @@ function clientUrl(): string {
     id = `browser-${crypto.randomUUID()}`;
     browser.localStorage.setItem(key, id);
   }
-  return `/api/global/plugin/voice/clients/${encodeURIComponent(id)}`;
+  return `/api/plugins/voice/clients/${encodeURIComponent(id)}`;
 }
 
 async function request(path: string, init?: RequestInit): Promise<Pick<MicrophoneState, 'inputs' | 'deviceId'>> {

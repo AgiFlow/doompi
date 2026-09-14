@@ -87,8 +87,9 @@ export class RmuxBackend implements IRmuxBackend {
         { check: true },
       );
       created = true;
-      // No remain-on-exit: a finished pane ends its session, and the last session
-      // ending stops the server, so a completed run leaves no process behind.
+      // Keep the pane until the log reader drains. Otherwise a fast shell can
+      // end the session before the reader starts, losing its final output.
+      await rmux.cmd('set-option', '-t', target, 'remain-on-exit', 'on', { check: true });
       await rmux.cmd('pipe-pane', '-t', target, this.logPipeCommand(logPath, aux.logDone, request), { check: true });
 
       const pane = rmux.session(target).pane(0, 0);
@@ -288,8 +289,8 @@ export class RmuxBackend implements IRmuxBackend {
       await waitForLogDrain(rmux, target, aux.logDone);
       return readExitMetadata(aux.exit) ?? { code: paneCode, signal: null };
     } finally {
-      // The pane ends its own session, so this only covers a session that somehow
-      // outlived its pane. Killing unconditionally would warn on every clean run.
+      // The pane stays alive for log capture. Remove its session after draining,
+      // allowing the last completed run to shut down the mux server too.
       let timer: ReturnType<typeof setTimeout> | undefined;
       const cleanup = async (): Promise<void> => {
         if (!(await sessionMissing(rmux, target))) await pane.server.session(target).kill();
@@ -457,9 +458,8 @@ async function waitForRunEnd(rmux: Rmux, target: string, exitPath: string): Prom
 /**
  * Gives the log sink a moment to mark the log complete.
  *
- * The sink dies with the session it was piped from, so once the session is gone
- * the marker is never coming and there is nothing left to wait for. Its writes
- * are synchronous, so the log itself is already on disk either way.
+ * Normal completion retains the session until the sink records its final
+ * writes. A lost session cannot guarantee a later marker, so it ends the wait.
  */
 async function waitForLogDrain(rmux: Rmux, target: string, donePath: string): Promise<void> {
   const deadline = Date.now() + LOG_DRAIN_TIMEOUT_MS;
