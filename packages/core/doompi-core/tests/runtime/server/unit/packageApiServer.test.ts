@@ -1,6 +1,8 @@
+import { Type } from 'typebox';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DoomApi, DoomApiContext } from '../../../../src/exports/packageApi';
+import { createDoomPluginRegistry, defineDoomPluginMethod } from '../../../../src/exports/pluginProtocol';
 import { DOOM_SERVER_HOST_SERVICE } from '../../../../src/exports/serverFacet';
 import { serveSessionApis, type PackageApiServer } from '../../../../src/server/packageApiServer';
 import type { ServerTelemetry } from '../../../../src/services/serverTelemetry';
@@ -275,6 +277,92 @@ describe('serving a session package APIs', () => {
     expect(response.status).toBe(200);
     expect(JSON.parse(response.body)).toMatchObject({ path: '/log' });
   });
+  it('mounts a session facet plugin method into the dispatch table it was given', async () => {
+    const pluginRegistry = createDoomPluginRegistry();
+    const method = defineDoomPluginMethod({
+      service: 'runner',
+      method: 'control',
+      scope: 'session',
+      direction: 'client-to-server',
+      input: Type.Object({ action: Type.String() }),
+      output: Type.Object({ ok: Type.Boolean() }),
+    });
+    const notices: string[] = [];
+    const server = await serveSessionApis({
+      ...requiredSessionCapabilities,
+      sessionId: 's1',
+      cwd: '/repo',
+      apis: [],
+      pluginRegistry,
+      prepareFacets: () => undefined,
+      facets: [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            if (!host || host.scope !== 'session') return undefined;
+            const registration = host.registerMethod(method, () => ({ ok: true }));
+            if (registration.mounted !== true) throw new Error('plugin method did not mount.');
+            return () => registration.dispose();
+          },
+        },
+      ],
+      onNotice: (message) => notices.push(message),
+    });
+    cleanups.push(() => server.close());
+
+    expect(notices).toEqual([]);
+    await expect(
+      pluginRegistry.invoke(
+        {
+          mount: { scope: 'session', sessionId: 's1' },
+          service: 'runner',
+          method: 'control',
+          input: { action: 'start' },
+        },
+        'client-to-server',
+      ),
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it('skips a session facet plugin method when no dispatch table is supplied', async () => {
+    const notices: string[] = [];
+    const server = await serveSessionApis({
+      ...requiredSessionCapabilities,
+      sessionId: 's1',
+      cwd: '/repo',
+      apis: [],
+      prepareFacets: () => undefined,
+      facets: [
+        {
+          inject: [DOOM_SERVER_HOST_SERVICE],
+          apply(context) {
+            const host = context.get(DOOM_SERVER_HOST_SERVICE);
+            if (!host || host.scope !== 'session') return undefined;
+            const registration = host.registerMethod(
+              defineDoomPluginMethod({
+                service: 'runner',
+                method: 'control',
+                scope: 'session',
+                direction: 'client-to-server',
+                input: Type.Object({ action: Type.String() }),
+                output: Type.Object({ ok: Type.Boolean() }),
+              }),
+              () => ({ ok: true }),
+            );
+            if (registration.mounted !== true) throw new Error('plugin method did not mount.');
+            return () => registration.dispose();
+          },
+        },
+      ],
+      onNotice: (message) => notices.push(message),
+    });
+    cleanups.push(() => server.close());
+
+    expect(notices).toContain("plugin method 'runner.control' is skipped: this host has no plugin dispatcher.");
+    expect(notices.some((message) => message.includes('did not install'))).toBe(true);
+  });
+
   it('installs an attributed server bundle facet before serving its API', async () => {
     const server = await serveSessionApis({
       ...requiredSessionCapabilities,

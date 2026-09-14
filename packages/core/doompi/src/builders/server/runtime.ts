@@ -169,6 +169,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
     onWorkspaceRemoved: (workspaceId) => webCompositions?.remove({ scope: 'workspace', workspaceId }),
     createSession: (request) => openSession(request),
     onNotice: notice,
+    hubToken: () => attachToken,
     requestSessionApi: (scope, request) => requestSessionApi(scope, request),
   });
   let harnessContext: Awaited<ReturnType<typeof buildHarnessContext>> | undefined;
@@ -371,6 +372,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           directEvents: hub.directEvents,
           hubToken: token,
           sessionService: hub.sessionService,
+          pluginRegistry: hub.pluginRegistry,
           apis: [],
           facets: pendingSessions.get(sessionOptions.sessionId)?.bundle.facets ?? [],
           workspaceId: sessionOptions.workspaceId,

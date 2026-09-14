@@ -849,4 +849,49 @@ describe('direct AgentHarness runtime', () => {
       await repository.close(BACKGROUND_CONTEXT);
     }
   });
+
+  it('registers supplied providers on a registry that only exposes registerNativeProvider', async () => {
+    const registered: unknown[] = [];
+    const runtimeShaped = {
+      getModels: () => [model],
+      getModel: (provider: string, id: string) => (provider === model.provider && id === model.id ? model : undefined),
+      getAvailable: async () => [model],
+      registerNativeProvider: (provider: unknown) => {
+        registered.push(provider);
+      },
+    } as unknown as Models;
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'native-provider-merge' }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({
+      cwd: '/tmp',
+      session,
+      models: runtimeShaped,
+      providers: [{ id: 'anthropic-vertex' } as never],
+      model,
+    });
+    try {
+      expect(registered).toEqual([{ id: 'anthropic-vertex' }]);
+    } finally {
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+
+  it('rejects providers when the supplied registry cannot register any', async () => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'provider-merge-unsupported' }, BACKGROUND_CONTEXT);
+    try {
+      await expect(
+        createDirectHarnessRuntime({
+          cwd: '/tmp',
+          session,
+          models,
+          providers: [{ id: 'anthropic-vertex' } as never],
+          model,
+        }),
+      ).rejects.toThrow('cannot register providers on the supplied Models registry');
+    } finally {
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
 });

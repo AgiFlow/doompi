@@ -284,4 +284,69 @@ describe('terminal Pi child session provider', () => {
     await service.close();
     await service.close();
   });
+
+  it('acquires real v4 ownership of the destination before the v3 copy lands', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-provider-ownership-'));
+    tempRoots.push(root);
+    const runtimeFactory = vi.fn(async (options: DirectHarnessRuntimeOptions) => fakeRuntime(options));
+    const service = createTerminalPiChildSessionService({ cwd: root, sessionsRoot: root, runtimeFactory });
+
+    const handle = await service.start(
+      request(
+        {
+          kind: 'terminal-pi-fork',
+          sourceSessionId: 'parent-session',
+          sourceLeafId: 'parent-leaf',
+          snapshotJsonl: v3Snapshot(),
+        },
+        root,
+      ),
+    );
+
+    const destination = runtimeFactory.mock.calls[0]?.[0].sessionPath;
+    expect(destination).toBeDefined();
+    expect(JSON.parse(fs.readFileSync(destination!, 'utf8').split('\n', 1)[0]!)).toMatchObject({
+      kind: 'header',
+      v: 4,
+    });
+    expect(fs.readdirSync(root).filter((name) => name.endsWith('.lock'))).toEqual([]);
+    await handle.dispose();
+    await service.close();
+  });
+
+  it('splits a thinking suffix off the model id and forwards live providers per spawn', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-provider-thinking-'));
+    tempRoots.push(root);
+    const { ownership } = owner();
+    const runtimeFactory = vi.fn(async (options: DirectHarnessRuntimeOptions) => fakeRuntime(options));
+    const providers = vi.fn(() => [{ id: 'anthropic-vertex' } as never]);
+    const service = createTerminalPiChildSessionService({
+      cwd: root,
+      sessionsRoot: root,
+      historyOwnership: ownership,
+      providers,
+      runtimeFactory,
+    });
+
+    const handle = await service.start({
+      ...request(
+        {
+          kind: 'terminal-pi-fork',
+          sourceSessionId: 'parent-session',
+          sourceLeafId: 'parent-leaf',
+          snapshotJsonl: v3Snapshot(),
+        },
+        root,
+      ),
+      model: 'anthropic-vertex/claude-sonnet-5:medium',
+    });
+
+    const options = runtimeFactory.mock.calls[0]?.[0];
+    expect(options?.model).toEqual({ provider: 'anthropic-vertex', id: 'claude-sonnet-5' });
+    expect(options?.thinkingLevel).toBe('medium');
+    expect(options?.providers).toEqual([{ id: 'anthropic-vertex' }]);
+    expect(providers).toHaveBeenCalledTimes(1);
+    await handle.dispose();
+    await service.close();
+  });
 });

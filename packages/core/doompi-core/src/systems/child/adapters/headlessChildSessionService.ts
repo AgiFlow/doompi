@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import type { Models, MutableModels } from '@earendil-works/pi-ai';
+import type { Models, MutableModels, Provider } from '@earendil-works/pi-ai';
 import {
   createBashTool,
   createEditTool,
@@ -40,6 +40,12 @@ export interface HeadlessChildSessionServiceOptions {
   readonly cwd: string;
   readonly sessionsRoot?: string;
   readonly models?: Models | MutableModels;
+  /**
+   * Providers to merge into the model registry for every child spawn. A thunk
+   * is resolved per spawn so providers registered after this service was built,
+   * such as Pi extension providers, are still visible to the child.
+   */
+  readonly providers?: readonly Provider[] | (() => readonly Provider[]);
   readonly defaultModel?: () => DirectHarnessModel | undefined;
   readonly historyOwnership?: HistoryOwnership;
   readonly now?: () => number;
@@ -50,12 +56,37 @@ export interface HeadlessChildSessionServiceProvider extends DoomChildSessionSer
   close(): Promise<void>;
 }
 
-function modelReference(value: string | undefined): DirectHarnessModel | undefined {
+const THINKING_SUFFIX_PATTERN = /:(off|minimal|low|medium|high|xhigh|max)$/;
+
+export interface ParsedChildModel {
+  readonly model: DirectHarnessModel;
+  readonly thinking?: string;
+}
+
+/**
+ * Child model specs may carry a Pi thinking suffix, for example
+ * `anthropic-vertex/claude-sonnet-5:medium`. The suffix is a request option and
+ * never part of the model id, so it has to be split off before model lookup.
+ */
+export function parseChildModelReference(value: string | undefined): ParsedChildModel | undefined {
   if (value === undefined) return undefined;
-  const separator = value.indexOf('/');
-  if (separator <= 0 || separator === value.length - 1)
+  const suffix = THINKING_SUFFIX_PATTERN.exec(value);
+  const reference = suffix === null ? value : value.slice(0, value.length - suffix[0].length);
+  const separator = reference.indexOf('/');
+  if (separator <= 0 || separator === reference.length - 1)
     throw new Error(`Child model must use the provider/model form: ${value}`);
-  return { provider: value.slice(0, separator), id: value.slice(separator + 1) };
+  return {
+    model: { provider: reference.slice(0, separator), id: reference.slice(separator + 1) },
+    ...(suffix === null ? {} : { thinking: suffix[1] as string }),
+  };
+}
+
+/** Resolve the provider set for one spawn, tolerating both a fixed array and a thunk. */
+export function resolveChildProviders(
+  providers: readonly Provider[] | (() => readonly Provider[]) | undefined,
+): readonly Provider[] | undefined {
+  const resolved = typeof providers === 'function' ? providers() : providers;
+  return resolved === undefined || resolved.length === 0 ? undefined : resolved;
 }
 
 function sessionFile(runtime: DirectHarnessRuntime): string | undefined {
@@ -260,7 +291,10 @@ export function createHeadlessChildSessionService(
         sessionId = randomUUID();
       }
 
-      const model = modelReference(request.model) ?? options.defaultModel?.();
+      const requestedModel = parseChildModelReference(request.model);
+      const model = requestedModel?.model ?? options.defaultModel?.();
+      const thinking = request.thinking ?? requestedModel?.thinking;
+      const providers = resolveChildProviders(options.providers);
       const runtimeOptions: DirectHarnessRuntimeOptions = {
         storage: 'sqlite',
         ...(request.source.kind === 'v4-fork' ? { lane: request.source.branch } : {}),
@@ -270,8 +304,9 @@ export function createHeadlessChildSessionService(
         ...(sessionPath === undefined ? {} : { sessionPath }),
         ...(options.sessionsRoot === undefined ? {} : { sessionsRoot: options.sessionsRoot }),
         ...(options.models === undefined ? {} : { models: options.models }),
+        ...(providers === undefined ? {} : { providers }),
         ...(model === undefined ? {} : { model }),
-        ...(request.thinking === undefined ? {} : { thinkingLevel: request.thinking as never }),
+        ...(thinking === undefined ? {} : { thinkingLevel: thinking as never }),
         ...directRequestOptions,
         historyOwnership: ownership,
       };

@@ -407,6 +407,54 @@ describe('headless child session provider', () => {
     await handle.stop();
     await provider.close();
   });
+
+  it('splits a thinking suffix off the model id and resolves providers per spawn', async () => {
+    const runtime = fakeRuntime('suffixed', '/tmp/suffixed.jsonl');
+    runtime.prompt = vi.fn(() => new Promise<void>(() => undefined));
+    const factory = runtimeFactory(runtime);
+    const providers = vi.fn(() => [{ id: 'anthropic-vertex' } as never]);
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent-session',
+      cwd: '/workspace',
+      providers,
+      runtimeFactory: factory,
+    });
+
+    const handle = await service.start({
+      ...request({ kind: 'fresh' }, '/workspace'),
+      model: 'anthropic-vertex/claude-sonnet-5:medium',
+    });
+    expect(factory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: { provider: 'anthropic-vertex', id: 'claude-sonnet-5' },
+        thinkingLevel: 'medium',
+        providers: [{ id: 'anthropic-vertex' }],
+      }),
+    );
+    expect(providers).toHaveBeenCalledTimes(1);
+    await handle.stop();
+    await service.close();
+  });
+
+  it('keeps an explicit thinking request ahead of the model suffix', async () => {
+    const runtime = fakeRuntime('explicit', '/tmp/explicit.jsonl');
+    runtime.prompt = vi.fn(() => new Promise<void>(() => undefined));
+    const factory = runtimeFactory(runtime);
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent-session',
+      cwd: '/workspace',
+      runtimeFactory: factory,
+    });
+
+    const handle = await service.start({
+      ...request({ kind: 'fresh' }, '/workspace'),
+      model: 'anthropic-vertex/claude-sonnet-5:medium',
+      thinking: 'high',
+    });
+    expect(factory).toHaveBeenCalledWith(expect.objectContaining({ thinkingLevel: 'high' }));
+    await handle.stop();
+    await service.close();
+  });
   it('releases source and destination ownership when a fork cannot be admitted', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-child-fork-lock-'));
     const sourcePath = await createSource(root);

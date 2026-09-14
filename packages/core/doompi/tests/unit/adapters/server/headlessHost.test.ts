@@ -285,6 +285,55 @@ describe('retained headless contributions', () => {
     }
   });
 
+  it('does not gate on sources when a facet withdraws a contribution before the first selection', async () => {
+    const onError = vi.fn();
+    const root = new Context();
+    let host!: HeadlessHost;
+    await root
+      .plugin((context: Context) => {
+        host = new HeadlessHost(context, {
+          candidates: [candidate],
+          selection: initial,
+          applyTools: () => undefined,
+          applyResources: () => undefined,
+          onError,
+          context: (selection): DoomHeadlessExecutionContext => ({
+            cwd: '/test',
+            repoRoot: '/test',
+            sessionId: 'test',
+            environment: {},
+            selection,
+            shutdown: vi.fn(),
+            client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
+            session: {
+              history: () => [],
+              messages: () => [],
+              append: vi.fn(),
+              replace: vi.fn(),
+            } as never,
+          }),
+        });
+      })
+      .await();
+
+    // Installing facets happens before the caller knows which packages installed.
+    await root
+      .extend({ [DOOM_HEADLESS_OWNER]: candidate })
+      .plugin((context: Context) => {
+        const service = requireDoomHeadlessHost(context);
+        service.registerActivity({ name: 'watch', start: () => () => undefined }).dispose();
+      })
+      .await();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onError).not.toHaveBeenCalled();
+
+    host.setAvailableSources([candidate.packageName]);
+    await host.select({});
+    expect(host.status.ready).toBe(true);
+    await host.close();
+    await root.fiber.dispose();
+  });
+
   it('rejects an unavailable required owner before advertising readiness', async () => {
     const fixture = await setup(() => undefined);
     try {
