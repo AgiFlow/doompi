@@ -82,16 +82,28 @@ function upstreamRequestUrl(request: IncomingMessage, headlessUrl: URL): URL {
   return target;
 }
 
+/** Distinguishes an oversized client body from an upstream failure in the shared catch. */
+class BodyTooLargeError extends Error {}
+
 async function readBody(request: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.byteLength;
-    if (size > MAX_PROXY_BODY_BYTES) throw new Error('The request body is too large.');
+    if (size > MAX_PROXY_BODY_BYTES) throw new BodyTooLargeError('The request body is too large.');
     chunks.push(buffer);
   }
   return Buffer.concat(chunks);
+}
+
+function writeJson(response: ServerResponse, status: number, body: unknown): void {
+  const message = JSON.stringify(body);
+  response.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': String(Buffer.byteLength(message)),
+  });
+  response.end(message);
 }
 
 function responseHeaders(headers: Headers): Record<string, string> {
@@ -128,30 +140,38 @@ async function proxyHttp(
   notice: (message: string) => void,
 ): Promise<void> {
   const target = upstreamRequestUrl(request, headlessUrl);
-  const body = request.method === 'GET' || request.method === 'HEAD' ? undefined : await readBody(request);
+  // A browser that navigates away destroys this response mid-proxy. That is not an
+  // upstream failure, and the headless work behind it is now pointless, so the same
+  // controller both cancels upstream and marks the error as the client's doing.
+  const clientGone = new AbortController();
+  response.on('close', () => {
+    if (!response.writableEnded) clientGone.abort();
+  });
   try {
+    const body = request.method === 'GET' || request.method === 'HEAD' ? undefined : await readBody(request);
     const upstream = await fetch(target, {
       method: request.method,
       headers: proxyHeaders(request, token),
+      signal: clientGone.signal,
       ...(body === undefined ? {} : { body: body as unknown as BodyInit, duplex: 'half' as const }),
     });
     response.writeHead(upstream.status, responseHeaders(upstream.headers));
     if (request.method === 'HEAD' || upstream.body === null) response.end();
     else await pipeline(Readable.fromWeb(upstream.body as import('node:stream/web').ReadableStream), response);
   } catch (error) {
+    if (clientGone.signal.aborted) return;
+    // Only reachable before the upstream call, so the headers are always still ours.
+    if (error instanceof BodyTooLargeError) {
+      writeJson(response, 413, { error: error.message });
+      return;
+    }
     const reason =
       error instanceof Error
         ? `${error.message}${error.cause instanceof Error ? `: ${error.cause.message}` : ''}`
         : String(error);
     notice(`headless request failed (${reason})`);
-    if (!response.headersSent) {
-      const message = JSON.stringify({ error: 'The headless server is unavailable.' });
-      response.writeHead(502, {
-        'content-type': 'application/json; charset=utf-8',
-        'content-length': String(Buffer.byteLength(message)),
-      });
-      response.end(message);
-    } else response.destroy();
+    if (!response.headersSent) writeJson(response, 502, { error: 'The headless server is unavailable.' });
+    else response.destroy();
   }
 }
 

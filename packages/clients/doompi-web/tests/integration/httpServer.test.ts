@@ -55,6 +55,13 @@ describe('the web presentation server', () => {
   let streamStarted: Promise<void>;
   let markStreamStarted: (() => void) | undefined;
   let finishStream: (() => void) | undefined;
+  let notices: string[];
+  let upstreamStreamClosed: Promise<void>;
+  let markUpstreamStreamClosed: (() => void) | undefined;
+  let slowStarted: Promise<void>;
+  let markSlowStarted: (() => void) | undefined;
+  let slowClosed: Promise<void>;
+  let markSlowClosed: (() => void) | undefined;
 
   beforeEach(async () => {
     assetsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-assets-'));
@@ -66,6 +73,16 @@ describe('the web presentation server', () => {
       markStreamStarted = resolve;
     });
     finishStream = undefined;
+    notices = [];
+    upstreamStreamClosed = new Promise<void>((resolve) => {
+      markUpstreamStreamClosed = resolve;
+    });
+    slowStarted = new Promise<void>((resolve) => {
+      markSlowStarted = resolve;
+    });
+    slowClosed = new Promise<void>((resolve) => {
+      markSlowClosed = resolve;
+    });
     upstream = createServer((request, response) => {
       if (request.url === '/api/remote/frontend' && request.method === 'POST') {
         const chunks: Buffer[] = [];
@@ -84,8 +101,17 @@ describe('the web presentation server', () => {
       if (request.url === '/api/stream') {
         response.writeHead(200, { 'content-type': 'text/plain' });
         response.write('first\n');
-        finishStream = () => response.end('second\n');
+        finishStream = () => {
+          if (!response.destroyed) response.end('second\n');
+        };
+        request.on('close', () => markUpstreamStreamClosed?.());
         markStreamStarted?.();
+        return;
+      }
+      // Never answers: stands in for headless work still running when the page reloads.
+      if (request.url === '/api/slow') {
+        request.on('close', () => markSlowClosed?.());
+        markSlowStarted?.();
         return;
       }
       if (request.url !== '/api/health') {
@@ -112,6 +138,7 @@ describe('the web presentation server', () => {
       assetsDir,
       headlessUrl: upstreamUrl,
       headlessToken: 'test-token',
+      onNotice: (message) => notices.push(message),
     });
   });
 
@@ -159,6 +186,48 @@ describe('the web presentation server', () => {
     const second = await reader.read();
     expect(Buffer.from(second.value ?? []).toString('utf8')).toBe('second\n');
   });
+  it('stays quiet when the browser aborts mid-response', async () => {
+    const target = new URL(presentation.url);
+    const first = await new Promise<string>((resolve, reject) => {
+      const client = requestHttp(
+        { hostname: target.hostname, method: 'GET', path: '/api/stream', port: target.port },
+        (response) => {
+          response.once('data', (chunk: Buffer) => {
+            // Exactly what a page reload does to every in-flight proxied request.
+            client.destroy();
+            resolve(chunk.toString('utf8'));
+          });
+        },
+      );
+      // The abort surfaces on the client socket; the assertion is about the server.
+      client.once('error', () => {});
+      client.end();
+      setTimeout(() => reject(new Error('The proxy never streamed a chunk.')), 2_000).unref();
+    });
+    expect(first).toBe('first\n');
+
+    await upstreamStreamClosed;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(notices).toEqual([]);
+  });
+
+  it('cancels upstream work when the browser aborts before the response starts', async () => {
+    const target = new URL(presentation.url);
+    const client = requestHttp({ hostname: target.hostname, method: 'GET', path: '/api/slow', port: target.port });
+    client.once('error', () => {});
+    client.end();
+    await slowStarted;
+    client.destroy();
+
+    await Promise.race([
+      slowClosed,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('The proxy left the headless request running.')), 2_000).unref(),
+      ),
+    ]);
+    expect(notices).toEqual([]);
+  });
+
   it('keeps authority-like request paths on the configured headless origin', async () => {
     const response = await rawGet(presentation.url, '//attacker.invalid/api/health');
 
