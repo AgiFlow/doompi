@@ -1,13 +1,43 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import ignore from 'ignore';
+
 import type { DoomApi } from '../exports/packageApi';
 
 const EXCLUDED_DIRECTORIES = new Set(['.git', 'node_modules']);
+const IGNORE_FILES = ['.gitignore', '.doomignore'];
 const FILE_QUERY_TIMEOUT_MS = 2000;
 const MAX_FILE_RESULTS = 50;
 
+/**
+ * The project's ignore test, or nothing when it declares no rules.
+ *
+ * Only the session root's files are read. A nested .gitignore would need one
+ * matcher per directory, and the cost of skipping it is a suggestion that
+ * should not have been offered rather than a file that cannot be opened. An
+ * unreadable or malformed file leaves completion listing everything, because
+ * hiding the tree is the worse failure.
+ */
+function readIgnoreRules(cwd: string): ((relativePath: string) => boolean) | undefined {
+  const rules = IGNORE_FILES.map((name) => {
+    try {
+      return fs.readFileSync(path.join(cwd, name), 'utf8');
+    } catch {
+      return '';
+    }
+  }).join('\n');
+  if (rules.trim().length === 0) return undefined;
+  try {
+    const matcher = ignore().add(rules);
+    return (relativePath: string): boolean => matcher.ignores(relativePath);
+  } catch {
+    return undefined;
+  }
+}
+
 async function listSessionFiles(cwd: string, query: string, signal: AbortSignal): Promise<string[]> {
+  const isIgnored = readIgnoreRules(cwd);
   const deadline = Date.now() + FILE_QUERY_TIMEOUT_MS;
   const pending = [''];
   const matches: string[] = [];
@@ -21,11 +51,15 @@ async function listSessionFiles(cwd: string, query: string, signal: AbortSignal)
     if (relativeDirectory === undefined) break;
     const entries = await fs.promises.readdir(path.join(cwd, relativeDirectory), { withFileTypes: true });
     for (const entry of entries) {
-      const relativePath = path.join(relativeDirectory, entry.name);
-      if (entry.isDirectory() && !EXCLUDED_DIRECTORIES.has(entry.name)) {
-        pending.push(relativePath);
-      } else if (entry.isFile()) {
-        const file = relativePath.split(path.sep).join('/');
+      // Ignore rules are written in posix form, and so is every result.
+      const file = relativeDirectory === '' ? entry.name : `${relativeDirectory}/${entry.name}`;
+      if (entry.isDirectory()) {
+        // An ignored directory is pruned rather than filtered at its leaves:
+        // walking a build cache is what exhausts the completion budget. The
+        // trailing slash is what makes a directory-only rule such as
+        // '.nx-cache/' match.
+        if (!EXCLUDED_DIRECTORIES.has(entry.name) && isIgnored?.(`${file}/`) !== true) pending.push(file);
+      } else if (entry.isFile() && isIgnored?.(file) !== true) {
         if (file.toLowerCase().includes(query)) matches.push(file);
       }
     }
