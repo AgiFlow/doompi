@@ -127,4 +127,76 @@ export const SubagentParams = Type.Union([
   RestoreParams,
 ]);
 
+/** The actions that accept `field`, so the declared docs cannot drift from the validator. */
+function acceptingActions(field: string): string {
+  return Object.values(SUBAGENT_ACTIONS)
+    .filter((action) => subagentActionAcceptsField(action, field))
+    .join(', ');
+}
+
+/**
+ * The schema declared to the model.
+ *
+ * A flat object rather than `SubagentParams` itself. A top-level union is
+ * `{anyOf:[...]}` with no `properties`, and Pi's Anthropic Messages adapter
+ * rebuilds tool input as `{type:'object', properties: schema.properties ?? {},
+ * required: schema.required ?? []}`, so the union arrived at the model as an
+ * empty object while the host went on validating calls against it. Nothing here
+ * relaxes what is accepted: `validateParams` still rejects an unknown action, a
+ * field the action does not take, and a missing required one.
+ */
+export const SubagentToolSchema = Type.Object(
+  {
+    action: Type.String({
+      enum: [...Object.values(SUBAGENT_ACTIONS)],
+      description: 'The operation to run. Every other field is accepted only by the actions its description names.',
+    }),
+    name: Type.Optional(
+      Type.String({ minLength: 1, description: `Exact agent name to inspect. Actions: ${acceptingActions('name')}.` }),
+    ),
+    cwd: Type.Optional(
+      Type.String({
+        minLength: 1,
+        description: `Directory to discover agents in. Actions: ${acceptingActions('cwd')}.`,
+      }),
+    ),
+    scope: Type.Optional(
+      Type.String({
+        enum: ['user', 'project', 'both'],
+        description: `Agent discovery scope. Actions: ${acceptingActions('scope')}.`,
+      }),
+    ),
+    requests: Type.Optional(
+      Type.Array(RunRequest, {
+        minItems: 1,
+        description: `Runs to start, one entry each. Actions: ${acceptingActions('requests')}.`,
+      }),
+    ),
+    concurrency: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        description: `Maximum runs started at once. Actions: ${acceptingActions('concurrency')}.`,
+      }),
+    ),
+    artifacts: Type.Optional(
+      Type.Boolean({ description: `Collect run artifacts. Actions: ${acceptingActions('artifacts')}.` }),
+    ),
+    id: Type.Optional(Type.String({ minLength: 1, description: `Run id. Actions: ${acceptingActions('id')}.` })),
+    transcriptLines: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        maximum: 500,
+        description: `Transcript lines to include; valid only alongside id. Actions: ${acceptingActions('transcriptLines')}.`,
+      }),
+    ),
+    message: Type.Optional(
+      Type.String({ minLength: 1, description: `Guidance to deliver. Actions: ${acceptingActions('message')}.` }),
+    ),
+    reason: Type.Optional(
+      Type.String({ minLength: 1, description: `Why the run is stopping. Actions: ${acceptingActions('reason')}.` }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
 export type SubagentToolParams = Static<typeof SubagentParams>;
