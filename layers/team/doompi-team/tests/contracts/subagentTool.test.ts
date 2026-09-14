@@ -3,6 +3,7 @@ import {
   SUBAGENT_ACTION_FIELDS,
   SUBAGENT_ACTIONS,
   SubagentParams,
+  SubagentToolSchema,
   subagentActionAcceptsField,
 } from '@agimon-ai/doompi-team/runtime-subagent-tool';
 import { Check } from 'typebox/value';
@@ -87,5 +88,36 @@ describe('subagent tool contract', () => {
     expect(Check(SubagentParams, { action: 'status' })).toBe(true);
     expect(Check(SubagentParams, { action: 'status', id: 'run-1', transcriptLines: 20 })).toBe(true);
     expect(Check(SubagentParams, { action: 'status', transcriptLines: 20 })).toBe(false);
+  });
+});
+
+/**
+ * How Pi's Anthropic Messages adapter rebuilds a tool's input schema:
+ * `{type:'object', properties: schema.properties ?? {}, required: schema.required ?? []}`.
+ * A top-level union has neither key, so it reaches the model as an empty object.
+ */
+function anthropicInputSchema(schema: unknown): {
+  properties: Record<string, { enum?: readonly string[] }>;
+  required: readonly string[];
+} {
+  const source = schema as { properties?: Record<string, { enum?: readonly string[] }>; required?: readonly string[] };
+  return { properties: source.properties ?? {}, required: source.required ?? [] };
+}
+
+describe('declared subagent schema', () => {
+  it('still names every action after the Anthropic adapter flattens it', () => {
+    const wire = anthropicInputSchema(SubagentToolSchema);
+    expect(wire.properties.action?.enum).toEqual([...Object.values(SUBAGENT_ACTIONS)]);
+    expect(wire.required).toEqual(['action']);
+  });
+
+  it('is why the union cannot be declared directly', () => {
+    expect(anthropicInputSchema(SubagentParams).properties).toEqual({});
+  });
+
+  it('declares every field some action accepts, and no others', () => {
+    const declared = Object.keys(anthropicInputSchema(SubagentToolSchema).properties);
+    const accepted = new Set(Object.values(SUBAGENT_ACTION_FIELDS).flat());
+    expect(declared.toSorted()).toEqual([...accepted].toSorted());
   });
 });

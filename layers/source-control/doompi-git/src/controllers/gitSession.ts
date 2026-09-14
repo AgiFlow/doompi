@@ -7,7 +7,7 @@ import {
 } from '@agimon-ai/doompi-core/headless';
 import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 
-import { RunWorktreeParams, type RunWorktreeToolParams } from '../schemas/runWorktreeTool';
+import { RunWorktreeToolSchema, type RunWorktreeToolParams } from '../schemas/runWorktreeTool';
 import { createWorktreeGit } from '../services/gitCli';
 import {
   executeRunWorktreeTool,
@@ -54,11 +54,11 @@ export function createGitSession({ host: serverHost }: DoomServerPluginContext):
     { name: 'doompi-git-readme', kind: 'context', read: () => readPackageResource('README.md') },
   ];
 
-  const tool: DoomHeadlessTool<typeof RunWorktreeParams> = {
+  const tool: DoomHeadlessTool<typeof RunWorktreeToolSchema> = {
     name: RUN_WORKTREE_TOOL_NAME,
     label: 'Worktree',
     description: RUN_WORKTREE_DESCRIPTION,
-    parameters: RunWorktreeParams,
+    parameters: RunWorktreeToolSchema,
     promptSnippet: 'Create and manage Git worktree sessions',
     executionMode: 'serial',
     async execute(_toolCallId, parameters, signal, onUpdate, execution) {

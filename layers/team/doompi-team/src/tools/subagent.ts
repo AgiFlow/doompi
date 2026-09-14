@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 
-import { SubagentParams } from '../schemas/subagentTool';
+import { SubagentToolSchema } from '../schemas/subagentTool';
 import { DoomTeamExpectedError } from '../services/errors';
 import {
   SUBAGENT_TOOL_NAME,
@@ -13,9 +13,9 @@ import { SUBAGENT_TOOL_DESCRIPTION } from '../services/toolDescription';
 export function createSubagentTool(
   service: SubagentToolContract,
   pi: Pick<ExtensionAPI, 'getAllTools'>,
-  renderers: Pick<ToolDefinition<typeof SubagentParams, SubagentToolDetails>, 'renderCall' | 'renderResult'>,
+  renderers: Pick<ToolDefinition<typeof SubagentToolSchema, SubagentToolDetails>, 'renderCall' | 'renderResult'>,
   waitUntilReady: (context: ExtensionContext, signal?: AbortSignal) => Promise<void>,
-): ToolDefinition<typeof SubagentParams, SubagentToolDetails> {
+): ToolDefinition<typeof SubagentToolSchema, SubagentToolDetails> {
   let conflict = false;
   try {
     conflict = pi.getAllTools().some((tool) => tool.name === SUBAGENT_TOOL_NAME);
@@ -33,7 +33,7 @@ export function createSubagentTool(
     name: SUBAGENT_TOOL_NAME,
     label: 'Subagent',
     description: SUBAGENT_TOOL_DESCRIPTION,
-    parameters: SubagentParams,
+    parameters: SubagentToolSchema,
     prepareArguments: validateParams,
     renderShell: 'self',
     ...renderers,

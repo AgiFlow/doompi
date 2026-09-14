@@ -9,13 +9,12 @@ import {
 import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
 import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
-import { Check } from 'typebox/value';
 
 import { createTeamSessionApi } from '../controllers/teamSessionApi';
 import { createSubagentCatalogChannel } from '../controllers/webSubagentCatalogChannel';
 import { createSubagentsChannel } from '../controllers/webSubagentsChannel';
 import { DOOM_SUBAGENT_POLICY_SERVICE } from '../schemas/subagentPolicy';
-import { SUBAGENT_ACTIONS, SubagentParams, type SubagentToolParams } from '../schemas/subagentTool';
+import { SUBAGENT_ACTIONS, SubagentToolSchema, type SubagentToolParams } from '../schemas/subagentTool';
 import { resolveActiveTeamModelSpecs } from '../services/agentDiscovery';
 import type { NativeAsyncJobProjection, TrackedAsyncJob } from '../services/asyncJobTracker';
 import { resolveTrackedRunId } from '../services/asyncJobTracker';
@@ -31,6 +30,7 @@ import type { NativeTeamRuntime, NativeTeamTransport } from '../services/nativeT
 import { openScopeAsync, suspendScopeRuns } from '../services/sessionLifecycle';
 import { createSessionScope } from '../services/sessionPaths';
 import { createSubagentPolicyService } from '../services/subagentPolicyService';
+import { validateParams as validateSubagentParams } from '../services/subagentTool';
 import {
   clearSuspendedRun,
   formatSuspendedRuns,
@@ -135,7 +135,7 @@ type HeadlessTeamServicesConfig = {
 function subagentTool(
   runtime: ReturnType<typeof createTeamExtensionRuntime>,
   execution: DoomHeadlessExecutionContext,
-): DoomHeadlessTool<typeof SubagentParams> {
+): DoomHeadlessTool<typeof SubagentToolSchema> {
   const scope = createSessionScope(execution.sessionId);
   const jobs = runtime.asyncJobTracker.forSession(execution.sessionId, scope);
   const availableModels = execution.model ? [toModelInfo(execution.model)] : [];
@@ -143,7 +143,7 @@ function subagentTool(
     name: 'subagent',
     label: 'Subagent',
     description: SUBAGENT_DESCRIPTION,
-    parameters: SubagentParams,
+    parameters: SubagentToolSchema,
     promptSnippet: 'Discover, run, inspect, steer, stop, and restore persistent subagents',
     promptGuidelines: [
       'Runs are persistent background work. Do not resubmit a run that already returned an id.',
@@ -151,9 +151,8 @@ function subagentTool(
     ],
     executionMode: 'serial',
     async execute(_toolCallId, parameters, signal, onUpdate) {
-      if (!Check(SubagentParams, parameters)) return result('Invalid subagent parameters.', true);
-      const params = parameters as SubagentToolParams;
       try {
+        const params: SubagentToolParams = validateSubagentParams(parameters);
         if (params.action === SUBAGENT_ACTIONS.agents) {
           const scope = scopeOf(params.scope);
           const agents = runtime.discovery.discover(params.cwd ?? execution.cwd, scope).agents;
