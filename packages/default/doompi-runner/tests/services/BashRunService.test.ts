@@ -691,6 +691,48 @@ describe('RmuxBackend.stop', () => {
     expect(rmuxMocks.sessionKill).toHaveBeenCalled();
   });
 
+  it('takes the pane pid from the call that created the pane', async () => {
+    rmuxPaneDead = true;
+    // A pid only the launch reports, so a handle carrying it cannot have come
+    // from the follow-up display-message round trip.
+    rmuxMocks.cmd.mockResolvedValueOnce({ stdout: '5150\n' });
+    const backend = new RmuxBackend(rmuxPaths);
+
+    const handle = await backend.launch({
+      id: 'run-p',
+      name: 'run-p',
+      command: 'echo done',
+      cwd: '/repo',
+      sessionId: 'session-a',
+      interactive: false,
+    });
+
+    expect(handle).toMatchObject({ pid: 5150, backend: 'rmux' });
+    await vi.advanceTimersByTimeAsync(2_100);
+    await handle?.completion();
+  });
+
+  it('falls back to asking for the pane pid when the launch reports none', async () => {
+    rmuxPaneDead = true;
+    // An rmux that prints nothing for -P -F must not take the launch down with
+    // it: the pid is still one display-message away.
+    const backend = new RmuxBackend(rmuxPaths);
+
+    const handle = await backend.launch({
+      id: 'run-q',
+      name: 'run-q',
+      command: 'echo done',
+      cwd: '/repo',
+      sessionId: 'session-a',
+      interactive: false,
+    });
+
+    expect(handle).toMatchObject({ pid: RMUX_PID, backend: 'rmux' });
+    expect(emitWarning).not.toHaveBeenCalledWith(expect.stringContaining('RMUX launch unavailable'));
+    await vi.advanceTimersByTimeAsync(2_100);
+    await handle?.completion();
+  });
+
   it('sends input only through the exact RMUX pane', async () => {
     const backend = new RmuxBackend(rmuxPaths);
 

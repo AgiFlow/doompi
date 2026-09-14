@@ -92,7 +92,7 @@ export class RmuxBackend implements IRmuxBackend {
       await rmux.cmd('pipe-pane', '-t', target, this.logPipeCommand(logPath, aux.logDone, request), { check: true });
 
       const pane = rmux.session(target).pane(0, 0);
-      const pid = reportedPid(opened.stdout) ?? (await panePid(rmux, target));
+      const pid = reportedPid(String(opened.stdout ?? '')) ?? (await panePid(rmux, target));
       fs.writeFileSync(aux.gate, '', { mode: 0o600 });
       released = true;
 
@@ -394,7 +394,8 @@ function environment(sessionId: string, interactive: boolean): Record<string, st
 
 async function panePid(rmux: Rmux, target: string): Promise<number> {
   const response = await rmux.displayMessage(PANE_PID_FORMAT, { target });
-  const pid = reportedPid(String(response['message'] ?? ''));
+  const message = typeof response['message'] === 'string' ? response['message'] : '';
+  const pid = reportedPid(message);
   if (pid === undefined) throw new Error(`RMUX did not report a pane pid for ${target}`);
   return pid;
 }

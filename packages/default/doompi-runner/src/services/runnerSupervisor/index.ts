@@ -158,12 +158,14 @@ function acquireDirectoryWatch(directory: string): DirectoryWatch {
       const targets = named === undefined ? [...entry.waiters.values()] : [entry.waiters.get(named)];
       for (const listeners of targets) {
         if (!listeners) continue;
-        for (const listener of [...listeners]) listener();
+        for (const listener of listeners) listener();
       }
     });
     // A watcher that cannot report is a watcher whose slices time out, which the
     // caller's own probe already covers.
     entry.watcher.on('error', () => undefined);
+    // Watching a sidecar is not work of its own, so it does not hold the loop open.
+    entry.watcher.unref?.();
   } catch {
     entry.watcher = undefined;
   }
@@ -219,8 +221,17 @@ export function watchForFile(filePath: string): FileWatch {
       return await new Promise<boolean>((resolve) => {
         const timer = setTimeout(() => {
           notify = undefined;
+          // The watcher is an optimisation, not the answer. A create event that
+          // was coalesced, reported under the temporary name of a rename, or
+          // never delivered at all must not outlive the slice it belongs to, so
+          // every slice ends by asking the filesystem itself.
+          settle();
           resolve(found);
         }, withinMs);
+        // A pending wait is not a reason to keep the process alive: the poll it
+        // replaced was unref'd, and a caller that has nothing else left to do
+        // should still be able to exit.
+        timer.unref?.();
         notify = () => {
           clearTimeout(timer);
           notify = undefined;
