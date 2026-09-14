@@ -186,6 +186,19 @@ describe('buildSyncedRuntime', () => {
     expect(mocks.loadMajorModesConfig).toHaveBeenCalledWith('/repo', '/configured-home');
   });
 
+  it('refuses to publish when an inactive mode bundle fails to compile', async () => {
+    mocks.compileModeExtension.mockImplementation(({ outputName }: { outputName: string }) =>
+      outputName === 'minimal'
+        ? Promise.reject(new Error('broken entry'))
+        : Promise.resolve({ bundle: `/dist/${outputName}.mjs`, compilerManifest: `/manifests/${outputName}.json` }),
+    );
+
+    await expect(buildSyncedRuntime('/repo')).rejects.toThrow('minimal: broken entry');
+    expect(mocks.compileModeExtension).toHaveBeenCalledTimes(4);
+    expect(mocks.compileExtensionSet).not.toHaveBeenCalled();
+    expect(mocks.writeSyncState).not.toHaveBeenCalled();
+  });
+
   it('refuses to publish artifacts over synchronization that changed during compilation', async () => {
     mocks.readSyncState
       .mockReturnValueOnce(state)

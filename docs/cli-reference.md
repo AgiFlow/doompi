@@ -30,7 +30,7 @@ Every command accepts `-h`/`--help`, including the subcommands: `doompi sync --h
 
 `doompi sync` reports unsupported keys in `.doom/config.yaml` and `.doom/modes.yaml` and then ignores them, so a config written against a different version cannot break a build. Invalid values for keys it does recognize still fail. `doompi doctor` is the strict check that reports those keys as problems.
 
-Synchronized state is repository- and worktree-scoped under `~/.pi/.doom/sync`. Publication is atomic and retains one superseded generation. See [Composition and runtime bundling](bundling.md) for the lifecycle.
+Synchronized state is repository- and worktree-scoped under `~/.pi/.doom/sync`. Publication is atomic. Superseded generations are currently retained because running sessions may still need their files; sync does not prune them. See [Composition and runtime bundling](bundling.md) for the lifecycle.
 
 ## Matrix and launch options
 

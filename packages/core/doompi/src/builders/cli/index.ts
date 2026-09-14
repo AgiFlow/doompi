@@ -144,6 +144,7 @@ export async function buildSyncedRuntime(
   }
   options.onCompositionsResolved?.(compositions);
   const results = await Promise.allSettled(builds.map(({ options }) => compileModeExtension(options)));
+  const failures: string[] = [];
   for (const [index, result] of results.entries()) {
     const { composition, majorMode, mute } = builds[index]!;
     if (result.status === 'fulfilled') {
@@ -151,13 +152,12 @@ export async function buildSyncedRuntime(
       bundleManifests[composition.fingerprint] = result.value.compilerManifest;
     } else {
       const detail = result.reason instanceof Error ? result.reason.message : String(result.reason);
-      process.stderr.write(`[doompi] could not precompile ${majorMode}${mute ? ' (mute)' : ''}: ${detail}\n`);
+      failures.push(`${majorMode}${mute ? ' (mute)' : ''}: ${detail}`);
     }
   }
-
-  if (!bundles[state.compositionFingerprint]) {
+  if (failures.length > 0) throw new Error(`Could not precompile mode bundles:\n${failures.join('\n')}`);
+  if (!bundles[state.compositionFingerprint])
     throw new Error('The synchronized active composition did not produce a bundle. Run doompi sync.');
-  }
 
   const bootstrapEntries = [ownEntry(COMPOSED_PI_ENTRY)];
   const bootstrapOptions = { outputDirectory, outputName: 'bootstrap' };

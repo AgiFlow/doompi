@@ -47,7 +47,7 @@ This path is useful for trying a composition immediately. It can compile as part
 
 ## The synchronized path
 
-`doompi sync` prepares runtime state before the next TUI starts. It provisions the defaults and every declared named layer, resolves the possible compositions, and writes their bundles into one immutable generation under `~/.pi/.doom/sync`.
+`doompi sync` prepares runtime state before the next TUI starts. It provisions the defaults and every declared named layer, resolves the possible compositions, and writes all declared mode bundles into one immutable generation under `~/.pi/.doom/sync`. If any mode bundle fails to compile, sync does not publish that generation.
 
 A generation contains more than TUI JavaScript:
 
@@ -72,9 +72,9 @@ Synchronization follows one transaction-like sequence:
 1. Stage every artifact in a new generation directory.
 2. Validate paths, manifests, source fingerprints, repository identity, and required files.
 3. Atomically publish the registration that points readers at that generation.
-4. Retain one previous generation and attempt to clean older ones.
+4. Retain previous generations until host-owned drain evidence can establish that no running session still needs them. The current sync path does not prune them.
 
-Published generations are not edited in place. A cleanup failure is reported, but it does not invalidate the generation that was already published.
+Published generations are not edited in place. Repeated syncs can therefore consume increasing disk space until safe generation cleanup is implemented.
 
 The registration is part of the boundary. It pins the repository identity, worktree, DoomPi package, Pi entry, state hash, and generation paths. A missing, stale, foreign, traversing, or malformed registration is rejected rather than replaced with a guessed source checkout or another repository's state.
 

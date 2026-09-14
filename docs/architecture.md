@@ -2,7 +2,7 @@
 
 [Back to DoomPi](../README.md)
 
-DoomPi has two runtime paths around the same resolved configuration. Interactive terminal launches compose Pi extensions and let Pi own extension loading, replacement, and the TUI runner. Headless launches run the agent harness directly, install package contributions through DoomPi's kernel and server facets, and expose client-neutral HTTP and WebSocket services. Both paths use the same package selection, synchronized generation, and composition identity.
+DoomPi has two runtime paths around the same resolved configuration. Interactive terminal launches compose Pi extensions and let Pi own extension loading, replacement, and the TUI runner. Headless launches run the agent harness directly, install package contributions through DoomPi's kernel and server facets, and expose client-neutral HTTP and WebSocket services. Both paths use the same package selection and synchronized generation. Each mode composition has its own fingerprint; the server bundle has a separate fingerprint derived from the set of mode fingerprints.
 
 The architecture follows five boundaries:
 
@@ -16,7 +16,7 @@ This guide explains those runtime boundaries and the contributor invariants they
 
 ## System model
 
-Configuration resolution produces one ordered package composition and one SHA-256 fingerprint. Synchronization projects that composition into artifacts for both runtime paths:
+Configuration resolution produces an ordered package composition and SHA-256 fingerprint for each mode selection. Synchronization projects the configured compositions into artifacts for both runtime paths:
 
 ```text
 resolved configuration and runtime selection
@@ -48,7 +48,7 @@ resolved configuration and runtime selection
 
 An interactive Pi activation begins with `cordisHost` and ends with `cordisFinalizer`. The resolver places fixed, default, layer, and selection-specific entries in canonical order. Default packages run before packages from selected named layers.
 
-The server bundle records the built server facet for each selected package, its valid scopes, ownership, and required status. A headless server admits only a synchronized bundle whose generation and fingerprint match the validated registration. Session hosts retain eligible candidates so the kernel can apply selection changes without importing a different generation.
+The server bundle records the built server facet for each selected package, its valid scopes, ownership, and required status. Its fingerprint hashes the set of synchronized mode composition fingerprints. A headless server admits only a synchronized bundle whose generation and server-bundle fingerprint match the validated registration. Session hosts retain eligible candidates so the kernel can apply selection changes without importing a different generation.
 
 ## Configuration and package boundaries
 
@@ -103,19 +103,19 @@ A package's browser plugin keeps `src/extensions/web.ts` as its composition entr
 
 Authored occurrences remain visible even when the same package appears more than once. Factory activation is deduplicated separately by canonical resolved path, with the first authored occurrence winning. This preserves configuration provenance without activating the same module twice.
 
-Synchronization also scans those selected package roots for `doompiServer` declarations. It builds one `server.bundle.json` that maps each built facet to its owning modes and layers, supported scopes, and required status. The composition fingerprint remains the identity used by launcher planning, synchronized bundles, server admission, persisted selection, drift detection, and transition classification.
+Synchronization also scans those selected package roots for `doompiServer` declarations. It builds one `server.bundle.json` that maps each built facet to its owning modes and layers, supported scopes, and required status. Per-mode composition fingerprints identify Pi bundles, persisted selection, drift, and transitions. A separate fingerprint over the synchronized mode fingerprint set identifies the server bundle for admission.
 
 ## Runtime artifacts and synchronization
 
 The `doompi` launcher provisions the defaults plus the active mode layers. It builds an aggregate Pi runtime bundle from the canonical activation plan and falls back to the individual ordered entries if bundling is unavailable.
 
-`doompi sync` provisions the defaults plus every declared named layer and stages one complete immutable generation in the home-scoped repository/worktree namespace. The generation contains state, Pi bootstraps and mode bundles, package resources, web assets, `server.bundle.json`, built server facets, and exported API contracts.
+`doompi sync` provisions the defaults plus every declared named layer and stages one complete immutable generation in the home-scoped repository/worktree namespace. The generation contains state, Pi bootstraps and all declared mode bundles, package resources, `server.bundle.json`, built server facets, and exported API contracts. It also contains web assets when `@agimon-ai/doompi-web` is installed.
 
 Publication follows three steps:
 
-1. Build and validate every artifact. Remove the unpublished generation if this fails.
+1. Build and validate every required artifact, including every declared mode bundle. Remove the unpublished generation if this fails.
 2. Write the validated registration atomically, so readers select a complete generation.
-3. Retain one superseded generation and attempt to remove older ones. Report cleanup failures without failing the published sync.
+3. Retain superseded generations. The current sync path does not prune them because a running host may still lazily import from an older generation.
 
 Published artifacts are not mutated in place.
 

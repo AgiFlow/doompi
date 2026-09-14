@@ -80,7 +80,7 @@ Before putting the cockpit behind a tunnel, review the web package's pairing, or
 
 ## Data, replay, and diagnostics
 
-The session journal contains conversation and tool history according to the upstream v4 JSONL format. The runtime also keeps current transcript state, in-flight work, and bounded presentation events in process memory. Presentation history is limited to 1,024 events or 8 MiB and reports dropped events; current projections are retained separately. This supports reconnect recovery but is not a durable audit log.
+The direct headless session stores its durable conversation and tool history in SQLite. Child transcript reading also supports upstream v4 JSONL journals. The runtime keeps current transcript state, in-flight work, and bounded presentation events in process memory. Presentation history is limited to 1,024 events or 8 MiB and reports dropped events; current projections are retained separately. This supports reconnect recovery but is not a durable audit log.
 
 Server telemetry records lifecycle and coarse usage events. Its transcript aggregate omits message and tool content. This is a telemetry property, not a guarantee that clients, extensions, package APIs, or the harness do not log their own data.
 
