@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
 
+import { DEFAULT_HEADLESS_URL } from '../services/headlessLaunch';
 import { contentTypeFor, resolveAssetPath } from '../services/staticAssets';
 import type { WebServer, WebServerOptions } from '../types/bridge';
 import { packagedVersion } from './packageVersion';
@@ -14,7 +15,6 @@ import { packagedVersion } from './packageVersion';
 const INDEX_FILE = 'index.html';
 const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';
 const WEB_PACKAGE_ROOT_ENV = 'DOOMPI_WEB_PACKAGE_ROOT';
-const DEFAULT_HEADLESS_URL = 'http://127.0.0.1:7434';
 const PWA_ASSET_PREFIX = '/pwa/';
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
 const HOP_BY_HOP_HEADERS = new Set([
