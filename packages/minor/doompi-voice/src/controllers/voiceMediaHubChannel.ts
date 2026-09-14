@@ -84,6 +84,7 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
       const subscriptions = new Map<string, () => void>();
       const handledRequests = new Set<string>();
       let catalogSignature = '';
+      let catalogRun: Promise<void> | undefined;
 
       const publishSelection = (payload: BrowserVoiceOwnershipPayload): void => {
         for (const scope of scopes.values()) host.publish(scope.sessionId, payload);
@@ -120,7 +121,7 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
         return true;
       };
 
-      const refreshCatalogs = async (): Promise<void> => {
+      const publishCatalogsOnce = async (): Promise<void> => {
         const nextSignature = [...scopes.keys()]
           .sort((left, right) => left.localeCompare(right))
           .map((sessionId) => `${sessionId}:${JSON.stringify(coordinator.catalog(sessionId))}`)
@@ -128,6 +129,24 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
         if (nextSignature === catalogSignature) return;
         await coordinator.publishCatalogs();
         catalogSignature = nextSignature;
+      };
+
+      /**
+       * Serialises overlapping catalog refreshes so concurrent callers cannot both pass the
+       * signature guard and publish the same state twice. Waiters do not share the in-flight run:
+       * each takes its own turn afterwards and the signature guard in publishCatalogsOnce makes
+       * that turn a no-op unless the state actually changed mid-flight, which is the trailing edge.
+       */
+      const refreshCatalogs = async (): Promise<void> => {
+        // The run in flight reports its own failure to its own caller; a waiter only needs its turn.
+        while (catalogRun !== undefined) await catalogRun.catch(() => undefined);
+        const run = publishCatalogsOnce();
+        catalogRun = run;
+        try {
+          await run;
+        } finally {
+          if (catalogRun === run) catalogRun = undefined;
+        }
       };
 
       const processSnapshot = async (sessionId: string, snapshot: VoiceOwnershipSessionSnapshot): Promise<void> => {

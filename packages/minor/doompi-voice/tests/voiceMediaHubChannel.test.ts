@@ -2,6 +2,7 @@ import type { DoomDirectEventBus, DoomHubChannelHost, DoomHubSessionScope } from
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createVoiceMediaWakeChannel, createVoiceOwnershipChannel } from '../src/controllers/voiceMediaHubChannel';
+import { VoiceOwnershipCoordinator } from '../src/services/voiceOwnershipCoordinator';
 import { VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../src/types/clientMedia';
 import {
   VOICE_OWNERSHIP_FRAME_TYPE,
@@ -224,6 +225,82 @@ describe('voice media hub channels', () => {
     h.emit('source');
     await vi.waitFor(() => expect(h.states.get('source')?.active).toBe(true));
     expect(h.actions.filter((action) => action === 'source:activate')).toHaveLength(1);
+    source.close();
+  });
+
+  it('coalesces overlapping catalog refreshes into a single publish', async () => {
+    const h = ownershipHarness({
+      source: { leaseId: 'lease-source', label: 'Source', active: true },
+      target: { leaseId: 'lease-target', label: 'Target', active: false },
+    });
+    const publishCatalogs = vi.spyOn(VoiceOwnershipCoordinator.prototype, 'publishCatalogs');
+    const source = createVoiceOwnershipChannel().start(h.host);
+    source.sessionAdded?.(scope('source'));
+    source.sessionAdded?.(scope('target'));
+    h.emit('source');
+    h.emit('target');
+    await vi.waitFor(() =>
+      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target', label: 'Target', order: 1 }]),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    publishCatalogs.mockClear();
+
+    h.states.get('target')!.label = 'Renamed';
+    h.emit('target');
+    // An uncoalesced refresh publishes again synchronously here, because the first run has not stored its
+    // signature yet.
+    h.emit('target');
+    expect(publishCatalogs).toHaveBeenCalledTimes(1);
+
+    await vi.waitFor(() =>
+      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target', label: 'Renamed', order: 1 }]),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(publishCatalogs).toHaveBeenCalledTimes(1);
+    source.close();
+  });
+
+  it('publishes a catalog change that arrives while a refresh is in flight', async () => {
+    const h = ownershipHarness({
+      source: { leaseId: 'lease-source', label: 'Source', active: true },
+      target: { leaseId: 'lease-target', label: 'Target', active: false },
+    });
+    let releaseCatalog = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      releaseCatalog = resolve;
+    });
+    let holdCatalogs = false;
+    const source = createVoiceOwnershipChannel().start({
+      ...h.host,
+      async requestSessionApi(session, request) {
+        const response = await h.host.requestSessionApi(session, request);
+        if (holdCatalogs) await held;
+        return response;
+      },
+    });
+    source.sessionAdded?.(scope('source'));
+    source.sessionAdded?.(scope('target'));
+    h.emit('source');
+    h.emit('target');
+    await vi.waitFor(() =>
+      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target', label: 'Target', order: 1 }]),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    holdCatalogs = true;
+    h.states.get('target')!.label = 'First';
+    h.emit('target');
+    await vi.waitFor(() =>
+      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target', label: 'First', order: 1 }]),
+    );
+    h.states.get('target')!.label = 'Second';
+    h.emit('target');
+    releaseCatalog();
+
+    // The change landed after the in-flight run had read its targets, so the trailing re-check must republish.
+    await vi.waitFor(() =>
+      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target', label: 'Second', order: 1 }]),
+    );
     source.close();
   });
 

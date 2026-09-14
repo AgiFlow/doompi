@@ -877,6 +877,28 @@ describe('direct AgentHarness runtime', () => {
     }
   });
 
+  it('prefers setProvider over registerNativeProvider when the registry exposes both', async () => {
+    const setProvider = vi.fn();
+    const registerNativeProvider = vi.fn();
+    const dualShaped = { ...models, setProvider, registerNativeProvider } as unknown as Models;
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'dual-provider-merge' }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({
+      cwd: '/tmp',
+      session,
+      models: dualShaped,
+      providers: [{ id: 'anthropic-vertex' } as never],
+      model,
+    });
+    try {
+      expect(setProvider).toHaveBeenCalledExactlyOnceWith({ id: 'anthropic-vertex' });
+      expect(registerNativeProvider).not.toHaveBeenCalled();
+    } finally {
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   it('rejects providers when the supplied registry cannot register any', async () => {
     const repository = new MemorySessionRepo();
     const session = await repository.create({ id: 'provider-merge-unsupported' }, BACKGROUND_CONTEXT);

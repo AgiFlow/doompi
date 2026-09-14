@@ -394,4 +394,21 @@ describe('retained headless contributions', () => {
       await fixture.close();
     }
   });
+
+  it('rejects selections queued into teardown without reporting them as failures', async () => {
+    const fixture = await setup(() => undefined);
+    try {
+      await fixture.host.select({});
+      expect(fixture.onError).not.toHaveBeenCalled();
+      const queued = fixture.host.select({ domains: ['docs'] }).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      await fixture.host.close();
+      await expect(queued).resolves.toBeInstanceOf(Error);
+      expect(fixture.onError).not.toHaveBeenCalled();
+    } finally {
+      await fixture.close();
+    }
+  });
 });

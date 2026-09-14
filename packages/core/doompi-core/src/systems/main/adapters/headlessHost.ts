@@ -391,7 +391,10 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     this.tail = result.catch((error: unknown) => {
       this.failure = error;
       this.ready = false;
-      this.options.onError?.(error);
+      // close() marks the host disposed before draining this tail, so every selection still
+      // queued at that point rejects by design. Those rejections are teardown artifacts, not
+      // actionable failures, and reporting them surfaces one notice per queued contribution.
+      if (!this.disposed) this.options.onError?.(error);
     });
     return result;
   }

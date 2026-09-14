@@ -15,6 +15,8 @@ import { serveWeb } from '../../src/adapters/httpServer';
 import { SYNCED_DIST_ENV, SYNCED_HOME_ENV } from './bundleSetup';
 import { type HeadlessSession, startHeadlessSession } from './headlessSession';
 const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
+/** Fixture-scoped stand-in for the production attach token, shared by the hub, the headless server, and the web adapter. */
+const E2E_HEADLESS_TOKEN = 'e2e-headless-token';
 
 export interface CockpitFixture {
   /** Every headless session, in registration order. */
@@ -166,6 +168,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const hub = createHeadlessHub({
       manager,
       createSession: (request) => createSession(request),
+      hubToken: () => E2E_HEADLESS_TOKEN,
       requestSessionApi: async (scope, request) => {
         const server = sessionApis.get(scope.sessionId);
         if (server === undefined) return Response.json({ error: 'Session API unavailable.' }, { status: 404 });
@@ -236,7 +239,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     let headless = await serveHeadlessServer({
       headlessHub: hub,
       port: 0,
-      token: 'e2e-headless-token',
+      token: E2E_HEADLESS_TOKEN,
       requestAsset: (request) => webCompositions.request(request),
       onNotice: (message) => console.error(`[headless] ${message}`),
       compositions: () => ({
@@ -253,7 +256,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       headless = await serveHeadlessServer({
         headlessHub: hub,
         port,
-        token: 'e2e-headless-token',
+        token: E2E_HEADLESS_TOKEN,
         requestAsset: (request) => webCompositions.request(request),
         onNotice: (message) => console.error(`[headless] ${message}`),
         compositions: () => ({
@@ -302,7 +305,9 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
           cwd: session.cwd,
           environment,
           directEvents: hub.directEvents,
+          hubToken: E2E_HEADLESS_TOKEN,
           sessionService: hub.sessionService,
+          pluginRegistry: hub.pluginRegistry,
           apis: [],
           facets: sessionBundle.facets,
           mountChannel: (channel) => {
@@ -335,7 +340,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       port: 0,
       assetsDir,
       headlessUrl: headless.url,
-      headlessToken: 'e2e-headless-token',
+      headlessToken: E2E_HEADLESS_TOKEN,
     });
 
     try {
