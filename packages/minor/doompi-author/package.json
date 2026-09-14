@@ -93,7 +93,7 @@
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
-    "@types/node": "26.4.1",
+    "@types/node": "26.5.1",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
     "@types/yauzl": "3.4.0",
