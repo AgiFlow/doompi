@@ -1,7 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -10,7 +9,6 @@ import { loadDomains } from '@agimon-ai/doompi-config/domains';
 import { filterHookDisabledLayers, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { loadMajorModesConfig, loadMajorModesConfigLenient } from '@agimon-ai/doompi-config/majorModes';
 import type { ConfigDiagnostic } from '@agimon-ai/doompi-config/types';
-import { DOOM_PACKAGE_NAME } from '@agimon-ai/doompi-core/doom-package';
 import {
   mergePiSettings,
   piAgentDirectory,
@@ -359,27 +357,21 @@ export function formatSyncResult(result: SyncResult, runner = 'pi'): string {
 }
 
 /**
- * The DoomPi package a repository pins for itself, if it pins one.
+ * The DoomPi that produced this generation, which is the one that can load it.
  *
- * Extensions are version-coupled to the harness that loads them, so the
- * registration must name the copy the repository resolves rather than whichever
- * copy happened to run sync. A globally installed DoomPi syncing a repository
- * that pins its own would otherwise record itself, and the dispatcher would
- * then load the wrong harness for every session in that repository.
+ * Always the executing package, never another copy the repository happens to
+ * install. A generation is not portable between two installations: the bundles
+ * are compiled from the building package's own extension entries, the recorded
+ * compiler inputs are its files, and the state names its bootstrap entry. Naming
+ * a second copy here publishes a registration whose package disagrees with the
+ * state it points at, and Pi's dispatcher then loads a harness that rejects the
+ * bootstrap as stale on every session, with no sync able to fix it.
+ *
+ * A repository that wants its own copy to own its sessions runs sync with that
+ * copy's CLI, which makes it the executing package.
  */
-function repositoryPackageRoot(repoRoot: string): string | undefined {
-  try {
-    return path.dirname(
-      createRequire(path.join(repoRoot, 'package.json')).resolve(`${DOOM_PACKAGE_NAME}/package.json`),
-    );
-  } catch {
-    // Not pinned here, which is normal; the executing package stands in.
-    return undefined;
-  }
-}
-
-function packageRegistrationFor(repoRoot: string): SyncPackageRegistration {
-  const root = fs.realpathSync(repositoryPackageRoot(repoRoot) ?? doomPiPackageRoot());
+function packageRegistrationFor(): SyncPackageRegistration {
+  const root = fs.realpathSync(doomPiPackageRoot());
   const manifestPath = path.join(root, 'package.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
     version?: unknown;
@@ -719,7 +711,7 @@ async function stageSync(
         webDirectory: web.status === 'bundled' ? web.assetsDir : null,
         apiDirectory,
         serverBundle: { path: descriptorPath, fingerprint, sha256: syncStateSha256(descriptorPath) },
-        package: packageRegistrationFor(location.root),
+        package: packageRegistrationFor(),
       },
       homeDirectory,
     );

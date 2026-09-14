@@ -5,38 +5,40 @@ DoomPi Web is the browser presentation process. It serves the SPA and PWA, then 
 ## Requirements
 
 - Node.js 22.19.0 or newer
-- A running `doompi-server` with its HTTP/WebSocket endpoint enabled
 - A synchronized DoomPi web bundle when using repository browser plugins
 
 ## Install and start
 
-Start the headless process on one port, then point the presentation process at it:
-
 ```bash
-doompi-server --web-port 7434 [server options]
-doompi-web --headless-url http://127.0.0.1:7434
+doompi-web
 ```
 
-Open <http://127.0.0.1:7433>. If the headless endpoint requires a token, pass it to the presentation process:
+Open <http://127.0.0.1:7433>. One command is enough: the presentation process starts a headless `doompi-server` on `127.0.0.1:7434`, generates a single-use credential in a private file, forwards it on every proxied request, and stops the child when it exits.
+
+It starts nothing when the endpoint already answers, or when `--headless-url` or `--headless-token` names a headless process someone else runs:
 
 ```bash
-doompi-web \
-  --headless-url http://127.0.0.1:7434 \
-  --headless-token "$DOOMPI_HEADLESS_TOKEN"
+# terminal 1
+doompi-server --auth-token-file ./headless.token --no-session --web 7434
+
+# terminal 2
+doompi-web --headless-url http://127.0.0.1:7434 --headless-token "$(cat ./headless.token)"
 ```
 
-The token is added by the presentation proxy and is not embedded in browser assets. Keep both listeners on loopback unless an authenticated deployment boundary is configured in front of them.
+`doompi-server` requires `--auth-token-file` and reads the credential from that file rather than a flag, because command arguments are visible to other local processes. Its `--web` port defaults to `7433`, so pass `--web 7434` to leave `7433` for the browser assets.
+
+The credential is added by the presentation proxy and is not embedded in browser assets. Keep both listeners on loopback unless an authenticated deployment boundary is configured in front of them.
 
 ## Command reference
 
-| Option                 | Default                 | Effect                                      |
-| ---------------------- | ----------------------- | ------------------------------------------- |
-| `--port <number>`      | `7433`                  | Select the browser presentation HTTP port   |
-| `--host <address>`     | `127.0.0.1`             | Select the presentation bind address        |
-| `--assets <path>`      | packaged shell          | Override the built SPA directory            |
-| `--headless-url <url>` | `http://127.0.0.1:7434` | Select the headless HTTP/WebSocket endpoint |
-| `--headless-token`     | unset                   | Forward a credential to the headless server |
-| `DOOMPI_WEB_DIST`      | unset                   | Environment equivalent of `--assets`        |
+| Option                 | Default           | Effect                                      |
+| ---------------------- | ----------------- | ------------------------------------------- |
+| `--port <number>`      | `7433`            | Select the browser presentation HTTP port   |
+| `--host <address>`     | `127.0.0.1`       | Select the presentation bind address        |
+| `--assets <path>`      | packaged shell    | Override the built SPA directory            |
+| `--headless-url <url>` | started on `7434` | Attach to an existing headless endpoint     |
+| `--headless-token`     | generated per run | Forward a credential to the headless server |
+| `DOOMPI_WEB_DIST`      | unset             | Environment equivalent of `--assets`        |
 
 `doompi-web --help` prints the current syntax. `doompi-web --version` prints the installed version without loading the server.
 
@@ -47,7 +49,7 @@ Use separate terminals for the headless endpoint and the Vite development server
 ```bash
 # repository root
 pnpm nx run @agimon-ai/doompi:build
-doompi-server --web-port 7434 [server options]
+doompi-server --auth-token-file ./headless.token --no-session --web 7434
 
 # packages/clients/doompi-web
 pnpm dev

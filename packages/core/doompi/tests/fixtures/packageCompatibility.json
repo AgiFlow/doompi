@@ -796,6 +796,7 @@
       "./ask-user": "tir",
       "./author-tools": "tir",
       "./background-work": "tir",
+      "./bundle-asset-policy": "tir",
       "./child-process": "tir",
       "./cockpit-container": "tir",
       "./config": "tir",
@@ -914,6 +915,11 @@
         "types": "./dist/background-work.d.mts",
         "import": "./dist/background-work.mjs",
         "require": "./dist/background-work.cjs"
+      },
+      "./bundle-asset-policy": {
+        "types": "./dist/bundle-asset-policy.d.mts",
+        "import": "./dist/bundle-asset-policy.mjs",
+        "require": "./dist/bundle-asset-policy.cjs"
       },
       "./child-process": {
         "types": "./dist/child-process.d.mts",

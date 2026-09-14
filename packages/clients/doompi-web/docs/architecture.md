@@ -31,6 +31,8 @@ sessions, native Team children, APIs, channels, history, security, events
 
 Browser disconnects do not stop the headless process or its sessions. Cleanup and replay policy remain headless responsibilities.
 
+Process lifetime is separate from module ownership. When no headless endpoint answers and the caller named none, `doompi-web` starts `doompi-server` as a child and stops it on exit, so a single command serves a working cockpit. It launches that binary without importing it: server facets, sessions, and authorization stay inside the child.
+
 ## Extension paths
 
 ```text

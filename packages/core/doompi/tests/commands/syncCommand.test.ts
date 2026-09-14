@@ -709,6 +709,37 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(fs.existsSync(live)).toBe(true);
   });
 
+  /**
+   * The bundles, the recorded compiler inputs, and the bootstrap entry all come
+   * from the package that ran sync. Registering a second copy the repository
+   * installs hands Pi's dispatcher a harness that rejects this generation as
+   * stale on every session, and no further sync can repair it.
+   */
+  it('registers the package that produced the generation, not another copy the repository installs', async () => {
+    const root = makeRepository();
+    const installed = path.join(root, 'node_modules', '@agimon-ai', 'doompi');
+    // The fixture links every workspace package here, so the copy under test
+    // replaces that link rather than writing through it into the real package.
+    fs.unlinkSync(installed);
+    fs.mkdirSync(path.join(installed, 'dist', 'extensions'), { recursive: true });
+    fs.writeFileSync(
+      path.join(installed, 'package.json'),
+      JSON.stringify({
+        name: '@agimon-ai/doompi',
+        version: '9.9.9-installed',
+        pi: { extensions: ['./dist/extensions/pi.mjs'] },
+      }),
+    );
+    fs.writeFileSync(path.join(installed, 'dist', 'extensions', 'pi.mjs'), 'export default () => {};\n');
+    const executingRoot = fs.realpathSync(path.resolve(import.meta.dirname, '../..'));
+
+    expect(await new SyncCommand().execute(['sync'], environmentFor(root), root, capture().output)).toBe(0);
+
+    const registration = readSyncRegistration(root, homeFor(root));
+    expect(registration?.package.root).toBe(executingRoot);
+    expect(registration?.package.version).not.toBe('9.9.9-installed');
+  });
+
   it('publishes nothing when a second sync finds the same inputs', async () => {
     const root = makeRepository();
     const homeDirectory = homeFor(root);
