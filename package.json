@@ -47,7 +47,7 @@
     "@agimon-ai/vibe-lint-plugin-doom-core": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
-    "@agimon-ai/workflow-mcp": "0.23.19",
+    "@agimon-ai/workflow-mcp": "0.23.24",
     "@commitlint/cli": "21.2.2",
     "@commitlint/config-conventional": "21.2.2",
     "@commitlint/config-nx-scopes": "21.2.0",
@@ -61,7 +61,7 @@
     "tsdown": "0.23.0",
     "typescript": "7.0.2",
     "vitest": "5.0.0",
-    "zod": "4.5.4"
+    "zod": "4.6.2"
   },
   "engines": {
     "node": ">=22.22.1"
