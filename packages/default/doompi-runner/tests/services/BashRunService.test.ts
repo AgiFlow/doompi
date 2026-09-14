@@ -712,6 +712,43 @@ describe('RmuxBackend.stop', () => {
     await handle?.completion();
   });
 
+  it.each(['pane status', 'log drain', 'session cleanup'])(
+    'completes from exit evidence when the RMUX %s request stalls',
+    async (stage) => {
+      const backend = new RmuxBackend(rmuxPaths);
+      const handle = await backend.launch({
+        id: 'run-a',
+        name: 'run-a',
+        command: 'echo done | cat | tail -n 1',
+        cwd: '/repo',
+        sessionId: 'session-a',
+        interactive: false,
+      });
+      const completed = vi.fn();
+      void handle?.completion().then(completed);
+      if (stage === 'pane status') {
+        rmuxMocks.displayMessage.mockImplementation(() => new Promise(() => undefined));
+        await vi.advanceTimersByTimeAsync(150);
+        expect(rmuxMocks.displayMessage).toHaveBeenCalledWith('#{pane_dead}:#{pane_dead_status}:#{session_name}', {
+          target: RMUX_TARGET,
+        });
+      } else if (stage === 'log drain') {
+        rmuxMocks.cmd.mockImplementation(() => new Promise(() => undefined));
+      } else {
+        rmuxMocks.sessionKill.mockImplementation(() => new Promise(() => undefined));
+      }
+      fs.writeFileSync(path.join(rmuxRoot, 'state', 'run-a.exit.json'), '{"code":0,"signal":null}\n');
+      if (stage !== 'log drain') fs.writeFileSync(path.join(rmuxRoot, 'state', 'run-a.log.done'), '');
+
+      await vi.advanceTimersByTimeAsync(3_200);
+
+      expect(completed).toHaveBeenCalledWith({ code: 0, signal: null });
+      expect(fs.existsSync(path.join(rmuxRoot, 'state', 'run-a.exit.json'))).toBe(false);
+      if (stage === 'pane status') expect(rmuxMocks.displayMessage).toHaveBeenCalledTimes(2);
+      else expect(emitWarning).toHaveBeenCalledWith(expect.stringContaining('Timed out cleaning up RMUX target'));
+    },
+  );
+
   it('falls back to asking for the pane pid when the launch reports none', async () => {
     rmuxPaneDead = true;
     // An rmux that prints nothing for -P -F must not take the launch down with

@@ -290,15 +290,26 @@ export class RmuxBackend implements IRmuxBackend {
     } finally {
       // The pane ends its own session, so this only covers a session that somehow
       // outlived its pane. Killing unconditionally would warn on every clean run.
-      if (!(await sessionMissing(rmux, target).catch(() => false))) {
-        await pane.server
-          .session(target)
-          .kill()
-          .catch((error: unknown) =>
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const cleanup = async (): Promise<void> => {
+        if (!(await sessionMissing(rmux, target))) await pane.server.session(target).kill();
+      };
+      try {
+        await Promise.race([
+          cleanup().catch((error: unknown) =>
             process.emitWarning(`Could not clean up completed RMUX target ${target}: ${errorMessage(error)}`),
-          );
+          ),
+          new Promise<void>((resolve) => {
+            timer = setTimeout(() => {
+              process.emitWarning(`Timed out cleaning up RMUX target ${target} after ${STOP_CLOSE_TIMEOUT_MS}ms`);
+              resolve();
+            }, STOP_CLOSE_TIMEOUT_MS);
+          }),
+        ]);
+      } finally {
+        if (timer) clearTimeout(timer);
+        cleanupSupervisorFiles(aux);
       }
-      cleanupSupervisorFiles(aux);
     }
   }
 
@@ -417,13 +428,28 @@ function reportedPid(output: string): number | undefined {
  */
 async function waitForRunEnd(rmux: Rmux, target: string, exitPath: string): Promise<number | null> {
   const landed = watchForFile(exitPath);
-  try {
-    for (;;) {
+  let active = true;
+  const readEvidence = async (): Promise<null> => {
+    while (active) {
       if (await landed.appeared(POLL_MS)) return null;
+    }
+    return null;
+  };
+  const probePane = async (): Promise<number | null> => {
+    while (active) {
+      await delay(POLL_MS);
+      if (!active) return null;
       const state = await readPaneExit(rmux, target);
       if (state.exited) return state.code;
     }
+    return null;
+  };
+  try {
+    // A stalled SDK request must not block the supervisor's durable evidence.
+    // Keep only one pane request in flight, even when it never answers.
+    return await Promise.race([readEvidence(), probePane()]);
   } finally {
+    active = false;
     landed.close();
   }
 }
@@ -438,12 +464,24 @@ async function waitForRunEnd(rmux: Rmux, target: string, exitPath: string): Prom
 async function waitForLogDrain(rmux: Rmux, target: string, donePath: string): Promise<void> {
   const deadline = Date.now() + LOG_DRAIN_TIMEOUT_MS;
   const landed = watchForFile(donePath);
-  try {
-    while (Date.now() < deadline) {
+  let active = true;
+  const readEvidence = async (): Promise<void> => {
+    while (active && Date.now() < deadline) {
       if (await landed.appeared(LOG_DRAIN_POLL_MS)) return;
+    }
+  };
+  const probeSession = async (): Promise<void> => {
+    while (active && Date.now() < deadline) {
+      await delay(LOG_DRAIN_POLL_MS);
+      if (!active) return;
       if (await sessionMissing(rmux, target)) return;
     }
+  };
+  try {
+    // The file loop enforces the deadline while a session query is outstanding.
+    await Promise.race([readEvidence(), probeSession()]);
   } finally {
+    active = false;
     landed.close();
   }
 }

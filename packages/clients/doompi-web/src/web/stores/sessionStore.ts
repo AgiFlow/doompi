@@ -352,6 +352,16 @@ export function endSessionReplay(sessionId: string): void {
 export function resetSessionStore(sessionId: string): void {
   const guard = replayGuards.get(sessionId);
   sessionStoreFor(sessionId).setState((state) => {
+    // Transcript pages do not contain facts returned by the session commands.
+    // Keep those facts even when their response arrives before a page reload.
+    const reset = {
+      ...initialSessionState,
+      agent: state.agent,
+      stats: state.stats,
+      commands: state.commands,
+      models: state.models,
+      thinkingLevels: state.thinkingLevels,
+    };
     const preservedStatuses =
       guard === undefined
         ? {}
@@ -359,7 +369,7 @@ export function resetSessionStore(sessionId: string): void {
     const preservedWidgets = guard === undefined ? [] : state.widgets.filter((key) => guard.widgets.has(key));
     if (!protocolTranscripts.has(sessionId)) {
       return {
-        ...initialSessionState,
+        ...reset,
         statuses: preservedStatuses,
         widgets: preservedWidgets,
       };
@@ -368,7 +378,7 @@ export function resetSessionStore(sessionId: string): void {
     // visible while that replay rebuilds DoomPi-only state around it.
     const entries = state.entries.filter((entry) => PROTOCOL_ENTRY_KINDS.has(entry.kind));
     return {
-      ...initialSessionState,
+      ...reset,
       entries,
       statuses: preservedStatuses,
       widgets: preservedWidgets,
