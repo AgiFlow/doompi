@@ -71,8 +71,8 @@ importers:
         specifier: 0.1.1
         version: 0.1.1(@types/node@26.4.1)(@types/react@19.2.18)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)(zod@4.5.4)
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.29
-        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
+        specifier: 0.0.1-alpha.34
+        version: 0.0.1-alpha.34(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
       '@agimon-ai/vibe-lint-plugin-doom-cli':
         specifier: workspace:*
         version: link:packages/tooling/vibe-lint-plugin-doom-cli
@@ -87,7 +87,7 @@ importers:
         version: link:packages/tooling/vibe-lint-plugin-doom-web
       '@agimon-ai/workflow-mcp':
         specifier: 0.23.19
-        version: 0.23.19(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))(zod@4.5.4)
+        version: 0.23.19(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(zod@4.5.4))(zod@4.5.4)
       '@commitlint/cli':
         specifier: 21.2.2
         version: 21.2.2(@types/node@26.4.1)(conventional-commits-parser@7.1.2)(typescript@7.0.2)
@@ -2616,8 +2616,8 @@ importers:
         version: 6.0.3
     devDependencies:
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.29
-        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
+        specifier: 0.0.1-alpha.34
+        version: 0.0.1-alpha.34(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
       '@types/node':
         specifier: 26.4.1
         version: 26.4.1
@@ -2638,8 +2638,8 @@ importers:
         version: 6.0.3
     devDependencies:
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.29
-        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
+        specifier: 0.0.1-alpha.34
+        version: 0.0.1-alpha.34(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
       '@types/node':
         specifier: 26.4.1
         version: 26.4.1
@@ -2660,8 +2660,8 @@ importers:
         version: 6.0.3
     devDependencies:
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.29
-        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
+        specifier: 0.0.1-alpha.34
+        version: 0.0.1-alpha.34(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
       '@types/node':
         specifier: 26.4.1
         version: 26.4.1
@@ -2682,8 +2682,8 @@ importers:
         version: 6.0.3
     devDependencies:
       '@agimon-ai/vibe-lint':
-        specifier: 0.0.1-alpha.29
-        version: 0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
+        specifier: 0.0.1-alpha.34
+        version: 0.0.1-alpha.34(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))
       '@types/node':
         specifier: 26.4.1
         version: 26.4.1
@@ -2719,11 +2719,11 @@ packages:
     resolution: {integrity: sha512-qed0biDNj7N89SD7293daRKf5fROjpEeFPQr/DnWDXVlvaarqv+6r54mnGcUb2J+yx6QJx+anzVzcVYvkTs2RA==}
     hasBin: true
 
-  '@agimon-ai/foundation-exec@0.26.19':
-    resolution: {integrity: sha512-YPLWySHc3B2l21J6x5XyNkF7AZYFjQQa9BxYKoXk3J38iV8O4vmzbVGjJwPFjIcCCvQbqSWttWN9JcuuiLprzA==}
-
   '@agimon-ai/foundation-exec@0.26.23':
     resolution: {integrity: sha512-b5qbUsyS2T2CKo7M1IaFQuuDXCTG/EQqF1TMEUHT8GYOjW88UYNqT5fj88HlyDYIpHXIjc5TAqapMUdgnw2OYA==}
+
+  '@agimon-ai/foundation-exec@0.26.24':
+    resolution: {integrity: sha512-aq+SyHSOAGMBXmgyb8MdGLUdKn1GbQvJHwEcp1vh8O//vWxxXKoddetkMmm+KYUxiZh4OQ7vxto2IUIZdhUlFA==}
 
   '@agimon-ai/foundation-port-registry@0.29.19':
     resolution: {integrity: sha512-ulvRK9ybEOeKuiAdneELiL4sao/trET5ZoXPbcG3iN36VGVMvhkPRIJiRYf7nFbyOYeHsb659xw7U5+oOIYuRw==}
@@ -2739,6 +2739,12 @@ packages:
 
   '@agimon-ai/foundation-port-registry@0.29.23':
     resolution: {integrity: sha512-eh+LmPpCQHpEQqb4g5dNEs8fxRzYYRrmZ2xmccsJjbEaE8D0Z0gMwTHSRUMlnbc0l0xorlbDy6lGbiij29ixFQ==}
+    hasBin: true
+    peerDependencies:
+      zod: ^4.4.3
+
+  '@agimon-ai/foundation-port-registry@0.29.24':
+    resolution: {integrity: sha512-8VsVSeKAZnBI7KduVTjn5cLhcdmu6Fg9qA98jEPmtt+8QAkGpTlA+mdJKB8U9vd42t0fdLmPauMp4NnBGsaS2w==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
@@ -2761,6 +2767,12 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
+  '@agimon-ai/foundation-process-registry@0.29.24':
+    resolution: {integrity: sha512-se4G1VRbXkgHn1rh60+nrEcLrtWRKINxLWZ50XQ+XVimt+2+UcoUAN4giyIHnZnLkbF0PdNWXKtvzRFYpabcNw==}
+    hasBin: true
+    peerDependencies:
+      zod: ^4.4.3
+
   '@agimon-ai/foundation-validator@0.26.19':
     resolution: {integrity: sha512-TthyaScN6OZNnpaWWOxQfwRdttSOir0qcUJSIyG6nU5d5JFzE8npGlWnBlzB0uyKkc+vAxjOSWrHWEMxycvC5g==}
     peerDependencies:
@@ -2768,6 +2780,11 @@ packages:
 
   '@agimon-ai/foundation-validator@0.26.22':
     resolution: {integrity: sha512-4FvAEOb97zpBnSSnNDiiu89z4SEZ5AUlByAF3qBRPCsLSrfjL/GAZomw4qFlbWCG+RqW5MaPylPjGrHc/OEiCQ==}
+    peerDependencies:
+      zod: ^4.4.3
+
+  '@agimon-ai/foundation-validator@0.26.24':
+    resolution: {integrity: sha512-d/KwKXBr4WuuHHIcI4/lgSWy6i/RgnRMauVdQrlE0+k4p3fWbQ+nSzggl8VGvgs9eLWJBVi39p49EIgsLkFhmg==}
     peerDependencies:
       zod: ^4.4.3
 
@@ -2791,6 +2808,16 @@ packages:
       '@earendil-works/pi-coding-agent':
         optional: true
 
+  '@agimon-ai/log-sink-mcp@0.29.24':
+    resolution: {integrity: sha512-+sMU5L6OGmL6gVNaxcd0SZEiMeXt/mgg9vTP0DdWPGvFKbQZl6Iu7fe/+MUzV+f1GsbXYzenC3YH//MzQoBQzg==}
+    hasBin: true
+    peerDependencies:
+      '@earendil-works/pi-coding-agent': '*'
+      zod: ^4.4.3
+    peerDependenciesMeta:
+      '@earendil-works/pi-coding-agent':
+        optional: true
+
   '@agimon-ai/mcp-proxy@0.31.22':
     resolution: {integrity: sha512-6zqiFv3B8VolUO2uzb3TKKXiEZc3h5jYEO9EP9g4TWrXcZmlD8+Kiik7W9QcJ9a/eDA69McEtxm40AedIvMDfA==}
     hasBin: true
@@ -2803,8 +2830,8 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
-  '@agimon-ai/vibe-lint@0.0.1-alpha.29':
-    resolution: {integrity: sha512-O2VoW9ez0rLYKj0qP4OBexhuFJxQhvm6Oc81kzF9iNcAWSJNjiI4iChKWA3rLL4DmiIMOWIgHO+X0gxWF1FWjw==}
+  '@agimon-ai/vibe-lint@0.0.1-alpha.34':
+    resolution: {integrity: sha512-JifOvPoM1nyfvyd8tUkm8CanFWTxoJPhrnVZ7++YHgYxA/m0mcdKxt0qRlKmeFLe+Q+kYJtyXmm0Imw+BYWVFg==}
     hasBin: true
 
   '@agimon-ai/workflow-mcp@0.23.19':
@@ -8348,6 +8375,12 @@ packages:
     peerDependencies:
       express: '>= 4.11'
 
+  express-rate-limit@8.7.0:
+    resolution: {integrity: sha512-hOwV7WOxXfjRpAM1DSJWZDXx3GhplwD8IfwuwvogD8i1Qnkgosw/H45s4ZnFAUHDAhPjlY9hLBvJhKmGMyY26g==}
+    engines: {node: '>= 16'}
+    peerDependencies:
+      express: '>= 4.11'
+
   express@5.2.1:
     resolution: {integrity: sha512-hIS4idWWai69NezIdRt2xFVofaF4j+6INOpJlVOLDO8zXGpUVEVzIYk12UUi2JzjEzWL3IOAxcTubgz9Po0yXw==}
     engines: {node: '>= 18'}
@@ -8638,6 +8671,10 @@ packages:
     resolution: {integrity: sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw==}
     engines: {node: '>=16.9.0'}
 
+  hono@4.13.7:
+    resolution: {integrity: sha512-c8/gF9ac8Y78/agExVocyLevgR+JlpNB444Py0FSX8pJoPdYUfUzRcXtYEYGwt6l19qIlVZPN5Mfsw9jFShmQQ==}
+    engines: {node: '>=16.9.0'}
+
   hookable@6.1.1:
     resolution: {integrity: sha512-U9LYDy1CwhMCnprUfeAZWZGByVbhd54hwepegYTK7Pi5NvqEj63ifz5z+xukznehT7i6NIZRu89Ay1AZmRsLEQ==}
 
@@ -8748,6 +8785,10 @@ packages:
 
   ip-address@10.5.0:
     resolution: {integrity: sha512-R5SnVLJmgYYvf2F2ZgwSBnelz5G4q5AxIC277GDfUaNbrZKNANcBC7RHqYYePlszf4kBolVkJauG0ZjHHFh55g==}
+    engines: {node: '>= 12'}
+
+  ip-address@10.7.0:
+    resolution: {integrity: sha512-BGFsyJd5mpXp3rK6jIdADLNgpJUK1jnjzvYF8lK+VyDab9JAmqN0YOKDdP17HlgKb2+ehPgDc8EtnRLbGCAMhA==}
     engines: {node: '>= 12'}
 
   ipaddr.js@1.9.1:
@@ -8952,6 +8993,9 @@ packages:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
 
+  jose@6.2.12:
+    resolution: {integrity: sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw==}
+
   jose@6.2.9:
     resolution: {integrity: sha512-XrchZOFZUl/T3vTwRe8XK+cJrGtMF4th1ARnDfwbBXFKThGhlsxEE4Zu03AD/bjJSt/9jT/mxrOCkJWOg77aPA==}
 
@@ -8975,6 +9019,10 @@ packages:
 
   js-yaml@5.3.0:
     resolution: {integrity: sha512-muutsYr+e2+d3rTgUGslq5rxbBlUy3cJ61IsHag2QNDQV+7zXWjkUpmALIajhrlLlrgRUiymj6U3zUr/TMK84Q==}
+    hasBin: true
+
+  js-yaml@5.4.1:
+    resolution: {integrity: sha512-28R/k+NAjeuf7+CKlTxWZVExJGwVVLwY06DgEnOMz2gEpfNkDcD7QvyiVPT0xy0XXhU8vHsd4Ot42OOPdJG7dQ==}
     hasBin: true
 
   jsep@1.4.0:
@@ -11303,22 +11351,17 @@ snapshots:
       - '@types/node'
       - supports-color
 
-  '@agimon-ai/foundation-exec@0.26.19(zod@4.4.3)':
-    dependencies:
-      '@agimon-ai/foundation-process-registry': 0.29.19(zod@4.4.3)
-    transitivePeerDependencies:
-      - zod
-
   '@agimon-ai/foundation-exec@0.26.23(zod@4.5.4)':
     dependencies:
       '@agimon-ai/foundation-process-registry': 0.29.23(zod@4.5.4)
     transitivePeerDependencies:
       - zod
 
-  '@agimon-ai/foundation-port-registry@0.29.19(zod@4.4.3)':
+  '@agimon-ai/foundation-exec@0.26.24(zod@4.4.3)':
     dependencies:
-      '@tursodatabase/database': 0.7.2
-      zod: 4.4.3
+      '@agimon-ai/foundation-process-registry': 0.29.24(zod@4.4.3)
+    transitivePeerDependencies:
+      - zod
 
   '@agimon-ai/foundation-port-registry@0.29.19(zod@4.5.4)':
     dependencies:
@@ -11335,9 +11378,8 @@ snapshots:
       '@tursodatabase/database': 0.7.2
       zod: 4.5.4
 
-  '@agimon-ai/foundation-process-registry@0.29.19(zod@4.4.3)':
+  '@agimon-ai/foundation-port-registry@0.29.24(zod@4.4.3)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.19(zod@4.4.3)
       '@tursodatabase/database': 0.7.2
       zod: 4.4.3
 
@@ -11359,8 +11401,10 @@ snapshots:
       '@tursodatabase/database': 0.7.2
       zod: 4.5.4
 
-  '@agimon-ai/foundation-validator@0.26.19(zod@4.4.3)':
+  '@agimon-ai/foundation-process-registry@0.29.24(zod@4.4.3)':
     dependencies:
+      '@agimon-ai/foundation-port-registry': 0.29.24(zod@4.4.3)
+      '@tursodatabase/database': 0.7.2
       zod: 4.4.3
 
   '@agimon-ai/foundation-validator@0.26.19(zod@4.5.4)':
@@ -11371,133 +11415,11 @@ snapshots:
     dependencies:
       zod: 4.5.4
 
-  '@agimon-ai/log-sink-mcp@0.29.19(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(zod@4.5.4))(zod@4.5.4)':
+  '@agimon-ai/foundation-validator@0.26.24(zod@4.4.3)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.19(zod@4.5.4)
-      '@agimon-ai/foundation-process-registry': 0.29.19(zod@4.5.4)
-      '@agimon-ai/foundation-validator': 0.26.19(zod@4.5.4)
-      '@hono/node-server': 2.0.10(hono@4.12.34)
-      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.5.4)
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.5.4)
-      '@opentelemetry/api': 1.9.1
-      '@opentelemetry/api-logs': 0.219.0
-      '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/exporter-trace-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/otlp-transformer': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/resources': 2.8.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/sdk-logs': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/sdk-trace-node': 2.8.0(@opentelemetry/api@1.9.1)
-      chalk: 5.6.2
-      commander: 14.0.3
-      drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
-      hono: 4.12.34
-      hono-rate-limiter: 0.5.3(hono@4.12.34)
-      inversify: 8.1.0(reflect-metadata@0.2.2)
-      reflect-metadata: 0.2.2
-      ruvector-onnx-embeddings-wasm: 0.1.2
-      sqlite-vec: 0.1.9
-      ulidx: 2.4.1
-      yaml: 2.8.3
-      zod: 4.5.4
-    optionalDependencies:
-      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
-    transitivePeerDependencies:
-      - '@aws-sdk/client-rds-data'
-      - '@cfworker/json-schema'
-      - '@cloudflare/workers-types'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@libsql/client-wasm'
-      - '@neondatabase/serverless'
-      - '@op-engineering/op-sqlite'
-      - '@planetscale/database'
-      - '@prisma/client'
-      - '@tidbcloud/serverless'
-      - '@types/better-sqlite3'
-      - '@types/pg'
-      - '@types/sql.js'
-      - '@upstash/redis'
-      - '@vercel/postgres'
-      - '@xata.io/client'
-      - better-sqlite3
-      - bun-types
-      - expo-sqlite
-      - gel
-      - knex
-      - kysely
-      - mysql2
-      - pg
-      - postgres
-      - prisma
-      - sql.js
-      - sqlite3
-      - supports-color
-      - unstorage
-
-  '@agimon-ai/log-sink-mcp@0.29.19(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))(zod@4.4.3)':
-    dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.19(zod@4.4.3)
-      '@agimon-ai/foundation-process-registry': 0.29.19(zod@4.4.3)
-      '@agimon-ai/foundation-validator': 0.26.19(zod@4.4.3)
-      '@hono/node-server': 2.0.10(hono@4.12.34)
-      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.4.3)
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
-      '@opentelemetry/api': 1.9.1
-      '@opentelemetry/api-logs': 0.219.0
-      '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/exporter-trace-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/otlp-transformer': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/resources': 2.8.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/sdk-logs': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/sdk-trace-node': 2.8.0(@opentelemetry/api@1.9.1)
-      chalk: 5.6.2
-      commander: 14.0.3
-      drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
-      hono: 4.12.34
-      hono-rate-limiter: 0.5.3(hono@4.12.34)
-      inversify: 8.1.0(reflect-metadata@0.2.2)
-      reflect-metadata: 0.2.2
-      ruvector-onnx-embeddings-wasm: 0.1.2
-      sqlite-vec: 0.1.9
-      ulidx: 2.4.1
-      yaml: 2.8.3
       zod: 4.4.3
-    optionalDependencies:
-      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
-    transitivePeerDependencies:
-      - '@aws-sdk/client-rds-data'
-      - '@cfworker/json-schema'
-      - '@cloudflare/workers-types'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@libsql/client-wasm'
-      - '@neondatabase/serverless'
-      - '@op-engineering/op-sqlite'
-      - '@planetscale/database'
-      - '@prisma/client'
-      - '@tidbcloud/serverless'
-      - '@types/better-sqlite3'
-      - '@types/pg'
-      - '@types/sql.js'
-      - '@upstash/redis'
-      - '@vercel/postgres'
-      - '@xata.io/client'
-      - better-sqlite3
-      - bun-types
-      - expo-sqlite
-      - gel
-      - knex
-      - kysely
-      - mysql2
-      - pg
-      - postgres
-      - prisma
-      - sql.js
-      - sqlite3
-      - supports-color
-      - unstorage
 
-  '@agimon-ai/log-sink-mcp@0.29.19(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))(zod@4.5.4)':
+  '@agimon-ai/log-sink-mcp@0.29.19(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(zod@4.5.4))(zod@4.5.4)':
     dependencies:
       '@agimon-ai/foundation-port-registry': 0.29.19(zod@4.5.4)
       '@agimon-ai/foundation-process-registry': 0.29.19(zod@4.5.4)
@@ -11588,6 +11510,69 @@ snapshots:
       ulidx: 2.4.1
       yaml: 2.8.3
       zod: 4.5.4
+    optionalDependencies:
+      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@cfworker/json-schema'
+      - '@cloudflare/workers-types'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@neondatabase/serverless'
+      - '@op-engineering/op-sqlite'
+      - '@planetscale/database'
+      - '@prisma/client'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/sql.js'
+      - '@upstash/redis'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - better-sqlite3
+      - bun-types
+      - expo-sqlite
+      - gel
+      - knex
+      - kysely
+      - mysql2
+      - pg
+      - postgres
+      - prisma
+      - sql.js
+      - sqlite3
+      - supports-color
+      - unstorage
+
+  '@agimon-ai/log-sink-mcp@0.29.24(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))(zod@4.4.3)':
+    dependencies:
+      '@agimon-ai/foundation-port-registry': 0.29.24(zod@4.4.3)
+      '@agimon-ai/foundation-process-registry': 0.29.24(zod@4.4.3)
+      '@agimon-ai/foundation-validator': 0.26.24(zod@4.4.3)
+      '@hono/node-server': 2.0.10(hono@4.12.34)
+      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.4.3)
+      '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/api-logs': 0.219.0
+      '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/exporter-trace-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-transformer': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.8.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-logs': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-node': 2.8.0(@opentelemetry/api@1.9.1)
+      chalk: 5.6.2
+      commander: 14.0.3
+      drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
+      hono: 4.12.34
+      hono-rate-limiter: 0.5.3(hono@4.12.34)
+      inversify: 8.1.0(reflect-metadata@0.2.2)
+      reflect-metadata: 0.2.2
+      ruvector-onnx-embeddings-wasm: 0.1.2
+      sqlite-vec: 0.1.9
+      ulidx: 2.4.1
+      yaml: 2.8.3
+      zod: 4.4.3
     optionalDependencies:
       '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(ws@8.21.3)(zod@4.5.4)
     transitivePeerDependencies:
@@ -11721,24 +11706,24 @@ snapshots:
       - vite-plus
       - yaml
 
-  '@agimon-ai/vibe-lint@0.0.1-alpha.29(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))':
+  '@agimon-ai/vibe-lint@0.0.1-alpha.34(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))':
     dependencies:
-      '@agimon-ai/foundation-exec': 0.26.19(zod@4.4.3)
-      '@agimon-ai/foundation-validator': 0.26.19(zod@4.4.3)
-      '@agimon-ai/log-sink-mcp': 0.29.19(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))(zod@4.4.3)
+      '@agimon-ai/foundation-exec': 0.26.24(zod@4.4.3)
+      '@agimon-ai/foundation-validator': 0.26.24(zod@4.4.3)
+      '@agimon-ai/log-sink-mcp': 0.29.24(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.4.3)
       chalk: 5.6.2
       commander: 14.0.3
-      hono: 4.13.5
+      hono: 4.13.7
       inversify: 8.2.1(reflect-metadata@0.2.2)
-      js-yaml: 5.3.0
+      js-yaml: 5.4.1
       minimatch: 10.2.5
       reflect-metadata: 0.2.2
       typescript: 6.0.3
       zod: 4.4.3
     optionalDependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.19(zod@4.4.3)
-      '@agimon-ai/foundation-process-registry': 0.29.19(zod@4.4.3)
+      '@agimon-ai/foundation-port-registry': 0.29.24(zod@4.4.3)
+      '@agimon-ai/foundation-process-registry': 0.29.24(zod@4.4.3)
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cfworker/json-schema'
@@ -11779,52 +11764,6 @@ snapshots:
       '@agimon-ai/foundation-process-registry': 0.29.19(zod@4.5.4)
       '@agimon-ai/foundation-validator': 0.26.19(zod@4.5.4)
       '@agimon-ai/log-sink-mcp': 0.29.19(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(zod@4.5.4))(zod@4.5.4))(zod@4.5.4)
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.5.4)
-      chalk: 5.6.2
-      commander: 14.0.3
-      js-yaml: 4.3.2
-      proper-lockfile: 4.1.2
-      zod: 4.5.4
-    transitivePeerDependencies:
-      - '@aws-sdk/client-rds-data'
-      - '@cfworker/json-schema'
-      - '@cloudflare/workers-types'
-      - '@earendil-works/pi-coding-agent'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@libsql/client-wasm'
-      - '@neondatabase/serverless'
-      - '@op-engineering/op-sqlite'
-      - '@planetscale/database'
-      - '@prisma/client'
-      - '@tidbcloud/serverless'
-      - '@types/better-sqlite3'
-      - '@types/pg'
-      - '@types/sql.js'
-      - '@upstash/redis'
-      - '@vercel/postgres'
-      - '@xata.io/client'
-      - better-sqlite3
-      - bun-types
-      - expo-sqlite
-      - gel
-      - knex
-      - kysely
-      - mysql2
-      - pg
-      - postgres
-      - prisma
-      - sql.js
-      - sqlite3
-      - supports-color
-      - unstorage
-
-  '@agimon-ai/workflow-mcp@0.23.19(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))(zod@4.5.4)':
-    dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.19(zod@4.5.4)
-      '@agimon-ai/foundation-process-registry': 0.29.19(zod@4.5.4)
-      '@agimon-ai/foundation-validator': 0.26.19(zod@4.5.4)
-      '@agimon-ai/log-sink-mcp': 0.29.19(@earendil-works/pi-coding-agent@0.85.1(zod@4.5.4))(zod@4.5.4)
       '@modelcontextprotocol/sdk': 1.29.0(zod@4.5.4)
       chalk: 5.6.2
       commander: 14.0.3
@@ -13416,9 +13355,9 @@ snapshots:
 
   '@hexagon/base64@1.1.28': {}
 
-  '@hono/node-server@1.19.17(hono@4.13.5)':
+  '@hono/node-server@1.19.17(hono@4.13.7)':
     dependencies:
-      hono: 4.13.5
+      hono: 4.13.7
 
   '@hono/node-server@2.0.10(hono@4.12.34)':
     dependencies:
@@ -13853,7 +13792,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@4.3.6)':
     dependencies:
-      '@hono/node-server': 1.19.17(hono@4.13.5)
+      '@hono/node-server': 1.19.17(hono@4.13.7)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -13862,9 +13801,9 @@ snapshots:
       eventsource: 3.0.7
       eventsource-parser: 3.1.1
       express: 5.2.1
-      express-rate-limit: 8.6.2(express@5.2.1)
-      hono: 4.13.5
-      jose: 6.2.9
+      express-rate-limit: 8.7.0(express@5.2.1)
+      hono: 4.13.7
+      jose: 6.2.12
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
@@ -13875,7 +13814,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@4.4.3)':
     dependencies:
-      '@hono/node-server': 1.19.17(hono@4.13.5)
+      '@hono/node-server': 1.19.17(hono@4.13.7)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -13884,9 +13823,9 @@ snapshots:
       eventsource: 3.0.7
       eventsource-parser: 3.1.1
       express: 5.2.1
-      express-rate-limit: 8.6.2(express@5.2.1)
-      hono: 4.13.5
-      jose: 6.2.9
+      express-rate-limit: 8.7.0(express@5.2.1)
+      hono: 4.13.7
+      jose: 6.2.12
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
@@ -13897,7 +13836,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.29.0(zod@4.5.4)':
     dependencies:
-      '@hono/node-server': 1.19.17(hono@4.13.5)
+      '@hono/node-server': 1.19.17(hono@4.13.7)
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
@@ -13906,9 +13845,9 @@ snapshots:
       eventsource: 3.0.7
       eventsource-parser: 3.1.1
       express: 5.2.1
-      express-rate-limit: 8.6.2(express@5.2.1)
-      hono: 4.13.5
-      jose: 6.2.9
+      express-rate-limit: 8.7.0(express@5.2.1)
+      hono: 4.13.7
+      jose: 6.2.12
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
@@ -17527,6 +17466,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  express-rate-limit@8.7.0(express@5.2.1):
+    dependencies:
+      debug: 4.4.3(supports-color@7.2.0)
+      express: 5.2.1
+      ip-address: 10.7.0
+    transitivePeerDependencies:
+      - supports-color
+
   express@5.2.1:
     dependencies:
       accepts: 2.0.0
@@ -17862,6 +17809,8 @@ snapshots:
 
   hono@4.13.5: {}
 
+  hono@4.13.7: {}
+
   hookable@6.1.1: {}
 
   hosted-git-info@9.0.3:
@@ -17971,6 +17920,8 @@ snapshots:
       - reflect-metadata
 
   ip-address@10.5.0: {}
+
+  ip-address@10.7.0: {}
 
   ipaddr.js@1.9.1: {}
 
@@ -18150,6 +18101,8 @@ snapshots:
 
   jiti@2.7.0: {}
 
+  jose@6.2.12: {}
+
   jose@6.2.9: {}
 
   joycon@3.1.1: {}
@@ -18168,6 +18121,10 @@ snapshots:
       argparse: 2.0.1
 
   js-yaml@5.3.0:
+    dependencies:
+      argparse: 2.0.1
+
+  js-yaml@5.4.1:
     dependencies:
       argparse: 2.0.1
 
