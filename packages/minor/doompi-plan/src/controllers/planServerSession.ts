@@ -11,7 +11,7 @@ import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agim
 import { loadDoomConfig, resolvePlanningPlansDirectory } from '../schemas/plan/config';
 import { readPlanSkill } from '../services/prompts';
 import { PLAN_REVIEW_OPTIONS, PLAN_REVIEW_TITLE } from '../types/planApi';
-import { parseDebugEvidencePacket, planTitleSlug } from './planMode';
+import { parseDebugEvidencePacket, planTitleSlug, visiblePlanForToolCall } from './planMode';
 
 const RECORD_DEBUG_EVIDENCE_TOOL = 'record_debug_evidence';
 const RUN_FABLE_PLAN_TOOL = 'run_fable_plan';
@@ -53,30 +53,6 @@ function output(value: unknown, isError = false): DoomHeadlessToolResult {
     details: value,
     ...(isError ? { isError: true } : {}),
   };
-}
-
-function latestMarkdown(entries: readonly Record<string, unknown>[]): string | undefined {
-  for (const entry of [...entries].reverse()) {
-    const message = entry.message;
-    if (typeof message !== 'object' || message === null || !('role' in message) || message.role !== 'assistant')
-      continue;
-    const content = 'content' in message ? message.content : undefined;
-    const candidates =
-      typeof content === 'string'
-        ? [content]
-        : Array.isArray(content)
-          ? [
-              content
-                .filter((block) => block?.type === 'text' && typeof block.text === 'string')
-                .map((block) => block.text)
-                .join('\n'),
-            ]
-          : [];
-    for (const candidate of candidates) {
-      if (typeof candidate === 'string' && candidate.trim().startsWith('#')) return candidate.trim();
-    }
-  }
-  return undefined;
 }
 
 export function createPlanServerSession(
@@ -294,10 +270,12 @@ export function createPlanServerSession(
         description: 'Save the implementation plan already presented in the session.',
         parameters: { type: 'object', properties: {}, additionalProperties: false },
         executionMode: 'serial',
-        async execute(_toolCallId, _parameters, signal) {
+        async execute(toolCallId, _parameters, signal) {
           try {
             signal?.throwIfAborted();
-            let content = latestMarkdown(await host.context.session.entries());
+            // Same extraction the Pi path uses: the text this very tool call was
+            // introduced by, not "the last assistant message that looks like a heading".
+            let content = visiblePlanForToolCall(await host.context.session.entries(), toolCallId);
             if (content === undefined) {
               const requested = await host.context.client.request(
                 {

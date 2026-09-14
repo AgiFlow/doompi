@@ -109,13 +109,15 @@ describe('server planning evidence', () => {
     const f = fixture();
     f.selection.state['minor-mode'] = ['plan'];
     f.entries.push(
-      { message: { role: 'user', content: '# Not the plan' } },
+      { type: 'message', message: { role: 'user', content: '# Not the plan' } },
       {
+        type: 'message',
         message: {
           role: 'assistant',
           content: [
             { type: 'thinking', thinking: 'private' },
             { type: 'text', text: '# Approved Plan\n\n1. Verify settings.' },
+            { type: 'toolCall', id: 'write', name: 'write_plan', arguments: {} },
           ],
         },
       },
@@ -126,6 +128,63 @@ describe('server planning evidence', () => {
     expect(mocks.writeFile).toHaveBeenCalledWith(
       expect.stringContaining('approved-plan-'),
       '# Approved Plan\n\n1. Verify settings.\n',
+      expect.objectContaining({ flag: 'wx' }),
+    );
+  });
+  it('saves a plan that opens with prose before its first heading', async () => {
+    const f = fixture();
+    f.selection.state['minor-mode'] = ['plan'];
+    f.entries.push({
+      type: 'message',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Here is the plan.\n\n## Steps\n\n1. Verify settings.' },
+          { type: 'toolCall', id: 'write', name: 'write_plan', arguments: {} },
+        ],
+      },
+    });
+    const tool = f.plugin().tools.find((tool) => tool.name === 'write_plan')!;
+    const result = await tool.execute('write', {}, undefined, undefined, f.host.context);
+    expect(result.isError).not.toBe(true);
+    expect(mocks.writeFile).toHaveBeenCalledWith(
+      expect.any(String),
+      'Here is the plan.\n\n## Steps\n\n1. Verify settings.\n',
+      expect.objectContaining({ flag: 'wx' }),
+    );
+  });
+  it('saves only the text introducing this tool call, not trailing text or another call', async () => {
+    const f = fixture();
+    f.selection.state['minor-mode'] = ['plan'];
+    f.entries.push(
+      {
+        type: 'message',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: '# Older Plan' },
+            { type: 'toolCall', id: 'older', name: 'write_plan', arguments: {} },
+          ],
+        },
+      },
+      {
+        type: 'message',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: '# Current Plan' },
+            { type: 'toolCall', id: 'write', name: 'write_plan', arguments: {} },
+            { type: 'text', text: 'Trailing commentary.' },
+          ],
+        },
+      },
+    );
+    const tool = f.plugin().tools.find((tool) => tool.name === 'write_plan')!;
+    const result = await tool.execute('write', {}, undefined, undefined, f.host.context);
+    expect(result.isError).not.toBe(true);
+    expect(mocks.writeFile).toHaveBeenCalledWith(
+      expect.any(String),
+      '# Current Plan\n',
       expect.objectContaining({ flag: 'wx' }),
     );
   });
