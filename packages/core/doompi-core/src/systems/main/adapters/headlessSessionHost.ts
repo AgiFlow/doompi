@@ -31,6 +31,7 @@ import { createHeadlessClient } from '../../../services/headlessClient';
 import { createHistoryOwnership } from '../../../services/historyOwnership';
 import {
   createPiExtensionHost,
+  preloadPiExtensions,
   resolvePiExtensionEntries,
   type PiExtensionHost,
 } from '../../../services/piExtensionHost';
@@ -370,6 +371,17 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     authPath: path.join(agentDir, 'auth.json'),
     modelsPath: path.join(agentDir, 'models.json'),
     refreshOnCreate: false,
+  });
+  // Pi extensions load before the model is resolved: an extension that registers a provider
+  // (a local Vertex or Bedrock bridge, say) must be in the runtime before the configured default
+  // is looked up, or the lookup misses and the session silently falls back to whichever model
+  // happens to be first in `getAvailable()`.
+  const piPreload = await preloadPiExtensions({
+    cwd: options.cwd,
+    agentDir,
+    models: modelRuntime,
+    extensionPaths: options.piExtensions === false ? [] : resolvePiExtensionEntries(options.repoRoot),
+    ...(options.onNotice === undefined ? {} : { onNotice: options.onNotice }),
   });
   const resolved = await resolveModel(parsed, modelRuntime, settings);
   if (parsed.apiKey !== undefined) await modelRuntime.setRuntimeApiKey(resolved.model.provider, parsed.apiKey);
@@ -711,21 +723,18 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       context.effect(() => () => childSessionProvider.close(), 'headless child session service lifetime');
     });
     if (headlessHost !== undefined) throw new Error('Direct headless facets were prepared more than once.');
-    if (options.piExtensions !== false) {
-      const extensionPaths = resolvePiExtensionEntries(options.repoRoot);
-      if (extensionPaths.length > 0) {
-        piHost = createPiExtensionHost({
-          cwd: options.cwd,
-          agentDir,
-          models: modelRuntime,
-          runtime,
-          extensionPaths,
-          getModel: () => currentModel,
-          getThinkingLevel: () => resolved.thinkingLevel ?? 'off',
-          client: () => client?.client,
-          ...(options.onNotice === undefined ? {} : { onNotice: options.onNotice }),
-        });
-      }
+    if (piPreload !== undefined) {
+      piHost = createPiExtensionHost({
+        cwd: options.cwd,
+        agentDir,
+        models: modelRuntime,
+        runtime,
+        preload: piPreload,
+        getModel: () => currentModel,
+        getThinkingLevel: () => resolved.thinkingLevel ?? 'off',
+        client: () => client?.client,
+        ...(options.onNotice === undefined ? {} : { onNotice: options.onNotice }),
+      });
     }
     headlessHost = new HeadlessHost(root, {
       candidates: options.candidates,

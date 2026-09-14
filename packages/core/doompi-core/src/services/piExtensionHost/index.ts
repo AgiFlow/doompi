@@ -14,6 +14,7 @@ import {
   type ExtensionActions,
   type ExtensionContextActions,
   type ExtensionUIContext,
+  type LoadExtensionsResult,
   type ModelRuntime,
   type RegisteredTool,
   type ToolInfo,
@@ -40,6 +41,65 @@ export function resolvePiExtensionEntries(repoRoot: string): readonly string[] {
     return [];
   }
 }
+
+/**
+ * Load Pi extensions and apply their provider registrations to the model runtime.
+ *
+ * `pi.registerProvider` only queues into the extension runtime while extensions load; Pi drains
+ * that queue in `ExtensionRunner.bindCore`. The runner cannot exist before the harness runtime,
+ * and the harness runtime is built from an already-resolved model, so waiting for `bindCore`
+ * would resolve the session's default model before extension providers exist and silently fall
+ * back to the first available model. Draining the queue here puts provider registration ahead of
+ * model resolution.
+ *
+ * The result is returned so `createPiExtensionHost` reuses it instead of discovering again, which
+ * keeps every extension factory running exactly once.
+ */
+export async function preloadPiExtensions(options: {
+  readonly cwd: string;
+  readonly agentDir: string;
+  readonly models: ModelRuntime;
+  readonly extensionPaths: readonly string[];
+  readonly onNotice?: (message: string) => void;
+}): Promise<LoadExtensionsResult | undefined> {
+  if (options.extensionPaths.length === 0) return undefined;
+
+  const result = await discoverAndLoadExtensions(
+    [...options.extensionPaths],
+    options.cwd,
+    options.agentDir,
+    createEventBus(),
+  );
+  for (const failure of result.errors) options.onNotice?.(`Pi extension ${failure.path}: ${failure.error}`);
+
+  // The same target bindCore uses: without providerActions it registers through ModelRegistry,
+  // which delegates to this ModelRuntime.
+  const registry = new ModelRegistry(options.models);
+  const report = (extensionPath: string, error: unknown): void =>
+    options.onNotice?.(
+      `Pi extension ${extensionPath}: provider registration failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+
+  for (const pending of result.runtime.pendingProviderRegistrations) {
+    try {
+      registry.registerProvider(pending.name, pending.config);
+    } catch (error) {
+      report(pending.extensionPath, error);
+    }
+  }
+  for (const pending of result.runtime.pendingNativeProviderRegistrations) {
+    try {
+      registry.registerProvider(pending.provider);
+    } catch (error) {
+      report(pending.extensionPath, error);
+    }
+  }
+  // Cleared so bindCore does not repeat registrations already applied to the same runtime.
+  result.runtime.pendingProviderRegistrations = [];
+  result.runtime.pendingNativeProviderRegistrations = [];
+
+  return result;
+}
 /**
  * Pi native extensions are session lifetime. They contribute tools once and are never
  * retracted, so they are merged at the harness apply boundary rather than contributed to the
@@ -51,8 +111,11 @@ export interface PiExtensionHostOptions {
   readonly agentDir: string;
   readonly models: ModelRuntime;
   readonly runtime: DirectHarnessRuntime;
-  /** Resolved Pi extension entries. Ambient discovery stays with Pi's own loader. */
-  readonly extensionPaths: readonly string[];
+  /**
+   * Extensions already loaded by `preloadPiExtensions`, or undefined when this worktree
+   * contributes none. Reused rather than re-discovered so each factory runs exactly once.
+   */
+  readonly preload: LoadExtensionsResult | undefined;
   /** Current model, tracked by the caller because harness session metadata does not carry it. */
   readonly getModel: () => Model<Api> | undefined;
   readonly getThinkingLevel: () => ThinkingLevel;
@@ -299,7 +362,7 @@ export async function createBridgedSessionManager(
 }
 
 export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtensionHost {
-  const { cwd, agentDir, models, runtime, extensionPaths } = options;
+  const { cwd, agentDir, models, runtime, preload } = options;
   let runner: ExtensionRunner | undefined;
   let tools: readonly AgentHarnessTool<object | undefined>[] = [];
   let skills: readonly Skill[] = [];
@@ -384,18 +447,15 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
 
     async load(): Promise<void> {
       if (runner !== undefined) throw new Error('The Pi extension host was loaded more than once');
-      if (extensionPaths.length === 0) return;
+      if (preload === undefined) return;
 
-      const eventBus = createEventBus();
-      const result = await discoverAndLoadExtensions([...extensionPaths], cwd, agentDir, eventBus);
-      for (const failure of result.errors) options.onNotice?.(`Pi extension ${failure.path}: ${failure.error}`);
-      const loaded: Extension[] = [...result.extensions];
+      const loaded: Extension[] = [...preload.extensions];
 
       const sessionManager = await createBridgedSessionManager(runtime, cwd, options.onNotice);
-      runner = new ExtensionRunner(loaded, result.runtime, cwd, sessionManager, new ModelRegistry(models));
+      runner = new ExtensionRunner(loaded, preload.runtime, cwd, sessionManager, new ModelRegistry(models));
       // 'rpc' is the accurate mode for a server with no terminal, and it must be set before any
-      // extension runs. Provider registration deliberately has no override: without providerActions
-      // the runner falls through to ModelRegistry, which delegates to the server's own ModelRuntime.
+      // extension runs. Provider registrations were already drained against this same ModelRuntime
+      // by preloadPiExtensions, so bindCore finds an empty queue here.
       runner.setUIContext(createHeadlessUiContext(options.client, resolveDefaultTheme(runner)), 'rpc');
       runner.bindCore(actions, contextActions);
 
