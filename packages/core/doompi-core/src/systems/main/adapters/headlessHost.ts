@@ -419,7 +419,7 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       // Reconciled on the same terms as the registration below: before the first applied
       // selection the caller's own select() computes the whole composition, and the sources
       // that selection gates on are not known yet.
-      if (!this.disposed && !this.refreshing) void this.select({}).catch(() => undefined);
+      if (this.appliedRevision > 0 && !this.disposed && !this.refreshing) void this.select({}).catch(() => undefined);
     };
     this.ctx.effect(() => dispose, `headless ${slot} contribution`);
     // Initial registration is reconciled once the caller has installed all facets.
