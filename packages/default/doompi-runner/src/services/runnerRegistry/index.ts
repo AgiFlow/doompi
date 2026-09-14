@@ -1,5 +1,7 @@
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
 import {
@@ -55,6 +57,30 @@ function readNumber(record: ProcessRegistryRecord, key: string): number {
   return typeof value === 'number' ? value : 0;
 }
 
+const runCommand = promisify(execFile);
+
+/**
+ * The process start time the registry stores to prove a pid is still the
+ * process it registered.
+ *
+ * The registry resolves it itself when the caller omits it, and it does so with
+ * `execFileSync`, which stops this process for the length of a `ps` on every
+ * runner that starts. Reading it here costs the same subprocess and blocks
+ * nothing: the command is already running by the time a runner is registered.
+ *
+ * The value has to match what the registry would have read, so the command and
+ * the trimming are deliberately identical to its own.
+ */
+async function processStartedAt(pid: number): Promise<string | undefined> {
+  if (process.platform === 'win32') return undefined;
+  try {
+    const { stdout } = await runCommand('ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8' });
+    return stdout.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export class RunnerRegistry implements IRunnerRegistry {
   private readonly listeners = new Set<() => void>();
 
@@ -68,12 +94,14 @@ export class RunnerRegistry implements IRunnerRegistry {
   async register(input: RegisterRunnerInput): Promise<RunnerRecord> {
     const startedAt = new Date().toISOString();
     const rootSessionId = resolveRootSessionId(input.sessionId, this.environment);
+    const identity = await processStartedAt(input.pid);
     const response = await this.registry.registerProcess({
       repositoryPath: this.repositoryPath(),
       serviceName: `${SERVICE_PREFIX}${input.id}`,
       serviceType: SERVICE_TYPE,
       pid: input.pid,
       command: input.command,
+      ...(identity === undefined ? {} : { processStartedAt: identity }),
       tags: resolveProcessTags([RUNNER_TAG, `runner:${input.id}`, sessionTag(input.sessionId)]),
       metadata: {
         id: input.id,

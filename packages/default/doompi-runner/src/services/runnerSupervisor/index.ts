@@ -119,3 +119,122 @@ export function supervisorCommand(paths: SupervisorPaths): string {
 export function shellJoin(values: readonly string[]): string {
   return values.map((value) => `'${value.replaceAll("'", `'"'"'`)}'`).join(' ');
 }
+
+/** A pending appearance of one supervisor sidecar, watched rather than polled for. */
+export interface FileWatch {
+  /** Resolves true once the file exists, or false when the slice elapses. */
+  appeared(withinMs: number): Promise<boolean>;
+  close(): void;
+}
+
+interface DirectoryWatch {
+  watcher: fs.FSWatcher | undefined;
+  readonly waiters: Map<string, Set<() => void>>;
+  references: number;
+}
+
+/**
+ * One watcher per directory, shared by every waiter inside it.
+ *
+ * A session's runners share a runs directory, and `DOOMPI_LOG_DIR` makes every
+ * session using it share one. A watcher per waited file would then put a watcher
+ * per in-flight runner on the same directory, each woken by every other runner's
+ * sidecar writes, so the watchers are pooled and reference counted instead.
+ */
+const directoryWatches = new Map<string, DirectoryWatch>();
+
+function acquireDirectoryWatch(directory: string): DirectoryWatch {
+  const existing = directoryWatches.get(directory);
+  if (existing) {
+    existing.references += 1;
+    return existing;
+  }
+  const entry: DirectoryWatch = { watcher: undefined, waiters: new Map(), references: 1 };
+  try {
+    entry.watcher = fs.watch(directory, (_event, changed) => {
+      // A rename can arrive without a name, and then the only safe reading is
+      // that any waiter in this directory might be the one it belongs to.
+      const named = changed === null ? undefined : String(changed);
+      const targets = named === undefined ? [...entry.waiters.values()] : [entry.waiters.get(named)];
+      for (const listeners of targets) {
+        if (!listeners) continue;
+        for (const listener of [...listeners]) listener();
+      }
+    });
+    // A watcher that cannot report is a watcher whose slices time out, which the
+    // caller's own probe already covers.
+    entry.watcher.on('error', () => undefined);
+  } catch {
+    entry.watcher = undefined;
+  }
+  directoryWatches.set(directory, entry);
+  return entry;
+}
+
+function releaseDirectoryWatch(directory: string, entry: DirectoryWatch): void {
+  entry.references -= 1;
+  if (entry.references > 0) return;
+  entry.watcher?.close();
+  entry.watcher = undefined;
+  entry.waiters.clear();
+  directoryWatches.delete(directory);
+}
+
+/**
+ * Reports a supervisor sidecar landing on disk without polling for it.
+ *
+ * The sidecars are written once and never rewritten, so the directory's own
+ * create event answers the only question a waiter has. Polling for them costs a
+ * full poll interval on every run that finishes inside one, and the runs that
+ * finish fastest are the ones that pay that tax most often.
+ *
+ * The watch is best effort: a platform or a directory that cannot deliver events
+ * leaves every slice to time out, which is exactly the poll the caller already
+ * runs as its fallback.
+ */
+export function watchForFile(filePath: string): FileWatch {
+  const directory = path.dirname(filePath);
+  const name = path.basename(filePath);
+  const entry = acquireDirectoryWatch(directory);
+  let released = false;
+  let found = false;
+  let notify: (() => void) | undefined;
+
+  const settle = (): void => {
+    if (found || !fs.existsSync(filePath)) return;
+    found = true;
+    notify?.();
+  };
+  const listeners = entry.waiters.get(name) ?? new Set<() => void>();
+  listeners.add(settle);
+  entry.waiters.set(name, listeners);
+
+  // The file can land between opening the watcher and the first wait, and that
+  // create event has nobody listening for it yet.
+  settle();
+
+  return {
+    async appeared(withinMs: number): Promise<boolean> {
+      if (found) return true;
+      return await new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => {
+          notify = undefined;
+          resolve(found);
+        }, withinMs);
+        notify = () => {
+          clearTimeout(timer);
+          notify = undefined;
+          resolve(true);
+        };
+      });
+    },
+    close(): void {
+      if (released) return;
+      released = true;
+      notify = undefined;
+      listeners.delete(settle);
+      if (listeners.size === 0) entry.waiters.delete(name);
+      releaseDirectoryWatch(directory, entry);
+    },
+  };
+}

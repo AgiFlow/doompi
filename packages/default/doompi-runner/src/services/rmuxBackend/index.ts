@@ -11,6 +11,7 @@ import {
   LOG_DRAIN_TIMEOUT_MS,
   NON_INTERACTIVE_ENV,
   OWNED_TARGET_PATTERN,
+  PANE_PID_FORMAT,
   PANE_STATE_FORMAT,
   POLL_MS,
   RMUX_BINARY_ENV,
@@ -34,6 +35,7 @@ import {
   shellJoin,
   type SupervisorPaths,
   supervisorPaths,
+  watchForFile,
   writeCommandSpec,
 } from '../runnerSupervisor';
 
@@ -65,9 +67,14 @@ export class RmuxBackend implements IRmuxBackend {
 
     try {
       this.prepareFiles(request, logPath, aux);
-      await rmux.cmd(
+      // `-P -F` reports the pane pid from the call that creates the pane, so the
+      // launch does not spend a second round trip asking for it.
+      const opened = await rmux.cmd(
         'new-session',
         '-d',
+        '-P',
+        '-F',
+        PANE_PID_FORMAT,
         '-s',
         target,
         '-c',
@@ -85,7 +92,7 @@ export class RmuxBackend implements IRmuxBackend {
       await rmux.cmd('pipe-pane', '-t', target, this.logPipeCommand(logPath, aux.logDone, request), { check: true });
 
       const pane = rmux.session(target).pane(0, 0);
-      const pid = await panePid(rmux, target);
+      const pid = reportedPid(opened.stdout) ?? (await panePid(rmux, target));
       fs.writeFileSync(aux.gate, '', { mode: 0o600 });
       released = true;
 
@@ -386,25 +393,37 @@ function environment(sessionId: string, interactive: boolean): Record<string, st
 }
 
 async function panePid(rmux: Rmux, target: string): Promise<number> {
-  const response = await rmux.displayMessage('#{pane_pid}', { target });
-  const pid = Number(response['message']);
-  if (!Number.isInteger(pid) || pid <= 0) throw new Error(`RMUX did not report a pane pid for ${target}`);
+  const response = await rmux.displayMessage(PANE_PID_FORMAT, { target });
+  const pid = reportedPid(String(response['message'] ?? ''));
+  if (pid === undefined) throw new Error(`RMUX did not report a pane pid for ${target}`);
   return pid;
+}
+
+/** A pane pid as rmux prints it, or nothing when the output holds no usable pid. */
+function reportedPid(output: string): number | undefined {
+  const pid = Number(output.trim());
+  return Number.isInteger(pid) && pid > 0 ? pid : undefined;
 }
 
 /**
  * Waits for the run to end, preferring the supervisor's own record of it.
  *
  * The sidecar is written before the command's pane can end, and it outlives the
- * server that the pane's exit takes down with it. Asking the server is the
- * fallback for a supervisor that died without recording anything.
+ * server that the pane's exit takes down with it. Watching for it means a run
+ * that finishes inside a poll interval is observed when it finishes rather than
+ * on the next tick. Asking the server stays the fallback for a supervisor that
+ * died without recording anything.
  */
 async function waitForRunEnd(rmux: Rmux, target: string, exitPath: string): Promise<number | null> {
-  for (;;) {
-    if (fs.existsSync(exitPath)) return null;
-    const state = await readPaneExit(rmux, target);
-    if (state.exited) return state.code;
-    await delay(POLL_MS);
+  const landed = watchForFile(exitPath);
+  try {
+    for (;;) {
+      if (await landed.appeared(POLL_MS)) return null;
+      const state = await readPaneExit(rmux, target);
+      if (state.exited) return state.code;
+    }
+  } finally {
+    landed.close();
   }
 }
 
@@ -417,10 +436,14 @@ async function waitForRunEnd(rmux: Rmux, target: string, exitPath: string): Prom
  */
 async function waitForLogDrain(rmux: Rmux, target: string, donePath: string): Promise<void> {
   const deadline = Date.now() + LOG_DRAIN_TIMEOUT_MS;
-  while (Date.now() < deadline) {
-    if (fs.existsSync(donePath)) return;
-    if (await sessionMissing(rmux, target)) return;
-    await delay(LOG_DRAIN_POLL_MS);
+  const landed = watchForFile(donePath);
+  try {
+    while (Date.now() < deadline) {
+      if (await landed.appeared(LOG_DRAIN_POLL_MS)) return;
+      if (await sessionMissing(rmux, target)) return;
+    }
+  } finally {
+    landed.close();
   }
 }
 

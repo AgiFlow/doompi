@@ -31,6 +31,11 @@ export interface HeadlessSessionHostOptions {
   ) => void;
   contextGroups?: (context: Context, selection: DoomHeadlessSelection) => ContextProjectionInput['groups'];
   onNotice?: (message: string) => void;
+  /**
+   * Load Pi native extensions from the synced composition. Defaults to enabled and resolves to
+   * a no-op when the worktree has no valid sync registration.
+   */
+  piExtensions?: boolean;
 }
 
 export interface HeadlessSessionHost {
