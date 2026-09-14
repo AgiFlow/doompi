@@ -290,9 +290,8 @@ export async function installLocalPackages(
   );
   try {
     // Reuse pnpm's content-addressed cache; resolution and node_modules remain isolated in the consumer root.
-    // The lockfile is written rather than suppressed: pnpm rebuild below performs a headless install and
-    // fails with ERR_PNPM_NO_LOCKFILE without one. It stays inside the throwaway consumer root.
-    const install = await runCommand(
+    // Keep the lockfile inside the throwaway consumer root for deterministic installs.
+    return runCommand(
       PNPM_COMMAND,
       [
         'install',
@@ -301,12 +300,6 @@ export async function installLocalPackages(
         '--config.auto-install-peers=false',
         '--config.strict-dep-builds=false',
       ],
-      consumer.root,
-    );
-    if (install.code !== 0) return install;
-    return runCommand(
-      PNPM_COMMAND,
-      ['rebuild', ...INSTALL_BUILD_DEPENDENCIES, '--config.frozen-lockfile=false', '--config.strict-dep-builds=false'],
       consumer.root,
     );
   } finally {

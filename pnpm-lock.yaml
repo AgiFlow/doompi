@@ -1412,6 +1412,9 @@ importers:
         specifier: 3.6.0
         version: 3.6.0
     devDependencies:
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../doompi-core
       '@agimon-ai/vibe-lint-plugin-doom-web':
         specifier: workspace:*
         version: link:../../tooling/vibe-lint-plugin-doom-web

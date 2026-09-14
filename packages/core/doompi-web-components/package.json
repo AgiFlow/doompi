@@ -91,6 +91,7 @@
     "tailwind-merge": "3.6.0"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-web": "workspace:*",
     "@types/node": "26.5.1",
     "@types/react": "19.3.0",
