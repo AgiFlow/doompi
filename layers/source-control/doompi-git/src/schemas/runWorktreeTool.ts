@@ -125,7 +125,7 @@ function acceptingActions(field: string): string {
 export const RunWorktreeToolSchema = Type.Object(
   {
     action: Type.String({
-      enum: [...Object.values(WORKTREE_ACTIONS)],
+      enum: Object.values(WORKTREE_ACTIONS),
       description: 'The operation to run. Every other field is accepted only by the actions its description names.',
     }),
     branch: Type.Optional(
@@ -157,7 +157,9 @@ export const RunWorktreeToolSchema = Type.Object(
       }),
     ),
     dryRun: Type.Optional(
-      Type.Boolean({ description: `Report the plan without destroying anything. Actions: ${acceptingActions('dryRun')}.` }),
+      Type.Boolean({
+        description: `Report the plan without destroying anything. Actions: ${acceptingActions('dryRun')}.`,
+      }),
     ),
   },
   { additionalProperties: false },
