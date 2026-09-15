@@ -10,7 +10,7 @@ import {
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 
-import { grepCallView } from '../lib/grepToolView';
+import { grepCallView } from '../_lib/grepToolView';
 
 /**
  * The grep tool's timeline item, the web half of its renderCall and

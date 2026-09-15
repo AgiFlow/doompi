@@ -90,7 +90,13 @@ describe('doompi-grep package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
     expect(exportsMap['./package.json']).toBeDefined();
-    expect(manifest.files).toEqual(['dist', 'src/web', 'src/extensions/web.ts', '!src/web/**/*.stories.tsx']);
+    // The browser half ships as source, colocated under the (frontend) groups.
+    expect(manifest.files).toEqual([
+      'dist',
+      'src/extensions/**/(frontend)/**',
+      'src/extensions/web.ts',
+      '!src/extensions/**/*.stories.tsx',
+    ]);
     expect(manifest.files).not.toContain('src');
     expect(manifest.files).not.toContain('tests');
     await expect(access(path.join(packageDirectory, 'dist'))).resolves.toBeUndefined();
