@@ -1,7 +1,4 @@
-export {
-  createDomainCatalog,
-  type DomainCatalog,
-} from '../extensions/workspaces/sessions/(backend)/_lib/domainCatalog';
+export { createDomainCatalog, type DomainCatalog } from '../services/domainCatalog';
 export {
   createDomainSwitchHandoffStore,
   DOMAIN_SWITCH_HANDOFF_MAX_DOMAINS,
@@ -10,10 +7,7 @@ export {
   DOMAIN_SWITCH_HANDOFF_TTL_MS,
 } from '../models/domainSwitchHandoff';
 export { createDomainTelemetry, type DomainTelemetryOptions } from '../services/logSinkTelemetry';
-export {
-  type DomainCatalogPort,
-  type DomainsCommandDependencies,
-} from '../extensions/workspaces/sessions/(backend)/_lib/domainsCommand';
+export type { DomainCatalogPort, DomainsCommandDependencies } from '../types/domainCommand';
 export {
   DOMAIN_NAMES_SCHEMA,
   EMPTY_DOMAIN_INPUT_SCHEMA,

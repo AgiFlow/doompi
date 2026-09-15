@@ -29,7 +29,7 @@ describe('startup module graph', () => {
   const startupModules = [
     'src/extensions/workspaces/sessions/(backend)/_lib/domainRuntime.ts',
     'src/extensions/workspaces/sessions/(backend)/_lib/voiceTool.ts',
-    'src/extensions/workspaces/sessions/(backend)/_lib/domainCatalog.ts',
+    'src/services/domainCatalog/index.ts',
     'src/extensions/workspaces/sessions/(backend)/_lib/domainsCommand.ts',
   ];
 
@@ -46,7 +46,7 @@ describe('startup module graph', () => {
   });
 
   it('resolves defaultDomainsForMajorMode from the dynamically imported manifest module', () => {
-    const catalog = source('src/extensions/workspaces/sessions/(backend)/_lib/domainCatalog.ts');
+    const catalog = source('src/services/domainCatalog/index.ts');
 
     expect(catalog).toContain("import('@agimon-ai/doompi-config/domains')");
     expect(catalog).toContain('defaultDomainsForMajorMode');

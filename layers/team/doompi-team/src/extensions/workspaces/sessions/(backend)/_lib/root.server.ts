@@ -153,20 +153,22 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
   };
   const channel = runtime.teamChannel.createHeadlessRuntime(transport);
   const serverService = (ctx: Context) => {
-    const availableModels = execution.model ? [toModelInfo(execution.model)] : [];
-    ctx.provide(
-      DOOM_DELEGATION_SERVICE,
-      bridge.createService(ctx, {
-        sessionId: execution.sessionId,
-        sessionScope: createSessionScope(execution.sessionId),
-        availableModels,
-        ...(execution.model ? { parentModel: execution.model } : {}),
-      }),
-    );
-    const backgroundWork = createBackgroundWorkService(ctx);
-    ctx.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork);
-    registerDirectRunBackgroundWork(ctx, backgroundWork, execution.sessionId, runtime.asyncJobTracker);
-    ctx.provide(DOOM_SUBAGENT_POLICY_SERVICE, createSubagentPolicyService(runtime.capabilityPolicies));
+    ctx.plugin((providerContext) => {
+      const availableModels = execution.model ? [toModelInfo(execution.model)] : [];
+      providerContext.provide(
+        DOOM_DELEGATION_SERVICE,
+        bridge.createService(providerContext, {
+          sessionId: execution.sessionId,
+          sessionScope: createSessionScope(execution.sessionId),
+          availableModels,
+          ...(execution.model ? { parentModel: execution.model } : {}),
+        }),
+      );
+      const backgroundWork = createBackgroundWorkService(providerContext);
+      providerContext.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork);
+      registerDirectRunBackgroundWork(providerContext, backgroundWork, execution.sessionId, runtime.asyncJobTracker);
+      providerContext.provide(DOOM_SUBAGENT_POLICY_SERVICE, createSubagentPolicyService(runtime.capabilityPolicies));
+    });
   };
 
   const environment = serverHost.context.environment;

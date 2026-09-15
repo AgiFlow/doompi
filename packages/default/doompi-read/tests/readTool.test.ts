@@ -7,13 +7,9 @@ import { computeFileTag } from '@agimon-ai/doompi-hashline/files';
 import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { createHashlineReadTool } from '../src/extensions/workspaces/sessions/(backend)/tool/_lib/readTool';
 import readRenderer from '../src/extensions/workspaces/sessions/(frontend)/tool/read.cli';
-import {
-  assertNotAborted,
-  createTaggedReadResult,
-  isImageRead,
-  createHashlineReadTool,
-} from '../src/services/readTool';
+import { assertNotAborted, createTaggedReadResult, isImageRead } from '../src/services/readTool';
 
 interface CapturedTool {
   readonly name: string;

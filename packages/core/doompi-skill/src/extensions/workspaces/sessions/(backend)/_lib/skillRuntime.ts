@@ -62,7 +62,9 @@ export function createSkillRuntime({ pi, openOverlay }: SkillPluginConfig): PiPl
     cordis.inject([DOOM_CORDIS_SESSION_SERVICE], (sessionContext) => {
       const session = sessionContext.get(DOOM_CORDIS_SESSION_SERVICE) as DoomCordisSessionService;
       const service = createDoomSkillSourcesService(`${session.generation}:skill-sources`);
-      sessionContext.provide(DOOM_SKILL_SOURCES_SERVICE, service);
+      sessionContext.plugin((providerContext) => {
+        providerContext.provide(DOOM_SKILL_SOURCES_SERVICE, service);
+      });
       activeSources = service;
       return () => {
         if (activeSources === service) activeSources = undefined;

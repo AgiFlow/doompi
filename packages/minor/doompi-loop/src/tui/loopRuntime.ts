@@ -181,7 +181,9 @@ export function createLoopPiRuntime(pi: ExtensionAPI): LoopPiRuntime {
           });
           const binding: ActiveLoopSession = { context: hostSession.context, hostSession, launchers };
           activeSession = binding;
-          sessionContext.provide(DOOM_LOOP_LAUNCHERS_SERVICE, launchers);
+          const provider = cordis.plugin((providerContext) => {
+            providerContext.provide(DOOM_LOOP_LAUNCHERS_SERVICE, launchers);
+          });
 
           let defaultRegistration: LoopLauncherRegistration;
           let unsubscribe: () => void;
@@ -192,6 +194,7 @@ export function createLoopPiRuntime(pi: ExtensionAPI): LoopPiRuntime {
           } catch (error) {
             if (activeSession === binding) activeSession = undefined;
             await launchers.dispose(SESSION_REPLACED_REASON);
+            await provider.dispose();
             throw error;
           }
 
@@ -208,6 +211,11 @@ export function createLoopPiRuntime(pi: ExtensionAPI): LoopPiRuntime {
             }
             try {
               await launchers.dispose(SESSION_SHUTDOWN_REASON);
+            } catch (error) {
+              cleanupErrors.push(error);
+            }
+            try {
+              await provider.dispose();
             } catch (error) {
               cleanupErrors.push(error);
             }

@@ -39,7 +39,9 @@ export default defineRoot(({ agent }: DoomServerPluginContext) => {
     commands: [headlessMinorModeCommand(catalog)],
     services: [
       (context: DoomServerPluginContext['context']) => {
-        context.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, catalog);
+        context.plugin((providerContext) => {
+          providerContext.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, catalog);
+        });
         context.effect(() =>
           catalog.subscribe(() => {
             void publish().catch(async (error) => {

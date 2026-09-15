@@ -1,6 +1,6 @@
 import { Worker } from 'node:worker_threads';
 
-import type { ShellTitleCommand, ShellTitleController, WriteTitle } from '../../../../../types/notifications';
+import type { ShellTitleCommand, ShellTitleController, WriteTitle } from '../../types/notifications';
 
 const BRAILLE_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const TITLE_FRAME_INTERVAL_MS = 80;

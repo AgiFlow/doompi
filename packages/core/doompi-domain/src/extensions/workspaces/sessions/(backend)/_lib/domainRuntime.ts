@@ -11,9 +11,9 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 import { createDomainSwitchHandoffStore } from '../../../../../models/domainSwitchHandoff';
+import { createDomainCatalog } from '../../../../../services/domainCatalog';
 import { DOMAIN_STATUS_KEY, domainStatus } from '../../../../../services/domainText';
 import type { DomainTelemetry } from '../../../../../types/telemetry';
-import { createDomainCatalog } from './domainCatalog';
 import { createDomainsCommand } from './domainsCommand';
 import { registerDomainVoiceCapabilities } from './voiceTool';
 
@@ -24,11 +24,11 @@ import { registerDomainVoiceCapabilities } from './voiceTool';
  * materializer, the resource collector and the picker stay off the startup path.
  */
 function lazyModules() {
-  let apply: Promise<typeof import('./applyDomains')> | undefined;
+  let apply: Promise<typeof import('../../../../../services/applyDomains')> | undefined;
   let journal: Promise<typeof import('@agimon-ai/doompi-config/piContext')> | undefined;
   let picker: Promise<typeof import('@agimon-ai/doompi-ui/matrix-picker')> | undefined;
   return {
-    apply: () => (apply ??= import('./applyDomains')),
+    apply: () => (apply ??= import('../../../../../services/applyDomains')),
     journal: () => (journal ??= import('@agimon-ai/doompi-config/piContext')),
     picker: () => (picker ??= import('@agimon-ai/doompi-ui/matrix-picker')),
   };

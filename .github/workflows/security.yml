@@ -130,7 +130,8 @@ jobs:
           NODE
 
       - name: Install dependencies without lifecycle scripts
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        # pnpm 12 can race while creating virtual-store slots on fresh Linux runners.
+        run: pnpm install --frozen-lockfile --ignore-scripts --child-concurrency=1
 
       - name: Verify registry signatures during burn-in
         continue-on-error: true

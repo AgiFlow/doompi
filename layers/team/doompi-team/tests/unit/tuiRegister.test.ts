@@ -4,16 +4,23 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SUBAGENT_CAPABILITY_CEILING_ENV } from '../../src/exports/env';
-import { createFleetCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/subagents-fleet.cli';
-import { createAgentListCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/subagents-list.cli';
 import {
   createFleetActionDispatcher,
+  createFleetCommand,
+} from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/subagents-fleet.cli';
+import {
+  createAgentListCommand,
+  type RegisterAgentListCommandDeps,
+} from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/subagents-list.cli';
+import { buildAgentCatalogEntries } from '../../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/agentResourceProjection';
+import {
   createAgentStatus,
   registerSubagentLeaderContribution,
   SUBAGENT_FLEET_COMMAND,
   SUBAGENT_LEADER_SOURCE,
   SUBAGENT_LIST_COMMAND,
 } from '../../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/contributions';
+import { openSubagentFleet } from '../../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/fleet.cli';
 import {
   AGENT_PULSE_FRAMES,
   COST_STATUS_KEY,
@@ -90,6 +97,12 @@ class FakeTracker implements AsyncJobTrackerContract {
   stop(): void {}
 }
 
+const createAgentListCommandForTest = (deps: RegisterAgentListCommandDeps) =>
+  createAgentListCommand(deps, { buildEntries: buildAgentCatalogEntries, open: openAgentCatalog });
+
+const createFleetCommandForTest = (deps: Parameters<typeof createFleetCommand>[0]) =>
+  createFleetCommand(deps, openSubagentFleet);
+
 function catalogAgent(name: string, overrides: Partial<AgentConfig> = {}): AgentConfig {
   return {
     name,
@@ -146,7 +159,7 @@ describe('registerAgentListCommand', () => {
     });
     const registerCommand = vi.fn();
     const pi = { registerCommand } as never;
-    createAgentListCommand({
+    createAgentListCommandForTest({
       discovery: { discover } as never,
       skills: { resolveSkillsWithFallback, discoverAvailableSkills } as never,
       policies: { resolve } as never,
@@ -193,7 +206,7 @@ describe('registerAgentListCommand', () => {
     );
     const registerCommand = vi.fn();
     const pi = { registerCommand } as never;
-    createAgentListCommand({
+    createAgentListCommandForTest({
       discovery: { discover: vi.fn().mockReturnValue({ agents, warnings: [] }) } as never,
       skills: {
         resolveSkillsWithFallback,
@@ -224,7 +237,7 @@ describe('registerAgentListCommand', () => {
   it('binds the catalog launcher to the handler-time context', async () => {
     const launchAgent = vi.fn();
     const registerCommand = vi.fn();
-    createAgentListCommand({
+    createAgentListCommandForTest({
       discovery: { discover: vi.fn().mockReturnValue({ agents: [catalogAgent('worker')], warnings: [] }) } as never,
       skills: {
         resolveSkillsWithFallback: vi.fn().mockReturnValue({ resolved: [], missing: [] }),
@@ -256,7 +269,7 @@ describe('registerFleetCommand', () => {
   it('registers the fleet command under the same name the leader-space overlay (G10) will target', () => {
     const registerCommand = vi.fn();
     const pi = { registerCommand } as never;
-    createFleetCommand({ scheduler: new FakeScheduler(), tracker: new FakeTracker(), environment: {} }).forEach(
+    createFleetCommandForTest({ scheduler: new FakeScheduler(), tracker: new FakeTracker(), environment: {} }).forEach(
       ([name, options]) => (pi as ExtensionAPI).registerCommand(name, options),
     );
     expect(registerCommand).toHaveBeenCalledWith(SUBAGENT_FLEET_COMMAND, expect.any(Object));
@@ -265,7 +278,7 @@ describe('registerFleetCommand', () => {
   it('does not replace the compact footer status while the overlay is open', async () => {
     const registerCommand = vi.fn();
     const pi = { registerCommand } as never;
-    createFleetCommand({ scheduler: new FakeScheduler(), tracker: new FakeTracker(), environment: {} }).forEach(
+    createFleetCommandForTest({ scheduler: new FakeScheduler(), tracker: new FakeTracker(), environment: {} }).forEach(
       ([name, options]) => (pi as ExtensionAPI).registerCommand(name, options),
     );
     const handler = registerCommand.mock.calls[0][1].handler as (args: string, ctx: unknown) => Promise<void>;

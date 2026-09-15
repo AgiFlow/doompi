@@ -2,13 +2,15 @@ import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
 import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
-import { openTaskSpace } from '../../../(frontend)/overlay/_lib/task-space.cli';
 import { COMMAND_NAME, ERR_REQUIRES_INTERACTIVE } from '../../../../../../schemas/task';
 import type { TaskStore } from '../../../../../../services/taskStore';
 import type { TaskPiScope } from '../../_lib/root.cli';
 
-export default (context: WithRoot<PiPluginContext, TaskPiScope>) =>
-  createTasksCommand(context.root.taskStore, openTaskSpace, context.root.waitForSessionReadiness);
+type OpenTaskSpace = (context: ExtensionContext, options: { store: TaskStore }) => Promise<void>;
+
+export const createTasksContribution =
+  (openTaskSpace: OpenTaskSpace) => (context: WithRoot<PiPluginContext, TaskPiScope>) =>
+    createTasksCommand(context.root.taskStore, openTaskSpace, context.root.waitForSessionReadiness);
 
 /**
  * `/tasks`, reachable from the leader palette as `SPC t l`.
@@ -19,7 +21,7 @@ export default (context: WithRoot<PiPluginContext, TaskPiScope>) =>
  */
 export function createTasksCommand(
   store: TaskStore,
-  openTaskSpace: (context: ExtensionContext, options: { store: TaskStore }) => Promise<void>,
+  openTaskSpace: OpenTaskSpace,
   waitUntilReady?: (context: ExtensionContext) => Promise<void>,
 ): readonly [string, Parameters<ExtensionAPI['registerCommand']>[1]] {
   return [

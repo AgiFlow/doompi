@@ -5,9 +5,9 @@ import { resolvePluginEntries, resolveSharedSkills } from '@agimon-ai/doompi-con
 import { requireHarnessPaths, updateHarnessState } from '@agimon-ai/doompi-config/harnessStore';
 import type { DoomHarnessContext, HarnessState } from '@agimon-ai/doompi-config/types';
 
-import { resolveMcpAllowlist } from '../../../../../services/mcpFilter';
-import { materializePluginEntries } from '../../../../../services/pluginMaterializer';
-import { collectResources } from '../../../../../services/resourceCollector';
+import { resolveMcpAllowlist } from '../mcpFilter';
+import { materializePluginEntries } from '../pluginMaterializer';
+import { collectResources } from '../resourceCollector';
 
 /**
  * Live domain switching: skills, plugin hooks, MCP config and subagent directories.

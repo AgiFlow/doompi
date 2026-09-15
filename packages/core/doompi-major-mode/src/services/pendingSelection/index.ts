@@ -6,7 +6,8 @@ import {
 import type { DoomConfigContext, DoomConfigPendingSelection } from '@agimon-ai/doompi-config/types';
 import type { TransitionSelectionSnapshot } from '@agimon-ai/doompi-core/transition';
 import type { Context } from '@deepseek-ai/cordis';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+
+type ConfigTransitionWriter = Parameters<typeof supersedeDoomConfigTransition>[0];
 
 /** The journal shape a transition records for the session that resumes after it. */
 export function selectionFromSnapshot(snapshot: TransitionSelectionSnapshot) {
@@ -19,7 +20,7 @@ export function selectionFromSnapshot(snapshot: TransitionSelectionSnapshot) {
   };
 }
 
-export function clearPendingSelection(pi: ExtensionAPI, cordis: Context): void {
+export function clearPendingSelection(pi: ConfigTransitionWriter, cordis: Context): void {
   const context = requireDoomConfigContext(cordis);
   const pendingSelection = context.pendingSelection;
   if (!pendingSelection) return;

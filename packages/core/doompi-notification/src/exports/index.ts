@@ -1,9 +1,5 @@
-export type { NotificationExtensionOptions } from '../extensions/workspaces/sessions/(backend)/_lib/notificationRuntime';
-export {
-  createMainThreadTitleController,
-  createWorkerTitleController,
-} from '../extensions/workspaces/sessions/(backend)/_lib/shellTitleController';
-export { sendSystemNotification } from '../extensions/workspaces/sessions/(backend)/_lib/systemNotification';
+export { createMainThreadTitleController, createWorkerTitleController } from '../services/shellTitleController';
+export { sendSystemNotification } from '../services/systemNotification';
 export {
   askUserPromptBody,
   type AttentionState,
@@ -22,6 +18,7 @@ export {
 } from '../services/notificationText';
 export type {
   DesktopNotification,
+  NotificationExtensionOptions,
   ShellTitleAction,
   ShellTitleCommand,
   ShellTitleController,

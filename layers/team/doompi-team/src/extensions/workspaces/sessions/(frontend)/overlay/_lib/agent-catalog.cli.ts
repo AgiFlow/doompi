@@ -10,23 +10,19 @@ import { fitStyledLine } from '@agimon-ai/doompi-ui/rendering';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui';
 
-import type { AgentConfig } from '../../../../../../types/agent';
 import type {
   AgentCatalogEntry,
+  AgentConfig,
+  AgentLaunchRequest,
   AgentResourceProjection,
   ProjectedResource,
   ResourceTabProjection,
-} from '.././_lib/agentResourceProjection';
+} from '../../../../../../types/agent';
 
 export const AGENT_CATALOG_OVERLAY_OPTIONS = DOOM_FULLSCREEN_UI_OPTIONS.overlayOptions;
 export type AgentResourceTab = 'tools' | 'skills' | 'extensions';
 
-/** One subagent launch asked for from the catalog. `context` matches `/run --fork`. */
-export interface AgentLaunchRequest {
-  agent: string;
-  task: string;
-  context: 'fresh' | 'fork';
-}
+export type { AgentLaunchRequest } from '../../../../../../types/agent';
 
 /**
  * Starts one run and returns immediately. The overlay closes on launch, so it

@@ -7,7 +7,7 @@ import {
   renderWorkflowFinished,
   WORKFLOW_FINISHED_MESSAGE,
   type WorkflowFinishedRun,
-} from '../../src/tui/workflow/workflowFinishedMessage';
+} from '../../src/extensions/workspaces/sessions/(frontend)/message/_lib/workflowFinishedRenderer';
 
 /** Identity theme: assertions are about what text is emitted, not colour codes. */
 const theme = {

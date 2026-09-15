@@ -132,7 +132,9 @@ function modeCatalogPlugin(
         return response;
       },
     });
-    sessionContext.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, catalog);
+    sessionContext.plugin((providerContext) => {
+      providerContext.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, catalog);
+    });
     activeCatalog.current = catalog;
     activeCatalog.sessionId = sessionId;
 
