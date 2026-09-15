@@ -15,7 +15,7 @@ const webPlugin = {
 
 afterEach(() => computerUse.reset());
 
-const render = () => renderPlugin(webPlugin.fills![0]!.component, slotPropsFixture({ sessionId: 's1' }).props);
+const render = () => renderPlugin(webPlugin.fills![0]!.component!, slotPropsFixture({ sessionId: 's1' }).props);
 
 describe('computer-use panel', () => {
   it('renders target activation controls for an inactive session', () => {

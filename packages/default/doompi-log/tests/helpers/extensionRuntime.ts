@@ -13,7 +13,7 @@ function installTestRuntime(pi: ExtensionAPI, options: PiTelemetryExtensionOptio
   for (const [name, command] of view?.commands ?? []) pi.registerCommand(name, command);
   for (const service of view?.services ?? []) cordis.plugin(service);
   cordis.effect(() => async () => {
-    view?.onDispose();
+    await view?.onDispose();
     await runtime.onDispose();
   });
   let shutdown: Promise<void> | undefined;
