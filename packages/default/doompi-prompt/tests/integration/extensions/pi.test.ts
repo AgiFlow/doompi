@@ -99,7 +99,9 @@ describe('doompi-prompt Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-prompt',
-        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
+        moduleUrl: expect.stringMatching(
+          /extensions\/workspaces\/sessions\/\(backend\)\/resource\/doompi-use-prompt\.cli\.ts$/u,
+        ),
         skills: [
           {
             name: 'doompi-use-prompt',
