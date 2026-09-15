@@ -186,7 +186,7 @@ Data crossing a child boundary uses explicit request, projection, and intercom c
 
 A standard feature declares one or more direct entries: `definePiExtension` for interactive Pi, `defineServerPlugin` for headless server scopes, and `defineWebPlugin` for presentation. A package advertises its built server facet and explicit `global`, `workspace`, or `session` scopes through `package.json` `doompiServer`. Packages with public typed methods also publish their generated API-contract entry there.
 
-Pi and server helpers own Cordis initialization, registration, readiness, rollback, and disposal. Server facets must use the object plugin form so their dependencies and completion belong to one observable fiber. Typed per-scope factories may be async. Optional `onStart`, `onStop`, and `onDispose` hooks cover external work and final resources.
+Pi and server helpers own Cordis initialization, registration, readiness, rollback, and disposal. Server facets must use the object plugin form so their dependencies and completion belong to one observable fiber. Typed per-scope factories may be async. Optional `onStart`, `onStop`, and `onDispose` hooks cover external work and final resources. See [Extension lifecycles](lifecycles.md) for the mount stages, the rollback matrix, and each host's failure policy.
 
 Headless tools, commands, resources, hooks, restrictions, and activities register through the session host and are activated by the kernel. Dynamic Pi catalogs continue to use typed `snapshot()` and `subscribe(listener)` collections. Importing a public contract must not activate its provider.
 
