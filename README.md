@@ -47,6 +47,7 @@ not. Use it as-is, build your own config on top, or raid it for parts.
 | [Observability](docs/observability.md)                         | Session metrics, local log storage, trace lookup, and telemetry controls           |
 | [CLI reference](docs/cli-reference.md)                         | Commands, options, exact effects, and direct package use                           |
 | [Architecture](docs/architecture.md)                           | Package composition, lifecycle ownership, transitions, and isolation               |
+| [Extension lifecycles](docs/lifecycles.md)                     | Mount stages, rollback, host differences, scopes, composition, and failure policy  |
 | [Development](docs/development.md)                             | Workspace commands and maintainer release flow                                     |
 | [Contributing](CONTRIBUTING.md)                                | Local setup, repository boundaries, checks, commits, and pull requests             |
 
