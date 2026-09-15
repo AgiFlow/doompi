@@ -23,6 +23,7 @@ import {
 import type { DoomHeadlessClient, DoomHeadlessClientRequest } from '../../exports/headless';
 import { fromPiSessionEntry, toPiFileEntries, type PiSessionHeaderInput } from '../../services/piSessionEntries';
 import { readSyncRegistration } from '../../services/syncRegistration';
+import type { ToolPromptEntry } from '../../services/toolPrompt';
 import type { DirectHarnessRuntime } from '../../types/server/directHarnessRuntime';
 
 /**
@@ -130,6 +131,14 @@ export interface PiExtensionHostOptions {
 export interface PiExtensionHost {
   /** Session lifetime tools contributed by Pi extensions, in load order. */
   readonly tools: readonly AgentHarnessTool<object | undefined>[];
+  /**
+   * System-prompt guidance for those same tools, in the same order.
+   *
+   * `AgentHarnessTool` has no field for it, so it cannot ride on the harness
+   * tool the way it does on a Pi extension definition, and the headless host
+   * renders it into the prompt itself.
+   */
+  readonly toolGuidance: readonly ToolPromptEntry[];
   /** Session lifetime skills contributed by Pi extensions, in discovery order. */
   readonly skills: readonly Skill[];
   load(): Promise<void>;
@@ -439,6 +448,16 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   return {
     get tools() {
       return tools;
+    },
+
+    get toolGuidance(): readonly ToolPromptEntry[] {
+      return registered.map((tool) => ({
+        name: tool.definition.name,
+        ...(tool.definition.promptSnippet === undefined ? {} : { promptSnippet: tool.definition.promptSnippet }),
+        ...(tool.definition.promptGuidelines === undefined
+          ? {}
+          : { promptGuidelines: tool.definition.promptGuidelines }),
+      }));
     },
 
     get skills() {
