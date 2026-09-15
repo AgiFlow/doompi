@@ -226,6 +226,87 @@ describe('serveHeadlessServer', () => {
     await hub.close();
   });
 
+  it('lists dormant records beside live sessions and revives one on request', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'live',
+      name: 'Live',
+      cwd: '/repo',
+      createdAt: '2025-01-01',
+      host: host().host,
+    });
+    const records = [
+      {
+        sessionId: 'asleep',
+        workspaceId: 'test-workspace',
+        cwd: '/repo',
+        name: 'Asleep',
+        createdAt: '2025-01-02',
+      },
+      // Already live, so it must not be offered a second time as dormant.
+      { sessionId: 'live', workspaceId: 'test-workspace', cwd: '/repo', name: 'Live', createdAt: '2025-01-01' },
+    ];
+    const reviveSession = vi.fn(async () => undefined);
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    const server = await serveHeadlessServer({
+      headlessHub: hub,
+      port: 0,
+      dormantSessions: () => records,
+      reviveSession,
+    });
+    servers.push(server);
+
+    const listed = (await (await fetch(`${server.url}/api/workspaces/test-workspace/sessions`)).json()) as {
+      sessions: { id: string; dormant?: boolean }[];
+    };
+    expect(listed.sessions.map((session) => [session.id, session.dormant ?? false])).toEqual([
+      ['live', false],
+      ['asleep', true],
+    ]);
+
+    // The rail reads its snapshot over the protocol socket, not the SSE stream,
+    // so that path is what has to carry a dormant card.
+    const client = await Client.connect({
+      serverId: DOOM_COCKPIT_SERVER_ID,
+      transportFactory: websocketTransport(`${server.url.replace('http:', 'ws:')}/api/ws`),
+    });
+    const binding = createRemoteServiceBinding({
+      services: [DoomHubService],
+      transport: createClientServiceTransport(client, () => ({ serverId: DOOM_COCKPIT_SERVER_ID })),
+    });
+    const hubService = binding.use(DoomHubService);
+    await binding.ready(BACKGROUND_CONTEXT);
+    const snapshot = hubService.state.value?.events[0]?.frame as unknown as {
+      sessions: { id: string; dormant?: boolean }[];
+    };
+    expect(snapshot.sessions.map((session) => [session.id, session.dormant ?? false])).toEqual([
+      ['live', false],
+      ['asleep', true],
+    ]);
+    await binding.dispose(BACKGROUND_CONTEXT);
+    await client.dispose();
+    const revived = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/asleep/revive`, {
+      method: 'POST',
+    });
+    expect(revived.status).toBe(200);
+    expect(reviveSession).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'asleep' }));
+
+    // A live session and a record in another workspace are both unaddressable here.
+    expect(
+      (await fetch(`${server.url}/api/workspaces/test-workspace/sessions/live/revive`, { method: 'POST' })).status,
+    ).toBe(404);
+    expect((await fetch(`${server.url}/api/workspaces/other/sessions/asleep/revive`, { method: 'POST' })).status).toBe(
+      404,
+    );
+    expect(reviveSession).toHaveBeenCalledTimes(1);
+    await hub.close();
+  });
   it('serves compositions, assets, remote requests, and directory suggestions', async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-directories-'));
     temporaryDirectories.push(directory);

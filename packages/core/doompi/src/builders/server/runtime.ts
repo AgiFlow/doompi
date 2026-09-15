@@ -9,7 +9,8 @@ import { createHeadlessHub, type HeadlessHub } from '@agimon-ai/doompi-core/head
 import { serveHeadlessServer } from '@agimon-ai/doompi-core/headless-server';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '@agimon-ai/doompi-core/headless-session-host';
 import { createHeadlessSessionManager } from '@agimon-ai/doompi-core/headless-session-manager';
-import { listSavedSessions } from '@agimon-ai/doompi-core/history';
+import { createOpenSessionRegistry, listSavedSessions } from '@agimon-ai/doompi-core/history';
+import type { OpenSessionRecord } from '@agimon-ai/doompi-core/history';
 import type {
   DoomHubSessionApiRequest,
   DoomHubSessionCreateRequest,
@@ -57,6 +58,12 @@ async function bounded(operation: Promise<unknown>, label: string, notice: (mess
 export async function runServerRuntime(options: ServeOptions, runtime: ServerRuntimeEnvironment): Promise<number> {
   const { cwd: baseCwd, environment: baseEnvironment, notice, resolveHarnessOptions, signal, syncWorkspace } = runtime;
   const telemetry = createServerTelemetry({ cwd: baseCwd, env: baseEnvironment, warn: notice });
+  // Beside the journals it names, because a record pointing at a sessions
+  // directory it is not stored next to is a record that can outlive its target.
+  const openSessions = createOpenSessionRegistry({
+    directory: path.join(piAgentDirectory(baseEnvironment), 'server'),
+    onNotice: notice,
+  });
   let nextEventLoopTick = performance.now() + 1_000;
   const eventLoopMonitor = setInterval(() => {
     const now = performance.now();
@@ -88,8 +95,15 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
   let mountSessionApis:
     | ((options: HeadlessSessionHostOptions, host: HeadlessSessionHost) => Promise<PackageApiServer>)
     | undefined;
+  /**
+   * Shutdown runs every session through the same close path a user-initiated
+   * close uses, so without this the registry would be emptied by the very event
+   * it exists to survive.
+   */
+  let shuttingDown = false;
 
   const closeManagedSession = async (sessionId: string): Promise<void> => {
+    if (!shuttingDown) openSessions.remove(sessionId);
     const artifacts = sessionArtifacts.get(sessionId);
     sessionArtifacts.delete(sessionId);
     webCompositions?.remove({ scope: 'session', sessionId });
@@ -473,7 +487,21 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
             activeLayers: childContext.selectedLayers,
           });
           pendingSessions.set(identity.sessionId, { cleanup: () => childContext.cleanup(), bundle });
-          await hub.create(sessionHostOptions(childContext, bundle, identity));
+          const created = await hub.create(sessionHostOptions(childContext, bundle, identity));
+          // Recorded only once the session is live, and only with a workspace,
+          // because a record the revive route cannot address is a rail card that
+          // never wakes.
+          if (created.workspaceId !== undefined) {
+            openSessions.add({
+              sessionId: created.id,
+              workspaceId: created.workspaceId,
+              cwd: created.cwd,
+              name: created.name,
+              createdAt: created.createdAt,
+              ...(created.parentSessionId === undefined ? {} : { parentSessionId: created.parentSessionId }),
+              ...(created.sessionProvenance === undefined ? {} : { sessionProvenance: created.sessionProvenance }),
+            });
+          }
           return { sessionId: identity.sessionId, cwd: childContext.options.cwd };
         } catch (error) {
           pendingSessions.delete(identity.sessionId);
@@ -524,6 +552,26 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         await openSession({ cwd: session.cwd, name: target.name ?? 'untitled' }, target.id);
         return target.id;
       },
+      dormantSessions: () => openSessions.list(),
+      reviveSession: async (record: OpenSessionRecord) => {
+        try {
+          await openSession(
+            {
+              cwd: record.cwd,
+              name: record.name,
+              ...(record.parentSessionId === undefined ? {} : { parentSessionId: record.parentSessionId }),
+              ...(record.sessionProvenance === undefined ? {} : { sessionProvenance: record.sessionProvenance }),
+            },
+            record.sessionId,
+          );
+        } catch (error) {
+          // A record whose journal or worktree is gone will fail the same way on
+          // every attempt, so it is dropped rather than left offering a card
+          // that cannot wake.
+          openSessions.remove(record.sessionId);
+          throw error;
+        }
+      },
       requestAsset: (request) => webCompositions?.request(request) ?? Promise.resolve(undefined),
       compositions: () => ({
         global: webCompositions?.get({ scope: 'global' }),
@@ -551,6 +599,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       signal.removeEventListener('abort', stop);
     }
   } finally {
+    shuttingDown = true;
     clearInterval(eventLoopMonitor);
     await bounded(telemetry.recordEvent('doompi_server.shutdown'), 'shutdown telemetry', notice);
     await Promise.allSettled([cockpit?.close()]);

@@ -1,6 +1,16 @@
 import type { ContextItemSource } from '../services/contextProjection';
 
-export type ContextItemKind = 'tool' | 'skill';
+export type ContextItemKind = 'tool' | 'skill' | 'prompt';
+
+/**
+ * Whether the prompt on offer is the one a turn actually sent.
+ *
+ * A session that has sent nothing has built no prompt yet, and building one to
+ * look at it would fire `before_agent_start` on every package that hooks it.
+ * `base` is the hook-free assembly shown instead; `effective` is what a turn
+ * really handed the model.
+ */
+export type ContextPromptStage = 'base' | 'effective';
 
 /** What a tool costs, split the way it is actually paid. */
 export interface ContextTokenBreakdown {
@@ -40,7 +50,22 @@ export interface ContextSkillDetail {
   readonly modelInvocable: boolean;
 }
 
-export type ContextItemDetail = ContextToolDetail | ContextSkillDetail;
+/**
+ * The assembled system prompt, as one addressable row.
+ *
+ * It carries no owner or source: every mode, package and profile in the
+ * composition contributes to it, and the text arrives as one blob with no
+ * seam to attribute slices along.
+ */
+export interface ContextPromptDetail {
+  readonly itemKind: 'prompt';
+  readonly name: 'system';
+  readonly tokens: number;
+  readonly stage: ContextPromptStage;
+  readonly text: string;
+}
+
+export type ContextItemDetail = ContextToolDetail | ContextSkillDetail | ContextPromptDetail;
 
 /** The file the agent writes and the session API reads back. */
 export interface ContextDetailFile {

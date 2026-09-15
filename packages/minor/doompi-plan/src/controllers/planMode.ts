@@ -72,7 +72,12 @@ import {
   type SubagentPolicyHandle,
 } from '../services/optionalTeamServices';
 import { PlanPointerService } from '../services/planPointer';
-import { buildFlavorPlanningPrompt, type DebugEvidencePacket, type PlanningFlavor } from '../services/prompts';
+import {
+  buildFlavorPlanningPrompt,
+  buildPlanModeBasePrompt,
+  type DebugEvidencePacket,
+  type PlanningFlavor,
+} from '../services/prompts';
 import {
   CONTINUE_PLANNING_CHOICE,
   EXIT_PLAN_MODE_CHOICE,
@@ -2043,7 +2048,7 @@ export function createPlanModeRuntime(
             os.homedir(),
           );
           sections.push(
-            `[PLAN MODE ACTIVE]\nYou are in repository read-only plan mode. The dedicated write_plan tool may write one unique Markdown plan file under ${plansDirectory}.\n\nExplore the codebase and produce a concrete implementation plan. For every plan, first call subagent with action "agents", cluster the exploration by independent domain, subsystem, or integration boundary, and create a provisional task graph with the task tool. Select specialized agents by matching their names and descriptions to each cluster. Assign every unblocked delegated task through the task tool, and use a one-shot inlineAgent with a focused systemPrompt when no discovered specialist fits. Treat the initial graph as provisional, not as a fixed contract. After findings arrive, review the entire graph at least once and perform one to three review passes in total. In each pass, use the evidence to add, rewrite, delete, cancel, reassign, or change blockedBy relationships for tasks when warranted. Do not keep following tasks that new information has made stale. Stop revising early when the graph is stable, or after the third pass.\n\nEvery plan must end with a delegated planning-draft stage blocked by all exploration and decision tasks. A single-boundary plan gets one planning draft. A complex plan spanning multiple subsystems, domains, packages, apps, or integration boundaries gets two planning drafts concurrently. Use three concurrent drafts instead when the work is cross-layer, migration-sensitive, security-sensitive, or similarly high risk. Assign each draft through the task tool to the discovered "planner" agent with context "fork" so it receives the conversation and gathered evidence. If the planner agent is unavailable, assign the same draft task through the task tool with a focused inlineAgent. All children receive read, Bash, grep, find, ls, and configured MCP tools with artifacts disabled. Bash and MCP tools are for read-only inspection and must not modify files, external systems, or repository state. Doom Team runs asynchronously, so do not poll. After launch, continue non-overlapping exploration or end your turn; completion notifications wake the parent session.\n\nAfter all planning drafts complete, the main agent must compare the candidates, pick the strongest draft, cross-check it against the gathered evidence and the other drafts, resolve conflicts and gaps, and ask the user only for product decisions. A child produces the draft, but the main agent owns and synthesizes the final plan. Do not modify files or repository state except through write_plan. Start the final plan with a meaningful Markdown H1 because write_plan derives the filename from it. Present the complete plan as visible Markdown in chat, then call write_plan with no arguments. After write_plan succeeds, clear the completed durable task graph and call complete_plan without a decision. In an interactive text session, complete_plan uses the normal exit-or-continue selector. Under autonomous voice, it displays and narrates the choices without opening a blocking dialog, then ends the turn. Interpret the user's next ordinary message and call complete_plan again with decision "exit" or "continue". Do not exit plan mode without explicit approval.`,
+            buildPlanModeBasePrompt(plansDirectory),
             buildFlavorPlanningPrompt(activeFlavor!, plansDirectory, debugEvidence, fableStage),
           );
         }

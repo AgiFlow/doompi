@@ -128,3 +128,20 @@ describe('SessionRail without lineage', () => {
     expect(card(markup, 'orphan')).not.toContain('aria-label="worktree"');
   });
 });
+
+describe('SessionRail with a dormant session', () => {
+  it('says the card is stopped rather than claiming it is a fresh session', () => {
+    applySessionsSnapshot({
+      type: 'sessions_snapshot',
+      sessions: [
+        summary('live', '2026-08-24T00:00:10.000Z'),
+        summary('asleep', '2026-08-24T00:00:20.000Z', { dormant: true }),
+      ],
+    });
+    const markup = render();
+    // Both are unprompted and idle, so only the dormant flag can tell them
+    // apart: without it the card would invite a prompt nothing would receive.
+    expect(card(markup, 'asleep')).toContain('stopped');
+    expect(card(markup, 'live')).toContain('fresh session');
+  });
+});

@@ -3,11 +3,21 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import type { Entry } from '@earendil-works/pi-agent-core';
-import type { SessionEntry } from '@earendil-works/pi-coding-agent';
-import { ExtensionRunner, initTheme, ModelRegistry, SessionManager } from '@earendil-works/pi-coding-agent';
+import type { Extension, LoadExtensionsResult, RegisteredTool, SessionEntry } from '@earendil-works/pi-coding-agent';
+import {
+  createExtensionRuntime,
+  ExtensionRunner,
+  initTheme,
+  ModelRegistry,
+  SessionManager,
+} from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createBridgedSessionManager, resolvePiExtensionEntries } from '../../../../src/services/piExtensionHost';
+import {
+  createBridgedSessionManager,
+  createPiExtensionHost,
+  resolvePiExtensionEntries,
+} from '../../../../src/services/piExtensionHost';
 import type { DirectHarnessRuntime } from '../../../../src/types/server/directHarnessRuntime';
 
 const CREATED_AT = 1_700_000_000_000;
@@ -184,5 +194,97 @@ describe('Pi extension UI theme access', () => {
     expect(runner.hasUI()).toBe(false);
     initTheme(undefined, false);
     expect(runner.getUIContext().theme.constructor.name).toBe('Theme');
+  });
+});
+
+function stubExtension(names: readonly string[]): Extension {
+  const tools = new Map<string, RegisteredTool>();
+  for (const name of names) {
+    tools.set(name, {
+      definition: {
+        name,
+        description: `${name} tool`,
+        parameters: { type: 'object', properties: {}, additionalProperties: false },
+        promptGuidelines: [`Use ${name} only when it applies.`],
+        execute: async () => ({ content: [{ type: 'text', text: 'ok' }] }),
+      },
+      sourceInfo: { extensionPath: `/extensions/${name}.mjs` },
+    } as unknown as RegisteredTool);
+  }
+  return {
+    path: '/extensions/stub.mjs',
+    tools,
+    handlers: new Map(),
+    commands: new Map(),
+    flags: new Map(),
+    shortcuts: new Map(),
+    messageRenderers: new Map(),
+  } as unknown as Extension;
+}
+
+async function loadedHost(names: readonly string[], onActiveToolsChanged?: () => void) {
+  const { runtime } = stubRuntime([]);
+  const preload: LoadExtensionsResult = {
+    extensions: [stubExtension(names)],
+    errors: [],
+    runtime: createExtensionRuntime(),
+  };
+  initTheme(undefined, false);
+  const host = createPiExtensionHost({
+    cwd: '/workspace/project',
+    agentDir: '/workspace/project/.pi',
+    models: {} as unknown as ConstructorParameters<typeof ModelRegistry>[0],
+    runtime,
+    preload,
+    getModel: () => undefined,
+    getThinkingLevel: () => 'off',
+    client: () => undefined,
+    ...(onActiveToolsChanged === undefined ? {} : { onActiveToolsChanged }),
+  });
+  await host.load();
+  // bindCore copies the host's actions onto the shared runtime, which is the object every
+  // extension's ExtensionAPI calls through. Reaching it here exercises the real seam.
+  return { host, actions: preload.runtime };
+}
+
+describe('Pi extension tool surface in the headless host', () => {
+  it('exposes every registered tool until a restriction narrows the set', async () => {
+    const { host, actions } = await loadedHost(['alpha', 'beta']);
+
+    expect(host.tools.map((tool) => tool.name)).toEqual(['alpha', 'beta']);
+    expect(actions.getActiveTools()).toEqual(['alpha', 'beta']);
+  });
+
+  // setActiveTools used to throw, which left every DoomToolRestriction inert and leaked mode-gated
+  // tools such as narrate into sessions whose minor mode was off.
+  it('hides a tool and its prompt guidance once setActiveTools drops it', async () => {
+    const onActiveToolsChanged = vi.fn();
+    const { host, actions } = await loadedHost(['alpha', 'beta'], onActiveToolsChanged);
+
+    actions.setActiveTools(['alpha']);
+
+    expect(host.tools.map((tool) => tool.name)).toEqual(['alpha']);
+    expect(host.toolGuidance.map((entry) => entry.name)).toEqual(['alpha']);
+    expect(actions.getActiveTools()).toEqual(['alpha']);
+    expect(onActiveToolsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores a tool when the restriction releases it', async () => {
+    const { host, actions } = await loadedHost(['alpha', 'beta']);
+
+    actions.setActiveTools([]);
+    expect(host.tools).toEqual([]);
+    expect(host.toolGuidance).toEqual([]);
+
+    actions.setActiveTools(['alpha', 'beta']);
+    expect(host.tools.map((tool) => tool.name)).toEqual(['alpha', 'beta']);
+  });
+
+  it('drops a name the host never registered rather than resurrecting it', async () => {
+    const { host, actions } = await loadedHost(['alpha']);
+
+    actions.setActiveTools(['alpha', 'ghost']);
+
+    expect(host.tools.map((tool) => tool.name)).toEqual(['alpha']);
   });
 });

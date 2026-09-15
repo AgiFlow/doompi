@@ -55,6 +55,8 @@ export const SessionSummarySchema = Type.Object({
   lastSettledAt: Optional(Text),
   parentSessionId: Optional(Text),
   sessionProvenance: Optional(Text),
+  /** Present and true for a recorded session the server has not reopened yet. */
+  dormant: Optional(Flag),
 });
 export const HubSnapshotFrameSchema = Type.Object({
   type: Type.Literal('sessions_snapshot'),
@@ -162,6 +164,9 @@ export const headlessHttpContracts: DoomHttpContract[] = [
   ),
   host('sessions.restart', '/api/workspaces/{workspaceId}/sessions/{sessionId}/restart', 'POST', ApiOkSchema, {
     availability: 'Host provides restartSession',
+  }),
+  host('sessions.revive', '/api/workspaces/{workspaceId}/sessions/{sessionId}/revive', 'POST', ApiOkSchema, {
+    availability: 'Host provides reviveSession',
   }),
   host(
     'sessions.resume',
@@ -323,12 +328,19 @@ const Detail = Type.Union([
     filePath: Optional(Text),
     modelInvocable: Flag,
   }),
+  Type.Object({
+    itemKind: Type.Literal('prompt'),
+    name: Type.Literal('system'),
+    tokens: NumberValue,
+    stage: Type.Union([Type.Literal('base'), Type.Literal('effective')]),
+    text: Text,
+  }),
 ]);
 export const sessionHttpContracts: DoomHttpContract[] = [
   {
     ...host('context.item', ITEM_ROUTE, 'GET', Type.Object({ revision: NumberValue, item: Detail }), {
       parameters: [
-        query('kind', Type.Union([Type.Literal('tool'), Type.Literal('skill')]), true),
+        query('kind', Type.Union([Type.Literal('tool'), Type.Literal('skill'), Type.Literal('prompt')]), true),
         query('name', Text, true),
       ],
     }),

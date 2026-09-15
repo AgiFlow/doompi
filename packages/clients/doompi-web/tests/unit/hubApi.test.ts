@@ -8,6 +8,7 @@ import {
   listSessionHistory,
   restartSession,
   resumeSession,
+  reviveSession,
   searchDirectories,
 } from '../../src/web/lib/hubApi';
 
@@ -81,6 +82,32 @@ describe('restartSession', () => {
   });
 });
 
+describe('reviveSession', () => {
+  it('posts to the session’s revive route', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(respond(202, { sessionId: 'dormant' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(reviveSession('dormant')).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions/dormant/revive', {
+      method: 'POST',
+    });
+  });
+
+  it('relays the hub error message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(respond(409, { error: 'That session is already open.' })));
+    await expect(reviveSession('dormant')).resolves.toEqual({ error: 'That session is already open.' });
+  });
+
+  it('falls back to the status code when the body is not helpful', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('nope', { status: 500 })));
+    await expect(reviveSession('dormant')).resolves.toEqual({ error: 'The hub answered 500.' });
+  });
+
+  it('reports an unreachable hub instead of throwing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection refused')));
+    await expect(reviveSession('dormant')).resolves.toEqual({ error: 'The cockpit hub is unreachable.' });
+  });
+});
 describe('Pi session history', () => {
   it('lists valid history rows for the selected live session', async () => {
     const thread = {

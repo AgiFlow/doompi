@@ -5,7 +5,7 @@ import { buildContextDetail } from '@agimon-ai/doompi-core/context-detail';
 import { DOOM_CONTEXT_ENTRY_TYPE, projectContext } from '@agimon-ai/doompi-core/context-projection';
 import { readDoomMcpStatus } from '@agimon-ai/doompi-core/mcp-status';
 import { readDoomSkillSourcesService } from '@agimon-ai/doompi-core/skills';
-import type { ContextItemDetail } from '@agimon-ai/doompi-core/types-context-api';
+import type { ContextItemDetail, ContextPromptStage } from '@agimon-ai/doompi-core/types-context-api';
 import { buildSkillCatalog, counter, type SkillEntry } from '@agimon-ai/doompi-skill/catalog';
 import { extensionName, extensionPackageName, extensionToolSource } from '@agimon-ai/doompi-ui/extensionName';
 import { buildToolSources } from '@agimon-ai/doompi-ui/toolInventory';
@@ -48,6 +48,15 @@ export interface ContextPublisherOptions {
    */
   writeDetail?: (sessionId: string, revision: number, items: readonly ContextItemDetail[]) => void;
   removeDetail?: (sessionId: string) => void;
+  /**
+   * The system prompt as the session currently stands.
+   *
+   * Read rather than pushed, for the same reason the tool inventory is: the
+   * prompt changes for reasons this module does not see. A host with no way to
+   * answer returns undefined and the panel reports no prompt rather than a
+   * stale one.
+   */
+  readSystemPrompt?: () => { readonly text: string; readonly stage: ContextPromptStage } | undefined;
 }
 
 /** Skills sit under owners, which is one level deeper than a flat list. */
@@ -115,6 +124,8 @@ export function createContextPublisher(
     }
 
     const countTokens = await counter();
+    const prompt = options.readSystemPrompt?.();
+    const promptCost = prompt === undefined ? undefined : { tokens: countTokens(prompt.text), stage: prompt.stage };
     const projection = projectContext({
       revision: revision + 1,
       majorMode: harness.majorMode,
@@ -124,11 +135,13 @@ export function createContextPublisher(
       skills,
       attribution: attributionFor(repoRoot, harness.domains, harness.pluginDirectories),
       countTokens,
+      ...(promptCost === undefined ? {} : { systemPrompt: promptCost }),
     });
 
     // Revision is compared out, so a republish that changed nothing is silent
-    // rather than a new journal entry saying the same thing.
-    const serialized = JSON.stringify({ ...projection, revision: 0 });
+    // rather than a new journal entry saying the same thing. The prompt joins by
+    // its text: a reworded prompt of the same length is still a different answer.
+    const serialized = JSON.stringify({ ...projection, revision: 0, promptText: prompt?.text });
     if (serialized === published || disposed) return;
     published = serialized;
     revision += 1;
@@ -137,7 +150,18 @@ export function createContextPublisher(
     const sessionId = options.readSessionId?.();
     if (sessionId !== undefined && sessionId !== '' && options.writeDetail !== undefined) {
       detailSessionId = sessionId;
-      options.writeDetail(sessionId, revision, buildContextDetail({ sources, skills, countTokens }));
+      options.writeDetail(
+        sessionId,
+        revision,
+        buildContextDetail({
+          sources,
+          skills,
+          countTokens,
+          ...(prompt === undefined || promptCost === undefined
+            ? {}
+            : { systemPrompt: { text: prompt.text, tokens: promptCost.tokens, stage: prompt.stage } }),
+        }),
+      );
     }
     pi.appendEntry(DOOM_CONTEXT_ENTRY_TYPE, { ...projection, revision });
   };

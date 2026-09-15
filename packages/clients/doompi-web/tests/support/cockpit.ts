@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { OpenSessionRecord } from '@agimon-ai/doompi-core/history';
 import type { DoomHubSessionCreateRequest } from '@agimon-ai/doompi-core/hub-channel';
 import { type PackageApiServer, serveSessionApis } from '@agimon-ai/doompi-core/package-api-server';
 import { createHeadlessHub, serveHeadlessServer, type HeadlessSessionHost } from '@agimon-ai/doompi-core/server';
@@ -42,6 +43,8 @@ export interface CockpitFixture {
 
 interface CockpitOptions {
   sessionCount: number;
+  /** Recorded sessions the fixture offers as dormant, as a restarted server would. */
+  dormantSessionCount: number;
   assets: 'packaged' | 'synced';
   assetPackageRoot: string | null;
   backlogLimit: number;
@@ -49,6 +52,7 @@ interface CockpitOptions {
 
 export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
   sessionCount: [1, { option: true }],
+  dormantSessionCount: [0, { option: true }],
   assets: ['packaged', { option: true }],
   assetPackageRoot: [null, { option: true }],
   backlogLimit: [512, { option: true }],
@@ -96,7 +100,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       await page.close();
     }
   },
-  cockpit: async ({ sessionCount, assets, assetPackageRoot }, use) => {
+  cockpit: async ({ sessionCount, dormantSessionCount, assets, assetPackageRoot }, use) => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-web-e2e-'));
     const syncedDist = process.env[SYNCED_DIST_ENV];
     if (assets === 'synced' && (syncedDist === undefined || syncedDist === ''))
@@ -149,6 +153,10 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const hosts = new Map<string, HeadlessSessionHost>();
     let createSession = async (_request: DoomHubSessionCreateRequest): Promise<{ sessionId: string; cwd: string }> => {
       throw new Error('The Playwright headless fixture is not ready to create sessions.');
+    };
+    const dormantRecords: OpenSessionRecord[] = [];
+    let reviveSession = async (_record: OpenSessionRecord): Promise<void> => {
+      throw new Error('The Playwright headless fixture is not ready to revive sessions.');
     };
     const manager = {
       async create(): Promise<HeadlessSessionHost> {
@@ -244,6 +252,8 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       port: 0,
       token: E2E_HEADLESS_TOKEN,
       requestAsset: (request) => webCompositions.request(request),
+      dormantSessions: () => dormantRecords,
+      reviveSession: (record) => reviveSession(record),
       onNotice: (message) => console.error(`[headless] ${message}`),
       compositions: () => ({
         global: globalComposition,
@@ -261,6 +271,8 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         port,
         token: E2E_HEADLESS_TOKEN,
         requestAsset: (request) => webCompositions.request(request),
+        dormantSessions: () => dormantRecords,
+        reviveSession: (record) => reviveSession(record),
         onNotice: (message) => console.error(`[headless] ${message}`),
         compositions: () => ({
           global: globalComposition,
@@ -330,6 +342,13 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       await registerFixtureSession(sessionId, request.name, request.cwd, false);
       return { sessionId, cwd: request.cwd };
     };
+    // A revived record becomes an ordinary fixture session, which is what the
+    // real server does: it reopens the journal the record names.
+    reviveSession = async (record) => {
+      const at = dormantRecords.findIndex((held) => held.sessionId === record.sessionId);
+      if (at >= 0) dormantRecords.splice(at, 1);
+      await registerFixtureSession(record.sessionId, record.name, record.cwd, false);
+    };
     for (let index = 0; index < sessionCount; index += 1) {
       await registerFixtureSession(
         `s${index + 1}`,
@@ -337,6 +356,16 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         path.join(workRoot, `s${index + 1}`),
         index === 0,
       );
+    }
+    for (let index = 0; index < dormantSessionCount; index += 1) {
+      const id = `d${index + 1}`;
+      dormantRecords.push({
+        sessionId: id,
+        workspaceId,
+        cwd: path.join(workRoot, id),
+        name: `dormant-${index + 1}`,
+        createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+      });
     }
 
     const web = await serveWeb({

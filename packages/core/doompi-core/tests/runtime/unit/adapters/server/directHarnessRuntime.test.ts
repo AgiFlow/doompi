@@ -187,6 +187,19 @@ describe('direct AgentHarness runtime', () => {
     }
   });
 
+  it('reports an idle lane as having nothing to resume instead of failing', async () => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'resume-idle-test' }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+    try {
+      // Every reopened session calls this, and most of them were idle. A throw
+      // here would make the ordinary case indistinguishable from a real fault.
+      expect(await runtime.resume()).toBe(false);
+    } finally {
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
   it.each(['sessionPath', 'legacySessionPath'] as const)(
     'rejects implicit v3 migration through %s without changing history',
     async (input) => {

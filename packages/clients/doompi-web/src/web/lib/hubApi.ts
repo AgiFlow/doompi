@@ -110,6 +110,32 @@ export async function restartSession(sessionId: string): Promise<RestartSessionR
   return { error };
 }
 
+export type ReviveSessionResult = { ok: true } | { error: string };
+
+/**
+ * Asks the hub to reopen a recorded session it has not started yet.
+ *
+ * Step-up gated like creating one, because it is the same act: an agent begins
+ * running in a directory. The card turns live when the resulting upsert lands.
+ */
+export async function reviveSession(sessionId: string): Promise<ReviveSessionResult> {
+  let response: Response;
+  try {
+    response = await fetchWithStepUp(`${sessionApiPath(sessionId)}/revive`, { method: 'POST' });
+  } catch {
+    return { error: 'The cockpit hub is unreachable.' };
+  }
+  if (response.ok) return { ok: true };
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    body = undefined;
+  }
+  const error = isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`;
+  return { error };
+}
+
 export type SessionHistoryResult = { sessions: PiSessionHistoryItem[] } | { error: string };
 
 /** Lists the Pi threads saved for a live session's workspace. */

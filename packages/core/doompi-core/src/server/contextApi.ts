@@ -23,8 +23,8 @@ function json(body: unknown, status: number): Response {
   });
 }
 
-function isItemKind(value: string | null): value is 'tool' | 'skill' {
-  return value === 'tool' || value === 'skill';
+function isItemKind(value: string | null): value is 'tool' | 'skill' | 'prompt' {
+  return value === 'tool' || value === 'skill' || value === 'prompt';
 }
 
 export interface ContextApiOptions {
@@ -47,7 +47,7 @@ export function createContextApi(options: ContextApiOptions = {}): DoomApiHandle
 
       const itemKind = url.searchParams.get(KIND_QUERY_PARAM);
       const name = url.searchParams.get(NAME_QUERY_PARAM);
-      if (!isItemKind(itemKind)) return json({ error: 'Ask for a tool or a skill.' }, 400);
+      if (!isItemKind(itemKind)) return json({ error: 'Ask for a tool, a skill, or the prompt.' }, 400);
       if (name === null || name === '') return json({ error: 'Name the item to describe.' }, 400);
 
       const file = options.readDetail

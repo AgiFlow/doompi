@@ -973,9 +973,14 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     );
     if (!result.ok) resultError(result);
   };
-  const resume = async (): Promise<void> => {
+  const resume = async (): Promise<boolean> => {
     const result = await writable(() => lane.resume(context));
+    // A lane with no persisted operation has nothing to continue. That is the
+    // ordinary state of a session reopened while idle, not a failure, so it is
+    // reported rather than thrown: only the caller knows whether it expected one.
+    if (!result.ok && result.error._tag === 'NothingToResume') return false;
     if (!result.ok) resultError(result);
+    return true;
   };
   const readState = async (): Promise<Record<string, unknown>> => {
     const [execution, persisted, stats, thinking] = await Promise.all([

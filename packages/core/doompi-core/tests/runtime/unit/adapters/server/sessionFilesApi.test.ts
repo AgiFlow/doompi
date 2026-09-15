@@ -49,7 +49,11 @@ describe('session file completion', () => {
     const handler = sessionFilesApi.start({ scope: 'session', sessionId: 'one', cwd, onNotice() {} });
     try {
       expect(await (await handler.fetch(new Request('http://files/?q='))).json()).toEqual({
-        files: ['.doomignore', '.gitignore', 'src/kept.ts'],
+        files: ['.doomignore', '.gitignore', 'src/', 'src/kept.ts'],
+      });
+      // A folder is completable, so the @ popup can name a whole directory.
+      expect(await (await handler.fetch(new Request('http://files/?q=src'))).json()).toEqual({
+        files: ['src/', 'src/kept.ts'],
       });
     } finally {
       handler.close();
