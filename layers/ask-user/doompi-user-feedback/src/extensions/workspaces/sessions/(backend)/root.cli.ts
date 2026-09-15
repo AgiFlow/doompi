@@ -1,17 +1,16 @@
 import { DOOM_NARRATION_SERVICE, requireDoomNarrationService } from '@agimon-ai/doompi-core/narration';
-import { definePiTool, type PiPluginContext, type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
-import { type DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
+import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import type { DoomToolRestriction } from '@agimon-ai/doompi-core/tool-surface';
 import { DOOM_MINOR_MODE_CATALOG_SERVICE, requireMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
-import { PACKAGE_SOURCE } from '../../../../constants/package';
 import { ASK_USER_QUESTION_TOOL_NAME } from '../../../../constants/tool';
 import { askUserToolRestriction } from '../../../../services/askUserToolGate';
 import { isAutonomousVoiceActive } from '../../../../services/autonomousVoiceMode';
 import { QuestionnaireCoordinator, type QuestionnaireRunner } from '../../../../services/questionnaireCoordinator';
 import { createVoiceQuestionHandoff, type VoiceQuestionHandoff } from '../../../../services/voiceQuestionHandoff';
-import { askUserToolRender } from '../../../../tui/askUserToolRender';
 import type { QuestionnaireResult } from '../../../../types/questionnaire';
 import { createAskUserQuestionTool } from './_tools/askUserQuestion';
 
@@ -19,7 +18,7 @@ function cancelledResult(): QuestionnaireResult {
   return { answers: [], cancelled: true };
 }
 
-export default ({ context: cordis }: PiPluginContext): PiPluginContributions => {
+const root = defineRoot(({ context: cordis }: PiPluginContext) => {
   let active = true;
   let sessionGeneration = 0;
   let sessionId: string | undefined;
@@ -125,7 +124,26 @@ export default ({ context: cordis }: PiPluginContext): PiPluginContributions => 
     lifecycleQueue = operation.catch(() => undefined);
     return trackOperation(operation);
   };
+  const toolRestriction = {
+    source: '@agimon-ai/doompi-user-feedback',
+    get restrict() {
+      return currentRestriction();
+    },
+    subscribe(listener: () => void) {
+      restrictionListeners.add(listener);
+      return () => {
+        restrictionListeners.delete(listener);
+      };
+    },
+  };
+
   return {
+    value: {
+      toolDependencies,
+      beforeAgentStart,
+      sessionStart,
+      toolRestriction,
+    },
     services: [
       (serviceContextOwner: Context) => {
         serviceContextOwner.inject([DOOM_MINOR_MODE_CATALOG_SERVICE, DOOM_NARRATION_SERVICE], (serviceContext) => {
@@ -157,22 +175,9 @@ export default ({ context: cordis }: PiPluginContext): PiPluginContributions => 
         });
       },
     ],
-    tools: [definePiTool(createAskUserQuestionTool(cordis, toolDependencies, askUserToolRender))],
-    events: { before_agent_start: beforeAgentStart, session_start: sessionStart },
     onDispose: shutdownRuntime,
-    toolRestrictions: [
-      {
-        source: PACKAGE_SOURCE,
-        get restrict() {
-          return currentRestriction();
-        },
-        subscribe(listener) {
-          restrictionListeners.add(listener);
-          return () => {
-            restrictionListeners.delete(listener);
-          };
-        },
-      },
-    ],
   };
-};
+});
+
+export type UserFeedbackPiScope = ReturnType<typeof root>['value'];
+export default root;
