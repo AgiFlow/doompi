@@ -56,6 +56,7 @@
           "@agimon-ai/doompi",
           "@agimon-ai/doompi-autocompact",
           "@agimon-ai/doompi-autostop",
+          "@agimon-ai/doompi-build",
           "@agimon-ai/doompi-cache",
           "@agimon-ai/doompi-author",
           "@agimon-ai/doompi-computer-use",
