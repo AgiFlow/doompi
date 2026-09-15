@@ -1,1 +1,1 @@
-export * from '../tui/format';
+export * from '../extensions/workspaces/sessions/(frontend)/_shared/format';

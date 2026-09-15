@@ -1,9 +1,5 @@
-# The browser half of this package lives in src/web, which the doom-extension
-# preset does not colour-check. doom-web owns that rule and its scope covers
-# src/web, so the plugin is declared for the one rule rather than for its
-# preset: the rest of that preset describes a cockpit host's client layers
-# (stores, features, routes, app), which a plugin's flat src/web does not use,
-# so it stays unenabled here.
+# Browser UI components are colocated with their session routes.
+# doom-web supplies theme checks for those routed components.
 plugins:
   - core
   - doom-extension
@@ -18,33 +14,76 @@ rules:
   boundary-import-allowlist: error
   file-naming-convention: error
 
+boundaries:
+  - name: cli-session-shared-presentation
+    pattern: src/extensions/**/(frontend)/_shared/*.ts
+    allowedImports:
+      - src/types/**
+      - src/constants/**
+      - src/models/**
+      - src/schemas/**
+      - src/services/**
+      - src/extensions/**/(frontend)/**
+  - name: cli-session-overlay-presentation
+    pattern: src/extensions/**/(frontend)/overlay/*.cli.ts
+    allowedImports:
+      - src/types/**
+      - src/constants/**
+      - src/models/**
+      - src/schemas/**
+      - src/services/**
+      - src/extensions/**/(frontend)/**
+  - name: cli-session-overlay-private
+    pattern: src/extensions/**/(frontend)/overlay/_lib/*.ts
+    allowedImports:
+      - src/types/**
+      - src/constants/**
+      - src/models/**
+      - src/schemas/**
+      - src/services/**
+      - src/extensions/**/(frontend)/**
+  - name: cli-session-tool-presentation
+    pattern: src/extensions/**/(frontend)/tool/*.cli.ts
+    allowedImports:
+      - src/types/**
+      - src/constants/**
+      - src/models/**
+      - src/schemas/**
+      - src/services/**
+      - src/extensions/**/(frontend)/**
+  - name: cli-session-message-presentation
+    pattern: src/extensions/**/(frontend)/message/*.cli.ts
+    allowedImports:
+      - src/types/**
+      - src/constants/**
+      - src/services/**
+      - src/extensions/**/(frontend)/**
+
 overrides:
+  # Routed filenames carry contribution identities and follow their own grammar.
+  - files:
+      - src/extensions/**
+    rules:
+      file-naming-convention: off
+  # These public subpaths predate routing. Their wrappers keep the published
+  # TUI and Pi APIs available while implementations stay beside their routes.
+  - files:
+      - src/exports/commands.ts
+      - src/exports/index.ts
+      - src/exports/toolTaskTool.ts
+      - src/exports/tuiFormat.ts
+      - src/exports/tuiSelectors.ts
+      - src/exports/tuiTaskOverlay.ts
+      - src/exports/tuiTaskSpace.ts
+    rules:
+      boundary-import-allowlist: off
+      composition-layout: off
   # Story files are read by the style-system renderer, which resolves the
   # default export by looking for a bare `const meta`. Naming the export at the
   # point of definition breaks the render, so the export-shape rules are off
   # here. Every other rule, theming included, still applies to stories.
   - files:
-      - src/web/components/*.stories.tsx
+      - src/extensions/**/(frontend)/**/*.stories.tsx
     rules:
       no-default-export: off
       direct-export-only: off
-  # These two commands render their own output rather than returning a value the
-  # Pi adapter renders, which is how doompi-mcp keeps commands free of the TUI.
-  # Inverting that is a behaviour change, so it is tracked separately and these
-  # lines come out with it.
-  - files:
-      - src/commands/index.ts
-      - src/commands/task/taskTool.ts
-    rules:
-      boundary-import-allowlist: off
-      doom-layer-boundary: off
-
-  # Reads time, randomness or process state ambiently instead of taking it as a
-  # dependency. Each needs a clock, id factory or env threaded through its
-  # caller; until then the rule stays on for every other module here.
-  - files:
-      - src/services/delegation/manager.ts # Date
-      - src/services/store/reconcile.ts # new Date()
-      - src/services/store/reducer.ts # new Date()
-    rules:
-      no-ambient-host-access: off

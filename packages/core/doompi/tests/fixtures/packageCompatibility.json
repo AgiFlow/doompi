@@ -2694,6 +2694,7 @@
       "./delegation-manager": "tir",
       "./extensions/pi": "tir",
       "./extensions/server": "tir",
+      "./extensions/web": "i",
       "./logSinkTelemetry": "tir",
       "./store-invariants": "tir",
       "./store-paths": "tir",
@@ -2743,6 +2744,9 @@
         "types": "./dist/extensions/server.d.mts",
         "import": "./dist/extensions/server.mjs",
         "require": "./dist/extensions/server.cjs"
+      },
+      "./extensions/web": {
+        "import": "./dist/extensions/web.mjs"
       },
       "./logSinkTelemetry": {
         "types": "./dist/logSinkTelemetry.d.mts",
@@ -2839,14 +2843,7 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": [],
-    "files": [
-      "dist",
-      "src/web",
-      "src/extensions/web.ts",
-      "src/types/webTasks.ts",
-      "package.json",
-      "!src/web/**/*.stories.tsx"
-    ],
+    "files": ["dist", "src/types/webTasks.ts", "package.json"],
     "os": [],
     "cpu": []
   },
