@@ -211,9 +211,16 @@ describe('identity derived from the path', () => {
     expect(web).toContain("toolRenderers: [via({ tools: ['write_plan'] }, ");
   });
 
-  it('names a backend tool and command from the filename, in snake case', () => {
+  it('names a backend tool from the filename, in snake case', () => {
     const { cli } = render({ 'src/extensions/(backend)/tool/write-plan.ts': EMPTY });
     expect(cli).toContain("[via({ name: 'write_plan' }, ");
+  });
+
+  it('names a command in kebab case, because that is what the user types', () => {
+    // The name reaches registerCommand verbatim, so a snake-cased one would
+    // publish /subagents_doctor and nobody would find it.
+    const { cli } = render({ 'src/extensions/(backend)/command/subagents-doctor.ts': EMPTY });
+    expect(cli).toContain("commands: [via({ name: 'subagents-doctor' }, ");
   });
 
   it('names a server hook event from the filename', () => {
@@ -351,6 +358,70 @@ describe('the terminal reads the frontend side too', () => {
     const { notices } = resolveTarget(graph, 'cli');
     expect(notices).toHaveLength(1);
     expect(notices[0]?.message).toContain('no backend file contributes');
+  });
+});
+
+/**
+ * A root is the scope's constructor, as Next.js spells a layout. It exists so
+ * a package whose surfaces all read one per-mount object graph can decompose
+ * into a file per surface without rebuilding that graph per file.
+ */
+describe('scope roots', () => {
+  const TREE = {
+    'src/extensions/(backend)/root.ts': EMPTY,
+    'src/extensions/(backend)/tool/subagent.ts': EMPTY,
+    'src/extensions/workspaces/sessions/(backend)/root.ts': EMPTY,
+    'src/extensions/workspaces/sessions/(backend)/tool/plan.ts': EMPTY,
+  };
+
+  it('constructs each scope before the contributions that read it', () => {
+    const { cli } = raw(TREE);
+    expect(cli).toContain('const scopeGlobal = rootGlobal(context);');
+    expect(cli).toContain('const contextGlobal = { ...context, root: scopeGlobal.value };');
+    expect(cli.indexOf('const scopeGlobal')).toBeLessThan(cli.indexOf('const scopeSession'));
+  });
+
+  it('nests roots, so an inner scope builds on the context the outer one produced', () => {
+    const { cli } = raw(TREE);
+    expect(cli).toContain('const scopeSession = rootSession(contextGlobal);');
+    expect(cli).toContain('const contextSession = { ...contextGlobal, root: scopeSession.value };');
+  });
+
+  it('hands each contribution the nearest enclosing root, not merely the innermost', () => {
+    const { cli } = render(TREE);
+    expect(cli).toMatch(/via\(\{ name: 'subagent' \}, at\(\w+, contextGlobal\)\)/u);
+    expect(cli).toMatch(/via\(\{ name: 'plan' \}, at\(\w+, contextSession\)\)/u);
+  });
+
+  it('folds every enclosing root’s lifecycle hooks into one set', () => {
+    // onStart is the reason a root is not just a service: it runs after the
+    // host has registered everything, which is the first point at which
+    // starting work that calls back into a contribution is safe.
+    const { cli } = raw(TREE);
+    expect(cli).toContain('...composeRootHooks(scopeGlobal, scopeSession),');
+    expect(cli).toContain("import { composeRootHooks } from '@agimon-ai/doompi-core/extension-file';");
+  });
+
+  it('rebuilds the enclosing roots per server scope, because each is its own mount', () => {
+    const { server } = raw(TREE);
+    // The global scope sees only its own root; the session scope constructs
+    // both, since a server facet reads one plugin[scope] and nothing above it.
+    expect(server).toContain('  global: (context) => {');
+    expect(server).toContain('...composeRootHooks(scopeGlobal),');
+    expect(server).toContain('...composeRootHooks(scopeGlobal, scopeSession),');
+  });
+
+  it('leaves an entry with no root exactly as it was', () => {
+    const { cli } = raw({ 'src/extensions/(backend)/tool/subagent.ts': EMPTY });
+    expect(cli).not.toContain('composeRootHooks');
+    expect(cli).toContain('(context) => ({');
+  });
+
+  it('reports a root on the frontend, which has no mount context to construct from', () => {
+    const graph = scanExtensions({ packageDir: packageWith({ 'src/extensions/(frontend)/root.tsx': EMPTY }) });
+    const { notices, roots } = resolveTarget(graph, 'web');
+    expect(roots).toEqual([]);
+    expect(notices[0]?.message).toContain('backend file');
   });
 });
 

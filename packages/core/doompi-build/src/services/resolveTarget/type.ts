@@ -23,5 +23,12 @@ export interface TargetResolution {
   readonly contributions: readonly ResolvedContribution[];
   /** Escape-hatch files whose raw contributions are merged in wholesale. */
   readonly escapeHatches: readonly ExtensionEntry[];
+  /**
+   * Scope constructors, outermost first.
+   *
+   * Each one runs before the contributions beneath it and its value joins
+   * their mount context, so the order is the nesting order and nothing else.
+   */
+  readonly roots: readonly ExtensionEntry[];
   readonly notices: readonly ExtensionNotice[];
 }

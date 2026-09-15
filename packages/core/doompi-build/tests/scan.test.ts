@@ -150,7 +150,7 @@ describe('scanExtensions', () => {
       packageDir: packageWith({ 'src/extensions/(backend)/extra.cli.ts': EMPTY }),
     });
     expect(graph.notices).toEqual([]);
-    expect(graph.entries[0]).toMatchObject({ escapeHatch: true, surface: undefined, platform: 'cli' });
+    expect(graph.entries[0]).toMatchObject({ role: 'escape-hatch', surface: undefined, platform: 'cli' });
   });
 
   it('excludes tests and stories wherever they sit', () => {
