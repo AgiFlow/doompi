@@ -1,11 +1,11 @@
 import type { DoomApi } from '@agimon-ai/doompi-core/package-api';
 
-import { KEY_SEPARATOR } from '../../../../../constants/settings';
-import { repositoryDoomConfigPath } from '../../../../../services/config';
-import { configScopeOf } from '../../../../../services/configPolicy';
-import { writeDoomConfigValues } from '../../../../../services/configWriter';
-import { DEFAULT_IMAGE_MAX_DIMENSION, MIN_IMAGE_MAX_DIMENSION } from '../../../../../services/imageSettings';
-import { loadPiImageSettings, savePiImageSettings } from '../../../../../services/piConfig';
+import { KEY_SEPARATOR } from '../../../../constants/settings';
+import { repositoryDoomConfigPath } from '../../../../services/config';
+import { configScopeOf } from '../../../../services/configPolicy';
+import { writeDoomConfigValues } from '../../../../services/configWriter';
+import { DEFAULT_IMAGE_MAX_DIMENSION, MIN_IMAGE_MAX_DIMENSION } from '../../../../services/imageSettings';
+import { loadPiImageSettings, savePiImageSettings } from '../../../../services/piConfig';
 import {
   configView,
   describe,
@@ -16,8 +16,8 @@ import {
   repositorySettingsView,
   selectionEdits,
   validateSelectionChanges,
-} from '../../../../../services/settings';
-import type { SettingsRepository } from '../../../../../types/settings';
+} from '../../../../services/settings';
+import type { SettingsRepository } from '../../../../types/settings';
 
 /** Config handlers are bound to their mount. Request paths cannot choose a different repository. */
 export const settingsApi: DoomApi = {
@@ -152,3 +152,5 @@ export const settingsApi: DoomApi = {
     };
   },
 };
+
+export default settingsApi;
