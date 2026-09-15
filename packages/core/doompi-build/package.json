@@ -37,6 +37,11 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
+    "./tsdown": {
+      "types": "./dist/tsdown.d.mts",
+      "import": "./dist/tsdown.mjs",
+      "require": "./dist/tsdown.cjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
