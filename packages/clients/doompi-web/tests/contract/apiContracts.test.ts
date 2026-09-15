@@ -73,6 +73,9 @@ describe('web client against exported API schemas', () => {
   it('validates the real session-create request and server response', async () => {
     const listening = await server();
     gateway.fetch.mockImplementation(async (target, init) => {
+      if (target === '/api/workspaces/test-workspace/sessions/created-session') {
+        return new Response(null, { status: 404 });
+      }
       const operation =
         target === '/api/workspaces'
           ? exported.paths['/api/workspaces'].post
@@ -97,7 +100,7 @@ describe('web client against exported API schemas', () => {
     expect(await createSession({ cwd: process.cwd(), name: 'Contract test' })).toEqual({
       sessionId: 'created-session',
     });
-    expect(gateway.fetch).toHaveBeenCalledTimes(2);
+    expect(gateway.fetch).toHaveBeenCalledTimes(3);
   });
 
   it('checks a second real client request and a server error against exported responses', async () => {

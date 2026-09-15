@@ -1,10 +1,10 @@
 import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 
-import { DIRECTORIES_API_ROUTE, type PiSessionHistoryItem } from '../../types/hub';
+import { DIRECTORIES_API_ROUTE, type PiSessionHistoryItem, type SessionSummary } from '../../types/hub';
 import { sealedHttpSession } from './sealedSession';
 import { fetchWithStepUp } from './stepUp';
 
-export type CreateSessionResult = { sessionId: string } | { error: string };
+export type CreateSessionResult = { sessionId: string; session?: SessionSummary } | { error: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -18,6 +18,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 export async function createSession(input: { cwd: string; name?: string }): Promise<CreateSessionResult> {
   let response: Response;
+  let workspaceId: string;
   try {
     // Creating a session picks a directory to run an agent in, which is one
     // of the two actions a live remote session is not enough for.
@@ -40,7 +41,8 @@ export async function createSession(input: { cwd: string; name?: string }): Prom
             : `The hub answered ${admission.status}.`,
       };
     }
-    response = await fetchWithStepUp(`/api/workspaces/${encodeURIComponent(admitted.workspace.id)}/sessions`, {
+    workspaceId = admitted.workspace.id;
+    response = await fetchWithStepUp(`/api/workspaces/${encodeURIComponent(workspaceId)}/sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: input.name }),
@@ -54,7 +56,21 @@ export async function createSession(input: { cwd: string; name?: string }): Prom
   } catch {
     body = undefined;
   }
-  if (response.ok && isRecord(body) && typeof body.sessionId === 'string') return { sessionId: body.sessionId };
+  if (response.ok && isRecord(body) && typeof body.sessionId === 'string') {
+    const sessionId = body.sessionId;
+    try {
+      const detail = await sealedHttpSession.fetch(
+        `/api/workspaces/${encodeURIComponent(workspaceId)}/sessions/${encodeURIComponent(sessionId)}`,
+      );
+      const session: unknown = await detail.json().catch(() => undefined);
+      if (detail.ok && isRecord(session) && session.id === sessionId) {
+        return { sessionId, session: session as unknown as SessionSummary };
+      }
+    } catch {
+      // The socket can still deliver the summary; this read only closes a missed-event race.
+    }
+    return { sessionId };
+  }
   const error = isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`;
   return { error };
 }

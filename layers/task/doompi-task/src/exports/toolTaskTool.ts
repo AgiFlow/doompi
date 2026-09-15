@@ -1,1 +1,1 @@
-export * from '../tools/task';
+export * from '../extensions/workspaces/sessions/(backend)/tool/task.cli';

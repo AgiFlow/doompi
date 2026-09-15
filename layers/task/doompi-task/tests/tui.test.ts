@@ -14,15 +14,16 @@ import {
   renderTaskResult,
   STATUS_GLYPH,
   STATUS_LABEL,
-} from '../src/tui/format';
+} from '../src/extensions/workspaces/sessions/(frontend)/_shared/format';
 import {
   deriveTaskProjection,
   groupTasks,
   hasActiveWork,
   selectOverlayLayout,
   shouldShowIds,
-} from '../src/tui/selectors';
-import { TaskOverlay } from '../src/tui/taskOverlay';
+} from '../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/selectors';
+import { TaskOverlay } from '../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/taskOverlay';
+import taskRenderer from '../src/extensions/workspaces/sessions/(frontend)/tool/task.cli';
 
 /** Pass-through theme so assertions read plain text, not colour codes. */
 function createTheme(): Theme {
@@ -41,6 +42,19 @@ function createTheme(): Theme {
 function task(overrides: Partial<Task> = {}): Task {
   return { id: 1, subject: 'a task', status: 'pending', ...overrides };
 }
+
+it('reads the current session task snapshot when rendering each tool call', () => {
+  const current = [task({ subject: 'first subject' })];
+  const renderer = taskRenderer({ root: { taskStore: { snapshot: { tasks: current } } } } as never);
+  const call = (subject: string): void => {
+    const component = renderer.renderCall?.({ action: 'get', id: 1 }, createTheme(), {} as never);
+    expect(component?.render(80).join(' ')).toContain(subject);
+  };
+
+  call('first subject');
+  current[0] = task({ subject: 'updated subject' });
+  call('updated subject');
+});
 
 describe('formatOverlayTaskLine', () => {
   it('shows the delegated agent and its current tool while a run is live', () => {

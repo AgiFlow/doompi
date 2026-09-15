@@ -1,6 +1,14 @@
+import { doompiExtension } from '@agimon-ai/doompi-build/tsdown';
 import { defineConfig } from 'tsdown';
 
-export default defineConfig({
+/**
+ * Host entries come from the folder tree. Public subpaths retain the historic
+ * names and emitted filenames that external consumers already use.
+ */
+const routed = doompiExtension({
+  packageDir: process.cwd(),
+  pluginId: 'task',
+  exportsDir: 'src/exports/_none',
   entry: {
     'api-contracts': 'src/exports/apiContracts.ts',
     'store-process-liveness': 'src/exports/storeProcessLiveness.ts',
@@ -24,19 +32,7 @@ export default defineConfig({
     'store-types': 'src/exports/storeTypes.ts',
     config: 'src/exports/config.ts',
     'tool-task-tool': 'src/exports/toolTaskTool.ts',
-    'extensions/pi': 'src/extensions/pi.ts',
-    'extensions/server': 'src/extensions/server.ts',
   },
-  clean: true,
-  dts: { incremental: true, parallel: false, eager: true },
-  exports: false,
-  format: ['esm', 'cjs'],
-  minify: {
-    compress: true,
-    mangle: { toplevel: true },
-    codegen: { removeWhitespace: true },
-  },
-  platform: 'node',
-  sourcemap: true,
-  unbundle: true,
 });
+if (!Array.isArray(routed)) throw new Error('Task requires its session web bundle.');
+export default defineConfig([{ ...routed[0], exports: false }, routed[1]]);

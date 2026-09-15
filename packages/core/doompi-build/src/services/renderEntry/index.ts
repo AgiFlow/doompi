@@ -290,7 +290,10 @@ function member(binding: Binding, contextExpression: string, target: BuildTarget
   // A terminal tool renderer is a field of the tool declaration, not a
   // registration of its own, so the pair is merged at runtime: three tool
   // shapes reach this array and each holds renderers somewhere different.
-  const resolved = binding.renderers === undefined ? base : `withPiRenderers(${base}, ${binding.renderers.identifier})`;
+  const resolved =
+    binding.renderers === undefined
+      ? base
+      : `withPiRenderers(${base}, at(${binding.renderers.identifier}, ${contextExpression}))`;
   const isFactory = FACTORY_FIELDS[target].includes(binding.contribution.field);
   if (binding.identity === undefined) return isFactory ? binding.identifier : resolved;
 

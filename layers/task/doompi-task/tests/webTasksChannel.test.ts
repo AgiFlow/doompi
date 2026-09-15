@@ -1,7 +1,7 @@
 import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
 import { describe, expect, it } from 'vitest';
 
-import { createTasksChannel } from '../src/controllers/webTasksChannel';
+import { createTasksChannel } from '../src/extensions/(backend)/channel/task-graph';
 import { emptyDocument, type TaskDocument } from '../src/models/task';
 import { TASKS_CHANNEL_TYPE } from '../src/types/webTasks';
 

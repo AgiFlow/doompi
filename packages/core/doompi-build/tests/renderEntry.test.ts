@@ -338,7 +338,7 @@ describe('the terminal reads the frontend side too', () => {
 
   it('folds a cli tool renderer into the tool it names, rather than beside it', () => {
     const { cli } = render(PAIR);
-    expect(cli).toMatch(/via\(\{ name: 'subagent' \}, withPiRenderers\(at\(\w+, context\), \w+\)\)/u);
+    expect(cli).toMatch(/via\(\{ name: 'subagent' \}, withPiRenderers\(at\(\w+, context\), at\(\w+, context\)\)\)/u);
     // One contribution, not two: the renderers are fields of the declaration,
     // so the pair registers once rather than the renderer landing beside it.
     expect(cli.match(/via\(/gu)).toHaveLength(1);

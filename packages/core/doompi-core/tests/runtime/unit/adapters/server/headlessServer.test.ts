@@ -474,6 +474,25 @@ describe('serveHeadlessServer', () => {
     await hub.close();
   });
 
+  it('keeps session creation working for a verified browser bundle from before workspace routes', async () => {
+    const createSession = vi.fn(async () => ({ sessionId: 'created', cwd: '/repo' }));
+    const hub = createHeadlessHub({ manager: {} as never, createSession });
+    const server = await serveHeadlessServer({ headlessHub: hub, port: 0, token: 'secret' });
+    servers.push(server);
+    const request = (body: unknown) =>
+      fetch(`${server.url}/api/sessions`, {
+        method: 'POST',
+        headers: { authorization: 'Bearer secret' },
+        body: JSON.stringify(body),
+      });
+
+    expect((await request({ cwd: '' })).status).toBe(400);
+    const response = await request({ cwd: '/repo', name: 'test' });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ sessionId: 'created' });
+    expect(createSession).toHaveBeenCalledWith({ cwd: '/repo', name: 'test' });
+    await hub.close();
+  });
   it('creates a root session through the global service without inventing a parent', async () => {
     const createSession = vi.fn(async () => ({ sessionId: 'created', cwd: '/repo' }));
     const hub = createHeadlessHub({ manager: {} as never, createSession });

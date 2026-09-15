@@ -27,11 +27,8 @@
   },
   "files": [
     "dist",
-    "src/web",
-    "src/extensions/web.ts",
     "src/types/webTasks.ts",
-    "package.json",
-    "!src/web/**/*.stories.tsx"
+    "package.json"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -67,6 +64,9 @@
       "types": "./dist/extensions/server.d.mts",
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
+    },
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
     },
     "./logSinkTelemetry": {
       "types": "./dist/logSinkTelemetry.d.mts",
@@ -162,7 +162,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -175,6 +175,7 @@
     "typebox": "1.3.30"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",
     "@tanstack/react-store": "0.11.1",
@@ -204,12 +205,12 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
-      "session",
       "global",
-      "workspace"
+      "workspace",
+      "session"
     ],
     "contracts": {
       "entry": "./src/exports/apiContracts.ts",
@@ -221,7 +222,7 @@
     "channels": [
       "task_graph"
     ],
-    "client": "./src/extensions/web.ts",
+    "client": "./dist/extensions/web.mjs",
     "scopes": [
       "session"
     ]

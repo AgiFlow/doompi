@@ -14,7 +14,7 @@ import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 
 import { createSession, searchDirectories } from '../../lib/hubApi';
-import { sessionsStore, waitForSession } from '../../stores/sessionsStore';
+import { applySessionUpsert, sessionsStore, waitForSession } from '../../stores/sessionsStore';
 
 const PATH_SEPARATOR = '/';
 /** Keystrokes settle for this long before the hub is asked for directories. */
@@ -94,6 +94,7 @@ export function NewSessionDialog({
     setError('');
     const outcome = await createSession({ cwd: directory, name: name.trim() || undefined });
     if ('sessionId' in outcome) {
+      if (outcome.session !== undefined) applySessionUpsert({ session: outcome.session });
       // Navigating before the hub's upsert lands would bounce off the
       // unknown-session fallback; wait until the rail knows the session.
       const appeared = await waitForSession(outcome.sessionId);
