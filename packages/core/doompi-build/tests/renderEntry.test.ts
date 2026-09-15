@@ -149,10 +149,15 @@ describe('renderWebEntry', () => {
     expect(web).toContain("id: 'plan',");
   });
 
-  it('threads no mount context, because the browser half has none', () => {
+  it('never resolves a frontend export, because a component is a function too', () => {
+    // The cockpit builds its definition as data and starts it separately, so
+    // there is no mount context. Resolving anyway would call any export that
+    // happens to be a function, which every React component is.
     const { web } = render({ 'src/extensions/(frontend)/tab/PlanPanel.tsx': EMPTY });
-    expect(web).toContain('at(');
-    expect(web).not.toContain(', context)');
+    expect(web).not.toContain('at(');
+    expect(web).not.toContain('const at =');
+    expect(web).not.toContain('context');
+    expect(web).toContain("tabs: [via({ id: 'plan-panel' }, tabPlanPanel)]");
     expect(parses(web)).toBe(true);
   });
 
