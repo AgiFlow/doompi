@@ -248,7 +248,13 @@ describe('server planning system prompt', () => {
     const f = fixture();
     const plugin = await activated(f, 'debug');
     const record = plugin.tools.find((tool) => tool.name === 'record_debug_evidence')!;
-    await record.execute('evidence', { issue: 'Tools leak when the mode is off' }, undefined, undefined, f.host.context);
+    await record.execute(
+      'evidence',
+      { issue: 'Tools leak when the mode is off' },
+      undefined,
+      undefined,
+      f.host.context,
+    );
 
     const systemPrompt = await promptFor(f, plugin);
 
