@@ -1,5 +1,5 @@
-import type { ContextItemDetail, ContextToolDetail } from '../../types/contextApi';
-import type { ContextSkillInventory } from '../contextProjection';
+import type { ContextItemDetail, ContextPromptStage, ContextToolDetail } from '../../types/contextApi';
+import type { ContextItemSource, ContextSkillInventory } from '../contextProjection';
 import { type CountTokens, type ToolSource, tokensForTool } from '../toolInventory';
 
 /**
@@ -21,7 +21,7 @@ function ownerOf(source: ToolSource): string {
   return CORE_OWNER;
 }
 
-function skillSource(group: ContextSkillInventory['group']): ContextItemDetail['source'] {
+function skillSource(group: ContextSkillInventory['group']): ContextItemSource {
   if (group === 'plugins') return 'plugin';
   if (group === 'extensions') return 'extension';
   return 'core';
@@ -31,6 +31,8 @@ export interface ContextDetailInput {
   readonly sources: readonly ToolSource[];
   readonly skills: readonly ContextSkillInventory[];
   readonly countTokens: CountTokens;
+  /** The assembled prompt, when the host has one to report. */
+  readonly systemPrompt?: { readonly text: string; readonly tokens: number; readonly stage: ContextPromptStage };
 }
 
 export function buildContextDetail(input: ContextDetailInput): ContextItemDetail[] {
@@ -67,6 +69,16 @@ export function buildContextDetail(input: ContextDetailInput): ContextItemDetail
       description: skill.description,
       ...(skill.filePath === undefined ? {} : { filePath: skill.filePath }),
       modelInvocable: skill.modelInvocable,
+    });
+  }
+
+  if (input.systemPrompt !== undefined) {
+    items.push({
+      itemKind: 'prompt',
+      name: 'system',
+      tokens: input.systemPrompt.tokens,
+      stage: input.systemPrompt.stage,
+      text: input.systemPrompt.text,
     });
   }
 

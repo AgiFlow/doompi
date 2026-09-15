@@ -36,6 +36,7 @@ import {
   type PiExtensionHost,
 } from '../../../services/piExtensionHost';
 import { formatToolPrompt, type ToolPromptEntry } from '../../../services/toolPrompt';
+import type { ContextPromptStage } from '../../../types/contextApi';
 import type { DirectHarnessRuntime } from '../../../types/server/directHarnessRuntime';
 import type { SessionFrame } from '../../../types/server/session';
 import { createHeadlessChildSessionServiceProvider } from '../../child/adapters/headlessChildSessionService';
@@ -321,6 +322,12 @@ function emitTo(listeners: Set<(frame: SessionFrame) => void>, frame: SessionFra
   }
 }
 
+/** The prompt a host has to show, and how complete it is. */
+interface HeadlessSystemPrompt {
+  readonly text: string;
+  readonly stage: ContextPromptStage;
+}
+
 function createHeadlessCompositionPublisher(
   runtime: Pick<DirectHarnessRuntime, 'sessionId' | 'appendCustomEntry'>,
   host: HeadlessHost,
@@ -328,14 +335,22 @@ function createHeadlessCompositionPublisher(
   groups: (
     selection: DoomHeadlessSelection,
   ) => import('../../../services/contextProjection').ContextProjectionInput['groups'],
+  readSystemPrompt: () => HeadlessSystemPrompt | undefined,
 ): (selection?: DoomHeadlessSelection) => Promise<void> {
   let countTokens: ((text: string) => number) | undefined;
   let contextRevision = 0;
   let publishedContext: string | undefined;
+  // Publishes overlap: a selection settling and a turn building its prompt can
+  // both ask at once, and each awaits the journal before recording what it
+  // published. Run them one after another so the second sees the first's
+  // revision rather than spending one of its own on the same composition.
+  let tail: Promise<void> = Promise.resolve();
 
-  return async (selection = host.context.selection): Promise<void> => {
+  const publish = async (selection: DoomHeadlessSelection): Promise<void> => {
     countTokens ??= (await import('gpt-tokenizer')).countTokens;
     const inventory = host.getContextInventory(selection, countTokens);
+    const prompt = readSystemPrompt();
+    const promptCost = prompt === undefined ? undefined : { tokens: countTokens(prompt.text), stage: prompt.stage };
     const context = projectContext({
       revision: contextRevision + 1,
       majorMode: selection.majorMode,
@@ -346,20 +361,34 @@ function createHeadlessCompositionPublisher(
       skills: inventory.skills,
       attribution: inventory.attribution,
       countTokens,
+      ...(promptCost === undefined ? {} : { systemPrompt: promptCost }),
     });
-    const contextKey = JSON.stringify({ ...context, revision: 0 });
-    if (contextKey !== publishedContext) {
-      const revision = contextRevision + 1;
-      const details = buildContextDetail({
-        sources: inventory.sources,
-        skills: inventory.skills,
-        countTokens,
-      });
-      await runtime.appendCustomEntry(DOOM_CONTEXT_ENTRY_TYPE, { ...context, revision });
-      writeContextDetail(runtime.sessionId, revision, details, environment);
-      contextRevision = revision;
-      publishedContext = contextKey;
-    }
+    // The prompt joins the key by its text, not just its figure: a reworded
+    // prompt of the same length is a different answer to the reader's question.
+    const contextKey = JSON.stringify({ ...context, revision: 0, promptText: prompt?.text });
+    if (contextKey === publishedContext) return;
+    const revision = contextRevision + 1;
+    const details = buildContextDetail({
+      sources: inventory.sources,
+      skills: inventory.skills,
+      countTokens,
+      ...(prompt === undefined || promptCost === undefined
+        ? {}
+        : { systemPrompt: { text: prompt.text, tokens: promptCost.tokens, stage: prompt.stage } }),
+    });
+    await runtime.appendCustomEntry(DOOM_CONTEXT_ENTRY_TYPE, { ...context, revision });
+    writeContextDetail(runtime.sessionId, revision, details, environment);
+    contextRevision = revision;
+    publishedContext = contextKey;
+  };
+
+  return (selection = host.context.selection): Promise<void> => {
+    // A failed publish must not strand every publish that follows it.
+    tail = tail.then(
+      () => publish(selection),
+      () => publish(selection),
+    );
+    return tail;
   };
 }
 
@@ -394,6 +423,34 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   // switch adds and removes its tools' prompt text with the tools themselves.
   let toolGuidance: readonly ToolPromptEntry[] = [];
   const initialSystemPrompt = [parsed.systemPrompt, ...(parsed.appendSystemPrompt ?? [])].filter(Boolean).join('\n\n');
+  /**
+   * Everything the prompt is made of before a package has had a say.
+   *
+   * Shared with the runtime callback below rather than copied. Assembling it is
+   * pure; the hook pass that follows it there is not, which is why the context
+   * panel is shown this rather than a prompt built for the panel's sake.
+   */
+  const composeSystemPrompt = (resources: readonly ResolvedHeadlessResource[]): string =>
+    [initialSystemPrompt, formatToolPrompt(toolGuidance), ...mapResources(resources).context]
+      .filter(Boolean)
+      .join('\n\n');
+  /** The last prompt a turn actually built, once one has. */
+  let builtSystemPrompt: string | undefined;
+  /**
+   * What the context panel is shown: the prompt a turn sent, or the hook-free
+   * base until one has.
+   *
+   * The base is composed from the applied snapshot rather than a fresh read, so
+   * it answers at exactly the moments the tool inventory beside it answers.
+   * Re-reading refuses while a selection is mid-apply, and the panel would then
+   * spend a published revision saying there is no prompt before the next one
+   * said there is.
+   */
+  const readSystemPrompt = (): HeadlessSystemPrompt | undefined => {
+    if (!headlessHost) return undefined;
+    if (builtSystemPrompt !== undefined) return { text: builtSystemPrompt, stage: 'effective' };
+    return { text: composeSystemPrompt(headlessHost.appliedResources), stage: 'base' };
+  };
   const runtime = await createDirectHarnessRuntime({
     cwd: options.cwd,
     sessionId: options.sessionId,
@@ -531,10 +588,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     systemPrompt: async () => {
       try {
         if (!headlessHost) throw new Error('Headless capabilities are not installed.');
-        const resources = await headlessHost.readResources();
-        let prompt = [initialSystemPrompt, formatToolPrompt(toolGuidance), ...mapResources(resources).context]
-          .filter(Boolean)
-          .join('\n\n');
+        let prompt = composeSystemPrompt(await headlessHost.readResources());
         const patches = await headlessHost.dispatchHook('before_agent_start', { systemPrompt: prompt });
         for (const patch of patches) {
           if (patch && typeof patch === 'object' && 'systemPrompt' in patch && typeof patch.systemPrompt === 'string') {
@@ -542,6 +596,20 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           }
         }
         promptPreparationFailed = false;
+        // The panel follows what was sent, so a prompt that changed mid-session
+        // republishes rather than waiting for the next selection change. Awaited
+        // here, on the same stage that already journals a selection inherited
+        // for this turn, so the published composition and the prompt the model
+        // receives cannot disagree. Its own guard: a journal that will not take
+        // the entry is a panel that lags, never a turn that is refused.
+        if (prompt !== builtSystemPrompt) {
+          builtSystemPrompt = prompt;
+          try {
+            await publishComposition();
+          } catch {
+            // Reported by the next publish, which starts from the same state.
+          }
+        }
         return prompt;
       } catch {
         // A throwing system-prompt callback faults the upstream harness. Deny at model admission instead.
@@ -723,6 +791,48 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       await headlessHost.dispatchHook(hook, event as unknown as AnyRecord);
   });
 
+  // The facet tools from the most recent reconciliation. Kept so a Pi-side restriction change can
+  // rebuild the merged surface in memory, the same way the kernel's tools sink does, instead of
+  // forcing a session reload.
+  let appliedFacetTools: readonly HeadlessTool[] = [];
+  let toolReapplyQueued = false;
+
+  const applyToolSurface = async (tools: readonly HeadlessTool[]): Promise<void> => {
+    const facetTools = tools.map((tool) => toolAdapter(tool, () => headlessHost!.context, reportedToolErrors));
+    // Facet tools win a name collision: they are the reconciled, mode-aware set.
+    const facetNames = new Set(facetTools.map((tool) => tool.name));
+    const piTools = (piHost?.tools ?? []).filter((tool) => !facetNames.has(tool.name));
+    toolGuidance = [
+      ...(piHost?.toolGuidance ?? []).filter((entry) => !facetNames.has(entry.name)),
+      ...tools.map((tool) => ({
+        name: tool.name,
+        ...(tool.promptSnippet === undefined ? {} : { promptSnippet: tool.promptSnippet }),
+        ...(tool.promptGuidelines === undefined ? {} : { promptGuidelines: tool.promptGuidelines }),
+      })),
+    ];
+    await runtime.replaceTools([...piTools, ...facetTools]);
+  };
+
+  /**
+   * Rebuilds the merged tool surface after a Pi extension narrowed its own tools.
+   *
+   * Deferred because the tool surface arbiter calls `setActiveTools` synchronously from inside
+   * `register`, and coalesced because several extensions register their restrictions in the same
+   * tick. The facet set is unchanged, so this never re-enters the kernel.
+   */
+  const scheduleToolReapply = (): void => {
+    if (toolReapplyQueued) return;
+    toolReapplyQueued = true;
+    queueMicrotask(() => {
+      toolReapplyQueued = false;
+      void applyToolSurface(appliedFacetTools).catch((error: unknown) =>
+        options.onNotice?.(
+          `Pi extension tool refresh failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+    });
+  };
+
   const prepareFacets = (root: CordisContext): void => {
     root.plugin((context) => {
       context.provide(DOOM_CHILD_SESSION_SERVICE, childSessionProvider.get());
@@ -739,6 +849,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         getModel: () => currentModel,
         getThinkingLevel: () => resolved.thinkingLevel ?? 'off',
         client: () => client?.client,
+        onActiveToolsChanged: scheduleToolReapply,
         ...(options.onNotice === undefined ? {} : { onNotice: options.onNotice }),
       });
     }
@@ -756,19 +867,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       context: executionContext,
       resolveSelection: options.resolveSelection,
       applyTools: async (tools) => {
-        const facetTools = tools.map((tool) => toolAdapter(tool, () => headlessHost!.context, reportedToolErrors));
-        // Facet tools win a name collision: they are the reconciled, mode-aware set.
-        const facetNames = new Set(facetTools.map((tool) => tool.name));
-        const piTools = (piHost?.tools ?? []).filter((tool) => !facetNames.has(tool.name));
-        toolGuidance = [
-          ...(piHost?.toolGuidance ?? []).filter((entry) => !facetNames.has(entry.name)),
-          ...tools.map((tool) => ({
-            name: tool.name,
-            ...(tool.promptSnippet === undefined ? {} : { promptSnippet: tool.promptSnippet }),
-            ...(tool.promptGuidelines === undefined ? {} : { promptGuidelines: tool.promptGuidelines }),
-          })),
-        ];
-        await runtime.replaceTools([...piTools, ...facetTools]);
+        appliedFacetTools = tools;
+        await applyToolSurface(tools);
       },
       applyResources: async (next) => {
         const mapped = mapResources(next);
@@ -793,6 +893,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       headlessHost,
       options.environment,
       (selection) => options.contextGroups?.(root, selection) ?? [],
+      readSystemPrompt,
     );
   };
 

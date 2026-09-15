@@ -264,3 +264,84 @@ test('opens a row and says so when the session cannot describe it', async ({ pag
   await expect(page.getByTestId('context-item-title')).toHaveText('read');
   await expect(page.getByTestId('context-item-error')).toBeVisible();
 });
+
+// The prompt is the largest thing the composition carries and the only one the
+// panel could not show. Its figure sits apart from the total on purpose: the
+// tool prose priced in the groups is inside this same text.
+test('offers the system prompt without adding it to the total', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'entry_appended',
+    entry: {
+      type: 'custom',
+      id: 'ctx-2',
+      customType: 'doom-context',
+      data: {
+        version: 1,
+        revision: 1,
+        estimator: 'gpt-tokenizer',
+        totalTokens: 153,
+        inactiveTokens: 0,
+        systemPrompt: { tokens: 9300, stage: 'effective' },
+        groups: [
+          {
+            id: 'core',
+            label: 'core',
+            kind: 'core',
+            tokens: 153,
+            inactiveTokens: 0,
+            items: [
+              {
+                name: 'read',
+                itemKind: 'tool',
+                source: 'extension',
+                owner: '@agimon-ai/doompi-read',
+                tokens: 153,
+                active: true,
+              },
+            ],
+          },
+        ],
+      },
+    },
+  });
+  await page.getByTestId('dock-tab-context').click();
+
+  const prompt = page.getByTestId('context-system-prompt');
+  await expect(prompt).toContainText('system prompt');
+  await expect(prompt).toContainText('~9,300');
+  await expect(page.getByTestId('context-total')).toHaveText('~153');
+
+  await prompt.click();
+
+  await expect(page.getByTestId('context-item-dialog')).toBeVisible();
+  await expect(page.getByTestId('context-item-title')).toHaveText('system prompt');
+});
+
+test('names the prompt as the base one before a turn has built one', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit({
+    type: 'entry_appended',
+    entry: {
+      type: 'custom',
+      id: 'ctx-3',
+      customType: 'doom-context',
+      data: {
+        version: 1,
+        revision: 1,
+        estimator: 'gpt-tokenizer',
+        totalTokens: 0,
+        inactiveTokens: 0,
+        systemPrompt: { tokens: 4200, stage: 'base' },
+        groups: [{ id: 'copilot', label: 'copilot', kind: 'major', tokens: 0, inactiveTokens: 0, items: [] }],
+      },
+    },
+  });
+  await page.getByTestId('dock-tab-context').click();
+
+  await expect(page.getByTestId('context-system-prompt')).toContainText('system prompt (base)');
+});

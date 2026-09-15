@@ -37,7 +37,7 @@ async function fixture() {
   const execution = {
     repoRoot: '/fixture-repository',
     environment: { HOME: '/fixture-home' },
-    session: { entries: async () => [] },
+    session: { entries: async () => [], appendCustomEntry: async () => undefined },
     get selection() {
       return selection;
     },

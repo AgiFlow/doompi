@@ -17,6 +17,7 @@ const FILE: ContextDetailFile = {
       description: 'Reads a file',
       parameters: { type: 'object' },
     },
+    { itemKind: 'prompt', name: 'system', tokens: 9300, stage: 'effective', text: 'You are a lazy senior developer.' },
   ],
 };
 
@@ -43,6 +44,13 @@ describe('the context session API', () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ revision: 4, item: FILE.items[0] });
+  });
+
+  it('serves the system prompt through the same route', async () => {
+    const response = await handler().fetch(new Request(url('kind=prompt&name=system')));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ revision: 4, item: FILE.items[1] });
   });
 
   it('refuses a kind it does not serve', async () => {

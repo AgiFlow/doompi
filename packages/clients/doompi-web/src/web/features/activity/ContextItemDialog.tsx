@@ -85,7 +85,9 @@ export function ContextItemDialog({ sessionId, target, onClose }: ContextItemDia
     >
       <DialogContent width="lg" data-testid="context-item-dialog" aria-describedby={undefined}>
         <DialogHeader>
-          <DialogTitle data-testid="context-item-title">{target.name}</DialogTitle>
+          <DialogTitle data-testid="context-item-title">
+            {target.itemKind === 'prompt' ? 'system prompt' : target.name}
+          </DialogTitle>
           <span className="text-2xs text-doom-faint">
             {target.itemKind} · {target.owner}
           </span>
@@ -110,6 +112,7 @@ export function ContextItemDialog({ sessionId, target, onClose }: ContextItemDia
 }
 
 function ContextItemBody({ detail }: { detail: ContextItemDetail }) {
+  if (detail.itemKind === 'prompt') return <PromptBody detail={detail} />;
   return (
     <div className="flex flex-col gap-3">
       {detail.itemKind === 'tool' ? <ToolCost detail={detail} /> : <SkillFacts detail={detail} />}
@@ -161,13 +164,44 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Pre({ testId, children }: { testId: string; children: string }) {
+function Pre({ testId, children, tall = false }: { testId: string; children: string; tall?: boolean }) {
   return (
-    <Panel className="max-h-64 overflow-auto bg-doom-deep px-3 py-2">
+    <Panel className={`overflow-auto bg-doom-deep px-3 py-2 ${tall ? 'max-h-[60vh]' : 'max-h-64'}`}>
       <pre data-testid={testId} className="text-sm leading-relaxed whitespace-pre-wrap text-doom-dim">
         {children}
       </pre>
     </Panel>
+  );
+}
+
+/**
+ * The whole prompt, and the two things a figure alone would mislead about.
+ *
+ * The count overlaps the panel's own total, because the tool prose and skill
+ * listings priced there are inside this text. And a session that has sent
+ * nothing has no built prompt to show: assembling one would fire the hooks that
+ * a real turn fires, so the pre-hook base is shown and named as such.
+ */
+function PromptBody({ detail }: { detail: Extract<ContextItemDetail, { itemKind: 'prompt' }> }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div data-testid="context-item-cost" className="flex flex-col gap-1">
+        <Row label="prompt" value={tokens(detail.tokens)} strong />
+        <p className="text-xs text-doom-faint">
+          counted apart from the panel total: the tool and skill prose priced there is part of this text
+        </p>
+        {detail.stage === 'base' ? (
+          <p data-testid="context-item-stage" className="text-xs text-doom-faint">
+            this session has sent nothing yet, so this is the prompt before packages add to it at the first message
+          </p>
+        ) : null}
+      </div>
+      <Section title="text">
+        <Pre testId="context-item-prompt" tall>
+          {detail.text}
+        </Pre>
+      </Section>
+    </div>
   );
 }
 

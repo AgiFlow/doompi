@@ -96,6 +96,25 @@ export function ContextPanel() {
       </div>
 
       <div className="shrink-0 border-t border-doom-border px-4 py-3">
+        {/* Above the totals rather than inside them. The prompt carries every
+            tool's prose and every skill's listing, which the group subtotals
+            have already counted, so the two figures overlap and adding them
+            would bill the same text twice. */}
+        {context?.systemPrompt ? (
+          <Button
+            variant="ghost"
+            size="card"
+            data-testid="context-system-prompt"
+            title="read the system prompt this session is running under"
+            onClick={() => setTarget({ itemKind: 'prompt', name: 'system', owner: 'session' })}
+            className="flex-row items-center justify-between gap-2 rounded-none px-0 py-px"
+          >
+            <span className="text-xs text-doom-dim">
+              {context.systemPrompt.stage === 'base' ? 'system prompt (base)' : 'system prompt'}
+            </span>
+            <span className="text-xs text-doom-dim">{tokens(context.systemPrompt.tokens)}</span>
+          </Button>
+        ) : null}
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-doom-text">active</span>
           <span data-testid="context-total" className="text-xs font-bold text-doom-text">

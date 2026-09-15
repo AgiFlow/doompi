@@ -206,3 +206,92 @@ describe('server planning evidence', () => {
     });
   });
 });
+
+/** Activate a flavor, then rebuild the plugin through the restore path a real session uses. */
+async function activated(f: ReturnType<typeof fixture>, flavor: string) {
+  await f.mount()('activate', { flavor });
+  const plugin = createPlanServerSession(f.host);
+  await plugin.hooks?.find((hook) => hook.event === 'session_start')?.handle({}, f.host.context);
+  return plugin;
+}
+
+async function promptFor(f: ReturnType<typeof fixture>, plugin: ReturnType<typeof createPlanServerSession>) {
+  const hook = (plugin.hooks ?? []).find((hook) => hook.event === 'before_agent_start')!;
+  const result = (await hook.handle({ systemPrompt: 'BASE' }, f.host.context)) as { systemPrompt: string };
+  return result.systemPrompt;
+}
+
+// The server facet used to append a single sentence while the Pi extension appended the full
+// delegation brief, so the same mode instructed the cockpit and the terminal differently.
+describe('server planning system prompt', () => {
+  it('appends the same plan mode brief the Pi extension does', async () => {
+    const f = fixture();
+    const plugin = await activated(f, 'normal');
+
+    const prompt = await promptFor(f, plugin);
+
+    expect(prompt).toContain('BASE');
+    expect(prompt).toContain('[PLAN MODE ACTIVE]');
+    expect(prompt).toContain('first call subagent with action "agents"');
+    expect(prompt).toContain('[PLAN MODE ACTIVE: NORMAL]');
+  });
+
+  it('names the directory write_plan actually writes to', async () => {
+    mocks.config.mockReturnValue({ modes: { planning: { plansDirectory: '/repo/.doom/plans' } } });
+    const f = fixture();
+    const plugin = await activated(f, 'normal');
+
+    expect(await promptFor(f, plugin)).toContain('/repo/.doom/plans');
+  });
+
+  it('switches to the debug brief and carries recorded evidence into it', async () => {
+    const f = fixture();
+    const plugin = await activated(f, 'debug');
+    const record = plugin.tools.find((tool) => tool.name === 'record_debug_evidence')!;
+    await record.execute('evidence', { issue: 'Tools leak when the mode is off' }, undefined, undefined, f.host.context);
+
+    const systemPrompt = await promptFor(f, plugin);
+
+    expect(systemPrompt).toContain('[PLAN MODE ACTIVE: DEBUG]');
+    expect(systemPrompt).toContain('issue: Tools leak when the mode is off');
+  });
+
+  it('reports Fable as unavailable rather than idle, because this host has no broker', async () => {
+    const f = fixture();
+    const plugin = await activated(f, 'fable');
+
+    const prompt = await promptFor(f, plugin);
+
+    expect(prompt).toContain('[PLAN MODE ACTIVE: FABLE]');
+    expect(prompt).toContain('Current Fable stage: unavailable');
+  });
+
+  it('keeps the flavor across a restart instead of silently planning as normal', async () => {
+    const f = fixture();
+    await f.mount()('activate', { flavor: 'debug' });
+
+    f.selection.state['minor-mode'] = [];
+    const restored = createPlanServerSession(f.host);
+    await restored.hooks?.find((hook) => hook.event === 'session_start')?.handle({}, f.host.context);
+    f.selection.state['minor-mode'] = ['plan'];
+    const systemPrompt = await promptFor(f, restored);
+
+    expect(systemPrompt).toContain('[PLAN MODE ACTIVE: DEBUG]');
+  });
+
+  it('carries a saved plan into the prompt so a cockpit edit is what gets implemented', async () => {
+    const f = fixture();
+    const plugin = await activated(f, 'normal');
+    await f.host.context.session.appendCustomEntry('plan-document', {
+      path: '/repo/.doom/plans/missing.md',
+      content: '# Stored Plan\n\n1. Ship it.',
+    });
+
+    const prompt = await promptFor(f, plugin);
+
+    expect(prompt).toContain('[CURRENT PLAN]');
+    expect(prompt).toContain('Source: /repo/.doom/plans/missing.md');
+    // The file is absent here, so the remembered text is the fallback rather than a hard failure.
+    expect(prompt).toContain('# Stored Plan');
+  });
+});

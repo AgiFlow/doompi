@@ -328,12 +328,19 @@ const Detail = Type.Union([
     filePath: Optional(Text),
     modelInvocable: Flag,
   }),
+  Type.Object({
+    itemKind: Type.Literal('prompt'),
+    name: Type.Literal('system'),
+    tokens: NumberValue,
+    stage: Type.Union([Type.Literal('base'), Type.Literal('effective')]),
+    text: Text,
+  }),
 ]);
 export const sessionHttpContracts: DoomHttpContract[] = [
   {
     ...host('context.item', ITEM_ROUTE, 'GET', Type.Object({ revision: NumberValue, item: Detail }), {
       parameters: [
-        query('kind', Type.Union([Type.Literal('tool'), Type.Literal('skill')]), true),
+        query('kind', Type.Union([Type.Literal('tool'), Type.Literal('skill'), Type.Literal('prompt')]), true),
         query('name', Text, true),
       ],
     }),

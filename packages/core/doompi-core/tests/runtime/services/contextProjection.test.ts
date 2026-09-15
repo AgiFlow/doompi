@@ -254,4 +254,24 @@ describe('MCP attribution', () => {
 
     expect(result.groups.find((group) => group.kind === 'core')?.items[0]).toMatchObject({ owner: 'pi' });
   });
+
+  // The prompt carries every tool snippet and skill listing the groups already
+  // price, so adding it to the total would bill that text twice.
+  it('reports the system prompt without folding it into the total', () => {
+    const priced = project({
+      sources: [source({ key: 'core', kind: 'core', label: 'pi · core', tools: [tool('read')] })],
+    });
+    const result = project({
+      sources: [source({ key: 'core', kind: 'core', label: 'pi · core', tools: [tool('read')] })],
+      systemPrompt: { tokens: 9300, stage: 'effective' },
+    });
+
+    expect(result.systemPrompt).toEqual({ tokens: 9300, stage: 'effective' });
+    expect(result.totalTokens).toBe(priced.totalTokens);
+    expect(result.groups.flatMap((group) => group.items).map((item) => item.name)).toEqual(['read']);
+  });
+
+  it('omits the system prompt when the host has none to report', () => {
+    expect(project().systemPrompt).toBeUndefined();
+  });
 });

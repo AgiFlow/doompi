@@ -246,6 +246,15 @@ export interface ContextProjection {
   groups: ContextGroupProjection[];
   totalTokens: number;
   inactiveTokens: number;
+  /**
+   * What the assembled system prompt costs, deliberately outside the groups.
+   *
+   * Every tool's prose and every skill's listing already count inside
+   * `totalTokens`, and those are slices of this same text, so the two figures
+   * overlap and must not be added. `stage` is `base` when the session has sent
+   * nothing yet and the prompt shown is the one before packages patch it.
+   */
+  systemPrompt?: { tokens: number; stage: 'base' | 'effective' };
   /** Names the tokenizer, because the figures are indicative, not billed. */
   estimator: string;
 }

@@ -10,6 +10,18 @@ import { createContextPublisher, type ContextPublisher } from '../builders/cli/c
 const HELP_CONTRIBUTION_SOURCE = '@agimon-ai/doompi';
 export default definePiExtension('@agimon-ai/doompi/context-catalog', ({ pi }) => {
   let publisher: ContextPublisher | undefined;
+  /**
+   * A handler's context, kept so the prompt can be read when the composition is
+   * published rather than only when an event fires.
+   *
+   * `getSystemPrompt` reads the session's live state and refuses only once the
+   * runner has been replaced, so a retained context answers for the session it
+   * came from or throws. Publishing happens on a timer and on catalog changes,
+   * neither of which carries a context of its own.
+   */
+  let promptContext: { getSystemPrompt: () => string } | undefined;
+  /** Pi hands out the base prompt until a turn replaces it with the one it sent. */
+  let turned = false;
   const bind = (cordis: Context): void => {
     cordis.inject([DOOM_HELP_SERVICE], (helpContext) => {
       const contribution = requireDoomHelpService(helpContext).register({
@@ -38,6 +50,16 @@ export default definePiExtension('@agimon-ai/doompi/context-catalog', ({ pi }) =
         readSessionId: () => session.sessionId,
         writeDetail: (sessionId, revision, items) => void writeContextDetail(sessionId, revision, items),
         removeDetail: removeContextDetail,
+        readSystemPrompt: () => {
+          try {
+            const text = promptContext?.getSystemPrompt();
+            return text === undefined || text === '' ? undefined : { text, stage: turned ? 'effective' : 'base' };
+          } catch {
+            // A context from a retired runner is stale, not fatal: the panel
+            // reports no prompt until the next event hands over a live one.
+            return undefined;
+          }
+        },
       });
       publisher = current;
       const publish = () => {
@@ -61,7 +83,13 @@ export default definePiExtension('@agimon-ai/doompi/context-catalog', ({ pi }) =
   return {
     services: [bind],
     events: {
-      turn_start() {
+      session_start(_event, ctx) {
+        promptContext = ctx;
+        void publisher?.publish();
+      },
+      turn_start(_event, ctx) {
+        promptContext = ctx;
+        turned = true;
         void publisher?.publish();
       },
     },

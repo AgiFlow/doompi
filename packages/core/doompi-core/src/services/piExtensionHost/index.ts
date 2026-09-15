@@ -126,6 +126,13 @@ export interface PiExtensionHostOptions {
    */
   readonly client: () => DoomHeadlessClient | undefined;
   readonly onNotice?: (message: string) => void;
+  /**
+   * Called when a Pi extension tool restriction changes the active set.
+   *
+   * Doom extensions register their restrictions asynchronously, after the first tool apply has
+   * already run, so the caller has to re-apply rather than read `tools` once at load.
+   */
+  readonly onActiveToolsChanged?: () => void;
 }
 
 export interface PiExtensionHost {
@@ -376,7 +383,12 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   let tools: readonly AgentHarnessTool<object | undefined>[] = [];
   let skills: readonly Skill[] = [];
   let registered: readonly RegisteredTool[] = [];
+  // Every registered name until a restriction narrows it. Seeded at load(), because an empty set
+  // before load must not read as "everything is hidden".
+  let activeNames = new Set<string>();
 
+  const activeTools = (): readonly AgentHarnessTool<object | undefined>[] =>
+    tools.filter((tool) => activeNames.has(tool.name));
   const requireRunner = (): ExtensionRunner => {
     if (runner === undefined) throw new Error('The Pi extension host is not loaded');
     return runner;
@@ -399,7 +411,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     // Harness SessionMetadata carries no display name, and Pi allows this to be absent.
     getSessionName: () => undefined,
     setLabel: () => unsupported('setLabel'),
-    getActiveTools: () => tools.map((tool) => tool.name),
+    getActiveTools: () => activeTools().map((tool) => tool.name),
     getAllTools: (): ToolInfo[] =>
       registered.map((tool) => ({
         name: tool.definition.name,
@@ -410,9 +422,16 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
           : { promptGuidelines: tool.definition.promptGuidelines }),
         sourceInfo: tool.sourceInfo,
       })),
-    setActiveTools: () => unsupported('setActiveTools'),
+    // Backs DOOM_TOOL_SURFACE_SERVICE, which is the only way a Pi extension can hide its own
+    // tools. Throwing here left every restriction inert and leaked mode-gated tools such as
+    // narrate into sessions whose mode was off.
+    setActiveTools: (names) => {
+      const known = new Set(registered.map((tool) => tool.definition.name));
+      activeNames = new Set(names.filter((name) => known.has(name)));
+      options.onActiveToolsChanged?.();
+    },
     refreshTools: () => {
-      void runtime.replaceTools([...tools]);
+      void runtime.replaceTools([...activeTools()]);
     },
     getCommands: () => [],
     setModel: async (model) => {
@@ -447,17 +466,21 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
 
   return {
     get tools() {
-      return tools;
+      return activeTools();
     },
 
     get toolGuidance(): readonly ToolPromptEntry[] {
-      return registered.map((tool) => ({
-        name: tool.definition.name,
-        ...(tool.definition.promptSnippet === undefined ? {} : { promptSnippet: tool.definition.promptSnippet }),
-        ...(tool.definition.promptGuidelines === undefined
-          ? {}
-          : { promptGuidelines: tool.definition.promptGuidelines }),
-      }));
+      // Filtered alongside `tools`: guidance for a hidden tool would otherwise keep instructing the
+      // model to call something it cannot see.
+      return registered
+        .filter((tool) => activeNames.has(tool.definition.name))
+        .map((tool) => ({
+          name: tool.definition.name,
+          ...(tool.definition.promptSnippet === undefined ? {} : { promptSnippet: tool.definition.promptSnippet }),
+          ...(tool.definition.promptGuidelines === undefined
+            ? {}
+            : { promptGuidelines: tool.definition.promptGuidelines }),
+        }));
     },
 
     get skills() {
@@ -480,6 +503,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
 
       registered = loaded.flatMap((extension) => [...extension.tools.values()]);
       tools = registered.map((tool) => toHarnessTool(tool, requireRunner));
+      activeNames = new Set(tools.map((tool) => tool.name));
       skills = await loadPiSkills(runner, cwd, agentDir, options.onNotice);
     },
 

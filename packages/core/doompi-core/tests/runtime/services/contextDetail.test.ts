@@ -119,6 +119,23 @@ describe('buildContextDetail', () => {
       modelInvocable: true,
     });
   });
+
+  it('carries the system prompt as one addressable item', () => {
+    const items = buildContextDetail({
+      sources: [],
+      skills: [],
+      countTokens,
+      systemPrompt: { text: 'You are a lazy senior developer.', tokens: 8, stage: 'base' },
+    });
+
+    expect(items).toEqual([
+      { itemKind: 'prompt', name: 'system', tokens: 8, stage: 'base', text: 'You are a lazy senior developer.' },
+    ]);
+  });
+
+  it('leaves the prompt out when the host has none to report', () => {
+    expect(buildContextDetail({ sources: [], skills: [], countTokens })).toEqual([]);
+  });
 });
 
 describe('the detail store', () => {
@@ -137,6 +154,22 @@ describe('the detail store', () => {
     expect(file?.revision).toBe(3);
     expect(findContextItem(file!, 'tool', 'bash')?.name).toBe('bash');
     expect(findContextItem(file!, 'skill', 'bash')).toBeUndefined();
+  });
+
+  it('finds the system prompt the way the panel asks for it', () => {
+    const environment = temporaryAgentDirectory();
+    const items = buildContextDetail({
+      sources: [],
+      skills: [],
+      countTokens,
+      systemPrompt: { text: 'plan mode is active', tokens: 5, stage: 'effective' },
+    });
+
+    writeContextDetail('s2', 1, items, environment);
+    const file = readContextDetail('s2', environment);
+    const prompt = findContextItem(file!, 'prompt', 'system');
+
+    expect(prompt?.itemKind === 'prompt' ? prompt.text : undefined).toBe('plan mode is active');
   });
 
   it('says nothing rather than throwing when no session has written', () => {

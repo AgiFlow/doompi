@@ -8,6 +8,7 @@ export interface PackageAttribution {
   layer?: string;
 }
 
+import type { ContextPromptStage } from '../../types/contextApi';
 import { type CountTokens, type ToolEntry, type ToolSource, tokensForTool } from '../toolInventory';
 
 /**
@@ -62,6 +63,18 @@ export interface ContextGroupProjection {
   readonly inactiveTokens: number;
 }
 
+/**
+ * What the assembled system prompt costs, and how complete the figure is.
+ *
+ * Kept out of `groups` on purpose. Every tool's prose and every skill's listing
+ * already count inside the group subtotals, and those are slices of this same
+ * text, so folding it into `totalTokens` would bill them twice.
+ */
+export interface ContextSystemPromptProjection {
+  readonly tokens: number;
+  readonly stage: ContextPromptStage;
+}
+
 export interface ContextProjection {
   readonly version: typeof CONTEXT_PROJECTION_VERSION;
   readonly revision: number;
@@ -74,6 +87,7 @@ export interface ContextProjection {
   readonly groups: readonly ContextGroupProjection[];
   readonly totalTokens: number;
   readonly inactiveTokens: number;
+  readonly systemPrompt?: ContextSystemPromptProjection;
   readonly estimator: typeof CONTEXT_PROJECTION_ESTIMATOR;
 }
 
@@ -123,6 +137,8 @@ export interface ContextProjectionInput {
    */
   readonly attribution: Readonly<Record<string, PackageAttribution>>;
   readonly countTokens: CountTokens;
+  /** Absent until the session has a prompt to report. */
+  readonly systemPrompt?: ContextSystemPromptProjection;
 }
 
 interface Bucket {
@@ -239,6 +255,7 @@ export function projectContext(input: ContextProjectionInput): ContextProjection
     groups,
     totalTokens: groups.reduce((total, group) => total + group.tokens, 0),
     inactiveTokens: groups.reduce((total, group) => total + group.inactiveTokens, 0),
+    ...(input.systemPrompt === undefined ? {} : { systemPrompt: input.systemPrompt }),
     estimator: CONTEXT_PROJECTION_ESTIMATOR,
   };
 }

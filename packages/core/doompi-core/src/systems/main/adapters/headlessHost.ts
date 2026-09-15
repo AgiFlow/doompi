@@ -183,6 +183,18 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     };
   }
 
+  /**
+   * The resources the last applied selection resolved to.
+   *
+   * `readResources` re-reads them for a live request and refuses while a
+   * selection is mid-apply. A reader describing the applied composition wants
+   * the same snapshot `getContextInventory` reports against, and wants it at
+   * the same moments, so it reads this instead of dispatching.
+   */
+  get appliedResources(): readonly ResolvedHeadlessResource[] {
+    return this.resolvedResources;
+  }
+
   getContextInventory(
     selection: DoomHeadlessSelection = this.applied,
     countTokens?: CountTokens,

@@ -438,12 +438,25 @@ describe('headless startup', () => {
           }),
         ]),
       );
+      // The detail file behind the panel is keyed by the newest published
+      // revision, and the composition republishes whenever the prompt a turn
+      // built differs from the last one, so the checks below compare the two
+      // rather than counting publishes the fixture happens to provoke.
+      const contextEntries = async () =>
+        (await session!.runtime.lane.findEntries({ order: 'oldestFirst' }, BACKGROUND_CONTEXT)).filter(
+          (entry) => entry.type === 'custom' && entry.customType === 'doom-context',
+        );
+      const publishedRevision = async (): Promise<number> =>
+        ((await contextEntries()).at(-1) as { data?: { revision?: number } } | undefined)?.data?.revision ?? 0;
       const startupEntries = await session.runtime.lane.findEntries({ order: 'oldestFirst' }, BACKGROUND_CONTEXT);
       const startupContexts = startupEntries.filter(
         (entry) => entry.type === 'custom' && entry.customType === 'doom-context',
       );
       expect(startupContexts).toHaveLength(1);
       expect(startupContexts[0]).toMatchObject({ data: { revision: 1 } });
+      // Nothing has been sent, so the prompt on offer is the one before the
+      // packages that hook a turn have added to it.
+      expect(startupContexts[0]).toMatchObject({ data: { systemPrompt: { stage: 'base' } } });
       expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({ revision: 1 });
       expect(startupEntries).toEqual(
         expect.arrayContaining([
@@ -499,11 +512,13 @@ describe('headless startup', () => {
       expect(streamSimple).not.toHaveBeenCalled();
       await session.runtime.prompt('First');
       expect(settled).toHaveBeenCalledOnce();
-      const entriesAfterPrompt = await session.runtime.lane.findEntries({ order: 'oldestFirst' }, BACKGROUND_CONTEXT);
-      expect(
-        entriesAfterPrompt.filter((entry) => entry.type === 'custom' && entry.customType === 'doom-context'),
-      ).toHaveLength(1);
-      expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({ revision: 1 });
+      // The first turn builds a prompt the packages have patched, which is a
+      // different answer to "what is this session running under" than the base
+      // published at startup, so the composition republishes.
+      const contextsAfterPrompt = await contextEntries();
+      expect(contextsAfterPrompt).toHaveLength(2);
+      expect(contextsAfterPrompt[1]).toMatchObject({ data: { systemPrompt: { stage: 'effective' } } });
+      expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({ revision: 2 });
       expect(streamSimple.mock.calls[0]?.[1].tools?.map((tool) => tool.name)).toEqual(['fixture_tool']);
       expect(started).toHaveBeenCalledTimes(1);
       expect(streamSimple.mock.calls[0]?.[1].systemPrompt).toBe(
@@ -511,11 +526,8 @@ describe('headless startup', () => {
       );
       await session.runtime.prompt('/mode review');
       expect(session.host!.context.selection.activeLayers).toEqual([]);
-      const reviewEntries = await session.runtime.lane.findEntries({ order: 'oldestFirst' }, BACKGROUND_CONTEXT);
-      expect(
-        reviewEntries.filter((entry) => entry.type === 'custom' && entry.customType === 'doom-context'),
-      ).toHaveLength(2);
-      expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({ revision: 2 });
+      expect(await contextEntries()).toHaveLength(3);
+      expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({ revision: 3 });
       expect(session.runtime.listCommands()).toEqual([
         { name: 'minor', description: 'Toggle or drive minor modes' },
         { name: 'mode', description: 'Change mode' },
@@ -527,7 +539,9 @@ describe('headless startup', () => {
       expect(streamSimple.mock.calls[1]?.[1].tools ?? []).toEqual([]);
       await session.runtime.prompt('/mode development');
       expect(session.host!.context.selection.activeLayers).toEqual(['tools']);
-      expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({ revision: 3 });
+      expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({
+        revision: await publishedRevision(),
+      });
       await session.runtime.prompt('/fixture restored');
       expect(executeCommand).toHaveBeenCalledTimes(3);
       resourceText = 'Updated context';
@@ -546,6 +560,7 @@ describe('headless startup', () => {
       expect(session.runtime.harness).toBe(harness);
       expect(installed).toHaveBeenCalledOnce();
 
+      const revisionBeforeFailure = await publishedRevision();
       const statusesBeforeFailure = frames.filter(
         (frame) =>
           typeof frame === 'object' && frame !== null && (frame as { type?: string }).type === 'extension_ui_request',
@@ -561,7 +576,9 @@ describe('headless startup', () => {
             typeof frame === 'object' && frame !== null && (frame as { type?: string }).type === 'extension_ui_request',
         ),
       ).toHaveLength(statusesBeforeFailure);
-      expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({ revision: 3 });
+      expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({
+        revision: revisionBeforeFailure,
+      });
       append.mockRestore();
       await session.host!.select({ domains: [] });
       expect(session.host!.status.ready).toBe(true);
