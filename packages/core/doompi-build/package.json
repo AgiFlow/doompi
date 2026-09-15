@@ -1,0 +1,62 @@
+{
+  "name": "@agimon-ai/doompi-build",
+  "version": "0.0.1-alpha.1",
+  "description": "Folder-convention scanner and build presets for DoomPi extensions.",
+  "keywords": [
+    "ai",
+    "build",
+    "coding-agent",
+    "developer-tools",
+    "doompi",
+    "file-based-routing",
+    "pi-package",
+    "tsdown",
+    "typescript"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/core/doompi-build"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "devDependencies": {
+    "@types/node": "26.5.1",
+    "@vitest/coverage-v8": "5.0.0",
+    "tsdown": "0.23.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}
