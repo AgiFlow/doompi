@@ -5,8 +5,8 @@ import path from 'node:path';
 import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createWorkflowsChannel } from '../src/services/workflowsHubChannel';
 import { presentWorkflowRuns, runBelongsToSession } from '../src/services/workflowRuns';
+import { createWorkflowsChannel } from '../src/services/workflowsHubChannel';
 import { readWorkflowRuns } from '../src/services/workflowWatcher';
 import { moveWorkflowRun, writeWorkflowRun } from './support/workflowRuns';
 

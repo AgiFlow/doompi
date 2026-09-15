@@ -87,6 +87,11 @@
       "import": "./dist/fable-plan-api.mjs",
       "require": "./dist/fable-plan-api.cjs"
     },
+    "./runs/background/cliRunnerEntry": {
+      "types": "./dist/runs/background/cliRunnerEntry.d.mts",
+      "import": "./dist/runs/background/cliRunnerEntry.mjs",
+      "require": "./dist/runs/background/cliRunnerEntry.cjs"
+    },
     "./runtime-subagent-policy": {
       "types": "./dist/runtime-subagent-policy.d.mts",
       "import": "./dist/runtime-subagent-policy.mjs",

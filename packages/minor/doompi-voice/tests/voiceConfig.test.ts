@@ -7,7 +7,6 @@ import { parseDoomConfig } from '@agimon-ai/doompi-config';
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { VoiceConfigController } from '../src/services/voiceConfigController';
 import {
   catalogEntryById,
   ENGINE_TOOLING,
@@ -19,6 +18,7 @@ import {
 } from '../src/services/catalog';
 import { downloadModelFile, isDownloaded } from '../src/services/download';
 import { planBlocker, planInstall, UNSUPPORTED_PLATFORM } from '../src/services/install';
+import { VoiceConfigController } from '../src/services/voiceConfigController';
 import type { IExecutableResolver, IProcessSpawner, ProcessResult, RunningProcess } from '../src/types';
 
 const WHISPER_CPP_TURBO = 'whisper-cpp/large-v3-turbo';

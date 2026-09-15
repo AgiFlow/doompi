@@ -26,7 +26,6 @@ function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
-
 /** Sorted, so a re-run never reorders what a previous one wrote. */
 function sortedByKey(record) {
   return Object.fromEntries(Object.entries(record).sort(([left], [right]) => left.localeCompare(right)));

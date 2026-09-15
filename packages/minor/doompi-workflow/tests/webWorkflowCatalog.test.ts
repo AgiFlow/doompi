@@ -1,7 +1,6 @@
 import type { DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createWorkflowCatalogChannel } from '../src/services/workflowCatalogChannel';
 import {
   createWorkflowCatalogReader,
   presentWorkflowCatalog,
@@ -9,6 +8,7 @@ import {
   type CatalogListEntry,
   type WorkflowCatalogReaderDeps,
 } from '../src/services/webWorkflowCatalog';
+import { createWorkflowCatalogChannel } from '../src/services/workflowCatalogChannel';
 import type { WorkflowCatalogEntryView, WorkflowCatalogPayload } from '../src/types/webWorkflows';
 
 const BLOG: CatalogListEntry = {
