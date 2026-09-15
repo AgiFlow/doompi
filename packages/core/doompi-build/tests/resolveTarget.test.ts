@@ -96,35 +96,13 @@ describe('resolveTarget', () => {
     expect(resolved.notices[0]?.message).toContain('the first one wins');
   });
 
-  it('routes each host fill target to the array that region reads', () => {
-    const fills: Array<[string, string]> = [
-      ['context', 'contextSections'],
-      ['rail', 'railSections'],
-      ['overlay', 'overlays'],
-      ['selection-bar', 'selectionBarItems'],
-      ['composer-actions', 'composerActions'],
-      ['composer-menu', 'composerMenuItems'],
-    ];
-    for (const [target, field] of fills) {
+  it('sends every fill to one array, whatever slot it names', () => {
+    // The cockpit declares its own regions as slots, so a host region and
+    // another plugin's slot are the same thing to the build tooling.
+    for (const target of ['context', 'rail', 'overlay', 'activity', 'activity.plan', 'task.detail']) {
       const graph = graphOf([entry({ file: target, side: 'frontend', surface: 'fill', target })]);
-      expect(fieldsFor(graph, 'web')).toEqual([field]);
+      expect(fieldsFor(graph, 'web')).toEqual(['fills']);
     }
-  });
-
-  it('separates a bare activity fill from one naming a group', () => {
-    const graph = graphOf([
-      entry({ file: 'bare', side: 'frontend', surface: 'fill', name: 'A', target: 'activity' }),
-      entry({ file: 'grouped', side: 'frontend', surface: 'fill', name: 'B', target: 'activity.plan' }),
-    ]);
-    const resolved = resolveTarget(graph, 'web').contributions;
-    expect(resolved.every((c) => c.field === 'activitySections')).toBe(true);
-    expect(resolved.find((c) => c.entry.file === 'bare')?.activityGroup).toBeUndefined();
-    expect(resolved.find((c) => c.entry.file === 'grouped')?.activityGroup).toBe('plan');
-  });
-
-  it('treats any other dotted fill target as another plugin slot', () => {
-    const graph = graphOf([entry({ file: 'a', side: 'frontend', surface: 'fill', target: 'task.detail' })]);
-    expect(fieldsFor(graph, 'web')).toEqual(['fills']);
   });
 
   it('picks the settings shape from the filename target, defaulting to a section', () => {

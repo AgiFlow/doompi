@@ -238,3 +238,28 @@ describe('scanExtensions', () => {
     expect(graph.entries.map((entry) => entry.name)).toEqual(['good']);
   });
 });
+
+describe('gate declarations', () => {
+  it('reads mode.* inside a gate folder as the gate declaration itself', () => {
+    const graph = scanExtensions({
+      packageDir: packageWith({
+        'src/extensions/(backend)/mode/plan/mode.ts': EMPTY,
+        'src/extensions/(backend)/mode/plan/tool/write-plan.ts': EMPTY,
+      }),
+    });
+    expect(graph.notices).toEqual([]);
+
+    const declaration = find(graph.entries, 'mode/plan/mode.ts');
+    expect(declaration).toMatchObject({ surface: 'mode', name: 'plan', gates: [] });
+
+    const gated = find(graph.entries, 'write-plan.ts');
+    expect(gated).toMatchObject({ surface: 'tool', gates: [{ kind: 'mode', id: 'plan' }] });
+  });
+
+  it('tells an author inside a gate folder what their options are', () => {
+    const graph = scanExtensions({
+      packageDir: packageWith({ 'src/extensions/(backend)/mode/plan/stray.ts': EMPTY }),
+    });
+    expect(graph.notices[0]?.message).toContain('name the file mode.* to declare the gate');
+  });
+});

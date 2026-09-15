@@ -38,33 +38,15 @@ export const WEB_FIELDS: Readonly<Record<string, string>> = {
   dock: 'dockFaces',
   setting: 'settingsSections',
   slot: 'slots',
+  // Every fill is a slot fill. The cockpit declares its own regions as slots
+  // (overlay, rail, context, activity and so on), so the build tooling needs
+  // to know none of their names.
   fill: 'fills',
   action: 'contextActions',
   api: NOT_A_CONTRIBUTION,
   method: NOT_A_CONTRIBUTION,
   store: NOT_A_CONTRIBUTION,
 };
-
-/**
- * Host regions a fill may name, and the array each one is read from.
- *
- * The cockpit registry is already slot-keyed internally and most of these
- * desugar into it at install time, so one `fill/` folder can stand in for all
- * of them. `activity` is the exception the generator must keep separate: its
- * binding resolves late, against the set of installed activity groups.
- */
-export const FILL_FIELDS: Readonly<Record<string, string>> = {
-  activity: 'activitySections',
-  context: 'contextSections',
-  rail: 'railSections',
-  overlay: 'overlays',
-  'selection-bar': 'selectionBarItems',
-  'composer-actions': 'composerActions',
-  'composer-menu': 'composerMenuItems',
-};
-
-/** The fill target whose binding resolves after every activity group is known. */
-export const ACTIVITY_FILL_TARGET = 'activity';
 
 /** Disambiguates the two shapes a `setting/` file can take. */
 export const SETTING_FIELDS: Readonly<Record<string, string>> = {

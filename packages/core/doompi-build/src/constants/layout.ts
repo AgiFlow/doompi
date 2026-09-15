@@ -34,13 +34,17 @@ export const GENERATED_ENTRY_NAMES: readonly string[] = ['pi', 'server', 'web'];
 export const BACKEND_PLATFORMS: readonly string[] = ['cli', 'server'];
 export const FRONTEND_PLATFORMS: readonly string[] = ['web', 'ios', 'android', 'desktop'];
 
-/** Surfaces that produce contributions on the backend side. */
+/**
+ * Surfaces that produce contributions on the backend side.
+ *
+ * `mode` is absent on purpose: it is a gate folder, so it is consumed before
+ * the surface check and its declaration file synthesises the surface instead.
+ */
 export const BACKEND_SURFACES: readonly string[] = [
   'tool',
   'command',
   'hook',
   'service',
-  'mode',
   'api',
   'channel',
   'method',
@@ -51,7 +55,6 @@ export const BACKEND_SURFACES: readonly string[] = [
 export const FRONTEND_SURFACES: readonly string[] = [
   'tool',
   'command',
-  'mode',
   'api',
   'channel',
   'method',
@@ -69,17 +72,6 @@ export const TARGETED_SURFACES: readonly string[] = ['fill', 'action'];
 
 /** Surfaces whose folders below the surface spell a route path. */
 export const ROUTED_SURFACES: readonly string[] = ['api'];
-
-/** Host regions a fill may name without a plugin prefix. */
-export const HOST_FILL_TARGETS: readonly string[] = [
-  'activity',
-  'context',
-  'rail',
-  'overlay',
-  'selection-bar',
-  'composer-actions',
-  'composer-menu',
-];
 
 /** Source extensions the scan accepts. */
 export const SOURCE_EXTENSIONS: readonly string[] = ['ts', 'tsx', 'mts', 'cts'];
