@@ -34,7 +34,17 @@ function packageWith(files: Record<string, string>): string {
   return dir;
 }
 
-function render(files: Record<string, string>): { cli: string; server: string; web: string } {
+/**
+ * Contributions are emitted as getters so the host builds them after services
+ * mount. That is an ordering device, and every assertion below is about which
+ * contribution landed where, so the getter is folded away here. One test
+ * asserts the emitted form itself.
+ */
+function fields(source: string): string {
+  return source.replaceAll(/get (\w+)\(\) \{ return (.*?); \},/gu, '$1: $2,');
+}
+
+function raw(files: Record<string, string>): { cli: string; server: string; web: string } {
   const graph = scanExtensions({ packageDir: packageWith(files) });
   expect(graph.notices).toEqual([]);
   return {
@@ -42,6 +52,11 @@ function render(files: Record<string, string>): { cli: string; server: string; w
     server: renderServerEntry(resolveTarget(graph, 'server'), OPTIONS),
     web: renderWebEntry(resolveTarget(graph, 'web'), OPTIONS),
   };
+}
+
+function render(files: Record<string, string>): { cli: string; server: string; web: string } {
+  const entries = raw(files);
+  return { cli: fields(entries.cli), server: fields(entries.server), web: fields(entries.web) };
 }
 
 /**
@@ -170,6 +185,22 @@ describe('renderWebEntry', () => {
     const { web } = render({ 'src/extensions/workspaces/sessions/(frontend)/fill/PlanRail.rail.tsx': EMPTY });
     expect(web).toContain("fills: [via({ slot: 'rail', id: 'plan-rail' }, ");
     expect(parses(web)).toBe(true);
+  });
+});
+
+describe('ordering', () => {
+  it('emits every contribution as a getter, so services mount first', () => {
+    // Both host helpers register services before they read anything else. A
+    // plain property is built when the factory returns, which is too early for
+    // a routed file to inject a service the same mount publishes.
+    const { server } = raw({
+      'src/extensions/(backend)/service/registry.ts': EMPTY,
+      'src/extensions/(backend)/tool/write-plan.ts': EMPTY,
+    });
+    expect(server).toContain('get tools() { return [');
+    // services is what the helper reads first, so a getter buys it nothing.
+    expect(server).toContain('services: [serviceRegistry]');
+    expect(server).not.toContain('get services()');
   });
 });
 

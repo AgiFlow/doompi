@@ -19,7 +19,7 @@ import { DOOM_MCP_TOOL_RESOLVER_SERVICE, requireDoomMcpToolResolver } from '@agi
  * in reload. Long-lived services are registered as Cordis effects, and stale
  * asynchronous session-start continuations are fenced by a generation token.
  */
-import { definePiExtension, definePiTool } from '@agimon-ai/doompi-core/pi-extension';
+import { definePiTool, type PiPluginContext, type PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 import {
   createDoomReadinessCoordinator,
   type DoomReadinessCoordinator,
@@ -141,9 +141,25 @@ function recordDelegationObservation(telemetry: DoomTelemetry, observation: Team
  * matches the `export default` convention every sibling extension in this repo
  * already uses (`doom-task`, `doom-file-edit`, `doom-pi-ui`).
  */
-export const activateTeamExtension = definePiExtension(
-  PACKAGE_SOURCE,
-  ({ context: cordis, pi, signal: pluginSignal }) => {
+/**
+ * Everything this package contributes to the interactive host.
+ *
+ * One factory because it is one lifetime. The readiness fence, the team
+ * runtime, the delegation bridge, the poll scheduler and the command set are
+ * built here and closed over by the tools, the commands and the events alike;
+ * each is a different slice of one per-mount object graph. Splitting them into
+ * routed files would mean rebuilding that graph per file or reaching for a
+ * module-level singleton, and the second is what the Cordis ownership rules
+ * exist to prevent.
+ *
+ * What the tree does say is which host this is for and which surfaces it
+ * feeds. The entry beside it is generated.
+ */
+export const createTeamPiRuntime = ({
+  context: cordis,
+  pi,
+  signal: pluginSignal,
+}: PiPluginContext): PiPluginContributions => {
     let telemetry: DoomTelemetry | undefined;
     const environment = { ...process.env };
     const getTelemetry = (ctx: ExtensionContext): DoomTelemetry => {
@@ -620,6 +636,4 @@ export const activateTeamExtension = definePiExtension(
         session_shutdown: sessionShutdown,
       },
     };
-  },
-);
-export default activateTeamExtension;
+};

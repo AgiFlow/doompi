@@ -26,11 +26,7 @@
     "directory": "layers/team/doompi-team"
   },
   "files": [
-    "dist",
-    "src/web",
-    "src/extensions/web.ts",
-    "src/types/webSubagents.ts",
-    "!src/web/**/*.stories.tsx"
+    "dist"
   ],
   "type": "module",
   "types": "./dist/index.d.mts",
@@ -104,7 +100,7 @@
     "build": "tsdown",
     "test": "vitest --run",
     "test-system": "vitest run --config vitest.system.config.ts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -121,6 +117,7 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@earendil-works/pi-agent-core": "0.85.1",
     "@earendil-works/pi-ai": "0.85.1",
     "@earendil-works/pi-coding-agent": "0.85.1",
