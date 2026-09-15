@@ -54,8 +54,10 @@ export default async function globalSetup(): Promise<() => void> {
   const globalRoot = globalDoomConfigDirectory(homeDir);
   const packages = pluginPackageRoots();
   const packageLines = [
+    // Fixed host packages live under packages/foundations and the host activates
+    // them itself, so listing one here is rejected as a feature selection.
     ...packages
-      .filter((entry) => !entry.root.includes(`${path.sep}packages${path.sep}core${path.sep}`))
+      .filter((entry) => !entry.root.includes(`${path.sep}packages${path.sep}foundations${path.sep}`))
       .map((entry) => entry.root),
     crashRoot,
   ]

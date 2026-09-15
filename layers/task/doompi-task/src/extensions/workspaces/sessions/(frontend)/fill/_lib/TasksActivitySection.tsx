@@ -116,7 +116,13 @@ function TaskRow({
   );
 }
 
-/** Session task graph in the activity dock. Empty graphs have no cockpit presence. */
+/**
+ * Session task graph in the activity dock. Empty graphs have no cockpit presence.
+ *
+ * This fills the `tasks` activity group, so the dock has already drawn the
+ * heading, the key chip and the section frame. Rendering rows only keeps the
+ * group titled once.
+ */
 export function TasksActivitySection({ sessionId, sendSessionFrame }: WebPluginSlotProps) {
   const sessionTasks = useStore(tasks.store, (state) => tasks.select(state, sessionId).tasks);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -127,19 +133,7 @@ export function TasksActivitySection({ sessionId, sendSessionFrame }: WebPluginS
   const history = sessionTasks.filter((task) => task.status === 'completed' || task.status === 'failed');
   const dialogTask = dialog ? sessionTasks.find((task) => task.id === dialog.taskId) : undefined;
   return (
-    <section data-testid="activity-tasks" className="flex flex-col gap-2 border-b border-doom-border-soft px-3 py-3">
-      <div className="flex items-center gap-2 px-1">
-        <span
-          aria-hidden
-          className={
-            active.length > 0 ? 'animate-pulse text-sm font-bold text-doom-yellow' : 'text-sm font-bold text-doom-faint'
-          }
-        >
-          #
-        </span>
-        <span className="flex-1 text-sm font-bold text-doom-text">tasks</span>
-        <span className="text-2xs text-doom-faint">{active.length} active</span>
-      </div>
+    <div className="flex flex-col gap-2">
       {active.length > 0 ? (
         <div className="flex flex-col gap-0.5">
           {active.map((task) => (
@@ -195,6 +189,6 @@ export function TasksActivitySection({ sessionId, sendSessionFrame }: WebPluginS
           onClose={() => setDialog(undefined)}
         />
       ) : null}
-    </section>
+    </div>
   );
 }
