@@ -1,10 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import {
-  displayPath,
-  isWritableFile,
-  resolveReadInputPath,
-} from '@agimon-ai/doompi-hashline/files';
+import { displayPath, isWritableFile, resolveReadInputPath } from '@agimon-ai/doompi-hashline/files';
 import {
   createReadToolDefinition,
   DEFAULT_MAX_BYTES,

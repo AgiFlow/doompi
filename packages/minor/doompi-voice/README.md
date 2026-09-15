@@ -164,7 +164,7 @@ reload that switch already performs.
 Autonomous voice can also change profile. The `profile` capability on the voice tool facade lists
 the configured personas and queues a switch, which reloads the session with the new persona, its
 voice, and its avatar. See
-[@agimon-ai/doompi-profile](../../core/doompi-profile/README.md) for authoring personas.
+[@agimon-ai/doompi-profile](../../foundations/doompi-profile/README.md) for authoring personas.
 
 When the agent is launched by `doompi-server`, capture and narration use the connected media client.
 The protocol is capability-driven rather than browser-specific. A client can own microphone capture,

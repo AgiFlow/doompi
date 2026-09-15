@@ -33,7 +33,7 @@ export const DOOMPI_RUNTIME_PACKAGES = new Set([
   // The coding agent's experimental server entry imports this consumer-provided peer at runtime.
   '@earendil-works/pi-server',
 ]);
-const DOOMPI_PACKAGE_DIRECTORIES = ['core', 'default', 'minor'] as const;
+const DOOMPI_PACKAGE_DIRECTORIES = ['cli', 'core', 'foundations', 'default', 'minor', 'utils'] as const;
 const PLATFORM_PACKAGE_SUFFIX = /-(darwin|linux)-(arm64|x64)$/u;
 const EXTERNAL_RUNTIME_PACKAGES = new Set(['@earendil-works/pi-coding-agent']);
 

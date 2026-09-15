@@ -135,7 +135,9 @@ export function defineCliCommand<TContext = unknown>(file: CliCommandFile<TConte
 }
 
 /** `command/<name>.server.ts`. A native headless or portable Doom command. */
-export function defineServerCommand<TContext = unknown>(file: ServerCommandFile<TContext>): ServerCommandFile<TContext> {
+export function defineServerCommand<TContext = unknown>(
+  file: ServerCommandFile<TContext>,
+): ServerCommandFile<TContext> {
   return file;
 }
 

@@ -42,7 +42,7 @@ export default defineConfig({
     alias: [
       {
         find: '@agimon-ai/doompi-ui/doom-overlay',
-        replacement: source('../../core/doompi-ui/src/exports/doomOverlay.ts'),
+        replacement: source('../../foundations/doompi-ui/src/exports/doomOverlay.ts'),
       },
       {
         find: '@agimon-ai/doompi-core/child-process',
@@ -50,15 +50,15 @@ export default defineConfig({
       },
       {
         find: /^@agimon-ai\/doompi-config\/(.*)$/,
-        replacement: `${source('../../core/doompi-config/src/exports/')}$1.ts`,
+        replacement: `${source('../../foundations/doompi-config/src/exports/')}$1.ts`,
       },
       {
         find: '@agimon-ai/doompi-config',
-        replacement: source('../../core/doompi-config/src/exports'),
+        replacement: source('../../foundations/doompi-config/src/exports'),
       },
       {
         find: /^@agimon-ai\/doompi-ui\/(.*)$/,
-        replacement: `${source('../../core/doompi-ui/src/exports/')}$1.ts`,
+        replacement: `${source('../../foundations/doompi-ui/src/exports/')}$1.ts`,
       },
     ],
   },

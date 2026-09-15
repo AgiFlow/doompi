@@ -107,8 +107,7 @@ const PACKAGE_MANIFEST_PATH = path.join(REPOSITORY_ROOT, 'packages/cli/doompi/pa
 const CI_WORKFLOW_PATH = path.join(REPOSITORY_ROOT, '.github/workflows/ci.yml');
 const standardPackageSet = new Set(STANDARD_PI_ENTRIES.map((entry) => entry.name));
 const selectablePackageNames = PACKAGE_MATRIX.filter(
-  (entry) =>
-    entry.layer !== 'core' && entry.layer !== 'foundations' && !FOUNDATION_PACKAGE_NAMES.includes(entry.name),
+  (entry) => entry.layer !== 'core' && entry.layer !== 'foundations' && !FOUNDATION_PACKAGE_NAMES.includes(entry.name),
 ).map((entry) => entry.name);
 const PACKAGE_COMPATIBILITY_BASELINE = JSON.parse(
   fs.readFileSync(new URL('../fixtures/packageCompatibility.json', import.meta.url), 'utf8'),

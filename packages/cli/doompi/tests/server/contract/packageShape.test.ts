@@ -22,7 +22,7 @@ describe('doompi core server surface', () => {
     const manifest = await readManifest();
     expect(manifest.bin?.['doompi-server']).toBe('./dist/bin/serve.mjs');
     const coreManifest = JSON.parse(
-      await readFile(new URL('../../../../doompi-core/package.json', import.meta.url), 'utf8'),
+      await readFile(new URL('../../../../../core/doompi-core/package.json', import.meta.url), 'utf8'),
     ) as PackageManifest;
     expect(coreManifest.exports?.['./server']).toEqual({
       types: './dist/server.d.mts',

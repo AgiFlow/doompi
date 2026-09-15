@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const PACKAGE_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
-const CACHE_PACKAGE_ROOT = path.resolve(PACKAGE_ROOT, '../doompi-cache');
+const CACHE_PACKAGE_ROOT = path.resolve(PACKAGE_ROOT, '../../foundations/doompi-cache');
 
 function source(relativePath: string): string {
   return fs.readFileSync(path.join(PACKAGE_ROOT, relativePath), 'utf8');

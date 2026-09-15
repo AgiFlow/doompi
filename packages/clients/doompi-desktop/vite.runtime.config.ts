@@ -59,9 +59,7 @@ export default defineConfig({
         'doompi/dist/src/extensions/entries/transitionCoordinator': source(
           'packages/cli/doompi/src/extensions/entries/transitionCoordinator.ts',
         ),
-        'doompi/dist/src/services/extensionAssembler': source(
-          'packages/cli/doompi/src/services/extensionAssembler.ts',
-        ),
+        'doompi/dist/src/services/extensionAssembler': source('packages/cli/doompi/src/services/extensionAssembler.ts'),
       },
       output: {
         format: 'es',

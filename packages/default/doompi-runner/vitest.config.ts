@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 
 const threshold = process.env.THRESHOLD ? Number.parseInt(process.env.THRESHOLD, 10) : 80;
 const doomExtensionContractsExports = fileURLToPath(new URL('../../core/doompi-core/src/exports/', import.meta.url));
-const doomUiExports = fileURLToPath(new URL('../../core/doompi-ui/src/exports/', import.meta.url));
+const doomUiExports = fileURLToPath(new URL('../../foundations/doompi-ui/src/exports/', import.meta.url));
 
 export default defineConfig({
   test: {

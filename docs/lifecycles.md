@@ -146,6 +146,6 @@ Server facets are imported one at a time and installed one at a time, in bundle 
 | Server facet loading and failure policy | [`serverFacetLoader.ts`](../packages/core/doompi-core/src/server/serverFacetLoader.ts)           |
 | Web install, merge and diagnostics      | [`pluginRegistry.ts`](../packages/clients/doompi-web/src/web/lib/pluginRegistry.ts)              |
 | Web mount and teardown                  | [`pluginRuntime.ts`](../packages/clients/doompi-web/src/web/lib/pluginRuntime.ts)                |
-| Compiled CLI extension set              | [`compiler/index.ts`](../packages/cli/doompi/src/compiler/index.ts)                             |
+| Compiled CLI extension set              | [`compiler/index.ts`](../packages/cli/doompi/src/compiler/index.ts)                              |
 
 See [Extension layout](extension-layout.md) for the folder convention that declares these contributions, [Architecture](architecture.md) for Cordis root ownership, selection transitions and child isolation, and [Composition and runtime bundling](bundling.md) for how a selection becomes the artifacts these hosts load.

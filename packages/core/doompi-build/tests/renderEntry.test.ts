@@ -103,7 +103,7 @@ describe('renderCliEntry', () => {
   it('renders Pi events as a record keyed by the event name', () => {
     const { cli } = render({ 'src/extensions/(backend)/hook/session-start.ts': EMPTY });
     expect(cli).toContain('events: {');
-    expect(cli).toContain("session_start: at(");
+    expect(cli).toContain('session_start: at(');
     expect(cli).toContain("as NonNullable<PiPluginContributions['events']>['session_start']");
     expect(parses(cli)).toBe(true);
   });

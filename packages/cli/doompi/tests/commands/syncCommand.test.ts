@@ -172,7 +172,7 @@ function initializePiFixture(root: string): void {
     if (typeof manifest.name !== 'string' || !manifest.name.startsWith('@agimon-ai/')) return;
     fs.symlinkSync(packageDirectory, path.join(packageScope, manifest.name.slice('@agimon-ai/'.length)), 'dir');
   };
-  for (const group of ['core', 'default', 'minor', 'clients']) {
+  for (const group of ['cli', 'core', 'foundations', 'default', 'minor', 'clients', 'utils']) {
     const groupDirectory = path.join(WORKSPACE_ROOT, 'packages', group);
     for (const entry of fs.readdirSync(groupDirectory, { withFileTypes: true })) {
       if (entry.isDirectory()) linkPackage(path.join(groupDirectory, entry.name));

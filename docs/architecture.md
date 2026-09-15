@@ -52,17 +52,17 @@ The server bundle records the built server facet for each selected package, its 
 
 ## Configuration and package boundaries
 
-| Location             | Responsibility                                                                                      |
-| -------------------- | --------------------------------------------------------------------------------------------------- |
-| `packages/cli/*`     | The published DoomPi distribution host: CLI, interactive host, and headless server runtime.         |
-| `packages/core/*`    | Shared contracts and libraries with no extension entry points of their own.                         |
-| `packages/foundations/*` | Fixed extension packages every composition activates, never selected on their own.              |
-| `packages/default/*` | Default distribution features selected through configuration.                                       |
-| `packages/minor/*`   | Optional modes selected through configuration.                                                      |
-| `packages/clients/*` | Standalone presentation clients, currently the web presentation server and desktop shell.           |
-| `packages/utils/*`   | Shared utilities and prebuilt native payloads that are never selected on their own.                 |
-| `layers/<layer>/*`   | Selectable higher-level extensions.                                                                 |
-| `packages/tooling/*` | Repository-owned development tools that are not part of the runtime package graph.                  |
+| Location                 | Responsibility                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| `packages/cli/*`         | The published DoomPi distribution host: CLI, interactive host, and headless server runtime. |
+| `packages/core/*`        | Shared contracts and libraries with no extension entry points of their own.                 |
+| `packages/foundations/*` | Fixed extension packages every composition activates, never selected on their own.          |
+| `packages/default/*`     | Default distribution features selected through configuration.                               |
+| `packages/minor/*`       | Optional modes selected through configuration.                                              |
+| `packages/clients/*`     | Standalone presentation clients, currently the web presentation server and desktop shell.   |
+| `packages/utils/*`       | Shared utilities and prebuilt native payloads that are never selected on their own.         |
+| `layers/<layer>/*`       | Selectable higher-level extensions.                                                         |
+| `packages/tooling/*`     | Repository-owned development tools that are not part of the runtime package graph.          |
 
 The published `@agimon-ai/doompi` package owns the CLI, interactive host, headless server runtime, and their fixed core dependency set. There is no standalone server package under `packages/clients`; the server entry is built and published by `@agimon-ai/doompi`. Selectable packages remain outside that private dependency closure. This keeps the distribution hosts stable while allowing a repository to choose its features.
 
@@ -219,19 +219,19 @@ The following system invariants apply across packages:
 
 | Responsibility             | Entry points                                                                                              |
 | -------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Canonical composition      | [`extensionAssembler.ts`](../packages/cli/doompi/src/builders/cli/extensionAssembler/index.ts)           |
-| Interactive launcher       | [`launchPlan.ts`](../packages/cli/doompi/src/builders/cli/launchPlan/index.ts)                           |
-| Interactive runtime bundle | [`runtimeBundle.ts`](../packages/cli/doompi/src/builders/cli/runtimeBundle/index.ts)                     |
-| Synchronized state         | [`syncState.ts`](../packages/cli/doompi/src/composition/syncState/index.ts)                              |
-| Artifact validation        | [`bootstrapLocator.ts`](../packages/cli/doompi/src/builders/cli/bootstrapLocator/index.ts)               |
-| Package bootstrap          | [`pi.ts`](../packages/cli/doompi/src/extensions/pi.ts)                                                   |
-| Server runtime             | [`runtime.ts`](../packages/cli/doompi/src/builders/server/runtime.ts)                                    |
-| Server bundle build        | [`server/index.ts`](../packages/cli/doompi/src/builders/server/index.ts)                                 |
+| Canonical composition      | [`extensionAssembler.ts`](../packages/cli/doompi/src/builders/cli/extensionAssembler/index.ts)            |
+| Interactive launcher       | [`launchPlan.ts`](../packages/cli/doompi/src/builders/cli/launchPlan/index.ts)                            |
+| Interactive runtime bundle | [`runtimeBundle.ts`](../packages/cli/doompi/src/builders/cli/runtimeBundle/index.ts)                      |
+| Synchronized state         | [`syncState.ts`](../packages/cli/doompi/src/composition/syncState/index.ts)                               |
+| Artifact validation        | [`bootstrapLocator.ts`](../packages/cli/doompi/src/builders/cli/bootstrapLocator/index.ts)                |
+| Package bootstrap          | [`pi.ts`](../packages/cli/doompi/src/extensions/pi.ts)                                                    |
+| Server runtime             | [`runtime.ts`](../packages/cli/doompi/src/builders/server/runtime.ts)                                     |
+| Server bundle build        | [`server/index.ts`](../packages/cli/doompi/src/builders/server/index.ts)                                  |
 | Server facet lifecycle     | [`serverFacetLoader.ts`](../packages/core/doompi-core/src/server/serverFacetLoader.ts)                    |
 | Headless session host      | [`headlessSessionHost.ts`](../packages/core/doompi-core/src/systems/main/adapters/headlessSessionHost.ts) |
 | Headless kernel            | [`kernel/index.ts`](../packages/core/doompi-core/src/services/kernel/index.ts)                            |
 | Client-neutral protocol    | [`headlessServer.ts`](../packages/core/doompi-core/src/server/headlessServer.ts)                          |
 | Package API hosting        | [`packageApiServer.ts`](../packages/core/doompi-core/src/server/packageApiServer.ts)                      |
 | Transition classification  | [`transitionClassifier.ts`](../packages/core/doompi-core/src/services/transitionClassifier/index.ts)      |
-| Pi transition entry        | [`transitionCoordinator.ts`](../packages/cli/doompi/src/extensions/transitionCoordinator.ts)             |
+| Pi transition entry        | [`transitionCoordinator.ts`](../packages/cli/doompi/src/extensions/transitionCoordinator.ts)              |
 | Cordis host lifecycle      | [`cordisHost.ts`](../packages/core/doompi-core/src/pi/cordisHost.ts)                                      |

@@ -147,6 +147,8 @@ export function defineSelectionAxis(file: SelectionAxisFile): SelectionAxisFile 
 }
 
 /** `lifecycle/start.ts`. Declares the frontend start lifecycle. */
-export function defineWebLifecycle(file: NonNullable<WebPluginContributions['start']>): NonNullable<WebPluginContributions['start']> {
+export function defineWebLifecycle(
+  file: NonNullable<WebPluginContributions['start']>,
+): NonNullable<WebPluginContributions['start']> {
   return file;
 }

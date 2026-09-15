@@ -1,16 +1,8 @@
 import { isWritableFile } from '@agimon-ai/doompi-hashline/files';
-import {
-  createGrepToolDefinition,
-  type AgentToolResult,
-  type ToolDefinition,
-} from '@earendil-works/pi-coding-agent';
+import { createGrepToolDefinition, type AgentToolResult, type ToolDefinition } from '@earendil-works/pi-coding-agent';
 
 import { GrepParamsSchema, type GrepParams } from '../../../../../../schemas/grepTool';
-import {
-  assertNotAborted,
-  type GrepResult,
-  tagGrepResult,
-} from '../../../../../../services/grepTool';
+import { assertNotAborted, type GrepResult, tagGrepResult } from '../../../../../../services/grepTool';
 
 type WritableCheck = (path: string) => Promise<boolean>;
 
