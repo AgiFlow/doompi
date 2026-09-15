@@ -48,6 +48,7 @@ not. Use it as-is, build your own config on top, or raid it for parts.
 | [CLI reference](docs/cli-reference.md)                         | Commands, options, exact effects, and direct package use                           |
 | [Architecture](docs/architecture.md)                           | Package composition, lifecycle ownership, transitions, and isolation               |
 | [Extension lifecycles](docs/lifecycles.md)                     | Mount stages, rollback, host differences, scopes, composition, and failure policy  |
+| [Extension layout](docs/extension-layout.md)                   | Folder-based authoring: scopes, sides, surfaces, filename grammar, and transports  |
 | [Development](docs/development.md)                             | Workspace commands and maintainer release flow                                     |
 | [Contributing](CONTRIBUTING.md)                                | Local setup, repository boundaries, checks, commits, and pull requests             |
 
