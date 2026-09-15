@@ -75,6 +75,8 @@ export const FRONTEND_SURFACES: readonly string[] = [
   'fill',
   'action',
   'store',
+  'activity-group',
+  'leader',
 ];
 
 /** Surfaces whose filename carries a relationship target. */
