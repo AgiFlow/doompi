@@ -4,6 +4,7 @@ const rules: Record<string, Severity> = {
   'composition-layout': 'error',
   'routed-file-position': 'error',
   'extension-side-boundary': 'error',
+  'legacy-source-root': 'error',
   'plugin-composition-wiring': 'error',
   'doom-constants': 'error',
   'neutral-extension-contracts': 'error',

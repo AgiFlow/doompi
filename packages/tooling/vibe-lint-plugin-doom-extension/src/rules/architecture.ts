@@ -22,13 +22,22 @@ const CANONICAL_ROOTS = new Set([
   'models',
   'schemas',
   'services',
-  'tools',
   'tui',
   'types',
   'web',
 ]);
 const RESOURCE_ROOTS = new Set(['prompts']);
-const TRANSITIONAL_ROOTS = new Set<string>();
+/**
+ * Roots the folder convention replaces, still accepted while packages migrate.
+ *
+ * `tools` held whichever tool shape a package happened to write first, so the
+ * same idea landed under `tools` for one host and `services` for the other.
+ * The convention splits that cleanly: a routed file under src/extensions is
+ * the shape one host expects, and a service is host-neutral. `web` is the
+ * same story for the browser half, which now colocates beside the routed file
+ * that renders it.
+ */
+const TRANSITIONAL_ROOTS = new Set<string>(['tools']);
 const FORBIDDEN_ROOTS = new Set([
   'adapters',
   'commands',
