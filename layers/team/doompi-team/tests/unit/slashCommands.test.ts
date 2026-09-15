@@ -3,12 +3,30 @@ import * as fs from 'node:fs';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 
-import { createSlashCommands, type SlashCommandDeps, startSingleAgentRun } from '../../src/controllers/slashCommands';
+import {
+  type SlashCommandDeps,
+  startSingleAgentRun,
+} from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/launch';
+import { createParallelCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/parallel.cli';
+import { createRunCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/run.cli';
+import { createDoctorCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/subagents-doctor.cli';
+import { createSteerCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/subagents-steer.cli';
+import { createStopCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/subagents-stop.cli';
 import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
 import type { ExtensionConfig } from '../../src/services/config';
 import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
 import type { SpawnPlannerContract, SpawnPlanRequest, SpawnPlanResult } from '../../src/services/spawnPlan';
 import type { AgentConfig, AgentDiscoveryContract } from '../../src/types/agent';
+
+function createSlashCommands(pi: ExtensionAPI, state: Parameters<typeof createRunCommand>[1], deps: SlashCommandDeps) {
+  return [
+    createRunCommand(pi, state, deps),
+    createParallelCommand(pi, state, deps),
+    createDoctorCommand(pi, state, deps),
+    createSteerCommand(pi, state, deps),
+    createStopCommand(pi, state, deps),
+  ];
+}
 
 interface FakeHost {
   pi: ExtensionAPI;

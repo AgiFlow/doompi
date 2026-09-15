@@ -9,11 +9,9 @@
 import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
 import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
 import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
-import type { SubagentCapabilityPolicyStore } from '../schemas/team/capabilityCeiling';
-import { resolveActiveTeamPackageConfig } from '../services/agentDiscovery';
-import type { SkillDiscoveryContract } from '../services/agentSkills';
+import type { FleetActionDispatcher } from '../extensions/workspaces/sessions/(frontend)/overlay/fleet.cli';
 import {
   type AsyncJobTrackerContract,
   type TrackedAsyncJobsContract,
@@ -22,10 +20,6 @@ import {
 import type { ManagementActionsContract } from '../services/managementActions';
 import type { PollSchedulerContract } from '../services/pollScheduler';
 import { createSessionScope, type SessionScope } from '../services/sessionPaths';
-import type { AgentDiscoveryContract } from '../types/agent';
-import { type AgentLaunchRequest, openAgentCatalog } from './agentCatalog';
-import { buildAgentCatalogEntries } from './agentResourceProjection';
-import { type FleetActionDispatcher, openSubagentFleet } from './fleet';
 import { AGENT_PULSE_FRAMES, agentFleetStatus, COST_STATUS_KEY, FLEET_STATUS_KEY } from './fleetStatus';
 
 export const SUBAGENT_FLEET_COMMAND = 'subagents-fleet';
@@ -62,55 +56,6 @@ export function registerSubagentLeaderContribution(hub: DoomUiHubService): () =>
     ],
   });
   return () => contribution.dispose();
-}
-
-export interface RegisterAgentListCommandDeps {
-  discovery: AgentDiscoveryContract;
-  skills: SkillDiscoveryContract;
-  policies: SubagentCapabilityPolicyStore;
-  /** Optional: absent until a composition root wires the catalog's launch keys to a real spawn path. */
-  launchAgent?: (ctx: ExtensionContext, request: AgentLaunchRequest) => void;
-}
-
-export function createAgentListCommand(
-  deps: RegisterAgentListCommandDeps,
-): Array<readonly [string, Parameters<ExtensionAPI['registerCommand']>[1]]> {
-  return [
-    [
-      SUBAGENT_LIST_COMMAND,
-      {
-        description: 'Browse agents available from this session cwd and inspect their projected launch resources',
-        handler: async (_args: string, ctx: ExtensionContext) => {
-          const agents = deps.discovery.discover(ctx.cwd, 'both').agents;
-          const teamPackage = resolveActiveTeamPackageConfig();
-          const availableSkills = deps.skills.discoverAvailableSkills(ctx.cwd);
-          const skillSnapshot = {
-            resolveSkillsWithFallback: (
-              ...args: Parameters<SkillDiscoveryContract['resolveSkillsWithFallback']>
-            ): ReturnType<SkillDiscoveryContract['resolveSkillsWithFallback']> =>
-              deps.skills.resolveSkillsWithFallback(...args),
-            discoverAvailableSkills: (): ReturnType<SkillDiscoveryContract['discoverAvailableSkills']> =>
-              availableSkills,
-          };
-          const entries = buildAgentCatalogEntries(agents, {
-            cwd: ctx.cwd,
-            skills: skillSnapshot,
-            capabilityCeiling: deps.policies.resolve(),
-            ...(teamPackage?.config.excludeTools
-              ? { excludeTools: teamPackage.config.excludeTools, exclusionSource: teamPackage.path }
-              : {}),
-            environment: { ...process.env },
-          });
-          const launchAgent = deps.launchAgent;
-          await openAgentCatalog(
-            ctx,
-            entries,
-            launchAgent ? { launchAgent: (request: AgentLaunchRequest) => launchAgent(ctx, request) } : {},
-          );
-        },
-      },
-    ],
-  ];
 }
 
 export interface RegisterFleetCommandDeps {
@@ -246,27 +191,4 @@ export function createAgentStatus(
       current = undefined;
     },
   };
-}
-
-export function createFleetCommand(
-  deps: RegisterFleetCommandDeps,
-): Array<readonly [string, Parameters<ExtensionAPI['registerCommand']>[1]]> {
-  return [
-    [
-      SUBAGENT_FLEET_COMMAND,
-      {
-        description: 'Open the live agent runs overlay: inspect current-session runs and apply runtime controls',
-        handler: async (_args: string, ctx: ExtensionContext) => {
-          const scope = createSessionScope(resolveRootSessionId(ctx.sessionManager.getSessionId(), deps.environment));
-          const jobs = deps.tracker.forSession(ctx.sessionManager.getSessionId(), scope);
-          const dispatchAction =
-            deps.dispatchAction ?? (deps.management ? createFleetActionDispatcher(deps.management, jobs) : undefined);
-          await openSubagentFleet(ctx, deps.scheduler, jobs, scope, {
-            dispatchAction,
-            readTranscriptPage: deps.readTranscriptPage,
-          });
-        },
-      },
-    ],
-  ];
 }

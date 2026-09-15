@@ -1,14 +1,33 @@
+import { defineCliTool, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { definePiTool, type PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 
-import { SubagentToolSchema } from '../schemas/subagentTool';
-import { DoomTeamExpectedError } from '../services/errors';
+import { SubagentToolSchema } from '../../../../../schemas/subagentTool';
+import { DoomTeamExpectedError } from '../../../../../services/errors';
 import {
   SUBAGENT_TOOL_NAME,
   validateParams,
   type SubagentToolContract,
   type SubagentToolDetails,
-} from '../services/subagentTool';
-import { SUBAGENT_TOOL_DESCRIPTION } from '../services/toolDescription';
+} from '../../../../../services/subagentTool';
+import { validateParams as validateSubagentParams } from '../../../../../services/subagentTool';
+import { SUBAGENT_TOOL_DESCRIPTION } from '../../../../../services/toolDescription';
+import { renderSubagentCall, renderSubagentResult } from '../../../../../tui/subagentToolRender';
+import type { TeamPiScope } from '../root.cli';
+
+export default defineCliTool((context: WithRoot<PiPluginContext, TeamPiScope>) =>
+  definePiTool(
+    createSubagentTool(
+      context.root.runtime.subagentTool,
+      context.pi,
+      {
+        renderCall: (params, theme) => renderSubagentCall(validateSubagentParams(params), theme),
+        renderResult: renderSubagentResult,
+      },
+      context.root.waitForSessionReadiness,
+    ),
+  ),
+);
 
 export function createSubagentTool(
   service: SubagentToolContract,

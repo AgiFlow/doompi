@@ -6,7 +6,7 @@ import {
   type AgentCatalogOptions,
   agentResourceSummary,
   openAgentCatalog,
-} from '../../src/tui/agentCatalog';
+} from '../../src/extensions/workspaces/sessions/(frontend)/overlay/agent-catalog.cli';
 import type {
   AgentCatalogEntry,
   AgentResourceProjection,

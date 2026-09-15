@@ -1,6 +1,18 @@
+import { defineCliTool, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { definePiTool, type PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 
-import { NATIVE_TEAM_TOOL_NAME, TeamToolParamsSchema, type NativeTeamRuntime } from '../services/nativeTeamChannel';
+import {
+  NATIVE_TEAM_TOOL_NAME,
+  TeamToolParamsSchema,
+  type NativeTeamRuntime,
+} from '../../../../../services/nativeTeamChannel';
+import type { TeamPiScope } from '../root.cli';
+
+export default defineCliTool((context: WithRoot<PiPluginContext, TeamPiScope>) =>
+  definePiTool(createIntercomTool(context.root.teamRuntime, context.pi, context.root.waitForSessionReadiness)),
+);
+
 export function createIntercomTool(
   runtime: NativeTeamRuntime,
   pi: Pick<ExtensionAPI, 'getAllTools'>,

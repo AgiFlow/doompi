@@ -13,6 +13,7 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { extension as activateTeamExtension } from '../../generated/pi';
 import {
   DOOM_DELEGATION_FINISHED_EVENT,
   DOOM_DELEGATION_STARTED_EVENT,
@@ -20,7 +21,6 @@ import {
   readDoomDelegationService,
 } from '../../src/exports/delegationApi';
 import { readDoomSubagentPolicyService } from '../../src/exports/subagentPolicy';
-import { activateTeamExtension } from '../../src/extensions/pi';
 import { createSessionScope } from '../../src/services/sessionPaths';
 import * as runtimeModule from '../../src/services/teamRuntime';
 import type { TeamExtensionRuntime } from '../../src/services/teamRuntime';

@@ -1309,6 +1309,52 @@ function ownedCordisScopes(units: readonly CordisSourceUnit[]): OwnedCordisScope
 
   // A callback passed to Context.plugin owns the context Cordis gives it.
   for (const { filePath, sourceFile } of units) {
+    if (
+      /\/src\/extensions\/(?:[^/]+\/)*\(backend\)\/root(?:\.(?:cli|server))?\.(?:cts|mts|ts)$/.test(
+        filePath.replaceAll('\\', '/'),
+      )
+    ) {
+      const visitRoot = (node: ts.Node): void => {
+        if (
+          ts.isCallExpression(node) &&
+          ts.isIdentifier(node.expression) &&
+          (aliasesByFile.get(filePath)?.get(node.expression.text) ?? node.expression.text) === 'defineRoot'
+        ) {
+          const factory = node.arguments[0];
+          if (factory && (ts.isArrowFunction(factory) || ts.isFunctionExpression(factory))) {
+            const markServices = (declaration: ts.ObjectLiteralExpression): void => {
+              const services = declaration.properties.find(
+                (property) => ts.isPropertyAssignment(property) && property.name.getText() === 'services',
+              );
+              if (services && ts.isPropertyAssignment(services) && ts.isArrayLiteralExpression(services.initializer)) {
+                for (const service of services.initializer.elements) {
+                  if (ts.isArrowFunction(service) || ts.isFunctionExpression(service)) markParameter(service, 0);
+                  else if (ts.isExpression(service)) {
+                    for (const { node: target } of targetRecords(filePath, service)) markParameter(target, 0);
+                  }
+                }
+              }
+            };
+            const visitReturn = (nested: ts.Node): void => {
+              if (
+                ts.isReturnStatement(nested) &&
+                nested.expression &&
+                ts.isObjectLiteralExpression(nested.expression)
+              ) {
+                markServices(nested.expression);
+              }
+              ts.forEachChild(nested, visitReturn);
+            };
+            let body: ts.Node = factory.body;
+            while (ts.isParenthesizedExpression(body)) body = body.expression;
+            if (ts.isObjectLiteralExpression(body)) markServices(body);
+            else visitReturn(body);
+          }
+        }
+        ts.forEachChild(node, visitRoot);
+      };
+      visitRoot(sourceFile);
+    }
     const visit = (node: ts.Node): void => {
       if (
         ts.isCallExpression(node) &&

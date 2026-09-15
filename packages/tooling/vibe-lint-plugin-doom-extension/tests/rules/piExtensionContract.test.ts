@@ -116,4 +116,12 @@ describe('Pi extension default factory rule', () => {
     expect(piExtensionDefaultFactory.check?.(outside, root, boundaryContext())).toBeNull();
     fs.rmSync(outside, { force: true });
   });
+
+  it('ignores private routed helpers that import the Pi API type', () => {
+    const helper = write(
+      'src/extensions/(backend)/command/_lib/ready.ts',
+      "import type { ExtensionAPI } from '@earendil-works/pi-coding-agent'; export function ready(_pi: ExtensionAPI): void {}",
+    );
+    expect(piExtensionDefaultFactory.check?.(helper, root, boundaryContext())).toBeNull();
+  });
 });

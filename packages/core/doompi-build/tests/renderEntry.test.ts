@@ -78,9 +78,20 @@ function parses(source: string): boolean {
 }
 
 describe('renderCliEntry', () => {
+  it('recognizes a session TUI overlay without registering it as a Pi contribution', () => {
+    const files = {
+      'src/extensions/workspaces/sessions/(frontend)/overlay/fleet.cli.ts': EMPTY,
+    };
+    const graph = scanExtensions({ packageDir: packageWith(files) });
+    expect(graph.notices).toEqual([]);
+    const { cli, web } = render(files);
+    expect(cli).not.toContain('overlay/fleet.cli');
+    expect(web).not.toContain('overlay/fleet.cli');
+  });
+
   it('emits one mount holding every backend contribution, whatever scope declared it', () => {
     const { cli } = render({
-      'src/extensions/(backend)/service/registry.ts': EMPTY,
+      'src/extensions/(backend)/root.ts': EMPTY,
       'src/extensions/workspaces/sessions/(backend)/tool/write-plan.ts': EMPTY,
     });
     expect(cli).toContain("definePiExtension('@agimon-ai/doompi-plan'");
@@ -116,6 +127,18 @@ describe('renderCliEntry', () => {
 });
 
 describe('renderServerEntry', () => {
+  it('registers session root startup work in the server activities field', () => {
+    const { server } = raw({
+      'src/extensions/workspaces/sessions/(backend)/root.server.ts': EMPTY,
+    });
+    expect(server).toContain('session: (context) => {');
+    expect(server).toContain(
+      "get activities(): DoomServerSessionPlugin['activities'] { return [...(scopeSession.activities ?? [])]; }",
+    );
+    expect(server).not.toContain('global:');
+    expect(server).not.toContain('workspace:');
+  });
+
   it('cascades a global contribution into every narrower scope', () => {
     const { server } = render({ 'src/extensions/(backend)/channel/tasks.ts': EMPTY });
     for (const scope of ['global', 'workspace', 'session']) expect(server).toContain(`${scope}: () => ({`);
@@ -194,13 +217,12 @@ describe('ordering', () => {
     // plain property is built when the factory returns, which is too early for
     // a routed file to inject a service the same mount publishes.
     const { server } = raw({
-      'src/extensions/(backend)/service/registry.ts': EMPTY,
+      'src/extensions/(backend)/root.ts': EMPTY,
       'src/extensions/(backend)/tool/write-plan.ts': EMPTY,
     });
     expect(server).toContain("get tools(): DoomServerSessionPlugin['tools'] { return [");
     // services is what the helper reads first, so a getter buys it nothing.
-    // It is always called, because that surface is uniformly a factory.
-    expect(server).toContain('services: [serviceRegistry(context)]');
+    expect(server).toContain('services: [...(scopeGlobal.services ?? [])]');
     expect(server).not.toContain('get services()');
   });
 });
@@ -276,15 +298,13 @@ describe('identity derived from the path', () => {
     expect(cli).not.toContain('piToolContributions');
   });
 
-  it('calls a service file, because that surface is always a factory', () => {
-    // Nothing at runtime separates a Cordis plugin from a (context) => plugin
-    // factory, so the surface is uniformly a factory rather than guessed at.
-    // It is also how a package publishes the graph its other files inject.
-    const { cli, server } = render({ 'src/extensions/(backend)/service/telemetry.ts': EMPTY });
-    expect(cli).toContain('services: [serviceTelemetry(context)]');
-    expect(server).toContain('services: [serviceTelemetry(context)]');
-    expect(cli).not.toContain('at(serviceTelemetry');
-    expect(server).not.toContain('at(serviceTelemetry');
+  it('registers services from each enclosing root', () => {
+    const { cli, server } = render({
+      'src/extensions/(backend)/root.ts': EMPTY,
+      'src/extensions/workspaces/sessions/(backend)/root.ts': EMPTY,
+    });
+    expect(cli).toContain('services: [...(scopeGlobal.services ?? []), ...(scopeSession.services ?? [])]');
+    expect(server).toContain('services: [...(scopeGlobal.services ?? []), ...(scopeSession.services ?? [])]');
   });
 
   it('declares the helpers without a generic trailing comma, which oxfmt strips from a .ts file', () => {
@@ -423,6 +443,12 @@ describe('scope roots', () => {
     expect(roots).toEqual([]);
     expect(notices[0]?.message).toContain('backend file');
   });
+});
+
+it('keeps native CLI command tuples intact', () => {
+  const { cli } = raw({ 'src/extensions/(backend)/command/run.cli.ts': EMPTY });
+  expect(cli).toContain('at(commandRun, context)');
+  expect(cli).not.toContain("via({ name: 'run' }");
 });
 
 describe('every generated entry', () => {

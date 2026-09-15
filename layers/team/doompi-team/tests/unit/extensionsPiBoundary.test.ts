@@ -4,8 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import standardPiExtension from '../../src/extensions/pi';
-import { activateTeamExtension } from '../../src/extensions/pi';
+import standardPiExtension, { extension as activateTeamExtension } from '../../generated/pi';
 
 const extensionsDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../src/extensions');
 

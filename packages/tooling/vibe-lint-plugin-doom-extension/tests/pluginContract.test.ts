@@ -21,7 +21,9 @@ const EXPECTED_RULE_IDS = [
   'doom-package-shape',
   'doom-prompt-shape',
   'doom-server-facet-shape',
+  'extension-side-boundary',
   'flat-service-layout',
+  'legacy-source-root',
   'neutral-extension-contracts',
   'no-ambient-host-access',
   'no-direct-tool-activation',
@@ -41,6 +43,7 @@ const EXPECTED_RULE_IDS = [
   'prefer-cordis-container',
   'provider-owned-policy',
   'public-export-boundary',
+  'routed-file-position',
   'schema-placement',
   'service-boundary',
   'thin-pi-adapter',
@@ -138,12 +141,7 @@ describe('Doom extension plugin contract', () => {
     expect(bin).not.toContain('src/extensions/**');
     expect(bin).not.toContain('src/exports/**');
     const exceptions = recommended.overrides?.flatMap((override) => override.files) ?? [];
-    expect(exceptions).toEqual([
-      'src/extensions/pi.ts',
-      'src/extensions/server.ts',
-      'tsdown.config.ts',
-      'vitest.config.ts',
-    ]);
+    expect(exceptions).toEqual(['src/extensions/**', 'tsdown.config.ts', 'vitest.config.ts']);
   });
 
   it('applies the browser boundary before the broader extension composition boundary', () => {
@@ -155,7 +153,14 @@ describe('Doom extension plugin contract', () => {
     expect(boundaries[browser]).toEqual({
       name: 'web-plugin-entry',
       pattern: 'src/extensions/web.ts',
-      allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
+      allowedImports: [
+        'src/web/**',
+        'src/types',
+        'src/types/**',
+        'src/constants',
+        'src/constants/**',
+        'src/extensions/**',
+      ],
     });
     expect(doomExtensionPlugin.patterns?.['doom-web-plugin-entry']?.includes).toEqual(['src/extensions/web.ts']);
     expect(doomExtensionPlugin.patterns?.['doom-web-plugin-store']?.includes).toEqual(['src/web/stores/**/*.ts']);
@@ -176,7 +181,7 @@ describe('Doom extension plugin contract', () => {
     expect(recommended.boundaries).toContainEqual({
       name: 'tests',
       pattern: 'tests/**',
-      allowedImports: ['src/**', 'tests/**'],
+      allowedImports: ['src/**', 'tests/**', 'generated/**'],
     });
     for (const id of [
       'doom-web-plugin-entry',
