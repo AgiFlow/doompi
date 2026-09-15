@@ -3,6 +3,7 @@ import type { BoundaryConfig, OverrideConfig, PluginConfigPreset, Severity } fro
 const rules: Record<string, Severity> = {
   'composition-layout': 'error',
   'routed-file-position': 'error',
+  'routed-file-contract': 'error',
   'extension-side-boundary': 'error',
   'legacy-source-root': 'error',
   'plugin-composition-wiring': 'error',
@@ -75,7 +76,7 @@ const boundaries: BoundaryConfig[] = [
   {
     name: 'exports',
     pattern: 'src/exports/**',
-    allowedImports: layer('constants', 'controllers', 'models', 'schemas', 'services', 'tools', 'tui', 'types'),
+    allowedImports: layer('constants', 'models', 'schemas', 'services', 'tui', 'types'),
   },
   { name: 'types', pattern: 'src/types/**', allowedImports: layer('constants', 'types') },
   { name: 'schemas', pattern: 'src/schemas/**', allowedImports: layer('constants', 'schemas', 'types') },
@@ -88,16 +89,6 @@ const boundaries: BoundaryConfig[] = [
     name: 'services',
     pattern: 'src/services/**',
     allowedImports: layer('constants', 'models', 'schemas', 'services', 'types'),
-  },
-  {
-    name: 'controllers',
-    pattern: 'src/controllers/**',
-    allowedImports: layer('constants', 'controllers', 'models', 'schemas', 'services', 'types'),
-  },
-  {
-    name: 'tools',
-    pattern: 'src/tools/**',
-    allowedImports: layer('constants', 'models', 'schemas', 'services', 'tools', 'types'),
   },
   // Browser entries retain the browser-only policy before general composition.
   {
@@ -132,18 +123,7 @@ const boundaries: BoundaryConfig[] = [
   {
     name: 'extensions',
     pattern: 'src/extensions/**',
-    allowedImports: layer(
-      'constants',
-      'controllers',
-      'extensions',
-      'models',
-      'schemas',
-      'services',
-      'tools',
-      'tui',
-      'types',
-      'web',
-    ),
+    allowedImports: layer('constants', 'extensions', 'models', 'schemas', 'services', 'tui', 'types', 'web'),
   },
   {
     name: 'tui',
@@ -158,18 +138,7 @@ const boundaries: BoundaryConfig[] = [
   {
     name: 'bin',
     pattern: 'src/bin/**',
-    allowedImports: layer(
-      'bin',
-      'constants',
-      'controllers',
-      'models',
-      'schemas',
-      'services',
-      'tools',
-      'tui',
-      'types',
-      'web',
-    ),
+    allowedImports: layer('bin', 'constants', 'models', 'schemas', 'services', 'tui', 'types', 'web'),
   },
   // The web cockpit plugin's browser half lives in src/web. It may reach its
   // own files and the shared src/types shapes (web-plugin-import-allowlist

@@ -92,11 +92,11 @@ describe('doompi-profile package contract', () => {
     });
     const client = await readFile(path.join(packageDirectory, 'generated/web.ts'), 'utf8');
     const contribution = await readFile(
-      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(frontend)/extra.ts'),
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(frontend)/selection-axis/profile.ts'),
       'utf8',
     );
     expect(client).toContain('defineWebPlugin');
-    expect(client).toContain('...extra');
+    expect(client).toContain('selectionAxes');
     expect(contribution).toContain("statusKey: 'doom-profile'");
   });
 
@@ -107,8 +107,11 @@ describe('doompi-profile package contract', () => {
 
   it('routes both Pi entries through a default-exported factory', async () => {
     const commandEntry = await readFile(path.join(packageDirectory, 'generated/pi.ts'), 'utf8');
-    const personaEntry = await readFile(path.join(packageDirectory, 'src/extensions/_standalone/persona.ts'), 'utf8');
-    const factory = await readFile(path.join(packageDirectory, 'src/controllers/profileRuntime.ts'), 'utf8');
+    const personaEntry = await readFile(path.join(packageDirectory, 'src/services/personaExtension/index.ts'), 'utf8');
+    const factory = await readFile(
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/_lib/profileRuntime.ts'),
+      'utf8',
+    );
 
     expect(commandEntry).toContain('definePiExtension');
     expect(commandEntry).toContain('export default extension');
@@ -117,7 +120,7 @@ describe('doompi-profile package contract', () => {
     expect(factory).toContain('services: [bindRuntime, bindVoice]');
     expect(factory).toContain('events:');
     const routedFactory = await readFile(
-      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/extra.cli.ts'),
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/resource/doompiAuthorProfile.cli.ts'),
       'utf8',
     );
     expect(routedFactory).toContain("name: 'doompi-author-profile'");

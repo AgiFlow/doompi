@@ -13,8 +13,8 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import type { GoalExtensionDependencies } from '../../types/extension';
-import type { GoalPiManager } from './goalManager';
-import { createGoalRuntime, isRetainedGoalStatus, createGoalMinorMode } from './runtimeActivation';
+import type { GoalPiManager } from '../goalManager';
+import { createGoalRuntime, isRetainedGoalStatus, createGoalMinorMode } from '../runtimeActivation';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-goal';
 const LEADER_ORDER = 100;

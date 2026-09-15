@@ -3,7 +3,7 @@ import { defineConfig } from 'tsdown';
 
 const routed = doompiExtension({
   packageDir: process.cwd(),
-  entry: { 'extensions/persona': 'src/extensions/_standalone/persona.ts' },
+  entry: { 'extensions/persona': 'src/services/personaExtension/index.ts' },
 });
 
 export default defineConfig(routed);

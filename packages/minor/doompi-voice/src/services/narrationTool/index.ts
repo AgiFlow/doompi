@@ -15,8 +15,8 @@ import type {
 import type { NarrationPlaybackOutcome } from '../../services/narration';
 import { type VoiceToolSessionHandle } from '../../services/voiceTools';
 import type { VoiceWorkerAutoCaptureController } from '../../services/voiceWorkerAutoCaptureController';
-import { renderNarrationToolCall, renderNarrationToolResult } from './voiceToolRender';
-import type { VoiceToolReadinessWaiter } from './voiceTools';
+import { renderNarrationToolCall, renderNarrationToolResult } from '../voiceToolRender';
+import type { VoiceToolReadinessWaiter } from '../voiceToolsController';
 
 const NARRATE_LABEL = 'Narrate';
 const NARRATE_DESCRIPTION =

@@ -3,14 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMetricsSource } from '../src/services/metricsSource';
 
-const { resolveLogSinkPort, resolveLogSinkInstance, execFile } = vi.hoisted(() => ({
+const { resolveLogSinkPort, resolveLogSinkInstance, createAsyncLogMetricsReader, workerReader } = vi.hoisted(() => ({
   resolveLogSinkPort: vi.fn(),
   resolveLogSinkInstance: vi.fn(),
-  execFile: vi.fn(),
+  createAsyncLogMetricsReader: vi.fn(),
+  workerReader: { getMetrics: vi.fn(), close: vi.fn() },
 }));
 
-vi.mock('@agimon-ai/log-sink-mcp', () => ({ resolveLogSinkPort, resolveLogSinkInstance }));
-vi.mock('node:child_process', () => ({ execFile }));
+vi.mock('@agimon-ai/log-sink-mcp', () => ({
+  createAsyncLogMetricsReader,
+  resolveLogSinkPort,
+  resolveLogSinkInstance,
+}));
 
 const REPORT = { timeline: [] } as unknown as LogMetricsReport;
 const QUERY = { groupBy: 'session', period: 'day', limit: 6 } as const;
@@ -26,6 +30,9 @@ const LOCAL_INSTANCE = {
 beforeEach(() => {
   vi.clearAllMocks();
   resolveLogSinkInstance.mockReturnValue(LOCAL_INSTANCE);
+  createAsyncLogMetricsReader.mockReturnValue(workerReader);
+  workerReader.getMetrics.mockResolvedValue(REPORT);
+  workerReader.close.mockResolvedValue(undefined);
 });
 
 describe('historical log metrics source', () => {
@@ -67,33 +74,36 @@ describe('historical log metrics source', () => {
     expect(source.lastTransport()).toBe('http');
   });
 
-  it('falls back to the CLI when sink discovery is unavailable', async () => {
+  it('falls back to the worker when sink discovery is unavailable', async () => {
     resolveLogSinkPort.mockRejectedValue(new Error('sink discovery unavailable'));
-    const cliRunner = vi.fn().mockResolvedValue(REPORT);
-    const source = createMetricsSource({ cwd: '/standalone/package', cliRunner });
+    const source = createMetricsSource({ cwd: '/standalone/package' });
 
     await expect(source.query(QUERY)).resolves.toEqual(REPORT);
 
-    expect(cliRunner).toHaveBeenCalledWith(QUERY);
-    expect(source.lastTransport()).toBe('cli');
+    expect(workerReader.getMetrics).toHaveBeenCalledWith(undefined, {
+      groupBy: 'session',
+      period: 'day',
+      sort: 'total-tokens',
+      limit: 6,
+      toolLimit: 1,
+    });
+    expect(source.lastTransport()).toBe('worker');
   });
 
-  it('falls back to the CLI when the historical HTTP response is stale', async () => {
+  it('falls back to the worker when the historical HTTP response is stale', async () => {
     resolveLogSinkPort.mockResolvedValue({ endpoint: 'http://127.0.0.1:4318' });
     const fetchMock = vi.fn(
       async (_input: unknown) => new Response(JSON.stringify({ error: 'older sink' }), { status: 200 }),
     );
-    const cliRunner = vi.fn().mockResolvedValue(REPORT);
     const source = createMetricsSource({
       cwd: '/standalone/package',
       fetchImpl: fetchMock as unknown as typeof fetch,
-      cliRunner,
     });
 
     await expect(source.query(QUERY)).resolves.toEqual(REPORT);
 
-    expect(cliRunner).toHaveBeenCalledWith(QUERY);
-    expect(source.lastTransport()).toBe('cli');
+    expect(workerReader.getMetrics).toHaveBeenCalledOnce();
+    expect(source.lastTransport()).toBe('worker');
   });
 
   it('reports the resolved instance so an empty history names the database it read', () => {
@@ -107,38 +117,41 @@ describe('historical log metrics source', () => {
       throw new Error('Invalid .logsink.yaml');
     });
     resolveLogSinkPort.mockResolvedValue(undefined);
-    const cliRunner = vi.fn().mockResolvedValue(REPORT);
-    const source = createMetricsSource({ cwd: '/standalone/package', ...IDENTITY, cliRunner });
+    const source = createMetricsSource({ cwd: '/standalone/package', ...IDENTITY });
 
     await expect(source.query(QUERY)).resolves.toEqual(REPORT);
     expect(source.instance?.()).toBeUndefined();
+    expect(createAsyncLogMetricsReader).toHaveBeenCalledWith({ cwd: '/standalone/package' });
   });
 
-  it('pins the CLI subprocess to the resolved database', async () => {
+  it('pins the worker reader to the resolved database', async () => {
     resolveLogSinkPort.mockResolvedValue(undefined);
-    execFile.mockImplementation((_command, _args, _options, callback) => {
-      callback(null, JSON.stringify(REPORT), '');
-    });
     const source = createMetricsSource({ cwd: '/standalone/package', ...IDENTITY });
 
     await expect(source.query(QUERY)).resolves.toEqual(REPORT);
 
-    // Without this the subprocess re-resolves an instance of its own from the
-    // inherited cwd and environment, which is how the two paths drifted apart.
-    const args = execFile.mock.calls[0]?.[1] as string[];
-    expect(args).toContain('--db-path');
-    expect(args[args.indexOf('--db-path') + 1]).toBe(LOCAL_INSTANCE.dbPath);
-    expect(source.lastTransport()).toBe('cli');
+    expect(createAsyncLogMetricsReader).toHaveBeenCalledWith({ dbPath: LOCAL_INSTANCE.dbPath });
+    expect(source.lastTransport()).toBe('worker');
   });
 
-  it('propagates a CLI failure after both transports are unavailable', async () => {
+  it('propagates a worker failure after both transports are unavailable', async () => {
     resolveLogSinkPort.mockResolvedValue(undefined);
-    const failure = new Error('metrics CLI failed');
-    const cliRunner = vi.fn().mockRejectedValue(failure);
-    const source = createMetricsSource({ cwd: '/standalone/package', cliRunner });
+    const failure = new Error('metrics worker failed');
+    workerReader.getMetrics.mockRejectedValue(failure);
+    const source = createMetricsSource();
 
     await expect(source.query(QUERY)).rejects.toBe(failure);
     expect(source.lastTransport()).toBeUndefined();
+  });
+
+  it('closes a worker reader created by a fallback query', async () => {
+    resolveLogSinkPort.mockResolvedValue(undefined);
+    const source = createMetricsSource();
+    await source.query(QUERY);
+
+    await source.close?.();
+
+    expect(workerReader.close).toHaveBeenCalledOnce();
   });
 });
 
@@ -173,33 +186,21 @@ describe('narrowing one query to a single group', () => {
     expect(new URL(String(fetchMock.mock.calls[0]?.[0])).searchParams.has('model')).toBe(false);
   });
 
-  it('sends the same filters as flags when it falls back to the CLI', async () => {
-    // The two transports must narrow identically, or a daemon that is merely
-    // unreachable would silently widen the reader's query.
+  it('sends the same filters when it falls back to the worker', async () => {
     resolveLogSinkPort.mockResolvedValue(undefined);
-    execFile.mockImplementation((_bin: string, _args: string[], _options: unknown, done: Function) => {
-      done(null, JSON.stringify(REPORT), '');
-    });
     const source = createMetricsSource({ ...IDENTITY });
 
-    await source.query({ ...QUERY, filter: { model: 'claude-opus-5', sessionId: 'id_abc' } });
+    const filter = { model: 'claude-opus-5', sessionId: 'id_abc' };
+    await source.query({ ...QUERY, filter });
 
-    const args = execFile.mock.calls[0]?.[1] as string[];
-    expect(args).toContain('--model');
-    expect(args[args.indexOf('--model') + 1]).toBe('claude-opus-5');
-    expect(args).toContain('--session-id');
-    expect(args[args.indexOf('--session-id') + 1]).toBe('id_abc');
+    expect(workerReader.getMetrics).toHaveBeenCalledWith(filter, expect.any(Object));
   });
 
-  it('passes no filter flags when the caller narrowed nothing', async () => {
+  it('passes no filters when the caller narrowed nothing', async () => {
     resolveLogSinkPort.mockResolvedValue(undefined);
-    execFile.mockImplementation((_bin: string, _args: string[], _options: unknown, done: Function) => {
-      done(null, JSON.stringify(REPORT), '');
-    });
 
     await createMetricsSource({ ...IDENTITY }).query(QUERY);
 
-    const args = execFile.mock.calls[0]?.[1] as string[];
-    expect(args.some((arg) => arg.startsWith('--model') || arg.startsWith('--session-id'))).toBe(false);
+    expect(workerReader.getMetrics).toHaveBeenCalledWith(undefined, expect.any(Object));
   });
 });

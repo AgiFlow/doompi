@@ -11,7 +11,12 @@ import {
   warrantsAttentionNotification,
   warrantsSettledNotification,
 } from '../../../../../services/notificationPolicy';
-import { attentionNotification, promptTitle, settledNotification, shellTabTitle } from '../../../../../services/notificationText';
+import {
+  attentionNotification,
+  promptTitle,
+  settledNotification,
+  shellTabTitle,
+} from '../../../../../services/notificationText';
 import type { ShellTitleController, WriteTitle } from '../../../../../types/notifications';
 import { createDoomNotificationRouter } from './notificationRouter';
 import { createWorkerTitleController } from './shellTitleController';

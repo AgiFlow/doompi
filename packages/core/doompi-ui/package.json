@@ -217,12 +217,28 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "doompiServer": {
+    "entry": "./generated/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "session"
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
+    }
+  },
   "doompiWeb": {
     "pluginId": "builtin-tools",
     "channels": [],
     "client": "./dist/extensions/web.mjs",
     "scopes": [
       "session"
+    ]
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
     ]
   }
 }

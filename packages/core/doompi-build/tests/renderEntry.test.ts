@@ -113,14 +113,6 @@ describe('renderCliEntry', () => {
     expect(cli).not.toContain(".ts'");
   });
 
-  it('spreads an escape hatch and infers its public options contract', () => {
-    const { cli } = render({ 'src/extensions/(backend)/extra.cli.ts': EMPTY });
-    expect(cli).toMatch(/\.\.\.await at\(\w+, context\),/u);
-    expect(cli).toContain('type OptionsOf<T> = T extends (context: PiPluginContext<infer Options>)');
-    expect(cli).toContain('definePiExtension<ExtensionOptions>');
-    expect(parses(cli)).toBe(true);
-  });
-
   it('emits a valid empty extension when nothing is declared', () => {
     const { cli } = render({ 'src/extensions/(frontend)/tab/Panel.tsx': EMPTY });
     expect(cli).toContain('definePiExtension');
@@ -194,13 +186,6 @@ describe('renderWebEntry', () => {
     expect(web).toContain("id: 'plan',");
   });
 
-  it('spreads a frontend escape hatch as contribution data without resolving it', () => {
-    const { web } = render({ 'src/extensions/(frontend)/extra.ts': EMPTY });
-    expect(web).toContain('...extra');
-    expect(web).not.toContain('const at =');
-    expect(web).not.toContain('at(extra');
-  });
-
   it('never resolves a frontend export, because a component is a function too', () => {
     // The cockpit builds its definition as data and starts it separately, so
     // there is no mount context. Resolving anyway would call any export that
@@ -217,6 +202,37 @@ describe('renderWebEntry', () => {
     const { web } = render({ 'src/extensions/workspaces/sessions/(frontend)/fill/PlanRail.rail.tsx': EMPTY });
     expect(web).toContain("fills: [via({ slot: 'rail', id: 'plan-rail' }, ");
     expect(parses(web)).toBe(true);
+  });
+});
+
+describe('routed cardinality', () => {
+  it('omits optional array and record members without changing ordinary routes', () => {
+    const OPTIONAL = "export default defineRoutedContribution({}, { cardinality: 'optional' });\n";
+    const { cli, server } = render({
+      'src/extensions/(backend)/hook/session-start.ts': OPTIONAL,
+      'src/extensions/(backend)/resource/guidance.ts': OPTIONAL,
+    });
+    expect(cli).toContain("...keyed('session_start', at(");
+    expect(cli).toContain('resources: defined([');
+    expect(server).toContain('hooks: defined([');
+    expect(cli).toContain('const defined =');
+    expect(cli).toContain('const keyed =');
+  });
+
+  it('flattens a many route into its standard surface array', () => {
+    const MANY = "export default defineRoutedContribution([], { cardinality: 'many' });\n";
+    const { cli, server } = render({ 'src/extensions/(backend)/resource/discovered.ts': MANY });
+    expect(cli).toContain('...many(resourceDiscovered, context)');
+    expect(server).toContain('...many(resourceDiscovered, context)');
+    expect(cli).toContain('const many =');
+  });
+
+  it('preserves a live Pi tool collection instead of snapshotting it into an array', () => {
+    const COLLECTION = "export default defineRoutedContribution({}, { cardinality: 'collection' });\n";
+    const { cli } = render({ 'src/extensions/(backend)/tool/dynamic.cli.ts': COLLECTION });
+    expect(cli).toContain("...piToolContributions('@agimon-ai/doompi-plan', at(toolDynamic, context))");
+    expect(cli).not.toContain("via({ name: 'dynamic' }");
+    expect(cli).not.toContain("piToolContributions('@agimon-ai/doompi-plan', [");
   });
 });
 
@@ -444,6 +460,12 @@ describe('scope roots', () => {
     const { cli } = raw({ 'src/extensions/(backend)/tool/subagent.ts': EMPTY });
     expect(cli).not.toContain('composeRootHooks');
     expect(cli).toContain('(context) => ({');
+  });
+
+  it('does not declare a root context when nothing reads it', () => {
+    const { cli } = raw({ 'src/extensions/workspaces/sessions/(backend)/root.ts': EMPTY });
+    expect(cli).toContain('const scopeSession = await rootSession(context);');
+    expect(cli).not.toContain('const contextSession');
   });
 
   it('reports a root on the frontend, which has no mount context to construct from', () => {

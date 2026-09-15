@@ -54,6 +54,8 @@ export interface ExtensionEntry {
   readonly target: string | undefined;
   /** Platform this file serves, or undefined for the side's neutral file. */
   readonly platform: string | undefined;
+  /** Helper-declared cardinality. Omitted means exactly one contribution. */
+  readonly cardinality?: 'optional' | 'many' | 'collection';
   /** Whether this declares a contribution, a scope root, or the escape hatch. */
   readonly role: EntryRole;
 }

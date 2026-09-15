@@ -17,8 +17,8 @@ import {
   createVoiceTurnFallback,
   type VoiceTurnFallbackRuntime,
   voiceToolRestriction,
-} from '../src/services/voice';
-import { deliverAutoCaptureInput } from '../src/services/voice';
+} from '../src/services/voiceController';
+import { deliverAutoCaptureInput } from '../src/services/voiceController';
 import { createDoomVoiceToolsService } from '../src/services/voiceTools';
 describe('autonomous prompt delivery', () => {
   it('queues composed prompts as follow-ups without changing ordinary idle or steer delivery', () => {

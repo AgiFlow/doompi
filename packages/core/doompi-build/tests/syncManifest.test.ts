@@ -25,21 +25,6 @@ afterEach(() => {
 });
 
 describe('syncManifest', () => {
-  it('preserves channels owned by an opaque frontend escape hatch', () => {
-    const packageDir = packageWith({
-      'src/extensions/workspaces/sessions/(frontend)/extra.ts': 'export default {};\n',
-    });
-    const manifest = syncManifest({
-      packageDir,
-      manifest: { doompiWeb: { channels: ['voice_audio', 'voice_state'] } },
-      graph: scanExtensions({ packageDir }),
-      targets: ['web'],
-      pluginId: 'voice',
-    });
-
-    expect(manifest.doompiWeb).toMatchObject({ channels: ['voice_audio', 'voice_state'] });
-  });
-
   it('converges routed channels when no opaque frontend hatch remains', () => {
     const packageDir = packageWith({
       'src/extensions/workspaces/sessions/(frontend)/channel/current-state.ts': 'export default {};\n',

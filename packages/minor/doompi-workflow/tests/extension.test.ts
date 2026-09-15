@@ -72,7 +72,9 @@ describe('doom workflow extension', () => {
     expect(help.listContributions()).toEqual([
       expect.objectContaining({
         source: '@agimon-ai/doompi-workflow',
-        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
+        moduleUrl: expect.stringMatching(
+          /extensions\/workspaces\/sessions\/\(backend\)\/resource\/workflow-skills\.cli\.ts$/u,
+        ),
         skills: [
           {
             name: 'doompi-author-workflow',

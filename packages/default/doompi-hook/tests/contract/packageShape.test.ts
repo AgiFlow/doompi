@@ -129,7 +129,7 @@ describe('doompi-hook package contract', () => {
     const sources = await Promise.all(
       [
         'src/extensions/workspaces/sessions/(backend)/extra.cli.ts',
-        'src/controllers/hookHandlers.ts',
+        'src/services/hookHandlers.ts',
         'src/services/hookDocuments/index.ts',
         'src/services/hookRunner/index.ts',
         'src/exports/index.ts',

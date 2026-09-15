@@ -1,6 +1,5 @@
-import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
 
-import type { TaskPiScope } from '../root.cli';
+import contribution from './_lib/tool-execution-end.cli';
 
-export default (context: WithRoot<PiPluginContext, TaskPiScope>) => context.root.toolExecutionEnd;
+export default defineRoutedContribution(contribution, {});

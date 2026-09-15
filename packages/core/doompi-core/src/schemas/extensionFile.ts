@@ -29,6 +29,11 @@ import type { DoomServerMethod } from './serverFacet';
 export type PathSupplied<TContribution, TKeys extends keyof TContribution> = Omit<TContribution, TKeys> &
   Partial<Pick<TContribution, TKeys>>;
 
+export type RoutedCardinality = 'one' | 'optional' | 'many' | 'collection';
+export interface RoutedFileOptions {
+  readonly cardinality?: RoutedCardinality;
+}
+
 /** A declaration, or a factory the generator calls with the mount context. */
 export type OrFactory<TDeclaration, TContext> = TDeclaration | ((context: TContext) => TDeclaration);
 
@@ -79,7 +84,9 @@ export interface RootDeclaration<TValue, TContext = unknown> extends PluginLifec
  * graph at module scope is the module-level singleton the Cordis ownership
  * rules exist to prevent.
  */
-export type RootFile<TValue, TContext = unknown> = (context: TContext) => RootDeclaration<TValue, TContext>;
+export type RootFile<TValue, TContext = unknown> = (
+  context: TContext,
+) => RootDeclaration<TValue, TContext> | Promise<RootDeclaration<TValue, TContext>>;
 
 /** A mount context with the nearest root's value attached, as a routed file sees it. */
 export type WithRoot<TContext, TValue> = TContext & { readonly root: TValue };

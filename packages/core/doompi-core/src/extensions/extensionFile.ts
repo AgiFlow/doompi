@@ -9,6 +9,7 @@ import type {
   HookFile,
   MethodFile,
   RootFile,
+  RoutedFileOptions,
   RouteFile,
   ServerToolFile,
   ServiceFile,
@@ -33,6 +34,35 @@ import type { PluginLifecycleHooks } from '../services/pluginLifecycle';
  * tell a portable contribution from a raw host declaration.
  */
 
+/** Declares non-default route cardinality while preserving the routed surface's inferred host type. */
+export function defineRoutedContribution<T>(file: T, _options: RoutedFileOptions): T {
+  return file;
+}
+
+/** `provider/<name>.cli.ts`. Declares one Pi provider tuple. */
+export function defineProvider<T>(file: T): T {
+  return file;
+}
+
+/** `resource/<name>.ts`. Declares one package resource. */
+export function defineResource<T>(file: T): T {
+  return file;
+}
+
+/** `shortcut/<name>.cli.ts`. Declares one Pi keyboard shortcut. */
+export function defineShortcut<T>(file: T): T {
+  return file;
+}
+
+/** `tool-restriction/<name>.ts`. Declares one tool restriction. */
+export function defineToolRestriction<T>(file: T): T {
+  return file;
+}
+
+/** Declares one mode when it is not represented by a mode gate file. */
+export function defineMode<T>(file: T): T {
+  return file;
+}
 /** `tool/<name>.ts`. Adds the discriminant the contribution array expects. */
 export function defineTool<TContext = unknown>(file: ToolFile<TContext>): ToolContribution<TContext> {
   return typeof file === 'function'

@@ -7,14 +7,14 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createFileEditsApi } from '../src/controllers/fileEditsApi';
-import { readSessionFiles } from '../src/controllers/webFilesChannel';
 import { createDoomIgnoreMatcher } from '../src/services/doomIgnore';
 import { EditTracker } from '../src/services/editTracker';
 import { FileEditPaths } from '../src/services/fileEditPaths';
+import { createFileEditsApi } from '../src/services/fileEditsApi';
 import { NodeSnapshotStoreAdapter } from '../src/services/snapshotStore';
 import { TimelineStore } from '../src/services/timelineStore';
 import { NodeTreeManifestAdapter } from '../src/services/treeManifest';
+import { readSessionFiles } from '../src/services/webFilesChannel';
 import type { FileEditsDetailView } from '../src/types/fileEditsApi';
 import { detailUrl } from '../src/types/fileEditsApi';
 import type { GitStatusPort } from '../src/types/gitStatus';

@@ -1,3 +1,5 @@
-import { api } from '../../../controllers/promptsApi';
+import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
 
-export default api;
+import { api } from '../../../services/promptsApi';
+
+export default defineRoutedContribution(api, {});

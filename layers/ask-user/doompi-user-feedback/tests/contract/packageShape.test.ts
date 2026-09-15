@@ -60,7 +60,7 @@ describe('doompi-user-feedback package contract', () => {
       'registerUserFeedbackExtension',
     );
     expect(
-      await readFile(path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/extra.cli.ts'), 'utf8'),
+      await readFile(path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/root.cli.ts'), 'utf8'),
     ).not.toMatch(/Symbol\.for|installed-hosts|WeakSet/u);
   });
 

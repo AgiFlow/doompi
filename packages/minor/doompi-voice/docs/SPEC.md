@@ -515,7 +515,7 @@ Start phrases remain optional leading control phrases during ordinary active lis
 **Modules:**
 
 - `src/services/commandCorrection.ts`
-- `src/controllers/voiceCommandContext.ts`
+- `src/services/voiceCommandContext/index.ts`
 
 Responsibilities:
 
@@ -554,8 +554,8 @@ Impact on result: prevents lost prompts, duplicate prompts, and orphan spools.
 - `src/services/narration.ts`
 - `src/services/narrationPlayback.ts`
 - `src/services/fallbackNarration.ts`
-- `src/controllers/narrationTool.ts`
-- `src/controllers/voice.ts`
+- `src/services/narrationTool/index.ts`
+- `src/services/voice/index.ts`
 
 Responsibilities:
 

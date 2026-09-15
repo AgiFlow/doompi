@@ -55,13 +55,13 @@ Source entrypoints live directly in `src/extensions`. Flat `src/exports` modules
 
 ## Structure and lifecycle
 
-- `extensions/`: typed Pi/server/web composition.
-- `controllers/`: commands, typed methods, and HTTP request handling.
+- `extensions/`: path-routed host contracts. Every scanned file default-exports one typed `define*` declaration.
 - `services/{serviceName}/`: package logic, with `index.ts` and `type.ts`.
-- `models/`: state. `tools/`: tool declarations using services.
-- `constants/` and `schemas/`: shared metadata and validation.
+- `models/`: host-neutral state and transitions.
+- `constants/`, `schemas/`, and `types/`: shared metadata, validation, and contracts.
+- Private `_lib/` and `_components/` folders beside routes hold surface-private implementation and are not scanned.
 
-Use a named plugin object for static contributions or a per-mount factory for shared dependencies. Pi factories and server scope factories may be async; the helper awaits their contribution result before registration and readiness. Declare tools with `defineTool`, commands with `defineCommand`, and include the same declarations in Pi and server arrays.
+Use a scoped `defineRoot` factory for shared dependencies and lifecycle. Put each tool, command, hook, method, API, resource, and presentation contribution in its own named routed file. Do not use catch-all entries, named exports in routes, or freeform route implementation.
 
 The lifecycle is construct, register, `onStart`, run, `onStop`, unregister, `onDispose`. All hooks are optional and receive one typed context. The helper awaits startup before readiness. Shutdown aborts the context signal, stops work, removes registrations in reverse order, and performs final cleanup. Failed startup awaits rollback. Optional provider replacement rebinds contributions without restarting the plugin. Minor-mode actions are independent of mounting.
 

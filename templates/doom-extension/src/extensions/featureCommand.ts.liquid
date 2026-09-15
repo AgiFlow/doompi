@@ -1,0 +1,15 @@
+import { defineCommand } from '@agimon-ai/doompi-core/pi-extension';
+
+import {
+  {{ commandName | snakeCase | upper }}_COMMAND_DESCRIPTION,
+  {{ commandName | snakeCase | upper }}_COMMAND_NAME,
+} from '../../../../../constants/{{ commandName | camelCase }}';
+
+/** {{ commandDescription }} */
+export default defineCommand({
+  name: {{ commandName | snakeCase | upper }}_COMMAND_NAME,
+  description: {{ commandName | snakeCase | upper }}_COMMAND_DESCRIPTION,
+  async execute(_args, execution) {
+    await execution.notify({ body: '{{ commandDescription }}', level: 'info' });
+  },
+});

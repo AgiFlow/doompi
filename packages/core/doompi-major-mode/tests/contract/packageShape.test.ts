@@ -75,7 +75,10 @@ describe('doompi-major-mode package contract', () => {
 
   it('routes Pi discovery through the command and voice-tool factory', async () => {
     const entry = await readFile(path.join(packageDirectory, 'generated/pi.ts'), 'utf8');
-    const factory = await readFile(path.join(packageDirectory, 'src/controllers/majorModeRuntime.ts'), 'utf8');
+    const factory = await readFile(
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/_lib/majorModeRuntime.ts'),
+      'utf8',
+    );
 
     expect(entry).toContain('definePiExtension');
     expect(entry).toContain('export default extension');

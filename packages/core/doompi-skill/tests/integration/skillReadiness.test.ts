@@ -149,7 +149,7 @@ describe('skills readiness generations', () => {
     expect(first.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-skill',
-        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/resource\/help\.cli\.ts$/u),
         skills: [
           {
             name: 'doompi-author-skill',

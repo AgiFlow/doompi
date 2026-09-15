@@ -1,3 +1,5 @@
-import { mcpHubApi } from '../../../controllers/mcpHubApi';
+import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
 
-export default mcpHubApi;
+import { mcpHubApi } from '../../../services/mcpHubApi';
+
+export default defineRoutedContribution(mcpHubApi, {});

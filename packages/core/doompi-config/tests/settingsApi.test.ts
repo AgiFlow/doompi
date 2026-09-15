@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { settingsApi } from '../src/extensions/workspaces/sessions/(backend)/_lib/settingsApi';
+import { settingsApi } from '../src/services/settingsApi';
 import type { SettingsConfigView } from '../src/types/settings';
 
 let directory: string;

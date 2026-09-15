@@ -4,8 +4,8 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SUBAGENT_CAPABILITY_CEILING_ENV } from '../../src/exports/env';
-import { createFleetCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/subagents-fleet.cli';
-import { createAgentListCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/subagents-list.cli';
+import { createFleetCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/subagents-fleet.cli';
+import { createAgentListCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/subagents-list.cli';
 import {
   createFleetActionDispatcher,
   createAgentStatus,
@@ -54,7 +54,9 @@ const uiHub = {
 
 vi.mock('../../src/services/agentDiscovery', () => ({ resolveActiveTeamPackageConfig }));
 
-vi.mock('../../src/extensions/workspaces/sessions/(frontend)/overlay/agent-catalog.cli', () => ({ openAgentCatalog }));
+vi.mock('../../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/agent-catalog.cli', () => ({
+  openAgentCatalog,
+}));
 
 class FakeScheduler implements PollSchedulerContract {
   subscriptions: PollSubscription[] = [];

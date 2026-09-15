@@ -28,7 +28,11 @@ import {
   voiceSwitchToken,
 } from '../../../../../services/domainText';
 import type { DomainCompletion, DomainListing } from '../../../../../types/domains';
-import type { DomainSwitchHandoff, DomainSwitchHandoffIdentity, DomainSwitchHandoffStore } from '../../../../../types/handoff';
+import type {
+  DomainSwitchHandoff,
+  DomainSwitchHandoffIdentity,
+  DomainSwitchHandoffStore,
+} from '../../../../../types/handoff';
 import { DOMAIN_EVENT, type DomainTelemetry } from '../../../../../types/telemetry';
 
 const INFO = 'info';

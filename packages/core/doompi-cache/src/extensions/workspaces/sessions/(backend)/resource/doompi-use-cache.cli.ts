@@ -1,2 +1,4 @@
-import { CACHE_HELP_SKILL, PACKAGE_SOURCE } from '../../../../constants/cache';
-export default { source: PACKAGE_SOURCE, moduleUrl: import.meta.url, skills: [CACHE_HELP_SKILL] };
+import { defineResource } from '@agimon-ai/doompi-core/extension-file';
+
+import { CACHE_HELP_SKILL, PACKAGE_SOURCE } from '../../../../../constants/cache';
+export default defineResource({ source: PACKAGE_SOURCE, moduleUrl: import.meta.url, skills: [CACHE_HELP_SKILL] });

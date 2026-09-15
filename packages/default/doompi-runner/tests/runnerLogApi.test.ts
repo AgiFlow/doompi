@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createRunnerLogApi } from '../src/controllers/runnerLogApi';
+import { createRunnerLogApi } from '../src/services/runnerLogApi';
 import { runnerStateDirFor } from '../src/services/runnerPaths';
 import type { ILogTail, LogTailHandle, LogTailOptions } from '../src/types/logTail';
 import type { IRmuxBackend } from '../src/types/rmuxBackend';

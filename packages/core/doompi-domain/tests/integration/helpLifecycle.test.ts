@@ -65,7 +65,9 @@ describe('Domain Help contribution lifecycle', () => {
 
     expect(contributions[0]).toEqual({
       source: '@agimon-ai/doompi-domain',
-      moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
+      moduleUrl: expect.stringMatching(
+        /extensions\/workspaces\/sessions\/\(backend\)\/resource\/doompiAuthorDomain\.cli\.ts$/u,
+      ),
       skills: [{ name: 'doompi-author-domain', description: EXPECTED_DESCRIPTION }],
     });
 

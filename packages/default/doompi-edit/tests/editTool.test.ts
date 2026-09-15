@@ -6,10 +6,7 @@ import { hashLine } from '@agimon-ai/doompi-hashline';
 import { computeFileTag } from '@agimon-ai/doompi-hashline/files';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  executeHashlineEdit,
-  createHashlineEditTool,
-} from '../src/extensions/workspaces/sessions/(backend)/tool/edit.cli';
+import { executeHashlineEdit, createHashlineEditTool } from '../src/services/editTool';
 
 let directory: string;
 

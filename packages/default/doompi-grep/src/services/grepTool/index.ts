@@ -1,12 +1,31 @@
 import { readFile, stat } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 
+import type {
+  DoomHeadlessExecutionContext,
+  DoomHeadlessTool,
+  DoomHeadlessToolResult,
+} from '@agimon-ai/doompi-core/headless';
 import { formatFileHeader, formatTaggedLine, splitLines } from '@agimon-ai/doompi-hashline';
-import { isWritableFile } from '@agimon-ai/doompi-hashline/files';
-import { computeFileTag, decodeUtf8, displayPath, resolveInputPath } from '@agimon-ai/doompi-hashline/files';
-import { DEFAULT_MAX_BYTES, formatSize, truncateHead, truncateLine } from '@earendil-works/pi-coding-agent';
+import {
+  computeFileTag,
+  decodeUtf8,
+  displayPath,
+  isWritableFile,
+  resolveInputPath,
+} from '@agimon-ai/doompi-hashline/files';
+import {
+  createGrepToolDefinition,
+  DEFAULT_MAX_BYTES,
+  formatSize,
+  truncateHead,
+  truncateLine,
+  type AgentToolResult,
+  type ToolDefinition,
+} from '@earendil-works/pi-coding-agent';
 
-import type { GrepParams } from '../../schemas/grepTool';
+import { GrepParamsSchema, type GrepParams } from '../../schemas/grepTool';
+import { runRipgrep } from '../ripgrep';
 
 const MATCH_DELIMITER = /:(\d+): /gu;
 const CONTEXT_DELIMITER = /-(\d+)- /gu;
@@ -58,6 +77,52 @@ export interface GrepOutputOperations {
   truncateHead(content: string, options: { readonly maxLines?: number }): GrepTruncation;
   truncateLine(line: string): { readonly text: string; readonly wasTruncated: boolean };
 }
+type WritableCheck = (path: string) => Promise<boolean>;
+
+export function createHashlineGrepTool(
+  writable: WritableCheck = isWritableFile,
+): ToolDefinition<typeof GrepParamsSchema> {
+  return {
+    name: 'grep',
+    label: 'grep',
+    description:
+      'Search file contents using Pi-compatible ripgrep semantics, then add exact-byte file tags and stable line anchors for writable matches. Non-writable matches retain native Pi output. Respects .gitignore.',
+    promptSnippet: 'Search file contents and return editable hashline anchors',
+    parameters: GrepParamsSchema,
+    executionMode: 'parallel',
+    async execute(toolCallId, params, signal, onUpdate, ctx) {
+      const input = params as GrepParams;
+      const nativeGrep = createGrepToolDefinition(ctx.cwd);
+      const nativeResult = await nativeGrep.execute(toolCallId, input, signal, onUpdate, ctx);
+      assertNotAborted(signal);
+      const tagged = await tagGrepResult(nativeResult as GrepResult, input, ctx.cwd, signal, writable);
+      return tagged as unknown as AgentToolResult<unknown>;
+    },
+  };
+}
+
+export function createHeadlessGrepTool(): DoomHeadlessTool<typeof GrepParamsSchema> {
+  return {
+    name: 'grep',
+    label: 'grep',
+    description:
+      'Search file contents using ripgrep semantics, then add exact-byte file tags and stable line anchors for writable matches. Respects .gitignore.',
+    promptSnippet: 'Search file contents and return editable hashline anchors',
+    parameters: GrepParamsSchema,
+    executionMode: 'parallel',
+    execute: async (
+      _toolCallId: string,
+      params: GrepParams,
+      signal: AbortSignal | undefined,
+      _onUpdate: ((result: DoomHeadlessToolResult) => void) | undefined,
+      context: DoomHeadlessExecutionContext,
+    ) => {
+      const result = await runRipgrep({ params, cwd: context.cwd, signal });
+      return tagGrepResult(result, params, context.cwd, signal);
+    },
+  };
+}
+
 export function parseGrepRow(value: string): GrepRow[] {
   return grepRowCandidates(value)
     .slice(0, 1)

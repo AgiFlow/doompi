@@ -27,7 +27,7 @@ export interface MetricsQueryParams {
 
 export type MetricsQuery = (params: MetricsQueryParams) => Promise<LogMetricsReport>;
 
-export type MetricsTransport = 'http' | 'cli';
+export type MetricsTransport = 'http' | 'worker';
 
 /**
  * The log-sink instance the history transports read.
@@ -48,4 +48,6 @@ export interface MetricsSource {
   lastTransport(): MetricsTransport | undefined;
   /** Undefined when instance resolution failed; the transports still work. */
   instance?(): MetricsInstance | undefined;
+  /** Releases a lazily created worker-backed reader. */
+  close?(): Promise<void>;
 }

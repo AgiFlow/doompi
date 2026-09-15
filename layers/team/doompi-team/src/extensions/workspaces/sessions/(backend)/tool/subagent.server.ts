@@ -20,7 +20,7 @@ import {
   listSuspendedRuns,
 } from '../../../../../services/suspendedRuns';
 import { createTeamExtensionRuntime } from '../../../../../services/teamRuntime';
-import type { TeamServerScope } from '../root.server';
+import type { TeamServerScope } from '../_lib/root.server';
 
 const SUBAGENT_DESCRIPTION =
   'Discover agents, start and manage persistent background subagent runs, and inspect suspended work.';

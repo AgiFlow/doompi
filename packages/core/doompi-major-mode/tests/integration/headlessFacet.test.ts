@@ -79,17 +79,19 @@ async function setup() {
 describe('headless major-mode command validation', () => {
   it('projects current metadata, reads its skill, and disposes every contribution', async () => {
     const { resources, execution, dispose, disposed } = await setup();
-    const texts = await Promise.all(resources.map((resource) => Promise.resolve(resource.read(execution))));
-    expect(JSON.parse(texts[0]!)).toEqual({ majorMode: 'development', activeLayers: [] });
-    expect(JSON.parse(texts[1]!)).toBeNull();
-    expect(texts[2]).toContain('doompi-author-major-mode');
+    const modes = resources.find((resource) => resource.name === 'doompi/modes-config')!;
+    const model = resources.find((resource) => resource.name === 'doompi/model')!;
+    const authoring = resources.find((resource) => resource.name === 'doompi-author-major-mode')!;
+    expect(JSON.parse(await modes.read(execution))).toEqual({ majorMode: 'development', activeLayers: [] });
+    expect(JSON.parse(await model.read(execution))).toBeNull();
+    expect(await authoring.read(execution)).toContain('doompi-author-major-mode');
     const changed = {
       ...execution,
       selection: { ...execution.selection, majorMode: 'review', activeLayers: ['tools'] },
       model: { provider: 'test-provider', id: 'test-model' },
     };
-    expect(JSON.parse(await resources[0]!.read(changed))).toEqual({ majorMode: 'review', activeLayers: ['tools'] });
-    expect(JSON.parse(await resources[1]!.read(changed))).toEqual(changed.model);
+    expect(JSON.parse(await modes.read(changed))).toEqual({ majorMode: 'review', activeLayers: ['tools'] });
+    expect(JSON.parse(await model.read(changed))).toEqual(changed.model);
     await dispose?.();
     expect(disposed).toHaveBeenCalledTimes(4);
   });

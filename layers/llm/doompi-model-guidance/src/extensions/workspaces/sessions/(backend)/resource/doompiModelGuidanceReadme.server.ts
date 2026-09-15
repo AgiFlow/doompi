@@ -1,7 +1,5 @@
-import { readPackageResource } from '../../../../../services/packageResources';
+import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
 
-export default {
-  name: 'doompi-model-guidance-readme',
-  kind: 'context' as const,
-  read: () => readPackageResource('README.md'),
-};
+import contribution from './_lib/doompiModelGuidanceReadme.server';
+
+export default defineRoutedContribution(contribution, {});

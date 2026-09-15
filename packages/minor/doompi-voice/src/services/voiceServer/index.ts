@@ -34,9 +34,9 @@ import { VoiceWorkerAutoCaptureController } from '../../services/voiceWorkerAuto
 import { VoiceWorkerClient } from '../../services/voiceWorkerClient';
 import { VoiceWorkerSessionController } from '../../services/voiceWorkerSessionController';
 import type { AutoCaptureUi, VoiceUi } from '../../types';
-import type { VoiceMediaBroker } from './clientMediaApi';
-import { LiveVoiceController } from './liveVoiceController';
-import { VoiceModeController } from './voiceModeController';
+import type { VoiceMediaBroker } from '../clientMediaApi';
+import { LiveVoiceController } from '../liveVoiceController';
+import { VoiceModeController } from '../voiceModeController';
 
 const SOURCE = '@agimon-ai/doompi-voice';
 const when = {

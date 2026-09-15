@@ -3,7 +3,7 @@ import type { RealtimeHost } from '../../services/realtimeHost';
 import { buildDelegationResultMessages, buildSessionContextMessages } from '../../services/realtimeProtocol';
 import type { AutoCaptureActivationState, AutoCaptureUi, IClock, VoiceState } from '../../types';
 import { REALTIME_LIMITS, type RealtimeDeliveryOutcome, type RealtimeEvent } from '../../types/realtime';
-import { RealtimeDelivery, type RealtimeDeliveryRequest } from './realtimeDelivery';
+import { RealtimeDelivery, type RealtimeDeliveryRequest } from '../realtimeDelivery';
 
 const POLL_INTERVAL_MILLISECONDS = 250;
 const STARTUP_DEADLINE_MILLISECONDS = 20_000;

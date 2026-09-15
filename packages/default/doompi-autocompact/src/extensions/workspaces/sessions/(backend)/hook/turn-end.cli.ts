@@ -1,6 +1,10 @@
-import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import type { PiEventHandlers, PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
 
-import type { AutocompactScope } from '../root.cli';
+import type { AutocompactScope } from '../_lib/piRoot';
 
-export default (context: WithRoot<PiPluginContext, AutocompactScope>) => context.root.events.turn_end;
+export default defineRoutedContribution(
+  (context: WithRoot<PiPluginContext<unknown>, AutocompactScope>): PiEventHandlers['turn_end'] =>
+    context.root.events.turn_end,
+  {},
+);

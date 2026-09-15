@@ -1,1 +1,1 @@
-export * from '../extensions/workspaces/sessions/(frontend)/overlay/task-space.cli';
+export * from '../extensions/workspaces/sessions/(frontend)/overlay/_lib/task-space.cli';

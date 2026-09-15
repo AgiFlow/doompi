@@ -16,7 +16,7 @@ import type {
 
 import { formatBatch, formatCatalog, formatCatalogDigest, formatError } from '../../services/voiceToolPrompt';
 import { VoiceToolError, type VoiceToolSessionHandle } from '../../services/voiceTools';
-import { renderVoiceToolCall, renderVoiceToolResult } from './voiceToolRender';
+import { renderVoiceToolCall, renderVoiceToolResult } from '../voiceToolRender';
 
 const DESCRIBE_LABEL = 'Describe voice tools';
 const USE_LABEL = 'Use voice tools';

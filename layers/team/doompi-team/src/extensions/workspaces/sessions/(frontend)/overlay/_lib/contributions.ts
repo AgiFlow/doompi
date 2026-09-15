@@ -19,7 +19,7 @@ import {
 import type { ManagementActionsContract } from '../../../../../../services/managementActions';
 import type { PollSchedulerContract } from '../../../../../../services/pollScheduler';
 import { createSessionScope, type SessionScope } from '../../../../../../services/sessionPaths';
-import type { FleetActionDispatcher } from '../fleet.cli';
+import type { FleetActionDispatcher } from './fleet.cli';
 import { AGENT_PULSE_FRAMES, agentFleetStatus, COST_STATUS_KEY, FLEET_STATUS_KEY } from './fleetStatus';
 
 export const SUBAGENT_FLEET_COMMAND = 'subagents-fleet';

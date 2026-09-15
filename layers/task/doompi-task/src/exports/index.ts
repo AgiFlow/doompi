@@ -1,5 +1,5 @@
 export * from '../services/taskResult';
-export * from '../extensions/workspaces/sessions/(backend)/tool/task.cli';
+export * from '../extensions/workspaces/sessions/(backend)/tool/_lib/task.cli';
 export * from '../schemas/task';
 export * from '../services/delegation';
 export * from '../services/paths';

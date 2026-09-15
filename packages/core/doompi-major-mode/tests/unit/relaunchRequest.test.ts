@@ -5,7 +5,10 @@ import path from 'node:path';
 import { DOOM_RELAUNCH_FILE_ENV, parseRelaunchHandoff } from '@agimon-ai/doompi-core/relaunch-handoff';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { requestSupervisedRelaunch, supervisedRelaunchAvailable } from '../../src/extensions/workspaces/sessions/(backend)/_lib/relaunchRequest';
+import {
+  requestSupervisedRelaunch,
+  supervisedRelaunchAvailable,
+} from '../../src/extensions/workspaces/sessions/(backend)/_lib/relaunchRequest';
 
 let workDir: string;
 

@@ -1,4 +1,5 @@
 import { defineSessionStore } from '@agimon-ai/doompi-core/web';
+import { useStore } from '@tanstack/react-store';
 
 import { {{ topic | camelCase }}ChannelType, type {{ topic | pascalCase }}ItemView } from '../../../../../types/web{{ topic | pascalCase }}';
 
@@ -8,6 +9,9 @@ export interface {{ topic | pascalCase }}Session {
 
 export const {{ topic | camelCase }} = defineSessionStore<{{ topic | pascalCase }}Session>({ items: [] });
 
+export function use{{ topic | pascalCase }}Badge(sessionId: string | null): number {
+  return useStore({{ topic | camelCase }}.store, (state) => {{ topic | camelCase }}.select(state, sessionId).items.length);
+}
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

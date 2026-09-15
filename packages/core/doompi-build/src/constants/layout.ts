@@ -21,7 +21,6 @@ export const SESSION_SEGMENT = 'sessions';
 /** Gate folders. Each is followed by exactly one id segment. */
 export const GATE_SEGMENTS: readonly string[] = ['mode', 'domain'];
 
-
 /** The leaf filename of an HTTP route, as Next.js spells it. */
 export const ROUTE_FILE_NAME = 'route';
 
@@ -70,6 +69,7 @@ export const BACKEND_SURFACES: readonly string[] = [
   'tool',
   'tool-restriction',
   'command',
+  'shortcut',
   'hook',
   'api',
   'channel',
@@ -104,6 +104,8 @@ export const FRONTEND_SURFACES: readonly string[] = [
   'leader',
   'selection-axis',
   'lifecycle',
+  'file-links',
+  'repository-settings-panel',
 ];
 
 /** Surfaces whose filename carries a relationship target. */

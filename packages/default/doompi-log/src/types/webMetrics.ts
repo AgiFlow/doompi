@@ -90,7 +90,7 @@ export interface MetricsTool {
 }
 
 /** Which transport answered, so the page can say where its numbers came from. */
-export type MetricsTransport = 'http' | 'cli';
+export type MetricsTransport = 'http' | 'worker';
 
 export interface MetricsTotals {
   /**

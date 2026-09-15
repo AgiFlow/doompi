@@ -74,7 +74,7 @@ describe('doompi-help package contract', () => {
 
   it('routes Pi discovery through the sole command and typed-mode factory', async () => {
     const entrySource = await readFile(path.join(packageDirectory, 'generated/pi.ts'), 'utf8');
-    const factorySource = await readFile(path.join(packageDirectory, 'src/controllers/helpPiRuntime.ts'), 'utf8');
+    const factorySource = await readFile(path.join(packageDirectory, 'src/services/helpPiRuntime/index.ts'), 'utf8');
 
     expect(entrySource).toContain('definePiExtension');
     expect(entrySource).not.toContain('doom.ts');

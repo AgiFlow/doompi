@@ -120,7 +120,7 @@
   "doompiWeb": {
     "pluginId": "computer-use",
     "channels": [
-      "computer_use_state"
+      "computer_use"
     ],
     "client": "./dist/extensions/web.mjs",
     "scopes": [

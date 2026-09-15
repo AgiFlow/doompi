@@ -70,16 +70,7 @@ const ALLOWED_ROOT_DEPENDENCIES: Readonly<Record<string, ReadonlySet<string>>> =
   constants: new Set(['constants']),
   models: new Set(['constants', 'models', 'schemas', 'types']),
   exports: new Set(['constants', 'models', 'schemas', 'services', 'tui', 'types']),
-  extensions: new Set([
-    'extensions',
-    'constants',
-    'models',
-    'schemas',
-    'services',
-    'tui',
-    'types',
-    'web',
-  ]),
+  extensions: new Set(['extensions', 'constants', 'models', 'schemas', 'services', 'tui', 'types', 'web']),
   schemas: new Set(['constants', 'schemas', 'types']),
   services: new Set(['constants', 'models', 'schemas', 'services', 'types']),
   tui: new Set(['constants', 'models', 'schemas', 'services', 'tui', 'types']),
@@ -2388,7 +2379,7 @@ function sourceRootVocabularyViolations(configRoot: string): string[] {
       }
       continue;
     }
-    if (CANONICAL_ROOTS.has(entry.name) || RESOURCE_ROOTS.has(entry.name) || TRANSITIONAL_ROOTS.has(entry.name)) {
+    if (CANONICAL_ROOTS.has(entry.name) || RESOURCE_ROOTS.has(entry.name)) {
       continue;
     }
     const empty = fs.readdirSync(path.join(sourceDirectory, entry.name)).length === 0;
@@ -2574,12 +2565,7 @@ export const doomFolderLayout: RuleDefinition = {
   check(filePath) {
     if (!fs.existsSync(filePath)) return null;
     const root = sourceRoot(filePath);
-    if (
-      !root ||
-      root === 'index.ts' ||
-      CANONICAL_ROOTS.has(root) ||
-      RESOURCE_ROOTS.has(root)
-    ) {
+    if (!root || root === 'index.ts' || CANONICAL_ROOTS.has(root) || RESOURCE_ROOTS.has(root)) {
       return null;
     }
     const sourceFile = readSource(filePath);
@@ -2598,12 +2584,7 @@ export const compatibilityWrapperOnly: RuleDefinition = {
   rationale: 'Compatibility paths may remain public temporarily without becoming a second implementation architecture.',
   check(filePath) {
     const root = sourceRoot(filePath);
-    if (
-      !root ||
-      root === 'index.ts' ||
-      CANONICAL_ROOTS.has(root) ||
-      RESOURCE_ROOTS.has(root)
-    ) {
+    if (!root || root === 'index.ts' || CANONICAL_ROOTS.has(root) || RESOURCE_ROOTS.has(root)) {
       return null;
     }
     const sourceFile = readSource(filePath);
@@ -2650,7 +2631,8 @@ export const noInternalPublicImport: RuleDefinition = {
 export const doomLayerBoundary: RuleDefinition = {
   preflight: true,
   rule: 'Extensions compose services and models through explicit inward dependencies',
-  rationale: 'Named routed surfaces own host concerns while a small universal dependency direction keeps policy host-neutral.',
+  rationale:
+    'Named routed surfaces own host concerns while a small universal dependency direction keeps policy host-neutral.',
   check(filePath, configRoot) {
     const root = sourceRoot(filePath);
     const allowedRoots = isCompositionAdapter(filePath, configRoot)

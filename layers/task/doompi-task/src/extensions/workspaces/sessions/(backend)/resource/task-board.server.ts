@@ -1,10 +1,5 @@
-import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
 
-import type { TaskServerScope } from '../root.server';
+import contribution from './_lib/task-board.server';
 
-export default (context: WithRoot<DoomServerPluginContext, TaskServerScope>) => ({
-  name: 'doompi/task-board',
-  kind: 'context' as const,
-  read: () => JSON.stringify(context.root.store.snapshot, null, 2),
-});
+export default defineRoutedContribution(contribution, {});

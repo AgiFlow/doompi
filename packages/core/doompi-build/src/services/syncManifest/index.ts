@@ -42,23 +42,14 @@ function webScopes(graph: ExtensionGraph): ExtensionScope[] {
 }
 
 /** The frame types the browser half claims, which the cockpit reads before loading it. */
-function channels(graph: ExtensionGraph, manifest: Record<string, unknown>): string[] {
-  const routed = graph.entries
-    .filter((entry) => entry.side === 'frontend' && entry.surface === 'channel')
-    .map((entry) => toSnake(entry.name));
-  const hasOpaqueFrontend = graph.entries.some((entry) => entry.side === 'frontend' && entry.role === 'escape-hatch');
-  if (!hasOpaqueFrontend) return [...new Set(routed)].sort();
-
-  // An escape hatch owns an opaque contributions object, so the scanner cannot
-  // see channels declared inside it. While that hatch exists, its manifest
-  // channels remain explicit source metadata and are merged with routed ones.
-  const blocks = Array.isArray(manifest.doompiWeb) ? manifest.doompiWeb : [manifest.doompiWeb];
-  const declared = blocks.flatMap((block) => {
-    if (block === null || typeof block !== 'object') return [];
-    const value = (block as Record<string, unknown>).channels;
-    return Array.isArray(value) ? value.filter((channel): channel is string => typeof channel === 'string') : [];
-  });
-  return [...new Set([...routed, ...declared])].sort();
+function channels(graph: ExtensionGraph, _manifest: Record<string, unknown>): string[] {
+  return [
+    ...new Set(
+      graph.entries
+        .filter((entry) => entry.side === 'frontend' && entry.surface === 'channel')
+        .map((entry) => toSnake(entry.name)),
+    ),
+  ].sort();
 }
 
 /**

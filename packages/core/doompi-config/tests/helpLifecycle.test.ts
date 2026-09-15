@@ -16,7 +16,9 @@ describe('Config Help lifecycle', () => {
     expect(first.listContributions()).toEqual([
       {
         source: PACKAGE_SOURCE,
-        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
+        moduleUrl: expect.stringMatching(
+          /extensions\/workspaces\/sessions\/\(backend\)\/resource\/config-help\.cli\.ts$/u,
+        ),
         skills: [CONFIG_HELP_SKILL],
       },
     ]);

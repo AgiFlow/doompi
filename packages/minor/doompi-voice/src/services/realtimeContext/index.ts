@@ -1,5 +1,5 @@
 import { REALTIME_LIMITS } from '../../types/realtime';
-import { collectVoiceCommandContext } from './voiceCommandContext';
+import { collectVoiceCommandContext } from '../voiceCommandContext';
 
 const MAX_BRANCH_ENTRIES = 256;
 const MAX_CONVERSATION_ENTRIES = 24;

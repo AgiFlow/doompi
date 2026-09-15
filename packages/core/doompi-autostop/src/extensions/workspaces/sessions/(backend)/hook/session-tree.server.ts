@@ -1,4 +1,9 @@
-import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
-import type { AutoStopServerScope } from '../root.server';
-export default (context: WithRoot<DoomServerPluginContext, AutoStopServerScope>) => context.root.hooks.find((hook) => hook.event === 'session_tree')!;
+
+type AutoStopServerScope = Awaited<ReturnType<typeof import('../root.server').default>>['value'];
+export default defineRoutedContribution(
+  (context: WithRoot<DoomServerPluginContext, AutoStopServerScope>) =>
+    context.root.hooks.find((hook) => hook.event === 'session_tree')!,
+  {},
+);

@@ -38,6 +38,19 @@ describe('scanExtensions', () => {
     expect(graph.notices).toEqual([]);
   });
 
+  it('reports an unexpected directory before a side group is selected', () => {
+    const graph = scanExtensions({
+      packageDir: packageWith({ 'src/extensions/misc/tool/example.ts': EMPTY }),
+    });
+    expect(graph.entries).toEqual([]);
+    expect(graph.notices).toEqual([
+      {
+        path: 'src/extensions/misc',
+        message: 'expected a scope segment or a side group, such as (backend)',
+      },
+    ]);
+  });
+
   it('reads scope from folder nesting and side from the group folder', () => {
     const graph = scanExtensions({
       packageDir: packageWith({
@@ -145,6 +158,22 @@ describe('scanExtensions', () => {
     expect(find(graph.entries, 'grep.cli.ts')).toMatchObject({ name: 'grep', platform: 'cli' });
   });
 
+  it('reads cardinality only from defineRoutedContribution options', () => {
+    const graph = scanExtensions({
+      packageDir: packageWith({
+        'src/extensions/(backend)/provider/broker.cli.ts':
+          "export default defineRoutedContribution(defineProvider(createProviders), { cardinality: 'many' });\n",
+        'src/extensions/(backend)/resource/comment.ts':
+          "// cardinality: 'optional'\nexport default defineResource(resource);\n",
+        'src/extensions/(backend)/tool/property.ts':
+          'export default defineTool({ description: "cardinality: \'collection\'" });\n',
+      }),
+    });
+    expect(find(graph.entries, 'broker.cli.ts')?.cardinality).toBe('many');
+    expect(find(graph.entries, 'comment.ts')?.cardinality).toBeUndefined();
+    expect(find(graph.entries, 'property.ts')?.cardinality).toBeUndefined();
+  });
+
   it('rejects extra.* at a side root', () => {
     const graph = scanExtensions({
       packageDir: packageWith({ 'src/extensions/(backend)/extra.cli.ts': EMPTY }),
@@ -222,11 +251,11 @@ describe('scanExtensions', () => {
     expect(graph.notices[0]?.message).toContain('side group');
   });
 
-  it('notices a stray file at a side root that is not the escape hatch', () => {
+  it('notices a stray file at a side root', () => {
     const graph = scanExtensions({
       packageDir: packageWith({ 'src/extensions/(backend)/stray.ts': EMPTY }),
     });
-    expect(graph.notices[0]?.message).toContain('needs a surface');
+    expect(graph.notices[0]?.message).toContain('named surface folder');
   });
 
   it('honours a configured root, side names and platform set', () => {

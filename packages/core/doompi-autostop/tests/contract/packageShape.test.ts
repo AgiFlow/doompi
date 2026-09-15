@@ -79,12 +79,12 @@ describe('doompi-autostop package contract', () => {
   it('routes the Pi entry through a default-exported factory', async () => {
     const entry = await readFile(path.join(packageDirectory, 'generated/pi.ts'), 'utf8');
     const factory = await readFile(
-      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/extra.cli.ts'),
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/root.cli.ts'),
       'utf8',
     );
     expect(entry).toContain('export default extension');
     expect(entry).toContain('definePiExtension');
-    expect(factory).toContain('events:');
+    expect(factory).toContain('createIdleShutdown');
     expect(factory).not.toContain('new Context()');
   });
 

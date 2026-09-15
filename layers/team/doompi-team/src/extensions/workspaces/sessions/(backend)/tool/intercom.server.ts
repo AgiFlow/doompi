@@ -3,7 +3,7 @@ import type { DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
 
 import type { NativeTeamRuntime } from '../../../../../services/nativeTeamChannel';
-import type { TeamServerScope } from '../root.server';
+import type { TeamServerScope } from '../_lib/root.server';
 
 function intercomTool(channel: NativeTeamRuntime): DoomHeadlessTool {
   return {

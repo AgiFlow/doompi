@@ -59,6 +59,15 @@ describe('generateExtension', () => {
     expect(exists(dir, 'generated/web.ts')).toBe(false);
   });
 
+  it('writes a host entry when the host has only a scope root', () => {
+    const dir = packageWith({ 'src/extensions/workspaces/sessions/(backend)/root.cli.ts': EMPTY });
+    const result = generateExtension({ packageDir: dir });
+
+    expect(result.targets).toEqual(['cli']);
+    expect(exists(dir, 'generated/pi.ts')).toBe(true);
+    expect(exists(dir, 'generated/server.ts')).toBe(false);
+  });
+
   it('writes no backend entries for a cockpit-only package', () => {
     const dir = packageWith({ 'src/extensions/(frontend)/tab/Panel.tsx': EMPTY });
     const result = generateExtension({ packageDir: dir });

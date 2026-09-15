@@ -4,7 +4,7 @@ import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-
 import { describe, expect, it, vi } from 'vitest';
 
 import { extension as activateAuthorExtension } from '../../../generated/pi';
-import { COMMAND_NAME } from '../../../src/controllers/doomAuthorCommand';
+import { AUTHOR_COMMAND_NAME as COMMAND_NAME } from '../../../src/constants/author';
 import type { AuthorExtensionService } from '../../../src/types/extension';
 
 /**
@@ -67,7 +67,7 @@ describe('doompi-author Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-author',
-        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/root\.cli\.ts$/u),
         skills: [
           {
             name: 'doompi-use-author',

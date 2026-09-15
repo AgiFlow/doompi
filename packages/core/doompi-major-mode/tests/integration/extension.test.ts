@@ -272,7 +272,9 @@ describe('major mode Pi factory', () => {
     expect(firstHelp.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-major-mode',
-        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
+        moduleUrl: expect.stringMatching(
+          /extensions\/workspaces\/sessions\/\(backend\)\/resource\/doompiAuthorMajorMode\.cli\.ts$/u,
+        ),
         skills: [
           {
             name: 'doompi-author-major-mode',

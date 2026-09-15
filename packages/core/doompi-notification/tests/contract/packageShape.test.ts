@@ -109,7 +109,7 @@ describe('doompi-notification package contract', () => {
   it('mounts its lifecycle under the shared Cordis host', async () => {
     const entry = await readFile(path.join(packageDirectory, 'generated/pi.ts'), 'utf8');
     const factory = await readFile(
-      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/extra.cli.ts'),
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/root.cli.ts'),
       'utf8',
     );
 

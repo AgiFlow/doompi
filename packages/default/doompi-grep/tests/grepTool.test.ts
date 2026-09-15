@@ -7,7 +7,7 @@ import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
 import { rgPath } from '@vscode/ripgrep';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { createHashlineGrepTool } from '../src/extensions/workspaces/sessions/(backend)/tool/grep.cli';
+import { createHashlineGrepTool } from '../src/services/grepTool';
 
 interface CapturedTool {
   readonly name: string;

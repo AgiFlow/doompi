@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   collectFleetSnapshot,
   SubagentFleetComponent,
-} from '../../src/extensions/workspaces/sessions/(frontend)/overlay/fleet.cli';
+} from '../../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/fleet.cli';
 import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
 import { readFleetTranscriptTail } from '../../src/services/fleetTranscript';
 import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';

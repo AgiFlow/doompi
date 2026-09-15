@@ -49,7 +49,12 @@ function contextFor(host: DoomHeadlessHostService): Context {
       name === DOOM_HEADLESS_HOST_SERVICE
         ? host
         : name === 'doom/server-host'
-          ? { scope: 'session', context: {}, registerApi: () => ({ dispose() {} }) }
+          ? {
+              scope: 'session',
+              context: {},
+              registerApi: () => ({ dispose() {} }),
+              registerChannel: () => ({ dispose() {} }),
+            }
           : undefined,
   } as unknown as Context;
 }

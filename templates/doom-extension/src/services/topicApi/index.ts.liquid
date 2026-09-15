@@ -1,0 +1,28 @@
+import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
+import { Hono } from 'hono';
+
+import { API_BASE_PATH, type {{ topic | pascalCase }}ItemView } from '../../types/{{ topic | camelCase }}Api';
+
+export interface {{ topic | pascalCase }}ApiOptions {
+  sessionId?: string;
+}
+
+export function create{{ topic | pascalCase }}Api(options: {{ topic | pascalCase }}ApiOptions = {}): Hono {
+  const app = new Hono();
+  app.get('/items/:id', (context) => {
+    const view: {{ topic | pascalCase }}ItemView = {
+      id: context.req.param('id'),
+      sessionId: options.sessionId ?? null,
+    };
+    return context.json(view);
+  });
+  return app;
+}
+
+export const api: DoomApi = {
+  basePath: API_BASE_PATH,
+  start(context: DoomApiContext): DoomApiHandler {
+    const app = create{{ topic | pascalCase }}Api(context.sessionId === undefined ? {} : { sessionId: context.sessionId });
+    return { fetch: (request) => app.fetch(request), close: () => undefined };
+  },
+};

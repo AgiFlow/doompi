@@ -1,9 +1,9 @@
 import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createPromptSaveCommand } from '../../../src/controllers/promptSaveCommand';
-import { createPromptsCommand } from '../../../src/controllers/promptsCommand';
 import { createRecentPrompts } from '../../../src/models/recentPrompts';
+import { createPromptSaveCommand } from '../../../src/services/promptSaveCommand';
+import { createPromptsCommand } from '../../../src/services/promptsCommand';
 import type { PromptExtensionDependencies, SavedPrompt } from '../../../src/types/prompt';
 
 type CommandHandler = Parameters<ExtensionAPI['registerCommand']>[1]['handler'];

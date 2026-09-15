@@ -67,6 +67,15 @@ function nearestSurface(name: string, side: ExtensionSide): string | undefined {
   return surfaces.includes(singular) ? singular : undefined;
 }
 
+/** Reads cardinality only from the routed helper's options argument. */
+function routedCardinality(source: string): ExtensionEntry['cardinality'] | undefined {
+  const declaration =
+    /export\s+default\s+defineRoutedContribution\s*\([\s\S]*,\s*\{\s*cardinality\s*:\s*['"](optional|many|collection)['"]/u.exec(
+      source,
+    );
+  return declaration?.[1] as ExtensionEntry['cardinality'] | undefined;
+}
+
 /** Resolves the routing root, accepting the singular alias when only it exists. */
 export function resolveRoutingRoot(packageDir: string, root: string | undefined): string | undefined {
   const candidates = root !== undefined ? [root] : [DEFAULT_ROUTING_ROOT, ROUTING_ROOT_ALIAS];
@@ -179,6 +188,8 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
 
     const parsed = parseFilename(fileName, platformsFor(state.side, options));
     if (parsed === undefined) return;
+    const source = fs.readFileSync(path.join(options.packageDir, relative), 'utf8');
+    const cardinality = routedCardinality(source);
 
     if (state.surface === undefined) {
       // Inside `mode/plan/`, a file called `mode.*` declares the gate itself
@@ -195,6 +206,7 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
           name: gate.id,
           target: parsed.target,
           platform: parsed.platform,
+          ...(cardinality ? { cardinality } : {}),
           role: 'contribution',
         });
         return;
@@ -241,6 +253,7 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
       name: parsed.name,
       target: parsed.target,
       platform: parsed.platform,
+      ...(cardinality ? { cardinality } : {}),
       role: 'contribution',
     });
   };

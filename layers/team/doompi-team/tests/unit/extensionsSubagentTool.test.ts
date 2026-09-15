@@ -3,11 +3,11 @@ import * as fs from 'node:fs';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createSubagentTool } from '../../src/extensions/workspaces/sessions/(backend)/tool/subagent.cli';
+import { createSubagentTool } from '../../src/extensions/workspaces/sessions/(backend)/tool/_lib/subagent.cli';
 import {
   renderSubagentCall,
   renderSubagentResult,
-} from '../../src/extensions/workspaces/sessions/(frontend)/tool/subagent.cli';
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/subagent.cli';
 import type {
   AsyncJobTrackerContract,
   TrackedAsyncJob,

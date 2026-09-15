@@ -1,7 +1,7 @@
 boilerplate:
   - name: scaffold-doom-extension
     targetFolder: packages/default
-    description: Create a publishable DoomPi extension using typed plugin declarations, controllers, services, and automatic lifecycle ownership.
+    description: Create a publishable DoomPi extension using named routed surfaces, host-neutral services, and automatic lifecycle ownership.
     variables_schema:
       type: object
       properties:
@@ -118,13 +118,14 @@ features:
     includes:
       - src/types/pluginMethod.ts->src/types/{{ methodName | camelCase }}Protocol.ts
       - src/schemas/pluginMethod.ts->src/schemas/{{ methodName | camelCase }}Method.ts
-      - src/controllers/pluginMethod.ts->src/controllers/{{ methodName | camelCase }}Method.ts
+      - "src/extensions/method.global.ts->src/extensions/(backend)/method/{{ methodName | kebabCase }}.server.ts?scope=global"
+      - "src/extensions/method.workspace.ts->src/extensions/workspaces/(backend)/method/{{ methodName | kebabCase }}.server.ts?scope=workspace"
       - "src/web/api/pluginMethod.ts->src/extensions/workspaces/sessions/(frontend)/_lib/{{ methodName | camelCase }}.ts"
-    instruction: Replace example JSON shapes with the package contract. Add the defineServerMethod controller through a routed backend contribution at the {{ scope }} scope. The browser helper stays private beside routed frontend contributions and calls the typed method through WebPluginRuntime. Use HTTP for binary transfers. Test request and response validation.
+    instruction: Replace example JSON shapes with the package contract. The generated named method route owns the exact {{ scope }} server contribution. The browser helper stays private beside routed frontend contributions and calls the typed method through WebPluginRuntime. Use HTTP for binary transfers. Test request and response validation.
     patterns:
       - src/types/**/*.ts
       - src/schemas/**/*.ts
-      - src/controllers/**/*.ts
+      - src/extensions/**/(backend)/method/*.server.ts
       - src/extensions/**/(frontend)/_lib/*.ts
   - name: scaffold-doom-prompt
     description: Add one package-owned DoomPi Help prompt under src/prompts for either extension authoring or user guidance.
@@ -179,7 +180,7 @@ features:
       - src/services/service/index.ts->src/services/{{ serviceName | camelCase }}/index.ts
       - src/services/service/type.ts->src/services/{{ serviceName | camelCase }}/type.ts
       - tests/unit/services/service.test.ts->tests/unit/services/{{ serviceName | camelCase }}.test.ts
-    instruction: Implement package logic under src/services/{{ serviceName | camelCase }}/. Keep its input/result contracts in type.ts and import the directory without /index or .ts. Services may use platform APIs when needed but must not import extensions, controllers, or tools. Models own shared state. Publish selected service interfaces through flat src/exports modules only when other packages consume them. Replace placeholder behavior and verify meaningful unit tests.
+    instruction: Implement package logic under src/services/{{ serviceName | camelCase }}/. Keep its input/result contracts in type.ts and import the directory without /index or .ts. Services may use platform APIs when needed but must not import extension entries. Models own shared state. Publish selected service interfaces through flat src/exports modules only when other packages consume them. Replace placeholder behavior and verify meaningful unit tests.
     patterns:
       - src/services/**/*.ts
   - name: scaffold-doom-tool-restriction
@@ -233,10 +234,10 @@ features:
           example: runner
         apiModule:
           type: string
-          description: Extensionless import from the generated routed file to the API controller
+          description: Extensionless import from the generated named API route to the API declaration
           pattern: ^\.\.?/[A-Za-z0-9_./-]+$
           maxLength: 120
-          example: ../../../../../controllers/runnerApi
+          example: ../../../../../services/runnerApi
         scope:
           type: string
           description: Exact host scope that owns the API
@@ -259,19 +260,19 @@ features:
         - scopeReason
       additionalProperties: false
     includes:
-      - "src/extensions/server.ts->src/extensions/(backend)/extra.server.ts?scope=global"
-      - "src/extensions/server.ts->src/extensions/workspaces/(backend)/extra.server.ts?scope=workspace"
-      - "src/extensions/server.ts->src/extensions/workspaces/sessions/(backend)/extra.server.ts?scope=session"
+      - "src/extensions/apiMount.ts->src/extensions/(backend)/api/{{ facetName | kebabCase }}/route.server.ts?scope=global"
+      - "src/extensions/apiMount.ts->src/extensions/workspaces/(backend)/api/{{ facetName | kebabCase }}/route.server.ts?scope=workspace"
+      - "src/extensions/apiMount.ts->src/extensions/workspaces/sessions/(backend)/api/{{ facetName | kebabCase }}/route.server.ts?scope=session"
       - tests/unit/extensions/server.test.ts
     instruction: |-
-      The generated extra.server.ts exports one contribution object with the API declaration. Its routed path supplies the scope; doompiExtension generates the server facet and manifest metadata. Keep apiModule relative to the selected routed file. Prefer a route.ts API surface when the endpoint maps cleanly to a routed HTTP path.
+      The generated route.server.ts exports one API declaration. Its routed path supplies the scope and doompiExtension generates the server facet and manifest metadata. Keep apiModule relative to the selected routed file.
 
-      Only add lifecycle hooks when work exists. Factories construct state, onStart begins background work, onStop drains it, and onDispose releases final instance resources. Never hand-write src/extensions/server.ts or a separate headless facet.
+      Only add lifecycle hooks to a scoped root when work exists. Roots construct shared state, onStart begins background work, onStop drains it, and onDispose releases final resources. Never hand-write src/extensions/server.ts or a catch-all contribution.
     patterns:
       - src/extensions/**/(backend)/**/*.ts
-      - src/controllers/**/*.ts
+      - src/extensions/**/(backend)/api/**/route.server.ts
   - name: scaffold-doom-command
-    description: Add a shared Pi/server command controller and its integration test.
+    description: Add one named shared Pi/server command route and its integration test.
     variables_schema:
       type: object
       properties:
@@ -294,13 +295,13 @@ features:
       additionalProperties: false
     includes:
       - src/constants/featureCommand.ts->src/constants/{{ commandName | camelCase }}.ts
-      - src/controllers/featureCommand.ts->src/controllers/{{ commandName | camelCase }}Command.ts
-      - tests/integration/controllers/featureCommand.test.ts->tests/integration/controllers/{{ commandName | camelCase }}Command.test.ts
-    instruction: Declare a shared command controller through defineCommand. Its execute handler delegates to an injected service and uses execution.notify. Include the returned declaration in Pi and/or session server commands arrays. The helper adapts notifications to the host. Metadata lives in constants; behavior lives in services. Document the command and test its result.
+      - "src/extensions/featureCommand.ts->src/extensions/workspaces/sessions/(backend)/command/{{ commandName | kebabCase }}.ts"
+      - tests/integration/extensions/featureCommand.test.ts->tests/integration/extensions/{{ commandName | camelCase }}Command.test.ts
+    instruction: Declare one shared command through defineCommand in its named routed file. Its execute handler delegates to a service when behavior is nontrivial and uses execution.notify. Metadata lives in constants and host-neutral behavior lives in services. Document the command and test its result.
     patterns:
-      - src/controllers/**/*.ts
+      - src/extensions/**/(backend)/command/*.ts
   - name: scaffold-doom-provider
-    description: Add one Cordis provider under src/providers that publishes a service on the shared Context.
+    description: Add one Cordis provider service that a scoped root publishes on the shared Context.
     variables_schema:
       type: object
       properties:
@@ -362,7 +363,7 @@ features:
       - src/services/implementation/type.ts->src/services/{{ capabilityName | camelCase }}/type.ts
       - src/services/implementation/index.ts->src/services/{{ capabilityName | camelCase }}/index.ts
       - tests/unit/services/implementation.test.ts->tests/unit/services/{{ capabilityName | camelCase }}.test.ts
-    instruction: Put the capability contract in src/services/{{ capabilityName | camelCase }}/type.ts and its implementation in index.ts. Reuse an existing contract when present. Construct dependencies in the per-mount extension factory and pass them to controllers/services. No adapters or container directories. Keep effects in the service and start long-lived work through onStart with shutdown through onStop.
+    instruction: Put the capability contract in src/services/{{ capabilityName | camelCase }}/type.ts and its implementation in index.ts. Reuse an existing contract when present. Construct dependencies in the per-mount extension root and pass them to routed contributions and services. No adapters or container directories. Keep effects in the service and start long-lived work through root lifecycle hooks.
     patterns:
       - src/services/**/*.ts
   - name: scaffold-doom-package-api
@@ -388,13 +389,15 @@ features:
       additionalProperties: false
     includes:
       - src/types/topicApi.ts->src/types/{{ topic | camelCase }}Api.ts
-      - src/controllers/topicApi.ts->src/controllers/{{ topic | camelCase }}Api.ts
+      - src/services/topicApi/index.ts->src/services/{{ topic | camelCase }}Api/index.ts
+      - "src/extensions/topicApiRoute.ts->src/extensions/workspaces/sessions/(backend)/api/{{ pluginId | kebabCase }}/route.server.ts"
       - src/exports/sessionApi.ts
       - tests/unit/topicApi.test.ts->tests/unit/{{ topic | camelCase }}Api.test.ts
-    instruction: Put HTTP request handling in the controller and delegate package behavior to services. Routes are relative to the host mount. Add a routed backend api/.../route.ts contribution at the owning scope; do not hand-write a server extension entry. src/exports/sessionApi.ts is a flat public module and should exist only when external consumers need it. Test requests through the API harness.
+    instruction: Put HTTP request handling in src/services/{{ topic | camelCase }}Api and keep the named routed API file as a thin defineRoute declaration. Routes are relative to the host mount. src/exports/sessionApi.ts is a flat public module and should exist only when external consumers need it. Test requests through the API harness.
     patterns:
       - src/types/*Api.ts
-      - src/controllers/*Api.ts
+      - src/services/*Api/**/*.ts
+      - src/extensions/**/(backend)/api/**/route.server.ts
       - src/exports/sessionApi.ts
   - name: scaffold-doom-web-plugin
     description: Add a routed per-session cockpit plugin contribution with its store, view types, and component tests.
@@ -425,7 +428,8 @@ features:
         - channelName
       additionalProperties: false
     includes:
-      - "src/extensions/web.ts->src/extensions/workspaces/sessions/(frontend)/extra.ts"
+      - "src/extensions/webTab.tsx->src/extensions/workspaces/sessions/(frontend)/tab/{{ pluginId | kebabCase }}.tsx"
+      - "src/extensions/webChannel.ts->src/extensions/workspaces/sessions/(frontend)/channel/{{ channelName | kebabCase }}.ts"
       - "src/web/topicStore.ts->src/extensions/workspaces/sessions/(frontend)/_lib/{{ topic | camelCase }}Store.ts"
       - "src/web/TopicPanel.tsx->src/extensions/workspaces/sessions/(frontend)/_components/{{ topic | pascalCase }}Panel.tsx"
       - src/web/tsconfig.json->tsconfig.web.json
@@ -433,7 +437,7 @@ features:
       - tests/unit/webTopicStore.test.ts->tests/unit/web{{ topic | pascalCase }}Store.test.ts
       - tests/web/topicPanel.test.ts->tests/web/{{ topic | camelCase }}Panel.test.ts
     instruction: |-
-      The routed frontend extra exports session contribution data. Keep its private components and store in sibling _components and _lib folders, which the scanner ignores. Shared wire view types remain in src/types.
+      Named tab and channel routes export one session contribution each. Keep private components and stores in sibling _components and _lib folders, which the scanner ignores. Shared wire view types remain in src/types.
 
       Set pluginId through doompiExtension({ pluginId }) when it differs from the package-derived id. The build emits dist/extensions/web.mjs and synchronizes doompiWeb. Use the root tsconfig.web.json and typecheck both Node and browser projects. Tests belong under tests/web and tests/unit.
     patterns:
@@ -468,7 +472,7 @@ features:
     instruction: |-
       Generate a timeline item in the routed frontend contribution's private _components folder and its pure view logic in sibling _lib. Compose the card from the shared MessageItem shell.
 
-      Register the renderer through a routed tool presentation file or the package's frontend extra contribution. The tool-name constant must equal the backend registered name. Run lint, both typechecks, tests, and scoped Vibe-Lint preflight.
+      Register the renderer through a named routed tool presentation file. The tool-name constant must equal the backend registered name. Run lint, both typechecks, tests, and scoped Vibe-Lint preflight.
     patterns:
       - src/extensions/**/(frontend)/**
   - name: scaffold-doom-constants
@@ -488,6 +492,6 @@ features:
       additionalProperties: false
     includes:
       - src/constants/featureCommand.ts->src/constants/{{ commandName | camelCase }}.ts
-    instruction: Put names, descriptions, and shared guidance in src/constants. Constants contain data only and may import only constants. Controllers, services, tools, schemas, types, models, and browser code consume these values rather than duplicate them.
+    instruction: Put names, descriptions, and shared guidance in src/constants. Constants contain data only and may import only constants. Routed contributions, services, schemas, types, models, and browser code consume these values rather than duplicate them.
     patterns:
       - src/constants/**/*.ts

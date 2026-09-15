@@ -2,8 +2,8 @@ import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { GoalPiManager } from '../../src/controllers/goalManager';
-import { goalMinorModeState, createGoalMinorMode } from '../../src/controllers/runtimeActivation';
+import type { GoalPiManager } from '../../src/services/goalManager';
+import { goalMinorModeState, createGoalMinorMode } from '../../src/services/runtimeActivation';
 
 function expectedActions(active: boolean): MinorModeState['actions'] {
   return active

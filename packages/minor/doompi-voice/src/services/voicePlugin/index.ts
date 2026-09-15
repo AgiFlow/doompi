@@ -9,8 +9,8 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import { createVoiceDependencies } from '../../services/voiceDependencies';
-import { createVoiceRuntime, voiceLeaderBindings, type VoiceExtensionOptions } from './voice';
-import { VoiceConfigController } from './voiceConfig';
+import { createVoiceRuntime, voiceLeaderBindings, type VoiceExtensionOptions } from '../voice';
+import { VoiceConfigController } from '../voiceConfigController';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-voice';
 const FOOTER_ID = 'voice-activity';

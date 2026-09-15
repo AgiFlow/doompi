@@ -9,7 +9,7 @@ import path from 'node:path';
 import { mountPackageApi } from '@agimon-ai/doompi-core/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createPlanApi, api, MAX_PLAN_BYTES } from '../../src/controllers/planApi';
+import { createPlanApi, api, MAX_PLAN_BYTES } from '../../src/services/planApi';
 import {
   API_BASE_PATH,
   contentPath,

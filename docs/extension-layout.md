@@ -4,7 +4,7 @@
 
 A folder-based convention for authoring extensions: the path declares the contribution, so a package carries no parallel registry of what it contains. This is the authoring surface for the mounts described in [Extension lifecycles](lifecycles.md).
 
-**Status: in progress.** The layout below is the target. `@agimon-ai/doompi-build` reads it, and a package without a routing root keeps building from its hand-written entries. Sections marked _not yet_ describe work that is planned rather than shipped.
+`@agimon-ai/doompi-build` reads this layout and generates each host entry. Legacy catch-all entries and implementation roots are rejected rather than treated as transitional input.
 
 ## Borrow, do not invent
 
@@ -15,7 +15,7 @@ The convention is optimised for people and coding agents who already know mainst
 | `(group)` folders, invisible to the path    | Next.js App Router route groups                     |
 | `_folder`, excluded from routing            | Next.js private folders                             |
 | `[param]`, `[...slug]` dynamic segments     | Next.js                                             |
-| `route.ts` with `GET`/`POST` named exports  | Next.js Route Handlers                              |
+| `route.ts` as an HTTP route leaf            | Next.js Route Handlers                              |
 | A directory per kind, filename is identity  | Nuxt (`server/api/`, `components/`, `composables/`) |
 | `.web.tsx` and `.ios.tsx` platform suffixes | Expo and Metro                                      |
 
@@ -93,26 +93,30 @@ Matching filenames across the two sides are the join. `(backend)/channel/tasks.t
 
 A directory per kind, filename is identity.
 
-| Surface     | `(backend)` produces                   | `(frontend)` produces                             |
-| ----------- | -------------------------------------- | ------------------------------------------------- |
-| `tool/`     | `tools` on CLI and server              | `toolRenderers`                                   |
-| `command/`  | `commands` on CLI and server           | `paletteCommands`                                 |
-| `hook/`     | CLI `events`, server `hooks`           | not scanned                                       |
-| `mode/`     | `minorModes`                           | `minorModes`                                      |
-| `api/`      | `api`, as a Next.js route tree         | generated typed client                            |
-| `channel/`  | `channels`, filename is the frame type | `channels`                                        |
-| `method/`   | `methods`, filename is the member      | typed caller                                      |
-| `resource/` | server `resources`                     | not scanned                                       |
-| `tab/`      | not scanned                            | `tabs`                                            |
-| `dock/`     | not scanned                            | `dockFaces`                                       |
-| `setting/`  | not scanned                            | `settingsSections` or `settingsPanels` by export  |
-| `slot/`     | not scanned                            | `slots`, named `<pluginId>.<file>`                |
-| `fill/`     | not scanned                            | any host region or plugin slot                    |
-| `action/`   | not scanned                            | `contextActions`, `userMessageActions`            |
-| `store/`    | not scanned                            | a store at the folder's scope, not a contribution |
-| `overlay/`  | not scanned                            | CLI TUI view opened on demand, not a registration |
-
-The backend scope root owns service injection and startup work. It returns its Cordis `services` and, on the server session, any host `activities`, alongside shared state and cleanup hooks. An activity can bind a session intercom or report suspended runs; it is unrelated to the browser's `activity` slot or `activity-group/` surface. A frontend `overlay/*.cli.ts` file owns the interactive view that a session command opens through Pi's `ui.custom`; Pi has no overlay registration array.
+| Surface                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `(backend)` produces                   | `(frontend)` produces                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------- |
+| `tool/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `tools` on CLI and server              | `toolRenderers`                          |
+| `tool-restriction/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | tool restrictions                      | not scanned                              |
+| `command/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `commands` on CLI and server           | `paletteCommands`                        |
+| `shortcut/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | CLI shortcuts                          | not scanned                              |
+| `hook/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | CLI `events`, server `hooks`           | not scanned                              |
+| `mode/<id>/mode.*`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `minorModes`                           | `minorModes`                             |
+| `provider/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | CLI providers                          | not scanned                              |
+| `api/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `api`, as a routed HTTP tree           | generated typed client                   |
+| `channel/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `channels`, filename is the frame type | `channels`                               |
+| `method/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `methods`, filename is the member      | typed caller                             |
+| `resource/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | CLI and server resources               | not scanned                              |
+| `tab/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | not scanned                            | `tabs`                                   |
+| `dock/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | not scanned                            | `dockFaces`                              |
+| `setting/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | not scanned                            | settings sections or panels              |
+| `slot/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | not scanned                            | `slots`, named `<pluginId>.<file>`       |
+| `fill/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | not scanned                            | any host region or plugin slot           |
+| `action/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | not scanned                            | context and user message actions         |
+| `store/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | not scanned                            | a store at the folder's scope            |
+| `overlay/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | not scanned                            | CLI TUI view opened on demand            |
+| `activity-group/`, `leader/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | not scanned                            | cockpit contributions                    |
+| `selection-axis/`, `lifecycle/`                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | not scanned                            | singleton or named cockpit contributions |
+| The backend scope root owns service injection and startup work. It returns its Cordis `services` and, on the server session, any host `activities`, alongside shared state and cleanup hooks. An activity can bind a session intercom or report suspended runs; it is unrelated to the browser's `activity` slot or `activity-group/` surface. A frontend `overlay/*.cli.ts` file owns the interactive view that a session command opens through Pi's `ui.custom`; Pi has no overlay registration array. |
 
 ### Gates are container folders
 
@@ -192,15 +196,15 @@ src/extensions/                                  GLOBAL
 
 Three, not four. SSE is not its own mechanism.
 
-**HTTP, and SSE with it.** A package's API is one app mounted under its base path. Inside `(backend)/api/` the tree is the Next.js App Router unchanged: folder path is route path, `route.ts` is the leaf, HTTP methods are named exports, `[param]` and `[...slug]` are dynamic segments.
+**HTTP, and SSE with it.** A backend `api/` tree follows the familiar folder path and `route.ts` leaf convention. The leaf default-exports one `defineRoute(...)` declaration. Request parsing, handlers, lifecycle, and public symbols belong in `src/services`, shared contracts, or a private colocated module.
 
 ```text
-(backend)/api/current/route.ts                     export const GET, export const PUT
-(backend)/api/runners/[runId]/log/route.ts         GET /runners/{runId}/log
-(backend)/api/runners/[runId]/log/stream/route.ts  an event stream
+(backend)/api/current/route.ts
+(backend)/api/runners/[runId]/log/route.ts
+(backend)/api/runners/[runId]/log/stream/route.ts
 ```
 
-An event stream is the same mount returning `text/event-stream`, declared in the contract with an events schema map. Next.js also does SSE inside `route.ts`, so there is no new file kind.
+An event stream is the same route returning `text/event-stream`, declared in the contract with an events schema map.
 
 **WebSocket.** No extension opens a socket. The host owns the workspace and session sockets, and extensions put frames on them as channels: a hub channel on the backend, a session channel contribution on the frontend. The channel lifecycle comes from the scope folder rather than a field.
 
@@ -252,24 +256,22 @@ None of these fields are new. The convention narrows an existing union by path i
 
 **Services stay context-free.** Modules under `src/services/**` take dependencies as parameters and know nothing about mounts. The routed file is the composition root that reads the mount context and constructs them.
 
-## Escape hatch
+## No catch-all entries
 
-`extra.*` is a reserved filename at a side root, the way `layout.tsx` is reserved in Next.js. `(backend)/extra.cli.ts`, `(backend)/extra.server.ts` and `(frontend)/extra.ts` export raw contributions that the generator merges with the scanned set.
+`extra.cli.ts`, `extra.server.ts`, and `extra.web.ts` are forbidden. They hide identity, cardinality, scope, and host ownership from both the scanner and reviewers. Use a standard named surface for every contribution. Shared mount state and lifecycle belong in `root.cli.ts` or `root.server.ts`.
 
-This covers surfaces with no folder, such as shortcuts, flags, providers, markdown transformers, selection axes and file links. It also lets a package adopt the layout one folder at a time. Message renderers and leader bindings already have their own routed surfaces.
-
-A tool override is **not** one of them. Replacing a name Pi already ships stays in `tool/`, because from the author's side both are "this package provides grep":
+A tool override stays in `tool/`, because from the author's side both values mean that the package provides the named tool:
 
 ```text
 (backend)/tool/grep.cli.ts       definePiTool(tool, { overrides: true })
 (backend)/tool/grep.server.ts    defineServerTool(tool)
 ```
 
-The difference lives in the value rather than the path, because only the value knows it. The generated CLI entry splits the two at runtime, so a claim reaches the override service, which arbitrates it, and an addition reaches the tool array. Hiding an override in the escape hatch would bury the most invasive thing one extension can do to another.
+The generated CLI entry splits additions and override claims at runtime.
 
 ## The export is typed, not free form
 
-A routed file's default export is its whole contract with the host, and the generated entry cannot check it: the entry merges the derived identity in and hands the result to a contribution array, where an excess or misspelled key is invisible. So each surface has a helper that types what that file may export.
+Every scanned file directly default-exports exactly one typed `define*` declaration. It has no named exports and no freeform implementation. Public symbols and shared logic belong in `src/exports`, `src/services`, shared contract roots, or a private `_lib` or `_components` directory.
 
 ```ts
 // (backend)/tool/write-plan.ts
@@ -278,19 +280,29 @@ import { defineTool } from '@agimon-ai/doompi-core/extension-file';
 export default defineTool((context) => ({
   description: 'Write the plan',
   parameters: WritePlanSchema,
-  async execute(input, execution) { ... },
+  async execute(input, execution) {
+    /* delegate to a service */
+  },
 }));
 ```
 
-Backend helpers come from `@agimon-ai/doompi-core/extension-file`, frontend helpers from `@agimon-ai/doompi-core/web`. Three rules shape them.
+Backend helpers come from `@agimon-ai/doompi-core/extension-file`, frontend helpers from `@agimon-ai/doompi-core/web`. Derived identity keys remain optional in helper input types because an explicit legacy identity is allowed to win. Backend helpers accept a declaration or a mount-context factory. Frontend declarations remain data because the cockpit starts them separately.
 
-**Derived keys are optional, not absent.** The path supplies the name and the generator spreads the authored value over it, so a file that states its own name keeps it. Removing the key from the type would make that legal case a type error.
+Portable and native tools use different helpers. `defineTool` marks a portable declaration for host adaptation. `defineServerTool` and `defineCliTool` preserve native host contracts.
 
-**A factory is always allowed on the backend.** A contribution needing the mount context cannot be built at module scope, so every backend helper accepts `declaration | ((context) => declaration)` and types the context. Frontend files have no factory form, because the cockpit builds its definition as data and starts it separately.
+### Cardinality
 
-**Portable and native are different helpers, because they are different contracts.** `defineTool` marks a contribution the host adapts, which composes abort signals and turns a throw into an error result. `defineServerTool` is a native headless tool the host registers untouched. Picking one is a real decision, so it is spelled rather than inferred from the shape.
+A standard route contributes one value unless it explicitly says otherwise. Cardinality is helper metadata, never a pseudo-surface folder:
 
-Root-owned services are Cordis plugins. The generator reads them from the root's `services` field before the host builds deferred tools, commands, and other registrations.
+```ts
+export default defineRoutedContribution(defineProvider(discoverProviders), { cardinality: 'many' });
+export default defineRoutedContribution(optionalHook, { cardinality: 'optional' });
+export default defineRoutedContribution(liveTools, { cardinality: 'collection' });
+```
+
+`optional` means zero or one, `many` means zero to many, and `collection` preserves a live collection contract such as `PiToolCollection`. Do not create `hook-optional/`, `resource-catalog/`, `tool-collection/`, or equivalent renamed aggregates. Resolve asynchronous discovery in an awaited root, then expose synchronous root-owned values to routes.
+
+Root-owned services are Cordis plugins. The generator reads them before it builds deferred tools, commands, and other registrations.
 
 ## The generated entries live outside src
 

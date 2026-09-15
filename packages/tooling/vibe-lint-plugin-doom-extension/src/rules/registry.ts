@@ -37,7 +37,12 @@ import {
   providerOwnedPolicy,
   thinPiAdapter,
 } from './conventions.js';
-import { doomExtensionSideBoundary, doomLegacySourceRoot, doomRoutedFilePosition } from './extensionLayout.js';
+import {
+  doomExtensionSideBoundary,
+  doomLegacySourceRoot,
+  doomRoutedFileContract,
+  doomRoutedFilePosition,
+} from './extensionLayout.js';
 import { neutralExtensionContracts } from './neutralContracts.js';
 import { packageApiManifest } from './packageApi.js';
 import { piExtensionDefaultFactory } from './piExtensionContract.js';
@@ -57,6 +62,7 @@ import { webPluginToolRenderers } from './webPluginTools.js';
 export const rules: Record<string, RuleDefinition> = {
   'composition-layout': compositionLayout,
   'routed-file-position': doomRoutedFilePosition,
+  'routed-file-contract': doomRoutedFileContract,
   'extension-side-boundary': doomExtensionSideBoundary,
   'legacy-source-root': doomLegacySourceRoot,
   'plugin-composition-wiring': pluginCompositionWiring,

@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
-import type { TeamPiScope } from '../../root.cli';
+import type { TeamPiScope } from '../../_lib/root.cli';
 
 type Command = readonly [string, Parameters<ExtensionAPI['registerCommand']>[1]];
 

@@ -7,11 +7,11 @@ import {
   type SlashCommandDeps,
   startSingleAgentRun,
 } from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/launch';
-import { createParallelCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/parallel.cli';
-import { createRunCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/run.cli';
-import { createDoctorCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/subagents-doctor.cli';
-import { createSteerCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/subagents-steer.cli';
-import { createStopCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/subagents-stop.cli';
+import { createParallelCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/parallel.cli';
+import { createRunCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/run.cli';
+import { createDoctorCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/subagents-doctor.cli';
+import { createSteerCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/subagents-steer.cli';
+import { createStopCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/_lib/subagents-stop.cli';
 import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
 import type { ExtensionConfig } from '../../src/services/config';
 import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
