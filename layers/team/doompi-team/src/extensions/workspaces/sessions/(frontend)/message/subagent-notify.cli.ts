@@ -3,7 +3,7 @@ import type { Component } from '@earendil-works/pi-tui';
 import { Text } from '@earendil-works/pi-tui';
 
 import { SUBAGENT_NOTIFY_MESSAGE_TYPE, type CompletionNotifyDetails } from '../../../../../services/notify';
-import { renderCompletionNotice } from '../../../../../tui/completionNotice';
+import { renderCompletionNotice } from './_lib/completionNotice';
 
 function asDetails(value: unknown): CompletionNotifyDetails[] | undefined {
   if (!Array.isArray(value) || value.length === 0) return undefined;

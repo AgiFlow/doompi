@@ -10,29 +10,21 @@ import {
   type SubagentToolContract,
   type SubagentToolDetails,
 } from '../../../../../services/subagentTool';
-import { validateParams as validateSubagentParams } from '../../../../../services/subagentTool';
 import { SUBAGENT_TOOL_DESCRIPTION } from '../../../../../services/toolDescription';
-import { renderSubagentCall, renderSubagentResult } from '../../../../../tui/subagentToolRender';
 import type { TeamPiScope } from '../root.cli';
 
 export default defineCliTool((context: WithRoot<PiPluginContext, TeamPiScope>) =>
   definePiTool(
-    createSubagentTool(
-      context.root.runtime.subagentTool,
-      context.pi,
-      {
-        renderCall: (params, theme) => renderSubagentCall(validateSubagentParams(params), theme),
-        renderResult: renderSubagentResult,
-      },
-      context.root.waitForSessionReadiness,
-    ),
+    createSubagentTool(context.root.runtime.subagentTool, context.pi, {}, context.root.waitForSessionReadiness),
   ),
 );
 
 export function createSubagentTool(
   service: SubagentToolContract,
   pi: Pick<ExtensionAPI, 'getAllTools'>,
-  renderers: Pick<ToolDefinition<typeof SubagentToolSchema, SubagentToolDetails>, 'renderCall' | 'renderResult'>,
+  renderers: Partial<
+    Pick<ToolDefinition<typeof SubagentToolSchema, SubagentToolDetails>, 'renderCall' | 'renderResult'>
+  >,
   waitUntilReady: (context: ExtensionContext, signal?: AbortSignal) => Promise<void>,
 ): ToolDefinition<typeof SubagentToolSchema, SubagentToolDetails> {
   let conflict = false;

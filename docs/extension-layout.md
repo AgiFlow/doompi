@@ -75,7 +75,7 @@ Neither appears in any URL. The split is not cosmetic; it is a boundary three me
 | Import boundary | the browser allowlist is pinned to one literal file path                                                | the rule matches the whole side |
 | Published files | `files` lists web source paths by hand, because web ships as source and backend as dist                 | derived                         |
 
-The sides separate logic from presentation; they do not name a host or an owner. A `.cli.ts` frontend file can render the Pi terminal, while a `.web.tsx` frontend file can render the browser. Browser code does not import backend code. A session CLI command may import a session frontend `overlay/*.cli.ts` route to open its TUI view; other cross-side imports are rejected by lint. Shared data contracts live in `src/types`, `src/constants`, `src/schemas`, or the generated API contract.
+The sides separate logic from presentation; they do not name a host or an owner. A `.cli.ts` frontend file can render the Pi terminal, while a `.web.tsx` frontend file can render the browser. Browser code does not import backend code. A session CLI command may import a session frontend `overlay/*.cli.ts` route to open its TUI view or a private helper beside it. The session Pi root may import a private overlay helper to mount terminal status. Other cross-side imports are rejected by lint. Shared data contracts live in `src/types`, `src/constants`, `src/schemas`, or the generated API contract.
 
 The split also narrows the suffix namespace, so the common case needs no suffix at all. Inside `(backend)`, no suffix means CLI and server. Inside `(frontend)`, no suffix means every frontend.
 
@@ -322,6 +322,8 @@ _shared/format.ts                     shared across both sides
 ```
 
 Inside `api/`, colocation needs no underscore at all: only `route.ts` is a route, so `api/plan/validate.ts` is already private.
+
+Terminal presentation follows the same rule: `overlay/fleet.cli.ts` owns the TUI view, `overlay/_lib/fleetTranscript.ts` belongs beside it, `message/subagent-notify.cli.ts` owns its message renderer, and `tool/subagent.cli.ts` supplies the Pi tool's renderers. These files stay at the session frontend scope instead of a separate `src/tui` root.
 
 Private helpers in `_lib` or `_internal` remain beside the routed file that uses them. Service injection and lifecycle cleanup belong in the scope root.
 

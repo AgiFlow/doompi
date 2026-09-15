@@ -6,8 +6,8 @@ import {
   type TrackedAsyncJobsContract,
   TERMINAL_ASYNC_JOB_STATES,
   type TrackedAsyncJob,
-} from '../services/asyncJobTracker';
-import type { ActivityState } from '../types';
+} from '../../../../../../services/asyncJobTracker';
+import type { ActivityState } from '../../../../../../types';
 
 export const FLEET_STATUS_KEY = 'doom-team-agents';
 /** Session cost total, published as a plain decimal string a consumer reads with `Number()`. */

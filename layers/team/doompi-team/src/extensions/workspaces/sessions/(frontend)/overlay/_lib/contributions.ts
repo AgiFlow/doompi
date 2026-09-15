@@ -2,7 +2,7 @@
  * Wires the agent catalog, run fleet, and compact footer status into the host.
  *
  * DESIGN PATTERNS:
- * - Wiring only: display decisions live in `agentCatalog.ts`, `fleet.ts`, and
+ * - Wiring only: display decisions live in `agent-catalog.cli.ts`, `fleet.cli.ts`, and
  *   `fleetStatus.ts`; this file connects those surfaces to host services.
  */
 
@@ -11,15 +11,15 @@ import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-co
 import type { DoomUiHubService } from '@agimon-ai/doompi-core/ui-hub';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
-import type { FleetActionDispatcher } from '../extensions/workspaces/sessions/(frontend)/overlay/fleet.cli';
 import {
   type AsyncJobTrackerContract,
   type TrackedAsyncJobsContract,
   resolveTrackedRunId,
-} from '../services/asyncJobTracker';
-import type { ManagementActionsContract } from '../services/managementActions';
-import type { PollSchedulerContract } from '../services/pollScheduler';
-import { createSessionScope, type SessionScope } from '../services/sessionPaths';
+} from '../../../../../../services/asyncJobTracker';
+import type { ManagementActionsContract } from '../../../../../../services/managementActions';
+import type { PollSchedulerContract } from '../../../../../../services/pollScheduler';
+import { createSessionScope, type SessionScope } from '../../../../../../services/sessionPaths';
+import type { FleetActionDispatcher } from '../fleet.cli';
 import { AGENT_PULSE_FRAMES, agentFleetStatus, COST_STATUS_KEY, FLEET_STATUS_KEY } from './fleetStatus';
 
 export const SUBAGENT_FLEET_COMMAND = 'subagents-fleet';

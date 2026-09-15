@@ -42,17 +42,12 @@ import { type FleetTranscriptTail, readFleetTranscriptTail } from '../../../../.
 import { nativeTranscriptTail } from '../../../../../services/nativeFleetTranscript';
 import type { PollSchedulerContract } from '../../../../../services/pollScheduler';
 import type { SessionScope } from '../../../../../services/sessionPaths';
-import {
-  agentSystemPromptFingerprint,
-  fieldRow,
-  readAgentSystemPrompt,
-  renderAgentView,
-} from '../../../../../tui/fleetAgentView';
+import { agentSystemPromptFingerprint, fieldRow, readAgentSystemPrompt, renderAgentView } from './_lib/fleetAgentView';
 import {
   type FleetTranscriptRender,
   type FleetTranscriptVerbosity,
   renderFleetTranscript,
-} from '../../../../../tui/fleetTranscript';
+} from './_lib/fleetTranscript';
 
 const DEFAULT_REFRESH_INTERVAL_MS = 750;
 const MIN_DETAIL_BODY_LINES = 15;

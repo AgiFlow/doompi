@@ -4,6 +4,10 @@ import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-w
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createSubagentTool } from '../../src/extensions/workspaces/sessions/(backend)/tool/subagent.cli';
+import {
+  renderSubagentCall,
+  renderSubagentResult,
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/subagent.cli';
 import type {
   AsyncJobTrackerContract,
   TrackedAsyncJob,
@@ -20,7 +24,6 @@ import { sessionScopeDir, sessionScopeEnvironment, type SessionScope } from '../
 import type { SpawnPlannerContract, SpawnPlanRequest, SpawnPlanResult } from '../../src/services/spawnPlan';
 import { SUBAGENT_TOOL_NAME, SubagentToolService } from '../../src/services/subagentTool';
 import { listSuspendedRuns, suspendRun } from '../../src/services/suspendedRuns';
-import { renderSubagentCall, renderSubagentResult } from '../../src/tui/subagentToolRender';
 import type { AgentConfig, AgentDiscoveryResult, AgentScope, AgentDiscoveryContract } from '../../src/types/agent';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 

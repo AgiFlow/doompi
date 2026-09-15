@@ -30,6 +30,11 @@ import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telem
 import type { Context, Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
+import {
+  createAgentStatus,
+  registerSubagentLeaderContribution,
+  type RegisterFleetCommandDeps,
+} from '../(frontend)/overlay/_lib/contributions';
 import type { SkillDiscoveryContract } from '../../../../services/agentSkills';
 import type { AsyncJobTrackerContract } from '../../../../services/asyncJobTracker';
 import { loadConfig } from '../../../../services/config';
@@ -46,11 +51,6 @@ import { formatSuspendedRunsAsync } from '../../../../services/suspendedRuns';
 import { createTeamCollaborationMount, type TeamDelegationObservation } from '../../../../services/teamCollaboration';
 import { createTeamExtensionRuntime } from '../../../../services/teamRuntime';
 import { formatTeamContextSnapshot, readActiveTeamSnapshot } from '../../../../services/teamSnapshot';
-import {
-  createAgentStatus,
-  registerSubagentLeaderContribution,
-  type RegisterFleetCommandDeps,
-} from '../../../../tui/contributions';
 import type { AgentDiscoveryContract } from '../../../../types/agent';
 import type { SlashCommandDeps, SlashCommandState } from './command/_lib/launch';
 

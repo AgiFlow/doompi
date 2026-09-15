@@ -20,15 +20,15 @@
  * DESIGN PATTERNS:
  * - Reading is the caller's business: `readAgentSystemPrompt` is separate from
  *   rendering so the overlay can cache the file read on a content fingerprint,
- *   the same discipline `fleet.ts` applies to transcripts
+ *   the same discipline `fleet.cli.ts` applies to transcripts
  */
 
 import * as fs from 'node:fs';
 
 import { Markdown, type MarkdownTheme, truncateToWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui';
 
-import type { AsyncRunStatus } from '../services/asyncExecution';
-import { formatDuration, formatModelThinking } from '../services/displayFormat';
+import type { AsyncRunStatus } from '../../../../../../services/asyncExecution';
+import { formatDuration, formatModelThinking } from '../../../../../../services/displayFormat';
 import type { FleetTranscriptTheme } from './fleetTranscript';
 
 export const FIELD_LABEL_WIDTH = 8;

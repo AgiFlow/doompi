@@ -3,13 +3,13 @@ import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
 import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
-import { openSubagentFleet } from '../../(frontend)/overlay/fleet.cli';
-import { createSessionScope } from '../../../../../services/sessionPaths';
 import {
   createFleetActionDispatcher,
   SUBAGENT_FLEET_COMMAND,
   type RegisterFleetCommandDeps,
-} from '../../../../../tui/contributions';
+} from '../../(frontend)/overlay/_lib/contributions';
+import { openSubagentFleet } from '../../(frontend)/overlay/fleet.cli';
+import { createSessionScope } from '../../../../../services/sessionPaths';
 import type { TeamPiScope } from '../root.cli';
 import { readyCommand } from './_lib/ready';
 

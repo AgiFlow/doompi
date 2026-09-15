@@ -255,6 +255,8 @@ describe('Team standard runtime', () => {
 
     expect(host.tools).toContain('subagent');
     expect(host.tools).not.toContain('subagent_wait');
+    expect(host.toolDefinitions.get('subagent')?.renderCall).toBeTypeOf('function');
+    expect(host.toolDefinitions.get('subagent')?.renderResult).toBeTypeOf('function');
   });
 
   it('registers exactly the two Doom Team model-facing tools', async () => {

@@ -1,8 +1,10 @@
+import { definePiToolRenderer } from '@agimon-ai/doompi-core/pi-extension';
 import { DoomToolCall, renderToolHeading } from '@agimon-ai/doompi-ui/toolChrome';
 import type { Theme, ThemeColor } from '@earendil-works/pi-coding-agent';
 import { type Component, truncateToWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui';
 
-import type { SubagentToolParams } from '../schemas/subagentTool';
+import type { SubagentToolParams } from '../../../../../schemas/subagentTool';
+import { validateParams } from '../../../../../services/subagentTool';
 
 const COLLAPSED_RESULT_LINES = 12;
 const ELLIPSIS = '…';
@@ -113,3 +115,9 @@ export function renderSubagentResult(
   }
   return framedResult(body, options.expanded, theme);
 }
+
+export default definePiToolRenderer({
+  renderShell: 'self',
+  renderCall: (params, theme) => renderSubagentCall(validateParams(params), theme),
+  renderResult: renderSubagentResult,
+});

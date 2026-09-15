@@ -2,12 +2,12 @@ import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
 import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
+import { buildAgentCatalogEntries } from '../../(frontend)/overlay/_lib/agentResourceProjection';
+import { SUBAGENT_LIST_COMMAND } from '../../(frontend)/overlay/_lib/contributions';
 import { type AgentLaunchRequest, openAgentCatalog } from '../../(frontend)/overlay/agent-catalog.cli';
 import type { SubagentCapabilityPolicyStore } from '../../../../../schemas/team/capabilityCeiling';
 import { resolveActiveTeamPackageConfig } from '../../../../../services/agentDiscovery';
 import type { SkillDiscoveryContract } from '../../../../../services/agentSkills';
-import { buildAgentCatalogEntries } from '../../../../../tui/agentResourceProjection';
-import { SUBAGENT_LIST_COMMAND } from '../../../../../tui/contributions';
 import type { AgentDiscoveryContract } from '../../../../../types/agent';
 import type { TeamPiScope } from '../root.cli';
 import { startSingleAgentRun } from './_lib/launch';

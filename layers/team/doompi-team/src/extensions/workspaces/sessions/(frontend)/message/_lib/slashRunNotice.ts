@@ -22,7 +22,7 @@
 
 import type { Theme } from '@earendil-works/pi-coding-agent';
 
-import type { SlashRunDetail } from '../models/slashResult';
+import type { SlashRunDetail } from '../../../../../../models/slashResult';
 
 /** A concise prefix that remains usable by session-scoped management resolution. */
 const RUN_ID_PREFIX_LENGTH = 8;

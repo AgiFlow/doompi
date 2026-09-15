@@ -27,7 +27,10 @@ describe('import boundaries', () => {
     expect(config.extends).toContain('doom-extension/recommended');
     expect(config.boundaries?.map((boundary) => boundary.name)).toEqual([
       'cli-session-overlay-presentation',
+      'cli-session-overlay-private',
+      'cli-session-tool-presentation',
       'cli-message-presentation',
+      'cli-message-private',
     ]);
   });
 
