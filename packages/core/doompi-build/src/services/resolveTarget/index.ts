@@ -12,6 +12,9 @@ import type { ExtensionEntry, ExtensionGraph, ExtensionNotice, ExtensionSide } f
 import { toSnake } from '../identity';
 import type { BuildTarget, ResolvedContribution, TargetResolution } from './type';
 
+/** Nesting order, so roots compose outermost first. */
+const SCOPE_DEPTH: Readonly<Record<string, number>> = { global: 0, workspace: 1, session: 2 };
+
 /**
  * Which sides a host reads, and which of their files.
  *
@@ -114,14 +117,27 @@ function mergeRenderers(
 export function resolveTarget(graph: ExtensionGraph, target: BuildTarget): TargetResolution {
   const notices: ExtensionNotice[] = [];
   const escapeHatches: ExtensionEntry[] = [];
+  const roots: ExtensionEntry[] = [];
   const winners = new Map<string, ExtensionEntry>();
 
   for (const entry of graph.entries) {
     if (!drawsFrom(entry, target)) continue;
     if (entry.platform !== undefined && entry.platform !== target) continue;
 
-    if (entry.escapeHatch) {
+    if (entry.role === 'escape-hatch') {
       escapeHatches.push(entry);
+      continue;
+    }
+
+    if (entry.role === 'root') {
+      // Backend only. A root is constructed from a mount context, and the
+      // cockpit has none: it builds its plugin definition as data and starts
+      // it separately, so there is nothing for a frontend root to receive.
+      if (entry.side === 'frontend') {
+        notices.push({ path: entry.file, message: 'a scope root is a backend file; the cockpit has no mount context' });
+        continue;
+      }
+      roots.push(entry);
       continue;
     }
 
@@ -146,5 +162,11 @@ export function resolveTarget(graph: ExtensionGraph, target: BuildTarget): Targe
     contributions.push({ entry, field });
   }
 
-  return { target, contributions: mergeRenderers(contributions, notices), escapeHatches, notices };
+  return {
+    target,
+    contributions: mergeRenderers(contributions, notices),
+    escapeHatches,
+    roots: roots.sort((left, right) => SCOPE_DEPTH[left.scope] - SCOPE_DEPTH[right.scope]),
+    notices,
+  };
 }

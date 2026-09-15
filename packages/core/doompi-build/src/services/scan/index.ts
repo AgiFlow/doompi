@@ -12,6 +12,7 @@ import {
   FRONTEND_SURFACES,
   GATE_SEGMENTS,
   GENERATED_ENTRY_NAMES,
+  ROOT_FILE_NAME,
   ROUTE_FILE_NAME,
   ROUTED_SURFACES,
   ROUTING_ROOT_ALIAS,
@@ -195,7 +196,26 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
           name: gate.id,
           target: parsed.target,
           platform: parsed.platform,
-          escapeHatch: false,
+          role: 'contribution',
+        });
+        return;
+      }
+
+      // The scope's constructor. Not gated: it owns the whole subtree's
+      // lifetime, and a gate that could switch it off would leave everything
+      // below it holding a context nothing built.
+      if (parsed.name === ROOT_FILE_NAME && gate === undefined) {
+        entries.push({
+          file: relative,
+          scope: state.scope,
+          side: state.side,
+          gates: [],
+          surface: undefined,
+          route: [],
+          name: parsed.name,
+          target: parsed.target,
+          platform: parsed.platform,
+          role: 'root',
         });
         return;
       }
@@ -204,7 +224,7 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
         return note(
           relative,
           gate === undefined
-            ? `only ${ESCAPE_HATCH_NAME}.* is read at a side root; everything else needs a surface`
+            ? `only ${ROOT_FILE_NAME}.* and ${ESCAPE_HATCH_NAME}.* are read at a side root; everything else needs a surface`
             : `inside ${gate.kind}/${gate.id}/ a contribution needs a surface folder, or name the file ${gate.kind}.* to declare the gate`,
         );
       }
@@ -218,7 +238,7 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
         name: parsed.name,
         target: parsed.target,
         platform: parsed.platform,
-        escapeHatch: true,
+        role: 'escape-hatch',
       });
       return;
     }
@@ -237,7 +257,7 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
       name: parsed.name,
       target: parsed.target,
       platform: parsed.platform,
-      escapeHatch: false,
+      role: 'contribution',
     });
   };
 

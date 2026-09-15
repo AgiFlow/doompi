@@ -4,6 +4,17 @@ export type ExtensionScope = 'global' | 'workspace' | 'session';
 /** Which half of the package a contribution belongs to. */
 export type ExtensionSide = 'backend' | 'frontend';
 
+/**
+ * What a scanned file is, beyond which surface it feeds.
+ *
+ * `root` is the scope's constructor, as Next.js spells a layout: it runs
+ * before anything below it, builds whatever that subtree shares, and every
+ * routed file under it receives the result as part of its mount context. It is
+ * also where a scope's teardown goes, because it is the only file that can see
+ * the whole lifetime.
+ */
+export type EntryRole = 'contribution' | 'escape-hatch' | 'root';
+
 /** One gate folder and the id it names. */
 export interface ExtensionGate {
   readonly kind: string;
@@ -43,8 +54,8 @@ export interface ExtensionEntry {
   readonly target: string | undefined;
   /** Platform this file serves, or undefined for the side's neutral file. */
   readonly platform: string | undefined;
-  /** True when this is a side's `extra.*` escape hatch. */
-  readonly escapeHatch: boolean;
+  /** Whether this declares a contribution, a scope root, or the escape hatch. */
+  readonly role: EntryRole;
 }
 
 /** Something the scan skipped, and why. Never fatal. */

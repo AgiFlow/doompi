@@ -28,6 +28,16 @@ export const ESCAPE_HATCH_NAME = 'extra';
 export const ROUTE_FILE_NAME = 'route';
 
 /**
+ * The reserved filename that constructs a scope, as Next.js spells a layout.
+ *
+ * One per scope and side. It runs before every contribution beneath it, and
+ * whatever it returns is handed to each of them as part of the mount context,
+ * which is how a package with one shared per-mount object graph decomposes
+ * into a file per surface instead of one closure.
+ */
+export const ROOT_FILE_NAME = 'root';
+
+/**
  * Where generated entries are written, package-relative.
  *
  * Not `src`. That directory is authored code, and a build that writes into it

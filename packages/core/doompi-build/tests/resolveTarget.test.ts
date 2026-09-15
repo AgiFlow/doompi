@@ -13,7 +13,7 @@ function entry(partial: Partial<ExtensionEntry> & { file: string; side: Extensio
     name: 'thing',
     target: undefined,
     platform: undefined,
-    escapeHatch: false,
+    role: 'contribution' as const,
     ...partial,
   };
 }
@@ -126,7 +126,7 @@ describe('resolveTarget', () => {
         side: 'backend',
         surface: undefined,
         name: 'extra',
-        escapeHatch: true,
+        role: 'escape-hatch' as const,
         platform: 'cli',
       }),
       entry({ file: 'tool.ts', side: 'backend' }),

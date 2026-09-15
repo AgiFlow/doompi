@@ -1,9 +1,11 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { TSchema } from 'typebox';
 
+import type { PluginLifecycleHooks } from '../services/pluginLifecycle';
 import type { DoomHeadlessActivity, DoomHeadlessEventName, DoomHeadlessHook, DoomHeadlessTool } from './headless';
 import type { DoomHubChannel } from './hubChannel';
 import type { DoomApi } from './packageApi';
+import type { PiToolDeclaration } from './piTool';
 import type { DoomPluginCommand, DoomPluginTool } from './pluginContributions';
 import type { DoomServerMethod } from './serverFacet';
 
@@ -56,7 +58,43 @@ export type ServerToolFile<TParameters extends TSchema = TSchema, TContext = unk
   TContext
 >;
 
-/** `command/<name>.ts`. The filename becomes the command name in snake case. */
+/**
+ * What a scope's `root.ts` returns: the value its subtree shares, and the
+ * lifetime hooks for that scope.
+ *
+ * `value` joins the mount context of every contribution beneath it, under
+ * `root`. The hooks are the reason a root exists at all rather than a service:
+ * `onStart` runs after the host has registered everything, which is the only
+ * point at which it is safe to start work that can call back into a
+ * contribution.
+ */
+export interface RootDeclaration<TValue, TContext = unknown> extends PluginLifecycleHooks<TContext> {
+  readonly value: TValue;
+}
+
+/**
+ * `root.ts`. One per scope and side, as Next.js spells a layout.
+ *
+ * Always a factory: a scope is constructed from its mount, and building the
+ * graph at module scope is the module-level singleton the Cordis ownership
+ * rules exist to prevent.
+ */
+export type RootFile<TValue, TContext = unknown> = (context: TContext) => RootDeclaration<TValue, TContext>;
+
+/** A mount context with the nearest root's value attached, as a routed file sees it. */
+export type WithRoot<TContext, TValue> = TContext & { readonly root: TValue };
+
+/**
+ * `tool/<name>.cli.ts`. A native interactive tool, handed to Pi untouched.
+ *
+ * The interactive counterpart of `ServerToolFile`. Pi's execute signature and
+ * its registry are its own, so a tool that needs them is declared with
+ * `definePiTool` rather than the portable shape; this is the factory form of
+ * that, for a tool built from the mount rather than at module scope.
+ */
+export type CliToolFile<TContext = unknown> = OrFactory<PiToolDeclaration, TContext>;
+
+/** `command/<name>.ts`. The filename becomes the command name in kebab case. */
 export type CommandFile<TContext = unknown> = OrFactory<
   PathSupplied<Omit<DoomPluginCommand, 'kind'>, 'name'>,
   TContext

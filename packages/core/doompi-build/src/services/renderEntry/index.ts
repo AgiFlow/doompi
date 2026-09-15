@@ -109,7 +109,10 @@ function fillIdentity(name: string, target: string | undefined): Identity {
 /** What the path can tell each host, keyed by the folder the author typed. */
 const BACKEND_IDENTITY: Readonly<Record<string, (name: string) => Identity>> = {
   tool: (name) => ({ name: toSnake(name) }),
-  command: (name) => ({ name: toSnake(name) }),
+  // Kebab, unlike a tool. A command name is what the user types after the
+  // slash and it reaches registerCommand verbatim, so `subagents-doctor` must
+  // stay `/subagents-doctor` rather than becoming `/subagents_doctor`.
+  command: (name) => ({ name: toKebab(name) }),
   channel: (name) => ({ frameType: toSnake(name) }),
   // Only the server reads this; the CLI keys its events record by the same name.
   hook: (name) => ({ event: toSnake(name) }),
@@ -209,6 +212,53 @@ function bind(resolution: TargetResolution, options: RenderOptions): Binding[] {
     });
 }
 
+/** Scope nesting depth, so a contribution can find the root that encloses it. */
+const DEPTH: Readonly<Record<ExtensionScope, number>> = { global: 0, workspace: 1, session: 2 };
+
+interface RootBinding {
+  /** The imported factory. */
+  readonly identifier: string;
+  /** The declaration it returned: `value` plus this scope's lifecycle hooks. */
+  readonly declaration: string;
+  /** The mount context contributions beneath this root receive. */
+  readonly context: string;
+  readonly entry: ExtensionEntry;
+}
+
+function rootBindings(entries: readonly ExtensionEntry[]): RootBinding[] {
+  return entries.map((entry) => {
+    const suffix = entry.scope[0]?.toUpperCase() + entry.scope.slice(1);
+    return { identifier: `root${suffix}`, declaration: `scope${suffix}`, context: `context${suffix}`, entry };
+  });
+}
+
+/**
+ * Constructs each scope before anything it contains, outermost first.
+ *
+ * Every root is handed the context its enclosing root produced, which is what
+ * makes them nest the way Next.js layouts do: a session root can build on what
+ * the global one already established rather than rediscovering it.
+ */
+function rootPrologue(roots: readonly RootBinding[], base: string): string[] {
+  const lines: string[] = [];
+  let enclosing = base;
+  for (const root of roots) {
+    lines.push(`const ${root.declaration} = ${root.identifier}(${enclosing});`);
+    lines.push(`const ${root.context} = { ...${enclosing}, root: ${root.declaration}.value };`);
+    enclosing = root.context;
+  }
+  return lines;
+}
+
+/** The context a contribution sees: the nearest enclosing root's, or the mount's. */
+function contextForScope(roots: readonly RootBinding[], scope: ExtensionScope, base: string): string {
+  let found = base;
+  for (const root of roots) {
+    if (DEPTH[root.entry.scope] <= DEPTH[scope]) found = root.context;
+  }
+  return found;
+}
+
 function hatchBindings(entries: readonly ExtensionEntry[]): { identifier: string; entry: ExtensionEntry }[] {
   return [...entries]
     .sort((left, right) => left.file.localeCompare(right.file))
@@ -297,10 +347,17 @@ function defer(field: string, rendered: string, target: BuildTarget): string {
   return `get ${name}(): ${type} { return ${value.join(': ').replace(/,$/u, '')}; },`;
 }
 
+/**
+ * The contributions object's body.
+ *
+ * The mount context is resolved per contribution rather than once, because a
+ * root rebinds it for everything beneath it and two contributions at different
+ * scopes can therefore see different contexts in the same object.
+ */
 function bodyFor(
   bindings: readonly Binding[],
   indent: string,
-  contextExpression: string,
+  contextOf: (binding: Binding) => string,
   target: BuildTarget,
   options: RenderOptions,
 ): string[] {
@@ -318,13 +375,13 @@ function bodyFor(
       lines.push(`${indent}${field}: {`);
       for (const entry of members) {
         lines.push(
-          `${indent}  ${toSnake(entry.contribution.entry.name)}: at(${entry.identifier}, ${contextExpression}),`,
+          `${indent}  ${toSnake(entry.contribution.entry.name)}: at(${entry.identifier}, ${contextOf(entry)}),`,
         );
       }
       lines.push(`${indent}},`);
       continue;
     }
-    const rendered = `[${members.map((entry) => member(entry, contextExpression, target)).join(', ')}]`;
+    const rendered = `[${members.map((entry) => member(entry, contextOf(entry), target)).join(', ')}]`;
     lines.push(`${indent}${defer(field, wrapField(field, target, rendered, options), target)}`);
   }
   return lines;
@@ -333,9 +390,11 @@ function bodyFor(
 function importsFor(
   bindings: readonly Binding[],
   hatches: readonly { identifier: string; entry: ExtensionEntry }[],
+  roots: readonly RootBinding[],
   entryDir: string,
 ): string[] {
   return [
+    ...roots.map((r) => `import ${r.identifier} from '${specifierFor(r.entry.file, entryDir)}';`),
     ...bindings.flatMap((b) => [
       `import ${b.identifier} from '${specifierFor(b.contribution.entry.file, entryDir)}';`,
       ...(b.renderers === undefined
@@ -365,29 +424,66 @@ function resolverFor(body: readonly string[], target: BuildTarget = 'cli'): stri
 }
 
 /** `noUnusedParameters` means a scope that never threads context takes none. */
-function parameterFor(body: readonly string[]): string {
-  return body.some((line) => line.includes(', context)')) ? '(context)' : '()';
+function parameterFor(lines: readonly string[]): string {
+  return lines.some((line) => line.includes(', context)') || line.includes('(context)')) ? '(context)' : '()';
+}
+
+/**
+ * The scope's factory: an expression body, or a block when roots come first.
+ *
+ * A root has to be constructed before the object that reads it, so a scope
+ * that has one becomes statements followed by a return rather than a bare
+ * object literal.
+ */
+function scopeBody(
+  prologue: readonly string[],
+  hooks: string | undefined,
+  body: readonly string[],
+  indent: string,
+): string[] {
+  const object = [...(hooks === undefined ? [] : [`${indent}  ${hooks}`]), ...body];
+  if (prologue.length === 0) return [`${parameterFor(body)} => ({`, ...object, `${indent}}),`];
+  return [
+    `${parameterFor([...prologue, ...body])} => {`,
+    ...prologue.map((line) => `${indent}  ${line}`),
+    `${indent}  return {`,
+    ...object.map((line) => `  ${line}`),
+    `${indent}  };`,
+    `${indent}},`,
+  ];
+}
+
+/** Folds every enclosing root's lifecycle hooks into the one set the host reads. */
+function rootHooks(roots: readonly RootBinding[]): string | undefined {
+  if (roots.length === 0) return undefined;
+  return `...composeRootHooks(${roots.map((root) => root.declaration).join(', ')}),`;
 }
 
 /** The interactive terminal entry. One mount, so every backend contribution lands in it. */
 export function renderCliEntry(resolution: TargetResolution, options: RenderOptions): string {
   const bindings = bind(resolution, options);
   const hatches = hatchBindings(resolution.escapeHatches);
+  // One mount, so every root in the tree applies, whatever its scope.
+  const roots = rootBindings(resolution.roots);
+  const prologue = rootPrologue(roots, 'context');
+  const innermost = roots[roots.length - 1]?.context ?? 'context';
   const body = [
-    ...bodyFor(bindings, '  ', 'context', resolution.target, options),
-    ...hatches.map((hatch) => `  ...at(${hatch.identifier}, context),`),
+    ...bodyFor(bindings, '  ', (b) => contextForScope(roots, b.contribution.entry.scope, 'context'), 'cli', options),
+    ...hatches.map((hatch) => `  ...at(${hatch.identifier}, ${innermost}),`),
   ];
+  const factory = scopeBody(prologue, rootHooks(roots), body, '');
 
   return compact([
     HEADER,
-    cliImport(body),
+    cliImport([...prologue, ...body]),
+    ...(roots.length > 0 ? ["import { composeRootHooks } from '@agimon-ai/doompi-core/extension-file';"] : []),
     '',
-    ...importsFor(bindings, hatches, options.entryDir),
+    ...importsFor(bindings, hatches, roots, options.entryDir),
     '',
     ...resolverFor(body, 'cli'),
-    `export const extension = definePiExtension('${options.packageName}', ${parameterFor(body)} => ({`,
-    ...body,
-    '}));',
+    `export const extension = definePiExtension('${options.packageName}', ${factory[0]}`,
+    ...factory.slice(1, -1),
+    `${factory[factory.length - 1]?.replace(/,$/u, '')});`,
     '',
     'export default extension;',
     '',
@@ -405,24 +501,39 @@ export function renderCliEntry(resolution: TargetResolution, options: RenderOpti
 export function renderServerEntry(resolution: TargetResolution, options: RenderOptions): string {
   const bindings = bind(resolution, options);
   const hatches = hatchBindings(resolution.escapeHatches);
+  const allRoots = rootBindings(resolution.roots);
 
   const scopes: string[] = [];
+  let usesRoots = false;
   for (const [index, scope] of SCOPE_ORDER.entries()) {
     const visible = bindings.filter((b) => SCOPE_ORDER.indexOf(b.contribution.entry.scope) <= index);
     const here = hatches.filter((h) => SCOPE_ORDER.indexOf(h.entry.scope) <= index);
+    // Each scope is an independent mount, so it constructs the roots that
+    // enclose it from scratch rather than sharing the deeper scope's.
+    const roots = allRoots.filter((root) => SCOPE_ORDER.indexOf(root.entry.scope) <= index);
+    const innermost = roots[roots.length - 1]?.context ?? 'context';
     const body = [
-      ...bodyFor(visible, '    ', 'context', 'server', options),
-      ...here.map((hatch) => `    ...at(${hatch.identifier}, context),`),
+      ...bodyFor(
+        visible,
+        '    ',
+        (b) => contextForScope(roots, b.contribution.entry.scope, 'context'),
+        'server',
+        options,
+      ),
+      ...here.map((hatch) => `    ...at(${hatch.identifier}, ${innermost}),`),
     ];
-    if (body.length === 0) continue;
-    scopes.push(`  ${scope}: ${parameterFor(body)} => ({`, ...body, '  }),');
+    if (body.length === 0 && roots.length === 0) continue;
+    if (roots.length > 0) usesRoots = true;
+    const factory = scopeBody(rootPrologue(roots, 'context'), rootHooks(roots), body, '  ');
+    scopes.push(`  ${scope}: ${factory[0]}`, ...factory.slice(1));
   }
 
   return compact([
     HEADER,
     serverImport(scopes),
+    ...(usesRoots ? ["import { composeRootHooks } from '@agimon-ai/doompi-core/extension-file';"] : []),
     '',
-    ...importsFor(bindings, hatches, options.entryDir),
+    ...importsFor(bindings, hatches, allRoots, options.entryDir),
     '',
     ...resolverFor(scopes, 'server'),
     'export const facet = defineServerPlugin({',
@@ -451,7 +562,7 @@ export function renderWebEntry(resolution: TargetResolution, options: RenderOpti
     const visible = bindings.filter((b) => b.contribution.entry.scope === scope);
     const here = hatches.filter((h) => h.entry.scope === scope);
     const body = [
-      ...bodyFor(visible, '    ', 'undefined', 'web', options),
+      ...bodyFor(visible, '    ', () => 'undefined', 'web', options),
       ...here.map((hatch) => `    ...at(${hatch.identifier}, undefined),`),
     ];
     if (body.length === 0) continue;
@@ -464,7 +575,7 @@ export function renderWebEntry(resolution: TargetResolution, options: RenderOpti
       ? "import { defineWebPlugin, type WebPluginContributions } from '@agimon-ai/doompi-core/web';"
       : "import { defineWebPlugin } from '@agimon-ai/doompi-core/web';",
     '',
-    ...importsFor(bindings, hatches, options.entryDir),
+    ...importsFor(bindings, hatches, [], options.entryDir),
     '',
     ...resolverFor(scopes, 'web'),
     'export const webPlugin = defineWebPlugin({',
