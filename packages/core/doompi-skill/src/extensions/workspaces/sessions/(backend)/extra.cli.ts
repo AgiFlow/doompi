@@ -1,6 +1,6 @@
 import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
 
-import { createSkillRuntime } from '../../../../controllers/skillRuntime';
+import { createSkillRuntime } from './_lib/skillRuntime';
 import { LEADER_SOURCE } from '../../../../types/skills';
 
 export default ({ pi }: PiPluginContext) => ({

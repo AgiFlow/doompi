@@ -1,6 +1,6 @@
-export type { NotificationExtensionOptions } from '../controllers/notificationRuntime';
-export { createMainThreadTitleController, createWorkerTitleController } from '../controllers/shellTitleController';
-export { sendSystemNotification } from '../controllers/systemNotification';
+export type { NotificationExtensionOptions } from '../extensions/workspaces/sessions/(backend)/_lib/notificationRuntime';
+export { createMainThreadTitleController, createWorkerTitleController } from '../extensions/workspaces/sessions/(backend)/_lib/shellTitleController';
+export { sendSystemNotification } from '../extensions/workspaces/sessions/(backend)/_lib/systemNotification';
 export {
   askUserPromptBody,
   type AttentionState,

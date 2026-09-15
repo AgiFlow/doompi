@@ -1,3 +1,3 @@
-import { notificationCommand } from '../../../../../controllers/notificationCommand';
+import { notificationCommand } from '../_lib/notificationCommand';
 
 export default notificationCommand;

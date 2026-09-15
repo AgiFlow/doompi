@@ -4,7 +4,7 @@ import {
   createProfileServerCommand,
   profileIdentityHook,
   readSelectedPersona,
-} from '../../../../controllers/profileServer';
+} from './_lib/profileServer';
 import { readPackageResource } from '../../../../services/packageResources';
 
 export default ({ agent }: DoomServerPluginContext) => ({

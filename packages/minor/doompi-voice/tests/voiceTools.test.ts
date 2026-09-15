@@ -4,7 +4,7 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createVoiceToolFacades } from '../src/controllers/voiceTools';
+import { createVoiceToolFacades } from '../src/services/voiceControllerTools';
 import { AutonomousTurnIdentityFactory } from '../src/services/autonomousTurn';
 import { createDoomVoiceToolsService, type VoiceToolDefinition } from '../src/services/voiceTools';
 import type { IClock } from '../src/types';

@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createResourceCatalogSignal } from '../../src/controllers/domainRuntime';
+import { createResourceCatalogSignal } from '../../src/extensions/workspaces/sessions/(backend)/_lib/domainRuntime';
 
 interface Harness {
   readonly pi: ExtensionAPI;

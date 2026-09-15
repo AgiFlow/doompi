@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { voiceClientSettingsApi } from '../src/controllers/voiceClientSettingsApi';
+import { voiceClientSettingsApi } from '../src/services/voiceControllerClientSettingsApi';
 import { VoiceClientSettingsStore } from '../src/services/voiceClientSettings';
 
 const roots: string[] = [];

@@ -15,7 +15,7 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createProfileCommand } from '../../src/controllers/profileCommand';
+import { createProfileCommand } from '../../src/extensions/workspaces/sessions/(backend)/_lib/profileCommand';
 import type { ProfileTelemetry } from '../../src/types/telemetry';
 import { bindStubCoordinator } from '../helpers/coordinator';
 

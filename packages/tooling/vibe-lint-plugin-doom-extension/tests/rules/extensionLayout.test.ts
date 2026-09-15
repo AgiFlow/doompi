@@ -4,7 +4,11 @@ import * as path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { doomExtensionSideBoundary } from '../../src/rules/extensionLayout.js';
+import {
+  doomExtensionSideBoundary,
+  doomLegacySourceRoot,
+  doomRoutedFilePosition,
+} from '../../src/rules/extensionLayout.js';
 
 describe('extension side boundary', () => {
   let root: string;
@@ -64,5 +68,36 @@ describe('extension side boundary', () => {
         "import { createFleetCommand } from '../../(backend)/command/subagents-fleet.cli';",
       ),
     ).toMatch(/backend code/u);
+  });
+});
+
+describe('canonical routed layout', () => {
+  let root: string;
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-extension-layout-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  function write(relativePath: string): string {
+    const filePath = path.join(root, relativePath);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, 'export default {};\n');
+    return filePath;
+  }
+
+  it.each(['src/controllers/feature.ts', 'src/tools/feature.ts'])('rejects legacy source root %s', (relativePath) => {
+    expect(doomLegacySourceRoot.check?.(write(relativePath), root)).toMatch(/named routed file/u);
+  });
+
+  it.each([
+    'src/extensions/(backend)/extra.cli.ts',
+    'src/extensions/(backend)/extra.server.ts',
+    'src/extensions/(frontend)/extra.web.ts',
+  ])('rejects catch-all route %s', (relativePath) => {
+    expect(doomRoutedFilePosition.check?.(write(relativePath), root)).toMatch(/named surface folder/u);
   });
 });

@@ -145,12 +145,12 @@ describe('scanExtensions', () => {
     expect(find(graph.entries, 'grep.cli.ts')).toMatchObject({ name: 'grep', platform: 'cli' });
   });
 
-  it('accepts extra.* at a side root and marks it as the escape hatch', () => {
+  it('rejects extra.* at a side root', () => {
     const graph = scanExtensions({
       packageDir: packageWith({ 'src/extensions/(backend)/extra.cli.ts': EMPTY }),
     });
-    expect(graph.notices).toEqual([]);
-    expect(graph.entries[0]).toMatchObject({ role: 'escape-hatch', surface: undefined, platform: 'cli' });
+    expect(graph.entries).toEqual([]);
+    expect(graph.notices[0]?.message).toContain('named surface folder');
   });
 
   it('excludes tests and stories wherever they sit', () => {

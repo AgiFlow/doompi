@@ -2,9 +2,9 @@ import { join } from 'node:path';
 
 import type { DoomServerPluginDefinition } from '@agimon-ai/doompi-core/server-facet';
 
-import { VoiceMediaBroker } from '../../../../controllers/clientMediaApi';
-import { createVoiceServer } from '../../../../controllers/voiceServer';
-import { createVoiceSessionApi } from '../../../../controllers/voiceSessionApi';
+import { VoiceMediaBroker } from '../../../../services/clientMediaApiController';
+import { createVoiceServer } from '../../../../services/voiceControllerServer';
+import { createVoiceSessionApi } from '../../../../services/voiceControllerSessionApi';
 import { createRealtimeRuntime } from '../../../../services/realtimeRuntime';
 
 export default (({ agent, host }) => {

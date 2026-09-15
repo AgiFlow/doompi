@@ -1,6 +1,6 @@
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
 
-import { createMajorModeServerCommand } from '../../../../controllers/majorModeServerCommand';
+import { createMajorModeServerCommand } from './_lib/majorModeServerCommand';
 import { readPackageResource } from '../../../../services/packageResources';
 
 type HeadlessExecution = NonNullable<DoomServerPluginContext['agent']>['context'];

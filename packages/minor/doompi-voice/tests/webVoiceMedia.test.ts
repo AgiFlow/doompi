@@ -144,7 +144,7 @@ describe('browser voice media', () => {
   });
 
   it('keeps process-local manual recording out of the browser minor-mode picker', async () => {
-    const source = await readFile(new URL('../src/controllers/voice.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/services/voiceController.ts', import.meta.url), 'utf8');
     const start = source.indexOf("label: 'Manual voice'");
     const manualAction = source.slice(start, source.indexOf("id: 'deactivate'", start));
 

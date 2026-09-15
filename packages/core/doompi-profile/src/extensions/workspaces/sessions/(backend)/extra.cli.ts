@@ -1,6 +1,6 @@
 import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
 
-import { createProfileRuntime } from '../../../../controllers/profileRuntime';
+import { createProfileRuntime } from './_lib/profileRuntime';
 import { createProfileTelemetry } from '../../../../services/logSinkTelemetry';
 import type { ProfileTelemetry } from '../../../../types/telemetry';
 

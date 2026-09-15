@@ -10,7 +10,7 @@ import {
   bindPendingSelection,
   clearPendingSelection,
   selectionFromSnapshot,
-} from '../../src/controllers/pendingSelection';
+} from '../../src/extensions/workspaces/sessions/(backend)/_lib/pendingSelection';
 
 let cordis: Context | undefined;
 

@@ -4,7 +4,7 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createSkillReadiness } from '../../src/controllers/skillReadiness';
+import { createSkillReadiness } from '../../src/extensions/workspaces/sessions/(backend)/_lib/skillReadiness';
 
 type Handler = (event: never, ctx: ExtensionContext) => unknown;
 

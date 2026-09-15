@@ -25,13 +25,17 @@ export const MERGED_INTO_TOOL = 'tool-renderers';
 
 export const CLI_FIELDS: Readonly<Record<string, string>> = {
   tool: 'tools',
+  'tool-restriction': 'toolRestrictions',
   command: 'commands',
   hook: 'events',
   mode: 'minorModes',
+  provider: 'providers',
+  resource: 'resources',
 };
 
 export const SERVER_FIELDS: Readonly<Record<string, string>> = {
   tool: 'tools',
+  'tool-restriction': 'toolRestrictions',
   command: 'commands',
   hook: 'hooks',
   mode: 'minorModes',
@@ -64,6 +68,8 @@ export const WEB_FIELDS: Readonly<Record<string, string>> = {
   action: 'contextActions',
   'activity-group': 'activityGroups',
   leader: 'leaderBindings',
+  'selection-axis': 'selectionAxes',
+  lifecycle: 'start',
   api: NOT_A_CONTRIBUTION,
   method: NOT_A_CONTRIBUTION,
   store: NOT_A_CONTRIBUTION,

@@ -10,7 +10,7 @@ vi.mock('@agimon-ai/doompi-config', () => ({
   getHarnessState: () => harnessState,
 }));
 
-const { modelGuidanceEvents } = await import('../../../src/controllers/modelGuidanceEvents');
+const { modelGuidanceEvents } = await import('../../../src/extensions/workspaces/sessions/(backend)/hook/beforeAgentStart.cli');
 
 type Handler = (
   event: { systemPrompt: string },

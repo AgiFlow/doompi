@@ -1,7 +1,7 @@
 import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
 
-import { createDomainServerCommand } from '../../../../controllers/domainServerCommand';
-import { domainServerResources } from '../../../../controllers/domainServerResources';
+import { createDomainServerCommand } from './_lib/domainServerCommand';
+import { domainServerResources } from './_lib/domainServerResources';
 import { readPackageResource } from '../../../../services/packageResources';
 
 type HeadlessExecution = NonNullable<DoomServerPluginContext['agent']>['context'];

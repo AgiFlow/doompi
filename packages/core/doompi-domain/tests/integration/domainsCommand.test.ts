@@ -26,7 +26,7 @@ import {
   type DomainCatalogPort,
   type DomainsCommandDependencies,
   createDomainsCommand,
-} from '../../src/controllers/domainsCommand';
+} from '../../src/extensions/workspaces/sessions/(backend)/_lib/domainsCommand';
 import { createDomainSwitchHandoffStore } from '../../src/models/domainSwitchHandoff';
 import { DOMAIN_EVENT, type DomainTelemetry } from '../../src/types/telemetry';
 import { bindStubCoordinator } from '../helpers/coordinator';

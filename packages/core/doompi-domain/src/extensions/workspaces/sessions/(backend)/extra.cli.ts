@@ -1,6 +1,6 @@
 import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
 
-import { createDomainRuntime } from '../../../../controllers/domainRuntime';
+import { createDomainRuntime } from './_lib/domainRuntime';
 import { createDomainTelemetry } from '../../../../services/logSinkTelemetry';
 import { DOMAIN_SOURCE } from '../../../../types/domains';
 import type { DomainTelemetry } from '../../../../types/telemetry';

@@ -110,32 +110,19 @@ export const doomExtensionSideBoundary: RuleDefinition = {
   },
 };
 
-/**
- * The roots the folder convention replaces.
- *
- * `src/tools` held whichever tool shape a package wrote first, so the same
- * capability landed under `tools` for one host and `services` for the other,
- * and neither root said which host it targeted. The convention splits it: a
- * routed file under src/extensions is the shape one host expects, and a
- * service is host-neutral.
- *
- * `src/web` is deliberately not reported. Browser code used by one routed
- * file should colocate beside it, but code shared across several surfaces has
- * to live somewhere, and that root is the right somewhere. Colocation is a
- * preference the layout doc states, not a rule worth failing a build over.
- */
+/** Legacy implementation roots replaced by named routed surfaces and host-neutral services. */
 export const doomLegacySourceRoot: RuleDefinition = {
   preflight: true,
-  rule: 'Platform-specific code lives in a routed file, not under src/tools',
+  rule: 'Host-specific code lives in named routed files, not under src/controllers or src/tools',
   rationale:
-    'A root named after a host tells you nothing about which host, and splits one capability across two roots. The routed file already says which host it targets, and the service beneath it says the logic targets none.',
+    'Generic controller and tool roots hide scope, side, and surface identity. Routed paths state those contracts and services hold host-neutral logic.',
   check(filePath, configRoot) {
     const relative = projectPath(filePath, configRoot);
     if (!relative) return null;
     if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return null;
 
-    if (relative.startsWith('src/tools/')) {
-      return 'Move the host-neutral half to src/services and the host-specific shape to a routed file under src/extensions, such as (backend)/tool/<name>.cli.ts or .server.ts.';
+    if (relative.startsWith('src/tools/') || relative.startsWith('src/controllers/')) {
+      return 'Move host-neutral logic to src/services and each host contribution to a named routed file under src/extensions.';
     }
     return null;
   },
