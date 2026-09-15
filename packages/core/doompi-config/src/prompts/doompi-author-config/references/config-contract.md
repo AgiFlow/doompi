@@ -94,7 +94,7 @@ voice:
     startPhrases: [hey doom]
     stopPhrases: [stop speaking]
     utteranceIdleMs: 3000
-    transcriptionTimeoutMs: 15000
+    transcriptionTimeoutMs: 120000
     tts:
       engine: macos-say
       voice: Samantha
@@ -103,8 +103,9 @@ voice:
 
 The model must use `provider/model-id` form. Control phrases must be non-empty, bounded strings and
 must remain unique after normalization. Idle time accepts 1500 through 10000 milliseconds. The
-transcription timeout accepts 1000 through 120000 milliseconds. TTS currently accepts only
-`macos-say`, with an optional rate from 80 through 500. Repository `voice.autoCapture` is rejected.
+transcription timeout accepts 1000 through 120000 milliseconds and defaults to 120000 milliseconds
+so cold local ASR model startup is covered. TTS currently accepts only `macos-say`, with an optional
+rate from 80 through 500. Repository `voice.autoCapture` is rejected.
 
 ### Default selection
 

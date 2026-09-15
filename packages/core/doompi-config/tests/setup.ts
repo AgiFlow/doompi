@@ -615,7 +615,7 @@ describe('Doom configuration', () => {
       startPhrases: [],
       stopPhrases: [],
       utteranceIdleMs: 3000,
-      transcriptionTimeoutMs: 15_000,
+      transcriptionTimeoutMs: 120_000,
     });
   });
   it.each([1500, 3000, 10_000])('accepts autonomous utterance idle bound %i', (utteranceIdleMs) => {

@@ -1,6 +1,6 @@
 import type { AsrDecodingEvidence, IClock, TimerHandle, TranscriptionAdapterOutput } from '../../types';
 
-export const DEFAULT_TRANSCRIPTION_TIMEOUT_MS = 15_000;
+export const DEFAULT_TRANSCRIPTION_TIMEOUT_MS = 120_000;
 
 export type TurnTranscriptionOutcome =
   | { kind: 'success'; transcript: string; evidence?: AsrDecodingEvidence }

@@ -80,7 +80,7 @@ describe('VoiceWorkerSessionController', () => {
     expect(controller.state).toBe('recording');
     expect(client.beginCapture).toHaveBeenCalledTimes(1);
     const begin = vi.mocked(client.beginCapture).mock.calls[0]![0];
-    expect(begin).toMatchObject({ mode: 'manual', maxDurationMs: 300_000, transcriptionTimeoutMs: 15_000 });
+    expect(begin).toMatchObject({ mode: 'manual', maxDurationMs: 300_000, transcriptionTimeoutMs: 120_000 });
     await controller.toggle(stopUi);
     expect(controller.state).toBe('transcribing');
     expect(client.finalizeCapture).toHaveBeenCalledWith(begin.sessionId, begin.captureId, 'explicit-stop');
