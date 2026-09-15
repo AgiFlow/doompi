@@ -553,6 +553,7 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
         return target.id;
       },
       dormantSessions: () => openSessions.list(),
+      removeDormantSession: (record: OpenSessionRecord) => openSessions.remove(record.sessionId),
       reviveSession: async (record: OpenSessionRecord) => {
         try {
           await openSession(
