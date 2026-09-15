@@ -12,9 +12,9 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 import { createDomainSwitchHandoffStore } from '../../../../../models/domainSwitchHandoff';
 import { createDomainCatalog } from '../../../../../services/domainCatalog';
+import { createDomainsCommand } from '../../../../../services/domainsCommand';
 import { DOMAIN_STATUS_KEY, domainStatus } from '../../../../../services/domainText';
 import type { DomainTelemetry } from '../../../../../types/telemetry';
-import { createDomainsCommand } from './domainsCommand';
 import { registerDomainVoiceCapabilities } from './voiceTool';
 
 /**

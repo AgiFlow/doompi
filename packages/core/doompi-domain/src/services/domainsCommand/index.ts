@@ -11,6 +11,9 @@ import {
 } from '@agimon-ai/doompi-minor-mode/reload-handoff';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
+import type { DomainsCommandDependencies } from '../../types/domainCommand';
+import type { DomainSwitchHandoff, DomainSwitchHandoffIdentity } from '../../types/handoff';
+import { DOMAIN_EVENT, type DomainTelemetry } from '../../types/telemetry';
 import {
   DOMAIN_COMMAND,
   domainItems,
@@ -25,10 +28,7 @@ import {
   transitionError,
   unchangedSummary,
   voiceSwitchToken,
-} from '../../../../../services/domainText';
-import type { DomainsCommandDependencies } from '../../../../../types/domainCommand';
-import type { DomainSwitchHandoff, DomainSwitchHandoffIdentity } from '../../../../../types/handoff';
-import { DOMAIN_EVENT, type DomainTelemetry } from '../../../../../types/telemetry';
+} from '../domainText';
 
 const INFO = 'info';
 const ERROR = 'error';

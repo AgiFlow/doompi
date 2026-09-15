@@ -30,7 +30,7 @@ describe('startup module graph', () => {
     'src/extensions/workspaces/sessions/(backend)/_lib/domainRuntime.ts',
     'src/extensions/workspaces/sessions/(backend)/_lib/voiceTool.ts',
     'src/services/domainCatalog/index.ts',
-    'src/extensions/workspaces/sessions/(backend)/_lib/domainsCommand.ts',
+    'src/services/domainsCommand/index.ts',
   ];
 
   it('keeps the domain manifest, the switch and the picker behind dynamic imports', () => {

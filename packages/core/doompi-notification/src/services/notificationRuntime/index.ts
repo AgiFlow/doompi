@@ -5,21 +5,16 @@ import type { PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension'
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext, ExtensionUIContext } from '@earendil-works/pi-coding-agent';
 
+import type { NotificationExtensionOptions, WriteTitle } from '../../types/notifications';
 import {
   askUserPromptBody,
   supportsShellTitle,
   warrantsAttentionNotification,
   warrantsSettledNotification,
-} from '../../../../../services/notificationPolicy';
-import {
-  attentionNotification,
-  promptTitle,
-  settledNotification,
-  shellTabTitle,
-} from '../../../../../services/notificationText';
-import { createWorkerTitleController } from '../../../../../services/shellTitleController';
-import type { NotificationExtensionOptions, WriteTitle } from '../../../../../types/notifications';
-import { createDoomNotificationRouter } from './notificationRouter';
+} from '../notificationPolicy';
+import { createDoomNotificationRouter } from '../notificationRouter';
+import { attentionNotification, promptTitle, settledNotification, shellTabTitle } from '../notificationText';
+import { createWorkerTitleController } from '../shellTitleController';
 
 const AGENT_SETTLED_EVENT = 'agent_settled';
 const AGENT_START_EVENT = 'agent_start';

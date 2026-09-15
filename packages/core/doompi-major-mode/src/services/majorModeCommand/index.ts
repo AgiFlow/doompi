@@ -18,6 +18,9 @@ import {
 } from '@agimon-ai/doompi-minor-mode/reload-handoff';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
+import { MAJOR_MODE_SWITCH_HANDOFF_KIND } from '../../types/majorMode';
+import type { MajorModeCommandDependencies } from '../../types/majorModeCommand';
+import { MAJOR_MODE_EVENT, type MajorModeTelemetry } from '../../types/telemetry';
 import {
   applySummary,
   errorMessage,
@@ -27,16 +30,9 @@ import {
   majorModeSummary,
   optionName,
   voiceSwitchToken,
-} from '../../../../../services/majorModeText';
-import {
-  bindPendingSelection,
-  clearPendingSelection,
-  selectionFromSnapshot,
-} from '../../../../../services/pendingSelection';
-import { colorStatus, STATUS_KEY } from '../../../../../services/statusLine';
-import { MAJOR_MODE_SWITCH_HANDOFF_KIND } from '../../../../../types/majorMode';
-import type { MajorModeCommandDependencies } from '../../../../../types/majorModeCommand';
-import { MAJOR_MODE_EVENT, type MajorModeTelemetry } from '../../../../../types/telemetry';
+} from '../majorModeText';
+import { bindPendingSelection, clearPendingSelection, selectionFromSnapshot } from '../pendingSelection';
+import { colorStatus, STATUS_KEY } from '../statusLine';
 
 function transitionError(result: DoomTransitionResult): Error {
   return new Error(`Major-mode transition was ${result.outcome}: ${result.diagnostics.join(', ')}`);
