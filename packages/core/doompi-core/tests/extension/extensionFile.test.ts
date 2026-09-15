@@ -49,9 +49,12 @@ describe('routed backend file contracts', () => {
     expect(stated).toMatchObject({ name: 'legacy_name' });
   });
 
-  it('passes a service and a native server tool through unchanged', () => {
+  it('takes a service as a factory, so it can read the mount before publishing', () => {
+    // Always a factory: a Cordis plugin is itself a function, so nothing at
+    // runtime separates one from a (context) => plugin factory.
     const plugin = (): void => undefined;
-    expect(defineService(plugin)).toBe(plugin);
+    const service = defineService(() => plugin);
+    expect(service(undefined)).toBe(plugin);
 
     const native = (): ReturnType<typeof makeNative> => makeNative();
     expect(defineServerTool(native)).toBe(native);

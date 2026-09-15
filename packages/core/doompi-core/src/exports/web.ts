@@ -1,9 +1,11 @@
 export { bindSessionApiWorkspace, sessionApiPath } from '../web/services/apiRoutes';
 export {
+  defineActivityGroup,
   defineChannelFile,
   defineContextAction,
   defineDockFace,
   defineFill,
+  defineLeaderBinding,
   defineMinorModeFile,
   definePaletteCommand,
   defineSessionChannel,
@@ -17,10 +19,12 @@ export {
   defineWebPlugin,
 } from '../extensions/webPlugin';
 export type {
+  ActivityGroupFile,
   ChannelFile,
   ContextActionFile,
   DockFaceFile,
   FillFile,
+  LeaderBindingFile,
   MinorModeFile,
   PaletteCommandFile,
   SettingsPanelFile,

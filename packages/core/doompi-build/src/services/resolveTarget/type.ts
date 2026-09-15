@@ -9,6 +9,12 @@ export interface ResolvedContribution {
   readonly entry: ExtensionEntry;
   /** The host contribution array this belongs in. */
   readonly field: string;
+  /**
+   * A presentation file folded into this contribution rather than emitted
+   * beside it. Only the terminal has one: its tool renderers are fields of the
+   * tool declaration, so the pair becomes a single registration.
+   */
+  readonly renderers?: ExtensionEntry;
 }
 
 /** Everything one host needs generated, plus anything skipped on the way. */

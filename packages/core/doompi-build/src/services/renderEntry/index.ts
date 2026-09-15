@@ -25,16 +25,16 @@ const FACTORY_FIELDS: Readonly<Record<BuildTarget, readonly string[]>> = {
 };
 
 /**
- * Fields whose member is itself a function, so the export is passed through
- * untouched.
+ * Fields whose member is always a factory of the value, never the value.
  *
- * A Cordis plugin is a function, which makes it indistinguishable from a
- * `(context) => declaration` factory at runtime. Resolving one through `at`
- * would call the plugin with the mount context and register its return value,
- * which is undefined. Nothing here may be resolved and nothing may carry a
- * derived identity, so these are emitted as the bare imported binding.
+ * A Cordis plugin is itself a function, so nothing at runtime separates one
+ * from a `(context) => plugin` factory. Rather than guess, the service surface
+ * is uniformly a factory and is always called. That is also what lets a
+ * package with shared per-mount state decompose: the service builds the graph
+ * from the mount and publishes it, and every other contribution is a getter,
+ * so it is built after the service fibers are up and can inject it.
  */
-const PASSTHROUGH_FIELDS: readonly string[] = ['services'];
+const ALWAYS_FACTORY_FIELDS: readonly string[] = ['services'];
 
 const SCOPE_ORDER: readonly ExtensionScope[] = ['global', 'workspace', 'session'];
 
@@ -44,6 +44,14 @@ const SCOPE_ORDER: readonly ExtensionScope[] = ['global', 'workspace', 'session'
  * generated entry has to as well. Emitted rather than imported, so a generated
  * entry carries no runtime dependency beyond the helper it is calling.
  */
+/** The contribution set each host reads, used to annotate the emitted getters. */
+const CONTRIBUTIONS_TYPE: Readonly<Record<BuildTarget, string>> = {
+  cli: 'PiPluginContributions',
+  server: 'DoomServerSessionPlugin',
+  web: 'WebPluginContributions',
+};
+
+/** The contribution set each host reads, used to annotate the emitted getters. */
 const RESOLVER_CONTEXT: Readonly<Record<BuildTarget, string>> = {
   cli: 'PiPluginContext',
   server: 'DoomServerPluginContext',
@@ -145,9 +153,9 @@ function identityFor(
   return FRONTEND_IDENTITY[surface]?.(entry.name, options);
 }
 
-/** A stable, unique, valid identifier: surface and name, disambiguated by scope when needed. */
-function identifierFor(contribution: ResolvedContribution, taken: Set<string>): string {
-  const words = [contribution.entry.surface ?? 'extra', contribution.entry.name]
+/** A stable, unique, valid identifier built from path words. */
+function uniqueIdentifier(parts: readonly string[], taken: Set<string>): string {
+  const words = parts
     .join('-')
     .split(/[^A-Za-z0-9]+/u)
     .filter((word) => word.length > 0);
@@ -158,6 +166,11 @@ function identifierFor(contribution: ResolvedContribution, taken: Set<string>): 
   while (taken.has(candidate)) candidate = `${base}${suffix++}`;
   taken.add(candidate);
   return candidate;
+}
+
+/** A stable, unique, valid identifier: surface and name, disambiguated by scope when needed. */
+function identifierFor(contribution: ResolvedContribution, taken: Set<string>): string {
+  return uniqueIdentifier([contribution.entry.surface ?? 'extra', contribution.entry.name], taken);
 }
 
 /** The extensionless relative specifier from a generated entry to a routed file. */
@@ -171,17 +184,29 @@ interface Binding {
   readonly identifier: string;
   readonly contribution: ResolvedContribution;
   readonly identity: Identity | undefined;
+  /** The paired presentation file, when one is folded into this contribution. */
+  readonly renderers: { readonly identifier: string; readonly file: string } | undefined;
 }
 
 function bind(resolution: TargetResolution, options: RenderOptions): Binding[] {
   const taken = new Set<string>();
   return [...resolution.contributions]
     .sort((left, right) => left.entry.file.localeCompare(right.entry.file))
-    .map((contribution) => ({
-      identifier: identifierFor(contribution, taken),
-      contribution,
-      identity: identityFor(contribution, resolution.target, options),
-    }));
+    .map((contribution) => {
+      // The contribution takes its identifier first, so the plain name stays
+      // with the tool rather than going to whichever file sorted earlier.
+      const identifier = identifierFor(contribution, taken);
+      const paired = contribution.renderers;
+      return {
+        identifier,
+        contribution,
+        identity: identityFor(contribution, resolution.target, options),
+        renderers:
+          paired === undefined
+            ? undefined
+            : { identifier: uniqueIdentifier(['render', paired.name], taken), file: paired.file },
+      };
+    });
 }
 
 function hatchBindings(entries: readonly ExtensionEntry[]): { identifier: string; entry: ExtensionEntry }[] {
@@ -199,9 +224,15 @@ function hatchBindings(entries: readonly ExtensionEntry[]): { identifier: string
  * function. A React component is a function, so that is not hypothetical.
  */
 function member(binding: Binding, contextExpression: string, target: BuildTarget): string {
-  if (PASSTHROUGH_FIELDS.includes(binding.contribution.field)) return binding.identifier;
+  if (ALWAYS_FACTORY_FIELDS.includes(binding.contribution.field)) {
+    return `${binding.identifier}(${contextExpression})`;
+  }
 
-  const resolved = target === 'web' ? binding.identifier : `at(${binding.identifier}, ${contextExpression})`;
+  const base = target === 'web' ? binding.identifier : `at(${binding.identifier}, ${contextExpression})`;
+  // A terminal tool renderer is a field of the tool declaration, not a
+  // registration of its own, so the pair is merged at runtime: three tool
+  // shapes reach this array and each holds renderers somewhere different.
+  const resolved = binding.renderers === undefined ? base : `withPiRenderers(${base}, ${binding.renderers.identifier})`;
   const isFactory = FACTORY_FIELDS[target].includes(binding.contribution.field);
   if (binding.identity === undefined) return isFactory ? binding.identifier : resolved;
 
@@ -223,12 +254,25 @@ function wrapField(field: string, target: BuildTarget, rendered: string, options
   return `...piToolContributions('${options.packageName}', ${rendered}),`;
 }
 
+/** The server entry imports only the types its scopes actually use. */
+function serverImport(scopes: readonly string[]): string {
+  const types = [
+    ...(scopes.some((line) => line.includes('at(')) ? ['type DoomServerPluginContext'] : []),
+    ...(scopes.some((line) => line.includes('get ')) ? ['type DoomServerSessionPlugin'] : []),
+  ];
+  return `import { ${['defineServerPlugin', ...types].join(', ')} } from '@agimon-ai/doompi-core/server-facet';`;
+}
+
 /** The CLI entry imports only what its body actually uses. */
 function cliImport(body: readonly string[]): string {
   const named = ['definePiExtension'];
   if (body.some((line) => line.includes('piToolContributions('))) named.push('piToolContributions');
-  const types = body.some((line) => line.includes('at(')) ? ', type PiPluginContext' : '';
-  return `import { ${named.join(', ')}${types} } from '@agimon-ai/doompi-core/pi-extension';`;
+  if (body.some((line) => line.includes('withPiRenderers('))) named.push('withPiRenderers');
+  const types = [
+    ...(body.some((line) => line.includes('at(')) ? ['type PiPluginContext'] : []),
+    ...(body.some((line) => line.includes('get ')) ? ['type PiPluginContributions'] : []),
+  ];
+  return `import { ${[...named, ...types].join(', ')} } from '@agimon-ai/doompi-core/pi-extension';`;
 }
 
 /**
@@ -243,10 +287,14 @@ function cliImport(body: readonly string[]): string {
  * `services` itself stays a plain property: it is what the helper reads first,
  * and a getter for it would buy nothing.
  */
-function defer(field: string, rendered: string): string {
+function defer(field: string, rendered: string, target: BuildTarget): string {
   if (field === 'services' || rendered.startsWith('...')) return rendered;
   const [name, ...value] = rendered.split(': ');
-  return `get ${name}() { return ${value.join(': ').replace(/,$/u, '')}; },`;
+  // Annotated, because a getter gets no contextual type from the object
+  // literal it sits in, so the identity helper's T would widen to unknown and
+  // the contribution would stop type checking against the array it joins.
+  const type = `${CONTRIBUTIONS_TYPE[target]}['${name}']`;
+  return `get ${name}(): ${type} { return ${value.join(': ').replace(/,$/u, '')}; },`;
 }
 
 function bodyFor(
@@ -277,7 +325,7 @@ function bodyFor(
       continue;
     }
     const rendered = `[${members.map((entry) => member(entry, contextExpression, target)).join(', ')}]`;
-    lines.push(`${indent}${defer(field, wrapField(field, target, rendered, options))}`);
+    lines.push(`${indent}${defer(field, wrapField(field, target, rendered, options), target)}`);
   }
   return lines;
 }
@@ -288,7 +336,12 @@ function importsFor(
   entryDir: string,
 ): string[] {
   return [
-    ...bindings.map((b) => `import ${b.identifier} from '${specifierFor(b.contribution.entry.file, entryDir)}';`),
+    ...bindings.flatMap((b) => [
+      `import ${b.identifier} from '${specifierFor(b.contribution.entry.file, entryDir)}';`,
+      ...(b.renderers === undefined
+        ? []
+        : [`import ${b.renderers.identifier} from '${specifierFor(b.renderers.file, entryDir)}';`]),
+    ]),
     ...hatches.map((h) => `import ${h.identifier} from '${specifierFor(h.entry.file, entryDir)}';`),
   ];
 }
@@ -367,9 +420,7 @@ export function renderServerEntry(resolution: TargetResolution, options: RenderO
 
   return compact([
     HEADER,
-    scopes.some((line) => line.includes('at('))
-      ? "import { defineServerPlugin, type DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';"
-      : "import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';",
+    serverImport(scopes),
     '',
     ...importsFor(bindings, hatches, options.entryDir),
     '',
@@ -409,7 +460,9 @@ export function renderWebEntry(resolution: TargetResolution, options: RenderOpti
 
   return compact([
     HEADER,
-    "import { defineWebPlugin } from '@agimon-ai/doompi-core/web';",
+    scopes.some((line) => line.includes('get '))
+      ? "import { defineWebPlugin, type WebPluginContributions } from '@agimon-ai/doompi-core/web';"
+      : "import { defineWebPlugin } from '@agimon-ai/doompi-core/web';",
     '',
     ...importsFor(bindings, hatches, options.entryDir),
     '',

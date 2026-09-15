@@ -78,14 +78,20 @@ export type HookFile<TEvent extends DoomHeadlessEventName = DoomHeadlessEventNam
 >;
 
 /**
- * `service/<name>.ts`. A Cordis plugin, exported bare.
+ * `service/<name>.ts`. A factory returning a Cordis plugin.
  *
- * No factory form, and no derived identity. A Cordis plugin is itself a
- * function, so there is no runtime test that separates one from a
- * `(context) => declaration` factory. The generator passes this through
- * untouched for exactly that reason.
+ * Always a factory, never the plugin bare. A Cordis plugin is itself a
+ * function, so no runtime test separates one from a `(context) => plugin`
+ * factory; making the surface uniformly a factory removes the ambiguity
+ * instead of guessing at it.
+ *
+ * It matters because this is how a package with shared per-mount state
+ * decomposes. The factory receives the mount context, builds the graph the
+ * package's tools, commands and hooks all read, and publishes it on the
+ * Cordis context. Every other surface is emitted as a getter, so it is built
+ * after the service fibers are up and can inject what this published.
  */
-export type ServiceFile = Parameters<Context['plugin']>[0];
+export type ServiceFile<TContext = unknown> = (context: TContext) => Parameters<Context['plugin']>[0];
 
 /** `channel/<frameType>.ts`. The array holds factories, so this is one. */
 export type ChannelFile = () => PathSupplied<DoomHubChannel, 'frameType'>;

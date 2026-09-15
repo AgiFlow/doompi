@@ -40,9 +40,17 @@ export const GENERATED_DIR = 'generated';
 /** Generated entry basenames. Never scanned, never hand-edited. */
 export const GENERATED_ENTRY_NAMES: readonly string[] = ['pi', 'server', 'web'];
 
-/** Platform suffixes, scoped to their side. A target may not reuse one of these words. */
+/**
+ * Platform suffixes, scoped to their side. A target may not reuse one of these words.
+ *
+ * `cli` appears on both sides, because the interactive host has both. Its
+ * backend files hold a tool's `execute` and its services; its frontend files
+ * hold the TUI that draws them. A terminal is a frontend that happens not to
+ * be a browser, which is why the side axis is logic against presentation
+ * rather than Node against browser.
+ */
 export const BACKEND_PLATFORMS: readonly string[] = ['cli', 'server'];
-export const FRONTEND_PLATFORMS: readonly string[] = ['web', 'ios', 'android', 'desktop'];
+export const FRONTEND_PLATFORMS: readonly string[] = ['cli', 'web', 'ios', 'android', 'desktop'];
 
 /**
  * Surfaces that produce contributions on the backend side.
@@ -61,13 +69,20 @@ export const BACKEND_SURFACES: readonly string[] = [
   'activity',
 ];
 
-/** Surfaces that produce contributions on the frontend side. */
+/**
+ * Surfaces that produce contributions on the frontend side.
+ *
+ * `message` is terminal-only today: the cockpit renders a timeline entry
+ * through a tool renderer or a fill, while the TUI has a separate registry
+ * keyed by custom message type.
+ */
 export const FRONTEND_SURFACES: readonly string[] = [
   'tool',
   'command',
   'api',
   'channel',
   'method',
+  'message',
   'tab',
   'dock',
   'setting',

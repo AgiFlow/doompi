@@ -1,24 +1,36 @@
 import {
   ACTION_FIELDS,
   CLI_FIELDS,
+  CLI_FRONTEND_FIELDS,
+  MERGED_INTO_TOOL,
   NOT_A_CONTRIBUTION,
   SERVER_FIELDS,
   SETTING_FIELDS,
   WEB_FIELDS,
 } from '../../constants/contributions';
 import type { ExtensionEntry, ExtensionGraph, ExtensionNotice, ExtensionSide } from '../../types/extensionGraph';
+import { toSnake } from '../identity';
 import type { BuildTarget, ResolvedContribution, TargetResolution } from './type';
 
-const SIDE_OF: Readonly<Record<BuildTarget, ExtensionSide>> = {
-  cli: 'backend',
-  server: 'backend',
-  web: 'frontend',
-};
+/**
+ * Which sides a host reads, and which of their files.
+ *
+ * The side axis is logic against presentation, not Node against browser, so
+ * the terminal reads both: every backend file, plus the frontend files that
+ * name it. A neutral frontend file is cockpit code, which a terminal cannot
+ * render, so the CLI takes only explicit `.cli` ones. The headless server has
+ * no presentation at all.
+ */
+function drawsFrom(entry: ExtensionEntry, target: BuildTarget): boolean {
+  if (target === 'web') return entry.side === 'frontend';
+  if (entry.side === 'backend') return true;
+  return target === 'cli' && entry.platform === 'cli';
+}
 
-const FIELDS_OF: Readonly<Record<BuildTarget, Readonly<Record<string, string>>>> = {
-  cli: CLI_FIELDS,
-  server: SERVER_FIELDS,
-  web: WEB_FIELDS,
+const FIELDS_OF: Readonly<Record<BuildTarget, Readonly<Record<ExtensionSide, Readonly<Record<string, string>>>>>> = {
+  cli: { backend: CLI_FIELDS, frontend: CLI_FRONTEND_FIELDS },
+  server: { backend: SERVER_FIELDS, frontend: {} },
+  web: { backend: {}, frontend: WEB_FIELDS },
 };
 
 /** Everything but the platform: two files sharing this are the same contribution. */
@@ -27,7 +39,10 @@ function logicalKey(entry: ExtensionEntry): string {
   const route = entry.route
     .map((segment) => ('literal' in segment ? segment.literal : `[${segment.param.name}]`))
     .join('/');
-  return [entry.scope, gates, entry.surface ?? '', route, entry.name, entry.target ?? ''].join('|');
+  // The side is part of it, because the terminal reads both. Without it a
+  // tool's logic and its TUI would look like one contribution overriding the
+  // other, and only one of the pair would survive.
+  return [entry.side, entry.scope, gates, entry.surface ?? '', route, entry.name, entry.target ?? ''].join('|');
 }
 
 /** Resolves the field for a surface whose filename target picks between two shapes. */
@@ -44,12 +59,47 @@ function fieldFor(entry: ExtensionEntry, target: BuildTarget): string | undefine
   const surface = entry.surface;
   if (surface === undefined) return undefined;
 
-  const declared = FIELDS_OF[target][surface];
+  const declared = FIELDS_OF[target][entry.side][surface];
   if (declared === undefined || declared === NOT_A_CONTRIBUTION) return undefined;
 
   if (target === 'web' && surface === 'setting') return variantField(SETTING_FIELDS, declared, entry.target);
   if (target === 'web' && surface === 'action') return variantField(ACTION_FIELDS, declared, entry.target);
   return declared;
+}
+
+/**
+ * Folds terminal tool renderers into the tool declarations they draw.
+ *
+ * Paired by the snake-cased filename, which is the tool's name on both sides.
+ * A renderer naming no tool this package contributes is reported rather than
+ * dropped: it is almost always a rename that only half landed, and a silently
+ * missing renderer is the kind of thing nobody notices until a demo.
+ */
+function mergeRenderers(
+  contributions: readonly ResolvedContribution[],
+  notices: ExtensionNotice[],
+): ResolvedContribution[] {
+  const renderers = new Map<string, ExtensionEntry>();
+  const rest: ResolvedContribution[] = [];
+  for (const contribution of contributions) {
+    if (contribution.field !== MERGED_INTO_TOOL) rest.push(contribution);
+    else renderers.set(toSnake(contribution.entry.name), contribution.entry);
+  }
+  if (renderers.size === 0) return rest;
+
+  const merged = rest.map((contribution) => {
+    if (contribution.field !== 'tools') return contribution;
+    const name = toSnake(contribution.entry.name);
+    const found = renderers.get(name);
+    if (found === undefined) return contribution;
+    renderers.delete(name);
+    return { ...contribution, renderers: found };
+  });
+
+  for (const orphan of renderers.values()) {
+    notices.push({ path: orphan.file, message: `renders a tool no backend file contributes; nothing will draw it` });
+  }
+  return merged;
 }
 
 /**
@@ -62,13 +112,12 @@ function fieldFor(entry: ExtensionEntry, target: BuildTarget): string | undefine
  * becomes a notice rather than silently disappearing.
  */
 export function resolveTarget(graph: ExtensionGraph, target: BuildTarget): TargetResolution {
-  const side = SIDE_OF[target];
   const notices: ExtensionNotice[] = [];
   const escapeHatches: ExtensionEntry[] = [];
   const winners = new Map<string, ExtensionEntry>();
 
   for (const entry of graph.entries) {
-    if (entry.side !== side) continue;
+    if (!drawsFrom(entry, target)) continue;
     if (entry.platform !== undefined && entry.platform !== target) continue;
 
     if (entry.escapeHatch) {
@@ -97,5 +146,5 @@ export function resolveTarget(graph: ExtensionGraph, target: BuildTarget): Targe
     contributions.push({ entry, field });
   }
 
-  return { target, contributions, escapeHatches, notices };
+  return { target, contributions: mergeRenderers(contributions, notices), escapeHatches, notices };
 }

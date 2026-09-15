@@ -1,6 +1,9 @@
 export {
+  defineMessageRenderer,
   definePiExtension,
+  definePiToolRenderer,
   piToolContributions,
+  withPiRenderers,
   type DefinedPiExtension,
   type PiExtensionDefinition,
 } from '../extensions/piExtension';
@@ -8,6 +11,7 @@ export type {
   PiPluginContext,
   PiPluginContributions,
   PiEventHandlers,
+  PiToolRenderers,
   PiToolRestriction,
   PiToolContribution,
   PiToolCollection,
