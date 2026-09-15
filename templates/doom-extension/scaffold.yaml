@@ -72,24 +72,24 @@ boilerplate:
       - src/services/extensionService/type.ts
       - src/services/extensionService/index.ts
       - src/constants/command.ts->src/constants/{{ commandName | camelCase }}.ts
-      - src/controllers/command.ts->src/controllers/{{ commandName | camelCase }}Command.ts
       - 'src/prompts/use/SKILL.md->src/prompts/doompi-use-{{ packageName | replace: "doompi-", "" | kebabCase }}/SKILL.md'
       - tests/unit/services/extensionService.test.ts
       - tests/integration/extensions/pi.test.ts
       - tests/contract/packageShape.test.ts
-      - src/extensions/pi.ts
+      - .gitignore
+      - "src/extensions/workspaces/sessions/(backend)/command/command.ts->src/extensions/workspaces/sessions/(backend)/command/{{ commandName | kebabCase }}.ts"
     instruction: |-
-      Generate only used folders. Host entries live directly in src/extensions/pi.ts, server.ts, and web.ts. src/exports contains flat, pure public re-export modules for services, constants, types, and schemas. Never re-export extensions from src/exports.
+      The path declares the contribution. A file under src/extensions is routed: its folder nesting is the scope (workspaces, then sessions), a (backend) or (frontend) group selects the build side, the next folder is the surface (tool, command, api, channel, tab, fill, setting, slot), and the filename is the contribution's identity. Never hand-write pi.ts, server.ts or web.ts; the build generates all three into generated/, which the package gitignores.
 
-      Dependency direction: extensions -> controllers -> services/models. Tools consume services/models. Services own all package logic, including filesystem and network work, under src/services/{serviceName}/index.ts and type.ts. Models own state. Controllers translate API, method, and command requests. Constants own metadata and guidance; schemas own runtime validation. Do not generate adapters, containers, commands, or providers directories.
+      A routed file exports one contribution through a define* helper, from @agimon-ai/doompi-core/extension-file on the backend and @agimon-ai/doompi-core/web on the frontend. Export the declaration, or a factory of one when it needs the mount context. The path supplies identity, so omit the name, id, slot or event the filename already carries.
 
-      Use definePiExtension({name, ...contributions}) for static plugins or definePiExtension(name, context => contributions) for per-mount dependencies. Pi factories and server scope factories may be async; readiness awaits their contribution result before registration. Most contributions are arrays. Pi tools may instead use a typed PiToolCollection with snapshot() and subscribe(listener). Reuse immutable declarations across snapshots. A new declaration with the same name replaces the implementation and aborts old invocations. The helper owns subscriptions and cancels withdrawn tools. Pi minorModes may use PiMinorModeCollection with snapshot() and subscribe(listener) when catalog availability changes; the helper owns attachment, withdrawal, provider rebinding, and unsubscribe. Shared tools use defineTool and commands use defineCommand. No mandatory setup, teardown, registration callbacks, or empty lifecycle hooks. The helper owns Cordis, registrations, and cleanup.
+      Split by what varies. A service under src/services/{serviceName}/ is host-neutral and owns the logic, including filesystem and network work. A routed file is only the shape one host expects: Pi tools carry renderCall and renderResult, headless tools carry neither, and both delegate to the same service. Never create a src/tools root, and never put browser code in src/web: colocate it beside the routed file that renders it, in a _components or _lib folder, which nothing scans.
 
-      Lifecycle: construct declarations, register, await onStart, run, abort signal, await onStop, unregister in reverse order, await onDispose. Hooks receive one typed context. onStop runs after the start stage is reached, even if onStart is absent or fails. Factories create state; onStart begins external work. Scope activation and minor-mode actions are separate lifetimes.
+      The two sides never import each other. Only src/types, src/constants, src/schemas and the generated API contract cross. Inside (backend)/api the tree is the Next.js App Router: the folder path is the route, route.ts is the leaf, HTTP methods are named exports, and [param] is a dynamic segment.
 
-      Use extensionless source imports without /index. tsdown uses explicit entries from src/extensions and flat src/exports. Browser entries remain source-bundled and excluded from the node build. Keep exports closed and Pi versions matching. Prompts remain published resources under src/prompts, indexed by llms.txt and declared through resources.
+      Lifecycle: construct declarations, register, await onStart, run, abort signal, await onStop, unregister in reverse order, await onDispose. Hooks receive one typed context. onStop runs once the start stage is reached, even if onStart is absent or fails. Factories create state; onStart begins external work.
 
-      Run pnpm fixcode, lint, typecheck, tests, build, VibeLint preflight, and npm pack --dry-run. Add APIs, server, web, tools, or services through the matching feature only when needed.
+      Prompts remain published resources under src/prompts, indexed by llms.txt. Run pnpm fixcode, lint, typecheck, tests, build, VibeLint preflight, and npm pack --dry-run.
 features:
   - name: scaffold-doom-plugin-method
     description: Add one exact-scope typed browser-to-server method to an extension that already has a server facet and web plugin.
