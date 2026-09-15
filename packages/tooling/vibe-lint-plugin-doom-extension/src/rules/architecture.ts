@@ -1822,13 +1822,14 @@ function publicFeatureAdapterPaths(configRoot: string): string[] {
 
   const adapters = new Set<string>();
   for (const facadeStem of facadeStems) {
-    const facadePath =
-      sourcePathForStem(path.join(configRoot, 'src', facadeStem)) ??
-      sourcePathForStem(path.join(configRoot, 'src', 'exports', facadeStem));
+    const facadePath = sourceCandidates(facadeStem)
+      .map((candidate) => sourcePathForStem(path.join(configRoot, candidate)))
+      .find((resolved) => resolved !== undefined && resolved !== null);
     if (!facadePath) continue;
     const facade = readSource(facadePath);
     if (!facade) continue;
-    if (projectPath(facadePath, configRoot)?.startsWith('src/extensions/')) {
+    const facadeRelative = projectPath(facadePath, configRoot);
+    if (facadeRelative?.startsWith('src/extensions/') || facadeRelative?.startsWith('generated/')) {
       adapters.add(facadePath);
       continue;
     }
@@ -2209,10 +2210,24 @@ function publicSourceAbiReferences(sourceFile: ts.SourceFile, packageName: strin
   return [...new Set(remaining)].sort();
 }
 
+/**
+ * Where a manifest stem's source may live.
+ *
+ * A folder-routed package has the build write its host entries to generated/,
+ * so the stem `extensions/pi` resolves to `generated/pi.ts` rather than
+ * anything under src. Both spellings are accepted while packages migrate.
+ */
+function sourceCandidates(stem: string): string[] {
+  const candidates = [`src/${stem}`, `src/exports/${stem}`];
+  const generated = stem.startsWith('extensions/') ? stem.slice('extensions/'.length) : undefined;
+  if (generated !== undefined) candidates.push(`generated/${generated}`);
+  return candidates;
+}
+
 function sourceTargetExists(configRoot: string, stem: string): boolean {
-  for (const prefix of ['src/', 'src/exports/']) {
+  for (const candidate of sourceCandidates(stem)) {
     for (const extension of SOURCE_TARGET_EXTENSIONS) {
-      if (fs.existsSync(path.join(configRoot, `${prefix}${stem}${extension}`))) return true;
+      if (fs.existsSync(path.join(configRoot, `${candidate}${extension}`))) return true;
     }
   }
   return false;
