@@ -13,10 +13,10 @@ interface PresetConfig {
   dts: { incremental: boolean; parallel: boolean; eager: boolean };
   exports: boolean;
   format: ('esm' | 'cjs')[];
-  minify: { compress: boolean; mangle: { toplevel: boolean }; codegen: { removeWhitespace: boolean } };
   platform: 'node';
   sourcemap: boolean;
   unbundle: boolean;
+  hooks: { 'build:done': () => void };
 }
 
 export interface ExtensionPresetOptions extends GenerateOptions {
@@ -24,8 +24,45 @@ export interface ExtensionPresetOptions extends GenerateOptions {
   readonly entry?: Record<string, string>;
   /** Public export modules, package-relative. Defaults to `src/exports`. */
   readonly exportsDir?: string;
-  /** Skip the minify block, as the largest core packages do. */
-  readonly minify?: boolean;
+}
+
+/**
+ * Restores the `types` condition tsdown's exports generation omits.
+ *
+ * tsdown derives the exports map from the built chunks, which is what makes
+ * the manifest follow the folder tree instead of being hand-maintained. But
+ * its `genSubExport` only ever emits `import`, `require` or `default`: a
+ * declaration chunk contributes nothing to a subpath, so only the root gets a
+ * top-level `types`. TypeScript still resolves a sibling `.d.mts` under
+ * node16 and bundler resolution, but publint and attw both read the condition,
+ * and this repository's package contract asserts it.
+ *
+ * Runs on `build:done`, after tsdown has written the manifest, and only
+ * rewrites when something actually changed so a second build is a no-op.
+ */
+function restoreTypeConditions(packageDir: string): void {
+  const manifestPath = path.join(packageDir, 'package.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
+    exports?: Record<string, unknown>;
+  };
+  const map = manifest.exports;
+  if (map === undefined) return;
+
+  let changed = false;
+  for (const [subpath, target] of Object.entries(map)) {
+    if (subpath === './package.json' || target === null || typeof target !== 'object') continue;
+    const conditions = target as Record<string, string>;
+    if (conditions.types !== undefined) continue;
+    const esm = conditions.import ?? conditions.default;
+    if (esm === undefined || !esm.endsWith('.mjs')) continue;
+    const types = `${esm.slice(0, -'.mjs'.length)}.d.mts`;
+    if (!fs.existsSync(path.join(packageDir, types))) continue;
+    // Ahead of import and require: a resolver takes the first condition it
+    // matches, and a types-aware one must not fall through to the runtime file.
+    map[subpath] = { types, ...conditions };
+    changed = true;
+  }
+  if (changed) fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
 const DEFAULT_EXPORTS_DIR = 'src/exports';
@@ -72,16 +109,13 @@ export function doompiExtension(options: ExtensionPresetOptions = { packageDir: 
     entry,
     clean: true,
     dts: { incremental: true, parallel: false, eager: true },
-    // The build never rewrites package.json. tsdown's own exports generation
-    // drops the `types` condition this repository's export maps carry, and a
-    // build that mutates a tracked file makes every cached test result
-    // unsound: the manifest can change after the test that read it. The
-    // manifest stays hand-written and lint-enforced instead.
-    exports: false,
+    exports: true,
     format: ['esm', 'cjs'],
-    minify: { compress: options.minify !== false, mangle: { toplevel: true }, codegen: { removeWhitespace: true } },
+    // No minify. This is a library build, and a mangled stack trace inside a
+    // published extension is far more expensive than the bytes it saves.
     platform: 'node',
     sourcemap: true,
     unbundle: true,
+    hooks: { 'build:done': () => restoreTypeConditions(packageDir) },
   };
 }
