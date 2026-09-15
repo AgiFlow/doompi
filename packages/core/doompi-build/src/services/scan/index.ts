@@ -166,6 +166,13 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
     if (state.side === undefined) {
       const base = fileName.slice(0, fileName.lastIndexOf('.'));
       if (state.scope === 'global' && generated.includes(base)) return;
+      // A direct child of the routing root is a host entry, not a
+      // contribution: either one this build generates, or one the package
+      // hand-writes and names itself. doompi-profile ships a second Pi entry
+      // the composition resolver activates by name, and a package that has
+      // not adopted the layout has all of its entries here. A contribution
+      // always sits at least one directory deep, inside a side group.
+      if (state.scope === 'global') return;
       if (parseFilename(fileName, []) === undefined) return;
       return note(relative, 'a contribution needs a side group and a surface folder');
     }

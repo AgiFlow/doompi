@@ -177,7 +177,9 @@ const boundaries: BoundaryConfig[] = [
     pattern: 'src/web/**',
     allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
   },
-  { name: 'tests', pattern: 'tests/**', allowedImports: ['src/**', 'tests/**'] },
+  // generated/** is the routed package's host entries, which its contract and
+  // lifecycle tests import the way they used to import src/extensions/pi.ts.
+  { name: 'tests', pattern: 'tests/**', allowedImports: ['src/**', 'tests/**', 'generated/**'] },
   {
     name: 'metadata',
     pattern:

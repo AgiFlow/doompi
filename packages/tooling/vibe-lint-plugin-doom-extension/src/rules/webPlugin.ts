@@ -445,8 +445,10 @@ export const webPluginManifest: RuleDefinition = {
         problems.push(`'${id}' registrationOrder must be a non-negative integer when present`);
       }
       const client = normalizeEntry(block.client);
-      if (client !== './src/extensions/web.ts') {
-        problems.push(`'${id}' client must be ./src/extensions/web.ts`);
+      // Two spellings while packages migrate: a hand-written entry under src,
+      // or the one a folder-routed package has the build write to generated/.
+      if (client !== './src/extensions/web.ts' && client !== './generated/web.ts') {
+        problems.push(`'${id}' client must be ./src/extensions/web.ts or ./generated/web.ts`);
       } else {
         if (!fs.existsSync(path.join(configRoot, client))) problems.push(`'${id}' client '${client}' does not exist`);
         if (!isPublished(files, stripDot(client)))
