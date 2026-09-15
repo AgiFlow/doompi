@@ -1,17 +1,17 @@
 {
-  "name": "@agimon-ai/doompi-runner-rmux-linux-x64",
+  "name": "@agimon-ai/doompi-runner-rmux-darwin-x64",
   "version": "0.0.1-alpha.67",
-  "description": "Prebuilt RMUX runtime for DoomPi Runner on Linux x64.",
+  "description": "Prebuilt RMUX runtime for DoomPi Runner on macOS x64.",
   "keywords": [
     "ai",
     "coding-agent",
+    "darwin",
     "developer-tools",
     "doom-runner",
     "doompi",
-    "linux",
+    "macos",
     "native-runtime",
     "pi-package",
-    "process-supervision",
     "rmux",
     "x64"
   ],
@@ -24,7 +24,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AgiFlow/doompi.git",
-    "directory": "packages/default/doompi-runner-rmux-linux-x64"
+    "directory": "packages/utils/doompi-runner-rmux-darwin-x64"
   },
   "files": [
     "vendor",
@@ -32,13 +32,10 @@
     "LICENSE-APACHE"
   ],
   "os": [
-    "linux"
+    "darwin"
   ],
   "cpu": [
     "x64"
-  ],
-  "libc": [
-    "glibc"
   ],
   "exports": {
     "./package.json": "./package.json"

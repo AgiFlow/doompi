@@ -148,6 +148,7 @@ const FRONTEND_IDENTITY: Readonly<Record<string, (name: string, options: RenderO
   action: (name) => ({ id: toKebab(name) }),
   mode: (name) => ({ name: toKebab(name) }),
   'activity-group': (name) => ({ name: toKebab(name) }),
+  'selection-axis': (name) => ({ name: toKebab(name) }),
   // A leader binding's id is namespaced like a slot, because the key tree is
   // shared and two plugins must not collide on one path's identity.
   leader: (name, options) => ({ id: `${options.pluginId}.${toKebab(name)}` }),
@@ -351,7 +352,7 @@ function cliImport(body: readonly string[], infersOptions: boolean): string {
   if (body.some((line) => line.includes('withPiRenderers('))) named.push('withPiRenderers');
   const types = [
     ...(body.some((line) => line.includes('at(')) || infersOptions ? ['type PiPluginContext'] : []),
-    ...(body.some((line) => line.includes('get ')) ? ['type PiPluginContributions'] : []),
+    ...(body.some((line) => line.includes(CONTRIBUTIONS_TYPE.cli)) ? [`type ${CONTRIBUTIONS_TYPE.cli}`] : []),
   ];
   return `import { ${[...named, ...types].join(', ')} } from '@agimon-ai/doompi-core/pi-extension';`;
 }

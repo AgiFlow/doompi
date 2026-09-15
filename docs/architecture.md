@@ -58,6 +58,7 @@ The server bundle records the built server facet for each selected package, its 
 | `packages/default/*` | Default distribution features selected through configuration.                                       |
 | `packages/minor/*`   | Optional modes selected through configuration.                                                      |
 | `packages/clients/*` | Standalone presentation clients, currently the web presentation server and desktop shell.           |
+| `packages/utils/*`   | Shared utilities and prebuilt native payloads that are never selected on their own.                 |
 | `layers/<layer>/*`   | Selectable higher-level extensions.                                                                 |
 | `packages/tooling/*` | Repository-owned development tools that are not part of the runtime package graph.                  |
 

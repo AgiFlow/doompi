@@ -23,7 +23,7 @@ import {
   shouldShowIds,
 } from '../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/selectors';
 import { TaskOverlay } from '../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/taskOverlay';
-import taskRenderer from '../src/extensions/workspaces/sessions/(frontend)/tool/task.cli';
+import taskRenderer from '../src/extensions/workspaces/sessions/(frontend)/tool/_lib/task.cli';
 
 /** Pass-through theme so assertions read plain text, not colour codes. */
 function createTheme(): Theme {

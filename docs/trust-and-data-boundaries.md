@@ -126,7 +126,7 @@ printed to stderr when it is added.
 ## Bundled native binaries
 
 DoomPi Runner ships prebuilt third-party executables under
-`packages/default/doompi-runner-{rmux,rtk}-*/vendor/`. They run with your full user privileges.
+`packages/utils/doompi-runner-{rmux,rtk}-*/vendor/`. They run with your full user privileges.
 
 | Binary                | Upstream                                          | Version                          | License           |
 | --------------------- | ------------------------------------------------- | -------------------------------- | ----------------- |

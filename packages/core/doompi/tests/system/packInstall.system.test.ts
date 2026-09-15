@@ -13,6 +13,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   FORBIDDEN_PACK_CONTENT,
+  FOUNDATION_PACKAGE_NAMES,
   PACKAGE_MATRIX,
   packageRootFor,
   REPOSITORY_ROOT,
@@ -105,7 +106,9 @@ const SYSTEM_CONFIG_PATH = path.join(REPOSITORY_ROOT, 'packages/core/doompi/vite
 const PACKAGE_MANIFEST_PATH = path.join(REPOSITORY_ROOT, 'packages/core/doompi/package.json');
 const CI_WORKFLOW_PATH = path.join(REPOSITORY_ROOT, '.github/workflows/ci.yml');
 const standardPackageSet = new Set(STANDARD_PI_ENTRIES.map((entry) => entry.name));
-const selectablePackageNames = PACKAGE_MATRIX.filter((entry) => entry.layer !== 'core').map((entry) => entry.name);
+const selectablePackageNames = PACKAGE_MATRIX.filter(
+  (entry) => entry.layer !== 'core' && !FOUNDATION_PACKAGE_NAMES.includes(entry.name),
+).map((entry) => entry.name);
 const PACKAGE_COMPATIBILITY_BASELINE = JSON.parse(
   fs.readFileSync(new URL('../fixtures/packageCompatibility.json', import.meta.url), 'utf8'),
 ) as Record<string, { exports: Record<string, string>; bin: Record<string, string> }>;

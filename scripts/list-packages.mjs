@@ -9,6 +9,7 @@ const packageDirectories = [
   ...directoriesIn(path.join(root, 'packages', 'minor')),
   ...directoriesIn(path.join(root, 'packages', 'clients')),
   ...directoriesIn(path.join(root, 'packages', 'tooling')),
+  ...directoriesIn(path.join(root, 'packages', 'utils')),
   ...directoriesIn(path.join(root, 'layers')).flatMap(directoriesIn),
 ].filter((directory) => fs.existsSync(path.join(directory, 'package.json')));
 

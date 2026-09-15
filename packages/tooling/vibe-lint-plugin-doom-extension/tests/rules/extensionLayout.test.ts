@@ -115,4 +115,12 @@ describe('canonical routed layout', () => {
     );
     expect(doomRoutedFileContract.check?.(many, root)).toBeNull();
   });
+
+  it('accepts a surface helper that names its type argument', () => {
+    const hook = write(
+      'src/extensions/(backend)/hook/before-agent-start.server.ts',
+      "export default defineHook<'before_agent_start'>({ event: 'before_agent_start' });\n",
+    );
+    expect(doomRoutedFileContract.check?.(hook, root)).toBeNull();
+  });
 });

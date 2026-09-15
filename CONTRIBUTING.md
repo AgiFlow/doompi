@@ -45,6 +45,7 @@ DoomPi is a monorepo with deliberate package boundaries:
 - Default distribution features live under `packages/default/*`.
 - Optional modes live under `packages/minor/*`.
 - Standalone client-facing processes live under `packages/clients/*`.
+- Shared utilities and prebuilt native payloads live under `packages/utils/*`.
 - Selectable extensions live under `layers/<layer>/*`.
 - Repository-owned development tools live under `packages/tooling/*`.
 

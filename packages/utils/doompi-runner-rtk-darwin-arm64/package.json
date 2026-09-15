@@ -1,9 +1,10 @@
 {
-  "name": "@agimon-ai/doompi-runner-rtk-darwin-x64",
+  "name": "@agimon-ai/doompi-runner-rtk-darwin-arm64",
   "version": "0.0.1-alpha.67",
-  "description": "Prebuilt RTK v0.45.0 log processor for DoomPi Runner on macOS x64.",
+  "description": "Prebuilt RTK v0.45.0 log processor for DoomPi Runner on macOS arm64.",
   "keywords": [
     "ai",
+    "arm64",
     "coding-agent",
     "darwin",
     "developer-tools",
@@ -13,8 +14,7 @@
     "macos",
     "native-runtime",
     "pi-package",
-    "rtk",
-    "x64"
+    "rtk"
   ],
   "homepage": "https://agimon.ai",
   "bugs": {
@@ -25,7 +25,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AgiFlow/doompi.git",
-    "directory": "packages/default/doompi-runner-rtk-darwin-x64"
+    "directory": "packages/utils/doompi-runner-rtk-darwin-arm64"
   },
   "files": [
     "vendor",
@@ -35,7 +35,7 @@
     "darwin"
   ],
   "cpu": [
-    "x64"
+    "arm64"
   ],
   "exports": {
     "./package.json": "./package.json"

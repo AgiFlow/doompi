@@ -1,7 +1,7 @@
 {
   "name": "@agimon-ai/doompi-hashline",
   "$schema": "../../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "packages/core/doompi-hashline/src",
+  "sourceRoot": "packages/utils/doompi-hashline/src",
   "projectType": "library",
   "tags": ["stage:active"],
   "sourceTemplate": "doom-extension"

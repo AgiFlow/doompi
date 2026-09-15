@@ -11,6 +11,7 @@ const packageGroups = [
   path.join(root, 'packages', 'default'),
   path.join(root, 'packages', 'minor'),
   path.join(root, 'packages', 'clients'),
+  path.join(root, 'packages', 'utils'),
   path.join(root, 'layers'),
 ];
 const dependencySections = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
@@ -87,7 +88,9 @@ const packageRecords = packageDirectories.map((directory, index) => ({
     ? 'core'
     : directory.startsWith(path.join(root, 'packages', 'clients') + path.sep)
       ? 'client'
-      : 'selectable',
+      : directory.startsWith(path.join(root, 'packages', 'utils') + path.sep)
+        ? 'foundation'
+        : 'selectable',
 }));
 const packageByName = new Map(packageRecords.map((record) => [record.manifest.name, record]));
 const toolingManifest = readJson(path.join(toolingPackageDirectory, 'package.json'));
@@ -162,8 +165,12 @@ function selectableDependencyAllowed(owner, target) {
   return owner === '@agimon-ai/doompi-runner' && runnerNativePackages.has(target);
 }
 
+// Foundation packages under packages/utils are shared utilities and prebuilt
+// native payloads. They are never selected on their own, so any package may
+// depend on one without making itself indispensable.
 function assertDispensableEdge(ownerRecord, targetRecord, source) {
   if (ownerRecord.manifest.name === targetRecord.manifest.name || targetRecord.kind === 'core') return;
+  if (targetRecord.kind === 'foundation') return;
   if (ownerRecord.kind === 'client' && targetRecord.kind === 'client') return;
   if (selectableDependencyAllowed(ownerRecord.manifest.name, targetRecord.manifest.name)) return;
   if (ownerRecord.kind === 'core') {

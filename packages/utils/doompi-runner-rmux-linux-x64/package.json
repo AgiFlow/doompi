@@ -1,7 +1,7 @@
 {
-  "name": "@agimon-ai/doompi-runner-rtk-linux-x64",
+  "name": "@agimon-ai/doompi-runner-rmux-linux-x64",
   "version": "0.0.1-alpha.67",
-  "description": "Prebuilt RTK v0.45.0 log processor for DoomPi Runner on Linux x64.",
+  "description": "Prebuilt RMUX runtime for DoomPi Runner on Linux x64.",
   "keywords": [
     "ai",
     "coding-agent",
@@ -9,25 +9,26 @@
     "doom-runner",
     "doompi",
     "linux",
-    "log-processing",
     "native-runtime",
     "pi-package",
-    "rtk",
+    "process-supervision",
+    "rmux",
     "x64"
   ],
   "homepage": "https://agimon.ai",
   "bugs": {
     "url": "https://github.com/AgiFlow/doompi/issues"
   },
-  "license": "Apache-2.0",
+  "license": "MIT OR Apache-2.0",
   "author": "Vuong Ngo",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AgiFlow/doompi.git",
-    "directory": "packages/default/doompi-runner-rtk-linux-x64"
+    "directory": "packages/utils/doompi-runner-rmux-linux-x64"
   },
   "files": [
     "vendor",
+    "LICENSE-MIT",
     "LICENSE-APACHE"
   ],
   "os": [

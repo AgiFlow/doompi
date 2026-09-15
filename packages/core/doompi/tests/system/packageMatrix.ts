@@ -2,7 +2,7 @@ import path from 'node:path';
 
 export const REPOSITORY_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../../../../../');
 
-export type PackageLayer = 'core' | 'default' | 'minor' | 'layer' | 'team' | 'task' | 'ask-user';
+export type PackageLayer = 'core' | 'default' | 'minor' | 'utils' | 'layer' | 'team' | 'task' | 'ask-user';
 export type PiManifestEntry = './dist/extensions/pi.mjs';
 
 export interface PackageMatrixEntry {
@@ -39,7 +39,7 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-file-edit': 'packages/default/doompi-file-edit',
   '@agimon-ai/doompi-goal': 'packages/minor/doompi-goal',
   '@agimon-ai/doompi-grep': 'packages/default/doompi-grep',
-  '@agimon-ai/doompi-hashline': 'packages/core/doompi-hashline',
+  '@agimon-ai/doompi-hashline': 'packages/utils/doompi-hashline',
   '@agimon-ai/doompi-help': 'packages/minor/doompi-help',
   '@agimon-ai/doompi-hook': 'packages/default/doompi-hook',
   '@agimon-ai/doompi-log': 'packages/default/doompi-log',
@@ -54,14 +54,14 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-read': 'packages/default/doompi-read',
   '@agimon-ai/doompi-runner': 'packages/default/doompi-runner',
   '@agimon-ai/doompi-sandbox': 'layers/sandbox/doompi-sandbox',
-  '@agimon-ai/doompi-runner-rmux-darwin-arm64': 'packages/default/doompi-runner-rmux-darwin-arm64',
-  '@agimon-ai/doompi-runner-rmux-darwin-x64': 'packages/default/doompi-runner-rmux-darwin-x64',
-  '@agimon-ai/doompi-runner-rmux-linux-arm64': 'packages/default/doompi-runner-rmux-linux-arm64',
-  '@agimon-ai/doompi-runner-rmux-linux-x64': 'packages/default/doompi-runner-rmux-linux-x64',
-  '@agimon-ai/doompi-runner-rtk-darwin-arm64': 'packages/default/doompi-runner-rtk-darwin-arm64',
-  '@agimon-ai/doompi-runner-rtk-darwin-x64': 'packages/default/doompi-runner-rtk-darwin-x64',
-  '@agimon-ai/doompi-runner-rtk-linux-arm64': 'packages/default/doompi-runner-rtk-linux-arm64',
-  '@agimon-ai/doompi-runner-rtk-linux-x64': 'packages/default/doompi-runner-rtk-linux-x64',
+  '@agimon-ai/doompi-runner-rmux-darwin-arm64': 'packages/utils/doompi-runner-rmux-darwin-arm64',
+  '@agimon-ai/doompi-runner-rmux-darwin-x64': 'packages/utils/doompi-runner-rmux-darwin-x64',
+  '@agimon-ai/doompi-runner-rmux-linux-arm64': 'packages/utils/doompi-runner-rmux-linux-arm64',
+  '@agimon-ai/doompi-runner-rmux-linux-x64': 'packages/utils/doompi-runner-rmux-linux-x64',
+  '@agimon-ai/doompi-runner-rtk-darwin-arm64': 'packages/utils/doompi-runner-rtk-darwin-arm64',
+  '@agimon-ai/doompi-runner-rtk-darwin-x64': 'packages/utils/doompi-runner-rtk-darwin-x64',
+  '@agimon-ai/doompi-runner-rtk-linux-arm64': 'packages/utils/doompi-runner-rtk-linux-arm64',
+  '@agimon-ai/doompi-runner-rtk-linux-x64': 'packages/utils/doompi-runner-rtk-linux-x64',
   '@agimon-ai/doompi-skill': 'packages/core/doompi-skill',
   '@agimon-ai/doompi-task': 'layers/task/doompi-task',
   '@agimon-ai/doompi-team': 'layers/team/doompi-team',
@@ -183,6 +183,14 @@ const PACKAGE_RESOURCES: Readonly<Record<string, readonly string[]>> = {
 export const OWNED_PACKAGE_NAMES = Object.keys(OWNED_PACKAGE_DIRECTORIES) as readonly string[];
 export const STANDARD_PI_PACKAGE_NAMES = STANDARD_PI_NAMES;
 
+/**
+ * Foundation packages are transitive dependencies of the fixed host core, so a
+ * bare `@agimon-ai/doompi` install is expected to contain them. They are listed
+ * by name because the folder no longer tells them apart: packages/utils holds
+ * both these and the runner payloads, which must stay out of that install.
+ */
+export const FOUNDATION_PACKAGE_NAMES: readonly string[] = ['@agimon-ai/doompi-hashline'];
+
 function packageDirectoryFor(name: string): string {
   const ownedDirectory = OWNED_PACKAGE_DIRECTORIES[name];
   if (!ownedDirectory) throw new Error(`No package directory is registered for ${name}`);
@@ -193,6 +201,7 @@ function packageLayerFor(relativeDirectory: string): PackageLayer {
   if (relativeDirectory.startsWith('packages/core/')) return 'core';
   if (relativeDirectory.startsWith('packages/default/')) return 'default';
   if (relativeDirectory.startsWith('packages/minor/')) return 'minor';
+  if (relativeDirectory.startsWith('packages/utils/')) return 'utils';
   if (relativeDirectory.startsWith('layers/team/')) return 'team';
   if (relativeDirectory.startsWith('layers/task/')) return 'task';
   if (relativeDirectory.startsWith('layers/ask-user/')) return 'ask-user';

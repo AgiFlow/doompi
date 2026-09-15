@@ -145,7 +145,10 @@ export const doomRoutedFileContract: RuleDefinition = {
     if (/\bexport\s+(?!default\b)/u.test(source)) {
       return 'Move named exports to src/services, src/types, or a private colocated _lib module. The routed file exports only its default declaration.';
     }
-    if (!/\bexport\s+default\s+define[A-Z][A-Za-z0-9]*\s*\(/u.test(source)) {
+    // The type argument list is optional: a helper such as `defineHook` is
+    // generic over the event so the handler sees a precise payload, and naming
+    // that event is the documented way to write one.
+    if (!/\bexport\s+default\s+define[A-Z][A-Za-z0-9]*\s*(?:<[^<>]*>\s*)?\(/u.test(source)) {
       return 'Default-export the routed contract directly through its surface define helper, such as defineRoot, defineTool, defineHook, or defineRoute.';
     }
     if (

@@ -11,6 +11,7 @@ const packageRoots = [
   'packages/minor',
   'packages/clients',
   'packages/tooling',
+  'packages/utils',
   'layers',
 ];
 const packagePatterns = ['**/*.ts', '**/*.tsx', '**/*.cts', '**/*.mts', '**/package.json'];

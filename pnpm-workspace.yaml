@@ -4,6 +4,7 @@ packages:
   - packages/minor/*
   - packages/clients/*
   - packages/tooling/*
+  - packages/utils/*
   - layers/*/*
   - "!**/dist/**"
 

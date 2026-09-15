@@ -42,7 +42,7 @@ const RTK_REPO = 'rtk-ai/rtk';
  */
 const TARGETS = [
   {
-    package: 'packages/default/doompi-runner-rmux-darwin-arm64',
+    package: 'packages/utils/doompi-runner-rmux-darwin-arm64',
     repo: RMUX_REPO,
     tag: RMUX_TAG,
     asset: 'rmux-0.9.1-macos-aarch64.tar.gz',
@@ -54,7 +54,7 @@ const TARGETS = [
     },
   },
   {
-    package: 'packages/default/doompi-runner-rmux-darwin-x64',
+    package: 'packages/utils/doompi-runner-rmux-darwin-x64',
     repo: RMUX_REPO,
     tag: RMUX_TAG,
     asset: 'rmux-0.9.1-macos-x86_64.tar.gz',
@@ -66,7 +66,7 @@ const TARGETS = [
     },
   },
   {
-    package: 'packages/default/doompi-runner-rmux-linux-arm64',
+    package: 'packages/utils/doompi-runner-rmux-linux-arm64',
     repo: RMUX_REPO,
     tag: RMUX_TAG,
     asset: 'rmux-0.9.1-linux-aarch64.tar.gz',
@@ -78,7 +78,7 @@ const TARGETS = [
     },
   },
   {
-    package: 'packages/default/doompi-runner-rmux-linux-x64',
+    package: 'packages/utils/doompi-runner-rmux-linux-x64',
     repo: RMUX_REPO,
     tag: RMUX_TAG,
     asset: 'rmux-0.9.1-linux-x86_64.tar.gz',
@@ -90,7 +90,7 @@ const TARGETS = [
     },
   },
   {
-    package: 'packages/default/doompi-runner-rtk-darwin-arm64',
+    package: 'packages/utils/doompi-runner-rtk-darwin-arm64',
     repo: RTK_REPO,
     tag: RTK_TAG,
     asset: 'rtk-aarch64-apple-darwin.tar.gz',
@@ -99,7 +99,7 @@ const TARGETS = [
     sources: { 'bin/rtk': 'rtk' },
   },
   {
-    package: 'packages/default/doompi-runner-rtk-darwin-x64',
+    package: 'packages/utils/doompi-runner-rtk-darwin-x64',
     repo: RTK_REPO,
     tag: RTK_TAG,
     asset: 'rtk-x86_64-apple-darwin.tar.gz',
@@ -108,7 +108,7 @@ const TARGETS = [
     sources: { 'bin/rtk': 'rtk' },
   },
   {
-    package: 'packages/default/doompi-runner-rtk-linux-arm64',
+    package: 'packages/utils/doompi-runner-rtk-linux-arm64',
     repo: RTK_REPO,
     tag: RTK_TAG,
     asset: 'rtk-aarch64-unknown-linux-gnu.tar.gz',
@@ -117,7 +117,7 @@ const TARGETS = [
     sources: { 'bin/rtk': 'rtk' },
   },
   {
-    package: 'packages/default/doompi-runner-rtk-linux-x64',
+    package: 'packages/utils/doompi-runner-rtk-linux-x64',
     repo: RTK_REPO,
     tag: RTK_TAG,
     asset: 'rtk-x86_64-unknown-linux-musl.tar.gz',

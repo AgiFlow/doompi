@@ -29,7 +29,7 @@
     },
     "test": {
       "inputs": ["default", "^production"],
-      "dependsOn": ["^build"],
+      "dependsOn": ["build", "^build"],
       "cache": true
     },
     "test-system": {
@@ -39,7 +39,7 @@
     },
     "typecheck": {
       "inputs": ["default", "^production"],
-      "dependsOn": ["^build"],
+      "dependsOn": ["build", "^build"],
       "cache": true
     },
     "lint": {
