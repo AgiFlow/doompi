@@ -10,6 +10,15 @@ import type { SyncGeneratedModules } from './webPluginGenerate';
 
 const DOOMPI_ROOT_ENV = 'DOOMPI_ROOT';
 
+/**
+ * The modules the cockpit supplies page-wide, rather than each plugin
+ * carrying its own copy.
+ *
+ * Build-time metadata, and it stays here rather than in a browser-facing
+ * barrel on purpose: exporting it from doompi-core/web put the literal list
+ * into the shipped cockpit bundle, where a plugin's own specifier strings
+ * would then appear as data.
+ */
 export const WEB_PLUGIN_RUNTIME_SPECIFIERS = [
   'react',
   'react/jsx-runtime',

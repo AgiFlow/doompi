@@ -25,10 +25,7 @@
     "directory": "packages/default/doompi-grep"
   },
   "files": [
-    "dist",
-    "generated/web.ts",
-    "src/extensions/**/(frontend)/**",
-    "!src/extensions/**/*.stories.tsx"
+    "dist"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -55,6 +52,9 @@
       "types": "./dist/extensions/server.d.mts",
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
+    },
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
     },
     "./package.json": "./package.json"
   },
@@ -121,7 +121,7 @@
   "doompiWeb": {
     "pluginId": "grep",
     "channels": [],
-    "client": "./generated/web.ts",
+    "client": "./dist/extensions/web.mjs",
     "scopes": [
       "session"
     ]

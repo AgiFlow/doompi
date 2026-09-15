@@ -72,7 +72,12 @@ describe('doompi-grep package contract', () => {
   it('keeps exports closed with ESM, CJS, and declaration build outputs', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
-    const publicEntries = Object.entries(exportsMap).filter(([subpath]) => subpath !== './package.json');
+    // The browser bundle is ESM only and carries no declarations: nothing
+    // imports it as a typed module, and the cockpit consumes it as a bundle.
+    expect(exportsMap['./extensions/web']).toEqual({ import: './dist/extensions/web.mjs' });
+    const publicEntries = Object.entries(exportsMap).filter(
+      ([subpath]) => subpath !== './package.json' && subpath !== './extensions/web',
+    );
     expect(publicEntries.length).toBeGreaterThan(0);
     expect(Object.keys(exportsMap)).not.toContain('./*');
 
@@ -90,13 +95,9 @@ describe('doompi-grep package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
     expect(exportsMap['./package.json']).toBeDefined();
-    // The browser half ships as source, colocated under the (frontend) groups.
-    expect(manifest.files).toEqual([
-      'dist',
-      'generated/web.ts',
-      'src/extensions/**/(frontend)/**',
-      '!src/extensions/**/*.stories.tsx',
-    ]);
+    // Only built artifacts. The browser half used to ship as source for the
+    // cockpit to compile; it is now a browser bundle in dist like the rest.
+    expect(manifest.files).toEqual(['dist']);
     expect(manifest.files).not.toContain('src');
     expect(manifest.files).not.toContain('tests');
     await expect(access(path.join(packageDirectory, 'dist'))).resolves.toBeUndefined();
