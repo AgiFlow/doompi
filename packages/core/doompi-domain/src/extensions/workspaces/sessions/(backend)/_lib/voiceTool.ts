@@ -11,6 +11,7 @@ import {
   SWITCH_DOMAINS_RESULT_SCHEMA,
   type SwitchDomainsInput,
 } from '../../../../../schemas/domainVoiceTools';
+import type { DomainCatalogPort } from '../../../../../services/domainsCommand';
 import { DOMAIN_COMMAND, VOICE_SWITCH_TOKEN_PREFIX } from '../../../../../services/domainText';
 import type { DomainCatalogPort } from '../../../../../types/domainCommand';
 import { DOMAIN_SOURCE } from '../../../../../types/domains';

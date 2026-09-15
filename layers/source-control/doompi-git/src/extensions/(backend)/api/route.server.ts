@@ -1,5 +1,5 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoute } from '@agimon-ai/doompi-core/extension-file';
 
 import contribution from './_lib/route.server';
 
-export default defineRoutedContribution(contribution, {});
+export default defineRoute(contribution);

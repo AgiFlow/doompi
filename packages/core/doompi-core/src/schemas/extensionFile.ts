@@ -1,8 +1,16 @@
 import type { Context } from '@deepseek-ai/cordis';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { TSchema } from 'typebox';
 
+import type { PiEventHandlers } from '../extensions/piExtension';
 import type { PluginLifecycleHooks } from '../services/pluginLifecycle';
-import type { DoomHeadlessActivity, DoomHeadlessEventName, DoomHeadlessHook, DoomHeadlessTool } from './headless';
+import type {
+  DoomHeadlessActivity,
+  DoomHeadlessCommand,
+  DoomHeadlessEventName,
+  DoomHeadlessHook,
+  DoomHeadlessTool,
+} from './headless';
 import type { DoomHubChannel } from './hubChannel';
 import type { DoomApi } from './packageApi';
 import type { PiToolDeclaration } from './piTool';
@@ -26,12 +34,13 @@ import type { DoomServerMethod } from './serverFacet';
  */
 
 /** The host contract with the keys a path derives made optional. */
-export type PathSupplied<TContribution, TKeys extends keyof TContribution> = Omit<TContribution, TKeys> &
-  Partial<Pick<TContribution, TKeys>>;
+export type PathSupplied<TContribution, TKeys extends keyof TContribution> = TContribution extends unknown
+  ? Omit<TContribution, TKeys> & Partial<Pick<TContribution, TKeys>>
+  : never;
 
-export type RoutedCardinality = 'one' | 'optional' | 'many' | 'collection';
+export type RoutedCardinality = 'optional' | 'many' | 'collection';
 export interface RoutedFileOptions {
-  readonly cardinality?: RoutedCardinality;
+  readonly cardinality: RoutedCardinality;
 }
 
 /** A declaration, or a factory the generator calls with the mount context. */
@@ -99,7 +108,10 @@ export type WithRoot<TContext, TValue> = TContext & { readonly root: TValue };
  * `definePiTool` rather than the portable shape; this is the factory form of
  * that, for a tool built from the mount rather than at module scope.
  */
-export type CliToolFile<TContext = unknown> = OrFactory<PiToolDeclaration, TContext>;
+export type CliToolFile<TContext = unknown> = OrFactory<
+  PiToolDeclaration | DoomPluginTool | Parameters<ExtensionAPI['registerTool']>[0],
+  TContext
+>;
 
 /** `command/<name>.ts`. The filename becomes the command name in kebab case. */
 export type CommandFile<TContext = unknown> = OrFactory<
@@ -109,6 +121,27 @@ export type CommandFile<TContext = unknown> = OrFactory<
 
 /** What `defineCommand` returns: the authored shape with the discriminant restored. */
 export type CommandContribution<TContext = unknown> = OrFactory<PathSupplied<DoomPluginCommand, 'name'>, TContext>;
+
+/** `command/<name>.cli.ts`. A native Pi command or portable Doom command. */
+export type CliCommandFile<TContext = unknown> = OrFactory<
+  DoomPluginCommand | readonly [...Parameters<ExtensionAPI['registerCommand']>],
+  TContext
+>;
+
+/** `command/<name>.server.ts`. A command registered by the headless session host. */
+export type ServerCommandFile<TContext = unknown> = OrFactory<
+  PathSupplied<DoomHeadlessCommand | DoomPluginCommand, 'name'>,
+  TContext
+>;
+
+/** One native Pi event handler from the host's overloaded event map. */
+export type CliHookHandler = PiEventHandlers[keyof PiEventHandlers];
+
+/** `hook/<event>.cli.ts`. A factory for one native Pi event handler. */
+export type CliHookFile<TContext, THandler extends CliHookHandler> = (context: TContext) => THandler;
+
+/** `overlay/<name>.cli.ts`. A terminal view opened directly by a command. */
+export type OverlayFile = (...args: never[]) => unknown;
 
 /**
  * `hook/<event>.ts`. The filename becomes the event in snake case.

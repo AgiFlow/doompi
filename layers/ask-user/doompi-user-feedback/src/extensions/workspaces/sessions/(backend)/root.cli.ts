@@ -1,5 +1,5 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
 
 import contribution from './_lib/root.cli';
 
-export default defineRoutedContribution(contribution, {});
+export default defineRoot(contribution);

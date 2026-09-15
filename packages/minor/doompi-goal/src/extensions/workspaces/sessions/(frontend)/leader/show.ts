@@ -1,12 +1,9 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineLeaderBinding } from '@agimon-ai/doompi-core/web';
 
-export default defineRoutedContribution(
-  {
-    path: [
-      { key: 'g', label: 'goal', detail: 'session objective' },
-      { key: 'g', label: 'current', detail: 'the goal being worked' },
-    ],
-    command: 'goal status',
-  },
-  {},
-);
+export default defineLeaderBinding({
+  path: [
+    { key: 'g', label: 'goal', detail: 'session objective' },
+    { key: 'g', label: 'current', detail: 'the goal being worked' },
+  ],
+  command: 'goal status',
+});

@@ -1,3 +1,3 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineMinorModeFile } from '@agimon-ai/doompi-core/web';
 
-export default defineRoutedContribution({ keys: 'g e', statusKey: 'goal', order: 40 }, {});
+export default defineMinorModeFile({ keys: 'g e', statusKey: 'goal', order: 40 });

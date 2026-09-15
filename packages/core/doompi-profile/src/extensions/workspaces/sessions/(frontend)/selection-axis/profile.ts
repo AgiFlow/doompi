@@ -1,5 +1,8 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
-export default defineRoutedContribution(
-  { name: 'profile', command: 'profile', statusKey: 'doom-profile', emptyLabel: 'no profile', order: 10 },
-  {},
-);
+import { defineSelectionAxis } from '@agimon-ai/doompi-core/web';
+export default defineSelectionAxis({
+  name: 'profile',
+  command: 'profile',
+  statusKey: 'doom-profile',
+  emptyLabel: 'no profile',
+  order: 10,
+});

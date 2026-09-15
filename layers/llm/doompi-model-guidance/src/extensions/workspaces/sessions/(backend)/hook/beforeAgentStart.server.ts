@@ -1,5 +1,5 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineHook } from '@agimon-ai/doompi-core/extension-file';
 
 import contribution from './_lib/beforeAgentStart.server';
 
-export default defineRoutedContribution(contribution, {});
+export default defineHook(contribution);

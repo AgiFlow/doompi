@@ -1,4 +1,5 @@
 export {
+  defineCliToolRenderer,
   defineMessageRenderer,
   definePiExtension,
   definePiToolRenderer,
@@ -11,6 +12,7 @@ export type {
   PiPluginContext,
   PiPluginContributions,
   PiEventHandlers,
+  PiToolRendererFile,
   PiToolRenderers,
   PiToolRestriction,
   PiToolContribution,

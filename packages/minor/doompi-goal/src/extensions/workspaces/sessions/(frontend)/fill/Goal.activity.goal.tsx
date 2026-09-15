@@ -1,5 +1,5 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineFill } from '@agimon-ai/doompi-core/web';
 
 import { GoalActivitySection } from '../../../../../web/components/GoalActivitySection';
 
-export default defineRoutedContribution({ component: GoalActivitySection }, {});
+export default defineFill({ component: GoalActivitySection });

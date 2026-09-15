@@ -1,5 +1,5 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineFill } from '@agimon-ai/doompi-core/web';
 
 import { LoopsActivitySection } from '../../../../../web/components/LoopsActivitySection';
 
-export default defineRoutedContribution({ component: LoopsActivitySection }, {});
+export default defineFill({ component: LoopsActivitySection });

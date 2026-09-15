@@ -441,6 +441,15 @@ export type PiToolRenderers<TParameters extends TSchema = TSchema, TDetails = un
   'renderShell' | 'renderCall' | 'renderResult'
 >;
 
+/** A terminal renderer declaration or a factory resolved from its session mount. */
+export type PiToolRendererFile<
+  TContext = unknown,
+  TParameters extends TSchema = TSchema,
+  TDetails = unknown,
+  TState = unknown,
+> =
+  | PiToolRenderers<TParameters, TDetails, TState>
+  | ((context: TContext) => PiToolRenderers<TParameters, TDetails, TState>);
 /**
  * `(frontend)/tool/<name>.cli.tsx`. The filename names the tool these draw.
  *
@@ -451,6 +460,18 @@ export type PiToolRenderers<TParameters extends TSchema = TSchema, TDetails = un
 export function definePiToolRenderer<TParameters extends TSchema = TSchema, TDetails = unknown, TState = unknown>(
   file: PiToolRenderers<TParameters, TDetails, TState>,
 ): PiToolRenderers<TParameters, TDetails, TState> {
+  return file;
+}
+
+/** `(frontend)/tool/<name>.cli.tsx` when the renderer needs mount context. */
+export function defineCliToolRenderer<
+  TContext,
+  TParameters extends TSchema = TSchema,
+  TDetails = unknown,
+  TState = unknown,
+>(
+  file: PiToolRendererFile<TContext, TParameters, TDetails, TState>,
+): PiToolRendererFile<TContext, TParameters, TDetails, TState> {
   return file;
 }
 

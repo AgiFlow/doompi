@@ -1,5 +1,5 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineFileLinks } from '@agimon-ai/doompi-core/web';
 
 import { authorFileLinks } from '../../../../../web/components/AuthorDocumentPanel';
 
-export default defineRoutedContribution({ ...authorFileLinks }, {});
+export default defineFileLinks({ ...authorFileLinks });

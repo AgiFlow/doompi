@@ -1,5 +1,5 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineCliHook } from '@agimon-ai/doompi-core/extension-file';
 
 import contribution from './_lib/session-shutdown.cli';
 
-export default defineRoutedContribution(contribution, {});
+export default defineCliHook(contribution);

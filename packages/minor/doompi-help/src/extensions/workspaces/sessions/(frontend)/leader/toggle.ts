@@ -1,12 +1,9 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineLeaderBinding } from '@agimon-ai/doompi-core/web';
 
-export default defineRoutedContribution(
-  {
-    path: [
-      { key: 'h', label: 'help', detail: 'package docs and logs' },
-      { key: 'e', label: 'toggle', detail: 'load or hide package Help' },
-    ],
-    command: 'minor help',
-  },
-  {},
-);
+export default defineLeaderBinding({
+  path: [
+    { key: 'h', label: 'help', detail: 'package docs and logs' },
+    { key: 'e', label: 'toggle', detail: 'load or hide package Help' },
+  ],
+  command: 'minor help',
+});

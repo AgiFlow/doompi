@@ -1,4 +1,4 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineFileLinks } from '@agimon-ai/doompi-core/web';
 
 import { fileLinks } from '../../../../../web/components/fileLinks';
-export default defineRoutedContribution(fileLinks, {});
+export default defineFileLinks(fileLinks);
