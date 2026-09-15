@@ -26,9 +26,9 @@
   },
   "files": [
     "dist",
-    "src/web",
+    "src/extensions/**/(frontend)/**",
     "src/extensions/web.ts",
-    "!src/web/**/*.stories.tsx"
+    "!src/extensions/**/*.stories.tsx"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -58,7 +58,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
