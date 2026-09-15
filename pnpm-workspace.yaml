@@ -1,5 +1,7 @@
 packages:
+  - packages/cli/*
   - packages/core/*
+  - packages/foundations/*
   - packages/default/*
   - packages/minor/*
   - packages/clients/*

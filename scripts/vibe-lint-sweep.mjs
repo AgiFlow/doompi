@@ -6,7 +6,9 @@ import process from 'node:process';
 
 const root = process.cwd();
 const packageRoots = [
+  'packages/cli',
   'packages/core',
+  'packages/foundations',
   'packages/default',
   'packages/minor',
   'packages/clients',

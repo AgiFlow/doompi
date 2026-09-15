@@ -32,7 +32,7 @@ export default async function globalSetup(): Promise<() => void> {
   const homeDir = path.join(testRoot, 'home');
   const agentDir = path.join(homeDir, '.pi', 'agent');
   const workspaceRoot = fileURLToPath(new URL('../../../../../', import.meta.url));
-  const cli = path.join(workspaceRoot, 'packages', 'core', 'doompi', 'dist', 'bin', 'cli.mjs');
+  const cli = path.join(workspaceRoot, 'packages', 'cli', 'doompi', 'dist', 'bin', 'cli.mjs');
   fs.mkdirSync(agentDir, { recursive: true });
   const syncEnv: NodeJS.ProcessEnv = {
     ...process.env,

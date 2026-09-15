@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="packages/core/doompi/assets/logo.png">
-    <source media="(prefers-color-scheme: light)" srcset="packages/core/doompi/assets/logo-light.png">
-    <img alt="DoomPi" src="packages/core/doompi/assets/logo-light.png" width="440">
+    <source media="(prefers-color-scheme: dark)" srcset="packages/cli/doompi/assets/logo.png">
+    <source media="(prefers-color-scheme: light)" srcset="packages/cli/doompi/assets/logo-light.png">
+    <img alt="DoomPi" src="packages/cli/doompi/assets/logo-light.png" width="440">
   </picture>
 </p>
 
@@ -20,7 +20,7 @@ curated Neovim setup than to a single plugin. It is tailored for people whose ag
 skills and tools. It turns extensions, skills, MCP servers, and system prompts into config instead
 of background noise.
 
-![DoomPi terminal interface showing tasks, Plan mode, and the Leader menu](packages/core/doompi/assets/doompi-tui.png)
+![DoomPi terminal interface showing tasks, Plan mode, and the Leader menu](packages/cli/doompi/assets/doompi-tui.png)
 
 Plugin systems often rely on model-driven discovery to decide what context to load. Codex, for
 example, selects plugins from their descriptions and then loads their skills, but relevant skills

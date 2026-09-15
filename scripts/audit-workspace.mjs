@@ -7,7 +7,9 @@ import { TARGETS } from './fetch-runner-binaries.mjs';
 
 const root = process.cwd();
 const packageGroups = [
+  path.join(root, 'packages', 'cli'),
   path.join(root, 'packages', 'core'),
+  path.join(root, 'packages', 'foundations'),
   path.join(root, 'packages', 'default'),
   path.join(root, 'packages', 'minor'),
   path.join(root, 'packages', 'clients'),
@@ -81,16 +83,29 @@ const packageDirectories = packageGroups
   .sort();
 const manifests = packageDirectories.map((directory) => readJson(path.join(directory, 'package.json')));
 const ownedNames = new Set(manifests.map(({ name }) => name));
+// The group a package sits in decides which edges it may take part in. `core`
+// is the shared library set and the CLI host, `foundation` is the fixed
+// extension and payload set every composition gets, and anything else is a
+// feature a repository chooses.
+const kindByGroup = {
+  cli: 'core',
+  core: 'core',
+  foundations: 'foundation',
+  utils: 'foundation',
+  clients: 'client',
+};
+
+function packageKind(directory) {
+  for (const [group, kind] of Object.entries(kindByGroup)) {
+    if (directory.startsWith(path.join(root, 'packages', group) + path.sep)) return kind;
+  }
+  return 'selectable';
+}
+
 const packageRecords = packageDirectories.map((directory, index) => ({
   directory,
   manifest: manifests[index],
-  kind: directory.startsWith(path.join(root, 'packages', 'core') + path.sep)
-    ? 'core'
-    : directory.startsWith(path.join(root, 'packages', 'clients') + path.sep)
-      ? 'client'
-      : directory.startsWith(path.join(root, 'packages', 'utils') + path.sep)
-        ? 'foundation'
-        : 'selectable',
+  kind: packageKind(directory),
 }));
 const packageByName = new Map(packageRecords.map((record) => [record.manifest.name, record]));
 const toolingManifest = readJson(path.join(toolingPackageDirectory, 'package.json'));

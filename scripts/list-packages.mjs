@@ -4,7 +4,9 @@ import process from 'node:process';
 
 const root = process.cwd();
 const packageDirectories = [
+  ...directoriesIn(path.join(root, 'packages', 'cli')),
   ...directoriesIn(path.join(root, 'packages', 'core')),
+  ...directoriesIn(path.join(root, 'packages', 'foundations')),
   ...directoriesIn(path.join(root, 'packages', 'default')),
   ...directoriesIn(path.join(root, 'packages', 'minor')),
   ...directoriesIn(path.join(root, 'packages', 'clients')),

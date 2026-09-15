@@ -6,7 +6,7 @@ const threshold = process.env.THRESHOLD ? Number.parseInt(process.env.THRESHOLD,
 const doomExtensionContractsExports = fileURLToPath(
   new URL('../../../packages/core/doompi-core/src/exports/', import.meta.url),
 );
-const doomUiExports = fileURLToPath(new URL('../../../packages/core/doompi-ui/src/exports/', import.meta.url));
+const doomUiExports = fileURLToPath(new URL('../../../packages/foundations/doompi-ui/src/exports/', import.meta.url));
 
 export default defineConfig({
   test: {

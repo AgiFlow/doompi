@@ -23,44 +23,44 @@ export default defineConfig({
         'doompi-web/dist/bin/serve': source('packages/clients/doompi-web/src/bin/serve.ts'),
         'doompi-web/dist/index': source('packages/clients/doompi-web/src/exports/index.ts'),
         'doompi-web/dist/bundler': source('packages/clients/doompi-web/src/exports/bundler.ts'),
-        'doompi/dist/bin/serve': source('packages/core/doompi/src/bin/serve.ts'),
-        'doompi/dist/bin/cli': source('packages/core/doompi/src/bin/cli.ts'),
-        'doompi/dist/bin/doomRunner': source('packages/core/doompi/src/bin/doomRunner.ts'),
-        'doompi/dist/bin/dpi': source('packages/core/doompi/src/bin/dpi.ts'),
+        'doompi/dist/bin/serve': source('packages/cli/doompi/src/bin/serve.ts'),
+        'doompi/dist/bin/cli': source('packages/cli/doompi/src/bin/cli.ts'),
+        'doompi/dist/bin/doomRunner': source('packages/cli/doompi/src/bin/doomRunner.ts'),
+        'doompi/dist/bin/dpi': source('packages/cli/doompi/src/bin/dpi.ts'),
         'doompi/dist/src/adapters/syncedRuntimeBuilder': source(
-          'packages/core/doompi/src/adapters/syncedRuntimeBuilder.ts',
+          'packages/cli/doompi/src/adapters/syncedRuntimeBuilder.ts',
         ),
         'doompi/dist/src/extensions/entries/agentModel': source(
-          'packages/core/doompi/src/extensions/entries/agentModel.ts',
+          'packages/cli/doompi/src/extensions/entries/agentModel.ts',
         ),
-        'doompi/dist/src/extensions/entries/doom': source('packages/core/doompi/src/extensions/entries/doom.ts'),
+        'doompi/dist/src/extensions/entries/doom': source('packages/cli/doompi/src/extensions/entries/doom.ts'),
         'doompi/dist/src/extensions/entries/cordisFinalizer': source(
-          'packages/core/doompi/src/extensions/entries/cordisFinalizer.ts',
+          'packages/cli/doompi/src/extensions/entries/cordisFinalizer.ts',
         ),
         'doompi/dist/src/extensions/entries/cordisHost': source(
-          'packages/core/doompi/src/extensions/entries/cordisHost.ts',
+          'packages/cli/doompi/src/extensions/entries/cordisHost.ts',
         ),
-        'doompi/dist/src/extensions/entries/effort': source('packages/core/doompi/src/extensions/entries/effort.ts'),
+        'doompi/dist/src/extensions/entries/effort': source('packages/cli/doompi/src/extensions/entries/effort.ts'),
         'doompi/dist/src/extensions/entries/launcherBootstrap': source(
-          'packages/core/doompi/src/extensions/entries/launcherBootstrap.ts',
+          'packages/cli/doompi/src/extensions/entries/launcherBootstrap.ts',
         ),
         'doompi/dist/src/extensions/entries/minorModeCommand': source(
-          'packages/core/doompi/src/extensions/entries/minorModeCommand.ts',
+          'packages/cli/doompi/src/extensions/entries/minorModeCommand.ts',
         ),
         'doompi/dist/src/extensions/entries/modeCatalog': source(
-          'packages/core/doompi/src/extensions/entries/modeCatalog.ts',
+          'packages/cli/doompi/src/extensions/entries/modeCatalog.ts',
         ),
         'doompi/dist/src/extensions/entries/ollamaProvider': source(
-          'packages/core/doompi/src/extensions/entries/ollamaProvider.ts',
+          'packages/cli/doompi/src/extensions/entries/ollamaProvider.ts',
         ),
         'doompi/dist/src/extensions/entries/styleSystem': source(
-          'packages/core/doompi/src/extensions/entries/styleSystem.ts',
+          'packages/cli/doompi/src/extensions/entries/styleSystem.ts',
         ),
         'doompi/dist/src/extensions/entries/transitionCoordinator': source(
-          'packages/core/doompi/src/extensions/entries/transitionCoordinator.ts',
+          'packages/cli/doompi/src/extensions/entries/transitionCoordinator.ts',
         ),
         'doompi/dist/src/services/extensionAssembler': source(
-          'packages/core/doompi/src/services/extensionAssembler.ts',
+          'packages/cli/doompi/src/services/extensionAssembler.ts',
         ),
       },
       output: {

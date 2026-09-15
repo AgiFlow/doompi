@@ -86,11 +86,11 @@ export function desktopRuntimePlugin(options: DesktopRuntimePluginOptions): Plug
     writeBundle() {
       copyWebAssets(options.workspaceRoot, options.outDir);
       copyPackageManifest(options.workspaceRoot, options.outDir, 'packages/clients/doompi-web', 'doompi-web');
-      copyPackageManifest(options.workspaceRoot, options.outDir, 'packages/core/doompi', 'doompi');
+      copyPackageManifest(options.workspaceRoot, options.outDir, 'packages/cli/doompi', 'doompi');
       copyPackageManifest(
         options.workspaceRoot,
         options.outDir,
-        'packages/core/doompi',
+        'packages/cli/doompi',
         'native/node_modules/@agimon-ai/doompi',
       );
       copyRuntimePackages(
@@ -103,7 +103,7 @@ export function desktopRuntimePlugin(options: DesktopRuntimePluginOptions): Plug
           `@tursodatabase/database-${napiTarget}`,
           `sqlite-vec-${process.platform === 'win32' ? `windows-${process.arch}` : target}`,
         ]),
-        path.join(options.workspaceRoot, 'packages', 'core', 'doompi'),
+        path.join(options.workspaceRoot, 'packages', 'cli', 'doompi'),
       );
       copyPackageCatalog(options.workspaceRoot, options.outDir, target);
       copyRuntimePackages(options.workspaceRoot, path.join(options.outDir, 'native', 'node_modules'), runtimePackages);
