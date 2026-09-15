@@ -3,14 +3,19 @@ import type { TSchema } from 'typebox';
 import type {
   ActivityFile,
   ChannelFile,
+  CliCommandFile,
+  CliHookFile,
+  CliHookHandler,
   CliToolFile,
   CommandContribution,
   CommandFile,
   HookFile,
   MethodFile,
+  OverlayFile,
   RootFile,
   RoutedFileOptions,
   RouteFile,
+  ServerCommandFile,
   ServerToolFile,
   ServiceFile,
   ToolContribution,
@@ -61,6 +66,11 @@ export function defineToolRestriction<T>(file: T): T {
 
 /** Declares one mode when it is not represented by a mode gate file. */
 export function defineMode<T>(file: T): T {
+  return file;
+}
+
+/** `overlay/<name>.cli.ts`. A terminal view opened directly by a command. */
+export function defineOverlay<T extends OverlayFile>(file: T): T {
   return file;
 }
 /** `tool/<name>.ts`. Adds the discriminant the contribution array expects. */
@@ -119,11 +129,28 @@ export function defineCliTool<TContext = unknown>(file: CliToolFile<TContext>): 
   return file;
 }
 
+/** `command/<name>.cli.ts`. A native Pi command or portable Doom command. */
+export function defineCliCommand<TContext = unknown>(file: CliCommandFile<TContext>): CliCommandFile<TContext> {
+  return file;
+}
+
+/** `command/<name>.server.ts`. A native headless or portable Doom command. */
+export function defineServerCommand<TContext = unknown>(file: ServerCommandFile<TContext>): ServerCommandFile<TContext> {
+  return file;
+}
+
 /** `command/<name>.ts`. Adds the discriminant the contribution array expects. */
 export function defineCommand<TContext = unknown>(file: CommandFile<TContext>): CommandContribution<TContext> {
   return typeof file === 'function'
     ? (context) => ({ kind: 'command' as const, ...file(context) })
     : { kind: 'command' as const, ...file };
+}
+
+/** `hook/<event>.cli.ts`. A native Pi event handler factory. */
+export function defineCliHook<TContext, THandler extends CliHookHandler>(
+  file: (context: TContext) => THandler,
+): CliHookFile<TContext, CliHookHandler> {
+  return file;
 }
 
 /** `hook/<event>.ts`. Name the event here too when the handler needs a precise payload. */

@@ -113,7 +113,7 @@ describe('Doom extension plugin contract', () => {
 
   it('publishes only canonical architecture guidance and boundaries', () => {
     const patterns = doomExtensionPlugin.patterns ?? {};
-    for (const obsolete of ['adapters', 'commands', 'container', 'providers']) {
+    for (const obsolete of ['adapters', 'commands', 'container', 'controllers', 'providers', 'tools']) {
       expect(patterns[`doom-${obsolete}`]).toBeUndefined();
       expect(recommended.boundaries?.some((boundary) => boundary.name === obsolete)).toBe(false);
       for (const boundary of recommended.boundaries ?? []) {

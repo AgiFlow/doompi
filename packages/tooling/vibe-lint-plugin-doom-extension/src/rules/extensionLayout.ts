@@ -148,6 +148,12 @@ export const doomRoutedFileContract: RuleDefinition = {
     if (!/\bexport\s+default\s+define[A-Z][A-Za-z0-9]*\s*\(/u.test(source)) {
       return 'Default-export the routed contract directly through its surface define helper, such as defineRoot, defineTool, defineHook, or defineRoute.';
     }
+    if (
+      /\bexport\s+default\s+defineRoutedContribution\s*\(/u.test(source) &&
+      !/\bcardinality\s*:\s*['"](?:optional|many|collection)['"]/u.test(source)
+    ) {
+      return 'Use the typed surface define helper for a single contribution. defineRoutedContribution requires explicit optional, many, or collection cardinality.';
+    }
     return null;
   },
 };

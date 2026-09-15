@@ -1,5 +1,5 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineCliToolRenderer } from '@agimon-ai/doompi-core/pi-extension';
 
 import contribution from './_lib/task.cli';
 
-export default defineRoutedContribution(contribution, {});
+export default defineCliToolRenderer(contribution);

@@ -1,5 +1,5 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineChannel } from '@agimon-ai/doompi-core/extension-file';
 
 import contribution from './_lib/task-graph';
 
-export default defineRoutedContribution(contribution, {});
+export default defineChannel(contribution);

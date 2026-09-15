@@ -1,4 +1,4 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineHook } from '@agimon-ai/doompi-core/extension-file';
 
 import { serverHooks } from '../../../../../services/serverHooks';
-export default defineRoutedContribution(serverHooks[1]!, {});
+export default defineHook(serverHooks[1]!);

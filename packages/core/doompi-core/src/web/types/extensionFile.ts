@@ -5,6 +5,7 @@ import type {
   LeaderBindingContribution,
   MinorModeContribution,
   PaletteCommandContribution,
+  SelectionAxisContribution,
   SessionChannelContribution,
   SettingsPanelContribution,
   SettingsSectionContribution,
@@ -64,6 +65,9 @@ export type UserMessageActionFile = PathSupplied<UserMessageActionContribution, 
 
 /** `activity-group/<name>.ts`. The filename is the group name and its slot. */
 export type ActivityGroupFile = PathSupplied<ActivityGroupContribution, 'name'>;
+
+/** `selection-axis/<name>.ts`. The filename becomes the axis name. */
+export type SelectionAxisFile = PathSupplied<SelectionAxisContribution, 'name'>;
 
 /**
  * `leader/<name>.ts`. The filename is the binding's local name, namespaced

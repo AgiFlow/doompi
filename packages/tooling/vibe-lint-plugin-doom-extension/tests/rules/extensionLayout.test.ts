@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   doomExtensionSideBoundary,
   doomLegacySourceRoot,
+  doomRoutedFileContract,
   doomRoutedFilePosition,
 } from '../../src/rules/extensionLayout.js';
 
@@ -82,10 +83,10 @@ describe('canonical routed layout', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  function write(relativePath: string): string {
+  function write(relativePath: string, source = 'export default {};\n'): string {
     const filePath = path.join(root, relativePath);
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, 'export default {};\n');
+    fs.writeFileSync(filePath, source);
     return filePath;
   }
 
@@ -99,5 +100,19 @@ describe('canonical routed layout', () => {
     'src/extensions/(frontend)/extra.web.ts',
   ])('rejects catch-all route %s', (relativePath) => {
     expect(doomRoutedFilePosition.check?.(write(relativePath), root)).toMatch(/named surface folder/u);
+  });
+
+  it('reserves defineRoutedContribution for explicit non-one cardinality', () => {
+    const singular = write(
+      'src/extensions/(backend)/resource/help.ts',
+      'export default defineRoutedContribution(resource, {});\n',
+    );
+    expect(doomRoutedFileContract.check?.(singular, root)).toMatch(/typed surface define helper/u);
+
+    const many = write(
+      'src/extensions/(backend)/provider/broker.cli.ts',
+      "export default defineRoutedContribution(providers, { cardinality: 'many' });\n",
+    );
+    expect(doomRoutedFileContract.check?.(many, root)).toBeNull();
   });
 });

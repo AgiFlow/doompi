@@ -1,3 +1,3 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineSlotFile } from '@agimon-ai/doompi-core/web';
 
-export default defineRoutedContribution({}, {});
+export default defineSlotFile({});

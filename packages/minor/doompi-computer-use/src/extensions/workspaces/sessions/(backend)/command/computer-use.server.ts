@@ -1,5 +1,5 @@
-import { defineRoutedContribution, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
+import { defineServerCommand, type WithRoot } from '@agimon-ai/doompi-core/extension-file';
 type Runtime = Awaited<ReturnType<typeof import('../root.server').default>>['value'];
 
 type Context = WithRoot<unknown, Runtime>;
-export default defineRoutedContribution((context: Context) => context.root.commands![0]!, {});
+export default defineServerCommand((context: Context) => context.root.commands![0]!);

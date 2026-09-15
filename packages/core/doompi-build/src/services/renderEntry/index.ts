@@ -406,7 +406,9 @@ function bodyFor(
       lines.push(`${indent}${field}: {`);
       for (const entry of members) {
         const key = toSnake(entry.contribution.entry.name);
-        const value = `at(${entry.identifier}, ${contextOf(entry)})`;
+        const resolved = `at(${entry.identifier}, ${contextOf(entry)})`;
+        const value =
+          target === 'cli' ? `${resolved} as NonNullable<PiPluginContributions['events']>['${key}']` : resolved;
         lines.push(
           entry.contribution.entry.cardinality === 'optional'
             ? `${indent}  ...keyed('${key}', ${value}),`

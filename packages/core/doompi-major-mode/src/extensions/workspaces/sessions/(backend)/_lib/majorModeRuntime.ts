@@ -8,10 +8,10 @@ import { DOOM_VOICE_TOOLS_SERVICE, requireDoomVoiceToolsService } from '@agimon-
 import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
+import { createMajorModeCommand } from '../../../../../services/majorModeCommand';
 import { colorStatus, STATUS_KEY } from '../../../../../services/statusLine';
 import { type MajorModeView } from '../../../../../types/majorMode';
 import { MAJOR_MODE_EVENT, type MajorModeTelemetry } from '../../../../../types/telemetry';
-import { createMajorModeCommand } from './majorModeCommand';
 import { requestSupervisedRelaunch, supervisedRelaunchAvailable } from './relaunchRequest';
 import { registerMajorModeVoiceCapability } from './voiceTool';
 

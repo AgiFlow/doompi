@@ -1,5 +1,5 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineWebLifecycle } from '@agimon-ai/doompi-core/web';
 
 import { startVoiceMediaRuntime } from '../../../../../web/components/VoiceMediaRuntime';
 
-export default defineRoutedContribution(startVoiceMediaRuntime, {});
+export default defineWebLifecycle(startVoiceMediaRuntime);

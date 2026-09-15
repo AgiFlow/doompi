@@ -9,7 +9,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import { createVoiceDependencies } from '../../services/voiceDependencies';
-import { createVoiceRuntime, voiceLeaderBindings, type VoiceExtensionOptions } from '../voice';
+import { createVoiceRuntime, voiceLeaderBindings, type VoiceExtensionOptions } from '../voiceController';
 import { VoiceConfigController } from '../voiceConfigController';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-voice';

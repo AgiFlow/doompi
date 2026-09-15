@@ -1,7 +1,4 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineResource } from '@agimon-ai/doompi-core/extension-file';
 
 import { readPromptSkill } from '../../../../../services/savedPrompts';
-export default defineRoutedContribution(
-  { name: 'doompi-use-prompt', kind: 'skill' as const, read: readPromptSkill },
-  {},
-);
+export default defineResource({ name: 'doompi-use-prompt', kind: 'skill' as const, read: readPromptSkill });

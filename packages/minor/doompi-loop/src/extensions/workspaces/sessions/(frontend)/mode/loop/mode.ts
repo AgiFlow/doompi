@@ -1,3 +1,3 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineMinorModeFile } from '@agimon-ai/doompi-core/web';
 
-export default defineRoutedContribution({ keys: 'l l', statusKey: 'doom-loop', activityGroup: 'loops', order: 30 }, {});
+export default defineMinorModeFile({ keys: 'l l', statusKey: 'doom-loop', activityGroup: 'loops', order: 30 });

@@ -7,6 +7,7 @@ import type {
   LeaderBindingFile,
   MinorModeFile,
   PaletteCommandFile,
+  SelectionAxisFile,
   SettingsPanelFile,
   SettingsSectionFile,
   SlotFile,
@@ -14,7 +15,14 @@ import type {
   ToolRendererFile,
   UserMessageActionFile,
 } from '../web/types/extensionFile';
-import type { SessionChannelContribution, SlotDeclaration, WebPluginDefinition } from '../web/types/webPlugin';
+import type {
+  FileLinkSource,
+  RepositorySettingsPanelContribution,
+  SessionChannelContribution,
+  SlotDeclaration,
+  WebPluginContributions,
+  WebPluginDefinition,
+} from '../web/types/webPlugin';
 
 /** Identity helper so plugin modules get checked literals without a type annotation. */
 export function defineWebPlugin(plugin: WebPluginDefinition): WebPluginDefinition {
@@ -118,5 +126,27 @@ export function defineLeaderBinding(file: LeaderBindingFile): LeaderBindingFile 
 
 /** `channel/<frameType>.ts`. */
 export function defineChannelFile<Payload = unknown>(file: ChannelFile<Payload>): ChannelFile<Payload> {
+  return file;
+}
+
+/** `file-links/<name>.ts`. Declares the scope's singleton file-link source. */
+export function defineFileLinks(file: FileLinkSource): FileLinkSource {
+  return file;
+}
+
+/** `repository-settings-panel/<name>.tsx`. Declares the workspace settings panel. */
+export function defineRepositorySettingsPanel(
+  file: RepositorySettingsPanelContribution,
+): RepositorySettingsPanelContribution {
+  return file;
+}
+
+/** `selection-axis/<name>.ts`. */
+export function defineSelectionAxis(file: SelectionAxisFile): SelectionAxisFile {
+  return file;
+}
+
+/** `lifecycle/start.ts`. Declares the frontend start lifecycle. */
+export function defineWebLifecycle(file: NonNullable<WebPluginContributions['start']>): NonNullable<WebPluginContributions['start']> {
   return file;
 }

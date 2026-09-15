@@ -1,5 +1,5 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineWebLifecycle } from '@agimon-ai/doompi-core/web';
 
 import { startAuthorBrowserLifecycle } from '../../../../../web/hooks/authorBrowserLifecycle';
 
-export default defineRoutedContribution(startAuthorBrowserLifecycle, {});
+export default defineWebLifecycle(startAuthorBrowserLifecycle);

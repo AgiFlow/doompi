@@ -1,5 +1,5 @@
-import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
+import { defineWebLifecycle } from '@agimon-ai/doompi-core/web';
 
 import contribution from './_lib/start.web';
 
-export default defineRoutedContribution(contribution, {});
+export default defineWebLifecycle(contribution);
