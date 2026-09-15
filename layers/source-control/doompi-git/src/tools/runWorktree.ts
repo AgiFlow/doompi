@@ -1,7 +1,7 @@
 import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent';
 
-import { RunWorktreeParams, type RunWorktreeToolParams } from '../schemas/runWorktreeTool';
+import { RunWorktreeToolSchema, type RunWorktreeToolParams } from '../schemas/runWorktreeTool';
 import {
   executeRunWorktreeTool,
   RUN_WORKTREE_DESCRIPTION,
@@ -17,12 +17,12 @@ export type { RunWorktreeToolDetails };
 /** Creates the typed Pi worktree tool declaration. */
 export function createRunWorktreeTool(
   operations: WorktreeOperations,
-): ToolDefinition<typeof RunWorktreeParams, RunWorktreeToolDetails> {
-  const tool: ToolDefinition<typeof RunWorktreeParams, RunWorktreeToolDetails> = {
+): ToolDefinition<typeof RunWorktreeToolSchema, RunWorktreeToolDetails> {
+  const tool: ToolDefinition<typeof RunWorktreeToolSchema, RunWorktreeToolDetails> = {
     name: RUN_WORKTREE_TOOL_NAME,
     label: 'Worktree',
     description: RUN_WORKTREE_DESCRIPTION,
-    parameters: RunWorktreeParams,
+    parameters: RunWorktreeToolSchema,
     prepareArguments: validateParams,
     // The signal and the progress callback are the host's two answers to a
     // call that takes minutes. Dropping them is what let an interrupted spawn

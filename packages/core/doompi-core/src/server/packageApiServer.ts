@@ -2,6 +2,7 @@ import type { DoomTraceContext } from '@agimon-ai/doompi-telemetry';
 
 import type { DoomDirectEventBus, DoomHubSessionService } from '../exports/hubChannel';
 import { DOOM_API_ROUTE_PREFIX, type DoomApi, type DoomApiContext } from '../exports/packageApi';
+import type { DoomPluginRegistry } from '../exports/pluginProtocol';
 import { createDoomServerHost, type CreateDoomServerHostOptions, type DoomServerFacet } from '../exports/serverFacet';
 import {
   installServerFacets,
@@ -32,6 +33,8 @@ export interface PackageApiServerOptions {
   readonly directEvents: DoomDirectEventBus;
   internalToken?: string;
   hubToken?: string;
+  /** Shared exact-scope dispatch table, so session facets can mount plugin methods. */
+  pluginRegistry?: DoomPluginRegistry;
   sessionService?: DoomHubSessionService;
   apis: readonly DoomApi[];
   /** Server facets to install; each registers its own APIs through the host. */
@@ -113,7 +116,12 @@ export async function serveSessionApis(options: PackageApiServerOptions): Promis
     ...(options.sessionService === undefined ? {} : { sessionService: options.sessionService }),
     onNotice: options.onNotice,
   };
-  const host = createDoomServerHost({ scope: 'session', context, mountChannel: options.mountChannel });
+  const host = createDoomServerHost({
+    scope: 'session',
+    context,
+    mountChannel: options.mountChannel,
+    ...(options.pluginRegistry === undefined ? {} : { pluginRegistry: options.pluginRegistry }),
+  });
   for (const api of options.apis) host.registerApi(api);
   let installed: InstalledServerFacets;
   try {

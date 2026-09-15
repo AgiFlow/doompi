@@ -4,6 +4,8 @@ import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-
 import { Hono } from 'hono';
 
 import { createAuthorBridgeState, type AuthorBridgeState } from '../models/authorBridgeState';
+import type { AuthorCatalog } from '../services/authorCatalog/type';
+import { readDocument } from '../services/structuredDocuments/document';
 import { API_BASE_PATH, AUTHOR_STATE_PATH, type AuthorSessionView } from '../types/authorApi';
 import { createAuthorBridgeApi } from './authorBridgeApi';
 import { createAuthorDocumentApi } from './authorDocumentApi';
@@ -53,3 +55,29 @@ export const api: DoomApi = {
     return { fetch: (request) => app.fetch(request), close: () => bridge.close() };
   },
 };
+
+/** The session API and tools share the same browser ownership and pending requests. */
+export function createAuthorSessionApi(cwd: string, sessionId: string): { api: DoomApi; catalog: AuthorCatalog } {
+  const bridge = createBridge();
+  return {
+    catalog: {
+      async open(path, signal) {
+        signal?.throwIfAborted();
+        const bytes = await readDocument(cwd, path);
+        return { path, byteLength: bytes.byteLength };
+      },
+      async describe(signal) {
+        signal?.throwIfAborted();
+        return bridge.describe();
+      },
+      execute: (input, signal) => bridge.invoke(input, signal),
+    },
+    api: {
+      basePath: API_BASE_PATH,
+      start() {
+        const app = createAuthorApi({ cwd, sessionId, bridge });
+        return { fetch: (request) => app.fetch(request), close: () => bridge.close() };
+      },
+    },
+  };
+}

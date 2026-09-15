@@ -14,7 +14,7 @@ client -> authenticated HTTP/WebSocket listener -> doompi-server
 Add DoomPi Web when a browser or remote cockpit should control the session:
 
 ```text
-browser -> DoomPi Web -> authenticated /api/pi WebSocket -> doompi-server
+browser -> DoomPi Web -> authenticated /api/ws WebSocket -> doompi-server
                                                      \-> DirectHarnessRuntime
 ```
 
@@ -57,7 +57,7 @@ A ready session owns:
 | Resource                        | Purpose                                                  |
 | ------------------------------- | -------------------------------------------------------- |
 | Loopback HTTP listener          | Health, discovery, channel, and package API routes       |
-| `/api/pi` WebSocket             | Authenticated Pi 0.85 Chord protocol                     |
+| `/api/ws` WebSocket             | Authenticated Pi 0.85 Chord protocol                     |
 | Direct harness runtime          | In-process Pi execution and typed session operations     |
 | Session journal                 | Upstream v4 JSONL history, normally below `.pi/sessions` |
 | `server.bundle.json` generation | Pinned server facet declarations and modules             |
@@ -84,7 +84,7 @@ The server does not select an executable or use an alternate runtime when the ad
 
 ## Add the browser cockpit
 
-DoomPi Web can proxy the server's `/api/pi` endpoint:
+DoomPi Web can proxy the server's `/api/ws` endpoint:
 
 ```bash
 npm install -g @agimon-ai/doompi-web

@@ -104,7 +104,7 @@ test('status updates preserve mounted Markdown and scroll while invalidating too
   await expect(page.getByTestId('entry-assistant').filter({ hasText: PERFORMANCE_MARKERS.large })).toBeVisible();
   await scrollToOldestTurn(page);
   await expect(page.getByTestId('entry-tool').first()).toBeVisible();
-  expect((await renderWork(page)).versions).toContain('19.2.8');
+  expect((await renderWork(page)).versions).toContain('19.3.0');
 
   const heldScrollTop = await page.getByTestId('timeline').evaluate((element) => {
     if (element.scrollHeight <= element.clientHeight) throw new Error('The performance transcript must overflow.');

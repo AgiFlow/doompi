@@ -71,6 +71,8 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
   private readonly kernel = createDoomKernel();
   private readonly selectionListeners = new Set<(selection: DoomHeadlessSelection) => void | Promise<void>>();
   private restrictions: readonly DoomHeadlessToolRestriction[] = [];
+  private restrictionsChanged = false;
+  private contributionsChanged = false;
   private readonly options: HeadlessHostOptions;
   private readonly selectionOverrides: Set<string>;
   private applied: DoomHeadlessSelection;
@@ -101,6 +103,7 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     this.applying = this.applied;
     context.effect(() => () => this.close(), 'headless host lifetime');
     this.kernel.defineSlot<Owned<DoomHeadlessToolRestriction>>('restrictions', (entries) => {
+      this.restrictionsChanged = true;
       this.restrictions = entries.map((entry) => entry.value).filter((restriction) => this.matches(restriction.when));
     });
     this.kernel.defineSlot<Owned<DoomHeadlessTool>>('tools', async (entries) => {
@@ -321,7 +324,7 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       if (sameValues(before, this.kernel.activeValues(slot))) await this.kernel.refresh(slot);
     };
     if (stateChanged) await refresh('restrictions');
-    if (majorChanged || domainsChanged || stateChanged) await refresh('tools');
+    if (majorChanged || domainsChanged || stateChanged || this.restrictionsChanged) await refresh('tools');
     if (majorChanged || domainsChanged || profileChanged || stateChanged) await refresh('resources');
     if (domainsChanged || stateChanged) {
       await refresh('commands');
@@ -373,9 +376,13 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
         const compositionChanged =
           this.appliedRevision === 0 ||
           !sameSelection(this.applied, selection) ||
+          this.restrictionsChanged ||
+          this.contributionsChanged ||
           !sameValues(previousValues.get('tools') ?? [], this.kernel.activeValues('tools')) ||
           !sameValues(previousValues.get('resources') ?? [], this.kernel.activeValues('resources'));
         if (compositionChanged) await this.options.onApplied?.(selection, revision);
+        this.restrictionsChanged = false;
+        this.contributionsChanged = false;
       } finally {
         this.refreshing = false;
       }
@@ -391,7 +398,10 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     this.tail = result.catch((error: unknown) => {
       this.failure = error;
       this.ready = false;
-      this.options.onError?.(error);
+      // close() marks the host disposed before draining this tail, so every selection still
+      // queued at that point rejects by design. Those rejections are teardown artifacts, not
+      // actionable failures, and reporting them surfaces one notice per queued contribution.
+      if (!this.disposed) this.options.onError?.(error);
     });
     return result;
   }
@@ -405,6 +415,7 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     const owner = readDoomHeadlessOwner(this.ctx);
     if (!owner) throw new Error('A headless contribution must have descriptor-owned package identity');
     this.ready = false;
+    this.contributionsChanged = true;
     const registration = this.kernel.contribute(slot, {
       source: owner.packageName,
       layer: owner.packageName,
@@ -415,8 +426,12 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       if (disposed) return;
       disposed = true;
       this.ready = false;
+      this.contributionsChanged = true;
       registration.dispose();
-      if (!this.disposed && !this.refreshing) void this.select({}).catch(() => undefined);
+      // Reconciled on the same terms as the registration below: before the first applied
+      // selection the caller's own select() computes the whole composition, and the sources
+      // that selection gates on are not known yet.
+      if (this.appliedRevision > 0 && !this.disposed && !this.refreshing) void this.select({}).catch(() => undefined);
     };
     this.ctx.effect(() => dispose, `headless ${slot} contribution`);
     // Initial registration is reconciled once the caller has installed all facets.

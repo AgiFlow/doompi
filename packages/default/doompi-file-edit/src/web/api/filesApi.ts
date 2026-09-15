@@ -1,3 +1,4 @@
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
 import {
@@ -37,7 +38,7 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
  * the form the file list already holds.
  */
 export function sessionFileUrl(sessionId: string, relPath: string): string {
-  return `/api/sessions/${encodeURIComponent(sessionId)}/file?path=${encodeURIComponent(relPath)}`;
+  return `${sessionApiPath(sessionId)}/file?path=${encodeURIComponent(relPath)}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

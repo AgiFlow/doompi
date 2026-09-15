@@ -8,6 +8,7 @@ import { getCookie } from 'hono/cookie';
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
 
 import { DEVICE_COOKIE, REMOTE_CHANNEL_ROUTE, REMOTE_HTTP_ROUTE, STEP_UP_HEADER } from '../constants/remote';
+import { parseDoomSocketPath } from '../schemas/packageApi';
 import { createRemoteAccess, type RemoteAccess } from '../services/remoteAccess';
 import { createRemoteAccessStore } from '../services/remoteAccessStore';
 import {
@@ -95,7 +96,7 @@ export interface RemoteRuntimeOptions {
   onNotice(message: string): void;
   /** The listener to which a sealed, authenticated request is forwarded. */
   forward(request: Request): Promise<Response>;
-  connectProtocol(): WebSocket;
+  connectProtocol(pathname: string): WebSocket;
   launchTunnel?: TunnelLauncher;
 }
 
@@ -212,7 +213,7 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
         );
         const device = remote.authorize(cookies.get(`__Host-${DEVICE_COOKIE}`));
         const channel = device === undefined ? undefined : remote.channelFor(device, 'protocol');
-        if (url.pathname !== '/api/pi' || verdict !== 'allow' || !device || !channel) {
+        if (!parseDoomSocketPath(url.pathname) || verdict !== 'allow' || !device || !channel) {
           socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
           socket.destroy();
           return;
@@ -220,7 +221,7 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
         webSockets.handleUpgrade(incoming, socket, head, (client) => {
           let upstream: WebSocket;
           try {
-            upstream = options.connectProtocol();
+            upstream = options.connectProtocol(url.pathname);
           } catch (error) {
             options.onNotice(`remote protocol could not connect: ${String(error)}`);
             client.close(1011, 'protocol unavailable');

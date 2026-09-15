@@ -31,7 +31,7 @@ async function main(): Promise<void> {
     port: options.port,
     host: options.host,
     assetsDir: options.assetsDir,
-    headlessUrl,
+    headlessUrl: headless?.url ?? headlessUrl,
     headlessToken: options.headlessToken ?? headless?.token,
     onNotice: notice,
   });

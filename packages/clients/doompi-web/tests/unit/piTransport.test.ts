@@ -57,16 +57,16 @@ afterEach(() => {
 
 async function open() {
   const sink = handlers();
-  const connecting = createProtocolTransport('ws://cockpit/api/pi')(sink);
+  const connecting = createProtocolTransport('ws://cockpit/api/ws')(sink);
   FakeSocket.last?.fire('open');
   return { transport: await connecting, socket: FakeSocket.last as FakeSocket, sink };
 }
 
 describe('protocolSocketUrl', () => {
   it('follows the page scheme so a served cockpit is not downgraded', () => {
-    expect(protocolSocketUrl({ protocol: 'https:', host: 'box:7433' } as Location)).toBe('wss://box:7433/api/pi');
+    expect(protocolSocketUrl({ protocol: 'https:', host: 'box:7433' } as Location)).toBe('wss://box:7433/api/ws');
     expect(protocolSocketUrl({ protocol: 'http:', host: '127.0.0.1:7433' } as Location)).toBe(
-      'ws://127.0.0.1:7433/api/pi',
+      'ws://127.0.0.1:7433/api/ws',
     );
   });
 });
@@ -79,7 +79,7 @@ describe('protocol transport', () => {
   });
 
   it('rejects when the socket fails before opening', async () => {
-    const connecting = createProtocolTransport('ws://cockpit/api/pi')(handlers());
+    const connecting = createProtocolTransport('ws://cockpit/api/ws')(handlers());
     FakeSocket.last?.fire('error');
 
     await expect(connecting).rejects.toThrow(/failed to open/);
@@ -140,7 +140,7 @@ describe('protocol transport', () => {
     expect(socket.closed).toBe(true);
   });
   it('rejects a connection closed before it opens', async () => {
-    const connecting = createProtocolTransport('ws://cockpit/api/pi')(handlers());
+    const connecting = createProtocolTransport('ws://cockpit/api/ws')(handlers());
     FakeSocket.last?.fire('close');
     await expect(connecting).rejects.toThrow(/failed to open/);
   });

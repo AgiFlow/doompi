@@ -1,4 +1,6 @@
-import { DIRECTORIES_API_ROUTE, type PiSessionHistoryItem, SESSIONS_API_ROUTE } from '../../types/hub';
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
+
+import { DIRECTORIES_API_ROUTE, type PiSessionHistoryItem } from '../../types/hub';
 import { sealedHttpSession } from './sealedSession';
 import { fetchWithStepUp } from './stepUp';
 
@@ -19,10 +21,29 @@ export async function createSession(input: { cwd: string; name?: string }): Prom
   try {
     // Creating a session picks a directory to run an agent in, which is one
     // of the two actions a live remote session is not enough for.
-    response = await fetchWithStepUp(SESSIONS_API_ROUTE, {
+    const admission = await fetchWithStepUp('/api/workspaces', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
+      body: JSON.stringify({ root: input.cwd }),
+    });
+    const admitted: unknown = await admission.json().catch(() => undefined);
+    if (
+      !admission.ok ||
+      !isRecord(admitted) ||
+      !isRecord(admitted.workspace) ||
+      typeof admitted.workspace.id !== 'string'
+    ) {
+      return {
+        error:
+          isRecord(admitted) && typeof admitted.error === 'string'
+            ? admitted.error
+            : `The hub answered ${admission.status}.`,
+      };
+    }
+    response = await fetchWithStepUp(`/api/workspaces/${encodeURIComponent(admitted.workspace.id)}/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: input.name }),
     });
   } catch {
     return { error: 'The cockpit hub is unreachable.' };
@@ -44,7 +65,7 @@ export type StopSessionResult = { ok: true } | { error: string };
 export async function stopSession(sessionId: string): Promise<StopSessionResult> {
   let response: Response;
   try {
-    response = await sealedHttpSession.fetch(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}`, {
+    response = await sealedHttpSession.fetch(`${sessionApiPath(sessionId)}`, {
       method: 'DELETE',
     });
   } catch {
@@ -72,7 +93,7 @@ export type RestartSessionResult = { ok: true } | { error: string };
 export async function restartSession(sessionId: string): Promise<RestartSessionResult> {
   let response: Response;
   try {
-    response = await sealedHttpSession.fetch(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}/restart`, {
+    response = await sealedHttpSession.fetch(`${sessionApiPath(sessionId)}/restart`, {
       method: 'POST',
     });
   } catch {
@@ -94,7 +115,7 @@ export type SessionHistoryResult = { sessions: PiSessionHistoryItem[] } | { erro
 /** Lists the Pi threads saved for a live session's workspace. */
 export async function listSessionHistory(sessionId: string): Promise<SessionHistoryResult> {
   try {
-    const response = await sealedHttpSession.fetch(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}/history`);
+    const response = await sealedHttpSession.fetch(`${sessionApiPath(sessionId)}/history`);
     const body = (await response.json()) as unknown;
     if (response.ok && isRecord(body) && Array.isArray(body.sessions)) {
       return {
@@ -123,7 +144,7 @@ export type ResumeSessionResult = { sessionId: string } | { error: string };
 /** Replaces one live card with a selected Pi thread from the same workspace. */
 export async function resumeSession(sessionId: string, targetSessionId: string): Promise<ResumeSessionResult> {
   try {
-    const response = await fetchWithStepUp(`${SESSIONS_API_ROUTE}/${encodeURIComponent(sessionId)}/resume`, {
+    const response = await fetchWithStepUp(`${sessionApiPath(sessionId)}/resume`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ targetSessionId }),
@@ -141,7 +162,7 @@ export async function resumeSession(sessionId: string, targetSessionId: string):
 export async function searchSessionFiles(sessionId: string, query: string): Promise<string[]> {
   try {
     const response = await sealedHttpSession.fetch(
-      `/api/sessions/${encodeURIComponent(sessionId)}/plugin/files/?q=${encodeURIComponent(query)}`,
+      `${sessionApiPath(sessionId)}/plugins/files/?q=${encodeURIComponent(query)}`,
     );
     if (!response.ok) return [];
     const body = (await response.json()) as { files?: unknown };

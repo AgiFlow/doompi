@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { describe, expect, it } from 'vitest';
 
 import { sessionFileUrl } from '../../src/types/media';
@@ -47,6 +50,8 @@ describe('mediaKindFor', () => {
 
 describe('sessionFileUrl', () => {
   it('encodes both the session and the path', () => {
-    expect(sessionFileUrl('s 1', 'docs/a b.svg')).toBe('/api/sessions/s%201/file?path=docs%2Fa%20b.svg');
+    expect(sessionFileUrl('s 1', 'docs/a b.svg')).toBe(
+      '/api/workspaces/test-workspace/sessions/s%201/file?path=docs%2Fa%20b.svg',
+    );
   });
 });

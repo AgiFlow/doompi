@@ -7,7 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
 
-import { DOOM_API_CALLER_HEADERS, type DoomApiMount } from '../exports/packageApi';
+import { DOOM_API_CALLER_HEADERS, parseDoomSocketPath, type DoomApiMount } from '../exports/packageApi';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
 import type { SavedSession } from '../services/sqliteSessionHistory';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
@@ -153,19 +153,28 @@ async function directorySuggestions(query: string, sessions: readonly HeadlessHu
   if (typed === '') return [];
   const matches = (value: string): boolean => value.toLowerCase().includes(typed.toLowerCase());
   const known = [...new Set([process.cwd(), ...sessions.map((session) => session.cwd)])].filter(matches);
-  if (!path.isAbsolute(typed)) return known.slice(0, 12);
-  const parent = path.dirname(typed);
-  const partial = path.basename(typed).toLowerCase();
-  try {
-    const entries = await fs.promises.readdir(parent, { withFileTypes: true });
-    const completed = entries
-      .filter((entry) => entry.isDirectory() && entry.name.toLowerCase().includes(partial))
-      .map((entry) => path.join(parent, entry.name))
-      .sort((left, right) => left.localeCompare(right));
-    return [...new Set([...known, ...completed])].slice(0, 12);
-  } catch {
-    return known.slice(0, 12);
+  const candidates = path.isAbsolute(typed)
+    ? [typed]
+    : typed.includes(path.sep)
+      ? [path.resolve(process.cwd(), typed)]
+      : [path.join(path.dirname(process.cwd()), typed), path.join(process.cwd(), typed)];
+  const completed: string[] = [];
+  for (const candidate of candidates) {
+    const drilling = typed.endsWith(path.sep);
+    const parent = drilling ? candidate : path.dirname(candidate);
+    const partial = drilling ? '' : path.basename(candidate).toLowerCase();
+    try {
+      const entries = await fs.promises.readdir(parent, { withFileTypes: true });
+      completed.push(
+        ...entries
+          .filter((entry) => entry.isDirectory() && entry.name.toLowerCase().includes(partial))
+          .map((entry) => path.join(parent, entry.name)),
+      );
+    } catch {
+      // A missing or unreadable parent simply has no completions.
+    }
   }
+  return [...new Set([...known, ...completed.sort((left, right) => left.localeCompare(right))])].slice(0, 12);
 }
 
 async function readBody(request: IncomingMessage): Promise<Uint8Array> {
@@ -222,6 +231,7 @@ function writeSse(response: ServerResponse, event: string, value: unknown): void
  */
 export async function serveHeadlessServer(options: HeadlessServerOptions): Promise<HeadlessServer> {
   const clients = new Set<Client>();
+  const scopedProtocols = new Set<Awaited<ReturnType<typeof createHeadlessProtocol>>>();
   const sse = new Set<ServerResponse>();
   let closed = false;
   const webSockets = new WebSocketServer({ noServer: true });
@@ -331,29 +341,36 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       });
       return;
     }
-    if (url.pathname === '/api/sessions' && request.method === 'POST') {
-      const body: unknown = JSON.parse(new TextDecoder().decode(await readBody(request)));
-      if (
-        !body ||
-        typeof body !== 'object' ||
-        !('cwd' in body) ||
-        typeof body.cwd !== 'string' ||
-        !body.cwd.trim() ||
-        ('name' in body && typeof body.name !== 'string')
-      ) {
-        json(response, 400, { error: 'A session needs a working directory and an optional name.' });
+    const workspaceSessions = /^\/api\/workspaces\/([^/]+)\/sessions$/u.exec(url.pathname);
+    if (workspaceSessions) {
+      const workspaceId = decodeURIComponent(workspaceSessions[1]);
+      const workspace = options.headlessHub.workspaces().find((entry) => entry.id === workspaceId);
+      if (!workspace) {
+        json(response, 404, { error: 'Workspace not found.' });
         return;
       }
-      const created = await options.headlessHub.sessionService.create({
-        cwd: body.cwd,
-        name: 'name' in body ? String(body.name) : path.basename(body.cwd),
-      });
-      json(response, 201, { sessionId: created.sessionId });
-      return;
-    }
-    if (url.pathname === '/api/sessions' && request.method === 'GET') {
-      json(response, 200, { sessions: options.headlessHub.snapshot().map(sessionView) });
-      return;
+      if (request.method === 'GET') {
+        json(response, 200, {
+          sessions: options.headlessHub
+            .snapshot()
+            .filter((session) => session.workspaceId === workspaceId)
+            .map(sessionView),
+        });
+        return;
+      }
+      if (request.method === 'POST') {
+        const body = parseJson(await readBody(request));
+        if (!body || typeof body !== 'object' || ('name' in body && typeof body.name !== 'string')) {
+          json(response, 400, { error: 'A session accepts an optional name.' });
+          return;
+        }
+        const created = await options.headlessHub.sessionService.create({
+          cwd: workspace.root,
+          name: 'name' in body ? String(body.name) : path.basename(workspace.root),
+        });
+        json(response, 201, { sessionId: created.sessionId });
+        return;
+      }
     }
     if (url.pathname === '/api/events' && request.method === 'GET') {
       response.writeHead(200, {
@@ -386,6 +403,13 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       }
     }
     const workspaceMatch = /^\/api\/workspaces\/([^/]+)$/u.exec(url.pathname);
+    if (workspaceMatch && request.method === 'GET') {
+      const workspace = options.headlessHub
+        .workspaces()
+        .find((entry) => entry.id === decodeURIComponent(workspaceMatch[1]));
+      json(response, workspace ? 200 : 404, workspace ? { workspace } : { error: 'Workspace not found.' });
+      return;
+    }
     if (workspaceMatch && request.method === 'DELETE') {
       const id = decodeURIComponent(workspaceMatch[1]);
       if (!options.headlessHub.workspaces().some((workspace) => workspace.id === id)) {
@@ -400,19 +424,34 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       json(response, 200, { ok: true });
       return;
     }
-    const pluginMatch = /^\/api\/(global|workspaces\/([^/]+)|sessions\/([^/]+))\/plugin\/([^/]+)(?:\/(.*))?$/u.exec(
-      url.pathname,
-    );
+    const pluginMatch =
+      /^\/api(?:\/workspaces\/([^/]+)(?:\/sessions\/([^/]+))?)?\/(?:plugins\/([^/]+)|settings)(?:\/(.*))?$/u.exec(
+        url.pathname,
+      );
     if (pluginMatch !== null && request.method !== 'CONNECT') {
+      const workspaceId = pluginMatch[1] === undefined ? undefined : decodeURIComponent(pluginMatch[1]);
+      const sessionId = pluginMatch[2] === undefined ? undefined : decodeURIComponent(pluginMatch[2]);
+      if (workspaceId !== undefined && !options.headlessHub.workspaces().some((entry) => entry.id === workspaceId)) {
+        json(response, 404, { error: 'Workspace not found.' });
+        return;
+      }
+      if (sessionId !== undefined && options.headlessHub.session(sessionId)?.workspaceId !== workspaceId) {
+        json(response, 404, { error: 'Session not found.' });
+        return;
+      }
       const mount: DoomApiMount =
-        pluginMatch[2] !== undefined
-          ? { scope: 'workspace', workspaceId: decodeURIComponent(pluginMatch[2]) }
-          : pluginMatch[3] !== undefined
-            ? { scope: 'session', sessionId: decodeURIComponent(pluginMatch[3]) }
+        sessionId !== undefined
+          ? { scope: 'session', sessionId }
+          : workspaceId !== undefined
+            ? { scope: 'workspace', workspaceId }
             : { scope: 'global' };
-      const basePath = decodeURIComponent(pluginMatch[4]);
+      const basePath = pluginMatch[3] === undefined ? 'settings' : decodeURIComponent(pluginMatch[3]);
       if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u.test(basePath)) {
         json(response, 400, { error: 'Invalid package API base path.' });
+        return;
+      }
+      if (pluginMatch[3] === 'settings' || (sessionId !== undefined && basePath === 'settings')) {
+        json(response, 404, { error: 'Not found.' });
         return;
       }
       const headers = new Headers();
@@ -441,7 +480,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
           options.headlessHub.requestApi(
             mount,
             basePath,
-            new Request(`http://doompi.local/${pluginMatch[5] ?? ''}${url.search}`, {
+            new Request(`http://doompi.local/${pluginMatch[4] ?? ''}${url.search}`, {
               method: request.method,
               headers,
               signal: abort.signal,
@@ -468,18 +507,18 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       }
       return;
     }
-    const sessionMatch = /^\/api\/sessions\/([^/]+)(?:\/(.*))?$/u.exec(url.pathname);
+    const sessionMatch = /^\/api\/workspaces\/([^/]+)\/sessions\/([^/]+)(?:\/(.*))?$/u.exec(url.pathname);
     if (sessionMatch === null) {
       json(response, 404, { error: 'Not found.' });
       return;
     }
-    const sessionId = decodeURIComponent(sessionMatch[1]);
+    const sessionId = decodeURIComponent(sessionMatch[2]);
     const session = options.headlessHub.session(sessionId);
-    if (session === undefined) {
+    if (session === undefined || session.workspaceId !== decodeURIComponent(sessionMatch[1])) {
       json(response, 404, { error: 'Session not found.' });
       return;
     }
-    const suffix = sessionMatch[2] === undefined ? '' : `/${sessionMatch[2]}`;
+    const suffix = sessionMatch[3] === undefined ? '' : `/${sessionMatch[3]}`;
     if (suffix === '' && request.method === 'GET') {
       json(response, 200, sessionView(session));
       return;
@@ -535,7 +574,8 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
 
   server.on('upgrade', (request, socket, head) => {
     const url = requestPath(request);
-    if (url.pathname !== '/api/pi') {
+    const mount = parseDoomSocketPath(url.pathname);
+    if (!mount) {
       socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
       socket.destroy();
       return;
@@ -545,12 +585,47 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       socket.destroy();
       return;
     }
-    webSockets.handleUpgrade(request, socket, head, (client) => {
-      webSockets.emit('connection', client, request);
-    });
+    if (
+      mount.scope !== 'global' &&
+      (!options.headlessHub.workspaces().some((entry) => entry.id === mount.workspaceId) ||
+        (mount.scope === 'session' && options.headlessHub.session(mount.sessionId)?.workspaceId !== mount.workspaceId))
+    ) {
+      socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+    const prepare =
+      mount.scope === 'global'
+        ? Promise.resolve(protocol)
+        : createHeadlessProtocol({
+            hub: options.headlessHub,
+            mount,
+            telemetry: options.telemetry,
+            onNotice: options.onNotice,
+          });
+    void prepare
+      .then(async (selected) => {
+        if (closed || socket.destroyed) {
+          if (selected !== protocol) await selected.close();
+          socket.destroy();
+          return;
+        }
+        if (selected !== protocol) {
+          scopedProtocols.add(selected);
+          socket.once('close', () => {
+            void selected.close().finally(() => scopedProtocols.delete(selected));
+          });
+        }
+        webSockets.handleUpgrade(request, socket, head, (client) => {
+          webSockets.emit('connection', client, selected);
+        });
+      })
+      .catch(() => {
+        socket.destroy();
+      });
   });
-  webSockets.on('connection', (socket) => {
-    const handler = protocol.accept(socket);
+  webSockets.on('connection', (socket, selected: typeof protocol) => {
+    const handler = selected.accept(socket);
     if (!handler) return;
     const client: Client = { socket, handler };
     clients.add(client);
@@ -587,7 +662,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       sse.clear();
       for (const client of clients) client.socket.terminate();
       clients.clear();
-      await protocol.close();
+      await Promise.all([protocol.close(), ...[...scopedProtocols].map((selected) => selected.close())]);
       webSockets.close();
       server.closeAllConnections();
       await new Promise<void>((resolve, reject) =>

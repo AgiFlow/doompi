@@ -42,14 +42,36 @@ export interface DoomWebComposition {
 }
 
 /** Canonical public prefix. Scope selection never falls through to a parent. */
-export function doomApiMountPath(mount: DoomApiMount): string {
-  if (mount.scope === 'global') return '/api/global/plugin';
-  if (mount.scope === 'workspace') return `/api/workspaces/${encodeURIComponent(mount.workspaceId)}/plugin`;
-  return `/api/sessions/${encodeURIComponent(mount.sessionId)}/plugin`;
+export function doomApiMountPath(mount: DoomApiMount & { workspaceId?: string }): string {
+  if (mount.scope === 'global') return '/api/plugins';
+  if (mount.scope === 'workspace') return `/api/workspaces/${encodeURIComponent(mount.workspaceId)}/plugins`;
+  if (!mount.workspaceId) throw new Error('A session API path requires its workspace identity.');
+  return `/api/workspaces/${encodeURIComponent(mount.workspaceId)}/sessions/${encodeURIComponent(mount.sessionId)}/plugins`;
+}
+
+/** Scope addressed by a public WebSocket upgrade. */
+export type DoomSocketMount =
+  | { scope: 'global' }
+  | { scope: 'workspace'; workspaceId: string }
+  | { scope: 'session'; workspaceId: string; sessionId: string };
+
+/** Only canonical resource paths may select a protocol listener. */
+export function parseDoomSocketPath(pathname: string): DoomSocketMount | undefined {
+  if (pathname === '/api/ws') return { scope: 'global' };
+  const match = /^\/api\/workspaces\/([^/]+)(?:\/sessions\/([^/]+))?\/ws$/u.exec(pathname);
+  if (!match) return undefined;
+  try {
+    const workspaceId = decodeURIComponent(match[1]);
+    return match[2] === undefined
+      ? { scope: 'workspace', workspaceId }
+      : { scope: 'session', workspaceId, sessionId: decodeURIComponent(match[2]) };
+  } catch {
+    return undefined;
+  }
 }
 
 /** The segment an API is mounted under, below this prefix. */
-export const DOOM_API_ROUTE_PREFIX = '/api/plugin';
+export const DOOM_API_ROUTE_PREFIX = '/api/plugins';
 /** Selects the hub API bundle that owns the named cockpit session. */
 export const DOOM_HUB_API_SESSION_QUERY_PARAM = 'hubSession';
 
@@ -166,7 +188,7 @@ export interface DoomApiHandler {
 }
 
 export interface DoomApi {
-  /** Segment under /api/plugin/; globally unique across loaded packages. */
+  /** Segment under /api/plugins/; globally unique across loaded packages. */
   basePath: string;
   start(context: DoomApiContext): DoomApiHandler;
 }

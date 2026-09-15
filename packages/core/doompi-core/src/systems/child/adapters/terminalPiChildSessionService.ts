@@ -29,6 +29,8 @@ import type { DirectHarnessModel } from '../../../types/server/directHarnessRunt
 import {
   composeDirectHarnessRequestOptions,
   createHeadlessChildSessionService,
+  parseChildModelReference,
+  resolveChildProviders,
   type HeadlessChildSessionServiceOptions,
 } from './headlessChildSessionService';
 import { registerNativeChild } from './nativeChildRuntimes';
@@ -37,7 +39,12 @@ export interface TerminalPiChildSessionServiceOptions {
   readonly cwd: string;
   readonly sessionsRoot?: string;
   readonly models?: Models | MutableModels;
-  readonly providers?: readonly Provider[];
+  /**
+   * Providers to merge into the model registry for every child spawn. A thunk
+   * is resolved per spawn so providers registered after this service was built,
+   * such as Pi extension providers, are still visible to the child.
+   */
+  readonly providers?: readonly Provider[] | (() => readonly Provider[]);
   readonly defaultModel?: () => DirectHarnessModel | undefined;
   readonly historyOwnership?: HistoryOwnership;
   readonly now?: () => number;
@@ -105,14 +112,6 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 function requireString(value: unknown, field: string): string {
   if (typeof value !== 'string' || value.length === 0) throw new Error(`Invalid terminal Pi snapshot ${field}`);
   return value;
-}
-
-function modelReference(value: string | undefined): DirectHarnessModel | undefined {
-  if (value === undefined) return undefined;
-  const separator = value.indexOf('/');
-  if (separator <= 0 || separator === value.length - 1)
-    throw new Error(`Child model must use the provider/model form: ${value}`);
-  return { provider: value.slice(0, separator), id: value.slice(separator + 1) };
 }
 
 function parseSnapshot(snapshotJsonl: string): { header: Record<string, unknown>; records: Record<string, unknown>[] } {
@@ -218,13 +217,16 @@ async function createChildJournal(
   const sessionsRoot = path.resolve(options.sessionsRoot ?? path.join(getAgentDir(), 'sessions'));
   fs.mkdirSync(sessionsRoot, { recursive: true, mode: 0o700 });
   const destinationPath = path.join(sessionsRoot, `${Date.now()}-${randomUUID()}.jsonl`);
-  fs.copyFileSync(sourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
 
   let destinationLease: HistoryOwnershipLease | undefined;
   let primaryFailure: unknown;
   try {
+    // Take ownership before the destination exists. The staged copy still holds
+    // the v3 header until the importer rewrites it, and the v4 owner rejects a
+    // v3 source outright, so copying first makes acquisition impossible.
     destinationLease = await ownership.acquire(destinationPath);
     await destinationLease.assertQuiescent();
+    fs.copyFileSync(sourcePath, destinationPath, fs.constants.COPYFILE_EXCL);
     await importV3WithPinnedUpstream({
       sourcePath,
       stagingPath: destinationPath,
@@ -271,7 +273,10 @@ export function createTerminalPiChildSessionService(
       if (request.source.kind !== 'terminal-pi-fork')
         throw new Error('Terminal Pi child sessions require terminal Pi fork sources.');
       const directRequestOptions = composeDirectHarnessRequestOptions(request);
-      const model = modelReference(request.model) ?? options.defaultModel?.();
+      const requestedModel = parseChildModelReference(request.model);
+      const model = requestedModel?.model ?? options.defaultModel?.();
+      const thinking = request.thinking ?? requestedModel?.thinking;
+      const providers = resolveChildProviders(options.providers);
       const sessionPath = await createChildJournal(request, request.source, options, ownership);
       const runtimeOptions: DirectHarnessRuntimeOptions = {
         cwd: request.cwd || options.cwd,
@@ -279,9 +284,9 @@ export function createTerminalPiChildSessionService(
         sessionPath,
         ...(options.sessionsRoot === undefined ? {} : { sessionsRoot: options.sessionsRoot }),
         ...(options.models === undefined ? {} : { models: options.models }),
-        ...(options.providers === undefined ? {} : { providers: options.providers }),
+        ...(providers === undefined ? {} : { providers }),
         ...(model === undefined ? {} : { model }),
-        ...(request.thinking === undefined ? {} : { thinkingLevel: request.thinking as never }),
+        ...(thinking === undefined ? {} : { thinkingLevel: thinking as never }),
         ...directRequestOptions,
         historyOwnership: ownership,
       };

@@ -588,7 +588,7 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       const client = await Client.connect({
         serverId: DOOM_COCKPIT_SERVER_ID,
         transportFactory: websocketTransport(
-          `${options.headlessUrl().replace('http:', 'ws:')}/api/pi?token=e2e-headless-token`,
+          `${options.headlessUrl().replace('http:', 'ws:')}/api/ws?token=e2e-headless-token`,
         ),
       });
       await client.request(

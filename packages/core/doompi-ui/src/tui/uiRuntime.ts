@@ -24,6 +24,7 @@ import {
   BUILTIN_LEADER_COMMANDS,
 } from '../constants/ui';
 import { DoomUiState, type LeaderSnapshot } from '../models/uiState';
+import { type EventLoopLagSampler, startEventLoopLagSampler } from '../services/eventLoopLag';
 import { extensionName, extensionPackageName, extensionToolSource } from '../services/extensionSource';
 import { type DoomLeaderDiagnostic, DoomLeaderRegistry } from '../services/leaderRegistry';
 import { UI_EVENT, type UiTelemetry } from '../services/telemetry';
@@ -78,6 +79,7 @@ export function createUiRuntime(cordis: Context, { pi, telemetry }: UiPluginOpti
   let activeContext: ExtensionContext | undefined;
   let sessionGeneration = 0;
   let hasSessionMessage = false;
+  let lagSampler: EventLoopLagSampler | undefined;
 
   /**
    * Asks the MCP extension what it is currently connected to.
@@ -115,6 +117,8 @@ export function createUiRuntime(cordis: Context, { pi, telemetry }: UiPluginOpti
       activeContext = undefined;
       hub.setContext(undefined);
       footerData = undefined;
+      lagSampler?.stop();
+      lagSampler = undefined;
       hub.dispose();
       uiState.reset();
       if (context?.mode === TUI_MODE) {
@@ -166,6 +170,15 @@ export function createUiRuntime(cordis: Context, { pi, telemetry }: UiPluginOpti
         hasSessionMessage = ctx.sessionManager.getEntries().some((entry) => entry.type === SESSION_MESSAGE_ENTRY);
         if (ctx.mode !== TUI_MODE) return;
         for (const message of pendingDiagnostics) notify(cordis, ctx, message, WARNING_STYLE);
+
+        // A resumed or forked session runs this again, and two samplers would
+        // double every report.
+        lagSampler?.stop();
+        lagSampler = startEventLoopLagSampler((lagMs) => {
+          void telemetry.recordWarning(UI_EVENT.eventLoopStalled, `Event loop stalled for ${String(lagMs)}ms.`, {
+            lag_ms: lagMs,
+          });
+        });
 
         const themeName = process.env[THEME_ENVIRONMENT_KEY] || DEFAULT_THEME_NAME;
         const themeResult = ctx.ui.setTheme(themeName);

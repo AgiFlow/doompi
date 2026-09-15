@@ -1,4 +1,5 @@
 import { type ContextItemDetail, type ContextItemKind, itemDetailUrl } from '@agimon-ai/doompi-core/context-api';
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
 /**
@@ -44,7 +45,7 @@ export async function fetchContextItemDetail(
 ): Promise<FetchItemDetailResult> {
   let response: Response;
   try {
-    response = await sealedTransport.fetch(itemDetailUrl(sessionId, itemKind, name));
+    response = await sealedTransport.fetch(itemDetailUrl(sessionApiPath(sessionId), itemKind, name));
   } catch {
     return { ok: false, error: UNREACHABLE };
   }

@@ -67,6 +67,8 @@ export function createSessionPresentation() {
       const frame: ProtocolEvent['frame'] = JSON.parse(encoded);
       const event = { sequence: ++revision, frame };
       let key: string | undefined;
+      if (frame.type === 'response' && frame.command === 'get_state' && frame.success === true) key = 'agent:model';
+      if (frame.type === 'thinking_level_changed') key = 'agent:thinking';
       if (frame.type === 'extension_ui_request') {
         if (frame.method === 'setStatus' && typeof frame.statusKey === 'string') key = `status:${frame.statusKey}`;
         else if (frame.method === 'setWidget' && typeof frame.widgetKey === 'string') key = `widget:${frame.widgetKey}`;

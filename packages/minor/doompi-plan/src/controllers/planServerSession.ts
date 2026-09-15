@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import { type DoomHeadlessHostService, type DoomHeadlessModelSettings } from '@agimon-ai/doompi-core/headless';
 import { type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
 import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
@@ -11,13 +11,14 @@ import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agim
 import { loadDoomConfig, resolvePlanningPlansDirectory } from '../schemas/plan/config';
 import { readPlanSkill } from '../services/prompts';
 import { PLAN_REVIEW_OPTIONS, PLAN_REVIEW_TITLE } from '../types/planApi';
-import { parseDebugEvidencePacket, planTitleSlug } from './planMode';
+import { parseDebugEvidencePacket, planTitleSlug, visiblePlanForToolCall } from './planMode';
 
 const RECORD_DEBUG_EVIDENCE_TOOL = 'record_debug_evidence';
 const RUN_FABLE_PLAN_TOOL = 'run_fable_plan';
 const WRITE_PLAN_TOOL = 'write_plan';
 const COMPLETE_PLAN_TOOL = 'complete_plan';
 const PLAN_MODE_ID = 'plan';
+const PLAN_MODEL_SNAPSHOT = 'plan-server-model-snapshot';
 const PLAN_MODE_ALLOWED_TOOLS = [
   'add_directory',
   'ask_user_question',
@@ -54,16 +55,6 @@ function output(value: unknown, isError = false): DoomHeadlessToolResult {
   };
 }
 
-function latestMarkdown(entries: readonly Record<string, unknown>[]): string | undefined {
-  for (const entry of [...entries].reverse()) {
-    const candidates = [entry.text, entry.content, entry.markdown];
-    for (const candidate of candidates) {
-      if (typeof candidate === 'string' && candidate.trim().startsWith('#')) return candidate.trim();
-    }
-  }
-  return undefined;
-}
-
 export function createPlanServerSession(
   host: DoomHeadlessHostService,
 ): Omit<DoomServerSessionPlugin, 'tools'> & { tools: Parameters<DoomHeadlessHostService['registerTool']>[0][] } {
@@ -90,7 +81,51 @@ export function createPlanServerSession(
     };
   };
   const publishMode = (): void => modeOwner?.publish();
+  const restoreModel = async (): Promise<void> => {
+    const session = host.context.session;
+    const entries = await session.entries({ type: 'custom', customType: PLAN_MODEL_SNAPSHOT, limit: 1 });
+    const data = entries[0]?.data;
+    if (data === undefined || data === null) return;
+    if (
+      typeof data !== 'object' ||
+      !('thinkingLevel' in data) ||
+      !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(String(data.thinkingLevel))
+    )
+      throw new Error('The saved planning model settings are invalid.');
+    if (!session.setModelSettings) throw new Error('This session cannot restore its model settings.');
+    await session.setModelSettings(data as DoomHeadlessModelSettings);
+    await session.appendCustomEntry(PLAN_MODEL_SNAPSHOT, null);
+  };
   const selectPlan = async (enabled: boolean, nextFlavor = flavor): Promise<void> => {
+    const wasEnabled = modeSelected();
+    const session = host.context.session;
+    if (enabled && !wasEnabled) {
+      const config = loadDoomConfig(host.context.repoRoot, host.context.environment.HOME ?? os.homedir()).modes
+        ?.planning?.main;
+      if (config?.model || config?.thinking) {
+        if (!session.readModelSettings || !session.setModelSettings)
+          throw new Error('This session cannot apply planning model settings.');
+        const previous = await session.readModelSettings();
+        const settings: Partial<DoomHeadlessModelSettings> = {};
+        if (config.model) {
+          const separator = config.model.indexOf('/');
+          const provider = separator > 0 ? config.model.slice(0, separator) : previous.model?.provider;
+          if (!provider) throw new Error('The planning model needs a provider.');
+          settings.model = { provider, id: separator > 0 ? config.model.slice(separator + 1) : config.model };
+        }
+        if (config.thinking) settings.thinkingLevel = config.thinking;
+        await session.appendCustomEntry(PLAN_MODEL_SNAPSHOT, previous);
+        try {
+          await session.setModelSettings(settings);
+        } catch (error) {
+          await session.setModelSettings(previous);
+          await session.appendCustomEntry(PLAN_MODEL_SNAPSHOT, null);
+          throw error;
+        }
+      }
+    } else if (!enabled && wasEnabled) {
+      await restoreModel();
+    }
     const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== PLAN_MODE_ID);
     await host.changeSelection({
       axis: 'state',
@@ -179,11 +214,18 @@ export function createPlanServerSession(
           type: 'object',
           properties: {
             issue: { type: 'string' },
-            reproduction: { type: 'string' },
+            expectedBehavior: { type: 'string' },
+            reproductionAttempt: { type: 'string' },
+            actualBehavior: { type: 'string' },
             logs: { type: 'array', items: { type: 'string' } },
-            traces: { type: 'array', items: { type: 'string' } },
+            correlatedTraceEvidence: { type: 'array', items: { type: 'string' } },
             processOutput: { type: 'array', items: { type: 'string' } },
-            browserEvidence: { type: 'array', items: { type: 'string' } },
+            browserConsoleEvidence: { type: 'array', items: { type: 'string' } },
+            correlationIds: { type: 'array', items: { type: 'string' } },
+            timestamps: { type: 'array', items: { type: 'string' } },
+            verifiedFacts: { type: 'array', items: { type: 'string' } },
+            hypotheses: { type: 'array', items: { type: 'string' } },
+            unavailableEvidence: { type: 'array', items: { type: 'string' } },
           },
           required: ['issue'],
           additionalProperties: false,
@@ -228,10 +270,12 @@ export function createPlanServerSession(
         description: 'Save the implementation plan already presented in the session.',
         parameters: { type: 'object', properties: {}, additionalProperties: false },
         executionMode: 'serial',
-        async execute(_toolCallId, _parameters, signal) {
+        async execute(toolCallId, _parameters, signal) {
           try {
             signal?.throwIfAborted();
-            let content = latestMarkdown(await host.context.session.entries());
+            // Same extraction the Pi path uses: the text this very tool call was
+            // introduced by, not "the last assistant message that looks like a heading".
+            let content = visiblePlanForToolCall(await host.context.session.entries(), toolCallId);
             if (content === undefined) {
               const requested = await host.context.client.request(
                 {
@@ -309,6 +353,13 @@ export function createPlanServerSession(
             systemPrompt:
               `${prompt}\n\n[PLAN MODE ACTIVE]\nRemain read-only and save the complete plan before requesting approval.`.trim(),
           };
+        },
+      },
+      {
+        event: 'session_start',
+        async handle() {
+          // Restore a saved model override if Plan was not restored with the session.
+          if (!modeSelected()) await restoreModel();
         },
       },
     ],

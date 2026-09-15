@@ -146,8 +146,12 @@ export function DialogOverlay() {
             data-testid="dialog-hints"
             className="w-full text-xs text-doom-faint sm:flex sm:w-auto sm:items-center sm:gap-1.5"
           >
-            {dialog.method === 'select' ? optionListHint(dialog.options.length) : 'enter confirm'} · <Kbd>esc</Kbd>{' '}
-            cancels and tells the agent
+            {dialog.method === 'select'
+              ? optionListHint(dialog.options.length)
+              : dialog.method === 'editor'
+                ? 'submit saves'
+                : 'enter confirm'}{' '}
+            · <Kbd>esc</Kbd> cancels and tells the agent
           </span>
           <div className="ml-auto flex items-center gap-2">
             <Button variant="outline" size="sm" data-testid="dialog-cancel" onClick={() => cancelDialog(dialog.id)}>

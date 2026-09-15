@@ -104,4 +104,65 @@ export const RunWorktreeParams = Type.Union([
   MessagesParams,
 ]);
 
+/** The actions that accept `field`, so the declared docs cannot drift from the validator. */
+function acceptingActions(field: string): string {
+  return Object.values(WORKTREE_ACTIONS)
+    .filter((action) => WORKTREE_ACTION_FIELDS[action].includes(field))
+    .join(', ');
+}
+
+/**
+ * The schema declared to the model.
+ *
+ * A flat object rather than `RunWorktreeParams` itself. A top-level union is
+ * `{anyOf:[...]}` with no `properties`, and Pi's Anthropic Messages adapter
+ * rebuilds tool input as `{type:'object', properties: schema.properties ?? {},
+ * required: schema.required ?? []}`, so the union arrived at the model as an
+ * empty object while the host went on validating calls against it. Nothing here
+ * relaxes what is accepted: `validateParams` still rejects an unknown action, a
+ * field the action does not take, and a missing required one.
+ */
+export const RunWorktreeToolSchema = Type.Object(
+  {
+    action: Type.String({
+      enum: Object.values(WORKTREE_ACTIONS),
+      description: 'The operation to run. Every other field is accepted only by the actions its description names.',
+    }),
+    branch: Type.Optional(
+      Type.String({ minLength: 1, description: `New branch to create. Actions: ${acceptingActions('branch')}.` }),
+    ),
+    baseRef: Type.Optional(
+      Type.String({
+        minLength: 1,
+        description: `Base ref, defaulting to the current branch. Actions: ${acceptingActions('baseRef')}.`,
+      }),
+    ),
+    task: Type.Optional(
+      Type.String({
+        minLength: 1,
+        description: `First message for the new session. Actions: ${acceptingActions('task')}.`,
+      }),
+    ),
+    name: Type.Optional(
+      Type.String({ minLength: 1, description: `Rail label for the worktree. Actions: ${acceptingActions('name')}.` }),
+    ),
+    id: Type.Optional(Type.String({ minLength: 1, description: `Worktree id. Actions: ${acceptingActions('id')}.` })),
+    force: Type.Optional(
+      Type.Boolean({ description: `Close even when the tree is dirty. Actions: ${acceptingActions('force')}.` }),
+    ),
+    message: Type.Optional(
+      Type.String({
+        minLength: 1,
+        description: `Merge commit message, or the text to send. Actions: ${acceptingActions('message')}.`,
+      }),
+    ),
+    dryRun: Type.Optional(
+      Type.Boolean({
+        description: `Report the plan without destroying anything. Actions: ${acceptingActions('dryRun')}.`,
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
 export type RunWorktreeToolParams = Static<typeof RunWorktreeParams>;

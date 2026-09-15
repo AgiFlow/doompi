@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,12 +30,15 @@ describe('remote file media preview', () => {
     vi.mocked(sealedTransport.fetch).mockResolvedValue(new Response('media', { headers: { 'content-type': type } }));
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:media');
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-    SessionMediaPreview({ src: '/api/sessions/s/file?path=clip', path: 'clip' });
+    SessionMediaPreview({ src: '/api/workspaces/test-workspace/sessions/s/file?path=clip', path: 'clip' });
     await vi.waitFor(() =>
-      expect(hooks.set).toHaveBeenCalledWith({ source: '/api/sessions/s/file?path=clip', url: 'blob:media' }),
+      expect(hooks.set).toHaveBeenCalledWith({
+        source: '/api/workspaces/test-workspace/sessions/s/file?path=clip',
+        url: 'blob:media',
+      }),
     );
     expect(sealedTransport.fetch).toHaveBeenCalledWith(
-      '/api/sessions/s/file?path=clip',
+      '/api/workspaces/test-workspace/sessions/s/file?path=clip',
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect((create.mock.calls[0]![0] as Blob).type).toBe(type);

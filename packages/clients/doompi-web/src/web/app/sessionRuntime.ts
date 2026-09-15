@@ -22,6 +22,7 @@ import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTe
 import { dispatchChannelFrame } from '../lib/pluginRegistry';
 import { focusSessionWebPlugins, removeSessionWebPluginRuntime } from '../lib/pluginRuntime';
 import { createProtocolHubSocket } from '../lib/protocolHubSocket';
+import { hasSessionProtocol } from '../lib/sessionProtocolCommands';
 import { bindTransport, notifyHubConnected, releaseTransport, sendHubFrame } from '../lib/transport';
 import { applyCaptureFrame, disconnectCaptures, pendingCaptureSessions } from '../stores/captureStore';
 import { dropComposerState, restoreComposerDrafts, saveComposerDrafts } from '../stores/composerStore';
@@ -155,12 +156,13 @@ export function startSessionRuntime(): () => void {
       claimDialogMenu(typeof frame.id === 'string' ? frame.id : '');
     if (frame.type === 'entry_appended') {
       const entry = isRecord(frame.entry) ? frame.entry : undefined;
-      if (entry?.type === 'custom' && entry.customType === RESOURCE_CATALOG_ENTRY_TYPE) refreshSessionFacts(sessionId);
+      if (entry?.type === 'custom' && entry.customType === RESOURCE_CATALOG_ENTRY_TYPE && hasSessionProtocol(sessionId))
+        refreshSessionFacts(sessionId);
     }
-    if (frame.type === 'message_end') refreshSessionStats(sessionId);
+    if (frame.type === 'message_end' && hasSessionProtocol(sessionId)) refreshSessionStats(sessionId);
     if (frame.type === 'agent_settled') {
       clearPendingMenu();
-      refreshSessionFacts(sessionId);
+      if (hasSessionProtocol(sessionId)) refreshSessionFacts(sessionId);
     }
   };
   const protocol = startProtocolRuntime(window.location, applyPresentationFrame);
@@ -293,7 +295,8 @@ export function startSessionRuntime(): () => void {
             frames.length,
             typeof frame.dropped === 'number' && Number.isFinite(frame.dropped) ? frame.dropped : 0,
           );
-          if (sessionId === sessionsStore.state.activeId) refreshSessionFacts(sessionId);
+          if (sessionId === sessionsStore.state.activeId && hasSessionProtocol(sessionId))
+            refreshSessionFacts(sessionId);
           return;
         }
         case SESSION_FRAME_TYPE: {

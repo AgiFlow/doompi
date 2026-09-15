@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,7 +20,7 @@ let app: ReturnType<typeof createFileEditsApi>;
 
 /** The URL builders carry the mount prefix, which the host strips before the app sees it. */
 function mounted(url: string): string {
-  return `http://host${url.replace(/^\/api\/sessions\/[^/]+\/plugin\/file-edits/, '')}`;
+  return `http://host${url.replace(/^\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/plugins\/file-edits/, '')}`;
 }
 
 beforeEach(() => {

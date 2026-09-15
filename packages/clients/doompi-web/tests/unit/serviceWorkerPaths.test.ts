@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { describe, expect, it } from 'vitest';
 
 import { trustedNetworkPath } from '../../src/pwa/networkPaths';
@@ -16,7 +19,7 @@ describe('trustedNetworkPath', () => {
       '/manifest.webmanifest',
       '/pwa/pwa.js',
       '/pwa/icon-192.png',
-      '/api/sessions',
+      '/api/workspaces/test-workspace/sessions',
       '/bundle-assets/main.js',
     ]) {
       expect(trustedNetworkPath(pathname)).toBe(true);

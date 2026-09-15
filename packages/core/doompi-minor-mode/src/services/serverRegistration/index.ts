@@ -31,6 +31,7 @@ export function serverMinorModes(
         if ('definition' in mode) {
           child.effect(() => () => mode.detach());
           mode.attach(handle);
+          child.effect(() => agent.subscribeSelection(() => mode.publish()));
         }
       }
     });

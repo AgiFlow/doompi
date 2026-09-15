@@ -27,6 +27,7 @@ import {
   type Model,
   type Models,
   type MutableModels,
+  type Provider,
   type Usage,
 } from '@earendil-works/pi-ai';
 
@@ -311,13 +312,33 @@ async function openStorage<TContext extends object | undefined>(
   }
 }
 
+/**
+ * Merge caller-supplied providers into the registry the harness will use.
+ * A pi-ai MutableModels exposes setProvider; a Pi ModelRuntime exposes
+ * registerNativeProvider instead, and dropping providers for the latter would
+ * silently hide every extension-registered provider from the child harness.
+ */
+function mergeProviders(models: AnyModels, providers: readonly Provider[]): void {
+  const mutable = models as Partial<MutableModels> & {
+    registerNativeProvider?: (provider: Provider) => void;
+  };
+  const register =
+    typeof mutable.setProvider === 'function'
+      ? mutable.setProvider.bind(models)
+      : typeof mutable.registerNativeProvider === 'function'
+        ? mutable.registerNativeProvider.bind(models)
+        : undefined;
+  if (register === undefined)
+    throw new Error('Direct harness cannot register providers on the supplied Models registry');
+  for (const provider of providers) register(provider);
+}
+
 function configureModels<TContext extends object | undefined>(
   options: DirectHarnessRuntimeOptions<TContext>,
 ): AnyModels {
   if (options.models !== undefined) {
-    if (options.providers !== undefined && 'setProvider' in options.models) {
-      for (const provider of options.providers) options.models.setProvider(provider);
-    }
+    if (options.providers !== undefined && options.providers.length > 0)
+      mergeProviders(options.models, options.providers);
     return options.models;
   }
   if (options.providers === undefined || options.providers.length === 0) {

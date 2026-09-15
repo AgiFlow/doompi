@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis';
+import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Static, TSchema } from 'typebox';
 
 import type { DoomNotificationRequest } from './notification';
@@ -56,7 +57,14 @@ export interface DoomHeadlessClient {
   appendComposerText?(text: string): void;
 }
 
+export interface DoomHeadlessModelSettings {
+  model?: { provider: string; id: string };
+  thinkingLevel: ThinkingLevel;
+}
+
 export interface DoomHeadlessSession {
+  readModelSettings?(): Promise<DoomHeadlessModelSettings>;
+  setModelSettings?(settings: Partial<DoomHeadlessModelSettings>): Promise<void>;
   /** Query durable history on demand; hosts do not retain the entire transcript. */
   entries(query?: {
     type?: 'custom' | 'message';

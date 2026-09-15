@@ -75,7 +75,7 @@ const report: MetricsReport = {
 const liveFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-  if (!url.includes(`/api/plugin/${LOG_API_BASE_PATH}/metrics`)) return liveFetch(input, init);
+  if (!url.includes(`/api/plugins/${LOG_API_BASE_PATH}/metrics`)) return liveFetch(input, init);
   return Promise.resolve(
     new Response(JSON.stringify(report), { status: 200, headers: { 'content-type': 'application/json' } }),
   );

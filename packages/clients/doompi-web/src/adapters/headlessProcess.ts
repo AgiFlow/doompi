@@ -14,6 +14,8 @@ const READY_TIMEOUT_MS = 120_000;
 
 /** A headless process this presentation server started and therefore shuts down. */
 export interface HeadlessProcess {
+  /** Endpoint selected for this child, which may differ when the default port is occupied. */
+  url: string;
   /** Credential the presentation proxy forwards to the child. */
   token: string;
   close: () => Promise<void>;
@@ -69,6 +71,17 @@ async function waitForExit(child: ChildProcess): Promise<void> {
   await new Promise<void>((resolve) => child.once('exit', () => resolve()));
 }
 
+async function availablePort(host: string): Promise<number> {
+  const probe = net.createServer();
+  await new Promise<void>((resolve, reject) => {
+    probe.once('error', reject);
+    probe.listen(0, host, resolve);
+  });
+  const address = probe.address() as net.AddressInfo;
+  await new Promise<void>((resolve, reject) => probe.close((error) => (error ? reject(error) : resolve())));
+  return address.port;
+}
+
 async function waitUntilReady(child: ChildProcess, host: string, port: number): Promise<boolean> {
   const deadline = Date.now() + READY_TIMEOUT_MS;
   for (;;) {
@@ -83,15 +96,19 @@ async function waitUntilReady(child: ChildProcess, host: string, port: number): 
  * Starts the client-neutral process the browser shell needs, so `doompi-web`
  * is a single command.
  *
- * An endpoint that already answers belongs to someone else: the presentation
- * server proxies to it untouched and starts nothing.
+ * An occupied default endpoint belongs to someone else. Start an authenticated
+ * child on an available port instead of attaching without its credential.
  */
 export async function startHeadless(options: HeadlessProcessOptions): Promise<HeadlessProcess | undefined> {
-  const { host, port } = headlessEndpoint(options.url);
+  const { host } = headlessEndpoint(options.url);
+  let { port } = headlessEndpoint(options.url);
+  const endpoint = new URL(options.url);
   if (await listening(host, port)) {
-    options.onNotice(`using the headless server already listening on ${options.url}`);
-    return undefined;
+    port = await availablePort(host);
+    endpoint.port = String(port);
+    options.onNotice(`${options.url} is occupied; starting a separate headless server on ${endpoint.origin}`);
   }
+  const url = endpoint.origin;
 
   const entry = resolveHeadlessEntry(options.environment, import.meta.url);
   if (entry === undefined) {
@@ -112,13 +129,14 @@ export async function startHeadless(options: HeadlessProcessOptions): Promise<He
     child.kill('SIGTERM');
     await waitForExit(child);
     discard();
-    options.onNotice(`the headless server did not start on ${options.url}`);
+    options.onNotice(`the headless server did not start on ${url}`);
     return undefined;
   }
 
-  options.onNotice(`headless server on ${options.url}`);
+  options.onNotice(`headless server on ${url}`);
   let closePromise: Promise<void> | undefined;
   return {
+    url,
     token,
     close: () =>
       (closePromise ??= (async () => {

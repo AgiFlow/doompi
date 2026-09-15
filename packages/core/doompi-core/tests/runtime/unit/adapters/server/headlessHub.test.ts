@@ -271,6 +271,95 @@ describe('createHeadlessHub', () => {
     await hub.close();
   });
 
+  it('hands a session to the narrowest channel mount and back when it is released', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn() } as never });
+    const lifecycle: string[] = [];
+    const channel = (owner: string): DoomHubChannel => ({
+      frameType: 'shared',
+      start: (channelHost) => ({
+        payloadFor: () => undefined,
+        sessionAdded: (scope) => lifecycle.push(`${owner}:added:${scope.sessionId}`),
+        sessionRemoved: (sessionId) => lifecycle.push(`${owner}:removed:${sessionId}`),
+        close: () => lifecycle.push(`${owner}:closed:${channelHost.sessions().length}`),
+      }),
+    });
+
+    hub.registerChannel(channel('global'));
+    hub.register({ id: 'one', workspaceId: 'ws', name: 'One', cwd: '/ws', createdAt: 'now', host: host().host });
+    expect(lifecycle).toEqual(['global:added:one']);
+
+    const releaseWorkspace = hub.registerChannel(channel('workspace'), { scope: 'workspace', workspaceId: 'ws' });
+    expect(lifecycle).toEqual(['global:added:one', 'global:removed:one', 'workspace:added:one']);
+
+    releaseWorkspace();
+    expect(lifecycle.slice(3)).toEqual(['workspace:closed:1', 'global:added:one']);
+    await hub.close();
+  });
+
+  it('keeps a shadowed channel out of the session it no longer serves', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn() } as never });
+    hub.register({ id: 'one', workspaceId: 'ws', name: 'One', cwd: '/ws', createdAt: 'now', host: host().host });
+    const seen = new Map<string, () => readonly { sessionId: string }[]>();
+    const channel = (owner: string): DoomHubChannel => ({
+      frameType: 'shared',
+      start: (channelHost) => {
+        seen.set(owner, () => channelHost.sessions());
+        return { payloadFor: () => ({ owner }), close: vi.fn() };
+      },
+    });
+
+    hub.registerChannel(channel('global'));
+    hub.registerChannel(channel('workspace'), { scope: 'workspace', workspaceId: 'ws' });
+
+    expect(
+      seen
+        .get('workspace')?.()
+        .map((scope) => scope.sessionId),
+    ).toEqual(['one']);
+    expect(seen.get('global')?.()).toEqual([]);
+    await hub.close();
+  });
+
+  it('authenticates a channel-owned session API call as the hub', async () => {
+    const requests: Array<Record<string, string>> = [];
+    const hub = createHeadlessHub({
+      manager: { closeSession: vi.fn() } as never,
+      hubToken: () => 'hub-token',
+      requestSessionApi: (_scope, request) => {
+        requests.push(Object.fromEntries(new Headers(request.headers).entries()));
+        return Promise.resolve(Response.json({ ok: true }));
+      },
+    });
+    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: host().host });
+    let call: ((headers?: Record<string, string>) => Promise<Response>) | undefined;
+    hub.registerChannel({
+      frameType: 'calls',
+      start: (channelHost) => {
+        call = (headers) =>
+          channelHost.requestSessionApi(
+            { sessionId: 'one', cwd: '/repo' },
+            { basePath: 'runner', path: '/hub/state', method: 'GET', ...(headers === undefined ? {} : { headers }) },
+          );
+        return { payloadFor: () => undefined, close: vi.fn() };
+      },
+    });
+
+    await call?.();
+    expect(requests[0]?.authorization).toBe('Bearer hub-token');
+
+    await call?.({ authorization: 'Bearer caller-token' });
+    expect(requests[1]?.authorization).toBe('Bearer caller-token');
+
+    // A browser call reaches the same session API through requestApi and keeps its own headers.
+    await hub.requestApi(
+      { scope: 'session', sessionId: 'one' },
+      'runner',
+      new Request('http://doompi.local/hub/state'),
+    );
+    expect(requests[2]?.authorization).toBeUndefined();
+    await hub.close();
+  });
+
   it('registers isolated direct runtimes without a command-frame channel', () => {
     const first = host();
     const second = host();

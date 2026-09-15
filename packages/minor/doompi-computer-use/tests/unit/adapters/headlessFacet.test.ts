@@ -95,6 +95,7 @@ async function fixture(selectionModes: string[] = [], environment: Readonly<Reco
       if (selected) minorModes = selected;
     }),
     assertActive: vi.fn(),
+    subscribeSelection: vi.fn(() => () => undefined),
     registerToolRestriction: (restriction: unknown) => {
       restrictions.push(restriction);
       return registrations;

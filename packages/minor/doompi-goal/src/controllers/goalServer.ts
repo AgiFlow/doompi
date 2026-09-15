@@ -42,7 +42,6 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
   tools: readonly DoomHeadlessTool[];
   commands: readonly DoomHeadlessCommand[];
 } {
-  const restrictionListeners = new Set<() => void>();
   const readGoal = async () =>
     stateFromEntries(
       (
@@ -85,8 +84,8 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
     };
   };
   const publishMode = (): void => modeOwner?.publish();
-  const updateToolRestriction = (): void => {
-    for (const listener of restrictionListeners) listener();
+  const updateToolRestriction = async (): Promise<void> => {
+    await host.changeSelection({ axis: 'state', key: 'goal-tools', values: goalToolNamesForState(goal) });
   };
   const persist = async (): Promise<void> => {
     await host.context.session.appendCustomEntry('goal-state', { goal: goal ?? null });
@@ -94,7 +93,7 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
   const selectMode = async (enabled: boolean): Promise<void> => {
     const modes = (host.context.selection.state?.['minor-mode'] ?? []).filter((mode) => mode !== 'goal');
     await host.changeSelection({ axis: 'state', key: 'minor-mode', values: enabled ? [...modes, 'goal'] : modes });
-    updateToolRestriction();
+    await updateToolRestriction();
     publishMode();
   };
   const requireGoal = (): ActiveGoal => {
@@ -169,7 +168,10 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
     ],
     tools: [
       {
-        when: { state: { 'minor-mode': 'goal' }, attribution: { kind: 'minor', mode: 'goal' } },
+        when: {
+          state: { 'minor-mode': 'goal', 'goal-tools': COMPLETE_TOOL },
+          attribution: { kind: 'minor', mode: 'goal' },
+        },
         name: COMPLETE_TOOL,
         label: 'Goal complete',
         description: 'Mark the active goal complete after verifying every requirement.',
@@ -200,7 +202,10 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
         },
       },
       {
-        when: { state: { 'minor-mode': 'goal' }, attribution: { kind: 'minor', mode: 'goal' } },
+        when: {
+          state: { 'minor-mode': 'goal', 'goal-tools': BLOCKED_TOOL },
+          attribution: { kind: 'minor', mode: 'goal' },
+        },
         name: BLOCKED_TOOL,
         label: 'Goal blocked',
         description: 'Mark the active goal blocked after the same external blocker recurs with evidence.',
@@ -226,7 +231,7 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
             goal = transitionGoal(requireGoal(), 'blocked');
             await persist();
             await host.context.session.abort();
-            updateToolRestriction();
+            await updateToolRestriction();
             publishMode();
             return output({ blocked: true, goal_id: input.goal_id, reason: input.reason, evidence: input.evidence });
           } catch (error) {
@@ -263,7 +268,7 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
             const current = requireGoal();
             goal = transitionGoal(current, parsed.kind === 'pause' ? 'paused' : 'active');
             await persist();
-            updateToolRestriction();
+            await updateToolRestriction();
             publishMode();
             await execution.client.notify({ body: `Goal ${parsed.kind}d.`, level: 'info' });
             return;
@@ -278,7 +283,7 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
         event: 'session_start',
         handle: async () => {
           goal = await readGoal();
-          updateToolRestriction();
+          await updateToolRestriction();
           publishMode();
           return undefined;
         },
@@ -295,17 +300,7 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
         handle(event) {
           if (!goal || goal.status !== 'active') return undefined;
           const prompt = typeof event.systemPrompt === 'string' ? event.systemPrompt : '';
-          return { systemPrompt: `${prompt}\n\n[GOAL ACTIVE]\n${goal.text}`.trim() };
-        },
-      },
-    ],
-    toolRestrictions: [
-      {
-        source: '@agimon-ai/doompi-goal',
-        restrict: () => ({ when: { state: { 'minor-mode': 'goal' } }, allowedTools: goalToolNamesForState(goal) }),
-        subscribe(listener) {
-          restrictionListeners.add(listener);
-          return () => restrictionListeners.delete(listener);
+          return { systemPrompt: `${prompt}\n\n[GOAL ACTIVE]\nGoal ID: ${goal.id}\n${goalSummary(goal)}`.trim() };
         },
       },
     ],

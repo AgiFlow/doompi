@@ -5,5 +5,6 @@ export {
   SUBAGENT_ACTION_FIELDS,
   SUBAGENT_ACTIONS,
   SubagentParams,
+  SubagentToolSchema,
   subagentActionAcceptsField,
 } from '../schemas/subagentTool';

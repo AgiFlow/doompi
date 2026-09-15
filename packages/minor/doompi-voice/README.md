@@ -17,7 +17,7 @@ Voice owns these authenticated server endpoints:
 
 | Mount                                   | Endpoint                        | Purpose                                                  |
 | --------------------------------------- | ------------------------------- | -------------------------------------------------------- |
-| `/api/global/plugin/voice`              | `GET /readiness`                | Check configuration and local transcription dependencies |
+| `/api/plugins/voice`                    | `GET /readiness`                | Check configuration and local transcription dependencies |
 | same                                    | `GET /clients/:clientId`        | Read browser microphone preferences                      |
 | same                                    | `PUT /clients/:clientId/inputs` | Register `{inputs: [{deviceId, groupId, label}]}`        |
 | same                                    | `PUT /clients/:clientId`        | Save `{deviceId}`; null clears selection                 |

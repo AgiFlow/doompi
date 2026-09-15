@@ -1,3 +1,5 @@
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
+
 import type { AuthorModeActivation } from './author';
 
 export const API_BASE_PATH = 'author';
@@ -16,7 +18,7 @@ export const AUTHOR_BRIDGE_ROUTES = {
 
 export function authorStateUrl(sessionId: string): string {
   const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${API_BASE_PATH}${AUTHOR_STATE_PATH}?${search.toString()}`;
+  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${AUTHOR_STATE_PATH}?${search.toString()}`;
 }
 
 export interface AuthorSessionView {

@@ -84,7 +84,7 @@ describe('doom voice package boundary', () => {
     expect(manifest.publishConfig?.access).toBe('public');
     expect(manifest.peerDependencies?.[piPackage]).toBe('0.85.1');
     expect(manifest.devDependencies?.[piPackage]).toBe('0.85.1');
-    expect(manifest.dependencies?.['sherpa-onnx-node']).toBe('1.13.7');
+    expect(manifest.dependencies?.['sherpa-onnx-node']).toBe('1.13.8');
   });
 
   it('declares every browser media channel exported by its hub entry', async () => {
@@ -226,7 +226,7 @@ describe('doom voice package boundary', () => {
       },
     });
     try {
-      const response = await mounted.fetch(`/api/plugin/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=s1`, {
+      const response = await mounted.fetch(`/api/plugins/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=s1`, {
         method: 'POST',
         headers: {
           'content-type': 'audio/ogg',
@@ -239,7 +239,7 @@ describe('doom voice package boundary', () => {
         code: 'unsupported_media_type',
         error: 'Audio must be WebM/Opus or MP4/AAC.',
       });
-      expect((await mounted.fetch('/api/plugin/elsewhere/manual/transcribe')).status).toBe(404);
+      expect((await mounted.fetch('/api/plugins/elsewhere/manual/transcribe')).status).toBe(404);
     } finally {
       mounted.close();
     }

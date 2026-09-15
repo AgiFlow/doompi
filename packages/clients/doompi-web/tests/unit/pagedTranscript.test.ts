@@ -119,6 +119,67 @@ it('rereads the authoritative page when an assistant message commits', async () 
   }
 });
 
+it('keeps session facts when a message reload finishes after the state response', async () => {
+  const { transcript, read } = fixture();
+  const originalRead = read.getMockImplementation()!;
+  let finish!: (page: TranscriptPage) => void;
+  try {
+    await transcript.initialize();
+    read.mockImplementationOnce(
+      () =>
+        new Promise<TranscriptPage>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    transcript.publish({
+      snapshot: { phase: 'idle' },
+      progress: null,
+      presentation: {
+        revision: 1,
+        events: [{ sequence: 1, frame: { type: 'message_end', message: { role: 'assistant' } } }],
+        projections: [],
+        dropped: 0,
+      },
+    } as unknown as SessionServiceState);
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+    applySessionFrame(id, {
+      type: 'response',
+      command: 'get_state',
+      success: true,
+      data: {
+        model: { provider: 'openai-codex', id: 'chosen-model' },
+        thinkingLevel: 'high',
+        sessionId: id,
+        isStreaming: false,
+        messageCount: 2,
+      },
+    });
+    applySessionFrame(id, {
+      type: 'response',
+      command: 'get_available_models',
+      success: true,
+      data: { models: [{ provider: 'openai-codex', id: 'chosen-model' }] },
+    });
+    applySessionFrame(id, {
+      type: 'response',
+      command: 'get_available_thinking_levels',
+      success: true,
+      data: { levels: ['off', 'high'] },
+    });
+    const before = sessionStoreFor(id).state;
+    finish(await originalRead({}));
+    await vi.waitFor(() => expect(sessionStoreFor(id).state).not.toBe(before));
+    expect(sessionStoreFor(id).state.agent).toEqual(before.agent);
+    expect(sessionStoreFor(id).state.models).toEqual(before.models);
+    expect(sessionStoreFor(id).state.thinkingLevels).toEqual(before.thinkingLevels);
+    expect(requestOlderHistory(id)).toBe(true);
+    await vi.waitFor(() => expect(sessionStoreFor(id).state.entries[0]?.id).toBe('e800'));
+    expect(sessionStoreFor(id).state.agent).toEqual(before.agent);
+  } finally {
+    transcript.dispose();
+  }
+});
+
 it('rolls a full live page forward, keeps profile context, and ignores duplicate commits', async () => {
   const { transcript, read, entries } = fixture();
   const originalRead = read.getMockImplementation()!;
@@ -189,8 +250,8 @@ it('replays projections, context, and live drafts only at the latest page', asyn
     } as unknown as SessionServiceState);
     await transcript.initialize();
     expect(frames.map((frame) => frame.type)).toEqual([
-      'status',
       'entry_appended',
+      'status',
       'message_update',
       'message_update',
       'tool_execution_start',

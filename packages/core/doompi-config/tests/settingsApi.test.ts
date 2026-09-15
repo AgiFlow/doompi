@@ -63,7 +63,7 @@ describe('configuration mount ownership', () => {
   it('reads home independently and overlays repository values only inside its workspace', async () => {
     const global = mount('global');
     const workspace = mount('workspace');
-    const route = '/config?key=modes.planning.main.thinking';
+    const route = '/?key=modes.planning.main.thinking';
     expect(await (await global.request(route)).json()).toMatchObject({
       repoRoot: '',
       values: { 'modes.planning.main.thinking': { value: 'high', origin: 'global' } },
@@ -81,7 +81,7 @@ describe('configuration mount ownership', () => {
 
   it('rejects cross-mount writes and serializes competing writes against their read hash', async () => {
     const workspace = mount('workspace');
-    const before = (await (await workspace.request('/config')).json()) as SettingsConfigView;
+    const before = (await (await workspace.request('/')).json()) as SettingsConfigView;
     const body = {
       scope: 'repository',
       repoRoot: repo,
@@ -104,7 +104,7 @@ describe('configuration mount ownership', () => {
     expect(
       (await workspace.request('/value', { ...body, value: null, expectedHash: next.hashes.repository })).status,
     ).toBe(200);
-    expect(await (await workspace.request('/config?key=modes.planning.main.thinking')).json()).toMatchObject({
+    expect(await (await workspace.request('/?key=modes.planning.main.thinking')).json()).toMatchObject({
       values: { 'modes.planning.main.thinking': { value: 'high', origin: 'global' } },
     });
   });
@@ -125,7 +125,7 @@ describe('configuration mount ownership', () => {
       400,
     );
     global.handler.close();
-    expect((await global.request('/config')).status).toBe(503);
+    expect((await global.request('/')).status).toBe(503);
   });
   it('validates atomic workspace selection writes before persisting any axis', async () => {
     const workspace = mount('workspace');
@@ -151,7 +151,7 @@ describe('configuration mount ownership', () => {
 
 it('atomically configures Voice with numeric values and preserves scope restrictions', async () => {
   const global = mount('global');
-  const before = (await (await global.request('/config')).json()) as SettingsConfigView;
+  const before = (await (await global.request('/')).json()) as SettingsConfigView;
   const keyPath = ['voice', 'autoCapture', 'utteranceIdleMs'];
   const edits = [
     { keyPath: ['voice', 'autoCapture', 'model'], value: 'provider/model' },
@@ -179,7 +179,7 @@ it('atomically configures Voice with numeric values and preserves scope restrict
   ).toBe(422);
   expect(fs.readFileSync(file, 'utf8')).toBe(saved);
   const workspace = mount('workspace');
-  const workspaceBefore = (await (await workspace.request('/config')).json()) as SettingsConfigView;
+  const workspaceBefore = (await (await workspace.request('/')).json()) as SettingsConfigView;
   expect(
     (
       await workspace.request('/value', {

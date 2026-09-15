@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -18,14 +21,17 @@ afterEach(() => {
 
 describe('createSession', () => {
   it('posts the request and returns the new session id', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(respond(201, { sessionId: 'fresh' }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(respond(201, { workspace: { id: 'test-workspace', root: '/workspace/x' } }))
+      .mockResolvedValueOnce(respond(201, { sessionId: 'fresh' }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(createSession({ cwd: '/workspace/x', name: 'x' })).resolves.toEqual({ sessionId: 'fresh' });
-    expect(fetchMock).toHaveBeenCalledWith('/api/sessions', {
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd: '/workspace/x', name: 'x' }),
+      body: JSON.stringify({ name: 'x' }),
     });
   });
 
@@ -51,7 +57,7 @@ describe('restartSession', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(restartSession('live')).resolves.toEqual({ ok: true });
-    expect(fetchMock).toHaveBeenCalledWith('/api/sessions/live/restart', { method: 'POST' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions/live/restart', { method: 'POST' });
   });
 
   it('escapes an id that would otherwise change the path', async () => {
@@ -59,7 +65,9 @@ describe('restartSession', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await restartSession('a/../b');
-    expect(fetchMock).toHaveBeenCalledWith('/api/sessions/a%2F..%2Fb/restart', { method: 'POST' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions/a%2F..%2Fb/restart', {
+      method: 'POST',
+    });
   });
 
   it('relays the hub error message', async () => {
@@ -101,7 +109,7 @@ describe('Pi session history', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(listSessionHistory('live')).resolves.toEqual({ sessions: [thread, unnamed] });
-    expect(fetchMock).toHaveBeenCalledWith('/api/sessions/live/history', undefined);
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions/live/history', undefined);
   });
 
   it('reports history errors and an unreachable hub', async () => {
@@ -119,7 +127,7 @@ describe('Pi session history', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(resumeSession('live', 'history-id')).resolves.toEqual({ sessionId: 'history-id' });
-    expect(fetchMock).toHaveBeenCalledWith('/api/sessions/live/resume', {
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions/live/resume', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ targetSessionId: 'history-id' }),

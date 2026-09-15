@@ -9,3 +9,9 @@ export const STATE_PHASE = {
   checkpointReady: 'checkpoint_ready',
   compacting: 'compacting',
 } as const;
+
+/**
+ * Above this, the context hook is worth a telemetry event. Below it the hook is
+ * noise against a round trip measured in seconds, and it runs on every request.
+ */
+export const SLOW_CONTEXT_HOOK_MS = 25;

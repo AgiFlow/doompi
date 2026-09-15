@@ -202,14 +202,14 @@ describe('computer-use request broker', () => {
           artifactId: 'artifact-1',
           status: 'ready',
           downloadUrl: 'file:///private/recording.mov',
-          previewUrl: '/api/plugin/computer-use/artifacts/artifact-1',
+          previewUrl: '/api/plugins/computer-use/artifacts/artifact-1',
           actionCount: 2,
         },
       }),
     );
     expect(broker.state()).toMatchObject({
       phase: 'inactive',
-      artifact: { artifactId: 'artifact-1', previewUrl: '/api/plugin/computer-use/artifacts/artifact-1' },
+      artifact: { artifactId: 'artifact-1', previewUrl: '/api/plugins/computer-use/artifacts/artifact-1' },
     });
     expect(JSON.stringify(broker.state())).not.toContain('file:///');
 

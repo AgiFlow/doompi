@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -135,7 +138,7 @@ describe('catalog HTTP loading', () => {
     const cancel = loadCatalog('session/a');
     expect(catalog.store.state['session/a']?.loading).toBe(true);
     await vi.waitFor(() => expect(catalog.store.state['session/a']?.loading).toBe(false));
-    expect(fetch).toHaveBeenCalledWith('/api/sessions/session%2Fa/plugin/team/catalog', {
+    expect(fetch).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions/session%2Fa/plugins/team/catalog', {
       signal: expect.any(AbortSignal),
       cache: 'no-store',
     });

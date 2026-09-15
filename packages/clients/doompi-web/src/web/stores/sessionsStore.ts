@@ -1,3 +1,4 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { Store } from '@tanstack/store';
 
@@ -30,6 +31,7 @@ export interface SessionsState {
 const initialState: SessionsState = { order: [], byId: {}, activeId: null, transferringToId: null, hydrated: false };
 
 export const sessionsStore = new Store<SessionsState>(initialState);
+bindSessionApiWorkspace((sessionId) => sessionsStore.state.byId[sessionId]?.summary.workspaceId);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

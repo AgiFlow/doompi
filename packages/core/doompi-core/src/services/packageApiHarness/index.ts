@@ -12,7 +12,7 @@ import {
  *
  * A package tests its routes by calling its Hono app directly, which proves the
  * routes but not the mount: the host serves them under
- * `/api/plugin/<basePath>` and strips that prefix before the app sees the
+ * `/api/plugins/<basePath>` and strips that prefix before the app sees the
  * request. A package whose routes are written absolute passes its own suite and
  * answers nothing in a running cockpit.
  *
@@ -37,7 +37,7 @@ export interface MountedPackageApi {
    * Fetches one path.
    *
    * The path is host-absolute, so it carries the mount the client would send:
-   * `/api/plugin/workflow/runs/repo/blog-4`. A path outside the mount is a 404
+   * `/api/plugins/workflow/runs/repo/blog-4`. A path outside the mount is a 404
    * from this, exactly as it is from the host.
    */
   fetch(path: string, init?: RequestInit): Promise<Response>;

@@ -15,6 +15,8 @@ import { serveWeb } from '../../src/adapters/httpServer';
 import { SYNCED_DIST_ENV, SYNCED_HOME_ENV } from './bundleSetup';
 import { type HeadlessSession, startHeadlessSession } from './headlessSession';
 const packageRoot = fileURLToPath(new URL('../../', import.meta.url));
+/** Fixture-scoped stand-in for the production attach token, shared by the hub, the headless server, and the web adapter. */
+const E2E_HEADLESS_TOKEN = 'e2e-headless-token';
 
 export interface CockpitFixture {
   /** Every headless session, in registration order. */
@@ -130,7 +132,9 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     if (registration?.webDirectory === null || registration?.webDirectory === undefined)
       throw new Error('global setup did not publish a web registration');
     const workspaceId = registration.identity.worktreeId;
-    const webCompositions = createWebCompositions(path.join(root, 'web-compositions'), () => undefined);
+    const webCompositions = createWebCompositions(path.join(root, 'web-compositions'), (message) => {
+      console.warn(`[cockpit fixture] ${message}`);
+    });
     let shellGeneration = 0;
     const republishShell = (): void => {
       shellGeneration += 1;
@@ -166,12 +170,14 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     const hub = createHeadlessHub({
       manager,
       createSession: (request) => createSession(request),
+      admitWorkspace: async () => ({ id: workspaceId, root: workRoot }),
+      hubToken: () => E2E_HEADLESS_TOKEN,
       requestSessionApi: async (scope, request) => {
         const server = sessionApis.get(scope.sessionId);
         if (server === undefined) return Response.json({ error: 'Session API unavailable.' }, { status: 404 });
         const body = request.body === undefined || request.body === null ? undefined : request.body;
         return server.request(
-          new Request(`http://session.local/api/plugin/${request.basePath}${request.path}`, {
+          new Request(`http://session.local/api/plugins/${request.basePath}${request.path}`, {
             method: request.method,
             headers: request.headers,
             ...(body === undefined ? {} : { body }),
@@ -236,7 +242,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     let headless = await serveHeadlessServer({
       headlessHub: hub,
       port: 0,
-      token: 'e2e-headless-token',
+      token: E2E_HEADLESS_TOKEN,
       requestAsset: (request) => webCompositions.request(request),
       onNotice: (message) => console.error(`[headless] ${message}`),
       compositions: () => ({
@@ -253,7 +259,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       headless = await serveHeadlessServer({
         headlessHub: hub,
         port,
-        token: 'e2e-headless-token',
+        token: E2E_HEADLESS_TOKEN,
         requestAsset: (request) => webCompositions.request(request),
         onNotice: (message) => console.error(`[headless] ${message}`),
         compositions: () => ({
@@ -302,7 +308,9 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
           cwd: session.cwd,
           environment,
           directEvents: hub.directEvents,
+          hubToken: E2E_HEADLESS_TOKEN,
           sessionService: hub.sessionService,
+          pluginRegistry: hub.pluginRegistry,
           apis: [],
           facets: sessionBundle.facets,
           mountChannel: (channel) => {
@@ -335,7 +343,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       port: 0,
       assetsDir,
       headlessUrl: headless.url,
-      headlessToken: 'e2e-headless-token',
+      headlessToken: E2E_HEADLESS_TOKEN,
     });
 
     try {

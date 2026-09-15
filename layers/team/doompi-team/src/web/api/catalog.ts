@@ -1,3 +1,4 @@
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
 import type { SubagentCatalogAgent, SubagentCatalogPayload } from '../../types/webSubagents';
@@ -30,7 +31,7 @@ function isAgent(value: unknown): value is SubagentCatalogAgent {
 
 /** Read the selected session's catalog through the host's authenticated HTTP transport. */
 export async function fetchCatalog(sessionId: string, signal: AbortSignal): Promise<SubagentCatalogPayload> {
-  const response = await sealedTransport.fetch(`/api/sessions/${encodeURIComponent(sessionId)}/plugin/team/catalog`, {
+  const response = await sealedTransport.fetch(`${sessionApiPath(sessionId)}/plugins/team/catalog`, {
     signal,
     cache: 'no-store',
   });
@@ -56,7 +57,7 @@ export async function fetchCatalog(sessionId: string, signal: AbortSignal): Prom
 
 /** Launch on the selected session host, without submitting a parent prompt. */
 export async function launchAgent(sessionId: string, request: LaunchRequest): Promise<string> {
-  const response = await sealedTransport.fetch(`/api/sessions/${encodeURIComponent(sessionId)}/plugin/team/run`, {
+  const response = await sealedTransport.fetch(`${sessionApiPath(sessionId)}/plugins/team/run`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(request),

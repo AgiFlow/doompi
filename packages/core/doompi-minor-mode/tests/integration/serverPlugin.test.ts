@@ -312,11 +312,16 @@ describe('declarative server contributions', () => {
       },
     };
     const registerOwner = vi.fn(() => handle);
-    context.provide(DOOM_HEADLESS_HOST_SERVICE, { assertActive: vi.fn() } as unknown as DoomHeadlessHostService);
+    const subscribeSelection = vi.fn(() => () => undefined);
+    context.provide(DOOM_HEADLESS_HOST_SERVICE, {
+      assertActive: vi.fn(),
+      subscribeSelection,
+    } as unknown as DoomHeadlessHostService);
     context.provide(DOOM_MINOR_MODE_CATALOG_SERVICE, { registerOwner } as never);
     const mode = {
       definition: {},
       attach: vi.fn(),
+      publish: vi.fn(),
       detach() {
         events.push('detach');
       },
@@ -327,6 +332,8 @@ describe('declarative server contributions', () => {
     );
     await vi.waitFor(() => expect(mode.attach).toHaveBeenCalled());
     expect(mode.attach).toHaveBeenCalledWith(handle);
+    (subscribeSelection.mock.calls[0] as unknown as [() => void])[0]();
+    expect(mode.publish).toHaveBeenCalledOnce();
     await dispose?.();
     expect(events).toEqual(['detach', 'handle']);
   });

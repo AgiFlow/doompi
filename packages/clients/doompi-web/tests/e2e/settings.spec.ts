@@ -73,7 +73,9 @@ test('saves a named tunnel on the remote control settings page and reuses it aft
   await page.getByTestId('remote-tunnel-token-file').fill('/Users/me/.cloudflared/doompi.token');
   await page.getByText('locally managed tunnel options').click();
   await page.getByTestId('remote-tunnel-name').fill('doompi');
+  const saved = page.waitForResponse('**/api/remote/settings');
   await page.getByTestId('remote-tunnel-save').click();
+  await saved;
   await expect(page.getByTestId('remote-tunnel-save')).toBeDisabled();
 
   await page.reload();
@@ -169,7 +171,7 @@ test('lists no plugins for the packaged bundle and nothing to resolve', async ({
 
 test('reads and writes the image limits on the images page', async ({ page, cockpit }) => {
   let images = { autoResize: true, maxDimension: 2000, minDimension: 256, maxAllowedDimension: 2000 };
-  await page.route('**/api/global/plugin/config/images', async (route) => {
+  await page.route('**/api/settings/images', async (route) => {
     if (route.request().method() === 'PUT') {
       const patch = route.request().postDataJSON() as { autoResize?: boolean; maxDimension?: number };
       images = { ...images, ...patch };
@@ -184,7 +186,7 @@ test('reads and writes the image limits on the images page', async ({ page, cock
   // A typed cap saves on its own button, so the field is dirty until then.
   await page.getByTestId('image-max-dimension').fill('1024');
   const saveRequest = page.waitForRequest(
-    (request) => request.method() === 'PUT' && request.url().endsWith('/api/global/plugin/config/images'),
+    (request) => request.method() === 'PUT' && request.url().endsWith('/api/settings/images'),
   );
   await page.getByTestId('image-max-dimension-save').click();
   expect((await saveRequest).postDataJSON()).toEqual({ maxDimension: 1024 });
@@ -192,11 +194,33 @@ test('reads and writes the image limits on the images page', async ({ page, cock
 
   // The toggle applies at once, and turning it off locks the cap with it.
   await page.getByTestId('image-auto-resize').click();
+  await expect.poll(() => images.autoResize).toBe(false);
   await expect(page.getByTestId('image-max-dimension')).toBeDisabled();
-  expect(images.autoResize).toBe(false);
 });
 test.describe('with the synced bundle', () => {
   test.use({ assets: 'synced' });
+
+  test('keeps a contributed settings deep link while its composition loads', async ({ page, cockpit }) => {
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route('**/api/compositions', async (route) => {
+      await ready;
+      await route.continue();
+    });
+    try {
+      await page.goto(`${cockpit.url}/settings/planning`);
+      await expect(page.getByTestId('settings')).toBeVisible();
+      await expect(page).toHaveURL(/\/settings\/planning$/);
+    } finally {
+      release();
+    }
+    await expect(page.getByTestId('settings-select-main.thinking')).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId('settings-select-main.thinking')).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/planning$/);
+  });
 
   test('lists every bundled plugin with its contributions and no diagnostics', async ({ page, cockpit }) => {
     await page.goto(`${cockpit.url}/settings/plugins`);

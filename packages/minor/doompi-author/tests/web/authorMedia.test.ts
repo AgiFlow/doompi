@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,8 +16,8 @@ describe('Author remote media', () => {
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:review');
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
     const signal = new AbortController().signal;
-    const asset = await loadAuthorMedia('/api/sessions/s/file?path=review', signal);
-    expect(sealedTransport.fetch).toHaveBeenCalledWith('/api/sessions/s/file?path=review', {
+    const asset = await loadAuthorMedia('/api/workspaces/test-workspace/sessions/s/file?path=review', signal);
+    expect(sealedTransport.fetch).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions/s/file?path=review', {
       signal,
       cache: 'no-store',
     });

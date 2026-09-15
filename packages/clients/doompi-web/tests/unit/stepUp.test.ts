@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { STEP_UP_HEADER } from '../../src/types/remoteAccess';
@@ -23,21 +26,21 @@ describe('fetchWithStepUp', () => {
       return new Response('{"ok":true}', { status: 200 });
     }) as unknown as typeof fetch;
 
-    const response = await fetchWithStepUp('/api/sessions', { method: 'POST' });
+    const response = await fetchWithStepUp('/api/workspaces/test-workspace/sessions', { method: 'POST' });
     expect(response.status).toBe(200);
-    expect(calls).toEqual(['/api/sessions']);
+    expect(calls).toEqual(['/api/workspaces/test-workspace/sessions']);
   });
 
   it('leaves an ordinary 401 alone when it names no action', async () => {
     // Not every refusal is a step-up; prompting for a gesture here would be
     // asking the user to authorise something the server never offered.
     globalThis.fetch = vi.fn(async () => new Response('{"error":"nope"}', { status: 401 })) as unknown as typeof fetch;
-    expect((await fetchWithStepUp('/api/sessions')).status).toBe(401);
+    expect((await fetchWithStepUp('/api/workspaces/test-workspace/sessions')).status).toBe(401);
   });
 
   it('leaves a 401 with an unparseable body alone', async () => {
     globalThis.fetch = vi.fn(async () => new Response('not json', { status: 401 })) as unknown as typeof fetch;
-    expect((await fetchWithStepUp('/api/sessions')).status).toBe(401);
+    expect((await fetchWithStepUp('/api/workspaces/test-workspace/sessions')).status).toBe(401);
   });
 
   it('does not retry when the gesture produces nothing', async () => {
@@ -48,7 +51,7 @@ describe('fetchWithStepUp', () => {
       return new Response('{"action":"session.create"}', { status: 401 });
     }) as unknown as typeof fetch;
 
-    expect((await fetchWithStepUp('/api/sessions', undefined, declines)).status).toBe(401);
+    expect((await fetchWithStepUp('/api/workspaces/test-workspace/sessions', undefined, declines)).status).toBe(401);
     expect(calls).toBe(1);
   });
 
@@ -61,7 +64,7 @@ describe('fetchWithStepUp', () => {
         : new Response('{"ok":true}', { status: 201 });
     }) as unknown as typeof fetch;
 
-    const response = await fetchWithStepUp('/api/sessions', { method: 'POST' }, signs);
+    const response = await fetchWithStepUp('/api/workspaces/test-workspace/sessions', { method: 'POST' }, signs);
     expect(response.status).toBe(201);
     expect(attempts).toEqual([undefined, 'an-assertion']);
   });
@@ -73,7 +76,7 @@ describe('fetchWithStepUp', () => {
       return new Response('{"action":"session.create"}', { status: 401 });
     }) as unknown as typeof fetch;
 
-    expect((await fetchWithStepUp('/api/sessions', undefined, signs)).status).toBe(401);
+    expect((await fetchWithStepUp('/api/workspaces/test-workspace/sessions', undefined, signs)).status).toBe(401);
     expect(guarded).toBe(2);
   });
 
@@ -86,7 +89,7 @@ describe('fetchWithStepUp', () => {
         : new Response('{}', { status: 200 });
     }) as unknown as typeof fetch;
 
-    await fetchWithStepUp('/api/sessions', { method: 'POST', body: '{"cwd":"/tmp"}' }, signs);
+    await fetchWithStepUp('/api/workspaces/test-workspace/sessions', { method: 'POST', body: '{"cwd":"/tmp"}' }, signs);
     expect(bodies).toEqual(['{"cwd":"/tmp"}', '{"cwd":"/tmp"}']);
   });
 });

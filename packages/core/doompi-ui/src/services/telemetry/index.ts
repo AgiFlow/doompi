@@ -9,6 +9,7 @@ export const UI_EVENT = {
   leaderActionUnavailable: 'doom_pi_ui.leader_action_unavailable',
   themeApplyFailed: 'doom_pi_ui.theme_apply_failed',
   shellInstalled: 'doom_pi_ui.shell_installed',
+  eventLoopStalled: 'doom_pi_ui.event_loop_stalled',
 } as const;
 
 export type UiEventName = (typeof UI_EVENT)[keyof typeof UI_EVENT];

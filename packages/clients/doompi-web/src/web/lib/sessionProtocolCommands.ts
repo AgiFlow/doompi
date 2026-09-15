@@ -143,6 +143,10 @@ export function bindSessionProtocol(
   return release;
 }
 
+export function hasSessionProtocol(sessionId: string): boolean {
+  return senders.has(sessionId);
+}
+
 export function sendSessionProtocolFrame(sessionId: string, frame: Frame): void {
   const sender = senders.get(sessionId);
   if (!sender) throw new Error('The session protocol is not connected.');

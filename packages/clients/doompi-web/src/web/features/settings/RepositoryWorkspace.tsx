@@ -43,11 +43,17 @@ function rememberRepository(repositoryId: string): void {
   }
 }
 
-export function RepositoryWorkspace({ current }: { current: SettingsSection }) {
+export function RepositoryWorkspace({
+  current,
+  onReady,
+}: {
+  current: SettingsSection;
+  onReady?: (ready: boolean) => void;
+}) {
   const sessionFingerprint = useStore(sessionsStore, (state) => Object.keys(state.byId).sort().join('\n'));
   const [repositories, setRepositories] = useState<readonly SettingsRepository[]>([]);
   const [repositoryId, setRepositoryId] = useState(rememberedRepository);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const repository = useMemo(
     () => repositories.find((candidate) => candidate.id === repositoryId) ?? null,
     [repositories, repositoryId],
@@ -75,8 +81,17 @@ export function RepositoryWorkspace({ current }: { current: SettingsSection }) {
   }, [sessionFingerprint]);
 
   useEffect(() => {
-    void focusWorkspaceWebPlugins(repositoryId || null).catch((error: unknown) => console.error(error));
-  }, [repositoryId]);
+    if (loading) return;
+    let cancelled = false;
+    void focusWorkspaceWebPlugins(repositoryId || null)
+      .then(() => {
+        if (!cancelled) onReady?.(true);
+      })
+      .catch((error: unknown) => console.error(error));
+    return () => {
+      cancelled = true;
+    };
+  }, [repositoryId, loading, onReady]);
 
   const selectRepository = (next: string): void => {
     setRepositoryId(next);

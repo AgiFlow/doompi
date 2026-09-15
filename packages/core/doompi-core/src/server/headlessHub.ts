@@ -10,7 +10,12 @@ import type {
 } from '../exports/hubChannel';
 import type { DoomWebComposition } from '../exports/packageApi';
 import type { DoomApiContext, DoomApiMount } from '../exports/packageApi';
-import { createDoomPluginRegistry, type DoomPluginCaller, type DoomPluginDirection } from '../exports/pluginProtocol';
+import {
+  createDoomPluginRegistry,
+  type DoomPluginCaller,
+  type DoomPluginDirection,
+  type DoomPluginRegistry,
+} from '../exports/pluginProtocol';
 import {
   createDoomServerHost,
   installServerFacets,
@@ -21,6 +26,9 @@ import {
 } from '../exports/serverFacet';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../systems/main/types/headlessSessionHost';
 import type { HeadlessSessionManager } from '../systems/main/types/headlessSessionManager';
+
+const AUTHORIZATION_HEADER = 'authorization';
+const CHANNEL_PRIORITY = { global: 0, workspace: 1, session: 2 } as const;
 
 export interface HeadlessHubSession {
   readonly id: string;
@@ -55,7 +63,8 @@ export type HeadlessHubEvent =
 
 export interface HeadlessHubOptions {
   manager: HeadlessSessionManager;
-  hubToken?: string;
+  /** Resolves the hub credential, because the server reads its token file after the hub exists. */
+  hubToken?: () => string | undefined;
   /** Creates a session through the canonical cockpit lifecycle for hub channels. */
   createSession?: (request: DoomHubSessionCreateRequest) => Promise<DoomHubSessionScope>;
   onNotice?: (message: string) => void;
@@ -84,6 +93,8 @@ export interface HeadlessHub {
   admitWorkspace(root: string): Promise<HeadlessWorkspace>;
   removeWorkspace(workspaceId: string): Promise<void>;
   requestApi(mount: DoomApiMount, basePath: string, request: Request): Promise<Response>;
+  /** The dispatch table hub facets mount into, shared with session hosts this hub serves. */
+  readonly pluginRegistry: DoomPluginRegistry;
   invokePlugin(call: unknown, direction: DoomPluginDirection, caller?: DoomPluginCaller): Promise<unknown>;
   registerChannel(channel: DoomHubChannel, mount?: DoomApiMount): () => void;
   channelTypes(): readonly string[];
@@ -138,14 +149,28 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     (mount.scope === 'workspace' ? session.workspaceId === mount.workspaceId : session.id === mount.sessionId);
   const selectedChannels = (session: HeadlessHubSession): StartedChannel[] => {
     const selected = new Map<string, StartedChannel>();
-    const priority = { global: 0, workspace: 1, session: 2 };
     for (const started of channels.values()) {
       if (!belongs(started.mount, session)) continue;
       const previous = selected.get(started.channel.frameType);
-      if (!previous || priority[started.mount.scope] > priority[previous.mount.scope])
+      if (!previous || CHANNEL_PRIORITY[started.mount.scope] > CHANNEL_PRIORITY[previous.mount.scope])
         selected.set(started.channel.frameType, started);
     }
     return [...selected.values()];
+  };
+  const selectedChannel = (session: HeadlessHubSession, frameType: string): StartedChannel | undefined =>
+    selectedChannels(session).find((started) => started.channel.frameType === frameType);
+  /**
+   * One channel serves a session: the narrowest mount that reaches it. A package that
+   * registers the same channel globally and per workspace would otherwise run two
+   * sources against one session, and only the narrower one can publish or receive.
+   *
+   * Compared by mount scope rather than identity so a channel being started already
+   * knows which sessions it is taking over.
+   */
+  const serves = (mount: DoomApiMount, frameType: string, session: HeadlessHubSession): boolean => {
+    if (!belongs(mount, session)) return false;
+    const current = selectedChannel(session, frameType);
+    return current === undefined || CHANNEL_PRIORITY[mount.scope] >= CHANNEL_PRIORITY[current.mount.scope];
   };
 
   const directEventKey = (frameType: string, sessionId: string): string => `${frameType}\0${sessionId}`;
@@ -197,11 +222,26 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     if (!sessions.has(sessionId)) return;
     emit({ kind: 'channel', frameType, sessionId, payload, ...(connectionId === undefined ? {} : { connectionId }) });
   };
+
+  /**
+   * Hub-owned calls carry the hub credential, so a session API can tell them from a
+   * browser call it must not trust. Browser traffic reaches a session API through
+   * requestApi instead, and keeps the headers its caller sent.
+   */
+  const hubAuthenticated = (request: DoomHubSessionApiRequest): DoomHubSessionApiRequest => {
+    const token = options.hubToken?.();
+    if (token === undefined || token === '') return request;
+    const headers = new Headers(request.headers);
+    if (headers.has(AUTHORIZATION_HEADER)) return request;
+    headers.set(AUTHORIZATION_HEADER, `Bearer ${token}`);
+    return { ...request, headers };
+  };
+
   const channelHost = (frameType: string, mount: DoomApiMount): DoomHubChannelHost => ({
     sessions: () =>
       sessionScopes().filter((scope) => {
         const session = sessions.get(scope.sessionId);
-        return session !== undefined && belongs(mount, session);
+        return session !== undefined && serves(mount, frameType, session);
       }),
     sessionService: {
       create: async (request) => {
@@ -224,11 +264,11 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     directEvents: {
       publish: (type, id, payload) => {
         const session = sessions.get(id);
-        if (session && belongs(mount, session)) directEvents.publish(type, id, payload);
+        if (session && serves(mount, frameType, session)) directEvents.publish(type, id, payload);
       },
       subscribe: (type, id, listener, subscriptionOptions) => {
         const session = sessions.get(id);
-        return session && belongs(mount, session)
+        return session && serves(mount, frameType, session)
           ? directEvents.subscribe(type, id, listener, subscriptionOptions)
           : () => undefined;
       },
@@ -236,24 +276,11 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     },
     publish: (sessionId, payload) => {
       const session = sessions.get(sessionId);
-      if (
-        session &&
-        selectedChannels(session).some(
-          (started) => started.channel.frameType === frameType && mountKey(started.mount) === mountKey(mount),
-        )
-      )
-        publish(frameType, sessionId, payload);
+      if (session && serves(mount, frameType, session)) publish(frameType, sessionId, payload);
     },
     publishToConnection: (connectionId, sessionId, payload) => {
       const session = sessions.get(sessionId);
-      if (
-        connectionId === '' ||
-        !session ||
-        !selectedChannels(session).some(
-          (started) => started.channel.frameType === frameType && mountKey(started.mount) === mountKey(mount),
-        )
-      )
-        return false;
+      if (connectionId === '' || !session || !serves(mount, frameType, session)) return false;
       publish(frameType, sessionId, payload, connectionId);
       return true;
     },
@@ -262,7 +289,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       if (!session || !belongs(mount, session)) return Response.json({ error: 'Session not found.' }, { status: 404 });
       if (options.requestSessionApi === undefined)
         return Response.json({ error: 'Session API unavailable.' }, { status: 404 });
-      return options.requestSessionApi(scope, request);
+      return options.requestSessionApi(scope, hubAuthenticated(request));
     },
     onNotice: (message) => options.onNotice?.(message),
   });
@@ -274,10 +301,20 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       return undefined;
     }
     try {
+      const displaced = new Map<string, StartedChannel>();
+      for (const session of sessions.values()) {
+        if (!belongs(mount, session)) continue;
+        const previous = selectedChannel(session, channel.frameType);
+        if (previous !== undefined) displaced.set(session.id, previous);
+      }
       const source = channel.start(channelHost(channel.frameType, mount));
       const started = { channel, source, mount };
       channels.set(key, started);
-      for (const session of sessions.values()) if (belongs(mount, session)) source.sessionAdded?.(scopeOf(session));
+      for (const session of sessions.values()) {
+        if (selectedChannel(session, channel.frameType) !== started) continue;
+        displaced.get(session.id)?.source.sessionRemoved?.(session.id);
+        source.sessionAdded?.(scopeOf(session));
+      }
       return started;
     } catch (error) {
       options.onNotice?.(`hub channel '${channel.frameType}' failed (${String(error)})`);
@@ -288,8 +325,10 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   const releaseChannel = (channel: DoomHubChannel, started: StartedChannel): void => {
     const key = `${mountKey(started.mount)}:${channel.frameType}`;
     if (channels.get(key) !== started) return;
+    const served = [...sessions.values()].filter((session) => selectedChannel(session, channel.frameType) === started);
     channels.delete(key);
     started.source.close();
+    for (const session of served) selectedChannel(session, channel.frameType)?.source.sessionAdded?.(scopeOf(session));
   };
 
   const receiveMountedChannel = (
@@ -317,7 +356,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     sessionCleanups.delete(sessionId);
     presentationCleanups.get(sessionId)?.();
     presentationCleanups.delete(sessionId);
-    for (const { source, mount } of channels.values()) if (belongs(mount, current)) source.sessionRemoved?.(sessionId);
+    for (const { source } of selectedChannels(current)) source.sessionRemoved?.(sessionId);
     directEvents.clearSession?.(sessionId);
     emit({ kind: 'removed', sessionId });
   };
@@ -373,8 +412,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       emit({ kind: 'upsert', session: current });
     });
     presentationCleanups.set(session.id, stopPresentation);
-    for (const { source, mount } of channels.values())
-      if (belongs(mount, session)) source.sessionAdded?.(scopeOf(session));
+    for (const { source } of selectedChannels(current)) source.sessionAdded?.(scopeOf(session));
     const active = (): boolean => sessions.get(session.id)?.host === session.host && !closed;
     const cleanup = (): void => {
       subscriptions.delete(cleanup);
@@ -419,7 +457,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     if (closed) throw new Error('The headless hub is closed.');
     const context: DoomApiContext = suppliedContext ?? {
       scope: 'global',
-      ...(options.hubToken === undefined ? {} : { hubToken: options.hubToken }),
+      ...(options.hubToken?.() === undefined ? {} : { hubToken: options.hubToken() }),
       sessionService,
       directEvents,
       onNotice: (message) => options.onNotice?.(message),
@@ -515,6 +553,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
         return Response.json({ error: `API '${basePath}' is not mounted in ${mountKey(mount)}.` }, { status: 404 });
       return handler.fetch(request);
     },
+    pluginRegistry,
     invokePlugin: (call, direction, caller) => pluginRegistry.invoke(call, direction, caller),
     async create(sessionOptions) {
       if (closed) throw new Error('The headless hub is closed.');

@@ -80,6 +80,9 @@ export function createFileEditRuntime(dependencies: FileEditDependencies): PiPlu
     active = false;
     sessionGeneration += 1;
     toolStartedAt.clear();
+    // A scan deferred by the last bash call would otherwise append after the
+    // clear below and leave a timeline no session owns.
+    await tracker.flush();
     tracker.reset();
     const closing = sessionContext;
     sessionContext = undefined;
@@ -170,24 +173,34 @@ export function createFileEditRuntime(dependencies: FileEditDependencies): PiPlu
         if (!active) return;
         const ownGeneration = sessionGeneration;
         toolStartedAt.set(event.toolCallId, Date.now());
+        const hookStartedAt = Date.now();
         await tracker.start(event.toolCallId, event.toolName, event.args, ctx.cwd);
+        const hookMs = Date.now() - hookStartedAt;
         if (!active || ownGeneration !== sessionGeneration) {
           toolStartedAt.delete(event.toolCallId);
           return;
         }
-        void telemetry.recordEvent('doom_file_edit.edit_started', { 'tool.name': event.toolName });
+        void telemetry.recordEvent('doom_file_edit.edit_started', {
+          'tool.name': event.toolName,
+          hook_ms: hookMs,
+        });
       },
       tool_execution_end: async (event, ctx) => {
         if (!active) return;
         const startedAt = toolStartedAt.get(event.toolCallId);
         toolStartedAt.delete(event.toolCallId);
+        // Measured separately from the tool's own duration: this is the part of
+        // the wait that belongs to this package rather than to the tool.
+        const hookStartedAt = Date.now();
         await tracker.end(event.toolCallId, event.isError, ctx.cwd);
         if (!active) return;
         await publishStatus();
+        const hookMs = Date.now() - hookStartedAt;
         void telemetry.recordEvent('doom_file_edit.edit_finished', {
           'tool.name': event.toolName,
           'tool.result.error': event.isError,
           ...(startedAt === undefined ? {} : { duration_ms: Date.now() - startedAt }),
+          hook_ms: hookMs,
           outcome: event.isError ? 'failed' : 'completed',
         });
       },

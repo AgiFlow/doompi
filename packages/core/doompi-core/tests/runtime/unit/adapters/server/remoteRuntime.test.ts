@@ -203,7 +203,7 @@ describe('global remote control', () => {
         JSON.stringify({
           v: 1,
           method: 'POST',
-          target: '/api/sessions',
+          target: '/api/workspaces/test-workspace/sessions',
           headers: [['content-type', 'application/json']],
           body: Buffer.from(JSON.stringify({ cwd: '/workspace' })).toString('base64'),
         }),
@@ -249,7 +249,7 @@ describe('global remote control', () => {
         )
       ).status,
     ).toBe(200);
-    const socket = new WebSocket(`ws://127.0.0.1:${String(publicPort)}/api/pi`, {
+    const socket = new WebSocket(`ws://127.0.0.1:${String(publicPort)}/api/ws`, {
       headers: { host: 'remote.example.com', origin: PUBLIC_ORIGIN, cookie },
     });
     await new Promise<void>((resolve, reject) => {

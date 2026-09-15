@@ -13,7 +13,7 @@ doompi-server process
   +-- DirectHarnessRuntime
   +-- typed management and session services
   +-- package facet host and in-process API handlers
-  +-- HTTP and WebSocket listener, including /api/pi
+  +-- HTTP and WebSocket listener, including /api/ws
   +-- v4 JSONL session journal
 ```
 
@@ -39,7 +39,7 @@ create DirectHarnessRuntime and prepare the headless host
 activate facets and initialize typed session services
           |
           v
-bind HTTP and /api/pi
+bind HTTP and /api/ws
           |
           v
 wait for the runtime
@@ -54,7 +54,7 @@ The executable performs these steps:
 5. Create the direct runtime with explicit history ownership, model configuration, session identity, and working directory.
 6. Prepare and activate the selected server facets. Required failures stop readiness; optional failures are reported and isolated.
 7. Mount in-process package API handlers and initialize the typed session projection.
-8. Bind the loopback HTTP listener and authenticated `/api/pi` WebSocket endpoint.
+8. Bind the loopback HTTP listener and authenticated `/api/ws` WebSocket endpoint.
 
 A startup error is written to stderr with a `[doompi-server]` prefix and exits non-zero. Successful startup waits for the direct runtime, not for a client to connect.
 
@@ -68,7 +68,7 @@ Once ready, the server holds a stable session boundary:
 | Direct harness runtime             | Whole server process             |
 | Typed session state and operations | Whole server process             |
 | Package facet registrations        | Until shutdown or facet disposal |
-| HTTP and `/api/pi` listener        | Whole server process             |
+| HTTP and `/api/ws` listener        | Whole server process             |
 | Session journal ownership          | Whole server process             |
 
 The session service projects runtime activity into an authoritative snapshot, transient progress, concurrent in-flight items, and bounded presentation events. A client does not need to remain connected for the runtime to update the journal.
@@ -103,6 +103,6 @@ A runtime failure is a session failure. The server does not replace it with an a
 ## Related guides
 
 - [Getting started](getting-started.md) covers launch options and synchronization.
-- [IPC](ipc.md) explains `/api/pi`, typed services, HTTP routes, and replay.
+- [IPC](ipc.md) explains `/api/ws`, typed services, HTTP routes, and replay.
 - [Session APIs](api.md) explains descriptor loading and handler lifetime.
 - [Security](security.md) describes listener, token, history, and trusted-code boundaries.

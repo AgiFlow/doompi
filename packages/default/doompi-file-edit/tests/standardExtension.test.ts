@@ -101,7 +101,12 @@ beforeEach(() => {
     },
     timeline: { initialize: vi.fn(), clear: runtimeMocks.clearTimeline, list: async () => [] },
     snapshots: { initialize: vi.fn(), clear: runtimeMocks.clearSnapshots },
-    editTracker: { start: runtimeMocks.startTracking, end: runtimeMocks.endTracking, reset: vi.fn() },
+    editTracker: {
+      start: runtimeMocks.startTracking,
+      end: runtimeMocks.endTracking,
+      flush: vi.fn(async () => undefined),
+      reset: vi.fn(),
+    },
     workflow: { open: vi.fn(async () => undefined) },
   }));
   runtimeMocks.registerLeader.mockReturnValue({ update: vi.fn(), dispose: runtimeMocks.leaderDispose });

@@ -15,6 +15,9 @@ import {
 } from '../types/computerUseApi';
 export { computerUseChannelType };
 
+/** Computer use runs on the DoomPi Desktop host, so every other client declines it. */
+const DESKTOP_UNAVAILABLE = 'DoomPi Desktop computer use is unavailable.';
+
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -96,7 +99,7 @@ export function createComputerUseChannel(): DoomHubChannel {
       };
 
       const completePending = async (scope: DoomHubSessionScope, pending: ComputerUseBrokerRequest): Promise<void> => {
-        if (!host.computerUse?.available) throw new Error('DoomPi Desktop computer use is unavailable.');
+        if (!host.computerUse?.available) throw new Error(DESKTOP_UNAVAILABLE);
         try {
           const result = await host.computerUse.request(scope, {
             operation: pending.operation,
@@ -176,11 +179,19 @@ export function createComputerUseChannel(): DoomHubChannel {
             state.phase === 'awaiting_confirmation' &&
             (activeSessionId === undefined || activeSessionId === scope.sessionId)
           ) {
-            if (!host.computerUse?.available) throw new Error('DoomPi Desktop computer use is unavailable.');
             const activation = (await responseJson(
               await sessionRequest(scope, COMPUTER_USE_ROUTES.hubActivation),
             )) as ComputerUseActivationRequest | null;
-            if (activation !== null) {
+            if (activation !== null && !host.computerUse?.available) {
+              // No desktop host: decline through the API's own failure path so the browser
+              // shows why, instead of leaving the request pending or raising a server error.
+              await responseJson(
+                await sessionRequest(scope, COMPUTER_USE_ROUTES.hubStop, 'POST', { error: DESKTOP_UNAVAILABLE }),
+              );
+              await refresh(scope);
+              return;
+            }
+            if (activation !== null && host.computerUse?.available) {
               activeSessionId = scope.sessionId;
               try {
                 const hostResult = await host.computerUse.request(scope, {
@@ -237,8 +248,11 @@ export function createComputerUseChannel(): DoomHubChannel {
         void (async () => {
           try {
             if (parsed.action === 'targets') {
-              if (!host.computerUse?.available) throw new Error('DoomPi Desktop computer use is unavailable.');
-              const result = await host.computerUse.request(scope, { operation: 'targets' });
+              // Without a desktop host there is nothing to capture, so the browser sees an
+              // empty target list rather than an error it cannot act on.
+              const result = host.computerUse?.available
+                ? await host.computerUse.request(scope, { operation: 'targets' })
+                : [];
               targets.set(
                 scope.sessionId,
                 Array.isArray(result)

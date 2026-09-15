@@ -5,6 +5,7 @@ import { createComputerUseChannel } from '../../src/controllers/webComputerUseCh
 import { COMPUTER_USE_ROUTES, type ComputerUseSessionView } from '../../src/types/computerUseApi';
 
 const scope: DoomHubSessionScope = { sessionId: 'session-1', cwd: '/repo' };
+const DESKTOP_UNAVAILABLE = 'DoomPi Desktop computer use is unavailable.';
 
 function state(
   phase: ComputerUseSessionView['phase'],
@@ -13,7 +14,7 @@ function state(
   return { sessionId: scope.sessionId, revision: 1, wake: 1, phase, ...extra };
 }
 
-function fixture(initial: ComputerUseSessionView = state('inactive')) {
+function fixture(initial: ComputerUseSessionView = state('inactive'), desktop = true) {
   let current = initial;
   let activation: unknown = null;
   let authorization: unknown = null;
@@ -61,7 +62,7 @@ function fixture(initial: ComputerUseSessionView = state('inactive')) {
     publish,
     onNotice,
     requestSessionApi,
-    computerUse: { available: true, request: desktopRequest },
+    ...(desktop ? { computerUse: { available: true, request: desktopRequest } } : {}),
   } as unknown as DoomHubChannelHost;
   const channel = createComputerUseChannel();
   const source = channel.start(host);
@@ -136,6 +137,29 @@ describe('computer-use hub channel', () => {
         expect.objectContaining({ path: COMPUTER_USE_ROUTES.hubStop, method: 'POST' }),
       ),
     );
+    test.source.close();
+  });
+
+  it('declines a pending activation and lists no targets without a Desktop host', async () => {
+    const test = fixture(state('awaiting_confirmation'), false);
+    test.setActivation({ requestId: 'request-1' });
+    test.source.sessionAdded?.(scope);
+    await vi.waitFor(() =>
+      expect(test.requestSessionApi).toHaveBeenCalledWith(
+        scope,
+        expect.objectContaining({
+          path: COMPUTER_USE_ROUTES.hubStop,
+          method: 'POST',
+          body: JSON.stringify({ error: DESKTOP_UNAVAILABLE }),
+        }),
+      ),
+    );
+    expect(test.desktopRequest).not.toHaveBeenCalled();
+    expect(test.onNotice).not.toHaveBeenCalled();
+
+    test.channel.receive?.(scope, { action: 'targets' }, { connectionId: 'c1' });
+    await vi.waitFor(() => expect(test.source.payloadFor(scope)).toEqual({ state: state('inactive'), targets: [] }));
+    expect(test.onNotice).not.toHaveBeenCalled();
     test.source.close();
   });
 

@@ -29,6 +29,12 @@ import { writeContextDetail } from '../../../services/contextDetailStore';
 import { DOOM_CONTEXT_ENTRY_TYPE, projectContext } from '../../../services/contextProjection';
 import { createHeadlessClient } from '../../../services/headlessClient';
 import { createHistoryOwnership } from '../../../services/historyOwnership';
+import {
+  createPiExtensionHost,
+  preloadPiExtensions,
+  resolvePiExtensionEntries,
+  type PiExtensionHost,
+} from '../../../services/piExtensionHost';
 import type { DirectHarnessRuntime } from '../../../types/server/directHarnessRuntime';
 import type { SessionFrame } from '../../../types/server/session';
 import { createHeadlessChildSessionServiceProvider } from '../../child/adapters/headlessChildSessionService';
@@ -366,6 +372,17 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     modelsPath: path.join(agentDir, 'models.json'),
     refreshOnCreate: false,
   });
+  // Pi extensions load before the model is resolved: an extension that registers a provider
+  // (a local Vertex or Bedrock bridge, say) must be in the runtime before the configured default
+  // is looked up, or the lookup misses and the session silently falls back to whichever model
+  // happens to be first in `getAvailable()`.
+  const piPreload = await preloadPiExtensions({
+    cwd: options.cwd,
+    agentDir,
+    models: modelRuntime,
+    extensionPaths: options.piExtensions === false ? [] : resolvePiExtensionEntries(options.repoRoot),
+    ...(options.onNotice === undefined ? {} : { onNotice: options.onNotice }),
+  });
   const resolved = await resolveModel(parsed, modelRuntime, settings);
   if (parsed.apiKey !== undefined) await modelRuntime.setRuntimeApiKey(resolved.model.provider, parsed.apiKey);
 
@@ -558,6 +575,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   const listeners = new Set<(frame: SessionFrame) => void>();
   const initialSelection = restoreHeadlessSelection(entries, options.selection);
   let headlessHost: HeadlessHost | undefined;
+  let piHost: PiExtensionHost | undefined;
   let client: ReturnType<typeof createHeadlessClient> | undefined;
   let disposed = false;
   let disposePromise: Promise<void> | undefined;
@@ -624,6 +642,15 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       },
     },
     session: {
+      async readModelSettings() {
+        const model = await runtime.lane.getModel(BACKGROUND_CONTEXT);
+        const thinkingLevel = await runtime.lane.getThinkingLevel(BACKGROUND_CONTEXT);
+        return { ...(model ? { model: modelIdentity(model) } : {}), thinkingLevel };
+      },
+      async setModelSettings(settings) {
+        if (settings.model) await runtime.setModel(settings.model);
+        if (settings.thinkingLevel !== undefined) await runtime.setThinkingLevel(settings.thinkingLevel);
+      },
       async forkSource() {
         const metadata = runtime.session.metadata as unknown as { path?: unknown };
         if (typeof metadata.path !== 'string') throw new Error('The parent session has no persisted journal.');
@@ -696,6 +723,19 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       context.effect(() => () => childSessionProvider.close(), 'headless child session service lifetime');
     });
     if (headlessHost !== undefined) throw new Error('Direct headless facets were prepared more than once.');
+    if (piPreload !== undefined) {
+      piHost = createPiExtensionHost({
+        cwd: options.cwd,
+        agentDir,
+        models: modelRuntime,
+        runtime,
+        preload: piPreload,
+        getModel: () => currentModel,
+        getThinkingLevel: () => resolved.thinkingLevel ?? 'off',
+        client: () => client?.client,
+        ...(options.onNotice === undefined ? {} : { onNotice: options.onNotice }),
+      });
+    }
     headlessHost = new HeadlessHost(root, {
       candidates: options.candidates,
       selection: initialSelection,
@@ -709,11 +749,23 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       ],
       context: executionContext,
       resolveSelection: options.resolveSelection,
-      applyTools: async (tools) =>
-        runtime.replaceTools(tools.map((tool) => toolAdapter(tool, () => headlessHost!.context, reportedToolErrors))),
+      applyTools: async (tools) => {
+        const facetTools = tools.map((tool) => toolAdapter(tool, () => headlessHost!.context, reportedToolErrors));
+        // Facet tools win a name collision: they are the reconciled, mode-aware set.
+        const facetNames = new Set(facetTools.map((tool) => tool.name));
+        const piTools = (piHost?.tools ?? []).filter((tool) => !facetNames.has(tool.name));
+        await runtime.replaceTools([...piTools, ...facetTools]);
+      },
       applyResources: async (next) => {
         const mapped = mapResources(next);
-        await runtime.replaceResources(mapped.harness);
+        // Facet skills win a name collision, for the same reason facet tools do.
+        const facetNames = new Set((mapped.harness.skills ?? []).map((skill) => skill.name));
+        const piSkills = (piHost?.skills ?? []).filter((skill) => !facetNames.has(skill.name));
+        await runtime.replaceResources(
+          piSkills.length === 0
+            ? mapped.harness
+            : { ...mapped.harness, skills: [...piSkills, ...(mapped.harness.skills ?? [])] },
+        );
       },
       onApplied: async (selection) => {
         if (headlessReady) await publishComposition(selection);
@@ -733,6 +785,15 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   const activateFacets = async (installed: InstalledServerFacets): Promise<void> => {
     if (headlessHost === undefined) throw new Error('Direct headless host was not prepared.');
     headlessHost.setAvailableSources(installed.installedPackages);
+    // Pi extensions load before the first selection so their session lifetime tools and skills
+    // are present in the very first composition. A failure here is reported, never fatal.
+    if (piHost !== undefined) {
+      try {
+        await piHost.load();
+      } catch (error) {
+        options.onNotice?.(`Pi extensions failed to load: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
     await headlessHost.select(initialSelection);
     headlessReady = headlessHost.status.ready;
     if (headlessReady) {
@@ -749,6 +810,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       const failures: unknown[] = [];
       try {
         if (headlessHost?.status.ready) await headlessHost.dispatchHook('session_shutdown', {});
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await piHost?.shutdown();
       } catch (error) {
         failures.push(error);
       }

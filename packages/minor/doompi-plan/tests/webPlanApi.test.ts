@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

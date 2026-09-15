@@ -33,7 +33,7 @@ describe('browser microphone selection', () => {
       .spyOn(sealedTransport, 'fetch')
       .mockImplementation(async () => Response.json({ deviceId: 'physical', inputs: available ? [physical] : [] }));
     expect(await voiceMicrophoneConstraints()).toMatchObject({ audio: { deviceId: { exact: 'physical' } } });
-    expect(fetch.mock.calls[0]?.[0]).toBe('/api/global/plugin/voice/clients/browser-stable/inputs');
+    expect(fetch.mock.calls[0]?.[0]).toBe('/api/plugins/voice/clients/browser-stable/inputs');
     available = false;
     await expect(voiceMicrophoneConstraints()).rejects.toThrow('unavailable');
   });

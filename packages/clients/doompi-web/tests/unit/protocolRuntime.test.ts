@@ -42,7 +42,7 @@ vi.mock('@earendil-works/chord', async (original) => ({
   createRemoteServiceBinding: fake.binding,
 }));
 vi.mock('../../src/web/lib/piTransport', () => ({
-  protocolSocketUrl: () => 'ws://test/api/pi',
+  protocolSocketUrl: () => 'ws://test/api/ws',
   createProtocolTransport: () => ({}),
 }));
 vi.mock('../../src/web/lib/sessionProtocolCommands', () => ({ bindSessionProtocol: () => fake.release }));

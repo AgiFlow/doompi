@@ -1,6 +1,6 @@
 # Session APIs
 
-Session APIs let a DoomPi package add HTTP behavior beside the direct headless runtime it extends. A package facet is loaded from the admitted `server.bundle.json` descriptor, registered in `doompi-server`, and called in process. The public client route is `/api/sessions/<session-id>/api/<base-path>/...`.
+Session APIs let a DoomPi package add HTTP behavior beside the direct headless runtime it extends. A package facet is loaded from the admitted `server.bundle.json` descriptor, registered in `doompi-server`, and called in process. The public client route is `/api/workspaces/<workspace-id>/sessions/<session-id>/plugins/<base-path>/...`.
 
 This guide also covers the package's TypeScript exports for Node.js callers that want to compose the same in-process services.
 
@@ -23,7 +23,7 @@ package.json doompiServer declaration
        in-process Request dispatch
                 |
                 v
- /api/sessions/<id>/api/<base-path>/...
+ /api/workspaces/<workspace-id>/sessions/<id>/plugins/<base-path>/...
 ```
 
 The descriptor and its pinned facet modules are part of the synchronized generation. This ensures:
@@ -83,7 +83,7 @@ An empty descriptor is a valid no-API state. In that case package API requests r
 The public path is:
 
 ```text
-/api/sessions/<session-id>/api/<base-path>/<package route>
+/api/workspaces/<workspace-id>/sessions/<session-id>/plugins/<base-path>/<package route>
 ```
 
 The server removes the session and package mount prefix before calling the handler. A path outside the route returns `404`. An unknown base path returns a JSON `404`. A handler exception becomes a generic JSON `500`; other APIs remain mounted. Invalid base paths are rejected before dispatch.
@@ -115,7 +115,7 @@ The core package publishes the in-process building blocks through `@agimon-ai/do
 | ----------------------------------- | ---------------------------------------------------------------- |
 | `createHeadlessSessionManager`      | Own direct session hosts and dispose them                        |
 | `createHeadlessHub`                 | Aggregate sessions, channels, and package API dispatch           |
-| `serveHeadlessServer`               | Expose HTTP and authenticated `/api/pi` WebSocket routes         |
+| `serveHeadlessServer`               | Expose HTTP and authenticated `/api/ws` WebSocket routes         |
 | `createAgentSessionRuntime`         | Project a direct runtime into typed session state and operations |
 | `createAgentServerService`          | Adapt one typed session service to the Pi protocol host          |
 | `createRpcTranscript`               | Reduce runtime events into the authoritative transcript          |
@@ -139,6 +139,6 @@ The caller remains responsible for creating admitted direct session hosts, closi
 
 ## Related guides
 
-- [IPC](ipc.md) explains `/api/pi`, typed operations, package dispatch, and replay.
+- [IPC](ipc.md) explains `/api/ws`, typed operations, package dispatch, and replay.
 - [Lifecycle](lifecycle.md) explains when facets load and close.
 - [Security](security.md) describes trusted package code and context capabilities.

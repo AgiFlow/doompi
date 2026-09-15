@@ -27,7 +27,7 @@ The design aims to:
 
 - keep the default listener on loopback;
 - keep the session token out of process arguments and application state sent to clients;
-- authenticate direct HTTP and `/api/pi` protocol access with a random capability;
+- authenticate direct HTTP and `/api/ws` protocol access with a random capability;
 - load only modules from an admitted, generation-pinned `server.bundle.json`;
 - keep package handlers in process while isolating optional facet failures; and
 - preserve session history ownership so two runtimes cannot write the same journal concurrently.
@@ -43,7 +43,7 @@ It does not attempt to:
 
 | Asset                       | Protection                                                             | Remaining trust                                                       |
 | --------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| HTTP and `/api/pi` listener | Loopback by default; token required except health                      | Owner, root, token holder, and any exposed reverse proxy              |
+| HTTP and `/api/ws` listener | Loopback by default; token required except health                      | Owner, root, token holder, and any exposed reverse proxy              |
 | Listener token              | Read from a file and compared as a bearer capability                   | Caller creates and protects the file                                  |
 | Server bundle               | Admitted generation, fingerprint, confined descriptor and module paths | Synchronized repository and package contents are trusted inputs       |
 | Session journal             | Explicit history ownership and v4 JSONL storage                        | Owner and any process able to access the session directory            |
@@ -60,7 +60,7 @@ Do not store it in the repository, a shared runtime directory, a public environm
 
 ## Listener authentication
 
-`/api/health` is intentionally unauthenticated so a local supervisor can check readiness. Every other HTTP route and the `/api/pi` upgrade require the configured token. HTTP clients should use `Authorization: Bearer <token>` or `x-doompi-token`. A WebSocket client may use the same capability in its upgrade headers or query string. Prefer a header because URLs can appear in logs.
+`/api/health` is intentionally unauthenticated so a local supervisor can check readiness. Every other HTTP route and the `/api/ws` upgrade require the configured token. HTTP clients should use `Authorization: Bearer <token>` or `x-doompi-token`. A WebSocket client may use the same capability in its upgrade headers or query string. Prefer a header because URLs can appear in logs.
 
 A token authenticates the caller to the session. It is not a per-operation permission system. A holder can prompt, steer, abort, change configuration, rewind, answer extension UI, and invoke mounted package APIs. Treat it as full session control.
 
@@ -74,7 +74,7 @@ Package handlers receive trusted process context, not automatic browser authoriz
 
 ## Browser and remote access
 
-DoomPi Web owns browser authentication and proxies `/api/pi` to the session server. It can add the server token on the upstream request without exposing that token to browser JavaScript. A remote browser receives DoomPi Web's separate device and session credentials, which can still grant powerful session control.
+DoomPi Web owns browser authentication and proxies `/api/ws` to the session server. It can add the server token on the upstream request without exposing that token to browser JavaScript. A remote browser receives DoomPi Web's separate device and session credentials, which can still grant powerful session control.
 
 Before putting the cockpit behind a tunnel, review the web package's pairing, origin, cookie, passkey, sealed transport, signed bundle, and optional container controls. Do not publish the server listener through an unauthenticated TCP forwarder. A tunnel changes reachability, not authority.
 

@@ -1,3 +1,5 @@
+import { sessionApiPath } from '@agimon-ai/doompi-core/web';
+
 import type { SpeechPresenceDetector } from './clientCaptureActivity';
 import type { RealtimeMediaCommand, RealtimeMediaTransport } from './realtime';
 
@@ -194,7 +196,7 @@ export interface VoiceMediaDevice {
 
 export function voiceMediaClientUrl(sessionId: string, route: string, params: Record<string, string> = {}): string {
   const search = new URLSearchParams({ session: sessionId, ...params });
-  return `/api/sessions/${encodeURIComponent(sessionId)}/plugin/${VOICE_MEDIA_API_BASE_PATH}${route}?${search.toString()}`;
+  return `${sessionApiPath(sessionId)}/plugins/${VOICE_MEDIA_API_BASE_PATH}${route}?${search.toString()}`;
 }
 
 export interface VoiceMicrophoneConstraints {

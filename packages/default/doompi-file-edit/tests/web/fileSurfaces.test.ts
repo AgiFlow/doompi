@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 

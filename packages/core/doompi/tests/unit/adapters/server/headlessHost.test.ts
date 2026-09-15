@@ -42,6 +42,9 @@ async function setup(
     required: options.required ?? candidate.required,
     owners: options.owners ?? candidate.owners,
   };
+  let replaceRestriction!: (names: string[]) => void;
+  let registerLateTool!: () => void;
+  const onApplied = vi.fn();
   const onError = vi.fn();
   const root = new Context();
   let host!: HeadlessHost;
@@ -55,6 +58,7 @@ async function setup(
         ...(options.allowedTools === undefined ? {} : { allowedTools: options.allowedTools }),
         applyResources: () => undefined,
         onError,
+        onApplied,
         context: (selection): DoomHeadlessExecutionContext => ({
           cwd: '/test',
           repoRoot: '/test',
@@ -85,6 +89,14 @@ async function setup(
     .extend({ [DOOM_HEADLESS_OWNER]: selectedCandidate })
     .plugin((context: Context) => {
       const service = requireDoomHeadlessHost(context);
+      let dynamic: ReturnType<typeof service.registerToolRestriction> | undefined;
+      replaceRestriction = (allowedTools) => {
+        dynamic?.dispose();
+        dynamic = service.registerToolRestriction({ allowedTools });
+      };
+      registerLateTool = () => {
+        service.registerTool({ name: 'late_tool', description: 'late', parameters: Type.Object({}), execute });
+      };
       service.registerTool({ name: 'test_tool', description: 'test', parameters: Type.Object({}), execute });
       if (options.gatedTool) {
         service.registerTool({
@@ -105,6 +117,9 @@ async function setup(
   host.setAvailableSources([selectedCandidate.packageName]);
   return {
     host,
+    replaceRestriction,
+    registerLateTool,
+    onApplied,
     execute,
     start,
     stop,
@@ -117,6 +132,33 @@ async function setup(
 }
 
 describe('retained headless contributions', () => {
+  it('publishes inventory when a tool is added without changing selection', async () => {
+    const fixture = await setup(() => undefined);
+    try {
+      await fixture.host.select({});
+      fixture.onApplied.mockClear();
+      fixture.registerLateTool();
+      await fixture.host.select({});
+      expect(fixture.onApplied).toHaveBeenCalled();
+    } finally {
+      await fixture.close();
+    }
+  });
+  it('reconciles tools when a restriction changes without a selection change', async () => {
+    const apply = vi.fn();
+    const fixture = await setup(apply);
+    try {
+      await fixture.host.select({});
+      fixture.replaceRestriction([]);
+      await fixture.host.select({});
+      expect(apply.mock.calls.at(-1)?.[0]).toEqual([]);
+      fixture.replaceRestriction(['test_tool']);
+      await fixture.host.select({});
+      expect(apply.mock.calls.at(-1)?.[0].map((tool: DoomHeadlessTool) => tool.name)).toEqual(['test_tool']);
+    } finally {
+      await fixture.close();
+    }
+  });
   it('inherits changed defaults while preserving explicit session axes', async () => {
     const fixture = await setup(() => undefined);
     try {
@@ -285,6 +327,55 @@ describe('retained headless contributions', () => {
     }
   });
 
+  it('does not gate on sources when a facet withdraws a contribution before the first selection', async () => {
+    const onError = vi.fn();
+    const root = new Context();
+    let host!: HeadlessHost;
+    await root
+      .plugin((context: Context) => {
+        host = new HeadlessHost(context, {
+          candidates: [candidate],
+          selection: initial,
+          applyTools: () => undefined,
+          applyResources: () => undefined,
+          onError,
+          context: (selection): DoomHeadlessExecutionContext => ({
+            cwd: '/test',
+            repoRoot: '/test',
+            sessionId: 'test',
+            environment: {},
+            selection,
+            shutdown: vi.fn(),
+            client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
+            session: {
+              history: () => [],
+              messages: () => [],
+              append: vi.fn(),
+              replace: vi.fn(),
+            } as never,
+          }),
+        });
+      })
+      .await();
+
+    // Installing facets happens before the caller knows which packages installed.
+    await root
+      .extend({ [DOOM_HEADLESS_OWNER]: candidate })
+      .plugin((context: Context) => {
+        const service = requireDoomHeadlessHost(context);
+        service.registerActivity({ name: 'watch', start: () => () => undefined }).dispose();
+      })
+      .await();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onError).not.toHaveBeenCalled();
+
+    host.setAvailableSources([candidate.packageName]);
+    await host.select({});
+    expect(host.status.ready).toBe(true);
+    await host.close();
+    await root.fiber.dispose();
+  });
+
   it('rejects an unavailable required owner before advertising readiness', async () => {
     const fixture = await setup(() => undefined);
     try {
@@ -341,6 +432,23 @@ describe('retained headless contributions', () => {
       await fixture.host.select({ domains: ['docs'] });
       expect(fixture.host.status.ready).toBe(true);
       expect(fixture.start.mock.calls.length).toBeGreaterThan(failedStartCount);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('rejects selections queued into teardown without reporting them as failures', async () => {
+    const fixture = await setup(() => undefined);
+    try {
+      await fixture.host.select({});
+      expect(fixture.onError).not.toHaveBeenCalled();
+      const queued = fixture.host.select({ domains: ['docs'] }).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      await fixture.host.close();
+      await expect(queued).resolves.toBeInstanceOf(Error);
+      expect(fixture.onError).not.toHaveBeenCalled();
     } finally {
       await fixture.close();
     }

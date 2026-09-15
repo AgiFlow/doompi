@@ -13,6 +13,7 @@ export const AUTOCOMPACT_EVENT = {
   contextCommitted: 'doom_autocompact.context_committed',
   contextApplied: 'doom_autocompact.context_applied',
   contextMarkerInvalid: 'doom_autocompact.context_marker_invalid',
+  contextHookSlow: 'doom_autocompact.context_hook_slow',
   nativeCompactionCompleted: 'doom_autocompact.native_compaction_completed',
 } as const;
 

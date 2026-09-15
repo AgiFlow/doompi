@@ -47,10 +47,10 @@ const componentName = (value: string): string =>
   value.replace(/[^a-zA-Z0-9.-]/gu, (character) => `_${character.codePointAt(0)!.toString(16)}_`);
 const pluginPrefix = (scope: DoomApiScope): string =>
   scope === 'global'
-    ? '/api/global/plugin'
+    ? '/api/plugins'
     : scope === 'workspace'
-      ? '/api/workspaces/{workspaceId}/plugin'
-      : '/api/sessions/{sessionId}/plugin';
+      ? '/api/workspaces/{workspaceId}/plugins'
+      : '/api/workspaces/{workspaceId}/sessions/{sessionId}/plugins';
 
 /** Compose declarations only. No handlers, lifecycle hooks, or platform resources are loaded. */
 export function createApiDocuments(selections: readonly ApiContractSelection[]): ApiDocuments {
@@ -58,7 +58,7 @@ export function createApiDocuments(selections: readonly ApiContractSelection[]):
   const schemas: Record<string, unknown> = {};
   const messages: Record<string, unknown> = {};
   const operations: Record<string, unknown> = {};
-  const channelMessages: Record<string, unknown> = {};
+  const channelMessages: Record<string, Record<string, unknown>> = { global: {}, workspace: {}, session: {} };
   const manifest: ApiDocuments['manifest'] = {
     version: 1,
     complete: true,
@@ -131,8 +131,13 @@ export function createApiDocuments(selections: readonly ApiContractSelection[]):
       manifest.dynamic.push(...contract.dynamic.map((value) => `${entry.packageName}: ${value}`));
       for (const route of contract.http.filter((route) => route.scope === selected.scope)) {
         const id = `${entry.packageName}.${route.scope}.${route.id}`;
-        const mount = route.basePath === undefined ? '' : `${pluginPrefix(route.scope)}/${route.basePath}`;
-        const pathname = `${mount}${route.path}`;
+        const mount =
+          route.basePath === undefined
+            ? ''
+            : route.basePath === 'settings'
+              ? `${route.scope === 'global' ? '/api' : '/api/workspaces/{workspaceId}'}/settings`
+              : `${pluginPrefix(route.scope)}/${route.basePath}`;
+        const pathname = `${mount}${route.path === '/' ? '' : route.path}`;
         const method = route.method.toLowerCase();
         const path = (paths[pathname] ??= {});
         if (path[method]) throw new Error(`Conflicting HTTP contract: ${route.method} ${pathname}`);
@@ -205,30 +210,35 @@ export function createApiDocuments(selections: readonly ApiContractSelection[]):
         const address = `${socket.scope}:${socket.direction}:${socket.kind}:${socket.service}:${socket.member}`;
         if (socketAddresses.has(address)) throw new Error(`Conflicting socket contract: ${address}`);
         socketAddresses.add(address);
-        const id = componentName(`${entry.packageName}.${socket.scope}.${socket.id}`);
-        const addMessage = (suffix: string, payload: unknown): string => {
-          const name = `${id}.${suffix}`;
-          messages[name] = { name, payload: schema(name, payload) };
-          channelMessages[name] = { $ref: `#/components/messages/${name}` };
-          return `#/channels/pi/messages/${name}`;
-        };
-        const request = addMessage('input', socket.input);
-        const replies = socket.output === undefined ? [] : [{ $ref: addMessage('output', socket.output) }];
-        if (socket.errors !== undefined) replies.push({ $ref: addMessage('error', socket.errors) });
-        operations[id] = {
-          action: socket.direction === 'client-to-server' ? 'receive' : 'send',
-          channel: { $ref: '#/channels/pi' },
-          messages: [{ $ref: request }],
-          description: socket.description,
-          ...(replies.length ? { reply: { channel: { $ref: '#/channels/pi' }, messages: replies } } : {}),
-          'x-doompi': {
-            service: socket.service,
-            member: socket.member,
-            scope: socket.scope,
-            kind: socket.kind,
-            ...(socket.availability ? { availability: socket.availability } : {}),
-          },
-        };
+        for (const channel of socket.scope === 'global' ? ['global'] : [socket.scope, 'global']) {
+          const id = componentName(
+            `${entry.packageName}.${socket.scope}.${socket.id}${channel === socket.scope ? '' : '.aggregate'}`,
+          );
+          const addMessage = (suffix: string, payload: unknown): string => {
+            const name = `${id}.${suffix}`;
+            messages[name] = { name, payload: schema(name, payload) };
+            channelMessages[channel][name] = { $ref: `#/components/messages/${name}` };
+            return `#/channels/${channel}/messages/${name}`;
+          };
+          const request = addMessage('input', socket.input);
+          const replies = socket.output === undefined ? [] : [{ $ref: addMessage('output', socket.output) }];
+          if (socket.errors !== undefined) replies.push({ $ref: addMessage('error', socket.errors) });
+          operations[id] = {
+            action: socket.direction === 'client-to-server' ? 'receive' : 'send',
+            channel: { $ref: `#/channels/${channel}` },
+            messages: [{ $ref: request }],
+            description: socket.description,
+            ...(replies.length ? { reply: { channel: { $ref: `#/channels/${channel}` }, messages: replies } } : {}),
+            'x-doompi': {
+              service: socket.service,
+              member: socket.member,
+              scope: socket.scope,
+              kind: socket.kind,
+              transportScope: channel,
+              ...(socket.availability ? { availability: socket.availability } : {}),
+            },
+          };
+        }
       }
     }
   }
@@ -256,14 +266,30 @@ export function createApiDocuments(selections: readonly ApiContractSelection[]):
   const asyncapi = {
     asyncapi: '3.0.0',
     info,
-    channels: {
-      pi: {
-        address: '/api/pi',
-        messages: channelMessages,
-        description:
-          'Decoded Pi/Chord application values. Local WebSocket messages carry length-prefixed CBOR bytes. Remote paired-device WebSocket messages carry UTF-8 JSON SealedEnvelope bytes whose decrypted payload contains the same Pi frames.',
-      },
-    },
+    channels: Object.fromEntries(
+      Object.entries(channelMessages).map(([scope, messages]) => [
+        scope,
+        {
+          address:
+            scope === 'global'
+              ? '/api/ws'
+              : scope === 'workspace'
+                ? '/api/workspaces/{workspaceId}/ws'
+                : '/api/workspaces/{workspaceId}/sessions/{sessionId}/ws',
+          ...(scope === 'global'
+            ? {}
+            : {
+                parameters: {
+                  workspaceId: { description: 'Admitted workspace identity.' },
+                  ...(scope === 'session' ? { sessionId: { description: 'Session owned by this workspace.' } } : {}),
+                },
+              }),
+          messages,
+          description:
+            'Decoded Pi/Chord values over framed CBOR. The global hub socket aggregates all scopes; workspace and session sockets restrict session access and package calls to their addressed scope. Remote paired-device sockets seal the same bytes.',
+        },
+      ]),
+    ),
     operations,
     components: { schemas: asyncApiSchemas(schemas), messages },
   };

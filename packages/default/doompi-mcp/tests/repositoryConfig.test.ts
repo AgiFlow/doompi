@@ -20,7 +20,7 @@ describe('package MCP configuration', () => {
       ...manifest.peerDependencies,
     };
 
-    expect(dependencies).toHaveProperty('@agimon-ai/mcp-proxy', '0.31.22');
+    expect(dependencies).toHaveProperty('@agimon-ai/mcp-proxy', '0.31.25');
     expect(dependencies).not.toHaveProperty('@agiflowai/architect-mcp');
     expect(dependencies).not.toHaveProperty('@agimon-ai/vibe-lint');
   });

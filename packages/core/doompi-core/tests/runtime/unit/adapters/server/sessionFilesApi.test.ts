@@ -33,4 +33,38 @@ describe('session file completion', () => {
     }
     expect((await handler.fetch(new Request('http://files/'))).status).toBe(503);
   });
+
+  it('prunes directories and files the project ignores through .gitignore and .doomignore', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-files-'));
+    roots.push(cwd);
+    fs.writeFileSync(path.join(cwd, '.gitignore'), '.nx-cache/\n*.log\n');
+    fs.writeFileSync(path.join(cwd, '.doomignore'), 'notes/\n');
+    fs.mkdirSync(path.join(cwd, '.nx-cache', 'deep'), { recursive: true });
+    fs.mkdirSync(path.join(cwd, 'notes'));
+    fs.mkdirSync(path.join(cwd, 'src'));
+    fs.writeFileSync(path.join(cwd, '.nx-cache', 'deep', 'cached.ts'), 'cached');
+    fs.writeFileSync(path.join(cwd, 'notes', 'scratch.ts'), 'scratch');
+    fs.writeFileSync(path.join(cwd, 'debug.log'), 'noise');
+    fs.writeFileSync(path.join(cwd, 'src', 'kept.ts'), 'kept');
+    const handler = sessionFilesApi.start({ scope: 'session', sessionId: 'one', cwd, onNotice() {} });
+    try {
+      expect(await (await handler.fetch(new Request('http://files/?q='))).json()).toEqual({
+        files: ['.doomignore', '.gitignore', 'src/kept.ts'],
+      });
+    } finally {
+      handler.close();
+    }
+  });
+
+  it('lists everything when the project declares no ignore rules', async () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-files-'));
+    roots.push(cwd);
+    fs.writeFileSync(path.join(cwd, 'debug.log'), 'noise');
+    const handler = sessionFilesApi.start({ scope: 'session', sessionId: 'one', cwd, onNotice() {} });
+    try {
+      expect(await (await handler.fetch(new Request('http://files/?q='))).json()).toEqual({ files: ['debug.log'] });
+    } finally {
+      handler.close();
+    }
+  });
 });

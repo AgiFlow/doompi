@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 
-import { SHELL } from '../../constants/spawner';
+import { EXIT_OUTPUT_DRAIN_MS, SHELL } from '../../constants/spawner';
 import type { ExitResult, ISpawner, OutputStream, SpawnedProcess, SpawnRequest } from '../../types/spawner';
 
 /** Wraps `node:child_process.spawn`. */
@@ -24,7 +24,20 @@ export class NodeSpawner implements ISpawner {
         child.stderr?.on('data', (chunk: string) => handler(chunk, 'stderr'));
       },
       onExit(handler: (result: ExitResult) => void): void {
-        child.on('close', (code, signal) => handler({ code, signal }));
+        let finished = false;
+        let drainTimer: ReturnType<typeof setTimeout> | undefined;
+        const finish = (result: ExitResult): void => {
+          if (finished) return;
+          finished = true;
+          if (drainTimer) clearTimeout(drainTimer);
+          handler(result);
+        };
+        child.once('exit', (code, signal) => {
+          // Descendants can keep inherited stdout/stderr open after the
+          // supervised command exits. `close` would then wait for them too.
+          drainTimer = setTimeout(() => finish({ code, signal }), EXIT_OUTPUT_DRAIN_MS);
+        });
+        child.once('close', (code, signal) => finish({ code, signal }));
       },
       onError(handler: (error: Error) => void): void {
         child.on('error', handler);

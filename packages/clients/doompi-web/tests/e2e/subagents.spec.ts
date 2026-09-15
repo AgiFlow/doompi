@@ -364,11 +364,11 @@ test('the catalog lists the agents the session can launch and launches one throu
   await expect(page.getByTestId('launch-agent')).toHaveText('reviewer-e2e');
   await page.getByTestId('launch-task').fill('Review the diff.');
   await page.getByTestId('launch-fresh').click();
-  await page.route('**/api/sessions/s1/plugin/team/run', (route) =>
+  await page.route('**/api/workspaces/*/sessions/s1/plugins/team/run', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ runId: 'run-launched' }) }),
   );
   const requestPromise = page.waitForRequest(
-    (request) => request.method() === 'POST' && request.url().endsWith('/api/sessions/s1/plugin/team/run'),
+    (request) => request.method() === 'POST' && request.url().endsWith('/sessions/s1/plugins/team/run'),
   );
   await page.getByTestId('launch-submit').click();
   const request = await requestPromise;

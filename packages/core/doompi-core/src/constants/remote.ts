@@ -22,7 +22,7 @@ export const REMOTE_PUSH_ROUTE = `${REMOTE_API_ROUTE}/push`;
 
 export const REMOTE_PUSH_KEY_ROUTE = `${REMOTE_PUSH_ROUTE}/key`;
 
-export const PROTOCOL_SOCKET_ROUTE = '/api/pi';
+export const PROTOCOL_SOCKET_ROUTE = '/api/ws';
 
 /** The pairing page a scanned QR opens. Unauthenticated on the tunnel listener. */
 export const PAIRING_PAGE_ROUTE = '/pair';

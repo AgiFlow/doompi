@@ -47,23 +47,35 @@ export const CEREMONY_TTL_MS = 120_000;
  * addition to the session check rather than a replacement for it.
  */
 const GATED_ROUTES: readonly { method: string; pattern: RegExp; action: StepUpAction }[] = [
-  { method: 'POST', pattern: /^\/api\/sessions$/u, action: 'session.create' },
-  { method: 'POST', pattern: /^\/api\/sessions\/[^/]+\/resume$/u, action: 'session.create' },
-  { method: 'POST', pattern: /^\/api\/global\/plugin\/doompi\/logins$/u, action: 'provider.login' },
-  { method: 'POST', pattern: /^\/api\/global\/plugin\/doompi\/logins\/[^/]+\/answer$/u, action: 'provider.login' },
-  { method: 'DELETE', pattern: /^\/api\/global\/plugin\/doompi\/providers\/[^/]+$/u, action: 'provider.logout' },
+  { method: 'POST', pattern: /^\/api\/workspaces$/u, action: 'session.create' },
+  { method: 'POST', pattern: /^\/api\/workspaces\/[^/]+\/sessions(?:\/[^/]+\/resume)?$/u, action: 'session.create' },
+  { method: 'POST', pattern: /^\/api\/plugins\/doompi\/logins(?:\/[^/]+\/answer)?$/u, action: 'provider.login' },
+  { method: 'DELETE', pattern: /^\/api\/plugins\/doompi\/providers\/[^/]+$/u, action: 'provider.logout' },
   {
     method: 'PUT',
-    pattern: /^\/api\/(?:global|workspaces\/[^/]+)\/plugin\/config\/(?:value|repository\/selection|images)$/u,
+    pattern: /^\/api(?:\/workspaces\/[^/]+)?\/settings\/(?:value|repository\/selection|images)$/u,
     action: 'settings.write',
   },
-  { method: 'POST', pattern: /^\/api\/auth\/logins\/[^/]+\/answer$/u, action: 'provider.login' },
-  { method: 'DELETE', pattern: /^\/api\/auth\/providers\/[^/]+$/u, action: 'provider.logout' },
-  { method: 'PUT', pattern: /^\/api\/settings\/(?:value|repository\/selection)$/u, action: 'settings.write' },
-  { method: 'POST', pattern: /^\/api\/plugin\/mcp\/repository\/discover$/u, action: 'mcp.discover' },
-  { method: 'POST', pattern: /^\/api\/plugin\/mcp\/repository\/authorize$/u, action: 'mcp.authorize' },
-  { method: 'DELETE', pattern: /^\/api\/plugin\/mcp\/repository\/authorize\/[^/]+$/u, action: 'mcp.authorize' },
-  { method: 'POST', pattern: /^\/api\/plugin\/computer-use\/activate$/u, action: 'computer-use.activate' },
+  {
+    method: 'POST',
+    pattern: /^\/api\/workspaces\/[^/]+\/plugins\/mcp\/repository\/discover$/u,
+    action: 'mcp.discover',
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/workspaces\/[^/]+\/plugins\/mcp\/repository\/authorize$/u,
+    action: 'mcp.authorize',
+  },
+  {
+    method: 'DELETE',
+    pattern: /^\/api\/workspaces\/[^/]+\/plugins\/mcp\/repository\/authorize\/[^/]+$/u,
+    action: 'mcp.authorize',
+  },
+  {
+    method: 'POST',
+    pattern: /^\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/plugins\/computer-use\/activate$/u,
+    action: 'computer-use.activate',
+  },
 ];
 export function stepUpActionFor(method: string, path: string): StepUpAction | undefined {
   const wanted = method.toUpperCase();

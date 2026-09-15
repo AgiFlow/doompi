@@ -195,9 +195,9 @@ function directModuleDependencyIsUnbundlable(root: string): boolean {
   );
 }
 
-function directModuleDependencyError(root: string): Error {
+function directModuleDependencyError(root: string, importer?: string): Error {
   return new Error(
-    `Cannot compile direct extension module because dependency "${root}" has native bindings or package-owned resources that are not part of the compiled artifact`,
+    `Cannot compile direct extension module because dependency "${root}" has native bindings or package-owned resources that are not part of the compiled artifact${importer ? ` (imported by ${importer})` : ''}`,
   );
 }
 
@@ -1027,11 +1027,11 @@ function setExternalResolver(
           directModuleDependencyIsUnbundlable(root) &&
           !directModuleDependencyIsPinned(root, resources)
         ) {
-          throw directModuleDependencyError(root);
+          throw directModuleDependencyError(root, importer);
         }
         if (root === '@napi-rs/keyring' && kind === 'module' && directModuleDependencyIsPinned(root, resources)) {
           const directory = packageManifestDirectory(specifier);
-          if (!directory) throw directModuleDependencyError(root);
+          if (!directory) throw directModuleDependencyError(root, importer);
           return {
             id: `${root}/${path.relative(directory, canonicalPath(specifier)).split(path.sep).join('/')}`,
             external: true,
@@ -1072,7 +1072,7 @@ function setExternalResolver(
         directModuleDependencyIsUnbundlable(root) &&
         !directModuleDependencyIsPinned(root, resources)
       ) {
-        throw directModuleDependencyError(root);
+        throw directModuleDependencyError(root, importer);
       }
       if (root === '@napi-rs/keyring' && kind === 'module' && directModuleDependencyIsPinned(root, resources)) {
         return { id: renamed, external: true };

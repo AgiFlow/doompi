@@ -59,6 +59,13 @@ const embeddedFeature = vi.hoisted(() => {
 vi.mock('@agimon-ai/workflow-mcp', () => ({
   createEmbeddedWorkflowFeature: () => embeddedFeature.feature,
 }));
+vi.mock('../../../src/services/workflowWatcher', () => ({
+  readWorkflowRuns: () => [
+    { piSessionId: 'workflow-headless-test', view: { runKey: 'run-1', workspace: '/tmp' } },
+    { piSessionId: 'other', view: { runKey: 'foreign', workspace: '/tmp' } },
+    { view: { runKey: 'unstamped', workspace: '/tmp' } },
+  ],
+}));
 vi.mock('zod', () => ({ z: { toJSONSchema: vi.fn(() => ({ type: 'object' })) } }));
 
 async function fixture() {
@@ -100,6 +107,7 @@ async function fixture() {
       if (selected) minorModes = selected;
     }),
     assertActive: vi.fn(),
+    subscribeSelection: vi.fn(() => () => undefined),
     registerToolRestriction: () => registration,
     registerActivity: (activity: DoomHeadlessActivity) => {
       activities.push(activity);
@@ -159,9 +167,6 @@ describe('workflow headless facet', () => {
       throw new Error('Workflow headless registrations were not created');
 
     expect(mode.initialState).toMatchObject({ activation: 'inactive', condition: 'ready' });
-    expect(embeddedFeature.getRecordFilter()?.({})).toBe(true);
-    expect(embeddedFeature.getRecordFilter()?.({ env: { PI_SESSION_ID: 'other' } })).toBe(false);
-    expect(embeddedFeature.getRecordFilter()?.({ env: { PI_SESSION_ID: 'workflow-headless-test' } })).toBe(true);
     await expect(mode.handleAction('activate', {}, operation(test.execution))).resolves.toEqual({
       message: 'Workflow mode activated.',
     });
@@ -189,8 +194,8 @@ describe('workflow headless facet', () => {
     expect(
       await run.execute('run-status', { action: 'status', runKey: 'run-1' }, undefined, undefined, test.execution),
     ).toEqual({
-      content: [{ type: 'text', text: '[]' }],
-      details: [],
+      content: [{ type: 'text', text: '{\n  "runKey": "run-1",\n  "workspace": "/tmp"\n}' }],
+      details: { runKey: 'run-1', workspace: '/tmp' },
     });
     expect(
       await run.execute(
@@ -205,6 +210,14 @@ describe('workflow headless facet', () => {
       details: { error: 'Workflow activity is not active.' },
     });
 
+    for (const runKey of ['foreign', 'unstamped', 'missing']) {
+      expect(
+        await run.execute('missing', { action: 'status', runKey }, undefined, undefined, test.execution),
+      ).toMatchObject({
+        isError: true,
+        details: { error: 'Workflow run was not found in this session.' },
+      });
+    }
     const stopActivity = await activity.start(test.execution);
     expect(embeddedFeature.control.start).toHaveBeenCalledOnce();
     await expect(

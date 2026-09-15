@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { SUBAGENT_ACTIONS, SubagentParams } from '../../src/exports/subagentTool';
+import {
+  SUBAGENT_ACTION_FIELDS,
+  SUBAGENT_ACTIONS,
+  SubagentParams,
+  SubagentToolSchema,
+} from '../../src/exports/subagentTool';
 
 interface VariantSchema {
   additionalProperties?: boolean;
@@ -49,5 +54,37 @@ describe('SubagentParams', () => {
     for (const removed of ['wait', 'list', 'get', 'doctor', 'interrupt', 'resume']) {
       expect(actions).not.toContain(removed);
     }
+  });
+});
+
+/**
+ * How Pi's Anthropic Messages adapter rebuilds a tool's input schema:
+ * `{type:'object', properties: schema.properties ?? {}, required: schema.required ?? []}`.
+ * A top-level union has neither key, so it reached the model as an empty object
+ * while the host went on validating calls against the union.
+ */
+function anthropicInputSchema(schema: unknown): {
+  properties: Record<string, { enum?: readonly string[] }>;
+  required: readonly string[];
+} {
+  const source = schema as { properties?: Record<string, { enum?: readonly string[] }>; required?: readonly string[] };
+  return { properties: source.properties ?? {}, required: source.required ?? [] };
+}
+
+describe('SubagentToolSchema', () => {
+  it('still names every action after the Anthropic adapter flattens it', () => {
+    const wire = anthropicInputSchema(SubagentToolSchema);
+    expect(wire.properties.action?.enum).toEqual(Object.values(SUBAGENT_ACTIONS));
+    expect(wire.required).toEqual(['action']);
+  });
+
+  it('is why the union cannot be declared to the model directly', () => {
+    expect(anthropicInputSchema(SubagentParams).properties).toEqual({});
+  });
+
+  it('declares every field some action accepts, and no others', () => {
+    const declared = Object.keys(anthropicInputSchema(SubagentToolSchema).properties);
+    const accepted = new Set(Object.values(SUBAGENT_ACTION_FIELDS).flat());
+    expect(declared.toSorted()).toEqual([...accepted].toSorted());
   });
 });

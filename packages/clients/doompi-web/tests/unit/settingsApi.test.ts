@@ -56,7 +56,7 @@ describe('settings API', () => {
       config,
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/workspaces/repo/plugin/config/config?repoRoot=%2Frepo+with+space&key=modes.main.model&key=voice.language',
+      '/api/workspaces/repo/settings?repoRoot=%2Frepo+with+space&key=modes.main.model&key=voice.language',
       undefined,
     );
   });
@@ -171,7 +171,7 @@ describe('settings API', () => {
       ok: true,
       settings: repositorySettings,
     });
-    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/repo%20with%20space/plugin/config/repository', undefined);
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/repo%20with%20space/settings/repository', undefined);
     await expect(readRepositorySettings('repo')).resolves.toEqual({ ok: false, error: 'gone' });
     await expect(readRepositorySettings('repo')).resolves.toEqual({
       ok: false,

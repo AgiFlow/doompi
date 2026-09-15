@@ -284,4 +284,145 @@ describe('terminal Pi child session provider', () => {
     await service.close();
     await service.close();
   });
+
+  it('acquires real v4 ownership of the destination before the v3 copy lands', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-provider-ownership-'));
+    tempRoots.push(root);
+    const runtimeFactory = vi.fn(async (options: DirectHarnessRuntimeOptions) => fakeRuntime(options));
+    const service = createTerminalPiChildSessionService({ cwd: root, sessionsRoot: root, runtimeFactory });
+
+    const handle = await service.start(
+      request(
+        {
+          kind: 'terminal-pi-fork',
+          sourceSessionId: 'parent-session',
+          sourceLeafId: 'parent-leaf',
+          snapshotJsonl: v3Snapshot(),
+        },
+        root,
+      ),
+    );
+
+    const destination = runtimeFactory.mock.calls[0]?.[0].sessionPath;
+    expect(destination).toBeDefined();
+    expect(JSON.parse(fs.readFileSync(destination!, 'utf8').split('\n', 1)[0]!)).toMatchObject({
+      kind: 'header',
+      v: 4,
+    });
+    expect(fs.readdirSync(root).filter((name) => name.endsWith('.lock'))).toEqual([]);
+    await handle.dispose();
+    await service.close();
+  });
+
+  it('splits a thinking suffix off the model id and forwards live providers per spawn', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-provider-thinking-'));
+    tempRoots.push(root);
+    const { ownership } = owner();
+    const runtimeFactory = vi.fn(async (options: DirectHarnessRuntimeOptions) => fakeRuntime(options));
+    const providers = vi.fn(() => [{ id: 'anthropic-vertex' } as never]);
+    const service = createTerminalPiChildSessionService({
+      cwd: root,
+      sessionsRoot: root,
+      historyOwnership: ownership,
+      providers,
+      runtimeFactory,
+    });
+
+    const handle = await service.start({
+      ...request(
+        {
+          kind: 'terminal-pi-fork',
+          sourceSessionId: 'parent-session',
+          sourceLeafId: 'parent-leaf',
+          snapshotJsonl: v3Snapshot(),
+        },
+        root,
+      ),
+      model: 'anthropic-vertex/claude-sonnet-5:medium',
+    });
+
+    const options = runtimeFactory.mock.calls[0]?.[0];
+    expect(options?.model).toEqual({ provider: 'anthropic-vertex', id: 'claude-sonnet-5' });
+    expect(options?.thinkingLevel).toBe('medium');
+    expect(options?.providers).toEqual([{ id: 'anthropic-vertex' }]);
+    expect(providers).toHaveBeenCalledTimes(1);
+    await handle.dispose();
+    await service.close();
+  });
+
+  it.each([
+    { model: 'anthropic-vertex/claude-sonnet-5:xhigh', id: 'claude-sonnet-5', thinkingLevel: 'xhigh' },
+    { model: 'anthropic-vertex/claude-opus-max', id: 'claude-opus-max', thinkingLevel: undefined },
+  ])('resolves $model into a terminal fork model and thinking level', async ({ model, id, thinkingLevel }) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-provider-suffix-'));
+    tempRoots.push(root);
+    const { ownership } = owner();
+    const runtimeFactory = vi.fn(async (options: DirectHarnessRuntimeOptions) => fakeRuntime(options));
+    const service = createTerminalPiChildSessionService({
+      cwd: root,
+      sessionsRoot: root,
+      historyOwnership: ownership,
+      runtimeFactory,
+    });
+
+    const handle = await service.start({
+      ...request(
+        {
+          kind: 'terminal-pi-fork',
+          sourceSessionId: 'parent-session',
+          sourceLeafId: 'parent-leaf',
+          snapshotJsonl: v3Snapshot(),
+        },
+        root,
+      ),
+      model,
+    });
+
+    const options = runtimeFactory.mock.calls[0]?.[0];
+    expect(options?.model).toEqual({ provider: 'anthropic-vertex', id });
+    expect(options?.thinkingLevel).toBe(thinkingLevel);
+    if (thinkingLevel === undefined) expect(options).not.toHaveProperty('thinkingLevel');
+    await handle.dispose();
+    await service.close();
+  });
+
+  it('acquires the destination lease before the staged v3 journal is copied into place', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-provider-order-'));
+    tempRoots.push(root);
+    const { ownership } = owner();
+    const copyFileSync = vi.spyOn(fs, 'copyFileSync');
+    const runtimeFactory = vi.fn(async (options: DirectHarnessRuntimeOptions) => fakeRuntime(options));
+    const service = createTerminalPiChildSessionService({
+      cwd: root,
+      sessionsRoot: root,
+      historyOwnership: ownership,
+      runtimeFactory,
+    });
+
+    try {
+      const handle = await service.start(
+        request(
+          {
+            kind: 'terminal-pi-fork',
+            sourceSessionId: 'parent-session',
+            sourceLeafId: 'parent-leaf',
+            snapshotJsonl: v3Snapshot(),
+          },
+          root,
+        ),
+      );
+
+      const destination = runtimeFactory.mock.calls[0]?.[0].sessionPath;
+      expect(destination).toBeDefined();
+      const copyIndex = copyFileSync.mock.calls.findIndex((call) => call[1] === destination);
+      expect(copyIndex, 'staged snapshot was never copied to the destination').toBeGreaterThanOrEqual(0);
+      const acquireOrder = ownership.acquire.mock.invocationCallOrder[0];
+      expect(ownership.acquire).toHaveBeenCalledExactlyOnceWith(destination);
+      expect(acquireOrder).toBeLessThan(copyFileSync.mock.invocationCallOrder[copyIndex]!);
+      await handle.dispose();
+      await service.close();
+    } finally {
+      copyFileSync.mockRestore();
+    }
+  });
 });

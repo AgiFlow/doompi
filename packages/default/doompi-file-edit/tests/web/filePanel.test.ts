@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -118,7 +121,7 @@ describe('the file tab body', () => {
     const rendered = renderPlugin(FilePanel, { ...fixture.props, filePath: PATH, relPath: 'docs/shot.png' });
     expect(rendered.html).toContain('data-mode="media"');
     expect(rendered.html).toContain('Loading media...');
-    expect(rendered.html).not.toContain('/api/sessions/s1/file?path=docs%2Fshot.png');
+    expect(rendered.html).not.toContain('/api/workspaces/test-workspace/sessions/s1/file?path=docs%2Fshot.png');
   });
 
   it('says why a file it cannot read has nothing to show', () => {

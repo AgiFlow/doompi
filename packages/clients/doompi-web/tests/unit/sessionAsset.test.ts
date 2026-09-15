@@ -1,3 +1,6 @@
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+import { beforeEach as beforeEachApiRoutes } from 'vitest';
+beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 
 import { sealedHttpSession } from '../../src/web/lib/sealedSession';
@@ -23,7 +26,7 @@ describe('loadSessionAsset', () => {
 
     const asset = await loadSessionAsset('s 1', 'docs/a b.png');
 
-    expect(fetchSpy).toHaveBeenCalledWith('/api/sessions/s%201/file?path=docs%2Fa%20b.png', {
+    expect(fetchSpy).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions/s%201/file?path=docs%2Fa%20b.png', {
       cache: 'no-store',
       credentials: 'same-origin',
     });

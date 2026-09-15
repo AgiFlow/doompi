@@ -58,12 +58,12 @@ const Images = Type.Object({
   maxAllowedDimension: Type.Number(),
 });
 const http: DoomHttpContract[] = (['global', 'workspace'] as const).flatMap((scope) => {
-  const common = { scope, basePath: 'config', authentication: 'owner' as const };
+  const common = { scope, basePath: 'settings', authentication: 'owner' as const };
   return [
     {
       ...common,
       id: 'config',
-      path: '/config',
+      path: '/',
       method: 'GET',
       description: 'Read selected settings keys and file hashes.',
       parameters: [{ name: 'key', in: 'query', required: false, schema: Strings }],

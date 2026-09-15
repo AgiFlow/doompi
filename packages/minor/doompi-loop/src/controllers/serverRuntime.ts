@@ -209,17 +209,22 @@ export function createSessionState(host: DoomHeadlessHostService): DoomServerSes
     ],
     commands: [
       {
-        when: { state: { 'minor-mode': MODE_ID }, attribution: { kind: 'minor', mode: MODE_ID } },
         name: START_COMMAND_NAME,
         description: 'Start a registered loop.',
         async execute(args: string, execution: DoomHeadlessExecutionContext) {
+          if (!launchers) {
+            const modes = host.context.selection.state?.['minor-mode'] ?? [];
+            await host.changeSelection({ axis: 'state', key: 'minor-mode', values: [...modes, MODE_ID] });
+          }
           if (!launchers) throw new Error('Loop activity is not active.');
           const available = launchers.listLaunchers();
-          const selected = await execution.client.request({
-            kind: 'select',
-            title: 'Choose a loop launcher',
-            options: available.map((entry) => ({ label: entry.label, value: entry.id })),
-          });
+          const selected =
+            args.trim() ||
+            (await execution.client.request({
+              kind: 'select',
+              title: 'Choose a loop launcher',
+              options: available.map((entry) => ({ label: entry.label, value: entry.id })),
+            }));
           const launcherId = args.trim() || (typeof selected === 'string' ? selected : '');
           if (!launcherId) return;
           const instance = await launchers.launch(launcherId);
@@ -228,12 +233,10 @@ export function createSessionState(host: DoomHeadlessHostService): DoomServerSes
         },
       },
       {
-        when: { state: { 'minor-mode': MODE_ID }, attribution: { kind: 'minor', mode: MODE_ID } },
         name: LIST_COMMAND_NAME,
         description: 'List and stop active loops.',
         async execute(_args: string, execution: DoomHeadlessExecutionContext) {
-          if (!launchers) throw new Error('Loop activity is not active.');
-          const instances = launchers.listInstances();
+          const instances = launchers?.listInstances() ?? [];
           await notify(execution, instances.length === 0 ? 'No loops are active.' : JSON.stringify(instances, null, 2));
         },
       },

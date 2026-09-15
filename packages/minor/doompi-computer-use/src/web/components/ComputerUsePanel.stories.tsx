@@ -44,7 +44,7 @@ const FAILED = seed('cu-failed', {
     artifact: {
       artifactId: 'rec-8f21',
       status: 'ready',
-      downloadUrl: '/api/plugin/computer-use/artifacts/rec-8f21',
+      downloadUrl: '/api/plugins/computer-use/artifacts/rec-8f21',
       actionCount: 14,
       completedAt: '2024-05-14T14:32:10.000Z',
     },

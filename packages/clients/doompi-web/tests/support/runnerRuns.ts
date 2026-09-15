@@ -51,7 +51,8 @@ export interface RunnerApiServer {
 export async function startRunnerApiServer(storeDir: string, sessionId: string): Promise<RunnerApiServer> {
   const server = http.createServer((incoming, outgoing) => {
     const url = new URL(incoming.url ?? '/', 'http://session.local');
-    const streaming = /^\/api\/plugin\/runner\/runners\/([^/]+)\/log\/stream$/u.exec(url.pathname);
+    const streaming =
+      /^\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/plugins\/runner\/runners\/([^/]+)\/log\/stream$/u.exec(url.pathname);
     if (streaming) {
       const runId = decodeURIComponent(streaming[1] ?? '');
       const logPath = path.join(storeDir, sessionId, 'logs', `${runId}.log`);
@@ -74,7 +75,9 @@ export async function startRunnerApiServer(storeDir: string, sessionId: string):
       incoming.on('close', () => clearInterval(timer));
       return;
     }
-    const match = /^\/api\/plugin\/runner\/runners\/([^/]+)\/log$/u.exec(url.pathname);
+    const match = /^\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/plugins\/runner\/runners\/([^/]+)\/log$/u.exec(
+      url.pathname,
+    );
     if (!match) {
       outgoing.writeHead(404, { 'content-type': 'application/json' });
       outgoing.end(JSON.stringify({ error: 'Not found.' }));
