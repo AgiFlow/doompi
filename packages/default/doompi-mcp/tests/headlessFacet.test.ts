@@ -41,11 +41,14 @@ vi.mock('../src/services/mcpRuntime', () => ({
   },
 }));
 
-import { mcpServerFacet as mcpHeadlessFacet } from '../src/extensions/server';
+import { facet as mcpHeadlessFacet } from '../generated/server';
 
 function contextFor(host: DoomHeadlessHostService): Context {
   const context = new Context();
-  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session' });
+  context.provide(DOOM_SERVER_HOST_SERVICE, {
+    scope: 'session',
+    registerApi: () => ({ dispose() {} }),
+  });
   context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
   return context;
 }
@@ -77,6 +80,7 @@ describe('MCP headless facet', () => {
       return { dispose };
     };
     const host = {
+      registerApi: () => register(),
       registerResource: (resource: DoomHeadlessResource) => {
         resources.push(resource);
         return register();
@@ -193,6 +197,7 @@ describe('MCP headless facet', () => {
     const resources: DoomHeadlessResource[] = [];
     const register = () => ({ dispose: vi.fn() });
     const host = {
+      registerApi: () => register(),
       registerResource: (resource: DoomHeadlessResource) => {
         resources.push(resource);
         return register();

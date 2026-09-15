@@ -4,9 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import piEntry, { extension as notificationExtension } from '../../generated/pi';
 import * as publicSurface from '../../src/exports';
-import { notificationExtension } from '../../src/extensions/pi';
-import piEntry, { notificationExtension as piNamedEntry } from '../../src/extensions/pi';
 
 interface PackageManifest {
   name: string;
@@ -63,26 +62,31 @@ describe('doompi-notification package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual([
+      '.',
+      './api-contracts',
+      './extensions/pi',
+      './extensions/server',
+      './package.json',
+    ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
-    for (const subpath of ['.', './extensions/pi', './extensions/server']) {
+    for (const subpath of ['.', './api-contracts', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
     expect(manifest.doompiServer).toMatchObject({
-      entry: './src/extensions/server.ts',
+      entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['session'],
     });
   });
 
   it('routes the Pi entry through a default-exported factory', async () => {
-    const entry = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
+    const entry = await readFile(path.join(packageDirectory, 'generated/pi.ts'), 'utf8');
 
     expect(entry).toContain('definePiExtension');
-    expect(entry).toContain('export default notificationExtension');
+    expect(entry).toContain('export default extension');
     expect(piEntry).toBe(notificationExtension);
-    expect(piNamedEntry).toBe(notificationExtension);
   });
 
   it('re-exports the whole public surface through src/exports', () => {
@@ -103,9 +107,13 @@ describe('doompi-notification package contract', () => {
   });
 
   it('mounts its lifecycle under the shared Cordis host', async () => {
-    const factory = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
+    const entry = await readFile(path.join(packageDirectory, 'generated/pi.ts'), 'utf8');
+    const factory = await readFile(
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/extra.cli.ts'),
+      'utf8',
+    );
 
-    expect(factory).toContain('definePiExtension');
+    expect(entry).toContain('definePiExtension');
     expect(factory).not.toContain('new Context()');
     expect(factory).toContain('createNotificationRuntime');
   });

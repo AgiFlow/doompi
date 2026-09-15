@@ -14,9 +14,9 @@ import { Context, type Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { extension as loopExtension } from '../generated/pi';
 import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../src/constants/loop';
 import { STATUS_KEY } from '../src/constants/piLoop';
-import { loopExtension } from '../src/extensions/pi';
 import {
   DOOM_LOOP_LAUNCHERS_SERVICE,
   type DoomLoopLaunchersService,

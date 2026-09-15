@@ -5,8 +5,8 @@ import { createDoomServerHost } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
+import authorServerFacetDefault, { facet as authorServerFacet } from '../../../generated/server';
 import { api } from '../../../src/controllers/authorApi';
-import authorServerFacetDefault, { authorServerFacet } from '../../../src/extensions/server';
 import { readAuthorPrompt } from '../../../src/services/authorPrompt';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
@@ -145,8 +145,8 @@ describe('authorServerFacet', () => {
 
 describe('Author prompt resource', () => {
   it('reads the published prompt from source and nested compiled module locations', async () => {
-    const source = new URL('../../../src/extensions/server.ts', import.meta.url);
-    const compiled = new URL('../../../dist/packages/minor/doompi-author/src/extensions/server.mjs', import.meta.url);
+    const source = new URL('../../../generated/server.ts', import.meta.url);
+    const compiled = new URL('../../../dist/packages/minor/doompi-author/generated/server.mjs', import.meta.url);
     const expected = await readAuthorPrompt(source);
 
     expect(expected).toContain('name: doompi-use-author');

@@ -11,7 +11,7 @@ import type {
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { majorModeServerFacet as majorModeHeadlessFacet } from '../../src/extensions/server';
+import { facet as majorModeHeadlessFacet } from '../../generated/server';
 
 const roots: string[] = [];
 afterEach(() => {

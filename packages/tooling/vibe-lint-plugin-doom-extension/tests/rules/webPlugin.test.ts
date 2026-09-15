@@ -291,11 +291,10 @@ describe('Doom web plugin rules', () => {
       expect(webPluginManifest.check?.(manifest, root)).toBeNull();
     });
 
-    it('accepts source-only type imports when the published client is a bundle', () => {
+    it('accepts a routed browser bundle before build output exists', () => {
       write('src/web/index.ts', "import type { Demo } from '../types/demo'; export type View = Demo;");
       write('src/types/demo.ts', 'export type Demo = string;');
-      write('src/web/tsconfig.json', '{}');
-      write('dist/extensions/web.mjs', 'export const webPlugin = {};');
+      write('tsconfig.web.json', '{}');
       const manifest = writeManifest({
         name: 'p',
         files: ['dist'],
@@ -303,6 +302,17 @@ describe('Doom web plugin rules', () => {
         doompiWeb: { pluginId: 'demo', client: './dist/extensions/web.mjs' },
       });
       expect(webPluginManifest.check?.(manifest, root)).toBeNull();
+    });
+
+    it('requires the routed browser tsconfig at the package root', () => {
+      write('src/web/index.ts', entry);
+      const manifest = writeManifest({
+        name: 'p',
+        files: ['dist'],
+        dependencies: { [CORE_PACKAGE]: 'workspace:*' },
+        doompiWeb: { pluginId: 'demo', client: './dist/extensions/web.mjs' },
+      });
+      expect(webPluginManifest.check?.(manifest, root)).toContain('has no tsconfig.web.json');
     });
 
     it('accepts optional browser peers backed by dev dependencies', () => {

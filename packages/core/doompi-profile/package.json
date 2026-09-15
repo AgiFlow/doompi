@@ -27,23 +27,27 @@
   },
   "files": [
     "dist",
-    "src/web",
     "llms.txt",
     "README.md",
     "src/prompts",
     "LICENSE",
-    "package.json",
-    "src/extensions/web.ts"
+    "package.json"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
-  "types": "./dist/index.d.mts",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
   "jsnext:main": "./dist/index.mjs",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
+    },
+    "./api-contracts": {
+      "types": "./dist/api-contracts.d.mts",
+      "import": "./dist/api-contracts.mjs",
+      "require": "./dist/api-contracts.cjs"
     },
     "./extensions/persona": {
       "types": "./dist/extensions/persona.d.mts",
@@ -60,6 +64,9 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -68,7 +75,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -82,6 +89,7 @@
     "typebox": "1.3.30"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/doompi-core": "workspace:*",
     "@agimon-ai/doompi-voice": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
@@ -114,7 +122,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
@@ -127,7 +135,7 @@
   "doompiWeb": {
     "pluginId": "profile",
     "channels": [],
-    "client": "./src/extensions/web.ts",
+    "client": "./dist/extensions/web.mjs",
     "scopes": [
       "session"
     ]

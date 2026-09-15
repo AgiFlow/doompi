@@ -13,7 +13,7 @@ import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { autocompactServerFacet as autocompactHeadlessFacet } from '../src/extensions/server';
+import { facet as autocompactHeadlessFacet } from '../generated/server';
 
 function contextFor(host: DoomHeadlessHostService): Context {
   const context = new Context();

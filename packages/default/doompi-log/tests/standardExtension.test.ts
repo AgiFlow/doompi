@@ -30,7 +30,7 @@ vi.mock('@agimon-ai/doompi-telemetry', () => ({
   createDoomTelemetry: lifecycleMocks.createTelemetry,
 }));
 
-const { doomLogExtension } = await import('../src/extensions/pi');
+const { extension: doomLogExtension } = await import('../generated/pi');
 
 function createContext(sessionId: string): ExtensionContext {
   return {

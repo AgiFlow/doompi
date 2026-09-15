@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { defaultPluginId, generateExtension } from '../src/services/generate';
+import { doompiExtension } from '../src/services/tsdownPreset';
 import { StaleGeneratedError, writeGenerated } from '../src/services/writeGenerated';
 
 const created: string[] = [];
@@ -99,6 +100,34 @@ describe('generateExtension', () => {
 
     expect(result.targets).toEqual([]);
     expect(result.changed).toEqual([]);
+  });
+
+  it('removes an obsolete generated target when its last contribution disappears', () => {
+    const dir = packageWith({ 'src/extensions/(frontend)/tab/Panel.tsx': EMPTY });
+    generateExtension({ packageDir: dir });
+    expect(exists(dir, 'generated/web.ts')).toBe(true);
+
+    fs.rmSync(path.join(dir, 'src/extensions/(frontend)/tab/Panel.tsx'));
+    const result = generateExtension({ packageDir: dir });
+
+    expect(result.changed).toEqual(['generated/web.ts']);
+    expect(exists(dir, 'generated/web.ts')).toBe(false);
+  });
+});
+
+describe('doompiExtension', () => {
+  it('generates ignored entries during CI builds unless check mode is explicit', () => {
+    const dir = packageWith({ 'src/extensions/(backend)/tool/grep.ts': EMPTY });
+    const previous = process.env.CI;
+    process.env.CI = '1';
+    try {
+      expect(() => doompiExtension({ packageDir: dir })).not.toThrow();
+      expect(exists(dir, 'generated/pi.ts')).toBe(true);
+      expect(exists(dir, 'generated/server.ts')).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env.CI;
+      else process.env.CI = previous;
+    }
   });
 });
 

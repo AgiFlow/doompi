@@ -7,8 +7,8 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ASK_USER_QUESTION_TOOL_NAME } from '../src/constants/tool';
+import { type AskUserQuestionToolDependencies } from '../src/extensions/workspaces/sessions/(backend)/_tools/askUserQuestion';
 import { QuestionnaireCoordinator } from '../src/services/questionnaireCoordinator';
-import { type AskUserQuestionToolDependencies } from '../src/tools/askUserQuestion';
 import type { QuestionnaireResult } from '../src/types/questionnaire';
 
 const extensionMocks = vi.hoisted(() => {
@@ -30,8 +30,8 @@ const extensionMocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('../src/tools/askUserQuestion', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/tools/askUserQuestion')>()),
+vi.mock('../src/extensions/workspaces/sessions/(backend)/_tools/askUserQuestion', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/extensions/workspaces/sessions/(backend)/_tools/askUserQuestion')>()),
   createAskUserQuestionTool: extensionMocks.registerTool,
 }));
 vi.mock('../src/services/voiceQuestionHandoff', async (importOriginal) => ({
@@ -42,7 +42,7 @@ vi.mock('../src/tui/runQuestionnaire', () => ({
   runTuiQuestionnaire: extensionMocks.runTuiQuestionnaire,
 }));
 
-import { userFeedbackExtension } from '../src/extensions/pi';
+import { extension as userFeedbackExtension } from '../generated/pi';
 
 type PiHandler = (event: unknown, context: ExtensionContext) => unknown;
 

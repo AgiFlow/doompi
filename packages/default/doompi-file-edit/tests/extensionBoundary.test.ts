@@ -12,11 +12,11 @@ async function readSource(relativePath: string): Promise<string> {
 
 describe('doom file edit extension boundaries', () => {
   it('folds typed host integration into the only standard Pi factory', async () => {
-    const piEntry = await readSource('src/extensions/pi.ts');
+    const piEntry = await readSource('src/extensions/workspaces/sessions/(backend)/extra.cli.ts');
     const implementation = await readSource('src/controllers/fileEditRuntime.ts');
     const alternateDoomEntry = await readSource('src/exports/extensions/doom.ts');
 
-    expect(piEntry).toContain('export default fileEditExtension');
+    expect(piEntry).toContain('export default');
     expect(implementation).not.toMatch(/@agimon-ai\/doompi-team|@agimon-ai\/doompi-config/u);
     expect(implementation).toMatch(/DOOM_UI_HUB_SERVICE/u);
     expect(implementation).toMatch(/registerLeader/u);
@@ -32,7 +32,7 @@ describe('doom file edit extension boundaries', () => {
   });
 
   it('keeps the Pi entry thin and delegates runtime behavior', async () => {
-    const piEntry = await readSource('src/extensions/pi.ts');
+    const piEntry = await readSource('src/extensions/workspaces/sessions/(backend)/extra.cli.ts');
 
     expect(piEntry).not.toMatch(/registerCommand|session_start|tool_execution/u);
     expect(piEntry).toMatch(/default/u);

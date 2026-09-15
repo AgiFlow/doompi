@@ -35,7 +35,7 @@ vi.mock('../../src/tui/goalHistoryOverlay', () => ({
   openGoalHistoryOverlay: vi.fn(),
 }));
 
-import { goalExtension as goalPiExtension } from '../../src/extensions/pi';
+import { extension as goalPiExtension } from '../../generated/pi';
 
 async function registerGoalExtension(pi: ExtensionAPI): Promise<void> {
   const root = mocks.createCordisRoot() as Context;

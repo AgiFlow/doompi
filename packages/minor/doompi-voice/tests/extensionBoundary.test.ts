@@ -20,12 +20,12 @@ afterEach(() => {
 
 describe('doom voice extension boundaries', () => {
   it('exposes one standard Pi factory with typed host integrations folded into it', async () => {
-    const piEntry = await readSource('src/extensions/pi.ts');
+    const piEntry = await readSource('generated/pi.ts');
     const standardFactory = await readSource('src/controllers/voicePlugin.ts');
     const implementation = await readSource('src/controllers/voice.ts');
     const alternateDoomEntry = await readSource('src/exports/extensions/doom.ts');
 
-    expect(piEntry).toContain('export default voicePiExtension');
+    expect(piEntry).toContain('export default extension');
     expect(standardFactory).toMatch(/DOOM_UI_HUB_SERVICE/u);
     expect(standardFactory).toMatch(/register(Footer|Leader|Config)/u);
     expect(implementation).not.toMatch(/\bDoomConfigService\b|doom-pi-ui|createProtocolRuntime/u);

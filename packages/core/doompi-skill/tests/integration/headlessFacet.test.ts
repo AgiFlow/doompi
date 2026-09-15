@@ -11,7 +11,7 @@ import type {
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { skillServerFacet as skillHeadlessFacet } from '../../src/extensions/server';
+import { facet as skillHeadlessFacet } from '../../generated/server';
 
 const temporaryDirectories: string[] = [];
 afterEach(async () => {
@@ -19,6 +19,15 @@ afterEach(async () => {
 });
 
 describe('skill headless facet', () => {
+  it('contributes nothing when a session agent is unavailable', async () => {
+    const close = await skillHeadlessFacet.apply({
+      effect() {},
+      get: (name: string) => (name === 'doom/server-host' ? { scope: 'session' } : undefined),
+    } as unknown as Context);
+
+    await close?.();
+  });
+
   it('lists discovered skills and invokes a requested skill', async () => {
     const cwd = await mkdtemp(path.join(tmpdir(), 'doompi-skill-headless-'));
     temporaryDirectories.push(cwd);

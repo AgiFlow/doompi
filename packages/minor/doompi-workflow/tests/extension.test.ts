@@ -12,7 +12,7 @@ import { DoomLeaderRegistry } from '@agimon-ai/doompi-ui/leaderRegistry';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const TEST_ENVIRONMENT = Object.freeze({});
-import { workflowExtension } from '../src/extensions/pi';
+import { extension as workflowExtension } from '../generated/pi';
 import {
   dispatcherTools,
   dispatcherToolRestriction,
@@ -72,7 +72,7 @@ describe('doom workflow extension', () => {
     expect(help.listContributions()).toEqual([
       expect.objectContaining({
         source: '@agimon-ai/doompi-workflow',
-        moduleUrl: expect.stringMatching(/pi\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
         skills: [
           {
             name: 'doompi-author-workflow',

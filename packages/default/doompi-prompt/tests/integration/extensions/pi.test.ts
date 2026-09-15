@@ -3,9 +3,9 @@ import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core
 import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it } from 'vitest';
 
+import { extension as activatePromptExtension } from '../../../generated/pi';
 import { COMMAND_NAME } from '../../../src/constants/prompts';
 import { COMMAND_NAME as PROMPT_SAVE_COMMAND } from '../../../src/constants/promptSave';
-import { activatePromptExtension } from '../../../src/extensions/pi';
 import { createRecentPrompts } from '../../../src/models/recentPrompts';
 import type { PromptExtensionDependencies, SavedPrompt } from '../../../src/types/prompt';
 
@@ -99,7 +99,7 @@ describe('doompi-prompt Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-prompt',
-        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
         skills: [
           {
             name: 'doompi-use-prompt',

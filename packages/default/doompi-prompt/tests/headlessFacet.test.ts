@@ -13,7 +13,7 @@ import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { promptServerFacet as promptHeadlessFacet } from '../src/extensions/server';
+import { facet as promptHeadlessFacet } from '../generated/server';
 
 const roots: string[] = [];
 const originalAgentDirectory = process.env.PI_CODING_AGENT_DIR;

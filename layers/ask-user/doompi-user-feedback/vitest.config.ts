@@ -13,7 +13,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text'],
-      exclude: ['node_modules/', 'dist/', 'tests/', '**/*.d.ts', '**/*.config.*', '**/coverage/**'],
+      exclude: ['node_modules/', 'dist/', 'generated/**', 'tests/', '**/*.d.ts', '**/*.config.*', '**/coverage/**'],
       reportOnFailure: false,
       enabled: true,
       skipFull: true,

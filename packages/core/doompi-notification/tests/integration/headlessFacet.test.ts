@@ -6,7 +6,7 @@ import type {
 import type { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { notificationServerFacet as notificationHeadlessFacet } from '../../src/extensions/server';
+import { facet as notificationHeadlessFacet } from '../../generated/server';
 
 describe('notification headless command', () => {
   it('trims and forwards a non-empty notification body', async () => {

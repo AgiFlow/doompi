@@ -9,7 +9,7 @@ import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai
 import { Context } from '@deepseek-ai/cordis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { runnerServerFacet } from '../../../src/extensions/server';
+import { facet as runnerServerFacet } from '../../../generated/server';
 
 const lifecycleMocks = vi.hoisted(() => {
   const container = {

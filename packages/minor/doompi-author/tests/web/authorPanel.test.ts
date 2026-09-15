@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
 import {
   AuthorDocumentPanel,
   authorFileTab,

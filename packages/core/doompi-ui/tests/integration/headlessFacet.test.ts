@@ -7,7 +7,7 @@ import type {
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { uiServerFacet } from '../../src/extensions/server';
+import { facet as uiServerFacet } from '../../generated/server';
 
 describe('UI headless inventory', () => {
   it('reports sorted unique tool names through the resource and command', async () => {

@@ -1,23 +1,9 @@
-// @scaffold-generated
+import { doompiExtension } from '@agimon-ai/doompi-build/tsdown';
 import { defineConfig } from 'tsdown';
 
-export default defineConfig({
-  entry: {
-    'api-contracts': 'src/exports/apiContracts.ts',
-    index: 'src/exports/index.ts',
-    'extensions/pi': 'src/extensions/pi.ts',
-    'extensions/server': 'src/extensions/server.ts',
-  },
-  clean: true,
-  dts: { incremental: true, parallel: false, eager: true },
-  exports: false,
-  format: ['esm', 'cjs'],
-  minify: {
-    compress: true,
-    mangle: { toplevel: true },
-    codegen: { removeWhitespace: true },
-  },
-  platform: 'node',
-  sourcemap: true,
-  unbundle: true,
+const routed = doompiExtension({
+  packageDir: process.cwd(),
 });
+if (!Array.isArray(routed)) throw new Error('help requires its web bundle.');
+
+export default defineConfig([{ ...routed[0], exports: false }, routed[1]]);

@@ -55,26 +55,28 @@ scanExtensions({
 
 ## Generating
 
-`generateExtension` runs the scan, renders an entry for each host the tree contributes to, and writes it. A target with nothing in it produces no file, so a backend-only package never grows an empty cockpit entry.
+`generateExtension` scans the authored tree, renders an entry for each host it contributes to, and writes build inputs beneath ignored `generated/`. A target with no contributions produces no entry, and removing a target deletes its obsolete generated entry.
 
 ```ts
 import { generateExtension } from '@agimon-ai/doompi-build';
 
-const { targets, changed, notices } = generateExtension({ packageDir, check: Boolean(process.env.CI) });
+const { targets, changed, notices } = generateExtension({ packageDir });
 ```
 
-Generated entries keep their historical paths, `src/extensions/{pi,server,web}.ts`, so nothing downstream has to change: the Pi compiler, the server bundle loader and the cockpit bundler all keep reading the same files. They are committed, and `check` throws on a stale one instead of writing it.
+Normal builds generate missing or stale entries, including in CI. Pass `check: true` only for an explicit write-free freshness check. Generated files are disposable build output and are not committed.
 
 ## The tsdown preset
 
 ```ts
 // tsdown.config.ts, the whole file
-import { defineConfig } from 'tsdown';
 import { doompiExtension } from '@agimon-ai/doompi-build/tsdown';
+import { defineConfig } from 'tsdown';
 
 export default defineConfig(doompiExtension());
 ```
 
-The scan and the write happen at config-load time rather than in a plugin hook, because `entry` has to exist before the build graph does. That is what the cockpit's own config already does for its generated plugin registry.
+The preset generates entries while the config loads because tsdown needs its entry map before building. It builds Node host entries and public `src/exports` modules, then bundles routed frontend contributions separately to `dist/extensions/web.mjs`. The browser bundle keeps bare package imports external so the cockpit supplies shared React and store singletons. It also emits local `?url` assets and `?worker&url` worker chunks.
 
-The cockpit entry is deliberately absent from `entry`: the browser half ships as source and is compiled by the cockpit's bundler, not this one.
+The build synchronizes `pi`, `doompiServer`, `doompiWeb`, and generated host exports in `package.json`. Keep package-specific public entries with the preset `entry` option, use `exportsDir` for a nonstandard public-export root, and set `pluginId` when the historical cockpit id differs from the package-derived default.
+
+Packages with a frontend target typecheck it through a root `tsconfig.web.json`. Include `generated` in the Node project, exclude routed `(frontend)` files from it, and include those files plus `generated/web.ts` in the browser project.

@@ -3,8 +3,11 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  type AskUserQuestionToolDependencies,
+  createAskUserQuestionTool,
+} from '../../src/extensions/workspaces/sessions/(backend)/_tools/askUserQuestion';
 import type { QuestionParams } from '../../src/schemas/questionnaire';
-import { type AskUserQuestionToolDependencies, createAskUserQuestionTool } from '../../src/tools/askUserQuestion';
 import { askUserToolRender } from '../../src/tui/askUserToolRender';
 import type { ToolTextResult } from '../../src/types/questionnaire';
 

@@ -16,7 +16,7 @@ import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { helpServerFacet } from '../../src/extensions/server';
+import { facet as helpServerFacet } from '../../generated/server';
 
 describe('help headless facet', () => {
   it('registers activation-gated resources and sends them through the help command', async () => {

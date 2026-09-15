@@ -21,13 +21,14 @@ const loadDoomConfig = vi.hoisted(() => vi.fn(() => ({ modes: {} }) as unknown))
 const getHarnessState = vi.hoisted(() => vi.fn(() => ({}) as unknown));
 vi.mock('@agimon-ai/doompi-config', () => ({ loadDoomConfig, getHarnessState }));
 
+import { extension as autocompactExtension } from '../generated/pi';
 import {
   CHECKPOINT_MESSAGE_TYPE,
   CONTEXT_MESSAGE_TYPE,
   RUNTIME_STATE_MESSAGE_TYPE,
   STATE_CUSTOM_TYPE,
 } from '../src/constants/autocompact';
-import { autocompactExtension } from '../src/extensions/pi';
+import type { AutocompactDependencies } from '../src/services/autocompactRuntime';
 import {
   AUTOCOMPACT_EVENT,
   type AutocompactEventAttributes,
@@ -211,7 +212,7 @@ async function createHarness(
     };
     cordis.provide(DOOM_CONTEXT_CONTRIBUTIONS_SERVICE, contextContributionsService);
   }
-  await autocompactExtension.install(cordis, pi, {
+  const extensionOptions: AutocompactDependencies = {
     generateCheckpoint: (input) => {
       generationRequests.push({
         messages: input.messages as Array<{ role: string; content?: unknown }>,
@@ -222,7 +223,8 @@ async function createHarness(
       return new Promise<string>((resolve, reject) => pendingGenerations.push({ resolve, reject }));
     },
     telemetry,
-  });
+  };
+  await autocompactExtension.install(cordis, pi, extensionOptions as never);
   pi.on('session_shutdown', () => cordis.fiber.dispose());
 
   return {

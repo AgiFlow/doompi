@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import standardPiExtension, { activatePlanExtension } from '../src/extensions/pi';
+import standardPiExtension, { extension as activatePlanExtension } from '../generated/pi';
 
 describe('Doom Plan Pi entry', () => {
   it('exports its named declaration as the loader default', () => {

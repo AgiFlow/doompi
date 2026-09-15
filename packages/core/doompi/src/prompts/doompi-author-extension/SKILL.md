@@ -24,10 +24,11 @@ Choose the package tier from the capability, not convenience:
 
 1. Inspect a nearby package with the same host surfaces and reuse its structure.
 2. Put logic in `services/<serviceName>/index.ts`, service ports in `type.ts`, mutable state in `models`, request handlers in `controllers`, and tools in `tools`. Keep reusable types, schemas, and constant data in their named folders. Do not create `adapters`, `container`, `commands`, or `providers` roots.
-3. Implement direct host entries in `src/extensions/pi.ts`, `server.ts`, or `web.ts` with `definePiExtension`, `defineServerPlugin`, or `defineWebPlugin`. Entries compose controllers, tools, and services. Build entries directly with tsdown, separately from flat public forwarding files in `src/exports`.
+3. Author each contribution at `src/extensions/<scope>/(backend|frontend)/<surface>/<name>[.<target>].<ext>`. Export one declaration or factory through the typed `define*` helper for that surface. Do not hand-write `pi.ts`, `server.ts`, or `web.ts`; `doompiExtension()` generates them beneath ignored `generated/` and builds the published host artifacts.
 4. Return typed contributions from a named declaration or per-mount factory. Factories may be async. Use optional `onStart`, `onStop`, and `onDispose` hooks for lifecycle work; helpers own Cordis initialization, registration, readiness, and cleanup.
 5. Put provider plugins in services and include them in the `services` contribution array. Consume required providers inside an owning injection with the corresponding `require...` accessor. The helper handles optional providers for native contributions such as resources and minor modes.
-6. Keep package exports explicit and flat, with only reusable APIs. If the extension contributes Help, publish `src/prompts/<skill-name>/SKILL.md`, link it from `llms.txt`, and declare its descriptor in `resources` with the exact package name and `import.meta.url`.
-7. Run the repository checks or equivalent standalone package checks before publishing.
+6. Keep package exports explicit and flat under `src/exports`, with only reusable APIs. If the extension contributes Help, publish `src/prompts/<skill-name>/SKILL.md`, link it from `llms.txt`, and declare its descriptor in `resources` with the exact package name and `import.meta.url`.
+7. For frontend contributions, add a root `tsconfig.web.json`, keep routed `(frontend)` files out of the Node project, and typecheck both projects.
+8. Run the repository checks or equivalent standalone package checks before publishing.
 
 Read [references/extension-contract.md](references/extension-contract.md) for the concrete package, lifecycle, and verification contract.

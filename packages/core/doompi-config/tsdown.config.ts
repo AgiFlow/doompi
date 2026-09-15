@@ -1,6 +1,9 @@
+import { doompiExtension } from '@agimon-ai/doompi-build/tsdown';
 import { defineConfig } from 'tsdown';
 
-export default defineConfig({
+const routed = doompiExtension({
+  packageDir: process.cwd(),
+  exportsDir: 'src/exports/_none',
   entry: {
     'api-contracts': 'src/exports/apiContracts.ts',
     agentPluginMcp: 'src/exports/agentPluginMcp.ts',
@@ -20,19 +23,8 @@ export default defineConfig({
     profiles: 'src/exports/profiles.ts',
     selectionSwitch: 'src/exports/selectionSwitch.ts',
     types: 'src/exports/types.ts',
-    'extensions/pi': 'src/extensions/pi.ts',
-    'extensions/server': 'src/extensions/server.ts',
   },
-  clean: true,
-  dts: { incremental: true, parallel: false, eager: true },
-  exports: false,
-  format: ['esm', 'cjs'],
-  minify: {
-    compress: true,
-    mangle: { toplevel: true },
-    codegen: { removeWhitespace: true },
-  },
-  platform: 'node',
-  sourcemap: true,
-  unbundle: true,
 });
+if (Array.isArray(routed)) throw new Error('Config does not provide a browser extension.');
+
+export default defineConfig({ ...routed, exports: false });

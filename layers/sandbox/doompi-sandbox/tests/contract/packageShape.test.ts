@@ -85,14 +85,16 @@ describe('doompi-sandbox package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
+      './api-contracts',
       './cockpit-harness',
-      './sandbox-harness',
       './extensions/pi',
       './extensions/server',
+      './sandbox-harness',
       './package.json',
     ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(conditions(exportsMap['.'])).toEqual(['types', 'import', 'require']);
+    expect(conditions(exportsMap['./api-contracts'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./cockpit-harness'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./sandbox-harness'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/pi'])).toEqual(['types', 'import', 'require']);

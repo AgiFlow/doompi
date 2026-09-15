@@ -2,7 +2,7 @@ import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testi
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
 import { LOOP_VIEW_STATUS_KEY } from '../../src/types/loopView';
 import { LoopActivityItems } from '../../src/web/components/LoopsActivitySection';
 const webPlugin = {

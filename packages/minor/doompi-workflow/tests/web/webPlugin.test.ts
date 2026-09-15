@@ -6,7 +6,7 @@ import {
 } from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
 import { workflows } from '../../src/web/stores/workflowsStore';
 const webPlugin = {
   id: scopedWebPlugin.id,

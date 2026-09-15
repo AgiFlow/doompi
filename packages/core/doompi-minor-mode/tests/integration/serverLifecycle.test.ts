@@ -9,7 +9,7 @@ import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import server from '../../src/extensions/server';
+import server from '../../generated/server';
 import { requireMinorModeCatalog } from '../../src/schemas/mode';
 import { restoreMinorModeSelection } from '../../src/services/projection';
 

@@ -42,14 +42,23 @@ function webScopes(graph: ExtensionGraph): ExtensionScope[] {
 }
 
 /** The frame types the browser half claims, which the cockpit reads before loading it. */
-function channels(graph: ExtensionGraph): string[] {
-  return [
-    ...new Set(
-      graph.entries
-        .filter((entry) => entry.side === 'frontend' && entry.surface === 'channel')
-        .map((entry) => toSnake(entry.name)),
-    ),
-  ].sort();
+function channels(graph: ExtensionGraph, manifest: Record<string, unknown>): string[] {
+  const routed = graph.entries
+    .filter((entry) => entry.side === 'frontend' && entry.surface === 'channel')
+    .map((entry) => toSnake(entry.name));
+  const hasOpaqueFrontend = graph.entries.some((entry) => entry.side === 'frontend' && entry.role === 'escape-hatch');
+  if (!hasOpaqueFrontend) return [...new Set(routed)].sort();
+
+  // An escape hatch owns an opaque contributions object, so the scanner cannot
+  // see channels declared inside it. While that hatch exists, its manifest
+  // channels remain explicit source metadata and are merged with routed ones.
+  const blocks = Array.isArray(manifest.doompiWeb) ? manifest.doompiWeb : [manifest.doompiWeb];
+  const declared = blocks.flatMap((block) => {
+    if (block === null || typeof block !== 'object') return [];
+    const value = (block as Record<string, unknown>).channels;
+    return Array.isArray(value) ? value.filter((channel): channel is string => typeof channel === 'string') : [];
+  });
+  return [...new Set([...routed, ...declared])].sort();
 }
 
 /**
@@ -107,6 +116,7 @@ export function syncManifest(input: ManifestSync): Record<string, unknown> {
     // Added from the target rather than from the file existing, because this
     // runs on the node build's build:done and the browser build follows it.
     if (targets.includes('web')) exportsMap[WEB_EXPORT] = { import: WEB_DIST };
+    else delete exportsMap[WEB_EXPORT];
     manifest.exports = Object.fromEntries(
       Object.entries(exportsMap).sort(([left], [right]) =>
         left === './package.json' ? 1 : right === './package.json' ? -1 : left.localeCompare(right),
@@ -132,7 +142,7 @@ export function syncManifest(input: ManifestSync): Record<string, unknown> {
   if (targets.includes('web')) {
     manifest.doompiWeb = {
       pluginId,
-      channels: channels(graph),
+      channels: channels(graph, manifest),
       // The built browser bundle, not the source. Its own tsdown config
       // targets a browser and leaves every bare specifier external, so the
       // cockpit resolves one React rather than bundling a copy per plugin.

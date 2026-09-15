@@ -4,8 +4,8 @@ import type { EventBusLike } from '@agimon-ai/doompi-core/protocol';
 import type { ExtensionAPI, ExtensionContext, ToolInfo } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
+import doomPiUiExtension from '../../generated/pi';
 import type { UiTelemetry } from '../../src/exports/logSinkTelemetry';
-import doomPiUiExtension from '../../src/extensions/pi';
 
 type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
 

@@ -12,7 +12,7 @@ import {
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import profileHeadlessFacet from '../../src/extensions/server';
+import profileHeadlessFacet from '../../generated/server';
 
 const roots: string[] = [];
 const SECRET = 'synthetic-headless-profile-secret';

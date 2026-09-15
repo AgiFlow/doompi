@@ -43,10 +43,11 @@ describe('doompi-author package contract', () => {
     );
     expect(Object.keys(value.exports ?? {})).toEqual([
       '.',
+      './author-facade',
       './extensions/pi',
       './extensions/server',
+      './extensions/web',
       './package.json',
-      './author-facade',
     ]);
     expect(value.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });
@@ -56,16 +57,17 @@ describe('doompi-author package contract', () => {
     expect('doompiApi' in value).toBe(false);
     expect(value.doompiServer).toEqual({
       contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
-      entry: './src/extensions/server.ts',
+      entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
     });
     expect(value.doompiWeb).toMatchObject({
       pluginId: 'author',
       channels: ['author_webmcp'],
-      client: './src/extensions/web.ts',
+      client: './dist/extensions/web.mjs',
     });
     expect(value.doompiWeb?.hub).toBeUndefined();
-    expect(value.files).toEqual(expect.arrayContaining(['dist', 'src/web', 'src/prompts', 'llms.txt', 'README.md']));
+    expect(value.files).toEqual(expect.arrayContaining(['dist', 'src/prompts', 'llms.txt', 'README.md']));
+    expect(value.files).not.toContain('src/web');
   });
 });

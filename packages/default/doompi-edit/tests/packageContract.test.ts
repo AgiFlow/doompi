@@ -69,7 +69,10 @@ describe('doompi-edit package contract', () => {
   it('keeps exports closed with ESM, CJS, and declaration build outputs', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
-    const publicEntries = Object.entries(exportsMap).filter(([subpath]) => subpath !== './package.json');
+    expect(exportsMap['./extensions/web']).toEqual({ import: './dist/extensions/web.mjs' });
+    const publicEntries = Object.entries(exportsMap).filter(
+      ([subpath]) => subpath !== './package.json' && subpath !== './extensions/web',
+    );
     expect(publicEntries.length).toBeGreaterThan(0);
     expect(Object.keys(exportsMap)).not.toContain('./*');
 
@@ -87,7 +90,7 @@ describe('doompi-edit package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
     expect(exportsMap['./package.json']).toBeDefined();
-    expect(manifest.files).toEqual(['dist', 'src/web', 'src/extensions/web.ts', '!src/web/**/*.stories.tsx']);
+    expect(manifest.files).toEqual(['dist']);
     expect(manifest.files).not.toContain('src');
     expect(manifest.files).not.toContain('tests');
     await expect(access(path.join(packageDirectory, 'dist'))).resolves.toBeUndefined();

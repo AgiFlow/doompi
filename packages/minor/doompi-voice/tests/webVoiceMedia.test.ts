@@ -40,7 +40,10 @@ describe('browser voice media', () => {
     first.voiceMediaWakes.reset();
   });
   it('publishes both controls and page-lifetime media channels', async () => {
-    const source = await readFile(new URL('../src/extensions/web.ts', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL('../src/extensions/workspaces/sessions/(frontend)/extra.ts', import.meta.url),
+      'utf8',
+    );
 
     expect(source).toContain('channels: [voiceMediaWakeChannel, voiceOwnershipChannel]');
     expect(source).toContain('start: startVoiceMediaRuntime');
@@ -58,13 +61,19 @@ describe('browser voice media', () => {
   });
 
   it('does not classify autonomous voice capture as background work', async () => {
-    const source = await readFile(new URL('../src/extensions/web.ts', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL('../src/extensions/workspaces/sessions/(frontend)/extra.ts', import.meta.url),
+      'utf8',
+    );
 
     expect(source).toContain('marksBackgroundWork: false');
   });
 
   it('presents narration as readable conversational output', async () => {
-    const source = await readFile(new URL('../src/extensions/web.ts', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL('../src/extensions/workspaces/sessions/(frontend)/extra.ts', import.meta.url),
+      'utf8',
+    );
     const rendered = renderPlugin(
       VoiceToolMessage,
       toolMessagePropsFixture({

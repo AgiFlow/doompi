@@ -39,9 +39,10 @@ export function displayedAuthorRegions(
 ): readonly AuthorDisplayedRegion[] {
   const draftRegions = workspace?.regions ?? [];
   if (draftRegions.length > 0) return draftRegions.map((region, index) => ({ ordinal: index + 1, region }));
-  const activeRequest = workspace?.requests.findLast(
-    (request) => request.status === 'REQUESTED' || request.status === 'CHANGING',
-  );
+  const activeRequest = workspace?.requests
+    .slice()
+    .reverse()
+    .find((request) => request.status === 'REQUESTED' || request.status === 'CHANGING');
   return (activeRequest?.pendingRegions ?? []).map((region) => ({
     ordinal: Math.max(1, (activeRequest?.regions.findIndex((original) => original.id === region.id) ?? 0) + 1),
     region,

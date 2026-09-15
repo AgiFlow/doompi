@@ -1,7 +1,7 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
 import { LaunchRunnerDialog } from '../../src/web/components/LaunchRunnerDialog';
 import { RunnersActivitySection } from '../../src/web/components/RunnersActivitySection';
 import { RunnerShellPanel, runnerShellTab } from '../../src/web/components/RunnerShellPanel';

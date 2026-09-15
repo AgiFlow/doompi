@@ -4,8 +4,8 @@ import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
+import { extension as activateSandboxExtension } from '../../../generated/pi';
 import { COMMAND_NAME } from '../../../src/constants/sandbox';
-import { activateSandboxExtension } from '../../../src/extensions/pi';
 import type { SandboxExtensionService } from '../../../src/types/extension';
 
 interface CommandDefinition {
@@ -93,7 +93,7 @@ describe('doompi-sandbox Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-sandbox',
-        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
         skills: [
           {
             name: 'doompi-use-sandbox',

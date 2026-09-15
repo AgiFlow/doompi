@@ -6,7 +6,7 @@ import { connectDoomCordisHost, installDoomCordisHost } from '@agimon-ai/doompi-
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { domainsExtension } from '../../src/extensions/pi';
+import { extension as domainsExtension } from '../../generated/pi';
 import type { DomainTelemetry } from '../../src/types/telemetry';
 import { bindStubCoordinator } from '../helpers/coordinator';
 import { bindConfig } from '../helpers/session';

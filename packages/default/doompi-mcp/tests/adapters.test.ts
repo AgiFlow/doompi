@@ -10,7 +10,7 @@ interface AdapterModule {
 
 describe('doom-mcp standalone adapter', () => {
   it('exposes one standard Pi adapter and no alternate Doom entry', async () => {
-    const standardAdapter = (await import('../src/extensions/pi')) as AdapterModule;
+    const standardAdapter = (await import('../generated/pi')) as AdapterModule;
     const alternateEntry = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/extensions/doom.ts');
 
     expect(standardAdapter.default).toEqual(expect.any(Function));

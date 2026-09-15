@@ -64,6 +64,7 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
     files.set(`${GENERATED_DIR}/${ENTRY_FILENAME[target]}.${ENTRY_EXTENSION[target]}`, source);
   }
 
-  const { changed } = writeGenerated(options.packageDir, files, options.check);
+  const managed = GENERATED_ENTRY_NAMES.map((name) => `${GENERATED_DIR}/${name}.ts`);
+  const { changed } = writeGenerated(options.packageDir, files, options.check, managed);
   return { graph, packageName, pluginId, files, changed, notices, targets };
 }

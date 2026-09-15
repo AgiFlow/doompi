@@ -9,8 +9,8 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { extension as runnerExtension } from '../generated/pi';
 import type { BashToolDependencies } from '../src/exports/bashTool';
-import { runnerExtension } from '../src/extensions/pi';
 import type { RunnerCompactionDependencies } from '../src/services/compaction';
 import type { RunnerSpaceOptions } from '../src/tui/runnerSpace';
 import type { BashRunResult } from '../src/types/bashRunService';
