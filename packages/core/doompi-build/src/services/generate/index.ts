@@ -56,7 +56,8 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
   for (const target of ['cli', 'server', 'web'] as const) {
     const resolution = resolveTarget(graph, target);
     notices.push(...resolution.notices);
-    if (resolution.contributions.length === 0 && resolution.escapeHatches.length === 0) continue;
+    if (resolution.contributions.length === 0 && resolution.escapeHatches.length === 0 && resolution.roots.length === 0)
+      continue;
 
     targets.push(target);
     const render = RENDERERS[target];

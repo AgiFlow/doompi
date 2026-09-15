@@ -6,8 +6,8 @@ import type {
 import { DOOM_API_CALLER_LOCALITY_HEADER, DOOM_API_CALLER_STEP_UP_HEADER } from '@agimon-ai/doompi-core/package-api';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createComputerUseApi } from '../../../src/controllers/computerUseApi';
-import { createComputerUseChannel } from '../../../src/controllers/webComputerUseChannel';
+import { createComputerUseApi } from '../../../src/services/computerUseApi';
+import { createComputerUseChannel } from '../../../src/services/webComputerUseChannel';
 import { COMPUTER_USE_ROUTES } from '../../../src/types/computerUseApi';
 
 const scope: DoomHubSessionScope = { sessionId: 'session-1', cwd: '/repo' };

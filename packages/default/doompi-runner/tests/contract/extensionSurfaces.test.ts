@@ -2,7 +2,7 @@ import { mountPackageApi, standardExtensionScenarios } from '@agimon-ai/doompi-c
 import { describe, expect, it } from 'vitest';
 
 import { extension as runnerExtension } from '../../generated/pi';
-import { api } from '../../src/controllers/runnerLogApi';
+import { api } from '../../src/services/runnerLogApi';
 
 /**
  * The surfaces this package ships.

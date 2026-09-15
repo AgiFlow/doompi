@@ -4,7 +4,7 @@ beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { describe, expect, it } from 'vitest';
 
 import { RUNNER_API_BASE_PATH, SESSION_QUERY_PARAM } from '../../src/constants/webRunnerLog';
-import { createRunnerLogApi } from '../../src/controllers/runnerLogApi';
+import { createRunnerLogApi } from '../../src/services/runnerLogApi';
 import { runnerLogPath, runnerLogStreamUrl, runnerLogUrl } from '../../src/types/webRunnerLog';
 
 /**

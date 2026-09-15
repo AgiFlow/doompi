@@ -1,1 +1,1 @@
-export * from '../extensions/workspaces/sessions/(backend)/command/tasks.cli';
+export * from '../extensions/workspaces/sessions/(backend)/command/_lib/tasks.cli';

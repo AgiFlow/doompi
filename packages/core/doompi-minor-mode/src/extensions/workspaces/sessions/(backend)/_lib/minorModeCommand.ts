@@ -1,7 +1,11 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import type { MinorModeCatalogService, MinorModeSessionKind } from '../../../../../schemas/mode';
-import { executeMinorModeCommand, MINOR_MODE_COMMAND, MINOR_MODE_COMMAND_DESCRIPTION } from '../../../../../services/command';
+import {
+  executeMinorModeCommand,
+  MINOR_MODE_COMMAND,
+  MINOR_MODE_COMMAND_DESCRIPTION,
+} from '../../../../../services/command';
 
 export { actionsFor, matchMinorMode, MINOR_MODE_COMMAND } from '../../../../../services/command';
 

@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { facet as teamHeadlessFacet } from '../../../generated/server';
 import { SUBAGENT_ACTIONS } from '../../../src/exports/subagentTool';
-import { TEAM_API_BASE_PATH } from '../../../src/extensions/workspaces/sessions/(backend)/api/route.server';
+import { TEAM_API_BASE_PATH } from '../../../src/extensions/workspaces/sessions/(backend)/api/_lib/route.server';
 import { sessionScopeDir } from '../../../src/services/sessionPaths';
 import * as runtimeModule from '../../../src/services/teamRuntime';
 import type { TeamExtensionRuntime } from '../../../src/services/teamRuntime';

@@ -132,7 +132,8 @@ async function fixture() {
   } as unknown as DoomHeadlessHostService;
   const serverHost = {
     scope: 'session',
-    registerApi: () => ({ dispose() {} }),
+    registerApi: () => registration,
+    registerChannel: () => registration,
     context: { directEvents: { publish: vi.fn() } },
   } as unknown as DoomServerHostService;
   const context = new Context();

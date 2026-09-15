@@ -7,8 +7,8 @@ import type { Context } from '@deepseek-ai/cordis';
 
 import { createHelpRuntime, type HelpRuntimeOptions } from '../../services/helpRuntime';
 import type { HelpActivationService } from '../../types/help';
-import { createHelpCommand } from './helpCommand';
-import { registerHelpModeIntegration, registerHelpUiIntegration } from './helpMode';
+import { createHelpCommand } from '../helpCommand';
+import { registerHelpModeIntegration, registerHelpUiIntegration } from '../helpMode';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-help';
 

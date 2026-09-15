@@ -49,10 +49,18 @@
       "import": "./dist/api-contracts.mjs",
       "require": "./dist/api-contracts.cjs"
     },
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
     "./extensions/server": {
       "types": "./dist/extensions/server.d.mts",
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
+    },
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
     },
     "./projection": {
       "types": "./dist/projection.d.mts",
@@ -126,5 +134,19 @@
       "entry": "./src/exports/apiContracts.ts",
       "dist": "./dist/api-contracts.mjs"
     }
+  },
+  "doompiWeb": {
+    "pluginId": "mcp",
+    "channels": [],
+    "client": "./dist/extensions/web.mjs",
+    "scopes": [
+      "workspace",
+      "session"
+    ]
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
+    ]
   }
 }

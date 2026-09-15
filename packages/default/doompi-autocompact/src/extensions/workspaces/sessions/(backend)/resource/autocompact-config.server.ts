@@ -1,8 +1,5 @@
-import { loadDoomConfig } from '@agimon-ai/doompi-config';
-import { defineActivity } from '@agimon-ai/doompi-core/extension-file';
+import { defineResource } from '@agimon-ai/doompi-core/extension-file';
 
-export default {
-  name: 'doompi/autocompact-config',
-  kind: 'context' as const,
-  read: (execution) => JSON.stringify(loadDoomConfig(execution.repoRoot).modes?.autocompact ?? {}),
-};
+import { autocompactConfigResource } from '../_lib/autocompactConfig';
+
+export default defineResource(autocompactConfigResource);

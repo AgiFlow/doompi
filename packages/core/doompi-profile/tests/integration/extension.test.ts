@@ -125,7 +125,9 @@ describe('profile Pi factory', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-profile',
-        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
+        moduleUrl: expect.stringMatching(
+          /extensions\/workspaces\/sessions\/\(backend\)\/resource\/doompiAuthorProfile\.cli\.ts$/u,
+        ),
         skills: [
           {
             name: 'doompi-author-profile',

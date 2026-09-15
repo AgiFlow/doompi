@@ -38,7 +38,7 @@ import type { GoalExtensionDependencies, GoalExtensionService } from '../../type
 import type { ActiveGoal, GoalRuntimeSnapshot, GoalStateData } from '../../types/goal';
 import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../types/goalView';
 import type { GoalHistoryEntry, GoalHistoryPort } from '../../types/history';
-import { goalToolRestriction, goalToolsUsable } from './toolVisibility';
+import { goalToolRestriction, goalToolsUsable } from '../toolVisibility';
 
 const GOAL_TOOL_SOURCE = '@agimon-ai/doompi-goal';
 const COMPLETE_TOOL = 'goal_complete';

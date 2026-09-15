@@ -13,7 +13,7 @@ async function readSource(relativePath: string): Promise<string> {
 describe('doom file edit extension boundaries', () => {
   it('folds typed host integration into the only standard Pi factory', async () => {
     const piEntry = await readSource('src/extensions/workspaces/sessions/(backend)/extra.cli.ts');
-    const implementation = await readSource('src/controllers/fileEditRuntime.ts');
+    const implementation = await readSource('src/services/fileEditRuntime.ts');
     const alternateDoomEntry = await readSource('src/exports/extensions/doom.ts');
 
     expect(piEntry).toContain('export default');

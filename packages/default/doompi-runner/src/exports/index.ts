@@ -4,7 +4,7 @@ export {
   DEFAULT_LOG_TTL_MS,
   DEFAULT_RESULT_MAX_BYTES,
 } from '../constants/runnerConfig';
-export { createHeadlessBashTool, createHeadlessRunnersCommand } from '../controllers/headless';
+export { createHeadlessBashTool, createHeadlessRunnersCommand } from '../services/headless';
 export { RmuxBackend } from '../services/rmuxBackend';
 export { rtkPackageForTarget } from '../services/rtkProcessor';
 export { getBackgroundThresholdMs, getLogMaxBytes, getLogTtlMs, getResultMaxBytes } from '../services/runnerConfig';

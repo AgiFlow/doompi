@@ -1,0 +1,8 @@
+import { defineMethod } from '@agimon-ai/doompi-core/extension-file';
+import { defineServerMethod } from '@agimon-ai/doompi-core/server-facet';
+
+import { {{ methodName | camelCase }}Method } from '../../schemas/{{ methodName | camelCase }}Method';
+
+export default defineMethod(
+  defineServerMethod({{ methodName | camelCase }}Method, async ({ value }) => ({ value })),
+);

@@ -27,8 +27,8 @@ export const CLI_FIELDS: Readonly<Record<string, string>> = {
   tool: 'tools',
   'tool-restriction': 'toolRestrictions',
   command: 'commands',
+  shortcut: 'shortcuts',
   hook: 'events',
-  mode: 'minorModes',
   provider: 'providers',
   resource: 'resources',
 };
@@ -70,6 +70,8 @@ export const WEB_FIELDS: Readonly<Record<string, string>> = {
   leader: 'leaderBindings',
   'selection-axis': 'selectionAxes',
   lifecycle: 'start',
+  'file-links': 'fileLinks',
+  'repository-settings-panel': 'repositorySettingsPanel',
   api: NOT_A_CONTRIBUTION,
   method: NOT_A_CONTRIBUTION,
   store: NOT_A_CONTRIBUTION,

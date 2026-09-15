@@ -4,8 +4,8 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { McpCatalog } from '../src/services/mcpCatalog';
+import { createMcpTool } from '../src/services/mcpTools';
 import { mcpToolRestriction } from '../src/services/toolVisibility';
-import { createMcpTool } from '../src/tools/mcpTools';
 import { renderMcpCall, renderMcpResult } from '../src/tui/mcpToolRender';
 
 function mcpTool(name: string, inputSchema: Record<string, unknown> = { type: 'object' }): McpToolInfo {

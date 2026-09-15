@@ -40,7 +40,7 @@ vi.mock('@agimon-ai/doompi-core/mcp-projection', async (importOriginal) => {
   };
 });
 
-vi.mock('../src/controllers/leader', () => ({
+vi.mock('../src/services/leader', () => ({
   registerLeaderContribution: () => () => undefined,
 }));
 

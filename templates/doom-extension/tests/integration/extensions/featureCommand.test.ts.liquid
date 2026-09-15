@@ -1,0 +1,15 @@
+import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
+import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
+import { expect, it } from 'vitest';
+
+import { {{ commandName | snakeCase | upper }}_COMMAND_NAME } from '../../../src/constants/{{ commandName | camelCase }}';
+import command from '../../../src/extensions/workspaces/sessions/(backend)/command/{{ commandName | kebabCase }}';
+
+it('maps the command result to a host notification', async () => {
+  const host = createPiTestHost();
+  await host.cordis();
+  await definePiExtension({ name: 'command-test', commands: [command] })(host.pi);
+  await host.runCommand({{ commandName | snakeCase | upper }}_COMMAND_NAME);
+  expect(host.notifications).toContainEqual(expect.objectContaining({ message: '{{ commandDescription }}' }));
+  await host.dispose();
+});

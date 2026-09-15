@@ -27,7 +27,7 @@ export const patterns: Record<string, PatternDefinition> = {
   },
   'doom-services': {
     description:
-      'Package logic, including filesystem, network, process integration, and Cordis service implementations. Each service has src/services/{serviceName}/index.ts and type.ts for its local contracts. Import lower layers and other services, never controllers, tools, or extension entries. Keep dependencies explicit so behavior can be tested independently.',
+      'Package logic, including filesystem, network, process integration, and Cordis service implementations. Each service has src/services/{serviceName}/index.ts and type.ts for local contracts. Services never import extension entries. Keep dependencies explicit so behavior can be tested independently.',
     includes: ['src/services/**/*.ts'],
   },
   'doom-prompts': {
@@ -37,22 +37,12 @@ export const patterns: Record<string, PatternDefinition> = {
   },
   'doom-models': {
     description:
-      'Package state and state transitions. Models import constants, models, schemas, and types; services and controllers consume them.',
+      'Package state and state transitions. Models import constants, models, schemas, and types; services and routed declarations consume them.',
     includes: ['src/models/**/*.ts'],
-  },
-  'doom-controllers': {
-    description:
-      'HTTP APIs, typed method handlers, and command declarations translate requests and responses, delegating package logic to services and state to models. Shared commands use defineCommand and are included in Pi or session-server contributions.',
-    includes: ['src/controllers/**/*.ts'],
-  },
-  'doom-tools': {
-    description:
-      'Typed tool declarations consume services and models. Use defineTool for portable Pi/server tools; keep native host capabilities explicitly typed. Extension entries include static declarations in tools arrays. Pi may use PiToolCollection snapshot()/subscribe(listener) for a changing catalog; reuse immutable declarations and let the helper own cancellation and unsubscribe.',
-    includes: ['src/tools/**/*.ts'],
   },
   'doom-extensions': {
     description:
-      'Direct Pi, server, and web host entries use definePiExtension, defineServerPlugin, or defineWebPlugin. Static declarations use named objects; stateful mounts use typed sync or async factories. The helper awaits factories before registration. Contributions use arrays; Pi tools may use a typed PiToolCollection for changing catalogs; minorModes may use PiMinorModeCollection for changing mode availability. Helpers own collection subscriptions and owner attachment/withdrawal. Pi/server lifecycle hooks are onStart, onStop, and onDispose, all optional. The helpers own Cordis initialization, registrations, rollback, and cleanup. Do not manually bootstrap the host or call another facet.apply. Server scopes are global, workspace, and session. Build these entries directly with tsdown, separate from flat public exports.',
+      'Folder-routed files default-export exactly one typed define declaration. Their path states scope, side, surface, and identity. Use root files for shared mount state and lifecycle, services for implementation, and private colocated _lib or _components for surface-private code. Named exports never live in scanned route files. Cardinality is declared through defineRoutedContribution options rather than pseudo-surface names or catch-all files.',
     includes: ['src/extensions/**/*.ts'],
   },
   'doom-tui': {
@@ -61,7 +51,7 @@ export const patterns: Record<string, PatternDefinition> = {
   },
   'doom-bin': {
     description:
-      'Executable composition entrypoints declared in package.json bin. Assemble services and controllers directly without importing public export wrappers or extension entries.',
+      'Executable composition entrypoints declared in package.json bin. Assemble services directly without importing public export wrappers or extension entries.',
     includes: ['src/bin/**/*.ts'],
   },
   'doom-web-plugin-entry': {

@@ -89,22 +89,27 @@ import {
   type VoiceUi,
 } from '../../types';
 import { VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS } from '../../types/voiceOwnership';
-import { LiveVoiceController } from './liveVoiceController';
-import { createMinorModeVoiceTool, createVoiceMinorModeCatalog } from './minorModeCatalog';
-import { isNarrationRuntimeActive, type NarrationToolRuntime, createNarrationTool } from './narrationTool';
-import { buildRealtimeContext } from './realtimeContext';
+import { LiveVoiceController } from '../liveVoiceController';
+import { createMinorModeVoiceTool, createVoiceMinorModeCatalog } from '../minorModeCatalog';
+import { isNarrationRuntimeActive, type NarrationToolRuntime, createNarrationTool } from '../narrationTool';
+import { buildRealtimeContext } from '../realtimeContext';
 import {
   createTransferVoiceToolLifecycle,
   transferVoiceToolRestriction,
   transferVoiceToolVisible,
-} from './transferVoiceTool';
-import { collectVoiceCommandContext } from './voiceCommandContext';
-import { VoiceModeController } from './voiceModeController';
-import { createVoiceToolFacades } from './voiceTools';
+} from '../transferVoiceTool';
+import { collectVoiceCommandContext } from '../voiceCommandContext';
+import { VoiceModeController } from '../voiceModeController';
+import { createVoiceToolFacades } from '../voiceToolsController';
 
 const TRANSFER_VOICE_SOURCE = `${VOICE_SOURCE}#transfer-voice`;
 
-export { MlxWhisperAdapter, OpenAiWhisperAdapter, TranscriberRegistry, WhisperCppAdapter } from '../../services/whisper';
+export {
+  MlxWhisperAdapter,
+  OpenAiWhisperAdapter,
+  TranscriberRegistry,
+  WhisperCppAdapter,
+} from '../../services/whisper';
 
 interface VoiceSessionContextLike {
   sessionManager?: { getSessionId(): string };

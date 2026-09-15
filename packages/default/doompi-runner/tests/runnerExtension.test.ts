@@ -65,7 +65,7 @@ vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
 vi.mock('../src/services/runnerDependencies', () => ({
   createRunnerDependencies: () => extensionMocks.container(),
 }));
-vi.mock('../src/tools/bashTool', () => ({
+vi.mock('../src/services/bashTool', () => ({
   createBashTool: extensionMocks.createBashTool,
 }));
 vi.mock('../src/services/compaction', async (importOriginal) => ({

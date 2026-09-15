@@ -98,6 +98,6 @@ Maintained by [Agimon](https://agimon.ai/about).
 
 MIT
 
-Plugin entries live in `src/extensions`, with host commands and event coordination in `src/controllers`. `src/models` owns goal state, accounting, transitions, and serialization. Named `src/services` folders handle history, persistence, prompts, and validation. Public helpers and types are exposed through flat `src/exports`.
+Plugin entries live in `src/extensions`, with host-neutral runtime logic in `src/services` and host registrations in routed `src/extensions` surfaces. `src/models` owns goal state, accounting, transitions, and serialization. Named `src/services` folders handle history, persistence, prompts, and validation. Public helpers and types are exposed through flat `src/exports`.
 
 Both hosts declare minor-mode owners and reactive tool restrictions. The helper owns registrations and subscriptions. Pi stops the Goal manager before releasing its service bindings, and final disposal also handles failed startup. Server restriction snapshots follow changes to persisted goal state.

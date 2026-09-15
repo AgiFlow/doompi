@@ -20,7 +20,7 @@ vi.mock('@agimon-ai/doompi-minor-mode', async (original) => ({
   },
 }));
 
-import { createPlanServerSession } from '../src/controllers/planServerSession';
+import { createPlanServerSession } from '../src/services/planServerSession';
 
 function fixture() {
   let settings: DoomHeadlessModelSettings = { model: { provider: 'test', id: 'chat' }, thinkingLevel: 'medium' };

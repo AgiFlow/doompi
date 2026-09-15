@@ -21,8 +21,8 @@ afterEach(() => {
 describe('doom voice extension boundaries', () => {
   it('exposes one standard Pi factory with typed host integrations folded into it', async () => {
     const piEntry = await readSource('generated/pi.ts');
-    const standardFactory = await readSource('src/services/voicePlugin.ts');
-    const implementation = await readSource('src/services/voice.ts');
+    const standardFactory = await readSource('src/services/voicePlugin/index.ts');
+    const implementation = await readSource('src/services/voice/index.ts');
     const alternateDoomEntry = await readSource('src/exports/extensions/doom.ts');
 
     expect(piEntry).toContain('export default extension');
@@ -40,7 +40,7 @@ describe('doom voice extension boundaries', () => {
   });
 
   it('guards manual voice commands in print, JSON, and RPC hosts', async () => {
-    const implementation = await readSource('src/services/voice.ts');
+    const implementation = await readSource('src/services/voice/index.ts');
     const commandStart = implementation.indexOf('COMMAND_NAME,');
     const commandEnd = implementation.indexOf(`AUTO_COMMAND_NAME,`, commandStart);
     const commandSection = implementation.slice(commandStart, commandEnd);
@@ -60,7 +60,7 @@ describe('doom voice extension boundaries', () => {
   });
 
   it('keeps production autonomous capture and STT behind the worker boundary', async () => {
-    const implementation = await readSource('src/services/voice.ts');
+    const implementation = await readSource('src/services/voice/index.ts');
     const controller = await readSource('src/services/voiceWorkerAutoCaptureController/index.ts');
 
     expect(implementation).toMatch(/new VoiceWorkerAutoCaptureController/u);
@@ -69,14 +69,14 @@ describe('doom voice extension boundaries', () => {
   });
 
   it('keeps the standalone narration tool behind the controller playback boundary', async () => {
-    const narrationTool = await readSource('src/services/narrationTool.ts');
+    const narrationTool = await readSource('src/services/narrationTool/index.ts');
 
     expect(narrationTool).toContain('narrateAgent');
     expect(narrationTool).not.toMatch(/modelRegistry|TtsAdapter|\.complete\(|\.speak\(/u);
   });
 
   it('limits lifecycle narration to the zero-call turn-end fallback', async () => {
-    const implementation = await readSource('src/services/voice.ts');
+    const implementation = await readSource('src/services/voice/index.ts');
     const controller = await readSource('src/services/voiceWorkerAutoCaptureController/index.ts');
     const legacyController = await readSource('src/services/autoCapture.ts');
     const legacyNarration = await readSource('src/services/autonomousNarration.ts');
@@ -94,7 +94,7 @@ describe('doom voice extension boundaries', () => {
   });
 
   it('does not restore the removed Runner PTY protocol', async () => {
-    const implementation = await readSource('src/services/voice.ts');
+    const implementation = await readSource('src/services/voice/index.ts');
 
     expect(implementation).not.toMatch(/runner-pty|createProtocolRuntime/u);
     expect(implementation).not.toMatch(/runCommand:\s*async/u);

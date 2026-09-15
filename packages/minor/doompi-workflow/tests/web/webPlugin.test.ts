@@ -59,8 +59,8 @@ describe('the workflows plugin surfaces', () => {
 
   it('keeps the idle activity section available as a workflow launcher', () => {
     const group = webPlugin.activityGroups?.[0];
-    const section = webPlugin.activitySections?.[0];
-    const rendered = renderPlugin(section!.component, slotPropsFixture({ sessionId: 's1' }).props);
+    const section = webPlugin.fills?.[0];
+    const rendered = renderPlugin(section!.component!, slotPropsFixture({ sessionId: 's1' }).props);
 
     expect(group?.activeSource?.isActive('s1')).toBe(false);
     expect(section?.id).toBe('workflows');
@@ -70,10 +70,11 @@ describe('the workflows plugin surfaces', () => {
   });
 
   it('renders the activity section with a run reported by the hub', () => {
-    const section = webPlugin.activitySections?.[0];
-    driveChannel(webPlugin.channels![0]!, 's1', { runs: [run] });
+    const section = webPlugin.fills?.[0];
+    const channel = webPlugin.channels?.find((candidate) => candidate.channel === 'workflow_runs');
+    driveChannel(channel!, 's1', { runs: [run] });
 
-    const rendered = renderPlugin(section!.component, slotPropsFixture({ sessionId: 's1' }).props);
+    const rendered = renderPlugin(section!.component!, slotPropsFixture({ sessionId: 's1' }).props);
 
     expect(rendered.error).toBeUndefined();
     expect(rendered.includes('blog-writing')).toBe(true);
@@ -86,10 +87,10 @@ describe('the workflows plugin surfaces', () => {
     const { props } = slotPropsFixture({ sessionId: null });
 
     const transientTabs = webPlugin.activityGroups?.flatMap((group) => group.transientTab?.() ?? []) ?? [];
-    for (const surface of [...(webPlugin.tabs ?? []), ...transientTabs, ...(webPlugin.activitySections ?? [])]) {
+    for (const surface of [...(webPlugin.tabs ?? []), ...transientTabs, ...(webPlugin.fills ?? [])]) {
       const component = 'panel' in surface ? surface.panel : surface.component;
       const id = 'id' in surface ? surface.id : 'unknown';
-      expect(renderPlugin(component, props).error, id).toBeUndefined();
+      expect(renderPlugin(component!, props).error, id).toBeUndefined();
     }
   });
 

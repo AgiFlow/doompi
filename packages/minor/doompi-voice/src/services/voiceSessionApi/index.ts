@@ -4,11 +4,16 @@ import { FfmpegEncodedAudioDecoder } from '../../services/encodedAudio';
 import { ExecutableResolver, NodeProcessSpawner, SystemClock, TemporaryWorkspace } from '../../services/infrastructure';
 import { ManualTranscriptionService } from '../../services/manualTranscription';
 import { ManualTranscriptionConfigLoader } from '../../services/manualTranscriptionConfig';
-import { MlxWhisperAdapter, OpenAiWhisperAdapter, TranscriberRegistry, WhisperCppAdapter } from '../../services/whisper';
+import {
+  MlxWhisperAdapter,
+  OpenAiWhisperAdapter,
+  TranscriberRegistry,
+  WhisperCppAdapter,
+} from '../../services/whisper';
 import { VOICE_MEDIA_API_BASE_PATH } from '../../types/clientMedia';
 import { MANUAL_TRANSCRIPTION_ROUTE, type IManualTranscriptionService } from '../../types/manualTranscription';
-import { api as voiceMediaApi, createVoiceMediaApi, type VoiceMediaApiOptions } from './clientMediaApi';
-import { ManualTranscriptionApi } from './manualTranscriptionApi';
+import { api as voiceMediaApi, createVoiceMediaApi, type VoiceMediaApiOptions } from '../clientMediaApi';
+import { ManualTranscriptionApi } from '../manualTranscriptionApi';
 
 export interface VoiceSessionApiOptions extends VoiceMediaApiOptions {
   manualTranscription?: IManualTranscriptionService;

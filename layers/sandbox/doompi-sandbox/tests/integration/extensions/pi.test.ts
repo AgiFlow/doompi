@@ -93,7 +93,9 @@ describe('doompi-sandbox Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-sandbox',
-        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
+        moduleUrl: expect.stringMatching(
+          /extensions\/workspaces\/sessions\/\(backend\)\/resource\/doompiUseSandbox\.cli\.ts$/u,
+        ),
         skills: [
           {
             name: 'doompi-use-sandbox',

@@ -39,3 +39,10 @@ overrides:
       - "**/*.config.*"
     rules:
       no-default-export: off
+  - files:
+      - "**/src/extension/**/*"
+      - "**/src/extensions/**/*"
+    rules:
+      # Route identity follows the host's path grammar. Commands are kebab-case,
+      # hooks are event names, and component routes may be PascalCase.
+      file-naming-convention: off

@@ -68,7 +68,9 @@ describe('doompi-git Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-git',
-        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
+        moduleUrl: expect.stringMatching(
+          /extensions\/workspaces\/sessions\/\(backend\)\/resource\/doompi-use-git\.cli\.ts$/u,
+        ),
         skills: [
           {
             name: 'doompi-use-git',

@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
 import { facet as fileEditsServerFacet } from '../../../generated/server';
-import { api } from '../../../src/controllers/fileEditsApi';
+import { api } from '../../../src/services/fileEditsApi';
 import { filesChannelType } from '../../../src/types/webFiles';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];

@@ -127,3 +127,27 @@ export const doomLegacySourceRoot: RuleDefinition = {
     return null;
   },
 };
+
+/** Scanned routes are declarations, while implementation and public symbols live outside the routing tree. */
+export const doomRoutedFileContract: RuleDefinition = {
+  preflight: true,
+  rule: 'Every routed extension file default-exports one typed define declaration and no named exports',
+  rationale:
+    'A route is a host contract identified by its path. Freeform implementation and named exports turn the routing tree into a second implementation or public API layer.',
+  check(filePath, configRoot) {
+    const relative = projectPath(filePath, configRoot);
+    if (!relative || !relative.startsWith('src/extension')) return null;
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return null;
+    const entry = scanExtensions({ packageDir: configRoot }).entries.find((candidate) => candidate.file === relative);
+    if (!entry) return null;
+
+    const source = fs.readFileSync(filePath, 'utf8');
+    if (/\bexport\s+(?!default\b)/u.test(source)) {
+      return 'Move named exports to src/services, src/types, or a private colocated _lib module. The routed file exports only its default declaration.';
+    }
+    if (!/\bexport\s+default\s+define[A-Z][A-Za-z0-9]*\s*\(/u.test(source)) {
+      return 'Default-export the routed contract directly through its surface define helper, such as defineRoot, defineTool, defineHook, or defineRoute.';
+    }
+    return null;
+  },
+};

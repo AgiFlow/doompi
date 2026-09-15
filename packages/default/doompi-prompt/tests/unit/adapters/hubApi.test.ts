@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { api, createPromptHubApi } from '../../../src/controllers/promptsApi';
+import { api, createPromptHubApi } from '../../../src/services/promptsApi';
 import type { SavedPrompt, SavedPromptStore } from '../../../src/types/prompt';
 import { promptsUrl, promptUrl } from '../../../src/types/webPrompts';
 

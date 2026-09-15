@@ -503,13 +503,15 @@ export function withPiRenderers(tool: PiToolContribution, renderers: PiToolRende
  * in the value, through `definePiTool(definition, { overrides: true })`.
  *
  * A generated entry therefore cannot decide this from the path, and calls
- * this instead. Every claim from one package is one atomic set, which is what
- * the override service expects.
+ * this instead. Every static claim from one package is one atomic set, which
+ * is what the override service expects. A live collection stays intact so its
+ * subscription continues to drive registration changes.
  */
 export function piToolContributions(
   source: string,
-  items: readonly PiToolContribution[],
+  items: readonly PiToolContribution[] | PiToolCollection,
 ): Pick<PiPluginContributions, 'tools' | 'toolOverrides'> {
+  if (!Array.isArray(items)) return { tools: items as PiToolCollection };
   const added: PiToolContribution[] = [];
   const claimed: PiToolDeclaration[] = [];
   for (const item of items) {

@@ -8,7 +8,7 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createPersonaEvents } from '../../src/extensions/_standalone/_lib/personaRuntime';
+import { createPersonaEvents } from '../../src/services/personaExtension/runtime';
 import type { ProfileTelemetry } from '../../src/types/telemetry';
 
 type BeforeAgentStart = (

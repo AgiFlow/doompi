@@ -171,5 +171,23 @@
   },
   "engines": {
     "node": ">=22.19.0"
+  },
+  "doompiServer": {
+    "entry": "./generated/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "global",
+      "workspace",
+      "session"
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
+    ]
   }
 }

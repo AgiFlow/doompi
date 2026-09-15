@@ -7,7 +7,7 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createFileEditsApi } from '../../src/controllers/fileEditsApi';
+import { createFileEditsApi } from '../../src/services/fileEditsApi';
 import { NodeSnapshotStoreAdapter } from '../../src/services/snapshotStore';
 import { TimelineStore } from '../../src/services/timelineStore';
 import type { FileEditsDetailView, FileEditsErrorView, FileEditsPreviewView } from '../../src/types/fileEditsApi';

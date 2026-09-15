@@ -49,7 +49,7 @@ const variables = {
   restrictionName: 'fixtureMode',
   restrictionDescription: 'Hide writes',
   facetName: 'fixture',
-  apiModule: '../controllers/fixtureApi',
+  apiModule: '../../../../../services/fixtureApi',
   scopeReason: 'the data belongs to the session',
   providerName: 'fixture-metrics',
   providerDescription: 'Publish metrics',
@@ -78,8 +78,10 @@ await test('every scaffold renders and all source imports resolve across the com
   const files = new Map();
   for (const feature of [...config.boilerplate, ...config.features]) {
     for (const [filename, content] of await render(feature)) {
-      assert.doesNotMatch(filename, /^src\/(?:adapters|containers?|commands|providers)\//u);
+      assert.doesNotMatch(filename, /^src\/(?:adapters|containers?|commands|controllers|providers|tools)\//u);
       assert.doesNotMatch(filename, /^src\/exports\/[^/]+\//u);
+      assert.doesNotMatch(filename, /\/extra\.(?:cli|server|web)\.[^.]+$/u);
+      assert.doesNotMatch(filename, /\/(?:[^/]+-(?:catalog|optional)|tool-collection)\//u);
       files.set(filename, content);
     }
   }
@@ -107,6 +109,12 @@ await test('every scaffold renders and all source imports resolve across the com
         content,
         /\b(?:registerTool|registerCommand|registerApi|registerChannel|connectDoomCordisHost)\s*\(/u,
       );
+      const privateFile = filename.split('/').some((segment) => segment.startsWith('_'));
+      const colocatedApiFile = filename.includes('/api/') && !/\/route(?:\.[^.]+)?\.tsx?$/u.test(filename);
+      if (/\.tsx?$/u.test(filename) && !privateFile && !colocatedApiFile) {
+        assert.match(content, /\bexport\s+default\s+define[A-Z][A-Za-z0-9]*\s*\(/u, filename);
+        assert.doesNotMatch(content, /\bexport\s+(?!default\b)/u, filename);
+      }
     }
   }
 });

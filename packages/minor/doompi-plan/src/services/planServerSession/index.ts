@@ -18,7 +18,7 @@ import {
   readPlanSkill,
 } from '../../services/prompts';
 import { PLAN_REVIEW_OPTIONS, PLAN_REVIEW_TITLE } from '../../types/planApi';
-import { parseDebugEvidencePacket, planTitleSlug, visiblePlanForToolCall } from './planMode';
+import { parseDebugEvidencePacket, planTitleSlug, visiblePlanForToolCall } from '../planMode';
 
 const RECORD_DEBUG_EVIDENCE_TOOL = 'record_debug_evidence';
 const RUN_FABLE_PLAN_TOOL = 'run_fable_plan';

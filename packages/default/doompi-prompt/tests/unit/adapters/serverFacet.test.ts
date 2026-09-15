@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
 import { facet as promptServerFacet } from '../../../generated/server';
-import { api } from '../../../src/controllers/promptsApi';
+import { api } from '../../../src/services/promptsApi';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 

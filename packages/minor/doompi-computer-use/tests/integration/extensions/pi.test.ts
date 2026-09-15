@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { extension as activateComputerUseExtension } from '../../../generated/pi';
 import { COMPUTER_USE_TOOL_NAMES } from '../../../src/constants/computerUse';
-import { COMMAND_NAME } from '../../../src/controllers/computerUseCommand';
+import { COMMAND_NAME } from '../../../src/services/computerUseCommand';
 import type { ComputerUseSessionClient } from '../../../src/services/sessionApiClient';
 import {
   COMPUTER_USE_MODE_STATUS_KEY,

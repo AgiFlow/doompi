@@ -103,11 +103,11 @@ describe('doompi-domain package contract', () => {
     });
     const client = await readFile(path.join(packageDirectory, 'generated/web.ts'), 'utf8');
     const contribution = await readFile(
-      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(frontend)/extra.ts'),
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(frontend)/selection-axis/domains.ts'),
       'utf8',
     );
     expect(client).toContain('export const webPlugin = defineWebPlugin');
-    expect(client).toContain('...extra');
+    expect(client).toContain('selectionAxes');
     expect(contribution).toContain("statusKey: 'doom-domain'");
     expect(contribution).toContain('multi: true');
   });
@@ -119,7 +119,10 @@ describe('doompi-domain package contract', () => {
 
   it('routes Pi discovery through the command and voice-tool factory', async () => {
     const entry = await readFile(path.join(packageDirectory, 'generated/pi.ts'), 'utf8');
-    const factory = await readFile(path.join(packageDirectory, 'src/controllers/domainRuntime.ts'), 'utf8');
+    const factory = await readFile(
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/_lib/domainRuntime.ts'),
+      'utf8',
+    );
 
     expect(entry).toContain('definePiExtension');
     expect(entry).toContain('export default extension');
@@ -127,7 +130,7 @@ describe('doompi-domain package contract', () => {
     expect(factory).toContain('registerDomainVoiceCapabilities');
     expect(factory).toContain('services:');
     expect(factory).toContain('commands:');
-    expect(entry).toContain('extra');
+    expect(entry).toContain('rootSession');
     expect(factory).toContain('inject([DOOM_CONFIG_SERVICE, DOOM_TRANSITION_SERVICE]');
     expect(factory).not.toContain('new Context()');
   });

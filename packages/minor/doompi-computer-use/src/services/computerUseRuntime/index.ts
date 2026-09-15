@@ -13,7 +13,7 @@ import {
   type ComputerUseSessionView,
 } from '../../types/computerUseApi';
 import type { ComputerUseExtensionDependencies } from '../../types/extension';
-import { createComputerUseCommand } from './computerUseCommand';
+import { createComputerUseCommand } from '../computerUseCommand';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-computer-use';
 export { COMPUTER_USE_MODE_ID };

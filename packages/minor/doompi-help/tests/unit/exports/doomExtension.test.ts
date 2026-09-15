@@ -33,7 +33,7 @@ vi.mock('../../../src/services/helpRuntime', () => ({
   },
 }));
 
-vi.mock('../../../src/controllers/helpMode', () => ({
+vi.mock('../../../src/services/helpMode', () => ({
   registerHelpModeIntegration: (...argumentsValue: unknown[]) => mocks.modeRegister(...argumentsValue),
   registerHelpUiIntegration: (...argumentsValue: unknown[]) => {
     mocks.uiRegister(...argumentsValue);

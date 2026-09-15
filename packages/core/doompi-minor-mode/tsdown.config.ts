@@ -11,7 +11,7 @@ const routed = doompiExtension({
     catalog: 'src/services/catalog/index.ts',
     projection: 'src/services/projection/index.ts',
     'reload-handoff': 'src/services/reloadHandoff/index.ts',
-    'minor-mode-command': 'src/controllers/minorModeCommand.ts',
+    'minor-mode-command': 'src/extensions/workspaces/sessions/(backend)/_lib/minorModeCommand.ts',
     mode: 'src/schemas/mode.ts',
     'mode-definition': 'src/services/modeDefinition/index.ts',
     owner: 'src/services/owner/index.ts',

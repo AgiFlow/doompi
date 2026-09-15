@@ -25,8 +25,8 @@ const mocks = vi.hoisted(() => ({
 }));
 const cordisRoots: Context[] = [];
 
-vi.mock('../../src/controllers/runtimeActivation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/controllers/runtimeActivation')>()),
+vi.mock('../../src/services/runtimeActivation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/services/runtimeActivation')>()),
   createGoalRuntime: mocks.createGoalRuntime,
   isRetainedGoalStatus: (status: unknown) =>
     typeof status === 'string' && status !== 'cleared' && status !== 'complete',

@@ -15,8 +15,7 @@ const webPlugin = {
 
 afterEach(() => computerUse.reset());
 
-const render = () =>
-  renderPlugin(webPlugin.activitySections![0]!.component, slotPropsFixture({ sessionId: 's1' }).props);
+const render = () => renderPlugin(webPlugin.fills![0]!.component, slotPropsFixture({ sessionId: 's1' }).props);
 
 describe('computer-use panel', () => {
   it('renders target activation controls for an inactive session', () => {
@@ -78,11 +77,11 @@ describe('computer-use panel', () => {
     expect(webPlugin.activityGroups).toEqual([
       expect.objectContaining({ name: 'computer-use', statusKey: 'doom-computer-use', hideWhenEmpty: true }),
     ]);
-    expect(webPlugin.activitySections?.[0]?.component).toBeDefined();
+    expect(webPlugin.fills?.[0]?.component).toBeDefined();
     expect(webPlugin.toolRenderers?.flatMap((renderer) => renderer.tools ?? [])).toEqual([
-      'computer_state',
       'computer_action',
       'computer_exec',
+      'computer_state',
     ]);
   });
 });

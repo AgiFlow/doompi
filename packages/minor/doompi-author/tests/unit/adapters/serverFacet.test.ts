@@ -6,7 +6,7 @@ import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
 import authorServerFacetDefault, { facet as authorServerFacet } from '../../../generated/server';
-import { api } from '../../../src/controllers/authorApi';
+import { api } from '../../../src/extensions/workspaces/sessions/(backend)/api/_lib/authorApi';
 import { readAuthorPrompt } from '../../../src/services/authorPrompt';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
@@ -30,10 +30,8 @@ function hostContext(scope: DoomServerHostService['scope']) {
     mounted: () => registered.map((candidate) => candidate.basePath),
     mountedChannels: () => [],
   };
-  const context = {
-    get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? host : undefined),
-    effect: () => undefined,
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, host);
   return { context, registered, state };
 }
 

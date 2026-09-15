@@ -9,7 +9,7 @@ import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-a
 
 import { DefaultGoalExtensionService } from '../../services/extensionService';
 import type { GoalExtensionDependencies } from '../../types/extension';
-import { GoalPiManager } from './goalManager';
+import { GoalPiManager } from '../goalManager';
 
 const PACKAGE_SOURCE = '@agimon-ai/doompi-goal';
 const MODE_ID = 'goal';

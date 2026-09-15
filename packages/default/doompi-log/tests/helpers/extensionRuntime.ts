@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
-import { createPiTelemetryRuntime } from '../../src/controllers/piTelemetry';
+import { createPiTelemetryRuntime } from '../../src/services/piTelemetry';
 import { createLogViewRuntime } from '../../src/tui/logRuntime';
 import type { PiTelemetryExtensionOptions } from '../../src/types/piTelemetry';
 

@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createComputerUseApi as createComputerUseApiImpl,
   type ComputerUseApiOptions,
-} from '../../src/controllers/computerUseApi';
+} from '../../src/services/computerUseApi';
 import { COMPUTER_USE_ROUTES } from '../../src/types/computerUseApi';
 
 const internal = { authorization: 'Bearer internal' };

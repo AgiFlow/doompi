@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   renderSubagentCall,
   renderSubagentResult,
-} from '../../src/extensions/workspaces/sessions/(frontend)/tool/subagent.cli';
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/subagent.cli';
 
 function plainTheme(): Theme {
   const identity = (text: string): string => text;

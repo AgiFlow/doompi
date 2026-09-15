@@ -1,1 +1,1 @@
-export * from '../controllers/cliApp';
+export * from '../services/cliApp';

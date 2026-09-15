@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 
-import { createAuthorPiMode } from '../../src/controllers/authorPiMode';
+import { createAuthorPiMode } from '../../src/extensions/workspaces/sessions/(backend)/_lib/authorPiMode';
 import type { AuthorCatalog } from '../../src/services/authorCatalog/type';
 
 it('starts viewport polling only after plugin startup and aborts it during stop', async () => {

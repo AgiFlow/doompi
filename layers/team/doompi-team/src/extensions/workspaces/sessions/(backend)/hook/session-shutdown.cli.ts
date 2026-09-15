@@ -1,6 +1,5 @@
-import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
-import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
 
-import type { TeamPiScope } from '../root.cli';
+import contribution from './_lib/session-shutdown.cli';
 
-export default (context: WithRoot<PiPluginContext, TeamPiScope>) => context.root.sessionShutdown;
+export default defineRoutedContribution(contribution, {});

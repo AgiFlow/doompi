@@ -1,7 +1,7 @@
 import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
 import { Context } from '@deepseek-ai/cordis';
 
-import { createMcpToolCollection } from '../src/tools/mcpToolCollection';
+import { createMcpToolCollection } from '../src/services/mcpToolCollection';
 const toolContexts: Context[] = [];
 import fs from 'node:fs';
 import os from 'node:os';

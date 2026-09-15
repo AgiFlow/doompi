@@ -17,7 +17,11 @@ export {
   VOICE_SWITCH_TOKEN_PREFIX,
   voiceSwitchToken,
 } from '../services/majorModeText';
-export { bindPendingSelection, clearPendingSelection, selectionFromSnapshot } from '../extensions/workspaces/sessions/(backend)/_lib/pendingSelection';
+export {
+  bindPendingSelection,
+  clearPendingSelection,
+  selectionFromSnapshot,
+} from '../extensions/workspaces/sessions/(backend)/_lib/pendingSelection';
 export { colorStatus, STATUS_KEY, statusText } from '../services/statusLine';
 export { MAJOR_MODE_SOURCE, MAJOR_MODE_SWITCH_HANDOFF_KIND, type MajorModeView } from '../types/majorMode';
 export {

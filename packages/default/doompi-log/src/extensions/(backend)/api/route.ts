@@ -1,3 +1,5 @@
-import { api } from '../../../controllers/hubApi';
+import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
 
-export default api;
+import { api } from '../../../services/hubApi';
+
+export default defineRoutedContribution(api, {});

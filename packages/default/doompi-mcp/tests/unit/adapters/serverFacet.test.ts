@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
 import { facet as mcpServerFacet } from '../../../generated/server';
-import { mcpHubApi } from '../../../src/controllers/mcpHubApi';
+import { mcpHubApi } from '../../../src/services/mcpHubApi';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
