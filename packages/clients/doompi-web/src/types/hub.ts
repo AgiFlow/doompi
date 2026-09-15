@@ -117,6 +117,12 @@ export interface SessionSummary {
    * The hub does not interpret it; the rail uses it to pick an affordance.
    */
   sessionProvenance?: string;
+  /**
+   * The hub recorded this session but has not reopened it since its last
+   * restart. Its journal is on disk; nothing is running behind the card until
+   * the page asks for it.
+   */
+  dormant?: boolean;
 }
 
 export const HUB_HELLO_TYPE = 'hub_hello';

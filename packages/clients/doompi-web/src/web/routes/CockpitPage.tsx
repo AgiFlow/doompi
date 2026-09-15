@@ -11,11 +11,12 @@ import { CommandPalette } from '../features/leader/CommandPalette';
 import { SelectionBar } from '../features/selection/SelectionBar';
 import { Composer } from '../features/session/Composer';
 import { Timeline } from '../features/session/Timeline';
+import { DormantPanel } from '../features/sessions/DormantPanel';
 import { SessionRail } from '../features/sessions/SessionRail';
 import { WelcomePanel } from '../features/sessions/WelcomePanel';
 import { TopBar } from '../features/status/TopBar';
 import { HOST_SLOTS, pluginActivityGroups, webTabs } from '../lib/pluginRegistry';
-import { sessionsStore, setActiveSession, useNoSessions } from '../stores/sessionsStore';
+import { sessionsStore, setActiveSession, useActiveSessionMeta, useNoSessions } from '../stores/sessionsStore';
 import { useActiveSession } from '../stores/sessionStore';
 import { findTransientTab, transientTabsStore } from '../stores/transientTabsStore';
 import { setDockOpen, uiStore } from '../stores/uiStore';
@@ -37,6 +38,11 @@ export function CockpitPage() {
     return state.byId[state.transferringToId]?.summary.name ?? 'destination session';
   });
   const noSessions = useNoSessions();
+  const activeMeta = useActiveSessionMeta();
+  // A recorded session with no runtime has no transcript to show and no agent
+  // to address, so it takes the conversation's place rather than rendering an
+  // empty timeline over a composer that would fail to send.
+  const dormantMeta = activeMeta?.summary.dormant === true ? activeMeta : null;
   const dialogId = useActiveSession((state) => state.dialog?.id ?? null);
   // A declared tab first, then one a plugin opened at runtime for this session.
   // Session plugin compositions replace the builtin plugin module after verification.
@@ -158,6 +164,8 @@ export function CockpitPage() {
           // no agent to address, so the conversation and everything that talks
           // to it give way to the one thing there is to do.
           <WelcomePanel />
+        ) : dormantMeta ? (
+          <DormantPanel meta={dormantMeta} />
         ) : (
           <>
             <Timeline />

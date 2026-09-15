@@ -35,6 +35,7 @@ import {
   resolvePiExtensionEntries,
   type PiExtensionHost,
 } from '../../../services/piExtensionHost';
+import { formatToolPrompt, type ToolPromptEntry } from '../../../services/toolPrompt';
 import type { DirectHarnessRuntime } from '../../../types/server/directHarnessRuntime';
 import type { SessionFrame } from '../../../types/server/session';
 import { createHeadlessChildSessionServiceProvider } from '../../child/adapters/headlessChildSessionService';
@@ -389,6 +390,9 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   const reportedToolErrors = new Set<string>();
   let promptPreparationFailed = false;
   let headlessReady = false;
+  // Guidance for the tools currently applied, refreshed by applyTools so a mode
+  // switch adds and removes its tools' prompt text with the tools themselves.
+  let toolGuidance: readonly ToolPromptEntry[] = [];
   const initialSystemPrompt = [parsed.systemPrompt, ...(parsed.appendSystemPrompt ?? [])].filter(Boolean).join('\n\n');
   const runtime = await createDirectHarnessRuntime({
     cwd: options.cwd,
@@ -528,7 +532,9 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       try {
         if (!headlessHost) throw new Error('Headless capabilities are not installed.');
         const resources = await headlessHost.readResources();
-        let prompt = [initialSystemPrompt, ...mapResources(resources).context].filter(Boolean).join('\n\n');
+        let prompt = [initialSystemPrompt, formatToolPrompt(toolGuidance), ...mapResources(resources).context]
+          .filter(Boolean)
+          .join('\n\n');
         const patches = await headlessHost.dispatchHook('before_agent_start', { systemPrompt: prompt });
         for (const patch of patches) {
           if (patch && typeof patch === 'object' && 'systemPrompt' in patch && typeof patch.systemPrompt === 'string') {
@@ -754,6 +760,14 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         // Facet tools win a name collision: they are the reconciled, mode-aware set.
         const facetNames = new Set(facetTools.map((tool) => tool.name));
         const piTools = (piHost?.tools ?? []).filter((tool) => !facetNames.has(tool.name));
+        toolGuidance = [
+          ...(piHost?.toolGuidance ?? []).filter((entry) => !facetNames.has(entry.name)),
+          ...tools.map((tool) => ({
+            name: tool.name,
+            ...(tool.promptSnippet === undefined ? {} : { promptSnippet: tool.promptSnippet }),
+            ...(tool.promptGuidelines === undefined ? {} : { promptGuidelines: tool.promptGuidelines }),
+          })),
+        ];
         await runtime.replaceTools([...piTools, ...facetTools]);
       },
       applyResources: async (next) => {
@@ -799,6 +813,15 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     if (headlessReady) {
       await headlessHost.dispatchHook('session_start', {});
       await publishComposition();
+      // A journal reopened while its lane still holds an in-flight operation is a
+      // turn that was cut off, not a finished one. Driving it here is what the
+      // runtime's resume exists for, and it runs detached because that turn can
+      // outlive session startup by minutes.
+      void runtime
+        .resume()
+        .catch((error: unknown) =>
+          options.onNotice?.(`Session resume failed: ${error instanceof Error ? error.message : String(error)}`),
+        );
     }
   };
 

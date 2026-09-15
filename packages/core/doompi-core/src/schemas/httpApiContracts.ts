@@ -55,6 +55,8 @@ export const SessionSummarySchema = Type.Object({
   lastSettledAt: Optional(Text),
   parentSessionId: Optional(Text),
   sessionProvenance: Optional(Text),
+  /** Present and true for a recorded session the server has not reopened yet. */
+  dormant: Optional(Flag),
 });
 export const HubSnapshotFrameSchema = Type.Object({
   type: Type.Literal('sessions_snapshot'),
@@ -162,6 +164,9 @@ export const headlessHttpContracts: DoomHttpContract[] = [
   ),
   host('sessions.restart', '/api/workspaces/{workspaceId}/sessions/{sessionId}/restart', 'POST', ApiOkSchema, {
     availability: 'Host provides restartSession',
+  }),
+  host('sessions.revive', '/api/workspaces/{workspaceId}/sessions/{sessionId}/revive', 'POST', ApiOkSchema, {
+    availability: 'Host provides reviveSession',
   }),
   host(
     'sessions.resume',

@@ -8,6 +8,7 @@ import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
 
 import { DOOM_API_CALLER_HEADERS, parseDoomSocketPath, type DoomApiMount } from '../exports/packageApi';
+import type { OpenSessionRecord } from '../services/openSessionRegistry';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
 import type { SavedSession } from '../services/sqliteSessionHistory';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
@@ -46,6 +47,9 @@ export interface HeadlessServerOptions {
   sessionHistory?: (session: HeadlessHubSession) => Promise<SavedSession[]>;
   restartSession?: (session: HeadlessHubSession) => Promise<void>;
   resumeSession?: (session: HeadlessHubSession, targetSessionId: string) => Promise<string>;
+  /** Recorded sessions this server has not reopened, surfaced so a client can ask for one. */
+  dormantSessions?: () => readonly OpenSessionRecord[];
+  reviveSession?: (record: OpenSessionRecord) => Promise<void>;
 }
 
 export interface HeadlessServer {
@@ -74,6 +78,27 @@ function sessionView(session: HeadlessHubSession): Record<string, unknown> {
     ...(session.lastSettledAt === undefined ? {} : { lastSettledAt: session.lastSettledAt }),
     ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
     ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
+  };
+}
+
+/** The dormant counterpart of `sessionView`; same shape, no runtime behind it. */
+function dormantView(record: OpenSessionRecord): Record<string, unknown> {
+  return {
+    id: record.sessionId,
+    workspaceId: record.workspaceId,
+    name: record.name,
+    cwd: record.cwd,
+    createdAt: record.createdAt,
+    updatedAt: record.createdAt,
+    phase: 'idle',
+    phaseSince: record.createdAt,
+    attach: 'attached',
+    pendingMessageCount: 0,
+    everPrompted: false,
+    awaitingInput: false,
+    dormant: true,
+    ...(record.parentSessionId === undefined ? {} : { parentSessionId: record.parentSessionId }),
+    ...(record.sessionProvenance === undefined ? {} : { sessionProvenance: record.sessionProvenance }),
   };
 }
 
@@ -235,10 +260,17 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
   const sse = new Set<ServerResponse>();
   let closed = false;
   const webSockets = new WebSocketServer({ noServer: true });
+  /**
+   * A recorded session is dormant exactly while the hub has no session for its
+   * id, so reviving one needs no bookkeeping beyond the hub itself.
+   */
+  const dormant = (): readonly OpenSessionRecord[] =>
+    (options.dormantSessions?.() ?? []).filter((record) => options.headlessHub.session(record.sessionId) === undefined);
   const protocol = await createHeadlessProtocol({
     hub: options.headlessHub,
     telemetry: options.telemetry,
     onNotice: options.onNotice,
+    dormantSessions: dormant,
   });
   const server = createServer((request, response) => {
     void handleRequest(request, response).catch((error: unknown) => {
@@ -351,10 +383,15 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       }
       if (request.method === 'GET') {
         json(response, 200, {
-          sessions: options.headlessHub
-            .snapshot()
-            .filter((session) => session.workspaceId === workspaceId)
-            .map(sessionView),
+          sessions: [
+            ...options.headlessHub
+              .snapshot()
+              .filter((session) => session.workspaceId === workspaceId)
+              .map(sessionView),
+            ...dormant()
+              .filter((record) => record.workspaceId === workspaceId)
+              .map(dormantView),
+          ],
         });
         return;
       }
@@ -382,7 +419,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       response.on('close', () => sse.delete(response));
       writeSse(response, 'sessions_snapshot', {
         type: 'sessions_snapshot',
-        sessions: options.headlessHub.snapshot().map(sessionView),
+        sessions: [...options.headlessHub.snapshot().map(sessionView), ...dormant().map(dormantView)],
       });
       return;
     }
@@ -513,8 +550,23 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       return;
     }
     const sessionId = decodeURIComponent(sessionMatch[2]);
+    const workspaceId = decodeURIComponent(sessionMatch[1]);
     const session = options.headlessHub.session(sessionId);
-    if (session === undefined || session.workspaceId !== decodeURIComponent(sessionMatch[1])) {
+    // Revive is the one session route that answers before a runtime exists: it
+    // is what creates one.
+    if (sessionMatch[3] === 'revive' && request.method === 'POST' && options.reviveSession) {
+      const record = dormant().find(
+        (candidate) => candidate.sessionId === sessionId && candidate.workspaceId === workspaceId,
+      );
+      if (record === undefined) {
+        json(response, 404, { error: 'Dormant session not found.' });
+        return;
+      }
+      await options.reviveSession(record);
+      json(response, 200, { ok: true });
+      return;
+    }
+    if (session === undefined || session.workspaceId !== workspaceId) {
       json(response, 404, { error: 'Session not found.' });
       return;
     }
@@ -602,6 +654,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
             mount,
             telemetry: options.telemetry,
             onNotice: options.onNotice,
+            dormantSessions: dormant,
           });
     void prepare
       .then(async (selected) => {

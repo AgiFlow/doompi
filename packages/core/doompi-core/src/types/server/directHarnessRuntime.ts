@@ -181,6 +181,7 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   followUp(text: string, images?: ImageContent[]): Promise<void>;
   abort(): Promise<void>;
   compact(customInstructions?: string): Promise<void>;
-  resume(): Promise<void>;
+  /** Continues a persisted in-flight operation; false when the lane had none. */
+  resume(): Promise<boolean>;
   dispose(): Promise<void>;
 }

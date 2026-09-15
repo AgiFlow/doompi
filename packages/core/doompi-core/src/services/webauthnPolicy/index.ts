@@ -48,7 +48,13 @@ export const CEREMONY_TTL_MS = 120_000;
  */
 const GATED_ROUTES: readonly { method: string; pattern: RegExp; action: StepUpAction }[] = [
   { method: 'POST', pattern: /^\/api\/workspaces$/u, action: 'session.create' },
-  { method: 'POST', pattern: /^\/api\/workspaces\/[^/]+\/sessions(?:\/[^/]+\/resume)?$/u, action: 'session.create' },
+  {
+    method: 'POST',
+    // Reviving a recorded session starts an agent in a directory, so it is gated
+    // exactly as creating one is.
+    pattern: /^\/api\/workspaces\/[^/]+\/sessions(?:\/[^/]+\/(?:resume|revive))?$/u,
+    action: 'session.create',
+  },
   { method: 'POST', pattern: /^\/api\/plugins\/doompi\/logins(?:\/[^/]+\/answer)?$/u, action: 'provider.login' },
   { method: 'DELETE', pattern: /^\/api\/plugins\/doompi\/providers\/[^/]+$/u, action: 'provider.logout' },
   {

@@ -145,6 +145,7 @@ function SessionCard({
       awaitingInput: summary.awaitingInput,
       everPrompted: summary.everPrompted,
       lastSettledAt: summary.lastSettledAt,
+      dormant: summary.dormant,
     },
     now,
   );

@@ -22,6 +22,7 @@ import {
 import { createAgentServerService, type DoomSessionMetadata } from '../pi/piSessionRuntime';
 import { createPiWebSocketListener, type PiListenerSocket } from '../pi/piWebSocketListener';
 import type { DoomSocketMount } from '../schemas/packageApi';
+import type { OpenSessionRecord } from '../services/openSessionRegistry';
 import type { ServerTelemetry } from '../services/serverTelemetry';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
 import { createThreadJournals, type ThreadJournals } from './threadJournals';
@@ -49,6 +50,32 @@ function sessionView(session: HeadlessHubSession): Record<string, JsonValue> {
     ...(session.lastSettledAt === undefined ? {} : { lastSettledAt: session.lastSettledAt }),
     ...(session.parentSessionId === undefined ? {} : { parentSessionId: session.parentSessionId }),
     ...(session.sessionProvenance === undefined ? {} : { sessionProvenance: session.sessionProvenance }),
+  };
+}
+
+/**
+ * A recorded session with no runtime behind it yet.
+ *
+ * Carries the same field set as a live session so the rail keys both by id and
+ * swaps one for the other in place once the server reopens the journal.
+ */
+function dormantView(record: OpenSessionRecord): Record<string, JsonValue> {
+  return {
+    id: record.sessionId,
+    workspaceId: record.workspaceId,
+    name: record.name,
+    cwd: record.cwd,
+    createdAt: record.createdAt,
+    updatedAt: record.createdAt,
+    phase: 'idle',
+    phaseSince: record.createdAt,
+    attach: 'attached',
+    pendingMessageCount: 0,
+    everPrompted: false,
+    awaitingInput: false,
+    dormant: true,
+    ...(record.parentSessionId === undefined ? {} : { parentSessionId: record.parentSessionId }),
+    ...(record.sessionProvenance === undefined ? {} : { sessionProvenance: record.sessionProvenance }),
   };
 }
 
@@ -93,7 +120,18 @@ function permitsSession(hub: HeadlessHub, mount: DoomSocketMount, sessionId: str
   );
 }
 
-function managementHost(hub: HeadlessHub, threads: ThreadJournals, mount: DoomSocketMount): RoutedServerServiceHost {
+function permitsDormant(mount: DoomSocketMount, record: OpenSessionRecord): boolean {
+  if (mount.scope === 'global') return true;
+  if (record.workspaceId !== mount.workspaceId) return false;
+  return mount.scope === 'workspace' || mount.sessionId === record.sessionId;
+}
+
+function managementHost(
+  hub: HeadlessHub,
+  threads: ThreadJournals,
+  mount: DoomSocketMount,
+  dormantSessions: () => readonly OpenSessionRecord[],
+): RoutedServerServiceHost {
   return {
     attachClient(presentation) {
       const connectionId = randomUUID();
@@ -116,10 +154,15 @@ function managementHost(hub: HeadlessHub, threads: ThreadJournals, mount: DoomSo
       );
       publish({
         type: 'sessions_snapshot',
-        sessions: hub
-          .snapshot()
-          .filter((session) => visible.has(session.id))
-          .map(sessionView),
+        sessions: [
+          ...hub
+            .snapshot()
+            .filter((session) => visible.has(session.id))
+            .map(sessionView),
+          ...dormantSessions()
+            .filter((record) => !visible.has(record.sessionId) && permitsDormant(mount, record))
+            .map(dormantView),
+        ],
       });
       const stopEvents = hub.onEvent((event) => {
         if (event.kind === 'removed') {
@@ -234,9 +277,10 @@ function protocolHost(
   threads: ThreadJournals,
   telemetry: ServerTelemetry | undefined,
   mount: DoomSocketMount,
+  dormantSessions: () => readonly OpenSessionRecord[],
 ): ServerHost<DoomSessionMetadata> {
   return {
-    serverServices: managementHost(hub, threads, mount),
+    serverServices: managementHost(hub, threads, mount, dormantSessions),
     async resolveSession(sessionId) {
       const session = hub.session(sessionId);
       if (!session || !permitsSession(hub, mount, session.id))
@@ -282,13 +326,17 @@ export async function createHeadlessProtocol(options: {
   mount?: DoomSocketMount;
   telemetry?: ServerTelemetry;
   onNotice?: (message: string) => void;
+  /** Recorded sessions the server has not reopened; they join the first snapshot only. */
+  dormantSessions?: () => readonly OpenSessionRecord[];
 }): Promise<HeadlessProtocol> {
   const listener = createPiWebSocketListener({ onError: (error) => options.onNotice?.(error.message) });
   const threads = createThreadJournals({
     resolve: (sessionId, threadId) => options.hub.threadJournal(sessionId, threadId),
   });
   const server = await new Server(
-    protocolHost(options.hub, threads, options.telemetry, options.mount ?? { scope: 'global' }),
+    protocolHost(options.hub, threads, options.telemetry, options.mount ?? { scope: 'global' }, () =>
+      options.dormantSessions === undefined ? [] : options.dormantSessions(),
+    ),
     {
       listeners: [listener],
       serverId: DOOM_COCKPIT_SERVER_ID,

@@ -12,6 +12,8 @@ export interface StatusLineInput {
   everPrompted: boolean;
   /** Set once any run finished; a settled session is not "fresh" even unprompted. */
   lastSettledAt?: string;
+  /** Recorded by the hub but not running; opening it is what starts it. */
+  dormant?: boolean;
 }
 
 const MINUTE_MS = 60_000;
@@ -34,6 +36,9 @@ export function formatRunDuration(elapsedMs: number): string {
  */
 export function sessionStatusLine(input: StatusLineInput, now: number): string {
   if (input.attach === 'refused') return 'another cockpit holds this session';
+  // Ranked above the phase fields because a dormant card's phase is a default,
+  // not an observation: there is no runtime to have reported one.
+  if (input.dormant === true) return 'stopped · open to wake';
   if (input.awaitingInput) return 'waiting for your input';
   if (input.phase !== 'idle') {
     const since = Date.parse(input.phaseSince);
