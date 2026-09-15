@@ -121,7 +121,7 @@ describe('the workspace web plugin composition', () => {
     expect(pluginMinorModes().map(mode)).toEqual(PACKAGED_MINOR_MODES.map(mode));
   });
 
-  it('installs the Loop activity group and section from the workspace package', async () => {
+  it('installs the Loop activity group and fill from the workspace package', async () => {
     const definitions = await installed();
     const loop = definitions.find(({ id }) => id === 'loop');
 
@@ -131,7 +131,7 @@ describe('the workspace web plugin composition', () => {
     expect(activityGroups({}, [], 'session-1')).toContainEqual(
       expect.objectContaining({ name: 'loops', active: false }),
     );
-    expect(loop?.activitySections?.map(({ id }) => id)).toEqual(['loops']);
+    expect(loop?.fills).toContainEqual(expect.objectContaining({ slot: 'activity.loops', id: 'loops' }));
   });
 
   /**

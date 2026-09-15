@@ -62,14 +62,21 @@ vi.mock('../../../src/services/reconcile', () => ({
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
-function hostContext(scope: DoomServerHostService['scope'], directEvents?: DoomDirectEventBus) {
+function hostContext(
+  scope: DoomServerHostService['scope'],
+  directEvents: DoomDirectEventBus = {
+    publish: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
+    close: vi.fn(),
+  },
+) {
   const registered: MountedApi[] = [];
   const state = { disposed: 0 };
   const host: DoomServerHostService = {
     scope,
     context: {
       locality: 'local',
-      ...(directEvents === undefined ? {} : { directEvents }),
+      directEvents,
     } as unknown as DoomServerHostService['context'],
     registerApi(api) {
       registered.push(api);

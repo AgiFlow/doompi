@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RealtimeHost } from '../src/services/realtimeHost';
 import type { RealtimeSignInAttempt } from '../src/services/realtimeRuntime';
 import type { VoiceDependencies } from '../src/types';
-import { voiceRuntime } from './helpers/voiceRuntime';
+import { publicVoiceRuntime, voiceRuntime } from './helpers/voiceRuntime';
 
 const disposers: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -20,7 +20,7 @@ afterEach(async () => {
 async function settle() {
   for (let index = 0; index < 30; index += 1) await Promise.resolve();
 }
-async function fixture(mode: 'live' | 'legacy' = 'live') {
+async function createFixture(runtime: typeof voiceRuntime, mode: 'live' | 'legacy' = 'live') {
   const cordis = new Context();
   const commands = new Map<string, { handler(args: string, context: ExtensionContext): Promise<void> }>();
   const events = new Map<string, (event: object, context: ExtensionContext) => Promise<void>>();
@@ -105,7 +105,7 @@ async function fixture(mode: 'live' | 'legacy' = 'live') {
     },
   });
   cordis.provide(DOOM_TOOL_SURFACE_SERVICE, toolSurface);
-  await voiceRuntime.install(cordis, pi, { dependencies, liveHost: host, liveSignIn: signIn, waitUntilConfigured });
+  await runtime.install(cordis, pi, { dependencies, liveHost: host, liveSignIn: signIn, waitUntilConfigured });
   disposers.push(async () => {
     await cordis.fiber.dispose();
   });
@@ -133,7 +133,11 @@ async function fixture(mode: 'live' | 'legacy' = 'live') {
   };
 }
 
-describe('production live voice command wiring', () => {
+describe.each([
+  ['extracted service', voiceRuntime],
+  ['public compatibility service', publicVoiceRuntime],
+] as const)('production live voice command wiring through the %s', (serviceName, runtime) => {
+  const fixture = (mode: 'live' | 'legacy' = 'live') => createFixture(runtime, mode);
   it('reports login startup failure without exposing authentication details', async () => {
     const f = await fixture();
     f.signIn.mockRejectedValueOnce(new Error('private-provider-credential'));
@@ -175,15 +179,17 @@ describe('production live voice command wiring', () => {
     expect(cancelled.context.ui.notify).not.toHaveBeenCalled();
     expect(cancelled.host.start).not.toHaveBeenCalled();
   });
-  it('keeps dynamically refreshed Voice tools hidden while autonomous Voice is disabled', async () => {
-    const f = await fixture();
-    expect(f.pi.getActiveTools()).toEqual(['read']);
+  if (serviceName === 'extracted service') {
+    it('keeps dynamically refreshed Voice tools hidden while autonomous Voice is disabled', async () => {
+      const f = await fixture();
+      expect(f.pi.getActiveTools()).toEqual(['read']);
 
-    await f.events.get('session_start')!({}, f.context);
+      await f.events.get('session_start')!({}, f.context);
 
-    expect(f.tools.has('describe_voice_tools')).toBe(true);
-    expect(f.pi.getActiveTools()).toEqual(['read']);
-  });
+      expect(f.tools.has('describe_voice_tools')).toBe(true);
+      expect(f.pi.getActiveTools()).toEqual(['read']);
+    });
+  }
 
   it('does not gate live tool descriptions or failed narration on local ASR', async () => {
     const f = await fixture();

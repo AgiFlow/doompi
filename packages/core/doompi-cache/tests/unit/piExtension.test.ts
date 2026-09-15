@@ -85,7 +85,9 @@ describe('Cache activation ordering', () => {
 
   it('rejects an optimizer module without an extension factory', async () => {
     mocks.optimizerExport = undefined;
-    await expect(activateCacheExtension(pi)).rejects.toThrow('does not export an extension factory');
+    await expect(activateCacheExtension(pi)).rejects.toThrow(
+      'Pi Cache Optimizer does not provide an extension factory.',
+    );
     expect(mocks.mount).not.toHaveBeenCalled();
   });
 });

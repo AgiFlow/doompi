@@ -56,6 +56,7 @@ function hostContext(scope: DoomServerHostService['scope']) {
     },
     registerCommand: () => ({ dispose() {} }),
     registerResource: () => ({ dispose() {} }),
+    registerTool: () => ({ dispose() {} }),
     registerHook: () => ({ dispose() {} }),
     assertActive() {},
   } as unknown as DoomHeadlessHostService);
@@ -73,19 +74,20 @@ describe('voiceServerFacet', () => {
 
     const dispose = await voiceServerFacet.apply(harness.context);
 
-    expect(harness.registered.map((api) => api.basePath)).toEqual(['voice', 'voice-media']);
+    expect(harness.registered.map((api) => api.basePath)).toEqual(['voice-media', 'voice']);
+    expect(harness.channels.map((channel) => channel.frameType)).toEqual(['voice_media_wake', 'voice_ownership']);
     expect(typeof dispose).toBe('function');
     await dispose?.();
   });
 
-  it('unregisters the API when the host disposes the facet', async () => {
+  it('unregisters the session APIs and channels when the host disposes the facet', async () => {
     const harness = hostContext('session');
 
     await (
       await voiceServerFacet.apply(harness.context)
     )?.();
 
-    expect(harness.state.disposed).toBe(2);
+    expect(harness.state.disposed).toBe(4);
   });
 
   it('registers voice wake and ownership channels on the hub scope', async () => {

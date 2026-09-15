@@ -127,10 +127,10 @@ describe('Doom deterministic architecture rules', () => {
   });
 
   it('enforces the canonical inward layer direction', () => {
-    const command = write('src/controllers/run.ts', "import { nodeRun } from '../extensions/pi';");
+    const model = write('src/models/run.ts', "import { run } from '../services/run';");
     const adapter = write('src/extensions/pi.ts', "import { run } from '../services/run';");
 
-    expect(doomLayerBoundary.check?.(command, root, boundaryContext())).toContain('forbidden dependencies');
+    expect(doomLayerBoundary.check?.(model, root, boundaryContext())).toContain('forbidden dependencies');
     expect(doomLayerBoundary.check?.(adapter, root, boundaryContext())).toBeNull();
   });
 
@@ -156,21 +156,24 @@ describe('Doom deterministic architecture rules', () => {
     expect(doomLayerBoundary.check?.(reaching, root, boundaryContext())).toContain('forbidden dependencies');
     expect(doomLayerBoundary.check?.(client, root, boundaryContext())).toBeNull();
   });
-  it('accepts the composed controller, model, tool, and service roots', () => {
+  it('accepts composed canonical roots and rejects legacy controller and tool roots', () => {
     write('package.json', JSON.stringify({ name: '@scope/package' }));
     const model = write('src/models/session.ts', 'export const session = {};');
     const service = write(
       'src/services/session/index.ts',
       "import { createHash } from 'node:crypto'; export const digest = () => createHash('sha256');",
     );
-    const controller = write(
-      'src/controllers/session.ts',
-      "import { digest } from '../services/session'; import { session } from '../models/session'; export { digest, session };",
+    const tui = write(
+      'src/tui/session.ts',
+      "import { session } from '../models/session'; export const render = () => session;",
     );
-    const tool = write('src/tools/session.ts', "import { digest } from '../services/session'; export { digest };");
-    for (const file of [model, service, controller, tool]) {
+    for (const file of [model, service, tui]) {
       expect(doomFolderLayout.check?.(file, root, boundaryContext())).toBeNull();
       expect(doomLayerBoundary.check?.(file, root, boundaryContext())).toBeNull();
+    }
+    for (const legacyRoot of ['controllers', 'tools']) {
+      const legacy = write(`src/${legacyRoot}/session.ts`, 'export const legacy = true;');
+      expect(doomFolderLayout.check?.(legacy, root, boundaryContext())).toContain('Legacy root');
     }
     expect(serviceBoundary.check?.(service, root, boundaryContext())).toBeNull();
   });

@@ -13,7 +13,10 @@ function hostContext(scope: DoomServerHostService['scope']) {
   const state = { disposed: 0 };
   const host: DoomServerHostService = {
     scope,
-    context: { locality: 'local' } as unknown as DoomServerHostService['context'],
+    context: {
+      locality: 'local',
+      directEvents: { publish() {}, subscribe: () => () => undefined, close() {} },
+    } as unknown as DoomServerHostService['context'],
     registerMethod() {
       return { dispose: () => undefined };
     },

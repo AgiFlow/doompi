@@ -103,6 +103,12 @@ export async function bundleCockpitWeb(options: BundleCockpitWebOptions): Promis
     envDir: false,
     logLevel: 'warn',
     base: './',
+    // Plugin sources are already-built ESM and can retain import.meta.url around
+    // Vite asset placeholders. Give the classic IIFE the URL of the script that
+    // was dynamically served, rather than letting Rolldown replace it with {}.
+    define: {
+      'import.meta.url': '(document.currentScript && document.currentScript.src) || document.baseURI',
+    },
     plugins: [react(), tailwindcss()],
     resolve: {
       dedupe: [...DEDUPED_RUNTIMES],

@@ -2923,6 +2923,7 @@
       "./extensions/web": "i",
       "./fable-plan": "tir",
       "./fable-plan-api": "tir",
+      "./runs/background/cliRunnerEntry": "tir",
       "./runtime-subagent-policy": "tir",
       "./runtime-subagent-tool": "tir",
       "./subagent-policy": "tir",
@@ -2983,6 +2984,11 @@
         "types": "./dist/fable-plan-api.d.mts",
         "import": "./dist/fable-plan-api.mjs",
         "require": "./dist/fable-plan-api.cjs"
+      },
+      "./runs/background/cliRunnerEntry": {
+        "types": "./dist/runs/background/cliRunnerEntry.d.mts",
+        "import": "./dist/runs/background/cliRunnerEntry.mjs",
+        "require": "./dist/runs/background/cliRunnerEntry.cjs"
       },
       "./runtime-subagent-policy": {
         "types": "./dist/runtime-subagent-policy.d.mts",
