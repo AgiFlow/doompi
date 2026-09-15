@@ -43,6 +43,8 @@ export const WEB_FIELDS: Readonly<Record<string, string>> = {
   // to know none of their names.
   fill: 'fills',
   action: 'contextActions',
+  'activity-group': 'activityGroups',
+  leader: 'leaderBindings',
   api: NOT_A_CONTRIBUTION,
   method: NOT_A_CONTRIBUTION,
   store: NOT_A_CONTRIBUTION,

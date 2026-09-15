@@ -118,6 +118,10 @@ const FRONTEND_IDENTITY: Readonly<Record<string, (name: string, options: RenderO
   setting: (name) => ({ id: toKebab(name) }),
   action: (name) => ({ id: toKebab(name) }),
   mode: (name) => ({ name: toKebab(name) }),
+  'activity-group': (name) => ({ name: toKebab(name) }),
+  // A leader binding's id is namespaced like a slot, because the key tree is
+  // shared and two plugins must not collide on one path's identity.
+  leader: (name, options) => ({ id: `${options.pluginId}.${toKebab(name)}` }),
 };
 
 /**
@@ -227,6 +231,24 @@ function cliImport(body: readonly string[]): string {
   return `import { ${named.join(', ')}${types} } from '@agimon-ai/doompi-core/pi-extension';`;
 }
 
+/**
+ * Emits a contribution as a getter, so it is built after services mount.
+ *
+ * Both host helpers register `services` first and read every other field
+ * afterwards. A plain property would be evaluated when the entry's factory
+ * returns, which is before any service exists, so a routed file could never
+ * inject one at construction and every package with shared per-mount state
+ * would be stuck in one closure.
+ *
+ * `services` itself stays a plain property: it is what the helper reads first,
+ * and a getter for it would buy nothing.
+ */
+function defer(field: string, rendered: string): string {
+  if (field === 'services' || rendered.startsWith('...')) return rendered;
+  const [name, ...value] = rendered.split(': ');
+  return `get ${name}() { return ${value.join(': ').replace(/,$/u, '')}; },`;
+}
+
 function bodyFor(
   bindings: readonly Binding[],
   indent: string,
@@ -255,7 +277,7 @@ function bodyFor(
       continue;
     }
     const rendered = `[${members.map((entry) => member(entry, contextExpression, target)).join(', ')}]`;
-    lines.push(`${indent}${wrapField(field, target, rendered, options)}`);
+    lines.push(`${indent}${defer(field, wrapField(field, target, rendered, options))}`);
   }
   return lines;
 }
