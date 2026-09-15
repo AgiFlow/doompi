@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildRealtimeContext } from '../src/services/realtimeContextController';
+import { buildRealtimeContext } from '../src/services/realtimeContext';
 
 function message(messageValue: Record<string, unknown>): Record<string, unknown> {
   return { type: 'message', message: messageValue };

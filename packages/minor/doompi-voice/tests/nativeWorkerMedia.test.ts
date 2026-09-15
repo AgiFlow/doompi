@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { resolveVoiceConfig } from '@agimon-ai/doompi-config';
 import { expect, it, vi } from 'vitest';
 
-import { VoiceMediaBroker } from '../src/services/clientMediaApiController';
+import { VoiceMediaBroker } from '../src/services/clientMediaApi';
 import { SystemClock } from '../src/services/infrastructure';
 import { VoiceWorkerClient } from '../src/services/voiceWorkerClient';
 import { VoiceWorkerSessionController } from '../src/services/voiceWorkerSessionController';

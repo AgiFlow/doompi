@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { collectVoiceCommandContext } from '../src/services/voiceControllerCommandContext';
+import { collectVoiceCommandContext } from '../src/services/voiceCommandContext';
 
 function message(messageValue: Record<string, unknown>): Record<string, unknown> {
   return { type: 'message', id: crypto.randomUUID(), timestamp: new Date().toISOString(), message: messageValue };

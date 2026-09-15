@@ -10,7 +10,7 @@ import {
   createNarrationTool,
   type NarrationToolOutcome,
   type NarrationToolRuntime,
-} from '../src/services/narrationToolController';
+} from '../src/services/narrationTool';
 import { createDoomVoiceToolsService } from '../src/services/voiceTools';
 
 const NARRATION_OUTCOMES: readonly NarrationToolOutcome[] = ['completed', 'interrupted', 'superseded', 'failed'];

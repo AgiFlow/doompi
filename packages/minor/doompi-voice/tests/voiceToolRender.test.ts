@@ -7,7 +7,7 @@ import {
   renderNarrationToolResult,
   renderVoiceToolCall,
   renderVoiceToolResult,
-} from '../src/services/voiceControllerToolRender';
+} from '../src/services/voiceToolRender';
 
 function plainTheme(): Theme {
   const identity = (text: string): string => text;

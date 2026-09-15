@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { LiveVoiceController } from '../src/services/liveVoiceControllerController';
-import { VoiceModeController, type ModeVoiceController } from '../src/services/voiceControllerModeController';
+import { LiveVoiceController } from '../src/services/liveVoiceController';
+import { VoiceModeController, type ModeVoiceController } from '../src/services/voiceModeController';
 import type { RealtimeHost } from '../src/services/realtimeHost';
 import type { AutoCaptureActivationState, AutoCaptureUi, IClock } from '../src/types';
 

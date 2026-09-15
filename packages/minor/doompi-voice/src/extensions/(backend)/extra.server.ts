@@ -1,7 +1,7 @@
 import type { DoomServerPluginDefinition } from '@agimon-ai/doompi-core/server-facet';
 
-import { voiceClientSettingsApi } from '../../services/voiceControllerClientSettingsApi';
-import { createVoiceMediaWakeChannel, createVoiceOwnershipChannel } from '../../services/voiceControllerMediaHubChannel';
+import { voiceClientSettingsApi } from '../../services/voiceClientSettingsApi';
+import { createVoiceMediaWakeChannel, createVoiceOwnershipChannel } from '../../services/voiceMediaHubChannel';
 
 export default (({ host }) =>
   host.scope === 'session'

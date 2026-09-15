@@ -1,7 +1,7 @@
 import type { PiPluginContext, PiPluginContributions } from '@agimon-ai/doompi-core/pi-extension';
 
-import type { VoiceExtensionOptions } from '../../../../services/voiceController';
-import { createVoicePiRuntime } from '../../../../services/voiceControllerPlugin';
+import type { VoiceExtensionOptions } from '../../../../services/voice';
+import { createVoicePiRuntime } from '../../../../services/voicePlugin';
 
 export default (({ context, pi, options }) => ({
   ...createVoicePiRuntime(context, pi, options ?? {}),
