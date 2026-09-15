@@ -7,12 +7,10 @@ import {
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
 import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
-import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';
+import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 
 import { createTeamSessionApi } from '../controllers/teamSessionApi';
-import { createSubagentCatalogChannel } from '../controllers/webSubagentCatalogChannel';
-import { createSubagentsChannel } from '../controllers/webSubagentsChannel';
 import { DOOM_SUBAGENT_POLICY_SERVICE } from '../schemas/subagentPolicy';
 import { SUBAGENT_ACTIONS, SubagentToolSchema, type SubagentToolParams } from '../schemas/subagentTool';
 import { resolveActiveTeamModelSpecs } from '../services/agentDiscovery';
@@ -287,11 +285,19 @@ function intercomTool(channel: NativeTeamRuntime): DoomHeadlessTool {
   };
 }
 
-export const teamServerFacet = defineServerPlugin({
-  name: SOURCE,
-  global: { channels: [createSubagentsChannel, createSubagentCatalogChannel] },
-  workspace: { channels: [createSubagentsChannel, createSubagentCatalogChannel] },
-  session: ({ context, host: serverHost, agent: host }) => {
+/**
+ * Everything this package contributes to one headless session.
+ *
+ * One factory for the same reason the interactive half is: the API, the tools,
+ * the services and the activities all read one runtime built per session. The
+ * channels are the exception, because they need nothing from it, so those are
+ * routed files and the path declares the three scopes they serve.
+ */
+export const createTeamServerSession = ({
+  context,
+  host: serverHost,
+  agent: host,
+}: DoomServerPluginContext): DoomServerSessionPlugin => {
     /** Mount Team's session services under a Cordis-owned plugin fiber. */
     function headlessTeamServicesPlugin(ctx: Context, config: HeadlessTeamServicesConfig): void {
       const availableModels = config.execution.model ? [toModelInfo(config.execution.model)] : [];
@@ -447,7 +453,4 @@ export const teamServerFacet = defineServerPlugin({
         },
       ],
     };
-  },
-});
-
-export default teamServerFacet;
+};

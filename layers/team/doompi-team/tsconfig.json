@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2023"],
+    "lib": [
+      "ES2023"
+    ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
@@ -26,8 +28,25 @@
     "forceConsistentCasingInFileNames": true,
     "rootDir": ".",
     "outDir": "dist",
-    "types": ["vitest/globals", "node"]
+    "types": [
+      "vitest/globals",
+      "node"
+    ]
   },
-  "include": ["src", "tests", "vitest.config.ts", "vitest.system.config.ts", "tsdown.config.ts"],
-  "exclude": ["node_modules", "dist", "coverage", "src/web", "src/extensions/web.ts"]
+  "include": [
+    "src",
+    "tests",
+    "vitest.config.ts",
+    "vitest.system.config.ts",
+    "tsdown.config.ts",
+    "generated"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "coverage",
+    "src/web",
+    "src/extensions/**/(frontend)/**/*",
+    "generated/web.ts"
+  ]
 }
