@@ -43,6 +43,7 @@ const EXPECTED_RULE_IDS = [
   'prefer-cordis-container',
   'provider-owned-policy',
   'public-export-boundary',
+  'routed-file-contract',
   'routed-file-position',
   'schema-placement',
   'service-boundary',
@@ -97,6 +98,7 @@ describe('Doom extension plugin contract', () => {
       'prefer-cordis-container',
       'doom-clean-architecture-boundary',
       'doom-constants',
+      'routed-file-contract',
       'web-plugin-layer-boundary',
     ]) {
       expect(recommended.rules[ruleId], ruleId).toBe('error');
@@ -118,7 +120,7 @@ describe('Doom extension plugin contract', () => {
         expect(boundary.allowedImports ?? []).not.toContain(`src/${obsolete}/**`);
       }
     }
-    for (const root of ['extensions', 'controllers', 'services', 'models', 'tools', 'constants', 'schemas', 'types']) {
+    for (const root of ['extensions', 'services', 'models', 'constants', 'schemas', 'types']) {
       expect(patterns[`doom-${root}`]?.includes).toContain(`src/${root}/**/*.ts`);
     }
     expect(patterns['doom-exports']?.includes).toEqual(['src/exports/*.ts']);
@@ -131,7 +133,7 @@ describe('Doom extension plugin contract', () => {
     for (const root of ['extensions', 'bin', 'web', 'exports']) {
       expect(exported).not.toContain(`src/${root}/**`);
     }
-    for (const root of ['constants', 'controllers', 'models', 'schemas', 'services', 'tools', 'tui', 'types']) {
+    for (const root of ['constants', 'models', 'schemas', 'services', 'tui', 'types']) {
       expect(exported).toContain(`src/${root}/**`);
     }
     const extensions = boundaries.find((boundary) => boundary.name === 'extensions')?.allowedImports ?? [];

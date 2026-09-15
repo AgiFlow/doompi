@@ -338,6 +338,7 @@ export function createVoiceServer(
     },
   ];
   return {
+    tools: exposedTools,
     services: [
       serverMinorModes([owner]),
       (context) => {

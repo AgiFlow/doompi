@@ -31,8 +31,8 @@ function testUiHub(): DoomUiHubService {
   } as unknown as DoomUiHubService;
 }
 
-vi.mock('../src/services/voiceController', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/services/voiceController')>()),
+vi.mock('../src/services/voice', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/services/voice')>()),
   createVoiceRuntime: extensionMocks.createVoiceRuntime,
 }));
 vi.mock('../src/services/voiceDependencies', () => ({ createVoiceDependencies: extensionMocks.createContainer }));
@@ -64,10 +64,28 @@ async function voicePiExtension(pi: ExtensionAPI): Promise<void> {
   }
   pi.on('session_shutdown', () => fiber.dispose());
 }
-import { voiceLeaderBindings } from '../src/services/voiceController';
+import { voiceLeaderBindings } from '../src/services/voice';
 
 beforeEach(() => {
-  extensionMocks.createVoiceRuntime.mockReturnValue({ tools: [], commands: [], events: {} });
+  const eventHandler = vi.fn(async () => undefined);
+  extensionMocks.createVoiceRuntime.mockReturnValue({
+    tools: [],
+    commands: [
+      ['voice', { description: 'Voice test command', handler: async () => undefined }],
+      ['voice-auto', { description: 'Voice auto test command', handler: async () => undefined }],
+    ],
+    events: {
+      agent_settled: eventHandler,
+      before_agent_start: eventHandler,
+      session_start: eventHandler,
+      tool_execution_start: eventHandler,
+      turn_end: eventHandler,
+    },
+    toolRestrictions: [
+      { source: 'voice-test', restrict: (incoming: readonly string[]) => incoming },
+      { source: 'transfer-voice-test', restrict: (incoming: readonly string[]) => incoming },
+    ],
+  });
   extensionMocks.createCordisRoot = () => {
     const root = new Context();
     cordisRoots.push(root);

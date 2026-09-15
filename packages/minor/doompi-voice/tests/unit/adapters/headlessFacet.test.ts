@@ -31,6 +31,12 @@ describe('native Voice session', () => {
       clientConnectWaitMs: 0,
     });
     const facet = createVoiceServer(host, broker, home);
+    expect(facet.tools?.map(({ name }) => name)).toEqual([
+      'describe_voice_tools',
+      'use_voice_tools',
+      'narrate',
+      'transfer_voice',
+    ]);
     const api = facet.api![0]!.start({} as never);
     try {
       const response = await api.fetch(new Request('http://voice/status'));

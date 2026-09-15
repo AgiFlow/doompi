@@ -6,7 +6,8 @@ import {
   resolveMcpDirectToolNames,
   resolveMcpDirectToolSelections,
 } from '../../src/services/mcpDirectToolAllowlist';
-import { formatTeamContextSnapshot } from '../../src/services/teamSnapshot';
+import type { NativeTeamRuntime } from '../../src/services/nativeTeamChannel';
+import { formatTeamContextSnapshot, readActiveTeamSnapshot } from '../../src/services/teamSnapshot';
 
 // ---------------------------------------------------------------------------
 // mcpDirectToolAllowlist.ts
@@ -65,6 +66,13 @@ describe('mcp direct tool resolver binding', () => {
 });
 
 describe('Team context contribution', () => {
+  it('reads the active runtime snapshot without requiring a runtime', () => {
+    const snapshot = { members: [] };
+    const runtime = { snapshot: () => snapshot } as unknown as NativeTeamRuntime;
+    expect(readActiveTeamSnapshot(runtime)).toBe(snapshot);
+    expect(readActiveTeamSnapshot()).toBeUndefined();
+  });
+
   it('renders only the resumable member fields', () => {
     expect(
       formatTeamContextSnapshot({
@@ -81,7 +89,8 @@ describe('Team context contribution', () => {
     ).toBe('- reviewer | role: subagent | agent: reviewer | run: run-1 | task task-1: Review the patch');
   });
 
-  it('omits an unavailable runtime and reports an empty active team', () => {
+  it('omits unavailable member details, an unavailable runtime, and an empty active team', () => {
+    expect(formatTeamContextSnapshot({ members: [{ name: 'lead', role: 'main' }] })).toBe('- lead | role: main');
     expect(formatTeamContextSnapshot(undefined)).toBeUndefined();
     expect(formatTeamContextSnapshot({ members: [] })).toBe('(no active team members)');
   });
