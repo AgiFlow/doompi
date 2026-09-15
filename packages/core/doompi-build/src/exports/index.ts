@@ -27,3 +27,9 @@ export {
   ROUTING_ROOT_ALIAS,
   TARGETED_SURFACES,
 } from '../constants/layout';
+export { generateExtension, defaultPluginId } from '../services/generate';
+export type { GenerateOptions, GenerateResult } from '../services/generate/type';
+export { renderCliEntry, renderServerEntry, renderWebEntry } from '../services/renderEntry';
+export type { RenderOptions } from '../services/renderEntry/type';
+export { StaleGeneratedError, writeGenerated } from '../services/writeGenerated';
+export type { WriteResult } from '../services/writeGenerated';

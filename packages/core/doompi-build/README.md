@@ -52,3 +52,29 @@ scanExtensions({
   generatedEntries: ['pi', 'server', 'web'],
 });
 ```
+
+## Generating
+
+`generateExtension` runs the scan, renders an entry for each host the tree contributes to, and writes it. A target with nothing in it produces no file, so a backend-only package never grows an empty cockpit entry.
+
+```ts
+import { generateExtension } from '@agimon-ai/doompi-build';
+
+const { targets, changed, notices } = generateExtension({ packageDir, check: Boolean(process.env.CI) });
+```
+
+Generated entries keep their historical paths, `src/extensions/{pi,server,web}.ts`, so nothing downstream has to change: the Pi compiler, the server bundle loader and the cockpit bundler all keep reading the same files. They are committed, and `check` throws on a stale one instead of writing it.
+
+## The tsdown preset
+
+```ts
+// tsdown.config.ts, the whole file
+import { defineConfig } from 'tsdown';
+import { doompiExtension } from '@agimon-ai/doompi-build/tsdown';
+
+export default defineConfig(doompiExtension());
+```
+
+The scan and the write happen at config-load time rather than in a plugin hook, because `entry` has to exist before the build graph does. That is what the cockpit's own config already does for its generated plugin registry.
+
+The cockpit entry is deliberately absent from `entry`: the browser half ships as source and is compiled by the cockpit's bundler, not this one.
