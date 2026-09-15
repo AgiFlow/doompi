@@ -1,3 +1,36 @@
+## 0.0.1-alpha.36 (2026-09-15)
+
+### 🚀 Features
+
+- surface the effective system prompt in the context panel ([a594b6d2](https://github.com/AgiFlow/doompi/commit/a594b6d2))
+- **doompi-web:** restore cockpit sessions after a server restart ([42d3e441](https://github.com/AgiFlow/doompi/commit/42d3e441))
+
+### 🩹 Fixes
+
+- **root:** format two test files and cover reviveSession ([0b74c548](https://github.com/AgiFlow/doompi/commit/0b74c548))
+- **doompi-plan:** save the plan that introduced the write_plan call ([cd60c62c](https://github.com/AgiFlow/doompi/commit/cd60c62c))
+- **doompi-web:** stop logging browser aborts as headless failures ([42524e2d](https://github.com/AgiFlow/doompi/commit/42524e2d))
+- **root:** repair CI dependency and runtime checks ([e870c0bd](https://github.com/AgiFlow/doompi/commit/e870c0bd))
+- mount headless session facets and restore state ([17e4e229](https://github.com/AgiFlow/doompi/commit/17e4e229))
+- align workspace REST and WebSocket routes ([78f77c59](https://github.com/AgiFlow/doompi/commit/78f77c59))
+- preserve runner output and align global plugin routes ([9de6fe9c](https://github.com/AgiFlow/doompi/commit/9de6fe9c))
+- preserve web model state and complete stalled runner commands ([1ac5a47c](https://github.com/AgiFlow/doompi/commit/1ac5a47c))
+- **doompi-core,doompi-voice:** silence teardown selection notices and coalesce catalog refreshes ([8de90596](https://github.com/AgiFlow/doompi/commit/8de90596))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.32
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.66
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.35 (2026-09-14)
 
 ### 🚀 Features

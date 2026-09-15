@@ -1,3 +1,18 @@
+## 0.0.1-alpha.71 (2026-09-15)
+
+### 🩹 Fixes
+
+- align workspace REST and WebSocket routes ([78f77c59](https://github.com/AgiFlow/doompi/commit/78f77c59))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.69
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.70 (2026-09-14)
 
 ### 🧱 Updated Dependencies

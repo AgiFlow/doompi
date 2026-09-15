@@ -1,3 +1,33 @@
+## 0.0.1-alpha.72 (2026-09-15)
+
+### 🚀 Features
+
+- surface the effective system prompt in the context panel ([a594b6d2](https://github.com/AgiFlow/doompi/commit/a594b6d2))
+
+### 🩹 Fixes
+
+- **root:** format two test files and cover reviveSession ([0b74c548](https://github.com/AgiFlow/doompi/commit/0b74c548))
+- **doompi-plan:** save the plan that introduced the write_plan call ([cd60c62c](https://github.com/AgiFlow/doompi/commit/cd60c62c))
+- mount headless session facets and restore state ([17e4e229](https://github.com/AgiFlow/doompi/commit/17e4e229))
+- align workspace REST and WebSocket routes ([78f77c59](https://github.com/AgiFlow/doompi/commit/78f77c59))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-author to 0.0.1-alpha.10
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-team to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-voice to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.32
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.72
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.71 (2026-09-14)
 
 ### 🧱 Updated Dependencies

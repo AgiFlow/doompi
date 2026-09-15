@@ -1,3 +1,33 @@
+## 0.0.1-alpha.72 (2026-09-15)
+
+### 🩹 Fixes
+
+- align workspace REST and WebSocket routes ([78f77c59](https://github.com/AgiFlow/doompi/commit/78f77c59))
+- preserve runner output and align global plugin routes ([9de6fe9c](https://github.com/AgiFlow/doompi/commit/9de6fe9c))
+- preserve web model state and complete stalled runner commands ([1ac5a47c](https://github.com/AgiFlow/doompi/commit/1ac5a47c))
+- **doompi-runner:** keep the loop alive while a file wait is pending ([729227b7](https://github.com/AgiFlow/doompi/commit/729227b7))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.32
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.71 (2026-09-14)
 
 ### 🧱 Updated Dependencies

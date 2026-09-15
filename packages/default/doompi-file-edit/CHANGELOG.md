@@ -1,3 +1,27 @@
+## 0.0.1-alpha.72 (2026-09-15)
+
+### 🩹 Fixes
+
+- align workspace REST and WebSocket routes ([78f77c59](https://github.com/AgiFlow/doompi/commit/78f77c59))
+
+### 🔥 Performance
+
+- **doompi-file-edit:** take the tree walk off the tool-result path ([4168670c](https://github.com/AgiFlow/doompi/commit/4168670c))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.32
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.71 (2026-09-14)
 
 ### 🧱 Updated Dependencies

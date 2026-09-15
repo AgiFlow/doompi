@@ -1,3 +1,25 @@
+## 0.0.1-alpha.16 (2026-09-15)
+
+### 🩹 Fixes
+
+- mount headless session facets and restore state ([17e4e229](https://github.com/AgiFlow/doompi/commit/17e4e229))
+- align workspace REST and WebSocket routes ([78f77c59](https://github.com/AgiFlow/doompi/commit/78f77c59))
+- **doompi-core,doompi-voice:** silence teardown selection notices and coalesce catalog refreshes ([8de90596](https://github.com/AgiFlow/doompi/commit/8de90596))
+- **doompi-core:** scope hub channels and fix child model spawns ([cb6cec79](https://github.com/AgiFlow/doompi/commit/cb6cec79))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.30
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.72
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.15 (2026-09-14)
 
 ### 🧱 Updated Dependencies

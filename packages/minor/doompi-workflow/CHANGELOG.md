@@ -1,3 +1,24 @@
+## 0.0.1-alpha.73 (2026-09-15)
+
+### 🩹 Fixes
+
+- mount headless session facets and restore state ([17e4e229](https://github.com/AgiFlow/doompi/commit/17e4e229))
+- align workspace REST and WebSocket routes ([78f77c59](https://github.com/AgiFlow/doompi/commit/78f77c59))
+- preserve runner output and align global plugin routes ([9de6fe9c](https://github.com/AgiFlow/doompi/commit/9de6fe9c))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.32
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.72
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.72 (2026-09-14)
 
 ### 🧱 Updated Dependencies

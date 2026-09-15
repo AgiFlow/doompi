@@ -1,3 +1,19 @@
+## 0.0.1-alpha.8 (2026-09-15)
+
+### 🩹 Fixes
+
+- **layers:** flatten subagent and run_worktree tool schemas ([6130d88a](https://github.com/AgiFlow/doompi/commit/6130d88a))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.30
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.67
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.7 (2026-09-14)
 
 ### 🧱 Updated Dependencies

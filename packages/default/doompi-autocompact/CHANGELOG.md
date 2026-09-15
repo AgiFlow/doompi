@@ -1,3 +1,19 @@
+## 0.0.1-alpha.71 (2026-09-15)
+
+### 🔥 Performance
+
+- **doompi-file-edit:** take the tree walk off the tool-result path ([4168670c](https://github.com/AgiFlow/doompi/commit/4168670c))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.69
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.70 (2026-09-14)
 
 ### 🧱 Updated Dependencies
