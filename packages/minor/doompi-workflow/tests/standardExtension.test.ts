@@ -27,7 +27,7 @@ vi.mock('../src/tui/workflowRuntime', () => ({
   createWorkflowPiRuntime: (pi: ExtensionAPI, options: unknown) => mocks.install(pi, options),
 }));
 
-vi.mock('../src/tools/workflowTools', () => ({
+vi.mock('../src/services/workflowTools', () => ({
   createWorkflowTools: (tools: unknown) => tools,
 }));
 

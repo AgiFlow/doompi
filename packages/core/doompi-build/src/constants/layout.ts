@@ -21,8 +21,6 @@ export const SESSION_SEGMENT = 'sessions';
 /** Gate folders. Each is followed by exactly one id segment. */
 export const GATE_SEGMENTS: readonly string[] = ['mode', 'domain'];
 
-/** The reserved filename carrying contributions no surface folder covers. */
-export const ESCAPE_HATCH_NAME = 'extra';
 
 /** The leaf filename of an HTTP route, as Next.js spells it. */
 export const ROUTE_FILE_NAME = 'route';
@@ -68,7 +66,17 @@ export const FRONTEND_PLATFORMS: readonly string[] = ['cli', 'web', 'ios', 'andr
  * `mode` is absent on purpose: it is a gate folder, so it is consumed before
  * the surface check and its declaration file synthesises the surface instead.
  */
-export const BACKEND_SURFACES: readonly string[] = ['tool', 'command', 'hook', 'api', 'channel', 'method', 'resource'];
+export const BACKEND_SURFACES: readonly string[] = [
+  'tool',
+  'tool-restriction',
+  'command',
+  'hook',
+  'api',
+  'channel',
+  'method',
+  'provider',
+  'resource',
+];
 
 /**
  * Surfaces that produce contributions on the frontend side.
@@ -94,6 +102,8 @@ export const FRONTEND_SURFACES: readonly string[] = [
   'store',
   'activity-group',
   'leader',
+  'selection-axis',
+  'lifecycle',
 ];
 
 /** Surfaces whose filename carries a relationship target. */

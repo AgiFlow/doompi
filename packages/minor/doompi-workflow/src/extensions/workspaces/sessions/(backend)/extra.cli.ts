@@ -13,7 +13,7 @@ import {
   resolveDispatcherParentSession,
 } from '../../../../services/workflowFence';
 import { workflowSkillDirectory } from '../../../../services/workflowResource';
-import { createWorkflowTools } from '../../../../tools/workflowTools';
+import { createWorkflowTools } from '../../../../services/workflowTools';
 import { registerLeaderContribution } from '../../../../tui/leader';
 import { renderWorkflowToolCall, renderWorkflowToolResult } from '../../../../tui/workflow/workflowToolRender';
 import { createWorkflowPiRuntime, type WorkflowPiExtensionOptions } from '../../../../tui/workflowRuntime';

@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
 import { facet as workflowServerFacet } from '../../../generated/server';
-import { api } from '../../../src/controllers/workflowHubApi';
+import { api } from '../../../src/services/workflowHubApi';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 

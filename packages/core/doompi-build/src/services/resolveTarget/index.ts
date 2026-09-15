@@ -65,6 +65,7 @@ function fieldFor(entry: ExtensionEntry, target: BuildTarget): string | undefine
   const declared = FIELDS_OF[target][entry.side][surface];
   if (declared === undefined || declared === NOT_A_CONTRIBUTION) return undefined;
 
+  if (target === 'web' && surface === 'lifecycle' && entry.name !== 'start') return undefined;
   if (target === 'web' && surface === 'setting') return variantField(SETTING_FIELDS, declared, entry.target);
   if (target === 'web' && surface === 'action') return variantField(ACTION_FIELDS, declared, entry.target);
   return declared;

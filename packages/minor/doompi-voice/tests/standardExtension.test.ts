@@ -31,12 +31,12 @@ function testUiHub(): DoomUiHubService {
   } as unknown as DoomUiHubService;
 }
 
-vi.mock('../src/controllers/voice', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/controllers/voice')>()),
+vi.mock('../src/services/voiceController', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/services/voiceController')>()),
   createVoiceRuntime: extensionMocks.createVoiceRuntime,
 }));
 vi.mock('../src/services/voiceDependencies', () => ({ createVoiceDependencies: extensionMocks.createContainer }));
-vi.mock('../src/controllers/voiceConfig', () => ({
+vi.mock('../src/services/voiceControllerConfig', () => ({
   VoiceConfigController: class {
     readonly refresh = extensionMocks.refresh;
     sections(): readonly [] {
@@ -64,7 +64,7 @@ async function voicePiExtension(pi: ExtensionAPI): Promise<void> {
   }
   pi.on('session_shutdown', () => fiber.dispose());
 }
-import { voiceLeaderBindings } from '../src/controllers/voice';
+import { voiceLeaderBindings } from '../src/services/voiceController';
 
 beforeEach(() => {
   extensionMocks.createVoiceRuntime.mockReturnValue({ tools: [], commands: [], events: {} });

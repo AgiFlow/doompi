@@ -1,8 +1,8 @@
 import type { DoomServerPluginDefinition } from '@agimon-ai/doompi-core/server-facet';
 
-import { createWorkflowCatalogChannel } from '../../controllers/workflowCatalogChannel';
-import { api } from '../../controllers/workflowHubApi';
-import { createWorkflowsChannel } from '../../controllers/workflowsHubChannel';
+import { createWorkflowCatalogChannel } from '../../services/workflowCatalogChannel';
+import { api } from '../../services/workflowHubApi';
+import { createWorkflowsChannel } from '../../services/workflowsHubChannel';
 
 export default (({ host }) =>
   host.scope === 'session'

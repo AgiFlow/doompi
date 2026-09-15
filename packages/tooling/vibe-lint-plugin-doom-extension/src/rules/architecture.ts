@@ -16,7 +16,6 @@ import { hasPluginHelperCall } from './pluginWiring.js';
 const CANONICAL_ROOTS = new Set([
   'bin',
   'constants',
-  'controllers',
   'exports',
   'extensions',
   'models',
@@ -27,18 +26,9 @@ const CANONICAL_ROOTS = new Set([
   'web',
 ]);
 const RESOURCE_ROOTS = new Set(['prompts']);
-/**
- * Roots the folder convention replaces, still accepted while packages migrate.
- *
- * `tools` held whichever tool shape a package happened to write first, so the
- * same idea landed under `tools` for one host and `services` for the other.
- * The convention splits that cleanly: a routed file under src/extensions is
- * the shape one host expects, and a service is host-neutral. `web` is the
- * same story for the browser half, which now colocates beside the routed file
- * that renders it.
- */
-const TRANSITIONAL_ROOTS = new Set<string>(['tools']);
 const FORBIDDEN_ROOTS = new Set([
+  'controllers',
+  'tools',
   'adapters',
   'commands',
   'container',
@@ -72,41 +62,34 @@ const EXTERNAL_IMPLEMENTATION_ROOTS = [
   'container',
   'containers',
   'providers',
-  'controllers',
   'exports',
   'extensions',
-  'tools',
   'tui',
 ];
 const ALLOWED_ROOT_DEPENDENCIES: Readonly<Record<string, ReadonlySet<string>>> = {
   constants: new Set(['constants']),
-  controllers: new Set(['constants', 'controllers', 'models', 'schemas', 'services', 'types']),
   models: new Set(['constants', 'models', 'schemas', 'types']),
-  exports: new Set(['constants', 'controllers', 'models', 'schemas', 'services', 'tools', 'tui', 'types']),
+  exports: new Set(['constants', 'models', 'schemas', 'services', 'tui', 'types']),
   extensions: new Set([
     'extensions',
     'constants',
-    'controllers',
     'models',
     'schemas',
     'services',
-    'tools',
     'tui',
     'types',
     'web',
   ]),
   schemas: new Set(['constants', 'schemas', 'types']),
   services: new Set(['constants', 'models', 'schemas', 'services', 'types']),
-  tools: new Set(['constants', 'models', 'schemas', 'services', 'tools', 'types']),
   tui: new Set(['constants', 'models', 'schemas', 'services', 'tui', 'types']),
   types: new Set(['constants', 'types']),
   web: new Set(['constants', 'types', 'web']),
-  bin: new Set(['bin', 'constants', 'controllers', 'models', 'schemas', 'services', 'tools', 'tui', 'types', 'web']),
+  bin: new Set(['bin', 'constants', 'models', 'schemas', 'services', 'tui', 'types', 'web']),
 };
 
 const DEFAULT_COMPOSITION_PACKAGES = ['@agimon-ai/doompi'];
 const DEFAULT_COMPOSITION_PATHS = [
-  'src/controllers/composer.ts',
   'src/services/extensionCompiler/index.ts',
   'src/services/runtimeBundle/index.ts',
   'src/services/syncState/index.ts',
@@ -1328,11 +1311,38 @@ function ownedCordisScopes(units: readonly CordisSourceUnit[]): OwnedCordisScope
         filePath.replaceAll('\\', '/'),
       )
     ) {
+      const markService = (expression: ts.Expression): void => {
+        if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) markParameter(expression, 0);
+        else if (ts.isObjectLiteralExpression(expression)) {
+          for (const property of expression.properties) {
+            if (ts.isMethodDeclaration(property) && property.name.getText() === 'apply') markParameter(property, 0);
+          }
+        } else {
+          for (const { node: target } of targetRecords(filePath, expression)) markParameter(target, 0);
+        }
+      };
+      const inspectRoutedContributions = (node: ts.Node): void => {
+        if (
+          ts.isPropertyAssignment(node) &&
+          node.name.getText(sourceFile) === 'services' &&
+          ts.isArrayLiteralExpression(node.initializer)
+        ) {
+          for (const service of node.initializer.elements) if (ts.isExpression(service)) markService(service);
+        }
+        ts.forEachChild(node, inspectRoutedContributions);
+      };
       for (const statement of sourceFile.statements) {
         if (!ts.isExportAssignment(statement)) continue;
         const exported = unwrapArchitectureExpression(statement.expression);
-        if (ts.isArrowFunction(exported) || ts.isFunctionExpression(exported)) markMountContext(exported);
-        else for (const { node: target } of targetRecords(filePath, exported)) markMountContext(target);
+        if (ts.isArrowFunction(exported) || ts.isFunctionExpression(exported)) {
+          markMountContext(exported);
+          inspectRoutedContributions(exported);
+        } else {
+          for (const { node: target } of targetRecords(filePath, exported)) {
+            markMountContext(target);
+            inspectRoutedContributions(target);
+          }
+        }
       }
     }
     if (
@@ -2568,8 +2578,7 @@ export const doomFolderLayout: RuleDefinition = {
       !root ||
       root === 'index.ts' ||
       CANONICAL_ROOTS.has(root) ||
-      RESOURCE_ROOTS.has(root) ||
-      TRANSITIONAL_ROOTS.has(root)
+      RESOURCE_ROOTS.has(root)
     ) {
       return null;
     }
@@ -2578,7 +2587,7 @@ export const doomFolderLayout: RuleDefinition = {
     const detail = FORBIDDEN_ROOTS.has(root)
       ? `Legacy root "${root}" is forbidden.`
       : `Unknown root "${root}" is not canonical.`;
-    return `${detail} Move implementation under extensions, controllers, services, models, tools, constants, schemas, types, web, tui, or bin. Keep public re-exports under flat exports. Put Help resources under prompts.`;
+    return `${detail} Move host-neutral implementation under services, models, constants, schemas, or types. Put host-specific contributions under named routes in extensions, public re-exports under flat exports, and Help resources under prompts.`;
   },
 };
 
@@ -2593,8 +2602,7 @@ export const compatibilityWrapperOnly: RuleDefinition = {
       !root ||
       root === 'index.ts' ||
       CANONICAL_ROOTS.has(root) ||
-      RESOURCE_ROOTS.has(root) ||
-      TRANSITIONAL_ROOTS.has(root)
+      RESOURCE_ROOTS.has(root)
     ) {
       return null;
     }
@@ -2641,8 +2649,8 @@ export const noInternalPublicImport: RuleDefinition = {
 
 export const doomLayerBoundary: RuleDefinition = {
   preflight: true,
-  rule: 'Extensions compose controllers, tools, services, and models through explicit inward dependencies',
-  rationale: 'A small universal dependency direction prevents host and presentation concerns from leaking into policy.',
+  rule: 'Extensions compose services and models through explicit inward dependencies',
+  rationale: 'Named routed surfaces own host concerns while a small universal dependency direction keeps policy host-neutral.',
   check(filePath, configRoot) {
     const root = sourceRoot(filePath);
     const allowedRoots = isCompositionAdapter(filePath, configRoot)

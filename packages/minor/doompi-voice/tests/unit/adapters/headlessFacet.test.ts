@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
 import { describe, expect, it, vi } from 'vitest';
 
-import { VoiceMediaBroker } from '../../../src/controllers/clientMediaApi';
-import { createVoiceServer } from '../../../src/controllers/voiceServer';
+import { VoiceMediaBroker } from '../../../src/services/clientMediaApiController';
+import { createVoiceServer } from '../../../src/services/voiceControllerServer';
 
 describe('native Voice session', () => {
   it('exposes status and controls without terminal adapters or false active tools', async () => {

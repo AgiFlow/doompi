@@ -4,7 +4,7 @@ import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
 import {
   createNotificationRuntime,
   type NotificationExtensionOptions,
-} from '../../../../controllers/notificationRuntime';
+} from './_lib/notificationRuntime';
 
 /** Detached children leave notification ownership with their parent session. */
 export default ({ pi, options, runtime }: PiPluginContext<NotificationExtensionOptions>) => {

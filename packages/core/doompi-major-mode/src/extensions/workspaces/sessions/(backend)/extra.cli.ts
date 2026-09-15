@@ -1,6 +1,6 @@
 import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
 
-import { createMajorModeRuntime } from '../../../../controllers/majorModeRuntime';
+import { createMajorModeRuntime } from './_lib/majorModeRuntime';
 import { createMajorModeTelemetry } from '../../../../services/logSinkTelemetry';
 import { MAJOR_MODE_SOURCE } from '../../../../types/majorMode';
 import type { MajorModeTelemetry } from '../../../../types/telemetry';

@@ -6,7 +6,6 @@ import {
   BACKEND_PLATFORMS,
   BACKEND_SURFACES,
   DEFAULT_ROUTING_ROOT,
-  ESCAPE_HATCH_NAME,
   FRONTEND_GROUP,
   FRONTEND_PLATFORMS,
   FRONTEND_SURFACES,
@@ -220,27 +219,12 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
         return;
       }
 
-      if (parsed.name !== ESCAPE_HATCH_NAME) {
-        return note(
-          relative,
-          gate === undefined
-            ? `only ${ROOT_FILE_NAME}.* and ${ESCAPE_HATCH_NAME}.* are read at a side root; everything else needs a surface`
-            : `inside ${gate.kind}/${gate.id}/ a contribution needs a surface folder, or name the file ${gate.kind}.* to declare the gate`,
-        );
-      }
-      entries.push({
-        file: relative,
-        scope: state.scope,
-        side: state.side,
-        gates: state.gates,
-        surface: undefined,
-        route: [],
-        name: parsed.name,
-        target: parsed.target,
-        platform: parsed.platform,
-        role: 'escape-hatch',
-      });
-      return;
+      return note(
+        relative,
+        gate === undefined
+          ? `only ${ROOT_FILE_NAME}.* is read at a side root; move each contribution into its named surface folder`
+          : `inside ${gate.kind}/${gate.id}/ a contribution needs a surface folder, or name the file ${gate.kind}.* to declare the gate`,
+      );
     }
 
     // Inside a routed surface only the leaf file is a route. Anything beside

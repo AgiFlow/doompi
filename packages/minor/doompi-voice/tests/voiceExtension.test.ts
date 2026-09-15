@@ -7,7 +7,7 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { NarrationToolRuntime } from '../src/controllers/narrationTool';
+import type { NarrationToolRuntime } from '../src/services/narrationToolController';
 import {
   type AutoCapturePiEventController,
   createVoiceNarrationService,
@@ -17,8 +17,8 @@ import {
   createVoiceTurnFallback,
   type VoiceTurnFallbackRuntime,
   voiceToolRestriction,
-} from '../src/controllers/voice';
-import { deliverAutoCaptureInput } from '../src/controllers/voice';
+} from '../src/services/voiceController';
+import { deliverAutoCaptureInput } from '../src/services/voiceController';
 import { createDoomVoiceToolsService } from '../src/services/voiceTools';
 describe('autonomous prompt delivery', () => {
   it('queues composed prompts as follow-ups without changing ordinary idle or steer delivery', () => {
