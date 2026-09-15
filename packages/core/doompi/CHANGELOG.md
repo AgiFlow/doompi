@@ -1,3 +1,44 @@
+## 0.0.1-alpha.73 (2026-09-15)
+
+### 🚀 Features
+
+- surface the effective system prompt in the context panel ([a594b6d2](https://github.com/AgiFlow/doompi/commit/a594b6d2))
+- **doompi-web:** restore cockpit sessions after a server restart ([42d3e441](https://github.com/AgiFlow/doompi/commit/42d3e441))
+
+### 🩹 Fixes
+
+- **doompi:** clean packed consumer metadata after install ([ff8612a6](https://github.com/AgiFlow/doompi/commit/ff8612a6))
+- **doompi:** restore packed runtime CI checks ([5b8173a2](https://github.com/AgiFlow/doompi/commit/5b8173a2))
+- **root:** repair CI dependency and runtime checks ([e870c0bd](https://github.com/AgiFlow/doompi/commit/e870c0bd))
+- mount headless session facets and restore state ([17e4e229](https://github.com/AgiFlow/doompi/commit/17e4e229))
+- align workspace REST and WebSocket routes ([78f77c59](https://github.com/AgiFlow/doompi/commit/78f77c59))
+- preserve runner output and align global plugin routes ([9de6fe9c](https://github.com/AgiFlow/doompi/commit/9de6fe9c))
+- **doompi-core,doompi-voice:** silence teardown selection notices and coalesce catalog refreshes ([8de90596](https://github.com/AgiFlow/doompi/commit/8de90596))
+- **doompi-core:** scope hub channels and fix child model spawns ([cb6cec79](https://github.com/AgiFlow/doompi/commit/cb6cec79))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.38
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.50
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.50
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.49
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.50
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.50
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.32
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.72
+- Updated @agimon-ai/vibe-lint-plugin-doom-cli to 0.0.1-alpha.3
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.72 (2026-09-14)
 
 ### 🚀 Features

@@ -1,3 +1,19 @@
+## 0.0.1-alpha.30 (2026-09-15)
+
+### 🩹 Fixes
+
+- **root:** repair CI dependency and runtime checks ([e870c0bd](https://github.com/AgiFlow/doompi/commit/e870c0bd))
+- align workspace REST and WebSocket routes ([78f77c59](https://github.com/AgiFlow/doompi/commit/78f77c59))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.66
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.29 (2026-09-13)
 
 ### 🚀 Features

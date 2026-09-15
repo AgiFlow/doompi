@@ -1,3 +1,22 @@
+## 0.0.1-alpha.10 (2026-09-15)
+
+### 🩹 Fixes
+
+- mount headless session facets and restore state ([17e4e229](https://github.com/AgiFlow/doompi/commit/17e4e229))
+- align workspace REST and WebSocket routes ([78f77c59](https://github.com/AgiFlow/doompi/commit/78f77c59))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.30
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.32
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.72
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.9 (2026-09-14)
 
 ### 🧱 Updated Dependencies

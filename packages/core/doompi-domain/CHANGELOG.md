@@ -1,3 +1,23 @@
+## 0.0.1-alpha.50 (2026-09-15)
+
+### 🩹 Fixes
+
+- mount headless session facets and restore state ([17e4e229](https://github.com/AgiFlow/doompi/commit/17e4e229))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-voice to 0.0.1-alpha.73
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.67
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.72
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.49 (2026-09-14)
 
 ### 🧱 Updated Dependencies
