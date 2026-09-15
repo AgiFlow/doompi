@@ -294,6 +294,14 @@ Backend helpers come from `@agimon-ai/doompi-core/extension-file`, frontend help
 
 One surface is deliberately unlike the rest. `service/` takes no helper wrapping and no derived identity, because a Cordis plugin is itself a function and nothing at runtime separates it from a `(context) => declaration` factory. The generator passes it straight through.
 
+## The generated entries are not committed
+
+`pi.ts`, `server.ts` and `web.ts` at the routing root are written by the build and listed in the package's own `.gitignore`. They are build output that happens to live in `src`, and a migrated package carries three fewer files to review.
+
+They still have to exist at the paths the hosts expect, because `pi.extensions`, `doompiServer.entry` and `doompiWeb.client` name them, and the cockpit compiles the web one from source. Both hold: every Nx target that reads them depends on `^build`, and `files` wins over `.gitignore` when npm builds the tarball, so `src/extensions/web.ts` still ships.
+
+The ignore is per package rather than repository-wide, because a package that has not adopted the layout yet still hand-writes those three files and must keep them tracked.
+
 ## Colocation
 
 A `_folder` is never scanned, at any depth, so implementation can sit next to the contribution that uses it. Prefer that over a distant shared root whenever exactly one surface uses the code.
