@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveVoiceCommandCorrector } from '../src/services/voiceController';
+import { resolveVoiceCommandCorrector } from '../src/services/voice';
 import {
   compactVoiceCommandContext,
   MAX_VOICE_COMMAND_CONTEXT_BYTES,

@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ManualTranscriptionApi,
   normalizeManualTranscriptionMediaType,
-} from '../src/services/manualTranscriptionApiController';
+} from '../src/services/manualTranscriptionApi';
 import { FfmpegEncodedAudioDecoder } from '../src/services/encodedAudio';
 import { SystemClock } from '../src/services/infrastructure';
 import { ManualTranscriptionService } from '../src/services/manualTranscription';

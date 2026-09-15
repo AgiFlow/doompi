@@ -1,7 +1,7 @@
 import { MAX_NARRATION_TEXT_CHARACTERS } from '@agimon-ai/doompi-core/narration';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveVoiceFallbackNarrator } from '../src/services/voiceController';
+import { resolveVoiceFallbackNarrator } from '../src/services/voice';
 import {
   DETERMINISTIC_FALLBACK_THRESHOLD_CHARACTERS,
   type FallbackNarrationModelRequest,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { RealtimeDelivery } from '../src/services/realtimeDeliveryController';
+import { RealtimeDelivery } from '../src/services/realtimeDelivery';
 
 function fixture() {
   let owned = true;

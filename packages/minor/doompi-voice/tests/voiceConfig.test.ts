@@ -7,7 +7,7 @@ import { parseDoomConfig } from '@agimon-ai/doompi-config';
 import type { ResolvedVoiceConfig } from '@agimon-ai/doompi-config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { VoiceConfigController } from '../src/services/voiceControllerConfig';
+import { VoiceConfigController } from '../src/services/voiceConfigController';
 import {
   catalogEntryById,
   ENGINE_TOOLING,

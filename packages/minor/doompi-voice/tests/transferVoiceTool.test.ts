@@ -9,7 +9,7 @@ import {
   createTransferVoiceToolLifecycle,
   transferVoiceToolRestriction,
   transferVoiceToolVisible,
-} from '../src/services/transferVoiceToolController';
+} from '../src/services/transferVoiceTool';
 import { sessionVoiceOwnership } from '../src/services/sessionVoiceOwnership';
 import { VOICE_OWNERSHIP_PROTOCOL_VERSION, type VoiceOwnershipCommand } from '../src/types/voiceOwnership';
 
