@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
-import { createPiTelemetryRuntime } from '../../src/controllers/piTelemetry';
+import { createPiTelemetryRuntime } from '../../src/services/piTelemetry';
 import { createLogViewRuntime } from '../../src/tui/logRuntime';
 import type { PiTelemetryExtensionOptions } from '../../src/types/piTelemetry';
 
@@ -13,7 +13,7 @@ function installTestRuntime(pi: ExtensionAPI, options: PiTelemetryExtensionOptio
   for (const [name, command] of view?.commands ?? []) pi.registerCommand(name, command);
   for (const service of view?.services ?? []) cordis.plugin(service);
   cordis.effect(() => async () => {
-    view?.onDispose();
+    await view?.onDispose();
     await runtime.onDispose();
   });
   let shutdown: Promise<void> | undefined;

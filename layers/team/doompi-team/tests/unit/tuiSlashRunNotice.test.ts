@@ -1,8 +1,9 @@
 import type { ExtensionAPI, MessageRenderOptions, Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 
+import { renderSlashRunNotice } from '../../src/extensions/workspaces/sessions/(frontend)/message/_lib/slashRunNotice';
+import { createSlashRunRenderer } from '../../src/extensions/workspaces/sessions/(frontend)/message/_lib/subagent-slash-result.cli';
 import { SLASH_RESULT_CUSTOM_TYPE, type SlashRunDetail } from '../../src/models/slashResult';
-import { createSlashRunRenderer, renderSlashRunNotice } from '../../src/tui/slashRunNotice';
 
 /** Identity theme: every assertion is about WHAT text is emitted, never about colour codes. */
 const theme = {

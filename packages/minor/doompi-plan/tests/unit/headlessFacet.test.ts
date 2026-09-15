@@ -18,7 +18,7 @@ import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { planServerFacet } from '../../src/extensions/server';
+import { facet as planServerFacet } from '../../generated/server';
 
 async function fixture() {
   let selection: DoomHeadlessSelection = {

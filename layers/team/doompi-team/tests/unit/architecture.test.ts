@@ -23,12 +23,15 @@ function readConfig(): VibeLintConfig {
 describe('import boundaries', () => {
   const config = readConfig();
 
-  it('uses the repository-owned canonical boundary preset and declares no boundaries of its own', () => {
+  it('uses the repository-owned boundary preset with CLI presentation exceptions', () => {
     expect(config.extends).toContain('doom-extension/recommended');
-    // src/web hosts the cockpit plugin, a root outside the src vocabulary; the
-    // doom-extension preset carries its boundary (web-plugin) and the tests
-    // boundary that reaches it, so a package-local block would only drift.
-    expect(config.boundaries).toBeUndefined();
+    expect(config.boundaries?.map((boundary) => boundary.name)).toEqual([
+      'cli-session-overlay-presentation',
+      'cli-session-overlay-private',
+      'cli-session-tool-presentation',
+      'cli-message-presentation',
+      'cli-message-private',
+    ]);
   });
 
   it('enforces deterministic boundary findings as errors', () => {

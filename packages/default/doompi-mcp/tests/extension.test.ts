@@ -19,9 +19,9 @@ import { Context, type Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { extension as mcpExtension } from '../generated/pi';
 import { COMMAND_NAME } from '../src/constants/mcp';
 import { LEADER_GROUP, LEADER_KEY, PACKAGE_SOURCE } from '../src/constants/piMcp';
-import { mcpExtension } from '../src/extensions/pi';
 import { SESSION_ENV_VAR } from '../src/schemas/sessionConfig';
 
 const SESSION_ID = 'session-1';

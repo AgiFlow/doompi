@@ -5,6 +5,7 @@ import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 import {
+  normalizeSubagentToolParams,
   SUBAGENT_ACTION_FIELDS,
   SUBAGENT_ACTIONS,
   type SubagentAction,
@@ -115,24 +116,8 @@ function requireNonblank(record: Record<string, unknown>, field: string, action:
   }
 }
 
-/** Remove the one legacy field emitted by Doom Plan before strict validation. */
-function normalizeCompatibilityParams(raw: unknown): unknown {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
-  const record = raw as Record<string, unknown>;
-  if (
-    typeof record.action !== 'string' ||
-    !IMPLEMENTED_SUBAGENT_ACTIONS.has(record.action) ||
-    record.action === SUBAGENT_ACTIONS.run ||
-    typeof record.model !== 'string'
-  ) {
-    return raw;
-  }
-  const { model: _model, ...normalized } = record;
-  return normalized;
-}
-
 export function validateParams(input: unknown): SubagentToolParams {
-  const raw = normalizeCompatibilityParams(input);
+  const raw = normalizeSubagentToolParams(input);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw invalidRequest('subagent parameters must be an object.', 'Call subagent with one documented action shape.');
   }

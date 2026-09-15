@@ -1,7 +1,7 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
 import { formatPlanStatus, PLAN_STATUS_KEY } from '../../src/types/planApi';
 const webPlugin = {
   id: scopedWebPlugin.id,
@@ -90,7 +90,7 @@ describe('the plan plugin declaration', () => {
     const group = webPlugin.activityGroups?.find((entry) => entry.name === 'plan');
 
     expect(group).toMatchObject({ statusKey: PLAN_STATUS_KEY });
-    expect(webPlugin.activitySections?.map((section) => section.id)).toContain(group?.name);
+    expect(webPlugin.fills?.map((fill) => fill.slot)).toContain(`activity.${group?.name}`);
   });
 
   it('keys the group off the plan rather than the mode, so it outlives plan mode', () => {

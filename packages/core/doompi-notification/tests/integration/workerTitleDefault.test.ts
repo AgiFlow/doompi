@@ -23,7 +23,7 @@ vi.mock('node:worker_threads', () => ({
   },
 }));
 
-const { notificationExtension } = await import('../../src/extensions/pi');
+const { extension: notificationExtension } = await import('../../generated/pi');
 const { createPiHarness } = await import('../helpers/piHarness');
 
 describe('notification extension without an injected title controller', () => {

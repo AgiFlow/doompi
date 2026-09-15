@@ -10,8 +10,12 @@ import { createTasksCommand } from '../src/exports/commands';
 import { TaskStore } from '../src/exports/storeTaskStore';
 import { STORE_SCHEMA_VERSION, type Task } from '../src/exports/storeTypes';
 import { ERR_REQUIRES_INTERACTIVE, TASK_STATUSES } from '../src/exports/toolSchema';
-import { openTaskSpace } from '../src/tui/taskSpace';
-import { TASK_SPACE_OVERLAY_OPTIONS, TaskSpaceComponent, type TaskSpaceOptions } from '../src/tui/taskSpace';
+import { openTaskSpace } from '../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/task-space.cli';
+import {
+  TASK_SPACE_OVERLAY_OPTIONS,
+  TaskSpaceComponent,
+  type TaskSpaceOptions,
+} from '../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/task-space.cli';
 
 const WIDTH = 120;
 const KEY_UP = '\x1b[A';

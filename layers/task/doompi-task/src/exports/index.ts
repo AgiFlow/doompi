@@ -1,5 +1,5 @@
 export * from '../services/taskResult';
-export * from '../tools/task';
+export * from '../extensions/workspaces/sessions/(backend)/tool/_lib/task.cli';
 export * from '../schemas/task';
 export * from '../services/delegation';
 export * from '../services/paths';
@@ -8,5 +8,5 @@ export * from '../services/reducer';
 export * from '../models/taskGraph';
 export * from '../services/taskStore';
 export * from '../models/task';
-export * from '../tui/selectors';
+export * from '../extensions/workspaces/sessions/(frontend)/overlay/_lib/selectors';
 export * from '../services/config';

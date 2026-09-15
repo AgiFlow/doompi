@@ -7,7 +7,7 @@ import { resetHarnessStore } from '@agimon-ai/doompi-config/harnessStore';
 import type { DoomHarnessContext } from '@agimon-ai/doompi-config/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { applyDomains } from '../../src/controllers/applyDomains';
+import { applyDomains } from '../../src/services/applyDomains';
 
 const collectResources = vi.hoisted(() => vi.fn());
 const resolveMcpAllowlist = vi.hoisted(() => vi.fn(() => ({ servers: ['figma'] })));

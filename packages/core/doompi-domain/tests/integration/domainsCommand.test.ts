@@ -22,12 +22,9 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  type DomainCatalogPort,
-  type DomainsCommandDependencies,
-  createDomainsCommand,
-} from '../../src/controllers/domainsCommand';
+import { createDomainsCommand } from '../../src/extensions/workspaces/sessions/(backend)/_lib/domainsCommand';
 import { createDomainSwitchHandoffStore } from '../../src/models/domainSwitchHandoff';
+import type { DomainCatalogPort, DomainsCommandDependencies } from '../../src/types/domainCommand';
 import { DOMAIN_EVENT, type DomainTelemetry } from '../../src/types/telemetry';
 import { bindStubCoordinator } from '../helpers/coordinator';
 import { bindConfig, harnessContext } from '../helpers/session';

@@ -75,7 +75,7 @@ describe('startup module graph boundaries', () => {
     expect(bootstrap).not.toContain('startupPrecompiler');
     expect(staticImports(bootstrap).join('\n')).not.toContain('composer');
     expect(cacheExtension).not.toContain('pi-cache-optimizer/index.ts');
-    const cacheImport = cacheExtension.match(/import\(`((?:\.\.\/)+pi-cache-optimizer-[^`]+\.mjs)`\)/u)?.[1];
+    const cacheImport = cacheExtension.match(/import\(["'`]((?:\.\.\/)+pi-cache-optimizer-[^"'`]+\.mjs)["'`]\)/u)?.[1];
     expect(cacheImport).toBeDefined();
     expect(fs.existsSync(path.resolve(path.dirname(cacheExtensionPath), cacheImport ?? ''))).toBe(true);
   });

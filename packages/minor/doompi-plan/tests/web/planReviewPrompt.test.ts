@@ -2,7 +2,7 @@ import type { ToolPromptDialog } from '@agimon-ai/doompi-core/web';
 import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it, vi } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
 import {
   CONTINUE_PLANNING_CHOICE,
   EXIT_PLAN_MODE_CHOICE,

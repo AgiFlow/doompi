@@ -20,7 +20,7 @@ import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { computerUseServerFacet as computerUseHeadlessFacet } from '../../../src/extensions/server';
+import { facet as computerUseHeadlessFacet } from '../../../generated/server';
 import type { ComputerUseSessionClient } from '../../../src/services/sessionApiClient';
 import type { ComputerUseObservation } from '../../../src/types/computerUse';
 import type { ComputerUseSessionView } from '../../../src/types/computerUseApi';
@@ -49,7 +49,12 @@ function contextFor(host: DoomHeadlessHostService): Context {
       name === DOOM_HEADLESS_HOST_SERVICE
         ? host
         : name === 'doom/server-host'
-          ? { scope: 'session', context: {}, registerApi: () => ({ dispose() {} }) }
+          ? {
+              scope: 'session',
+              context: {},
+              registerApi: () => ({ dispose() {} }),
+              registerChannel: () => ({ dispose() {} }),
+            }
           : undefined,
   } as unknown as Context;
 }

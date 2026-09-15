@@ -17,8 +17,8 @@ import {
 } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import doomPiUiExtension from '../../generated/pi';
 import type { UiTelemetry } from '../../src/exports/logSinkTelemetry';
-import doomPiUiExtension from '../../src/extensions/pi';
 
 type EventHandler = (event: unknown, context: ExtensionContext) => unknown;
 

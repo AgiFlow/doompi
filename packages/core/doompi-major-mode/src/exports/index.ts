@@ -1,4 +1,4 @@
-export type { MajorModeCommandDependencies } from '../controllers/majorModeCommand';
+export type { MajorModeCommandDependencies } from '../types/majorModeCommand';
 export { createMajorModeTelemetry, type MajorModeTelemetryOptions } from '../services/logSinkTelemetry';
 export {
   MAJOR_MODE_VOICE_INPUT_SCHEMA,
@@ -17,7 +17,7 @@ export {
   VOICE_SWITCH_TOKEN_PREFIX,
   voiceSwitchToken,
 } from '../services/majorModeText';
-export { bindPendingSelection, clearPendingSelection, selectionFromSnapshot } from '../controllers/pendingSelection';
+export { bindPendingSelection, clearPendingSelection, selectionFromSnapshot } from '../services/pendingSelection';
 export { colorStatus, STATUS_KEY, statusText } from '../services/statusLine';
 export { MAJOR_MODE_SOURCE, MAJOR_MODE_SWITCH_HANDOFF_KIND, type MajorModeView } from '../types/majorMode';
 export {

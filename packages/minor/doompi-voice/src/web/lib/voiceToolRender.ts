@@ -2,7 +2,7 @@ import type { ToolResultView } from '@agimon-ai/doompi-core/web';
 import type { MessageLine, MessageLineTone } from '@agimon-ai/doompi-web-components';
 
 /**
- * The cockpit half of src/controllers/voiceToolRender.ts: the catalog,
+ * The cockpit half of src/services/voiceToolRender.ts: the catalog,
  * batch, and narration shapes reduced to toned lines so the cards stay a
  * thin mapping and the parsing is testable without a DOM. The tool names and
  * shape guards are duplicated from doompi-core because web/

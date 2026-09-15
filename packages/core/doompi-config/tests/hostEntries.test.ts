@@ -13,7 +13,7 @@ import {
 } from '../src/exports/config';
 
 const roots: string[] = [];
-const PI_EXTENSION_PATH = '../src/extensions/pi.ts';
+const PI_EXTENSION_PATH = '../generated/pi.ts';
 const PI_CONFIG_PATH = '../src/exports/piConfig.ts';
 const PI_CONFIG_SERVICE_PATH = '../src/services/piConfig/index.ts';
 const TYPES_PATH = '../src/types/piConfig.ts';
@@ -128,12 +128,16 @@ describe('configuration host entries', () => {
   it('joins the shared Cordis host instead of constructing a package-local root', async () => {
     const piModule = await importSourceModule(PI_EXTENSION_PATH);
     const piSource = await fs.promises.readFile(path.resolve(TEST_DIRECTORY, PI_EXTENSION_PATH), 'utf8');
+    const factorySource = await fs.promises.readFile(
+      path.resolve(TEST_DIRECTORY, '../src/extensions/workspaces/sessions/(backend)/root.cli.ts'),
+      'utf8',
+    );
 
     expect(piModule.default).toBeTypeOf('function');
-    expect(piSource).toContain('definePiExtension(PACKAGE_SOURCE');
-    expect(piSource).toContain('services: [runtime.plugin]');
-    expect(piSource).toContain('events: { session_start: runtime.onSessionStart }');
-    expect(piSource).not.toContain('new Context()');
-    expect(piSource).not.toContain('registeredHosts');
+    expect(piSource).toContain("definePiExtension<ExtensionOptions>('@agimon-ai/doompi-config'");
+    expect(factorySource).toContain('services: [runtime.plugin]');
+    expect(piSource).toContain('hookSessionStart');
+    expect(factorySource).not.toContain('new Context()');
+    expect(factorySource).not.toContain('registeredHosts');
   });
 });

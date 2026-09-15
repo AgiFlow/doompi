@@ -27,22 +27,23 @@
     "directory": "packages/default/doompi-log"
   },
   "files": [
-    "dist",
-    "src/web",
-    "src/extensions/web.ts",
-    "src/types/webMetrics.ts",
-    "src/types/issueGrouping.ts",
-    "!src/web/**/*.stories.tsx"
+    "dist"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
-  "types": "./dist/index.d.mts",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
   "jsnext:main": "./dist/index.mjs",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
+    },
+    "./api-contracts": {
+      "types": "./dist/api-contracts.d.mts",
+      "import": "./dist/api-contracts.mjs",
+      "require": "./dist/api-contracts.cjs"
     },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
@@ -54,20 +55,23 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
+    },
     "./metrics": {
       "types": "./dist/metrics.d.mts",
       "import": "./dist/metrics.mjs",
       "require": "./dist/metrics.cjs"
     },
-    "./metricsSource": {
-      "types": "./dist/metricsSource.d.mts",
-      "import": "./dist/metricsSource.mjs",
-      "require": "./dist/metricsSource.cjs"
-    },
     "./metrics-overlay": {
       "types": "./dist/metrics-overlay.d.mts",
       "import": "./dist/metrics-overlay.mjs",
       "require": "./dist/metrics-overlay.cjs"
+    },
+    "./metrics-source": {
+      "types": "./dist/metrics-source.d.mts",
+      "import": "./dist/metrics-source.mjs",
+      "require": "./dist/metrics-source.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -78,7 +82,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -87,12 +91,13 @@
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@agimon-ai/doompi-web-components": "workspace:*",
     "@agimon-ai/doompi-web-security": "workspace:*",
-    "@agimon-ai/log-sink-mcp": "0.29.25",
+    "@agimon-ai/log-sink-mcp": "0.29.26",
     "@deepseek-ai/cordis": "4.0.2",
     "hono": "4.13.7",
     "typebox": "1.3.30"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/doompi-ui": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",
@@ -123,7 +128,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "global",
@@ -137,7 +142,8 @@
   },
   "doompiWeb": {
     "pluginId": "log",
-    "client": "./src/extensions/web.ts",
+    "channels": [],
+    "client": "./dist/extensions/web.mjs",
     "scopes": [
       "global"
     ]

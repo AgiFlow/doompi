@@ -15,7 +15,7 @@ import type { Context, Fiber } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { mcpExtension } from '../src/extensions/pi';
+import { extension as mcpExtension } from '../generated/pi';
 
 const DEFERRED_RUNTIME_TIMEOUT_MS = 5_000;
 
@@ -40,7 +40,7 @@ vi.mock('@agimon-ai/doompi-core/mcp-projection', async (importOriginal) => {
   };
 });
 
-vi.mock('../src/controllers/leader', () => ({
+vi.mock('../src/services/leader', () => ({
   registerLeaderContribution: () => () => undefined,
 }));
 

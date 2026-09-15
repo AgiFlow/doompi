@@ -8,9 +8,9 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DomainCatalogPort } from '../../src/controllers/domainsCommand';
-import { registerDomainVoiceCapabilities } from '../../src/controllers/voiceTool';
+import { registerDomainVoiceCapabilities } from '../../src/extensions/workspaces/sessions/(backend)/_lib/voiceTool';
 import { createDomainSwitchHandoffStore } from '../../src/models/domainSwitchHandoff';
+import type { DomainCatalogPort } from '../../src/types/domainCommand';
 import { bindStubCoordinator } from '../helpers/coordinator';
 import { bindConfig } from '../helpers/session';
 

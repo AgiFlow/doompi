@@ -4,8 +4,8 @@ import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core
 import { createPiTestHost, standardExtensionScenarios } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it, vi } from 'vitest';
 
+import { extension as activateGitExtension } from '../../../generated/pi';
 import { COMMAND_NAME } from '../../../src/constants/git';
-import { activateGitExtension } from '../../../src/extensions/pi';
 import type { GitExtensionService } from '../../../src/types/extension';
 
 /**
@@ -68,7 +68,9 @@ describe('doompi-git Pi extension', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-git',
-        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
+        moduleUrl: expect.stringMatching(
+          /extensions\/workspaces\/sessions\/\(backend\)\/resource\/doompi-use-git\.cli\.ts$/u,
+        ),
         skills: [
           {
             name: 'doompi-use-git',

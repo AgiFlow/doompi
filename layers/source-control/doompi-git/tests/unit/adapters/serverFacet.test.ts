@@ -2,7 +2,7 @@ import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
-import { gitServerFacet } from '../../../src/extensions/server';
+import { facet as gitServerFacet } from '../../../generated/server';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 

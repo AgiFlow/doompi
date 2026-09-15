@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
+import type { TSchema } from 'typebox';
 
 import { connectDoomCordisHost, type DoomCordisRuntimeService } from '../pi/cordisHost';
 import { DOOM_HELP_SERVICE, requireDoomHelpService, type DoomHelpService } from '../schemas/help';
@@ -425,4 +426,124 @@ export function definePiExtension<TOptions = undefined>(
     }
   };
   return Object.assign(activate, { install });
+}
+
+/**
+ * What a CLI tool's presentation file supplies.
+ *
+ * The terminal is a frontend. `renderCall` and `renderResult` draw a tool call
+ * into the TUI exactly as a cockpit tool renderer draws it into the browser,
+ * so they are authored on the frontend side under a `.cli` platform suffix and
+ * never alongside the tool's `execute`.
+ */
+export type PiToolRenderers<TParameters extends TSchema = TSchema, TDetails = unknown, TState = unknown> = Pick<
+  ToolDefinition<TParameters, TDetails, TState>,
+  'renderShell' | 'renderCall' | 'renderResult'
+>;
+
+/** A terminal renderer declaration or a factory resolved from its session mount. */
+export type PiToolRendererFile<
+  TContext = unknown,
+  TParameters extends TSchema = TSchema,
+  TDetails = unknown,
+  TState = unknown,
+> =
+  | PiToolRenderers<TParameters, TDetails, TState>
+  | ((context: TContext) => PiToolRenderers<TParameters, TDetails, TState>);
+/**
+ * `(frontend)/tool/<name>.cli.tsx`. The filename names the tool these draw.
+ *
+ * Generic over the tool's schema, because a renderer reads the call it is
+ * drawing: state the parameter type and `renderResult` sees the real arguments
+ * instead of `unknown`, which is what the single-file version got for free.
+ */
+export function definePiToolRenderer<TParameters extends TSchema = TSchema, TDetails = unknown, TState = unknown>(
+  file: PiToolRenderers<TParameters, TDetails, TState>,
+): PiToolRenderers<TParameters, TDetails, TState> {
+  return file;
+}
+
+/** `(frontend)/tool/<name>.cli.tsx` when the renderer needs mount context. */
+export function defineCliToolRenderer<
+  TContext,
+  TParameters extends TSchema = TSchema,
+  TDetails = unknown,
+  TState = unknown,
+>(
+  file: PiToolRendererFile<TContext, TParameters, TDetails, TState>,
+): PiToolRendererFile<TContext, TParameters, TDetails, TState> {
+  return file;
+}
+
+/**
+ * `(frontend)/message/<name>.cli.tsx`. A renderer for one custom message type.
+ *
+ * The type is stated rather than derived from the filename, because it is a
+ * protocol constant shared with whatever emits the message. A path-derived
+ * name would silently stop matching the moment either side was renamed.
+ */
+export function defineMessageRenderer(
+  messageType: Parameters<ExtensionAPI['registerMessageRenderer']>[0],
+  render: Parameters<ExtensionAPI['registerMessageRenderer']>[1],
+): readonly [...Parameters<ExtensionAPI['registerMessageRenderer']>] {
+  return [messageType, render];
+}
+
+/**
+ * Attaches a presentation file's renderers to the tool its filename names.
+ *
+ * Three tool shapes reach a contribution array and each carries renderers in a
+ * different place, so a generated entry cannot spell this merge itself. A
+ * native Pi definition takes them at the top level, the portable shape nests
+ * them under `pi`, and `definePiTool` owns its own registration, so that one
+ * is reached by narrowing the host it registers against. `register` asks for
+ * nothing but `registerTool`, which is what makes the last case a two-line
+ * shim rather than a proxy over the whole extension API.
+ */
+export function withPiRenderers(tool: PiToolContribution, renderers: PiToolRenderers): PiToolContribution {
+  if (!('kind' in tool)) return { ...tool, ...renderers };
+  if (tool.kind !== 'pi-tool') return { ...tool, pi: { ...tool.pi, ...renderers } };
+  return {
+    ...tool,
+    register(pi, executionSignal) {
+      tool.register(
+        { registerTool: (definition) => pi.registerTool({ ...definition, ...renderers }) },
+        executionSignal,
+      );
+    },
+  };
+}
+
+/**
+ * Splits routed tool files into the two arrays the Pi host keeps apart.
+ *
+ * A tool that replaces a name Pi already ships is not a second registration,
+ * it is a claim the override service arbitrates, and only the winner
+ * registers. The folder convention keeps both in `tool/`, because from the
+ * author's side both are "this package provides grep"; which one it is lives
+ * in the value, through `definePiTool(definition, { overrides: true })`.
+ *
+ * A generated entry therefore cannot decide this from the path, and calls
+ * this instead. Every static claim from one package is one atomic set, which
+ * is what the override service expects. A live collection stays intact so its
+ * subscription continues to drive registration changes.
+ */
+export function piToolContributions(
+  source: string,
+  items: readonly PiToolContribution[] | PiToolCollection,
+): Pick<PiPluginContributions, 'tools' | 'toolOverrides'> {
+  if (!Array.isArray(items)) return { tools: items as PiToolCollection };
+  const added: PiToolContribution[] = [];
+  const claimed: PiToolDeclaration[] = [];
+  for (const item of items) {
+    // Only a native declaration may claim a name: a replacement is handed to
+    // Pi's registry directly, which the portable shape is not.
+    if ('kind' in item && item.kind === 'pi-tool' && item.overrides === true) claimed.push(item);
+    else added.push(item);
+  }
+  if (claimed.length === 0) return { tools: added };
+  return {
+    tools: added,
+    toolOverrides: [{ source, tools: claimed.map((item) => item.name), replacements: claimed }],
+  };
 }

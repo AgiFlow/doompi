@@ -6,10 +6,13 @@ import type { TranscriptPage } from '@agimon-ai/doompi-core/session-protocol';
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  collectFleetSnapshot,
+  SubagentFleetComponent,
+} from '../../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/fleet.cli';
 import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
 import { readFleetTranscriptTail } from '../../src/services/fleetTranscript';
 import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
-import { collectFleetSnapshot, SubagentFleetComponent } from '../../src/tui/fleet';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
 
 /**

@@ -19,7 +19,7 @@ import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { workflowServerFacet } from '../../../src/extensions/server';
+import { facet as workflowServerFacet } from '../../../generated/server';
 
 const embeddedFeature = vi.hoisted(() => {
   const control = {
@@ -132,7 +132,8 @@ async function fixture() {
   } as unknown as DoomHeadlessHostService;
   const serverHost = {
     scope: 'session',
-    registerApi: () => ({ dispose() {} }),
+    registerApi: () => registration,
+    registerChannel: () => registration,
     context: { directEvents: { publish: vi.fn() } },
   } as unknown as DoomServerHostService;
   const context = new Context();

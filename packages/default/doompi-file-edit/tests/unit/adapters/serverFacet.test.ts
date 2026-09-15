@@ -2,8 +2,7 @@ import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
-import { api } from '../../../src/controllers/fileEditsApi';
-import { fileEditsServerFacet } from '../../../src/extensions/server';
+import { facet as fileEditsServerFacet } from '../../../generated/server';
 import { filesChannelType } from '../../../src/types/webFiles';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
@@ -41,11 +40,12 @@ describe('fileEditsServerFacet', () => {
     expect(fileEditsServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
   });
 
-  it('registers the exact file-edits API in session scope', async () => {
+  it('registers the file-edits channel in session scope', async () => {
     const harness = hostContext('session');
     expect(typeof (await fileEditsServerFacet.apply(harness.context))).toBe('function');
-    expect(harness.registered).toEqual([api]);
-    expect(harness.channels).toEqual([]);
+    expect(harness.registered).toEqual([]);
+    expect(harness.channels).toHaveLength(1);
+    expect(harness.channels[0]?.frameType).toBe(filesChannelType);
   });
 
   it('registers the file-edits channel in hub scope', async () => {

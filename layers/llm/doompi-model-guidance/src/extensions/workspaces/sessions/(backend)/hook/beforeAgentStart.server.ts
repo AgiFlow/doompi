@@ -1,0 +1,5 @@
+import { defineHook } from '@agimon-ai/doompi-core/extension-file';
+
+import contribution from './_lib/beforeAgentStart.server';
+
+export default defineHook(contribution);

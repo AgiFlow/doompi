@@ -49,6 +49,8 @@ import type { SpawnPlannerContract, SessionForkSource } from '../spawnPlan';
 import type { SubagentWaiterContract } from '../subagentWait';
 
 const DEFAULT_DELEGATION_TIMEOUT_MS = 20 * 60 * 1000;
+const DELEGATION_TIMEOUT_WARNING_MAX_LEAD_MS = 2 * 60 * 1000;
+const DELEGATION_TIMEOUT_WARNING_FRACTION = 0.1;
 const DELEGATION_PROGRESS_INTERVAL_MS = 250;
 const SETTLED_DELEGATION_WINDOW = 256;
 
@@ -148,6 +150,13 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
     const runId = entry.runId;
     if (!runId) return;
 
+    const timeoutMs = request.timeoutMs ?? DEFAULT_DELEGATION_TIMEOUT_MS;
+    const warningLeadMs = Math.min(
+      DELEGATION_TIMEOUT_WARNING_MAX_LEAD_MS,
+      Math.max(1, Math.floor(timeoutMs * DELEGATION_TIMEOUT_WARNING_FRACTION)),
+    );
+    const warningAt = (entry.runtimeStartedAt ?? Date.now()) + timeoutMs - warningLeadMs;
+    let timeoutWarningSent = false;
     let lastProgress = '';
     entry.disposeProgress = deps.scheduler.register({
       id: `delegation:${entry.requestId}`,
@@ -155,10 +164,23 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
       run: () => {
         const job = jobs.get(runId);
         if (!job) return false;
+        let worked = false;
+        if (!timeoutWarningSent && Date.now() >= warningAt) {
+          timeoutWarningSent = true;
+          const secondsRemaining = Math.max(1, Math.ceil(warningLeadMs / 1000));
+          const secondsLabel = `${secondsRemaining} second${secondsRemaining === 1 ? '' : 's'}`;
+          void deps.management
+            .steer(
+              runId,
+              `This delegation will time out in about ${secondsLabel}. Stop exploring now, complete the highest-value remaining work, and return a concise result before the deadline. If you cannot finish, return verified findings and blockers immediately.`,
+            )
+            .catch(() => undefined);
+          worked = true;
+        }
         const progressKey = [job.status, job.updatedAt, job.error, job.tokens, job.currentTool, job.toolCount]
           .map((value) => String(value))
           .join(':');
-        if (progressKey === lastProgress) return false;
+        if (progressKey === lastProgress) return worked;
         lastProgress = progressKey;
         ctx.emit(DOOM_DELEGATION_UPDATED_EVENT, {
           requestId: entry.requestId,
@@ -176,7 +198,6 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
     });
     deps.scheduler.wake();
 
-    const timeoutMs = request.timeoutMs ?? DEFAULT_DELEGATION_TIMEOUT_MS;
     const wait = await deps.waiter.wait({
       target: { id: runId },
       sessionId,

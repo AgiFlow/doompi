@@ -5,13 +5,10 @@ import path from 'node:path';
 import type { ResolvedVoiceConfig, VoiceAdapterConfig } from '@agimon-ai/doompi-config';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  ManualTranscriptionApi,
-  normalizeManualTranscriptionMediaType,
-} from '../src/controllers/manualTranscriptionApi';
 import { FfmpegEncodedAudioDecoder } from '../src/services/encodedAudio';
 import { SystemClock } from '../src/services/infrastructure';
 import { ManualTranscriptionService } from '../src/services/manualTranscription';
+import { ManualTranscriptionApi, normalizeManualTranscriptionMediaType } from '../src/services/manualTranscriptionApi';
 import { encodePcm16Wav } from '../src/services/pcm';
 import type {
   IClock,

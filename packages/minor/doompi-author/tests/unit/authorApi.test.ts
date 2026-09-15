@@ -8,8 +8,12 @@ import { fileURLToPath } from 'node:url';
 import { mountPackageApi } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it } from 'vitest';
 
-import { createAuthorApi, createAuthorSessionApi, api } from '../../src/controllers/authorApi';
-import { AUTHOR_DOCUMENT_OPEN_PATH } from '../../src/controllers/authorDocumentApi';
+import {
+  createAuthorApi,
+  createAuthorSessionApi,
+  api,
+} from '../../src/extensions/workspaces/sessions/(backend)/api/_lib/authorApi';
+import { AUTHOR_DOCUMENT_OPEN_PATH } from '../../src/extensions/workspaces/sessions/(backend)/api/_lib/authorDocumentApi';
 import { API_BASE_PATH, AUTHOR_STATE_PATH, authorStateUrl } from '../../src/types/authorApi';
 
 const PACKAGE_ROOT = path.resolve(fileURLToPath(import.meta.url), '..', '..', '..');

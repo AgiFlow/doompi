@@ -3,17 +3,15 @@
  *
  * NOT A PORT:
  * The predecessor's `fleetTranscript.ts` parsed the HOST agent's own session
- * JSONL. `childTranscript.ts` (`../shared/childTranscript.ts`) is a
- * from-scratch, write-only format this package invented for its own reasons
- * (see that module's header: it is the parent's independent record, not the
- * host's session file). Translating the predecessor's parser would build a
- * reader for a format nothing here writes, so this reads `childTranscript.ts`'s
+ * JSONL. The child transcript is a separate record, not the host's session
+ * file. Translating the predecessor's parser would build a reader for a format
+ * nothing here writes, so this reads the child transcript's
  * actual record shapes (`message`/`tool_start`/`tool_end`/`stdout`/`stderr`/
  * `truncated`) directly.
  *
  * READ THE RECORD, NOT THE SUMMARY:
- * `childTranscript.ts` flattens each message to a `text` field with
- * `extractTextFromContent`, which recognises only `{type:'text'}`. An assistant
+ * Older child records flattened each message to a `text` field by recognising
+ * only `{type:'text'}`. An assistant
  * turn made of a `thinking` block plus `toolCall` blocks therefore flattens to
  * nothing, and the writer omits the field entirely - which is what produced
  * rows of bare `assistant` headers with no content under them. The writer does

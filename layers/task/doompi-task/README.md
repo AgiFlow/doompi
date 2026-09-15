@@ -107,12 +107,21 @@ Intercom and Team membership remain Team state; `tasks.json` remains Task state.
 ## Public API
 
 ```ts
-import { detectCycle, isBlocked, TaskStore, taskExtension } from '@agimon-ai/doompi-task';
+import { detectCycle, isBlocked, TaskStore } from '@agimon-ai/doompi-task';
 import type { Task, TaskStatus } from '@agimon-ai/doompi-task';
 ```
 
-Focused subpaths include `/tool/schema`, `/store/reducer`, `/store/taskStore`,
-`/delegation/manager`, and `/tui/selectors`. Pi loads `/extensions/pi` through package metadata.
+Focused subpaths include `/tool-schema`, `/store-reducer`, `/store-task-store`,
+`/delegation-manager`, and `/tui-selectors`. Pi loads `/extensions/pi` through package metadata.
+
+## Source layout
+
+The host entries are generated from `src/extensions`. Pi and headless session roots hold each
+session's store, delegation manager, startup work, service injection, and cleanup. Their tools,
+commands, hooks, and resources register from files beside the roots. The global backend channel
+publishes task graph updates. The session frontend owns the cockpit channel and Activity dock
+section, plus Task Space, the terminal widget, and the task tool renderer. Shared task rules and
+persistence stay in `src/services`; the published compatibility APIs remain in `src/exports`.
 
 ## Development
 

@@ -9,8 +9,8 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createMainThreadTitleController } from '../../src/controllers/shellTitleController';
-import { notificationExtension } from '../../src/extensions/pi';
+import { extension as notificationExtension } from '../../generated/pi';
+import { createMainThreadTitleController } from '../../src/services/shellTitleController';
 import { createPiHarness, type PiHarness } from '../helpers/piHarness';
 
 const COMMAND_TIMEOUT_MS = 3_000;
@@ -377,14 +377,17 @@ describe('notification extension', () => {
 describe('notification extension in a detached subagent', () => {
   it('registers nothing, because the parent session already reports the run', async () => {
     const harness = createPiHarness();
+    await installDoomCordisHost(harness.pi, { mode: 'composed', source: 'notification-child-test-host' });
+    vi.mocked(harness.pi.on).mockClear();
 
     await notificationExtension(harness.pi, {
       titleController: createMainThreadTitleController(),
       environment: { PI_SUBAGENT_CHILD: '1' },
     });
 
-    expect(harness.pi.on).not.toHaveBeenCalled();
-    expect(harness.handlers.size).toBe(0);
+    expect(harness.pi.on).toHaveBeenCalledExactlyOnceWith('session_shutdown', expect.any(Function));
+    expect(harness.handlers.has('agent_start')).toBe(false);
+    expect(harness.handlers.has('input')).toBe(false);
   });
 });
 

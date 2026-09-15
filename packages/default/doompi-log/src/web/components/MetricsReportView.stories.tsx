@@ -84,7 +84,7 @@ const singleBucket: MetricsReport = {
   period: 'day',
   bucketUnit: 'hour',
   focus: '9f2c41ae',
-  transport: 'cli',
+  transport: 'worker',
   totals: {
     totalTokens: 214_000,
     inputTokens: 3_100,

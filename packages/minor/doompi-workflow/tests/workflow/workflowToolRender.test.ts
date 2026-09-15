@@ -3,7 +3,7 @@ import { type Component, visibleWidth } from '@earendil-works/pi-tui';
 import { describe, expect, it } from 'vitest';
 
 import { WORKFLOW_PI_TOOL_NAMES } from '../../src/constants/workflow';
-import { createWorkflowTools } from '../../src/tools/workflowTools';
+import { createWorkflowTools } from '../../src/services/workflowTools';
 import {
   renderWorkflowToolCall,
   renderWorkflowToolResult,

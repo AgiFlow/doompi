@@ -58,21 +58,30 @@ describe('doompi-major-mode package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual([
+      '.',
+      './api-contracts',
+      './extensions/pi',
+      './extensions/server',
+      './package.json',
+    ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).not.toContain('./extensions/doom');
-    for (const subpath of ['.', './extensions/pi', './extensions/server']) {
+    for (const subpath of ['.', './api-contracts', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });
 
   it('routes Pi discovery through the command and voice-tool factory', async () => {
-    const entry = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
-    const factory = await readFile(path.join(packageDirectory, 'src/controllers/majorModeRuntime.ts'), 'utf8');
+    const entry = await readFile(path.join(packageDirectory, 'generated/pi.ts'), 'utf8');
+    const factory = await readFile(
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/_lib/majorModeRuntime.ts'),
+      'utf8',
+    );
 
     expect(entry).toContain('definePiExtension');
-    expect(entry).toContain('export default majorModeExtension');
+    expect(entry).toContain('export default extension');
     expect(entry).not.toContain('doom.ts');
     expect(factory).toContain('createMajorModeCommand');
     expect(factory).toContain('registerMajorModeVoiceCapability');

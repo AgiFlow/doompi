@@ -8,7 +8,7 @@ import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { cacheServerFacet } from '../../../src/extensions/server';
+import { facet as cacheServerFacet } from '../../../generated/server';
 
 async function fixture() {
   const hooks: DoomHeadlessHook[] = [];

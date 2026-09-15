@@ -52,11 +52,10 @@ describe('@agimon-ai/doompi-plan package shape', () => {
     }
   });
 
-  it('declares ESM, CJS, and declaration output for the root and Pi entry', () => {
+  it('uses the routed extension preset for its host entries', () => {
     const config = readConfig('tsdown.config.ts');
-    expect(config).toMatch(/format\s*:\s*\[[^\]]*['"]esm['"][^\]]*['"]cjs['"]/u);
-    expect(config).toMatch(/dts\s*:\s*\{[^}]*eager/u);
-    expect(config).toContain("'extensions/pi': 'src/extensions/pi.ts'");
+    expect(config).toContain("import { doompiExtension } from '@agimon-ai/doompi-build/tsdown'");
+    expect(config).toContain('doompiExtension({');
   });
 
   it('keeps the package export map closed and explicit', () => {
@@ -65,6 +64,10 @@ describe('@agimon-ai/doompi-plan package shape', () => {
     for (const [subpath, target] of Object.entries(exportsMap)) {
       if (typeof target === 'string') {
         expect(target === './package.json' || target.startsWith('./dist/'), subpath).toBe(true);
+        continue;
+      }
+      if (subpath === './extensions/web') {
+        expect(target).toEqual({ import: './dist/extensions/web.mjs' });
         continue;
       }
       expect(Object.keys(target as Record<string, string>), subpath).toEqual(['types', 'import', 'require']);
@@ -78,7 +81,7 @@ describe('@agimon-ai/doompi-plan package shape', () => {
     });
     expect(packageJson.doompiServer).toEqual({
       contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
-      entry: './src/extensions/server.ts',
+      entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['session'],
     });

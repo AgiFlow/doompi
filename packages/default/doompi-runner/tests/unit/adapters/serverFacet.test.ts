@@ -9,7 +9,7 @@ import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai
 import { Context } from '@deepseek-ai/cordis';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { runnerServerFacet } from '../../../src/extensions/server';
+import { facet as runnerServerFacet } from '../../../generated/server';
 
 const lifecycleMocks = vi.hoisted(() => {
   const container = {
@@ -62,14 +62,21 @@ vi.mock('../../../src/services/reconcile', () => ({
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
-function hostContext(scope: DoomServerHostService['scope'], directEvents?: DoomDirectEventBus) {
+function hostContext(
+  scope: DoomServerHostService['scope'],
+  directEvents: DoomDirectEventBus = {
+    publish: vi.fn(),
+    subscribe: vi.fn(() => () => undefined),
+    close: vi.fn(),
+  },
+) {
   const registered: MountedApi[] = [];
   const state = { disposed: 0 };
   const host: DoomServerHostService = {
     scope,
     context: {
       locality: 'local',
-      ...(directEvents === undefined ? {} : { directEvents }),
+      directEvents,
     } as unknown as DoomServerHostService['context'],
     registerApi(api) {
       registered.push(api);

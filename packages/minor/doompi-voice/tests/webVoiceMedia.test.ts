@@ -40,12 +40,25 @@ describe('browser voice media', () => {
     first.voiceMediaWakes.reset();
   });
   it('publishes both controls and page-lifetime media channels', async () => {
-    const source = await readFile(new URL('../src/extensions/web.ts', import.meta.url), 'utf8');
+    const source = (
+      await Promise.all(
+        [
+          'channel/voice-media-wake.ts',
+          'channel/voice-ownership.ts',
+          'fill/Voice.composer-actions.tsx',
+          'leader/toggle.ts',
+          'lifecycle/start.web.ts',
+        ].map((file) =>
+          readFile(new URL(`../src/extensions/workspaces/sessions/(frontend)/${file}`, import.meta.url), 'utf8'),
+        ),
+      )
+    ).join('\n');
 
-    expect(source).toContain('channels: [voiceMediaWakeChannel, voiceOwnershipChannel]');
-    expect(source).toContain('start: startVoiceMediaRuntime');
+    expect(source).toContain('voiceMediaWakeChannel');
+    expect(source).toContain('voiceOwnershipChannel');
+    expect(source).toContain('startVoiceMediaRuntime');
     expect(source).not.toContain('voice-media-runtime');
-    expect(source).toContain("composerActions: [{ id: 'voice', component: VoiceComposerAction }]");
+    expect(source).toContain("id: 'voice'");
     expect(source).not.toContain("id: 'voice.capture'");
     expect(source).not.toContain("command: 'voice'");
     expect(source).toContain("id: 'voice.toggle'");
@@ -58,13 +71,19 @@ describe('browser voice media', () => {
   });
 
   it('does not classify autonomous voice capture as background work', async () => {
-    const source = await readFile(new URL('../src/extensions/web.ts', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL('../src/extensions/workspaces/sessions/(frontend)/activity-group/voice.ts', import.meta.url),
+      'utf8',
+    );
 
     expect(source).toContain('marksBackgroundWork: false');
   });
 
   it('presents narration as readable conversational output', async () => {
-    const source = await readFile(new URL('../src/extensions/web.ts', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL('../src/extensions/workspaces/sessions/(frontend)/tool/narrate.tsx', import.meta.url),
+      'utf8',
+    );
     const rendered = renderPlugin(
       VoiceToolMessage,
       toolMessagePropsFixture({
@@ -135,7 +154,7 @@ describe('browser voice media', () => {
   });
 
   it('keeps process-local manual recording out of the browser minor-mode picker', async () => {
-    const source = await readFile(new URL('../src/controllers/voice.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/services/voice/index.ts', import.meta.url), 'utf8');
     const start = source.indexOf("label: 'Manual voice'");
     const manualAction = source.slice(start, source.indexOf("id: 'deactivate'", start));
 

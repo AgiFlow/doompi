@@ -151,7 +151,7 @@ function RequestRecord({ request, prominent = false }: { request: AuthorRequestR
 
 export function AuthorRequestLog({ requests }: { requests: readonly AuthorRequestRecord[] }) {
   const latest = requests.at(-1);
-  const earlier = requests.slice(0, -1).toReversed();
+  const earlier = requests.slice(0, -1).reverse();
   return (
     <section data-testid="author-request-history" className="space-y-3">
       <h3 className="text-2xs font-bold tracking-widest text-doom-faint">AUTHORING</h3>

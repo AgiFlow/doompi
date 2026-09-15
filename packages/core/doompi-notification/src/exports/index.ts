@@ -1,6 +1,5 @@
-export type { NotificationExtensionOptions } from '../controllers/notificationRuntime';
-export { createMainThreadTitleController, createWorkerTitleController } from '../controllers/shellTitleController';
-export { sendSystemNotification } from '../controllers/systemNotification';
+export { createMainThreadTitleController, createWorkerTitleController } from '../services/shellTitleController';
+export { sendSystemNotification } from '../services/systemNotification';
 export {
   askUserPromptBody,
   type AttentionState,
@@ -19,6 +18,7 @@ export {
 } from '../services/notificationText';
 export type {
   DesktopNotification,
+  NotificationExtensionOptions,
   ShellTitleAction,
   ShellTitleCommand,
   ShellTitleController,

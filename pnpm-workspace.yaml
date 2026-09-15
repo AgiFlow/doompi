@@ -50,10 +50,10 @@ onlyBuiltDependencies:
 minimumReleaseAge: 2880
 minimumReleaseAgeExclude:
   - "@agimon-ai/foundation-exec@0.26.16||0.26.19||0.26.23||0.26.25"
-  - "@agimon-ai/foundation-port-registry@0.29.16||0.29.19||0.29.20||0.29.22||0.29.23||0.29.25"
-  - "@agimon-ai/foundation-process-registry@0.29.16||0.29.19||0.29.20||0.29.22||0.29.23||0.29.25"
-  - "@agimon-ai/foundation-validator@0.26.16||0.26.19||0.26.20||0.26.22||0.26.25"
-  - "@agimon-ai/log-sink-mcp@0.29.16||0.29.19||0.29.20||0.29.22||0.29.25"
+  - "@agimon-ai/foundation-port-registry@0.29.16||0.29.19||0.29.20||0.29.22||0.29.23||0.29.25||0.29.26"
+  - "@agimon-ai/foundation-process-registry@0.29.16||0.29.19||0.29.20||0.29.22||0.29.23||0.29.25||0.29.26"
+  - "@agimon-ai/foundation-validator@0.26.16||0.26.19||0.26.20||0.26.22||0.26.25||0.26.26"
+  - "@agimon-ai/log-sink-mcp@0.29.16||0.29.19||0.29.20||0.29.22||0.29.25||0.29.26"
   - "@agimon-ai/mcp-proxy@0.31.16||0.31.19||0.31.20||0.31.22||0.31.25"
   - "@agimon-ai/rmux-darwin-arm64@0.9.2"
   - "@agimon-ai/rmux-darwin-x64@0.9.2"

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAuthorCommand } from '../../../src/controllers/doomAuthorCommand';
+import { createAuthorCommand } from '../../../src/services/authorCommand';
 
 describe('Author command', () => {
   it('delivers its result through the shared notification capability', async () => {

@@ -5,7 +5,10 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { registerProfileVoiceCapability, type ProfileVoiceView } from '../../src/controllers/voiceTool';
+import {
+  registerProfileVoiceCapability,
+  type ProfileVoiceView,
+} from '../../src/extensions/workspaces/sessions/(backend)/_lib/voiceTool';
 import { bindStubCoordinator } from '../helpers/coordinator';
 
 const SESSION_ID = 'profile-voice-session';

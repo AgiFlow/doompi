@@ -15,12 +15,13 @@ import {
 } from '@agimon-ai/doompi-hashline/files';
 import {
   DEFAULT_MAX_BYTES,
+  formatDimensionNote,
   formatSize,
+  resizeImage,
   truncateHead,
   truncateLine,
   type ReadToolDetails,
 } from '@earendil-works/pi-coding-agent';
-import { formatDimensionNote, resizeImage } from '@earendil-works/pi-coding-agent';
 
 import { ReadParamsSchema, type ReadParams } from '../../schemas/readTool';
 import {

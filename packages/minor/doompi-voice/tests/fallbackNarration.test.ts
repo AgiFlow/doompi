@@ -1,12 +1,12 @@
 import { MAX_NARRATION_TEXT_CHARACTERS } from '@agimon-ai/doompi-core/narration';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveVoiceFallbackNarrator } from '../src/controllers/voice';
 import {
   DETERMINISTIC_FALLBACK_THRESHOLD_CHARACTERS,
   type FallbackNarrationModelRequest,
   VoiceTurnFallbackNarrator,
 } from '../src/services/fallbackNarration';
+import { resolveVoiceFallbackNarrator } from '../src/services/voiceController';
 
 afterEach(() => {
   vi.useRealTimers();

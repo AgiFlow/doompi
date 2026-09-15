@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
 
-import { runCli } from '../controllers/cliApp';
+import { runCli } from '../services/cliApp';
 import { createRunnerDependencies } from '../services/runnerDependencies';
 
 async function readStdin(): Promise<string> {

@@ -27,8 +27,6 @@
   },
   "files": [
     "dist",
-    "src/web",
-    "src/extensions/web.ts",
     "llms.txt",
     "src/prompts",
     "README.md",
@@ -55,6 +53,9 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
+    },
     "./package.json": "./package.json"
   },
   "publishConfig": {
@@ -63,7 +64,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -73,6 +74,7 @@
     "@deepseek-ai/cordis": "4.0.2"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@types/node": "26.5.1",
@@ -93,7 +95,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
@@ -106,7 +108,7 @@
   "doompiWeb": {
     "pluginId": "help",
     "channels": [],
-    "client": "./src/extensions/web.ts",
+    "client": "./dist/extensions/web.mjs",
     "scopes": [
       "session"
     ]

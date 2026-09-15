@@ -25,8 +25,8 @@ const mocks = vi.hoisted(() => ({
 }));
 const cordisRoots: Context[] = [];
 
-vi.mock('../../src/controllers/runtimeActivation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/controllers/runtimeActivation')>()),
+vi.mock('../../src/services/runtimeActivation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/services/runtimeActivation')>()),
   createGoalRuntime: mocks.createGoalRuntime,
   isRetainedGoalStatus: (status: unknown) =>
     typeof status === 'string' && status !== 'cleared' && status !== 'complete',
@@ -35,7 +35,7 @@ vi.mock('../../src/tui/goalHistoryOverlay', () => ({
   openGoalHistoryOverlay: vi.fn(),
 }));
 
-import { goalExtension as goalPiExtension } from '../../src/extensions/pi';
+import { extension as goalPiExtension } from '../../generated/pi';
 
 async function registerGoalExtension(pi: ExtensionAPI): Promise<void> {
   const root = mocks.createCordisRoot() as Context;
@@ -68,7 +68,7 @@ function createFixture(): Fixture {
   const manager = {
     tools: vi.fn(() => []),
     toolRestrictions: vi.fn(() => []),
-    commands: vi.fn(() => []),
+    commands: vi.fn(() => [['goal', { description: 'Manage the session goal', handler: vi.fn() }]]),
     events: vi.fn(() => ({})),
     snapshot: vi.fn(() => ({ goal: undefined })),
     showFromLeader: vi.fn(),

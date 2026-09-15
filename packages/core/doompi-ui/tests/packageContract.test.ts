@@ -92,13 +92,13 @@ describe('doom Pi UI package boundary', () => {
     expect(manifest.doompiWeb).toEqual({
       pluginId: 'builtin-tools',
       channels: [],
-      client: './src/extensions/web.ts',
+      client: './dist/extensions/web.mjs',
       scopes: ['session'],
     });
     const buildConfig = await readFile(path.join(packageDirectory, 'tsdown.config.ts'), 'utf8');
-    expect(buildConfig).toContain('src/extensions/pi.ts');
-    expect(buildConfig).toContain('src/extensions/server.ts');
-    expect(buildConfig).not.toContain('src/extensions/web.ts');
+    expect(buildConfig).toContain('doompiExtension');
+    expect(buildConfig).not.toContain('src/extensions/pi.ts');
+    expect(buildConfig).not.toContain('src/extensions/server.ts');
   });
   it('uses package-local project configuration without private rig packages or Doom Config runtime coupling', async () => {
     const project = await readJsonFile<ProjectManifest>(path.join(packageDirectory, 'project.json'));
@@ -141,8 +141,13 @@ describe('doom Pi UI package boundary', () => {
 
     for (const [subpath, target] of publicEntries) {
       expect(conditionPaths(target, 'import'), subpath).toHaveLength(1);
-      expect(conditionPaths(target, 'require'), subpath).toHaveLength(1);
-      expect(conditionPaths(target, 'types'), subpath).toHaveLength(1);
+      if (subpath === './extensions/web') {
+        expect(conditionPaths(target, 'require'), subpath).toHaveLength(0);
+        expect(conditionPaths(target, 'types'), subpath).toHaveLength(0);
+      } else {
+        expect(conditionPaths(target, 'require'), subpath).toHaveLength(1);
+        expect(conditionPaths(target, 'types'), subpath).toHaveLength(1);
+      }
 
       for (const output of targetPaths(target)) await expectFile(output);
     }

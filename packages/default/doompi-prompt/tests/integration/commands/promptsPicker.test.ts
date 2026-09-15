@@ -2,8 +2,8 @@ import type { ExtensionAPI, ExtensionCommandContext } from '@earendil-works/pi-c
 import { describe, expect, it, vi } from 'vitest';
 
 import { COMMAND_NAME } from '../../../src/constants/prompts';
-import { createPromptsCommand } from '../../../src/controllers/promptsCommand';
 import { createRecentPrompts } from '../../../src/models/recentPrompts';
+import { createPromptsCommand } from '../../../src/services/promptsCommand';
 import type { PromptExtensionDependencies } from '../../../src/types/prompt';
 
 const pickerConstructed = vi.hoisted(() => vi.fn());

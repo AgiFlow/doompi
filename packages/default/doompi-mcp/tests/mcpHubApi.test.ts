@@ -1,7 +1,7 @@
 import type { DoomApiContext } from '@agimon-ai/doompi-core/package-api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { mcpHubApi } from '../src/controllers/mcpHubApi';
+import { mcpHubApi } from '../src/services/mcpHubApi';
 import { McpSettingsManager } from '../src/services/mcpSettingsManager';
 import type { McpAuthorizationFlow, McpRepositoryCatalog } from '../src/types/webMcp';
 

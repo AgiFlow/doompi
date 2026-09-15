@@ -26,75 +26,98 @@
     "directory": "layers/team/doompi-team"
   },
   "files": [
-    "dist",
-    "src/web",
-    "src/extensions/web.ts",
-    "src/types/webSubagents.ts",
-    "!src/web/**/*.stories.tsx"
+    "dist"
   ],
   "type": "module",
-  "types": "./dist/index.d.mts",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
   "jsnext:main": "./dist/index.mjs",
   "exports": {
-    ".": "./dist/index.mjs",
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./api-contracts": {
+      "types": "./dist/api-contracts.d.mts",
+      "import": "./dist/api-contracts.mjs",
+      "require": "./dist/api-contracts.cjs"
+    },
     "./capability-ceiling": {
-      "types": "./dist/capabilityCeiling.d.mts",
-      "import": "./dist/capabilityCeiling.mjs",
-      "require": "./dist/capabilityCeiling.cjs"
+      "types": "./dist/capability-ceiling.d.mts",
+      "import": "./dist/capability-ceiling.mjs",
+      "require": "./dist/capability-ceiling.cjs"
     },
     "./delegation": {
       "types": "./dist/delegation.d.mts",
       "import": "./dist/delegation.mjs",
       "require": "./dist/delegation.cjs"
     },
-    "./team-snapshot": {
-      "types": "./dist/teamSnapshot.d.mts",
-      "import": "./dist/teamSnapshot.mjs",
-      "require": "./dist/teamSnapshot.cjs"
+    "./delegation-api": {
+      "types": "./dist/delegation-api.d.mts",
+      "import": "./dist/delegation-api.mjs",
+      "require": "./dist/delegation-api.cjs"
     },
-    "./env": "./dist/env.mjs",
-    "./extensions/pi": "./dist/extensions/pi.mjs",
+    "./env": {
+      "types": "./dist/env.d.mts",
+      "import": "./dist/env.mjs",
+      "require": "./dist/env.cjs"
+    },
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
     "./extensions/server": {
       "types": "./dist/extensions/server.d.mts",
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
-    "./package.json": "./package.json",
-    "./subagent-tool": {
-      "types": "./dist/subagent-tool.d.mts",
-      "import": "./dist/subagent-tool.mjs",
-      "require": "./dist/subagent-tool.cjs"
-    },
-    "./subagent-policy": {
-      "types": "./dist/subagent-policy.d.mts",
-      "import": "./dist/subagent-policy.mjs",
-      "require": "./dist/subagent-policy.cjs"
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
     },
     "./fable-plan": {
       "types": "./dist/fable-plan.d.mts",
       "import": "./dist/fable-plan.mjs",
       "require": "./dist/fable-plan.cjs"
     },
-    "./delegation-api": {
-      "types": "./dist/delegation-api.d.mts",
-      "import": "./dist/delegation-api.mjs",
-      "require": "./dist/delegation-api.cjs"
+    "./fable-plan-api": {
+      "types": "./dist/fable-plan-api.d.mts",
+      "import": "./dist/fable-plan-api.mjs",
+      "require": "./dist/fable-plan-api.cjs"
     },
-    "./runtime-subagent-tool": {
-      "types": "./dist/runtime-subagent-tool.d.mts",
-      "import": "./dist/runtime-subagent-tool.mjs",
-      "require": "./dist/runtime-subagent-tool.cjs"
+    "./runs/background/cliRunnerEntry": {
+      "types": "./dist/runs/background/cliRunnerEntry.d.mts",
+      "import": "./dist/runs/background/cliRunnerEntry.mjs",
+      "require": "./dist/runs/background/cliRunnerEntry.cjs"
     },
     "./runtime-subagent-policy": {
       "types": "./dist/runtime-subagent-policy.d.mts",
       "import": "./dist/runtime-subagent-policy.mjs",
       "require": "./dist/runtime-subagent-policy.cjs"
     },
-    "./fable-plan-api": {
-      "types": "./dist/fable-plan-api.d.mts",
-      "import": "./dist/fable-plan-api.mjs",
-      "require": "./dist/fable-plan-api.cjs"
-    }
+    "./runtime-subagent-tool": {
+      "types": "./dist/runtime-subagent-tool.d.mts",
+      "import": "./dist/runtime-subagent-tool.mjs",
+      "require": "./dist/runtime-subagent-tool.cjs"
+    },
+    "./subagent-policy": {
+      "types": "./dist/subagent-policy.d.mts",
+      "import": "./dist/subagent-policy.mjs",
+      "require": "./dist/subagent-policy.cjs"
+    },
+    "./subagent-tool": {
+      "types": "./dist/subagent-tool.d.mts",
+      "import": "./dist/subagent-tool.mjs",
+      "require": "./dist/subagent-tool.cjs"
+    },
+    "./team-snapshot": {
+      "types": "./dist/team-snapshot.d.mts",
+      "import": "./dist/team-snapshot.mjs",
+      "require": "./dist/team-snapshot.cjs"
+    },
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public",
@@ -104,7 +127,7 @@
     "build": "tsdown",
     "test": "vitest --run",
     "test-system": "vitest run --config vitest.system.config.ts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -121,6 +144,7 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@earendil-works/pi-agent-core": "0.85.1",
     "@earendil-works/pi-ai": "0.85.1",
     "@earendil-works/pi-coding-agent": "0.85.1",
@@ -159,12 +183,12 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
-      "session",
       "global",
-      "workspace"
+      "workspace",
+      "session"
     ],
     "contracts": {
       "entry": "./src/exports/apiContracts.ts",
@@ -174,10 +198,10 @@
   "doompiWeb": {
     "pluginId": "subagents",
     "channels": [
-      "subagent_runs",
-      "subagent_catalog"
+      "subagent_catalog",
+      "subagent_runs"
     ],
-    "client": "./src/extensions/web.ts",
+    "client": "./dist/extensions/web.mjs",
     "scopes": [
       "session"
     ]

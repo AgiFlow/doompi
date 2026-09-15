@@ -1,6 +1,7 @@
 import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
 import { describe, expect, it } from 'vitest';
 
+import type { IVoiceMediaHostConnection } from '../src/types';
 import {
   VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER,
   VOICE_MEDIA_ACTIVITY_ELAPSED_HEADER,
@@ -197,7 +198,7 @@ describe('voice client media session API', () => {
             {
               method: 'POST',
               headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE },
-              body: new Uint8Array([1, 2]),
+              body: Buffer.from([1, 2]),
             },
           ),
         )
@@ -345,7 +346,7 @@ describe('voice client media session API', () => {
             {
               method: 'POST',
               headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE },
-              body: new Uint8Array([1, 2]),
+              body: Buffer.from([1, 2]),
             },
           ),
         )
@@ -359,7 +360,7 @@ describe('voice client media session API', () => {
             {
               method: 'POST',
               headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE },
-              body: new Uint8Array([1, 2]),
+              body: Buffer.from([1, 2]),
             },
           ),
         )
@@ -383,7 +384,7 @@ describe('voice client media session API', () => {
           request(audioRoute, {
             method: 'POST',
             headers: { 'content-type': VOICE_MEDIA_CONTENT_TYPE },
-            body: new Uint8Array([1]),
+            body: Buffer.from([1]),
           }),
         )
       ).status,
@@ -994,6 +995,63 @@ describe('voice client media session API', () => {
     expect(reset.headers.get(VOICE_MEDIA_ACTIVITY_STATE_HEADER)).toBe('listening');
     expect(reset.headers.get(VOICE_MEDIA_ACTIVITY_EPOCH_HEADER)).toBe('1');
     expect(reset.headers.get(VOICE_MEDIA_ACTIVITY_SPEECH_MS_HEADER)).toBe('0');
+    api.close();
+  });
+
+  it('validates direct host capture lifecycle calls at the broker boundary', async () => {
+    const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN, clientConnectWaitMs: 0 });
+    const media = (api as typeof api & { media: IVoiceMediaHostConnection }).media;
+    const configuration = { mode: 'manual', activityControl: 'host' } as const;
+
+    await expect(media.startCapture('capture-direct', configuration)).rejects.toMatchObject({ status: 503 });
+    await connect(api);
+    await expect(media.startCapture('', configuration)).rejects.toMatchObject({ status: 400 });
+    await expect(
+      media.startCapture('capture-invalid', { mode: 'manual', activityControl: 'client', endpointSilenceMs: 1 }),
+    ).rejects.toMatchObject({ status: 400 });
+
+    await media.startCapture('capture-direct', configuration);
+    await expect(media.startCapture('capture-other', configuration)).rejects.toMatchObject({ status: 409 });
+    await expect(media.readCapture('capture-other')).rejects.toMatchObject({ status: 409 });
+    await expect(media.stopCapture('capture-other')).rejects.toMatchObject({ status: 409 });
+    await media.stopCapture('capture-direct');
+    await media.abortCapture('capture-direct');
+    await expect(media.readCapture('capture-direct')).rejects.toThrow('unexpectedly');
+    api.close();
+  });
+
+  it('validates direct streamed playback data and lifecycle calls', async () => {
+    const api = createVoiceMediaApi({ internalToken: INTERNAL_TOKEN, clientConnectWaitMs: 0 });
+    const media = (api as typeof api & { media: IVoiceMediaHostConnection }).media;
+    const sendPlaybackAudio = media.sendPlaybackAudio;
+    const sealPlaybackAudio = media.sealPlaybackAudio;
+    if (!sendPlaybackAudio || !sealPlaybackAudio) throw new Error('Expected streamed playback support.');
+
+    await expect(media.startPlayback({ playbackId: 'playback-direct', text: 'Status.' })).rejects.toMatchObject({
+      status: 503,
+    });
+    await connect(api);
+    await expect(media.startPlayback({ playbackId: '', text: 'Status.' })).rejects.toMatchObject({ status: 400 });
+    await expect(media.startPlayback({ playbackId: 'playback-direct', text: '  ' })).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(sendPlaybackAudio('missing', Buffer.from([1, 2]))).rejects.toMatchObject({ status: 409 });
+
+    await expect(media.startPlayback({ playbackId: 'playback-direct', text: 'Status.' })).resolves.toBe('streamed');
+    await expect(media.startPlayback({ playbackId: 'playback-other', text: 'Other.' })).rejects.toMatchObject({
+      status: 409,
+    });
+    await expect(sendPlaybackAudio('playback-direct', Buffer.alloc(0))).rejects.toThrow('Invalid');
+    await expect(sendPlaybackAudio('playback-direct', Buffer.from([1]))).rejects.toThrow('Invalid');
+    await expect(sendPlaybackAudio('playback-direct', Buffer.alloc(1024 * 1024))).rejects.toThrow('Invalid');
+    await sendPlaybackAudio('playback-direct', Buffer.from([1, 2]));
+    await expect(sealPlaybackAudio('missing')).rejects.toMatchObject({ status: 409 });
+    await sealPlaybackAudio('playback-direct', 'speaker stopped');
+    await expect(sendPlaybackAudio('playback-direct', Buffer.from([1, 2]))).rejects.toMatchObject({
+      status: 409,
+    });
+    await expect(media.stopPlayback('missing')).rejects.toMatchObject({ status: 409 });
+    await media.abortPlayback('playback-direct');
     api.close();
   });
 

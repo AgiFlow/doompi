@@ -193,20 +193,19 @@ describe('the sync-time cockpit bundler', () => {
       outDir,
     });
     const pluginFiles = filesBelow(result.pluginsDir);
-    const bundledJavaScript = pluginFiles
-      .filter((file) => file.endsWith('.js'))
-      .map((file) => fs.readFileSync(file, 'utf8'))
-      .join('\n');
+    const pluginJavaScriptFiles = pluginFiles.filter((file) => file.endsWith('.js') || file.endsWith('.mjs'));
+    const bundledJavaScript = pluginJavaScriptFiles.map((file) => fs.readFileSync(file, 'utf8')).join('\n');
     const compositionScript = fs.readFileSync(path.join(result.pluginsDir, 'composition.js'), 'utf8');
 
     expect(result.pluginIds).toEqual(['voice']);
     expect(bundledJavaScript).toContain('onnxruntime');
     expect(bundledJavaScript).not.toContain('DoomPiWebPluginRuntime.onnxruntime');
-    expect(pluginFiles.filter((file) => file.endsWith('.js')).length).toBeGreaterThan(1);
+    expect(pluginJavaScriptFiles.length).toBeGreaterThan(1);
     expect(pluginFiles.some((file) => file.endsWith('.onnx'))).toBe(true);
     expect(pluginFiles.some((file) => file.endsWith('.css'))).toBe(true);
     expect(compositionScript).toContain('assets/');
     expect(compositionScript).toContain('document.currentScript');
+    expect(compositionScript).not.toContain('import.meta');
     expect(compositionScript).not.toContain('{}.url');
     expect(compositionScript).not.toContain('new URL(`/assets/');
     expect(compositionScript).not.toContain('../models/silero_vad_v6.2.1.onnx');

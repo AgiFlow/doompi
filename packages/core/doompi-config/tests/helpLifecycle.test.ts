@@ -2,8 +2,8 @@ import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core
 import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it } from 'vitest';
 
+import { extension as registerConfigExtension } from '../generated/pi';
 import { CONFIG_HELP_SKILL, PACKAGE_SOURCE } from '../src/constants/config';
-import { registerConfigExtension } from '../src/extensions/pi';
 
 describe('Config Help lifecycle', () => {
   it('declares Help, follows provider replacement, and removes contributions on shutdown', async () => {
@@ -14,7 +14,13 @@ describe('Config Help lifecycle', () => {
     const provider = connection.root.plugin((context) => context.provide(DOOM_HELP_SERVICE, first));
     await provider;
     expect(first.listContributions()).toEqual([
-      { source: PACKAGE_SOURCE, moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u), skills: [CONFIG_HELP_SKILL] },
+      {
+        source: PACKAGE_SOURCE,
+        moduleUrl: expect.stringMatching(
+          /extensions\/workspaces\/sessions\/\(backend\)\/resource\/config-help\.cli\.ts$/u,
+        ),
+        skills: [CONFIG_HELP_SKILL],
+      },
     ]);
     await provider.dispose();
     expect(first.listContributions()).toEqual([]);

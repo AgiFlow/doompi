@@ -31,12 +31,12 @@ function testUiHub(): DoomUiHubService {
   } as unknown as DoomUiHubService;
 }
 
-vi.mock('../src/controllers/voice', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/controllers/voice')>()),
+vi.mock('../src/services/voice', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/services/voice')>()),
   createVoiceRuntime: extensionMocks.createVoiceRuntime,
 }));
 vi.mock('../src/services/voiceDependencies', () => ({ createVoiceDependencies: extensionMocks.createContainer }));
-vi.mock('../src/controllers/voiceConfig', () => ({
+vi.mock('../src/services/voiceConfigController', () => ({
   VoiceConfigController: class {
     readonly refresh = extensionMocks.refresh;
     sections(): readonly [] {
@@ -49,7 +49,7 @@ vi.mock('../src/controllers/voiceConfig', () => ({
   },
 }));
 
-import { voicePiExtension as composedVoiceExtension } from '../src/extensions/pi';
+import { extension as composedVoiceExtension } from '../generated/pi';
 
 async function voicePiExtension(pi: ExtensionAPI): Promise<void> {
   Object.assign(pi, { registerTool: vi.fn(), registerCommand: vi.fn() });
@@ -64,10 +64,28 @@ async function voicePiExtension(pi: ExtensionAPI): Promise<void> {
   }
   pi.on('session_shutdown', () => fiber.dispose());
 }
-import { voiceLeaderBindings } from '../src/controllers/voice';
+import { voiceLeaderBindings } from '../src/services/voice';
 
 beforeEach(() => {
-  extensionMocks.createVoiceRuntime.mockReturnValue({ tools: [], commands: [], events: {} });
+  const eventHandler = vi.fn(async () => undefined);
+  extensionMocks.createVoiceRuntime.mockReturnValue({
+    tools: [],
+    commands: [
+      ['voice', { description: 'Voice test command', handler: async () => undefined }],
+      ['voice-auto', { description: 'Voice auto test command', handler: async () => undefined }],
+    ],
+    events: {
+      agent_settled: eventHandler,
+      before_agent_start: eventHandler,
+      session_start: eventHandler,
+      tool_execution_start: eventHandler,
+      turn_end: eventHandler,
+    },
+    toolRestrictions: [
+      { source: 'voice-test', restrict: (incoming: readonly string[]) => incoming },
+      { source: 'transfer-voice-test', restrict: (incoming: readonly string[]) => incoming },
+    ],
+  });
   extensionMocks.createCordisRoot = () => {
     const root = new Context();
     cordisRoots.push(root);

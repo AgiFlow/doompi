@@ -43,25 +43,25 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
-    "./command": {
-      "types": "./dist/command.d.mts",
-      "import": "./dist/command.mjs",
-      "require": "./dist/command.cjs"
-    },
     "./catalog": {
       "types": "./dist/catalog.d.mts",
       "import": "./dist/catalog.mjs",
       "require": "./dist/catalog.cjs"
     },
-    "./projection": {
-      "types": "./dist/projection.d.mts",
-      "import": "./dist/projection.mjs",
-      "require": "./dist/projection.cjs"
+    "./command": {
+      "types": "./dist/command.d.mts",
+      "import": "./dist/command.mjs",
+      "require": "./dist/command.cjs"
     },
-    "./reload-handoff": {
-      "types": "./dist/reload-handoff.d.mts",
-      "import": "./dist/reload-handoff.mjs",
-      "require": "./dist/reload-handoff.cjs"
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
     },
     "./minor-mode-command": {
       "types": "./dist/minor-mode-command.d.mts",
@@ -83,17 +83,17 @@
       "import": "./dist/owner.mjs",
       "require": "./dist/owner.cjs"
     },
-    "./extensions/pi": {
-      "types": "./dist/extensions/pi.d.mts",
-      "import": "./dist/extensions/pi.mjs",
-      "require": "./dist/extensions/pi.cjs"
+    "./projection": {
+      "types": "./dist/projection.d.mts",
+      "import": "./dist/projection.mjs",
+      "require": "./dist/projection.cjs"
     },
-    "./package.json": "./package.json",
-    "./extensions/server": {
-      "types": "./dist/extensions/server.d.mts",
-      "import": "./dist/extensions/server.mjs",
-      "require": "./dist/extensions/server.cjs"
-    }
+    "./reload-handoff": {
+      "types": "./dist/reload-handoff.d.mts",
+      "import": "./dist/reload-handoff.mjs",
+      "require": "./dist/reload-handoff.cjs"
+    },
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
@@ -112,6 +112,7 @@
     "typebox": "1.3.30"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "@earendil-works/pi-coding-agent": "0.85.1",
@@ -138,12 +139,11 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
     ],
-    "required": true,
     "contracts": {
       "entry": "./src/exports/apiContracts.ts",
       "dist": "./dist/api-contracts.mjs"

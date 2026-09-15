@@ -13,9 +13,9 @@ import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { TEAM_API_BASE_PATH } from '../../../src/controllers/teamSessionApi';
+import { facet as teamHeadlessFacet } from '../../../generated/server';
 import { SUBAGENT_ACTIONS } from '../../../src/exports/subagentTool';
-import { teamServerFacet as teamHeadlessFacet } from '../../../src/extensions/server';
+import { TEAM_API_BASE_PATH } from '../../../src/extensions/workspaces/sessions/(backend)/api/_lib/route.server';
 import { sessionScopeDir } from '../../../src/services/sessionPaths';
 import * as runtimeModule from '../../../src/services/teamRuntime';
 import type { TeamExtensionRuntime } from '../../../src/services/teamRuntime';
@@ -59,6 +59,7 @@ async function fixture(options: { serverHost?: unknown } = {}) {
   };
   const defaultServerHost = {
     registerApi: vi.fn(() => registration()),
+    registerChannel: vi.fn(() => registration()),
     scope: 'session' as const,
     context: {
       environment: {},

@@ -1,1 +1,1 @@
-export { applyDomains } from '../controllers/applyDomains';
+export { applyDomains } from '../services/applyDomains';

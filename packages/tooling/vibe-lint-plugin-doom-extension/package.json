@@ -47,6 +47,7 @@
     "fixcode": "oxlint . --fix && oxfmt ."
   },
   "dependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "typescript": "6.0.3"
   },
   "devDependencies": {

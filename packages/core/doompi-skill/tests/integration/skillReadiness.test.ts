@@ -5,7 +5,7 @@ import { DOOM_UI_HUB_SERVICE, type DoomUiHubService } from '@agimon-ai/doompi-co
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import skillsExtension from '../../src/extensions/pi';
+import skillsExtension from '../../generated/pi';
 
 interface Snapshot {
   skills: Array<{ name: string }>;
@@ -149,7 +149,7 @@ describe('skills readiness generations', () => {
     expect(first.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-skill',
-        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/resource\/help\.cli\.ts$/u),
         skills: [
           {
             name: 'doompi-author-skill',

@@ -1,1 +1,1 @@
-export * from '../tui/selectors';
+export * from '../extensions/workspaces/sessions/(frontend)/overlay/_lib/selectors';

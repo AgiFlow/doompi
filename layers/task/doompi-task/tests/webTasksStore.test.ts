@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import type { WebTask } from '../src/types/webTasks';
 import {
   requestTaskEdit,
   requestTaskMessage,
@@ -10,7 +9,8 @@ import {
   taskMessageInstruction,
   tasks,
   tasksChannel,
-} from '../src/web/stores/tasksStore';
+} from '../src/extensions/workspaces/sessions/(frontend)/channel/_lib/tasksStore';
+import type { WebTask } from '../src/types/webTasks';
 
 describe('task cockpit store', () => {
   it('parses task payloads and rejects invalid envelopes', () => {

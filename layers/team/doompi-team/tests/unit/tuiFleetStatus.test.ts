@@ -1,7 +1,6 @@
 import { agentIdentityColor } from '@agimon-ai/doompi-ui/theme';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
 import {
   AGENT_PULSE_FRAMES,
   activeAgentCount,
@@ -9,7 +8,8 @@ import {
   agentStatusText,
   FLEET_STATUS_KEY,
   publishAgentStatus,
-} from '../../src/tui/fleetStatus';
+} from '../../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/fleetStatus';
+import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
 
 class FakeTracker implements AsyncJobTrackerContract {
   forSession() {

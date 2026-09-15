@@ -26,17 +26,14 @@
   },
   "files": [
     "dist",
-    "src/web",
     "src/types/author.ts",
     "src/types/webAuthor.ts",
     "src/types/structuredDocuments.ts",
-    "src/extensions/web.ts",
     "src/prompts",
     "llms.txt",
     "README.md",
     "LICENSE",
-    "package.json",
-    "!src/web/**/*.stories.tsx"
+    "package.json"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -48,6 +45,11 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
+    "./author-facade": {
+      "types": "./dist/authorFacade.d.mts",
+      "import": "./dist/authorFacade.mjs",
+      "require": "./dist/authorFacade.cjs"
+    },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",
       "import": "./dist/extensions/pi.mjs",
@@ -58,12 +60,10 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
-    "./package.json": "./package.json",
-    "./author-facade": {
-      "types": "./dist/authorFacade.d.mts",
-      "import": "./dist/authorFacade.mjs",
-      "require": "./dist/authorFacade.cjs"
-    }
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
+    },
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
@@ -71,7 +71,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -89,6 +89,7 @@
     "yazl": "3.3.1"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@tanstack/react-store": "0.11.1",
@@ -117,7 +118,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "global",
@@ -134,7 +135,7 @@
     "channels": [
       "author_webmcp"
     ],
-    "client": "./src/extensions/web.ts",
+    "client": "./dist/extensions/web.mjs",
     "scopes": [
       "session"
     ]

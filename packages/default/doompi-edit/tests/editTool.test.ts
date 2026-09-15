@@ -6,7 +6,7 @@ import { hashLine } from '@agimon-ai/doompi-hashline';
 import { computeFileTag } from '@agimon-ai/doompi-hashline/files';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { executeHashlineEdit, createHashlineEditTool } from '../src/tools/piEdit';
+import { executeHashlineEdit, createHashlineEditTool } from '../src/services/editTool';
 
 let directory: string;
 
@@ -23,32 +23,8 @@ function anchor(line: number, content: string): string {
 }
 
 describe('hashline edit execution', () => {
-  it('registers only edit with the shared Doom tool chrome', () => {
-    let tool:
-      | {
-          readonly name: string;
-          readonly renderShell?: string;
-          renderCall?(args: Record<string, unknown>, theme: unknown): { render(width: number): string[] };
-        }
-      | undefined;
-    tool = createHashlineEditTool() as unknown as typeof tool;
-    const identity = (value: string): string => value;
-    const theme = {
-      fg: (_color: string, value: string) => value,
-      bg: (_color: string, value: string) => value,
-      bold: identity,
-      dim: identity,
-      inverse: identity,
-      italic: identity,
-      strikethrough: identity,
-      underline: identity,
-    };
-
-    expect(tool?.name).toBe('edit');
-    expect(tool?.renderShell).toBe('self');
-    expect(
-      tool?.renderCall?.({ path: 'a.ts', hash: 'abcdefgh', edits: [{ from: '1#abc', to: '1#abc' }] }, theme).render(80),
-    ).toEqual(expect.arrayContaining([expect.stringContaining('EDIT  a.ts · 1 range')]));
+  it('registers only edit', () => {
+    expect(createHashlineEditTool().name).toBe('edit');
   });
 
   it('preserves BOM, CRLF, and permissions while applying deduplicated snapshot ranges', async () => {

@@ -2,6 +2,10 @@ import type { BoundaryConfig, OverrideConfig, PluginConfigPreset, Severity } fro
 
 const rules: Record<string, Severity> = {
   'composition-layout': 'error',
+  'routed-file-position': 'error',
+  'routed-file-contract': 'error',
+  'extension-side-boundary': 'error',
+  'legacy-source-root': 'error',
   'plugin-composition-wiring': 'error',
   'doom-constants': 'error',
   'neutral-extension-contracts': 'error',
@@ -72,7 +76,7 @@ const boundaries: BoundaryConfig[] = [
   {
     name: 'exports',
     pattern: 'src/exports/**',
-    allowedImports: layer('constants', 'controllers', 'models', 'schemas', 'services', 'tools', 'tui', 'types'),
+    allowedImports: layer('constants', 'models', 'schemas', 'services', 'tui', 'types'),
   },
   { name: 'types', pattern: 'src/types/**', allowedImports: layer('constants', 'types') },
   { name: 'schemas', pattern: 'src/schemas/**', allowedImports: layer('constants', 'schemas', 'types') },
@@ -86,37 +90,40 @@ const boundaries: BoundaryConfig[] = [
     pattern: 'src/services/**',
     allowedImports: layer('constants', 'models', 'schemas', 'services', 'types'),
   },
-  {
-    name: 'controllers',
-    pattern: 'src/controllers/**',
-    allowedImports: layer('constants', 'controllers', 'models', 'schemas', 'services', 'types'),
-  },
-  {
-    name: 'tools',
-    pattern: 'src/tools/**',
-    allowedImports: layer('constants', 'models', 'schemas', 'services', 'tools', 'types'),
-  },
   // Browser entries retain the browser-only policy before general composition.
   {
     name: 'web-plugin-entry',
     pattern: 'src/extensions/web.ts',
-    allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
+    allowedImports: [
+      'src/web/**',
+      'src/types',
+      'src/types/**',
+      'src/constants',
+      'src/constants/**',
+      'src/extensions/**',
+    ],
+  },
+  {
+    // The browser half of a folder-routed package. Same policy as the entry
+    // above, matched by position rather than by one literal path, so a
+    // (frontend) group anywhere in the tree is held to it.
+    name: 'web-plugin-routed',
+    pattern: 'src/extensions/**/(frontend)/**',
+    allowedImports: [
+      'src/web/**',
+      'src/types',
+      'src/types/**',
+      'src/constants',
+      'src/constants/**',
+      'src/schemas',
+      'src/schemas/**',
+      'src/extensions/**/(frontend)/**',
+    ],
   },
   {
     name: 'extensions',
     pattern: 'src/extensions/**',
-    allowedImports: layer(
-      'constants',
-      'controllers',
-      'extensions',
-      'models',
-      'schemas',
-      'services',
-      'tools',
-      'tui',
-      'types',
-      'web',
-    ),
+    allowedImports: layer('constants', 'extensions', 'models', 'schemas', 'services', 'tui', 'types', 'web'),
   },
   {
     name: 'tui',
@@ -131,18 +138,7 @@ const boundaries: BoundaryConfig[] = [
   {
     name: 'bin',
     pattern: 'src/bin/**',
-    allowedImports: layer(
-      'bin',
-      'constants',
-      'controllers',
-      'models',
-      'schemas',
-      'services',
-      'tools',
-      'tui',
-      'types',
-      'web',
-    ),
+    allowedImports: layer('bin', 'constants', 'models', 'schemas', 'services', 'tui', 'types', 'web'),
   },
   // The web cockpit plugin's browser half lives in src/web. It may reach its
   // own files and the shared src/types shapes (web-plugin-import-allowlist
@@ -153,7 +149,9 @@ const boundaries: BoundaryConfig[] = [
     pattern: 'src/web/**',
     allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
   },
-  { name: 'tests', pattern: 'tests/**', allowedImports: ['src/**', 'tests/**'] },
+  // generated/** is the routed package's host entries, which its contract and
+  // lifecycle tests import the way they used to import src/extensions/pi.ts.
+  { name: 'tests', pattern: 'tests/**', allowedImports: ['src/**', 'tests/**', 'generated/**'] },
   {
     name: 'metadata',
     pattern:
@@ -161,10 +159,14 @@ const boundaries: BoundaryConfig[] = [
   },
 ];
 
-/** Host loaders and build tools require default exports only at their direct entries. */
+/**
+ * Host loaders and build tools require default exports at their entries, and
+ * so does the folder convention: a routed file under src/extensions declares
+ * one contribution through its default export, the way a Next.js route does.
+ */
 const overrides: OverrideConfig[] = [
   {
-    files: ['src/extensions/pi.ts', 'src/extensions/server.ts', 'tsdown.config.ts', 'vitest.config.ts'],
+    files: ['src/extensions/**', 'tsdown.config.ts', 'vitest.config.ts'],
     rules: { 'no-default-export': 'off', 'direct-export-only': 'off' },
   },
 ];

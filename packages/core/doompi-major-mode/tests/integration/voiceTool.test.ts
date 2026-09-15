@@ -7,7 +7,7 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { registerMajorModeVoiceCapability } from '../../src/controllers/voiceTool';
+import { registerMajorModeVoiceCapability } from '../../src/extensions/workspaces/sessions/(backend)/_lib/voiceTool';
 import type { MajorModeView } from '../../src/types/majorMode';
 import { bindStubCoordinator } from '../helpers/coordinator';
 

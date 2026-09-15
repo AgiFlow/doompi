@@ -137,6 +137,6 @@ MIT
 
 ## Source and lifecycle
 
-`src/extensions/pi.ts`, `server.ts`, and `web.ts` are the host entries. They compose controllers, native tool declarations, and named services. Controllers coordinate services and models; TUI rendering stays in `src/tui`. Public capabilities live in flat `src/exports` files and build separately from host entries.
+The host entries are generated from `src/extensions/`. Pi commands, tools, hooks, and its root live under `workspaces/sessions/(backend)` because they serve the active Pi session. The session frontend owns message renderers, the fleet and catalog `overlay/*.cli.ts` views, their private presentation helpers, and the `tool/subagent.cli.ts` renderer. The CLI and server session roots hold state, service injection, startup work, and cleanup. The server session backend also owns its API and resources. Team's hub relay channels live in the global backend tree. `src/services` holds platform-agnostic logic, and public capabilities live in flat `src/exports` files.
 
-The Pi and server helpers own contribution registration and disposal. Team's collaboration service replaces session fibers explicitly, uses the injected session only when its session manager matches, and otherwise mounts in the standalone plugin context. Losing that injected session disposes its collaboration fiber.
+The routed files own contribution registration. Team's collaboration service replaces session fibers explicitly, uses the injected session only when its session manager matches, and otherwise mounts in the standalone plugin context. Losing that injected session disposes its collaboration fiber.

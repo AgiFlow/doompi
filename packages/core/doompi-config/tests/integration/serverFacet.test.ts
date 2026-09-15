@@ -8,7 +8,7 @@ import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { configServerFacet } from '../../src/extensions/server';
+import { facet as configServerFacet } from '../../generated/server';
 
 describe('config server resources', () => {
   it('declares the server host and publishes selection and authoring resources', async () => {

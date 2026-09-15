@@ -83,7 +83,7 @@ Selectable packages resolve from the consumer repository through normal `node_mo
 
 ### Cockpit plugin source
 
-A package's browser plugin keeps `src/extensions/web.ts` as its composition entry and groups implementation by responsibility: `lib/` for pure calculations, `api/` for browser transports, `stores/` for reactive state and channel reducers, `hooks/` for React subscriptions and effects, and `components/` for rendering. Imports point inward in that order. Shared wire contracts stay in `src/types/`, while server controllers stay outside the browser tree. Omit empty folders and keep state-specific types beside the store that owns them.
+A package's browser plugin is generated from named routes under `src/extensions/**/(frontend)`. Tabs, channels, settings, fills, actions, stores, lifecycle hooks, and other presentation surfaces each directly default-export one typed `define*` declaration. Browser implementation lives in private `_components` or `_lib` folders beside its route, or in `src/web` when it is shared across frontend surfaces. Shared wire contracts stay in `src/types`. Browser code never imports backend routes.
 
 ## Runtime ownership
 
@@ -184,13 +184,15 @@ Data crossing a child boundary uses explicit request, projection, and intercom c
 
 ## Contributor contract
 
-A standard feature declares one or more direct entries: `definePiExtension` for interactive Pi, `defineServerPlugin` for headless server scopes, and `defineWebPlugin` for presentation. A package advertises its built server facet and explicit `global`, `workspace`, or `session` scopes through `package.json` `doompiServer`. Packages with public typed methods also publish their generated API-contract entry there.
+A standard feature declares contributions through the routed tree described in [Extension layout](extension-layout.md). `root.cli.ts` and `root.server.ts` construct scope-owned state, services, startup work, and lifecycle. Named route files own individual tools, commands, hooks, APIs, channels, methods, providers, resources, shortcuts, and frontend contributions. The build generates `definePiExtension`, `defineServerPlugin`, and `defineWebPlugin` host entries outside `src`.
 
-Pi and server helpers own Cordis initialization, registration, readiness, rollback, and disposal. Server facets must use the object plugin form so their dependencies and completion belong to one observable fiber. Typed per-scope factories may be async. Optional `onStart`, `onStop`, and `onDispose` hooks cover external work and final resources.
+Every scanned route directly default-exports exactly one typed `define*` declaration. It has no named exports or freeform implementation. `extra.*`, `src/tools`, `src/controllers`, and pseudo-surfaces such as `hook-optional` or `resource-catalog` are forbidden. Non-default cardinality is declared through `defineRoutedContribution(..., { cardinality: 'optional' | 'many' | 'collection' })` on the standard surface.
 
-Headless tools, commands, resources, hooks, restrictions, and activities register through the session host and are activated by the kernel. Dynamic Pi catalogs continue to use typed `snapshot()` and `subscribe(listener)` collections. Importing a public contract must not activate its provider.
+Pi and server helpers own Cordis initialization, registration, readiness, rollback, and disposal. Roots may be asynchronous when they must resolve discovery before routes read root-owned values. Optional `onStart`, `onStop`, and `onDispose` hooks cover external work and final resources. See [Extension lifecycles](lifecycles.md) for mount stages and failure policy.
 
-Reusable public APIs live in flat `src/exports` forwarding files. Tsdown builds those, direct extension entries, server facets, and API-contract entries separately. Services own logic and IO, models own mutable state, controllers own request handling, and tools consume services or models. Shared schemas, types, and constants remain in their named folders. Do not add adapters, containers, commands, or providers roots.
+Headless tools, commands, resources, hooks, restrictions, and activities register through the session host and are activated by the kernel. Dynamic Pi catalogs use typed `snapshot()` and `subscribe(listener)` collections without being converted to static arrays. Importing a public contract must not activate its provider.
+
+Reusable public APIs live in flat `src/exports` forwarding files. Services own host-neutral logic and IO, models own mutable state, and private route modules own surface-specific implementation. Shared schemas, types, and constants remain in their named folders.
 
 The DoomPi package bootstrap is interactive host infrastructure. It claims a synchronized load before awaiting and stays inert outside a synchronized repository. Headless startup instead enters through the server builder and admits only validated synchronized server bundles.
 

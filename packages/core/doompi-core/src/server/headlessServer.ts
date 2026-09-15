@@ -49,6 +49,7 @@ export interface HeadlessServerOptions {
   resumeSession?: (session: HeadlessHubSession, targetSessionId: string) => Promise<string>;
   /** Recorded sessions this server has not reopened, surfaced so a client can ask for one. */
   dormantSessions?: () => readonly OpenSessionRecord[];
+  removeDormantSession?: (record: OpenSessionRecord) => void | Promise<void>;
   reviveSession?: (record: OpenSessionRecord) => Promise<void>;
 }
 
@@ -373,6 +374,28 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       });
       return;
     }
+    // Verified browser bundles can remain active across a server upgrade. Keep
+    // their former create route working while they refresh to workspace routes.
+    if (url.pathname === '/api/sessions' && request.method === 'POST') {
+      const body = parseJson(await readBody(request));
+      if (
+        !body ||
+        typeof body !== 'object' ||
+        !('cwd' in body) ||
+        typeof body.cwd !== 'string' ||
+        !body.cwd.trim() ||
+        ('name' in body && typeof body.name !== 'string')
+      ) {
+        json(response, 400, { error: 'A session needs a working directory and an optional name.' });
+        return;
+      }
+      const created = await options.headlessHub.sessionService.create({
+        cwd: body.cwd,
+        name: 'name' in body ? String(body.name) : path.basename(body.cwd),
+      });
+      json(response, 201, { sessionId: created.sessionId });
+      return;
+    }
     const workspaceSessions = /^\/api\/workspaces\/([^/]+)\/sessions$/u.exec(url.pathname);
     if (workspaceSessions) {
       const workspaceId = decodeURIComponent(workspaceSessions[1]);
@@ -567,6 +590,14 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       return;
     }
     if (session === undefined || session.workspaceId !== workspaceId) {
+      const record = dormant().find(
+        (candidate) => candidate.sessionId === sessionId && candidate.workspaceId === workspaceId,
+      );
+      if (request.method === 'DELETE' && record !== undefined && options.removeDormantSession !== undefined) {
+        await options.removeDormantSession(record);
+        json(response, 200, { ok: true });
+        return;
+      }
       json(response, 404, { error: 'Session not found.' });
       return;
     }

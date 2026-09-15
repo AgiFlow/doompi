@@ -1,8 +1,8 @@
 import { mountPackageApi, standardExtensionScenarios } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it } from 'vitest';
 
-import { api } from '../../src/controllers/runnerLogApi';
-import { runnerExtension } from '../../src/extensions/pi';
+import { extension as runnerExtension } from '../../generated/pi';
+import { api } from '../../src/services/runnerLogApi';
 
 /**
  * The surfaces this package ships.

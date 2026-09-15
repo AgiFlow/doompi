@@ -85,7 +85,7 @@ replacement. The next session publishes a new snapshot.
 
 ## Plugin structure and lifecycle
 
-Pi and server entries live directly in `src/extensions`. HTTP request handling lives in `src/controllers`, package behavior in `src/services/{serviceName}`, and cached harness state in `src/models`. Public consumption modules remain flat under `src/exports`.
+Pi and server entries live directly in `src/extensions`. HTTP request handling lives in routed `api/` files, package behavior in `src/services/{serviceName}`, and cached harness state in `src/models`. Public consumption modules remain flat under `src/exports`.
 
 The Pi entry uses `definePiExtension` with a Config service contribution and a typed `session_start` event. The shared helper owns mounting and disposal. Config publishes its readiness coordinator synchronously, loads configuration asynchronously, and waits at the session-start barrier before later features run. Session replacement cancels the prior generation and removes its Config and MCP projection services. Help contributions follow their optional provider without restarting Config.
 

@@ -16,7 +16,7 @@ import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import minorModeServerFacet from '@agimon-ai/doompi-minor-mode/extensions/server';
 import { restoreMinorModeSelection } from '@agimon-ai/doompi-minor-mode/projection';
-import { profileServerFacet } from '@agimon-ai/doompi-profile/extensions/server';
+import profileServerFacet from '@agimon-ai/doompi-profile/extensions/server';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import {
   createAssistantMessageEventStream,

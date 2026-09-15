@@ -97,10 +97,11 @@ export function createLogViewRuntime(
 
   return {
     telemetryOptions,
-    onDispose: () => {
+    onDispose: async () => {
       active = false;
       sink = undefined;
       lastDiagnostic = undefined;
+      await metricsSource?.close?.();
     },
     services: [
       (cordis: Context) => {

@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
 import { describe, expect, it, vi } from 'vitest';
 
-import { VoiceMediaBroker } from '../../../src/controllers/clientMediaApi';
-import { createVoiceServer } from '../../../src/controllers/voiceServer';
+import { VoiceMediaBroker } from '../../../src/services/clientMediaApi';
+import { createVoiceServer } from '../../../src/services/voiceServer';
 
 describe('native Voice session', () => {
   it('exposes status and controls without terminal adapters or false active tools', async () => {
@@ -31,6 +31,12 @@ describe('native Voice session', () => {
       clientConnectWaitMs: 0,
     });
     const facet = createVoiceServer(host, broker, home);
+    expect(facet.tools?.map(({ name }) => name)).toEqual([
+      'describe_voice_tools',
+      'use_voice_tools',
+      'narrate',
+      'transfer_voice',
+    ]);
     const api = facet.api![0]!.start({} as never);
     try {
       const response = await api.fetch(new Request('http://voice/status'));

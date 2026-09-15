@@ -1,7 +1,7 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
 import { LaunchRunnerDialog } from '../../src/web/components/LaunchRunnerDialog';
 import { RunnersActivitySection } from '../../src/web/components/RunnersActivitySection';
 import { RunnerShellPanel, runnerShellTab } from '../../src/web/components/RunnerShellPanel';
@@ -41,10 +41,11 @@ describe('the runners group tab', () => {
     expect(group?.transientTab?.().id).toBe('runner-runs');
   });
 
-  it('keeps the section under the same name, so the dock still renders it inside the group', () => {
+  it('keeps the fill under the same name, so the dock still renders it inside the group', () => {
     const group = webPlugin.activityGroups?.find((entry) => entry.name === 'runners');
+    const fill = webPlugin.fills?.find((entry) => entry.slot === 'activity.runners');
 
-    expect(webPlugin.activitySections?.map((section) => section.id)).toContain(group?.name);
+    expect(fill?.id).toBe(group?.name);
   });
 });
 

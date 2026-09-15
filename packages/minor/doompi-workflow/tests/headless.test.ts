@@ -22,7 +22,7 @@ import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
 describe('doom-workflow headless entry', () => {
   it('loads the sole standard Pi entry without the optional UI provider', async () => {
     vi.resetModules();
-    const standard = await import('../src/extensions/pi');
+    const standard = await import('../generated/pi');
     // A host with no terminal is also a host with no doompi-ui on its module
     // path, and the entry has to survive both at once.
     const host = createPiTestHost({ hasUI: false, mode: 'rpc' });

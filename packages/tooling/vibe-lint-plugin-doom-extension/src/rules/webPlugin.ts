@@ -22,7 +22,8 @@ const PACKAGE_MANIFEST_NAME = 'package.json';
 export const WEB_ROOT = 'src/web';
 /** The remaining raw hub sender is migrated after the Author pilot. */
 const LEGACY_HUB_SENDERS = new Set(['@agimon-ai/doompi-git']);
-const WEB_TSCONFIG = 'tsconfig.json';
+const LEGACY_WEB_TSCONFIG = 'tsconfig.json';
+const ROUTED_WEB_TSCONFIG = 'tsconfig.web.json';
 const TYPES_ROOT = 'src/types';
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);
 const CONTRACTS_PACKAGE = '@agimon-ai/doompi-core';
@@ -445,29 +446,44 @@ export const webPluginManifest: RuleDefinition = {
         problems.push(`'${id}' registrationOrder must be a non-negative integer when present`);
       }
       const client = normalizeEntry(block.client);
-      if (client !== './src/extensions/web.ts') {
-        problems.push(`'${id}' client must be ./src/extensions/web.ts`);
+      // Two spellings while packages migrate: a hand-written source entry the
+      // cockpit compiles itself, or the browser bundle a folder-routed package
+      // builds for it.
+      const clients = ['./src/extensions/web.ts', './dist/extensions/web.mjs'];
+      const bundled = client === './dist/extensions/web.mjs';
+      if (client === null || !clients.includes(client)) {
+        problems.push(`'${id}' client must be one of ${clients.join(' or ')}`);
       } else {
-        if (!fs.existsSync(path.join(configRoot, client))) problems.push(`'${id}' client '${client}' does not exist`);
+        // A routed bundle does not exist in a clean checkout. Its generated source
+        // and final artifact are created by the package build, after preflight.
+        if (!bundled && !fs.existsSync(path.join(configRoot, client)))
+          problems.push(`'${id}' client '${client}' does not exist`);
         if (!isPublished(files, stripDot(client)))
           problems.push(`'${id}' client '${client}' is not in the files allowlist`);
-        for (const dependency of unpublishedBrowserDependencies(configRoot, client, files))
-          problems.push(`'${id}' browser entry imports '${dependency}', which is not in the files allowlist`);
+        if (!bundled) {
+          for (const dependency of unpublishedBrowserDependencies(configRoot, client, files))
+            problems.push(`'${id}' browser entry imports '${dependency}', which is not in the files allowlist`);
+        }
       }
-      // Keyed off the root the package actually has, not the client path: the
-      // client may be a re-export from src/exports, which sits in neither root.
       const webRoot = existingWebRoot(configRoot);
-      if (webRoot !== undefined && !fs.existsSync(path.join(configRoot, webRoot, WEB_TSCONFIG))) {
-        problems.push(`'${id}' has no ${webRoot}/${WEB_TSCONFIG}, so its web entry is never typechecked`);
+      const webTsconfig = bundled
+        ? ROUTED_WEB_TSCONFIG
+        : webRoot === undefined
+          ? undefined
+          : `${webRoot}/${LEGACY_WEB_TSCONFIG}`;
+      if (webTsconfig !== undefined && !fs.existsSync(path.join(configRoot, webTsconfig))) {
+        problems.push(`'${id}' has no ${webTsconfig}, so its web entry is never typechecked`);
       }
       if (block.hub !== undefined) {
         problems.push(`'${id}' must not declare doompiWeb.hub; register channels and APIs through doompiServer`);
       }
     }
     const imports = webImports(configRoot);
-    for (const typeFile of [...imports.typeFiles].sort()) {
-      if (!isPublished(files, typeFile))
-        problems.push(`${WEB_ROOT}/ imports '${typeFile}', which is not in the files allowlist`);
+    if (blocks.some((block) => normalizeEntry(block.client) !== './dist/extensions/web.mjs')) {
+      for (const typeFile of [...imports.typeFiles].sort()) {
+        if (!isPublished(files, typeFile))
+          problems.push(`${WEB_ROOT}/ imports '${typeFile}', which is not in the files allowlist`);
+      }
     }
     if (!hasBrowserRuntime(manifest, CONTRACTS_PACKAGE)) {
       problems.push(`${CONTRACTS_PACKAGE} must be a dependency: the synced bundle imports it at runtime`);

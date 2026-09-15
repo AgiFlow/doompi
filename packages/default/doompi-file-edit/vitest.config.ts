@@ -18,7 +18,7 @@ export default defineConfig({
         'node_modules/',
         'dist/',
         'tests/',
-        'src/controllers/fileEditRuntime.ts',
+        'src/services/fileEditRuntime.ts',
         '**/*.d.ts',
         '**/*.config.*',
         '**/coverage/**',

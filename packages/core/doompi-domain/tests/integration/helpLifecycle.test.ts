@@ -3,7 +3,7 @@ import { DOOM_HELP_SERVICE, type DoomHelpContribution, type DoomHelpService } fr
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { domainsExtension } from '../../src/extensions/pi';
+import { extension as domainsExtension } from '../../generated/pi';
 import type { DomainTelemetry } from '../../src/types/telemetry';
 
 const EXPECTED_DESCRIPTION =
@@ -65,7 +65,9 @@ describe('Domain Help contribution lifecycle', () => {
 
     expect(contributions[0]).toEqual({
       source: '@agimon-ai/doompi-domain',
-      moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
+      moduleUrl: expect.stringMatching(
+        /extensions\/workspaces\/sessions\/\(backend\)\/resource\/doompiAuthorDomain\.cli\.ts$/u,
+      ),
       skills: [{ name: 'doompi-author-domain', description: EXPECTED_DESCRIPTION }],
     });
 

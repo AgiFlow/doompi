@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { TokenStore } from '@agimon-ai/mcp-proxy';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { mcpHubApi } from '../src/controllers/mcpHubApi';
+import { mcpHubApi } from '../src/services/mcpHubApi';
 import { McpSettingsManager } from '../src/services/mcpSettingsManager';
 
 const temporaryDirectories: string[] = [];

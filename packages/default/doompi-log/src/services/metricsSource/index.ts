@@ -1,12 +1,11 @@
 /**
  * Historical metrics access for the `SPC h l` overlay.
  *
- * Two transports, in order: the running sink's HTTP API, then the installed
- * CLI as a subprocess. The sink daemon is long-lived and often lags the
- * installed package, so a daemon that rejects newer query parameters is treated
- * as unavailable rather than fatal. The reader exported by log-sink-mcp is
- * deliberately not used in-process: better-sqlite3 is synchronous and a
- * one-day window blocks for seconds, which would freeze the TUI.
+ * Two transports, in order: the running sink's HTTP API, then a worker-backed
+ * database reader. The sink daemon is long-lived and often lags the installed
+ * package, so a daemon that rejects newer query parameters is treated as
+ * unavailable rather than fatal. SQLite queries run in the package worker so a
+ * one-day window cannot freeze the TUI.
  *
  * Both transports resolve the sink instance from the same identity the Pi
  * telemetry extension writes under. Without it log-sink falls back to
@@ -14,20 +13,17 @@
  * would land on the local instance while the writer exported to the global one
  * and the panel would report an empty history that no session ever filled.
  */
-import { execFile } from 'node:child_process';
-import { createRequire } from 'node:module';
-import path from 'node:path';
-
-import type { LogMetricsReport } from '@agimon-ai/log-sink-mcp';
-import { resolveLogSinkInstance, resolveLogSinkPort } from '@agimon-ai/log-sink-mcp';
+import {
+  createAsyncLogMetricsReader,
+  type AsyncLogMetricsReader,
+  type LogMetricsReport,
+  resolveLogSinkInstance,
+  resolveLogSinkPort,
+} from '@agimon-ai/log-sink-mcp';
 
 import type { MetricsInstance, MetricsQueryParams, MetricsSource, MetricsTransport } from '../../types/metricsSource';
 
-const PACKAGE_NAME = '@agimon-ai/log-sink-mcp';
 const HTTP_TIMEOUT_MS = 5000;
-const CLI_TIMEOUT_MS = 30000;
-/** A day of dev telemetry is already ~140k records; keep the payload bounded. */
-const MAX_CLI_BUFFER = 32 * 1024 * 1024;
 /**
  * The overlay ranks one tool, but a page pairing tool calls against failure
  * counts needs a denominator for every tool that failed, so callers ask.
@@ -50,34 +46,17 @@ export interface MetricsSourceOptions {
   /** Identity the sink is registered under; must match the telemetry writer's. */
   packageName?: string;
   serviceName?: string;
-  /** Overrides transport discovery in tests. */
+  /** Overrides HTTP transport discovery in tests. */
   fetchImpl?: typeof fetch;
-  cliRunner?: (params: MetricsQueryParams) => Promise<LogMetricsReport>;
+  /** Overrides the worker-backed reader in tests. */
+  workerReader?: Pick<AsyncLogMetricsReader, 'getMetrics' | 'close'>;
 }
 
-function cliEntryPoint(): string {
-  const require = createRequire(import.meta.url);
-  // The published bin is CJS; the ESM build sits beside it and starts faster.
-  const packageJson = require.resolve(`${PACKAGE_NAME}/package.json`);
-  return path.join(path.dirname(packageJson), 'dist', 'cli.mjs');
-}
-
-/**
- * The sink names these the same way on the wire and on the command line, apart
- * from the case convention, so the two transports stay in step.
- */
 const FILTER_QUERY_KEYS = {
   sessionId: 'sessionId',
   agentName: 'agentName',
   model: 'model',
   provider: 'provider',
-} as const;
-
-const FILTER_CLI_FLAGS = {
-  sessionId: '--session-id',
-  agentName: '--agent-name',
-  model: '--model',
-  provider: '--provider',
 } as const;
 
 function filterEntries(params: MetricsQueryParams): [keyof typeof FILTER_QUERY_KEYS, string][] {
@@ -118,48 +97,6 @@ async function queryHttp(
 }
 
 /**
- * The subprocess resolves an instance of its own from the inherited cwd and
- * environment, so the database is passed explicitly rather than left to agree
- * with this process by coincidence.
- */
-function runCli(params: MetricsQueryParams, dbPath: string | undefined): Promise<LogMetricsReport> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      process.execPath,
-      [
-        cliEntryPoint(),
-        'logs',
-        'metrics',
-        '--group-by',
-        params.groupBy,
-        '--period',
-        params.period,
-        '--sort',
-        TOKEN_SORT,
-        '--limit',
-        String(params.limit),
-        '--tool-limit',
-        String(params.toolLimit ?? DEFAULT_TOOL_LIMIT),
-        ...filterEntries(params).flatMap(([key, value]) => [FILTER_CLI_FLAGS[key], value]),
-        ...(dbPath === undefined ? [] : ['--db-path', dbPath]),
-      ],
-      { timeout: CLI_TIMEOUT_MS, maxBuffer: MAX_CLI_BUFFER },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(new Error(stderr.trim() || error.message));
-          return;
-        }
-        try {
-          resolve(JSON.parse(stdout) as LogMetricsReport);
-        } catch {
-          reject(new Error('metrics CLI returned unparsable output'));
-        }
-      },
-    );
-  });
-}
-
-/**
  * A malformed `.logsink.yaml` must not take the overlay down with it. Both
  * transports still run when resolution fails; they fall back to log-sink's own
  * resolution and the panel reports an unknown instance.
@@ -188,7 +125,7 @@ export function createMetricsSource(options: MetricsSourceOptions = {}): Metrics
   let transport: MetricsTransport | undefined;
   let endpoint: string | undefined | null;
   const instance = resolveInstance(identity);
-  const cliRunner = options.cliRunner ?? ((params: MetricsQueryParams) => runCli(params, instance?.dbPath));
+  let workerReader = options.workerReader;
 
   const resolveEndpoint = async (): Promise<string | undefined> => {
     if (endpoint !== undefined) return endpoint ?? undefined;
@@ -212,14 +149,26 @@ export function createMetricsSource(options: MetricsSourceOptions = {}): Metrics
           transport = 'http';
           return report;
         } catch {
-          // A stale or unhealthy daemon must not hide data the CLI can still read.
+          // A stale or unhealthy daemon must not hide data the worker can still read.
           endpoint = null;
         }
       }
 
-      const report = await cliRunner(params);
-      transport = 'cli';
+      workerReader ??= createAsyncLogMetricsReader(
+        instance === undefined ? { cwd: options.cwd } : { dbPath: instance.dbPath },
+      );
+      const report = await workerReader.getMetrics(params.filter, {
+        groupBy: params.groupBy,
+        period: params.period,
+        sort: TOKEN_SORT,
+        limit: params.limit,
+        toolLimit: params.toolLimit ?? DEFAULT_TOOL_LIMIT,
+      });
+      transport = 'worker';
       return report;
+    },
+    async close() {
+      await workerReader?.close();
     },
   };
 }

@@ -10,7 +10,7 @@ import type { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
-import { profileExtension } from '../../src/extensions/pi';
+import { extension as profileExtension } from '../../generated/pi';
 import type { ProfileTelemetry } from '../../src/types/telemetry';
 import { bindStubCoordinator } from '../helpers/coordinator';
 
@@ -125,7 +125,9 @@ describe('profile Pi factory', () => {
     expect(firstService.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-profile',
-        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
+        moduleUrl: expect.stringMatching(
+          /extensions\/workspaces\/sessions\/\(backend\)\/resource\/doompiAuthorProfile\.cli\.ts$/u,
+        ),
         skills: [
           {
             name: 'doompi-author-profile',

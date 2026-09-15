@@ -23,7 +23,7 @@ describe('owned HTTP package authoring', () => {
       const manifest = JSON.parse(fs.readFileSync(new URL(`${directory}/package.json`, repositoryRoot), 'utf8'));
       expect(manifest.doompiApi, directory).toBeUndefined();
       expect(manifest.doompiServer, directory).toMatchObject({
-        entry: './src/extensions/server.ts',
+        entry: directory === 'packages/core/doompi' ? './src/extensions/server.ts' : './generated/server.ts',
         dist: './dist/extensions/server.mjs',
       });
     }

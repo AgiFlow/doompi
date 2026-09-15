@@ -1,7 +1,7 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
 import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../src/types/goalView';
 import { EditGoalDialog } from '../../src/web/components/EditGoalDialog';
 import { GoalActivitySection } from '../../src/web/components/GoalActivitySection';
@@ -95,11 +95,11 @@ describe('the goal dialogs', () => {
 });
 
 describe('the plugin declaration', () => {
-  it('gives the group a section of the same name, which is what puts it inside it', () => {
+  it('fills the activity slot matching the group name', () => {
     const group = webPlugin.activityGroups?.[0];
 
     expect(group).toMatchObject({ name: 'goal', keys: 'g e', statusKey: GOAL_VIEW_STATUS_KEY });
-    expect(webPlugin.activitySections?.map((section) => section.id)).toEqual([group?.name]);
+    expect(webPlugin.fills?.map((fill) => fill.slot)).toEqual([`activity.${group?.name}`]);
   });
 
   it('keeps durable goal context out of the background-work state', () => {

@@ -11,7 +11,7 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createMajorModeCommand } from '../../src/controllers/majorModeCommand';
+import { createMajorModeCommand } from '../../src/services/majorModeCommand';
 import type { MajorModeView } from '../../src/types/majorMode';
 import type { MajorModeTelemetry } from '../../src/types/telemetry';
 import { bindStubCoordinator } from '../helpers/coordinator';

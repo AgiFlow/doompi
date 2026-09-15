@@ -10,7 +10,7 @@ import {
   AUTHOR_DOCUMENT_OPEN_PATH,
   AUTHOR_DOCUMENT_SERIALIZE_PATH,
   createAuthorDocumentApi,
-} from '../../src/controllers/authorDocumentApi';
+} from '../../src/extensions/workspaces/sessions/(backend)/api/_lib/authorDocumentApi';
 import { parseCsv, preflightCsv, serializeCsv } from '../../src/services/structuredDocuments/csv';
 import {
   parseMarkdownSlides,

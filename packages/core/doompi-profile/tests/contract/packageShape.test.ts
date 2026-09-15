@@ -40,15 +40,7 @@ describe('doompi-profile package contract', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.publishConfig).toEqual({ access: 'public' });
     expect(manifest.files).toEqual(
-      expect.arrayContaining([
-        'dist',
-        'src/web',
-        'src/extensions/web.ts',
-        'llms.txt',
-        'README.md',
-        'src/prompts',
-        'package.json',
-      ]),
+      expect.arrayContaining(['dist', 'llms.txt', 'README.md', 'src/prompts', 'package.json']),
     );
     expect(manifest.keywords).toEqual([
       'agent-persona',
@@ -70,16 +62,19 @@ describe('doompi-profile package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
+      './api-contracts',
       './extensions/persona',
       './extensions/pi',
       './extensions/server',
+      './extensions/web',
       './package.json',
     ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).not.toContain('./extensions/doom');
-    for (const subpath of ['.', './extensions/persona', './extensions/pi', './extensions/server']) {
+    for (const subpath of ['.', './api-contracts', './extensions/persona', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
     }
+    expect(conditions(exportsMap['./extensions/web'])).toEqual(['import']);
     // Only the command entry is discovered by a bare package name. Detached
     // children load ./extensions/persona by explicit subpath instead, because
     // they have no transition coordinator to run a switch through.
@@ -92,14 +87,17 @@ describe('doompi-profile package contract', () => {
     expect(manifest.doompiWeb).toEqual({
       pluginId: 'profile',
       channels: [],
-      client: './src/extensions/web.ts',
+      client: './dist/extensions/web.mjs',
       scopes: ['session'],
     });
-    const client = await readFile(path.join(packageDirectory, 'src/extensions/web.ts'), 'utf8');
+    const client = await readFile(path.join(packageDirectory, 'generated/web.ts'), 'utf8');
+    const contribution = await readFile(
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(frontend)/selection-axis/profile.ts'),
+      'utf8',
+    );
     expect(client).toContain('defineWebPlugin');
-    const entry = client;
-    expect(entry).toContain('defineWebPlugin');
-    expect(entry).toContain("statusKey: 'doom-profile'");
+    expect(client).toContain('selectionAxes');
+    expect(contribution).toContain("statusKey: 'doom-profile'");
   });
 
   it('uses the shared core package for runtime and web capabilities', async () => {
@@ -108,18 +106,25 @@ describe('doompi-profile package contract', () => {
   });
 
   it('routes both Pi entries through a default-exported factory', async () => {
-    const commandEntry = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
-    const personaEntry = await readFile(path.join(packageDirectory, 'src/extensions/persona.ts'), 'utf8');
-    const factory = await readFile(path.join(packageDirectory, 'src/controllers/profileRuntime.ts'), 'utf8');
+    const commandEntry = await readFile(path.join(packageDirectory, 'generated/pi.ts'), 'utf8');
+    const personaEntry = await readFile(path.join(packageDirectory, 'src/services/personaExtension/index.ts'), 'utf8');
+    const factory = await readFile(
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/_lib/profileRuntime.ts'),
+      'utf8',
+    );
 
     expect(commandEntry).toContain('definePiExtension');
-    expect(commandEntry).toContain('export default profileExtension');
+    expect(commandEntry).toContain('export default extension');
     expect(personaEntry).toContain('export default personaExtension');
     expect(factory).toContain('createProfileCommand');
     expect(factory).toContain('services: [bindRuntime, bindVoice]');
     expect(factory).toContain('events:');
-    expect(commandEntry).toContain("name: 'doompi-author-profile'");
-    expect(commandEntry).toContain('moduleUrl: import.meta.url');
+    const routedFactory = await readFile(
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/resource/doompiAuthorProfile.cli.ts'),
+      'utf8',
+    );
+    expect(routedFactory).toContain("name: 'doompi-author-profile'");
+    expect(routedFactory).toContain('moduleUrl: import.meta.url');
     expect(factory).not.toContain('new Context()');
   });
 

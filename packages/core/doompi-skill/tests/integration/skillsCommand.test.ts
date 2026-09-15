@@ -18,7 +18,7 @@ import type {
 } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import skillsExtension from '../../src/extensions/pi';
+import skillsExtension from '../../generated/pi';
 import { skillInvocation } from '../../src/services/skillText';
 import type { SkillsOverlayOptions, SkillsOverlayResult } from '../../src/tui/skillsOverlay';
 import { SKILLS_LEADER_CONTRIBUTION } from '../../src/types/skills';

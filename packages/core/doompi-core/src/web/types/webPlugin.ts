@@ -571,6 +571,30 @@ export interface GlobalStore<T> {
   reset(): void;
 }
 
+/** One record per workspace id; a missing key means the workspace has reported nothing. */
+export type WorkspaceRecords<T> = Partial<Record<string, T>>;
+
+/**
+ * Per-workspace plugin state, for a surface that outlives any one session but
+ * is not page-wide: a repository picker, a workspace settings page, a cached
+ * branch list. It takes the shape SessionStore gives per session, minus the
+ * channel helper, because the hub addresses channel frames to a session id and
+ * never to a workspace.
+ */
+export interface WorkspaceStore<T> {
+  readonly store: Store<WorkspaceRecords<T>>;
+  /**
+   * The workspace's record, or the one shared empty record for null and
+   * unknown workspaces: a stable reference, so a useStore selector over it
+   * never re-renders on an unchanged workspace.
+   */
+  select(state: WorkspaceRecords<T>, workspaceId: string | null): T;
+  /** Replaces the workspace's record; an updater returning the current record publishes nothing. */
+  update(workspaceId: string, updater: (current: T) => T): void;
+  drop(workspaceId: string): void;
+  reset(): void;
+}
+
 /**
  * One session-scoped data channel: the hub pushes ChannelFrame payloads whose
  * frame type equals `channel`; parse is the validation gate at the boundary

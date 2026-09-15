@@ -16,20 +16,19 @@ import { hasPluginHelperCall } from './pluginWiring.js';
 const CANONICAL_ROOTS = new Set([
   'bin',
   'constants',
-  'controllers',
   'exports',
   'extensions',
   'models',
   'schemas',
   'services',
-  'tools',
   'tui',
   'types',
   'web',
 ]);
 const RESOURCE_ROOTS = new Set(['prompts']);
-const TRANSITIONAL_ROOTS = new Set<string>();
 const FORBIDDEN_ROOTS = new Set([
+  'controllers',
+  'tools',
   'adapters',
   'commands',
   'container',
@@ -63,41 +62,25 @@ const EXTERNAL_IMPLEMENTATION_ROOTS = [
   'container',
   'containers',
   'providers',
-  'controllers',
   'exports',
   'extensions',
-  'tools',
   'tui',
 ];
 const ALLOWED_ROOT_DEPENDENCIES: Readonly<Record<string, ReadonlySet<string>>> = {
   constants: new Set(['constants']),
-  controllers: new Set(['constants', 'controllers', 'models', 'schemas', 'services', 'types']),
   models: new Set(['constants', 'models', 'schemas', 'types']),
-  exports: new Set(['constants', 'controllers', 'models', 'schemas', 'services', 'tools', 'tui', 'types']),
-  extensions: new Set([
-    'extensions',
-    'constants',
-    'controllers',
-    'models',
-    'schemas',
-    'services',
-    'tools',
-    'tui',
-    'types',
-    'web',
-  ]),
+  exports: new Set(['constants', 'models', 'schemas', 'services', 'tui', 'types']),
+  extensions: new Set(['extensions', 'constants', 'models', 'schemas', 'services', 'tui', 'types', 'web']),
   schemas: new Set(['constants', 'schemas', 'types']),
   services: new Set(['constants', 'models', 'schemas', 'services', 'types']),
-  tools: new Set(['constants', 'models', 'schemas', 'services', 'tools', 'types']),
   tui: new Set(['constants', 'models', 'schemas', 'services', 'tui', 'types']),
   types: new Set(['constants', 'types']),
   web: new Set(['constants', 'types', 'web']),
-  bin: new Set(['bin', 'constants', 'controllers', 'models', 'schemas', 'services', 'tools', 'tui', 'types', 'web']),
+  bin: new Set(['bin', 'constants', 'models', 'schemas', 'services', 'tui', 'types', 'web']),
 };
 
 const DEFAULT_COMPOSITION_PACKAGES = ['@agimon-ai/doompi'];
 const DEFAULT_COMPOSITION_PATHS = [
-  'src/controllers/composer.ts',
   'src/services/extensionCompiler/index.ts',
   'src/services/runtimeBundle/index.ts',
   'src/services/syncState/index.ts',
@@ -133,6 +116,7 @@ const DEFAULT_FIXED_CORE_PACKAGES = [
 const DEFAULT_PACKAGE_LAYER_ORDER = ['contracts', 'platform', 'integration', 'extension', 'host'];
 const DEFAULT_PACKAGE_LAYER_FALLBACK = 'extension';
 const DEFAULT_PACKAGE_LAYERS: Readonly<Record<string, string>> = {
+  '@agimon-ai/doompi-build': 'contracts',
   '@agimon-ai/doompi-core': 'contracts',
   '@agimon-ai/doompi-minor-mode': 'platform',
   '@agimon-ai/doompi-hashline': 'contracts',
@@ -1190,41 +1174,98 @@ function namedCordisFunctions(units: readonly CordisSourceUnit[]): {
 } {
   const aliasesByFile = new Map<string, Map<string, string>>();
   const recordsByName = new Map<string, CordisFunctionRecord[]>();
+  const unitPaths = new Set(units.map(({ filePath }) => path.resolve(filePath)));
+  const recordKey = (filePath: string, name: string): string => `${path.resolve(filePath)}::${name}`;
+  const importedUnit = (filePath: string, specifier: string): string | undefined => {
+    if (!specifier.startsWith('.')) return undefined;
+    const stem = path.resolve(path.dirname(filePath), specifier);
+    const candidates = [
+      stem,
+      ...[...SOURCE_EXTENSIONS].map((extension) => `${stem}${extension}`),
+      ...[...SOURCE_EXTENSIONS].map((extension) => path.join(stem, `index${extension}`)),
+    ];
+    return candidates.find((candidate) => unitPaths.has(path.resolve(candidate)));
+  };
   const addRecord = (name: string, node: ts.FunctionLikeDeclaration): void => {
     const records = recordsByName.get(name) ?? [];
     records.push({ name, node });
     recordsByName.set(name, records);
   };
+
   for (const { filePath, sourceFile } of units) {
-    const aliases = new Map<string, string>();
-    for (const statement of sourceFile.statements) {
-      if (ts.isImportDeclaration(statement) && !statement.importClause?.isTypeOnly) {
-        const bindings = statement.importClause?.namedBindings;
-        if (bindings && ts.isNamedImports(bindings)) {
-          for (const element of bindings.elements) {
-            if (!element.isTypeOnly) aliases.set(element.name.text, (element.propertyName ?? element.name).text);
-          }
+    const visit = (node: ts.Node): void => {
+      if (ts.isFunctionDeclaration(node) && node.name && node.body) {
+        addRecord(node.name.text, node);
+        addRecord(recordKey(filePath, node.name.text), node);
+        if (ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)) {
+          addRecord(recordKey(filePath, 'default'), node);
         }
       }
-    }
-    aliasesByFile.set(filePath, aliases);
-    const visit = (node: ts.Node): void => {
-      if (ts.isFunctionDeclaration(node) && node.name && node.body) addRecord(node.name.text, node);
       if (
         ts.isVariableDeclaration(node) &&
         ts.isIdentifier(node.name) &&
         node.initializer &&
-        (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
+        (ts.isArrowFunction(unwrapArchitectureExpression(node.initializer)) ||
+          ts.isFunctionExpression(unwrapArchitectureExpression(node.initializer)))
       ) {
-        addRecord(node.name.text, node.initializer);
+        const initializer = unwrapArchitectureExpression(node.initializer);
+        addRecord(node.name.text, initializer as ts.ArrowFunction | ts.FunctionExpression);
+        addRecord(recordKey(filePath, node.name.text), initializer as ts.ArrowFunction | ts.FunctionExpression);
       }
       if (ts.isClassDeclaration(node) && node.name) {
         const constructor = node.members.find(ts.isConstructorDeclaration);
-        if (constructor) addRecord(node.name.text, constructor);
+        if (constructor) {
+          addRecord(node.name.text, constructor);
+          addRecord(recordKey(filePath, node.name.text), constructor);
+        }
       }
       ts.forEachChild(node, visit);
     };
     visit(sourceFile);
+  }
+
+  for (const { filePath, sourceFile } of units) {
+    const aliases = new Map<string, string>();
+    const localKey = (name: string): string => recordKey(filePath, name);
+    for (const statement of sourceFile.statements) {
+      if (ts.isImportDeclaration(statement) && !statement.importClause?.isTypeOnly) {
+        const target = ts.isStringLiteralLike(statement.moduleSpecifier)
+          ? importedUnit(filePath, statement.moduleSpecifier.text)
+          : undefined;
+        const clause = statement.importClause;
+        if (clause?.name) aliases.set(clause.name.text, target ? recordKey(target, 'default') : 'default');
+        const bindings = clause?.namedBindings;
+        if (bindings && ts.isNamedImports(bindings)) {
+          for (const element of bindings.elements) {
+            if (element.isTypeOnly) continue;
+            const imported = (element.propertyName ?? element.name).text;
+            aliases.set(element.name.text, target ? recordKey(target, imported) : imported);
+          }
+        }
+      }
+    }
+    const visitLocals = (node: ts.Node): void => {
+      if (ts.isFunctionDeclaration(node) && node.name) aliases.set(node.name.text, localKey(node.name.text));
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+        aliases.set(node.name.text, localKey(node.name.text));
+      }
+      if (ts.isClassDeclaration(node) && node.name) aliases.set(node.name.text, localKey(node.name.text));
+      ts.forEachChild(node, visitLocals);
+    };
+    visitLocals(sourceFile);
+    aliasesByFile.set(filePath, aliases);
+
+    for (const statement of sourceFile.statements) {
+      if (!ts.isExportAssignment(statement)) continue;
+      const exported = unwrapArchitectureExpression(statement.expression);
+      if (ts.isArrowFunction(exported) || ts.isFunctionExpression(exported)) {
+        addRecord(recordKey(filePath, 'default'), exported);
+      } else if (ts.isIdentifier(exported)) {
+        for (const record of recordsByName.get(localKey(exported.text)) ?? []) {
+          addRecord(recordKey(filePath, 'default'), record.node);
+        }
+      }
+    }
   }
   return { aliasesByFile, recordsByName };
 }
@@ -1240,6 +1281,19 @@ function ownedCordisScopes(units: readonly CordisSourceUnit[]): OwnedCordisScope
     names.add(parameter.name.text);
     owned.set(callback, names);
     return names.size !== before;
+  };
+  const markMountContext = (callback: ts.FunctionLikeDeclaration): void => {
+    const parameter = callback.parameters[0];
+    if (!parameter) return;
+    const names = owned.get(callback) ?? new Set<string>();
+    if (ts.isIdentifier(parameter.name)) names.add(`${parameter.name.text}.context`);
+    if (ts.isObjectBindingPattern(parameter.name)) {
+      for (const element of parameter.name.elements) {
+        const key = element.propertyName?.getText() ?? element.name.getText();
+        if (key === 'context' && ts.isIdentifier(element.name)) names.add(element.name.text);
+      }
+    }
+    owned.set(callback, names);
   };
   const functionAncestors = (node: ts.Node): ts.FunctionLikeDeclaration[] => {
     const result: ts.FunctionLikeDeclaration[] = [];
@@ -1300,6 +1354,201 @@ function ownedCordisScopes(units: readonly CordisSourceUnit[]): OwnedCordisScope
 
   // A callback passed to Context.plugin owns the context Cordis gives it.
   for (const { filePath, sourceFile } of units) {
+    if (
+      /\/src\/extensions\/(?:[^/]+\/)*\(backend\)\/extra(?:\.(?:cli|server))?\.(?:cts|mts|ts)$/.test(
+        filePath.replaceAll('\\', '/'),
+      )
+    ) {
+      const markService = (expression: ts.Expression): void => {
+        if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) markParameter(expression, 0);
+        else if (ts.isObjectLiteralExpression(expression)) {
+          for (const property of expression.properties) {
+            if (ts.isMethodDeclaration(property) && property.name.getText() === 'apply') markParameter(property, 0);
+          }
+        } else {
+          for (const { node: target } of targetRecords(filePath, expression)) markParameter(target, 0);
+        }
+      };
+      const inspectRoutedContributions = (node: ts.Node): void => {
+        if (
+          ts.isPropertyAssignment(node) &&
+          node.name.getText(sourceFile) === 'services' &&
+          ts.isArrayLiteralExpression(node.initializer)
+        ) {
+          for (const service of node.initializer.elements) if (ts.isExpression(service)) markService(service);
+        }
+        ts.forEachChild(node, inspectRoutedContributions);
+      };
+      for (const statement of sourceFile.statements) {
+        if (!ts.isExportAssignment(statement)) continue;
+        const exported = unwrapArchitectureExpression(statement.expression);
+        if (ts.isArrowFunction(exported) || ts.isFunctionExpression(exported)) {
+          markMountContext(exported);
+          inspectRoutedContributions(exported);
+        } else {
+          for (const { node: target } of targetRecords(filePath, exported)) {
+            markMountContext(target);
+            inspectRoutedContributions(target);
+          }
+        }
+      }
+    }
+    if (
+      /\/src\/extensions\/(?:[^/]+\/)*\(backend\)\/root(?:\.(?:cli|server))?\.(?:cts|mts|ts)$/.test(
+        filePath.replaceAll('\\', '/'),
+      )
+    ) {
+      const inspected = new Set<ts.Node>();
+      const variableInitializers = (expression: ts.Expression): ts.Expression[] => {
+        if (!ts.isIdentifier(expression)) return [];
+        const initializers: ts.Expression[] = [];
+        const visit = (node: ts.Node): void => {
+          if (
+            ts.isVariableDeclaration(node) &&
+            ts.isIdentifier(node.name) &&
+            node.name.text === expression.text &&
+            node.initializer
+          ) {
+            initializers.push(node.initializer);
+          }
+          ts.forEachChild(node, visit);
+        };
+        visit(expression.getSourceFile());
+        return initializers;
+      };
+      const importedValues = (expression: ts.Expression): ts.Expression[] => {
+        if (!ts.isIdentifier(expression)) return [];
+        const alias = aliasesByFile.get(expression.getSourceFile().fileName)?.get(expression.text);
+        const separator = alias?.lastIndexOf('::') ?? -1;
+        if (!alias || separator < 0) return [];
+        const targetPath = alias.slice(0, separator);
+        const exportedName = alias.slice(separator + 2);
+        const unit = units.find((candidate) => path.resolve(candidate.filePath) === targetPath);
+        if (!unit) return [];
+        if (exportedName !== 'default') return [];
+        return unit.sourceFile.statements.flatMap((statement) =>
+          ts.isExportAssignment(statement) ? [statement.expression] : [],
+        );
+      };
+      const markService = (expression: ts.Expression): void => {
+        const service = unwrapArchitectureExpression(expression);
+        if (ts.isArrowFunction(service) || ts.isFunctionExpression(service)) markParameter(service, 0);
+        else if (ts.isObjectLiteralExpression(service)) {
+          for (const property of service.properties) {
+            if (ts.isMethodDeclaration(property) && property.name.getText() === 'apply') markParameter(property, 0);
+            if (
+              ts.isPropertyAssignment(property) &&
+              property.name.getText() === 'apply' &&
+              (ts.isArrowFunction(property.initializer) || ts.isFunctionExpression(property.initializer))
+            ) {
+              markParameter(property.initializer, 0);
+            }
+          }
+        } else {
+          for (const { node: target } of targetRecords(service.getSourceFile().fileName, service)) {
+            markParameter(target, 0);
+          }
+        }
+      };
+      const inspectFactory = (factory: ts.FunctionLikeDeclaration): void => {
+        if (inspected.has(factory) || !factory.body) return;
+        inspected.add(factory);
+        const body = ts.isExpression(factory.body) ? unwrapArchitectureExpression(factory.body) : factory.body;
+        if (ts.isExpression(body)) {
+          inspectRootValue(body);
+          return;
+        }
+        const visitReturns = (node: ts.Node): void => {
+          if (node !== body && ts.isFunctionLike(node)) return;
+          if (ts.isReturnStatement(node) && node.expression) inspectRootValue(node.expression);
+          ts.forEachChild(node, visitReturns);
+        };
+        visitReturns(body);
+      };
+      const inspectObjectServices = (declaration: ts.ObjectLiteralExpression): void => {
+        for (const property of declaration.properties) {
+          if (ts.isPropertyAssignment(property) && property.name.getText() === 'services') {
+            inspectServices(property.initializer);
+          }
+          if (ts.isSpreadAssignment(property)) inspectRootValue(property.expression);
+        }
+      };
+      const inspectPropertyServices = (expression: ts.Expression): void => {
+        const value = unwrapArchitectureExpression(expression);
+        if (inspected.has(value)) return;
+        inspected.add(value);
+        if (ts.isObjectLiteralExpression(value)) {
+          inspectObjectServices(value);
+          return;
+        }
+        for (const initializer of variableInitializers(value)) inspectPropertyServices(initializer);
+        if (ts.isCallExpression(value)) {
+          for (const { node: target } of targetRecords(value.getSourceFile().fileName, value.expression)) {
+            inspectFactory(target);
+          }
+        }
+      };
+      const inspectServices = (expression: ts.Expression): void => {
+        const services = unwrapArchitectureExpression(expression);
+        if (ts.isArrayLiteralExpression(services)) {
+          for (const element of services.elements) {
+            if (ts.isSpreadElement(element)) inspectServices(element.expression);
+            else markService(element);
+          }
+          return;
+        }
+        if (ts.isBinaryExpression(services) && services.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) {
+          inspectServices(services.left);
+          inspectServices(services.right);
+          return;
+        }
+        if (ts.isPropertyAccessExpression(services) && services.name.text === 'services') {
+          inspectPropertyServices(services.expression);
+          return;
+        }
+        for (const initializer of variableInitializers(services)) inspectServices(initializer);
+      };
+      const inspectRootValue = (expression: ts.Expression): void => {
+        const value = unwrapArchitectureExpression(expression);
+        if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) {
+          inspectFactory(value);
+          return;
+        }
+        if (ts.isObjectLiteralExpression(value)) {
+          inspectObjectServices(value);
+          return;
+        }
+        if (ts.isCallExpression(value)) {
+          const helper = ts.isIdentifier(value.expression)
+            ? (aliasesByFile.get(value.getSourceFile().fileName)?.get(value.expression.text) ?? value.expression.text)
+            : undefined;
+          if (helper === 'defineRoot') {
+            const factory = value.arguments[0];
+            if (factory) inspectRootValue(factory);
+            return;
+          }
+          for (const { node: target } of targetRecords(value.getSourceFile().fileName, value.expression)) {
+            inspectFactory(target);
+          }
+          return;
+        }
+        for (const initializer of variableInitializers(value)) inspectRootValue(initializer);
+        for (const imported of importedValues(value)) inspectRootValue(imported);
+        for (const { node: target } of targetRecords(value.getSourceFile().fileName, value)) inspectFactory(target);
+      };
+      const visitRoot = (node: ts.Node): void => {
+        if (
+          ts.isCallExpression(node) &&
+          ts.isIdentifier(node.expression) &&
+          (aliasesByFile.get(filePath)?.get(node.expression.text) ?? node.expression.text) === 'defineRoot'
+        ) {
+          const factory = node.arguments[0];
+          if (factory) inspectRootValue(factory);
+        }
+        ts.forEachChild(node, visitRoot);
+      };
+      visitRoot(sourceFile);
+    }
     const visit = (node: ts.Node): void => {
       if (
         ts.isCallExpression(node) &&
@@ -1315,19 +1564,7 @@ function ownedCordisScopes(units: readonly CordisSourceUnit[]): OwnedCordisScope
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
         const helper = aliasesByFile.get(filePath)?.get(node.expression.text) ?? node.expression.text;
         if (helper === 'definePiExtension' || helper === 'defineServerPlugin') {
-          const markHookContext = (callback: ts.FunctionLikeDeclaration): void => {
-            const parameter = callback.parameters[0];
-            if (!parameter) return;
-            const names = owned.get(callback) ?? new Set<string>();
-            if (ts.isIdentifier(parameter.name)) names.add(`${parameter.name.text}.context`);
-            if (ts.isObjectBindingPattern(parameter.name)) {
-              for (const element of parameter.name.elements) {
-                const key = element.propertyName?.getText() ?? element.name.getText();
-                if (key === 'context' && ts.isIdentifier(element.name)) names.add(element.name.text);
-              }
-            }
-            owned.set(callback, names);
-          };
+          const markHookContext = markMountContext;
           const markService = (expression: ts.Expression): void => {
             if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) markParameter(expression, 0);
             else if (ts.isObjectLiteralExpression(expression)) {
@@ -1822,13 +2059,14 @@ function publicFeatureAdapterPaths(configRoot: string): string[] {
 
   const adapters = new Set<string>();
   for (const facadeStem of facadeStems) {
-    const facadePath =
-      sourcePathForStem(path.join(configRoot, 'src', facadeStem)) ??
-      sourcePathForStem(path.join(configRoot, 'src', 'exports', facadeStem));
+    const facadePath = sourceCandidates(facadeStem)
+      .map((candidate) => sourcePathForStem(path.join(configRoot, candidate)))
+      .find((resolved) => resolved !== undefined && resolved !== null);
     if (!facadePath) continue;
     const facade = readSource(facadePath);
     if (!facade) continue;
-    if (projectPath(facadePath, configRoot)?.startsWith('src/extensions/')) {
+    const facadeRelative = projectPath(facadePath, configRoot);
+    if (facadeRelative?.startsWith('src/extensions/') || facadeRelative?.startsWith('generated/')) {
       adapters.add(facadePath);
       continue;
     }
@@ -2209,10 +2447,24 @@ function publicSourceAbiReferences(sourceFile: ts.SourceFile, packageName: strin
   return [...new Set(remaining)].sort();
 }
 
+/**
+ * Where a manifest stem's source may live.
+ *
+ * A folder-routed package has the build write its host entries to generated/,
+ * so the stem `extensions/pi` resolves to `generated/pi.ts` rather than
+ * anything under src. Both spellings are accepted while packages migrate.
+ */
+function sourceCandidates(stem: string): string[] {
+  const candidates = [`src/${stem}`, `src/exports/${stem}`];
+  const generated = stem.startsWith('extensions/') ? stem.slice('extensions/'.length) : undefined;
+  if (generated !== undefined) candidates.push(`generated/${generated}`);
+  return candidates;
+}
+
 function sourceTargetExists(configRoot: string, stem: string): boolean {
-  for (const prefix of ['src/', 'src/exports/']) {
+  for (const candidate of sourceCandidates(stem)) {
     for (const extension of SOURCE_TARGET_EXTENSIONS) {
-      if (fs.existsSync(path.join(configRoot, `${prefix}${stem}${extension}`))) return true;
+      if (fs.existsSync(path.join(configRoot, `${candidate}${extension}`))) return true;
     }
   }
   return false;
@@ -2294,7 +2546,7 @@ function sourceRootVocabularyViolations(configRoot: string): string[] {
       }
       continue;
     }
-    if (CANONICAL_ROOTS.has(entry.name) || RESOURCE_ROOTS.has(entry.name) || TRANSITIONAL_ROOTS.has(entry.name)) {
+    if (CANONICAL_ROOTS.has(entry.name) || RESOURCE_ROOTS.has(entry.name)) {
       continue;
     }
     const empty = fs.readdirSync(path.join(sourceDirectory, entry.name)).length === 0;
@@ -2465,7 +2717,12 @@ function relativeImportRoot(filePath: string, specifier: string): string | undef
 /** Host entry modules compose the package's inward-facing declarations. */
 function isCompositionAdapter(filePath: string, configRoot: string): boolean {
   const relativePath = projectPath(filePath, configRoot);
-  return relativePath === 'src/extensions/pi.ts' || relativePath === 'src/extensions/server.ts';
+  return (
+    relativePath === 'src/extensions/pi.ts' ||
+    relativePath === 'src/extensions/server.ts' ||
+    relativePath === 'generated/pi.ts' ||
+    relativePath === 'generated/server.ts'
+  );
 }
 
 export const doomFolderLayout: RuleDefinition = {
@@ -2475,13 +2732,7 @@ export const doomFolderLayout: RuleDefinition = {
   check(filePath) {
     if (!fs.existsSync(filePath)) return null;
     const root = sourceRoot(filePath);
-    if (
-      !root ||
-      root === 'index.ts' ||
-      CANONICAL_ROOTS.has(root) ||
-      RESOURCE_ROOTS.has(root) ||
-      TRANSITIONAL_ROOTS.has(root)
-    ) {
+    if (!root || root === 'index.ts' || CANONICAL_ROOTS.has(root) || RESOURCE_ROOTS.has(root)) {
       return null;
     }
     const sourceFile = readSource(filePath);
@@ -2489,7 +2740,7 @@ export const doomFolderLayout: RuleDefinition = {
     const detail = FORBIDDEN_ROOTS.has(root)
       ? `Legacy root "${root}" is forbidden.`
       : `Unknown root "${root}" is not canonical.`;
-    return `${detail} Move implementation under extensions, controllers, services, models, tools, constants, schemas, types, web, tui, or bin. Keep public re-exports under flat exports. Put Help resources under prompts.`;
+    return `${detail} Move host-neutral implementation under services, models, constants, schemas, or types. Put host-specific contributions under named routes in extensions, public re-exports under flat exports, and Help resources under prompts.`;
   },
 };
 
@@ -2500,13 +2751,7 @@ export const compatibilityWrapperOnly: RuleDefinition = {
   rationale: 'Compatibility paths may remain public temporarily without becoming a second implementation architecture.',
   check(filePath) {
     const root = sourceRoot(filePath);
-    if (
-      !root ||
-      root === 'index.ts' ||
-      CANONICAL_ROOTS.has(root) ||
-      RESOURCE_ROOTS.has(root) ||
-      TRANSITIONAL_ROOTS.has(root)
-    ) {
+    if (!root || root === 'index.ts' || CANONICAL_ROOTS.has(root) || RESOURCE_ROOTS.has(root)) {
       return null;
     }
     const sourceFile = readSource(filePath);
@@ -2552,8 +2797,9 @@ export const noInternalPublicImport: RuleDefinition = {
 
 export const doomLayerBoundary: RuleDefinition = {
   preflight: true,
-  rule: 'Extensions compose controllers, tools, services, and models through explicit inward dependencies',
-  rationale: 'A small universal dependency direction prevents host and presentation concerns from leaking into policy.',
+  rule: 'Extensions compose services and models through explicit inward dependencies',
+  rationale:
+    'Named routed surfaces own host concerns while a small universal dependency direction keeps policy host-neutral.',
   check(filePath, configRoot) {
     const root = sourceRoot(filePath);
     const allowedRoots = isCompositionAdapter(filePath, configRoot)
@@ -3115,7 +3361,7 @@ export const doomCleanArchitectureBoundary: RuleDefinition = {
   },
 };
 
-const SERVER_PLUGIN_ENTRY = 'src/extensions/server.ts';
+const SERVER_PLUGIN_ENTRIES = new Set(['src/extensions/server.ts', 'generated/server.ts']);
 
 export const doomServerFacetShape: RuleDefinition = {
   preflight: true,
@@ -3127,7 +3373,8 @@ export const doomServerFacetShape: RuleDefinition = {
     if (!fs.existsSync(filePath)) return null;
     if (relativePath === 'src/adapters/headless/facet.ts')
       return 'Remove the separate headless facet; declare contributions in defineServerPlugin.';
-    if (relativePath !== SERVER_PLUGIN_ENTRY && relativePath !== 'src/adapters/server/facet.ts') return null;
+    if (relativePath === null) return null;
+    if (!SERVER_PLUGIN_ENTRIES.has(relativePath) && relativePath !== 'src/adapters/server/facet.ts') return null;
     const source = readSource(filePath);
     if (!source) return null;
     const violations: string[] = [];

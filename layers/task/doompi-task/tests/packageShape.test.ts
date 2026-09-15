@@ -105,8 +105,13 @@ describe('doom-task package boundary', () => {
     expect(publicEntries.length).toBeGreaterThan(0);
     for (const [subpath, target] of publicEntries) {
       expect(conditionPaths(target, 'import'), subpath).toHaveLength(1);
-      expect(conditionPaths(target, 'require'), subpath).toHaveLength(1);
-      expect(conditionPaths(target, 'types'), subpath).toHaveLength(1);
+      if (subpath === './extensions/web') {
+        expect(conditionPaths(target, 'require'), subpath).toHaveLength(0);
+        expect(conditionPaths(target, 'types'), subpath).toHaveLength(0);
+      } else {
+        expect(conditionPaths(target, 'require'), subpath).toHaveLength(1);
+        expect(conditionPaths(target, 'types'), subpath).toHaveLength(1);
+      }
       for (const output of targetPaths(target)) await expectFile(output);
     }
   });
