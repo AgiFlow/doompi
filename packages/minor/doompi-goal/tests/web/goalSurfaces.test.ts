@@ -95,11 +95,11 @@ describe('the goal dialogs', () => {
 });
 
 describe('the plugin declaration', () => {
-  it('gives the group a section of the same name, which is what puts it inside it', () => {
+  it('fills the activity slot matching the group name', () => {
     const group = webPlugin.activityGroups?.[0];
 
     expect(group).toMatchObject({ name: 'goal', keys: 'g e', statusKey: GOAL_VIEW_STATUS_KEY });
-    expect(webPlugin.activitySections?.map((section) => section.id)).toEqual([group?.name]);
+    expect(webPlugin.fills?.map((fill) => fill.slot)).toEqual([`activity.${group?.name}`]);
   });
 
   it('keeps durable goal context out of the background-work state', () => {

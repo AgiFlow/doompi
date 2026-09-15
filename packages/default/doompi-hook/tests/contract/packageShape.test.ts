@@ -77,15 +77,13 @@ describe('doompi-hook package contract', () => {
     });
   });
 
-  it('routes the Pi entry through a default-exported factory on the shared Cordis host', async () => {
-    const entry = await readFile(
-      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/extra.cli.ts'),
-      'utf8',
-    );
-    expect(entry).toContain('export default');
+  it('routes the generated Pi entry through a default-exported factory on the shared Cordis host', async () => {
+    const entry = await readFile(path.join(packageDirectory, 'generated/pi.ts'), 'utf8');
+
+    expect(entry).toContain('export default extension');
     expect(entry).toContain('PiPluginContext');
-    expect(entry).toContain('createHookHandlers');
-    expect(entry).toContain('services: [binding.plugin]');
+    expect(entry).toContain("definePiExtension<ExtensionOptions>('@agimon-ai/doompi-hook'");
+    expect(entry).toContain('services: [...(scopeSession.services ?? [])]');
     expect(entry).not.toContain('new Context()');
   });
 
@@ -128,8 +126,9 @@ describe('doompi-hook package contract', () => {
   it('declares no protocol channel literals, which belong to the contracts package', async () => {
     const sources = await Promise.all(
       [
-        'src/extensions/workspaces/sessions/(backend)/extra.cli.ts',
-        'src/services/hookHandlers.ts',
+        'generated/pi.ts',
+        'src/extensions/workspaces/sessions/(backend)/resource/doompi-use-hook.cli.ts',
+        'src/services/hookHandlers/index.ts',
         'src/services/hookDocuments/index.ts',
         'src/services/hookRunner/index.ts',
         'src/exports/index.ts',

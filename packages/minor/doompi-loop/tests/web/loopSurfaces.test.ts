@@ -18,8 +18,8 @@ const payload = JSON.stringify([
   { instanceId: 'stopping-loop', label: 'Stopping loop', detail: 'every 90s', state: 'stopping' },
 ]);
 
-const loopsActivitySection = webPlugin.activitySections?.[0]?.component;
-if (!loopsActivitySection) throw new Error('Expected the Loop activity section.');
+const loopsActivityFill = webPlugin.fills?.find(({ slot }) => slot === 'activity.loops')?.component;
+if (!loopsActivityFill) throw new Error('Expected the Loop activity fill.');
 
 describe('Loop web surfaces', () => {
   it('declares the Loop mode, idle activity group, slots, and command bindings', () => {
@@ -31,10 +31,12 @@ describe('Loop web surfaces', () => {
     ]);
     expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive('s1')).toBe(false);
     expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive(null)).toBe(false);
-    expect(webPlugin.activitySections?.map(({ id }) => id)).toEqual(['loops']);
-    expect(webPlugin.slots?.map(({ slot }) => slot)).toEqual(['loop.registration', 'loop.items']);
-    expect(webPlugin.fills?.map(({ slot, id }) => ({ slot, id }))).toEqual([{ slot: 'loop.items', id: 'instances' }]);
-    expect(webPlugin.leaderBindings?.map(({ id }) => id)).toEqual(['loop.start', 'loop.list']);
+    expect(webPlugin.slots?.map(({ slot }) => slot)).toEqual(['loop.items', 'loop.registration']);
+    expect(webPlugin.fills?.map(({ slot, id }) => ({ slot, id }))).toEqual([
+      { slot: 'loop.items', id: 'instances' },
+      { slot: 'activity.loops', id: 'loops' },
+    ]);
+    expect(webPlugin.leaderBindings?.map(({ id }) => id)).toEqual(['loop.list', 'loop.start']);
   });
 
   it('renders semantic rows, lifecycle labels, and full detail text', () => {
@@ -67,9 +69,9 @@ describe('Loop web surfaces', () => {
     expect(html).toContain('loop status unavailable');
   });
 
-  it('keeps the idle activity section and both launcher surfaces available', () => {
+  it('keeps the idle activity fill and both launcher surfaces available', () => {
     const rendered = renderPlugin(
-      loopsActivitySection,
+      loopsActivityFill,
       slotPropsFixture({
         slotContent: {
           'loop.registration': createElement('span', { 'data-testid': 'loop-extension-slot' }, 'Agiflow loop'),
@@ -82,7 +84,7 @@ describe('Loop web surfaces', () => {
     expect(rendered.html).toContain('Agiflow loop');
 
     const withoutSession = renderPlugin(
-      loopsActivitySection,
+      loopsActivityFill,
       slotPropsFixture({ sessionId: null, statuses: { [LOOP_VIEW_STATUS_KEY]: payload } }).props,
     );
     expect(withoutSession.error).toBeUndefined();

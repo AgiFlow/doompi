@@ -136,7 +136,9 @@ describe('repository hook Pi lifecycle', () => {
     expect(first.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-hook',
-        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
+        moduleUrl: expect.stringMatching(
+          /extensions\/workspaces\/sessions\/\(backend\)\/resource\/doompi-use-hook\.cli\.ts$/u,
+        ),
         skills: [
           {
             name: 'doompi-author-hook',

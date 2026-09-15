@@ -68,7 +68,7 @@ function createFixture(): Fixture {
   const manager = {
     tools: vi.fn(() => []),
     toolRestrictions: vi.fn(() => []),
-    commands: vi.fn(() => []),
+    commands: vi.fn(() => [['goal', { description: 'Manage the session goal', handler: vi.fn() }]]),
     events: vi.fn(() => ({})),
     snapshot: vi.fn(() => ({ goal: undefined })),
     showFromLeader: vi.fn(),

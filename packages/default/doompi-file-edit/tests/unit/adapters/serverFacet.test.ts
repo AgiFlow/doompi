@@ -3,7 +3,6 @@ import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
 import { facet as fileEditsServerFacet } from '../../../generated/server';
-import { api } from '../../../src/services/fileEditsApi';
 import { filesChannelType } from '../../../src/types/webFiles';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
@@ -41,11 +40,12 @@ describe('fileEditsServerFacet', () => {
     expect(fileEditsServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
   });
 
-  it('registers the exact file-edits API in session scope', async () => {
+  it('registers the file-edits channel in session scope', async () => {
     const harness = hostContext('session');
     expect(typeof (await fileEditsServerFacet.apply(harness.context))).toBe('function');
-    expect(harness.registered).toEqual([api]);
+    expect(harness.registered).toEqual([]);
     expect(harness.channels).toHaveLength(1);
+    expect(harness.channels[0]?.frameType).toBe(filesChannelType);
   });
 
   it('registers the file-edits channel in hub scope', async () => {
@@ -61,7 +61,7 @@ describe('fileEditsServerFacet', () => {
     await (
       await fileEditsServerFacet.apply(session.context)
     )?.();
-    expect(session.state.disposed).toBe(2);
+    expect(session.state.disposed).toBe(1);
 
     const hub = hostContext('global');
     await (
