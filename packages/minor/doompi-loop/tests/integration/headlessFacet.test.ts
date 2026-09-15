@@ -19,7 +19,7 @@ import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { loopServerFacet } from '../../src/extensions/server';
+import { facet as loopServerFacet } from '../../generated/server';
 
 async function fixture(autoStart = false) {
   let stopStartedActivity: (() => void | Promise<void>) | undefined;

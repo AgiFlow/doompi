@@ -57,7 +57,13 @@ describe('doompi-hook package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual([
+      '.',
+      './api-contracts',
+      './extensions/pi',
+      './extensions/server',
+      './package.json',
+    ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).not.toContain('./extensions/doom');
     for (const subpath of ['.', './extensions/pi', './extensions/server']) {
@@ -65,16 +71,19 @@ describe('doompi-hook package contract', () => {
     }
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
     expect(manifest.doompiServer).toMatchObject({
-      entry: './src/extensions/server.ts',
+      entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['session'],
     });
   });
 
   it('routes the Pi entry through a default-exported factory on the shared Cordis host', async () => {
-    const entry = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
-    expect(entry).toContain('export default hookExtension');
-    expect(entry).toContain('definePiExtension');
+    const entry = await readFile(
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/extra.cli.ts'),
+      'utf8',
+    );
+    expect(entry).toContain('export default');
+    expect(entry).toContain('PiPluginContext');
     expect(entry).toContain('createHookHandlers');
     expect(entry).toContain('services: [binding.plugin]');
     expect(entry).not.toContain('new Context()');
@@ -119,7 +128,7 @@ describe('doompi-hook package contract', () => {
   it('declares no protocol channel literals, which belong to the contracts package', async () => {
     const sources = await Promise.all(
       [
-        'src/extensions/pi.ts',
+        'src/extensions/workspaces/sessions/(backend)/extra.cli.ts',
         'src/controllers/hookHandlers.ts',
         'src/services/hookDocuments/index.ts',
         'src/services/hookRunner/index.ts',

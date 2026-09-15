@@ -2,8 +2,8 @@ import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
+import { facet as workflowServerFacet } from '../../../generated/server';
 import { api } from '../../../src/controllers/workflowHubApi';
-import { workflowServerFacet } from '../../../src/extensions/server';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 

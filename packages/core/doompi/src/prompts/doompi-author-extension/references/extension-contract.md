@@ -58,49 +58,49 @@ Use the canonical source vocabulary and omit unused folders:
 ```text
 src/
 |-- constants/   Constant data
-|-- types/       Shared types
+|-- types/       Shared browser-safe types
 |-- schemas/     Runtime validation
 |-- models/      Mutable state
 |-- services/    Logic, including filesystem, process, and network operations
 |   `-- review/  index.ts implementation, type.ts service ports
 |-- controllers/ Request and command handlers using services and models
-|-- tools/       Typed tool declarations using services and models
-|-- extensions/  Direct pi.ts, server.ts, and web.ts host composition
-|-- web/         Browser presentation when needed
-|-- tui/         Terminal presentation when needed
+|-- tools/       Reusable typed tool declarations
+|-- extensions/  Routed host contributions by scope, side, surface, and filename
+|-- tui/         Shared terminal presentation when needed
 |-- prompts/     Published package-owned Help prompts
 `-- exports/     Flat public forwarding files, reusable APIs only
 ```
+
+Browser-only implementation details should live in `_components` or `_lib` beside their routed frontend contribution. These private folders are not scanned. Use `src/types`, `src/constants`, and `src/schemas` only for code intentionally shared across sides.
 
 Omit unused folders. There are no adapters, container, commands, or providers roots. Services may perform IO and provide Cordis services, but host bootstrapping and native registration belong to the extension helpers. Imports point from extensions to controllers/tools to services/models, then schemas/types/constants. Use extensionless source imports and omit `/index`.
 
 ## Plugin declarations and lifecycle
 
-The helper joins the shared Cordis host and owns registration and teardown. A Pi entry composes typed declarations:
+The routed file exports one contribution. Its path supplies the scope, host side, surface, and identity:
 
 ```ts
-import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';
-import { createReviewCommand } from '../controllers/reviewCommand';
-import { createReviewService } from '../services/review';
+// src/extensions/workspaces/sessions/(backend)/command/review.ts
+import { defineCommand } from '@agimon-ai/doompi-core/extension-file';
 
-export const reviewExtension = definePiExtension('@example/doompi-review', () => {
-  const service = createReviewService();
-  return {
-    commands: [createReviewCommand(service)],
-    resources: [
-      {
-        source: '@example/doompi-review',
-        moduleUrl: import.meta.url,
-        skills: [{ name: 'doompi-use-review', description: 'Configure and use the review extension.' }],
-      },
-    ],
-  };
-});
+import { createReviewCommand } from '../../../../../controllers/reviewCommand';
+import { createReviewService } from '../../../../../services/review';
 
-export default reviewExtension;
+export default defineCommand(() => createReviewCommand(createReviewService()));
 ```
 
-Controllers use `defineCommand` for portable commands; tools use `defineTool` for portable tools or `definePiTool` for native Pi capabilities. Server plugins declare a `name` and explicit `global`, `workspace`, and `session` scopes. Each scope is a contribution object or typed factory, and exposes `api`, `methods`, or `channels`; session scope also exposes agent capabilities. A `doompiServer` manifest points directly to `./src/extensions/server.ts`. Browser plugins similarly live directly in `./src/extensions/web.ts`.
+Use `defineCommand` for portable commands, `defineTool` for portable tools, `definePiTool` for native Pi capabilities, and the matching typed helper for every other surface. The generated server facet and browser plugin group routed declarations by scope. Use an `extra.<target>.ts` escape hatch only when a legacy contribution object cannot be represented without changing behavior.
+
+The package build is convention-driven:
+
+```ts
+import { doompiExtension } from '@agimon-ai/doompi-build/tsdown';
+import { defineConfig } from 'tsdown';
+
+export default defineConfig(doompiExtension());
+```
+
+Generated `pi.ts`, `server.ts`, and `web.ts` entries live under ignored `generated/`. The build publishes Node host entries and a browser bundle at `dist/extensions/web.mjs`, then synchronizes host metadata in `package.json`. A frontend package uses a root `tsconfig.web.json`; never publish or import a hand-written `src/extensions/web.ts`.
 
 Factories may return a promise. The helper waits for the declaration, mounts service contributions, registers capabilities, and awaits `onStart`. Shutdown aborts the instance signal, waits for startup to settle, awaits `onStop`, releases registrations in reverse order, then awaits `onDispose`. `onStop` runs once the start stage has been reached, including when `onStart` is absent or fails. Registration failures still release acquired handles and call accepted `onDispose`. Cleanup is idempotent and all cleanup stages run even when one fails.
 

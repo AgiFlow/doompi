@@ -19,7 +19,7 @@ import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { workflowServerFacet } from '../../../src/extensions/server';
+import { facet as workflowServerFacet } from '../../../generated/server';
 
 const embeddedFeature = vi.hoisted(() => {
   const control = {

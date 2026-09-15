@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const createPlanModeRuntime = vi.hoisted(() => vi.fn());
 vi.mock('../src/controllers/planMode', () => ({ createPlanModeRuntime }));
 
-const { activatePlanExtension } = await import('../src/extensions/pi');
+const { extension: activatePlanExtension } = await import('../generated/pi');
 
 function createPi(): { pi: ExtensionAPI; shutdown: () => Promise<void> } {
   const handlers = new Map<string, () => Promise<void>>();

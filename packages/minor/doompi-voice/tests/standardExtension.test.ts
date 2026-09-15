@@ -49,7 +49,7 @@ vi.mock('../src/controllers/voiceConfig', () => ({
   },
 }));
 
-import { voicePiExtension as composedVoiceExtension } from '../src/extensions/pi';
+import { extension as composedVoiceExtension } from '../generated/pi';
 
 async function voicePiExtension(pi: ExtensionAPI): Promise<void> {
   Object.assign(pi, { registerTool: vi.fn(), registerCommand: vi.fn() });

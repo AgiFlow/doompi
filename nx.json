@@ -23,7 +23,7 @@
   "targetDefaults": {
     "build": {
       "inputs": ["production", "^production", "{projectRoot}/package.json"],
-      "outputs": ["{projectRoot}/dist"],
+      "outputs": ["{projectRoot}/dist", "{projectRoot}/generated"],
       "dependsOn": ["^build"],
       "cache": true
     },

@@ -190,7 +190,10 @@ export class BrowserNarrationEchoDiscriminator {
 
   public endPlayback(playbackId: string, endedAt: number): void {
     if (!Number.isFinite(endedAt)) return;
-    const reference = this.references.findLast((candidate) => candidate.playbackId === playbackId);
+    const reference = this.references
+      .slice()
+      .reverse()
+      .find((candidate) => candidate.playbackId === playbackId);
     if (reference !== undefined && reference.endedAt === undefined) this.finishReference(reference, endedAt);
   }
 

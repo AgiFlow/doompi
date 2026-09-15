@@ -41,8 +41,8 @@ vi.mock('../../../src/controllers/helpMode', () => ({
   },
 }));
 
-import { helpExtension } from '../../../src/extensions/pi';
-import piExtension from '../../../src/extensions/pi';
+import { extension as helpExtension } from '../../../generated/pi';
+import piExtension from '../../../generated/pi';
 
 type LifecycleHandler = (...argumentsValue: unknown[]) => unknown;
 

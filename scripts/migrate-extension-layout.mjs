@@ -26,13 +26,34 @@ function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
-function writeJson(file, value) {
-  fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
-}
 
 /** Sorted, so a re-run never reorders what a previous one wrote. */
 function sortedByKey(record) {
   return Object.fromEntries(Object.entries(record).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function hasRoutedSide(packageDir, side) {
+  const root = path.join(packageDir, 'src/extensions');
+  if (!fs.existsSync(root)) return false;
+
+  const pending = [root];
+  while (pending.length > 0) {
+    const directory = pending.pop();
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (entry.name === `(${side})`) return true;
+      pending.push(path.join(directory, entry.name));
+    }
+  }
+  return false;
+}
+
+function appendIgnoredDirectory(file, directory, check, changed) {
+  const current = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  const lines = current.split(/\r?\n/u);
+  if (lines.includes(directory)) return;
+  changed.push(path.basename(file));
+  if (!check) fs.writeFileSync(file, `${current}${current === '' || current.endsWith('\n') ? '' : '\n'}${directory}\n`);
 }
 
 function migrate(packageDir, check) {
@@ -40,6 +61,13 @@ function migrate(packageDir, check) {
   const manifestPath = path.join(packageDir, 'package.json');
   const manifest = readJson(manifestPath);
   const hasWeb = manifest.doompiWeb !== undefined;
+  const needsBackend = manifest.pi !== undefined || manifest.doompiServer !== undefined;
+  if (needsBackend && !hasRoutedSide(packageDir, 'backend')) {
+    throw new Error(`${packageDir}: refusing migration before routed (backend) contributions exist`);
+  }
+  if (hasWeb && !hasRoutedSide(packageDir, 'frontend')) {
+    throw new Error(`${packageDir}: refusing migration before routed (frontend) contributions exist`);
+  }
 
   const write = (relative, contents) => {
     const target = path.join(packageDir, relative);
@@ -51,8 +79,13 @@ function migrate(packageDir, check) {
     }
   };
 
-  write('.gitignore', '/generated\n');
-  write('tsdown.config.ts', TSDOWN_CONFIG);
+  const tsdownPath = path.join(packageDir, 'tsdown.config.ts');
+  const existingTsdown = fs.existsSync(tsdownPath) ? fs.readFileSync(tsdownPath, 'utf8') : null;
+  if (existingTsdown !== null && existingTsdown !== TSDOWN_CONFIG && !existingTsdown.includes('doompiExtension(')) {
+    throw new Error(`${packageDir}: refusing to overwrite custom tsdown.config.ts; migrate its entries manually`);
+  }
+  appendIgnoredDirectory(path.join(packageDir, '.gitignore'), '/generated', check, changed);
+  if (existingTsdown === null) write('tsdown.config.ts', TSDOWN_CONFIG);
 
   // The build tool is a dev dependency: nothing it writes is imported at runtime.
   manifest.devDependencies = sortedByKey({
@@ -63,17 +96,12 @@ function migrate(packageDir, check) {
   // The build derives doompiServer, doompiWeb and pi from the tree, so they
   // are left alone here: the first build after this rewrites them.
   //
-  // files narrows to built output. The browser half used to ship as source for
-  // the cockpit to compile and is now a browser bundle in dist like the rest.
+  // Add built output without deleting package-owned source resources. The
+  // generator can replace host metadata, but it cannot know whether a prompt,
+  // model, worker, or other src/** file is part of the published contract.
   manifest.files = [
     'dist',
-    ...(manifest.files ?? []).filter(
-      (entry) =>
-        !['dist', 'src/web', 'src/extensions/web.ts'].includes(entry) &&
-        !entry.startsWith('!') &&
-        !entry.startsWith('generated/') &&
-        !entry.startsWith('src/'),
-    ),
+    ...(manifest.files ?? []).filter((entry) => entry !== 'dist' && !entry.startsWith('generated/')),
   ];
 
   if (manifest.scripts?.typecheck !== undefined && hasWeb) {

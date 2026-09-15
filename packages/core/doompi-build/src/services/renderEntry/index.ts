@@ -51,26 +51,15 @@ const CONTRIBUTIONS_TYPE: Readonly<Record<BuildTarget, string>> = {
   web: 'WebPluginContributions',
 };
 
-/** The contribution set each host reads, used to annotate the emitted getters. */
-const RESOLVER_CONTEXT: Readonly<Record<BuildTarget, string>> = {
-  cli: 'PiPluginContext',
-  server: 'DoomServerPluginContext',
-  web: 'never',
-};
-
 /**
- * The mount context a routed file's factory receives, named rather than
- * `unknown`.
- *
- * A factory that has to declare its parameter `unknown` and cast it back is a
- * worse contract than the hand-written entry it replaced, so the resolver is
- * typed with the host's own context and the entry imports that type.
+ * Resolves a routed file's default export without imposing one host context on
+ * every factory. The generated mount supplies the concrete context, and `at`
+ * preserves that type while still accepting declaration objects.
  */
-function resolver(target: BuildTarget): string {
-  const context = RESOLVER_CONTEXT[target];
+function resolver(): string {
   return [
-    `type Factory<T, C extends ${context}> = (context: C) => T;`,
-    `const at = <T, C extends ${context}>(value: T | Factory<T, C>, context: C): T =>`,
+    'type Factory<T, C> = (context: C) => T;',
+    'const at = <T, C>(value: T | Factory<T, C>, context: C): T =>',
     "  typeof value === 'function' ? (value as Factory<T, C>)(context) : value;",
   ].join('\n');
 }
@@ -235,15 +224,15 @@ function rootBindings(entries: readonly ExtensionEntry[]): RootBinding[] {
 /**
  * Constructs each scope before anything it contains, outermost first.
  *
- * Every root is handed the context its enclosing root produced, which is what
- * makes them nest the way Next.js layouts do: a session root can build on what
- * the global one already established rather than rediscovering it.
+ * Every root is handed the context its enclosing root produced. Root factories
+ * may be async, so the generated host factory awaits each one before exposing
+ * its value to narrower contributions.
  */
 function rootPrologue(roots: readonly RootBinding[], base: string): string[] {
   const lines: string[] = [];
   let enclosing = base;
   for (const root of roots) {
-    lines.push(`const ${root.declaration} = ${root.identifier}(${enclosing});`);
+    lines.push(`const ${root.declaration} = await ${root.identifier}(${enclosing});`);
     lines.push(`const ${root.context} = { ...${enclosing}, root: ${root.declaration}.value };`);
     enclosing = root.context;
   }
@@ -317,20 +306,17 @@ function wrapField(field: string, target: BuildTarget, rendered: string, options
 
 /** The server entry imports only the types its scopes actually use. */
 function serverImport(scopes: readonly string[]): string {
-  const types = [
-    ...(scopes.some((line) => line.includes('at(')) ? ['type DoomServerPluginContext'] : []),
-    ...(scopes.some((line) => line.includes('get ')) ? ['type DoomServerSessionPlugin'] : []),
-  ];
+  const types = scopes.some((line) => line.includes('get ')) ? ['type DoomServerSessionPlugin'] : [];
   return `import { ${['defineServerPlugin', ...types].join(', ')} } from '@agimon-ai/doompi-core/server-facet';`;
 }
 
-/** The CLI entry imports only what its body actually uses. */
-function cliImport(body: readonly string[]): string {
+/** The CLI entry imports only what its body and inferred options use. */
+function cliImport(body: readonly string[], infersOptions: boolean): string {
   const named = ['definePiExtension'];
   if (body.some((line) => line.includes('piToolContributions('))) named.push('piToolContributions');
   if (body.some((line) => line.includes('withPiRenderers('))) named.push('withPiRenderers');
   const types = [
-    ...(body.some((line) => line.includes('at(')) ? ['type PiPluginContext'] : []),
+    ...(body.some((line) => line.includes('at(')) || infersOptions ? ['type PiPluginContext'] : []),
     ...(body.some((line) => line.includes('get ')) ? ['type PiPluginContributions'] : []),
   ];
   return `import { ${[...named, ...types].join(', ')} } from '@agimon-ai/doompi-core/pi-extension';`;
@@ -450,6 +436,20 @@ function compact(lines: readonly string[]): string {
   return lines.filter((line, index, all) => !(line === '' && all[index - 1] === '')).join('\n');
 }
 
+/** Infers the public Pi options contract from authored context factories. */
+function cliOptionsType(identifiers: readonly string[]): string[] {
+  if (identifiers.length === 0) return [];
+  const members = identifiers.map((identifier) => `OptionsOf<typeof ${identifier}>`).join(' | ');
+  return [
+    'type OptionsOf<T> = T extends (context: PiPluginContext<infer Options>) => unknown ? Options : never;',
+    `type InferredOptions = Exclude<${members}, undefined>;`,
+    'type Intersect<Union> =',
+    '  (Union extends unknown ? (value: Union) => void : never) extends (value: infer Value) => void ? Value : never;',
+    'type ExtensionOptions = [InferredOptions] extends [never] ? undefined : Intersect<InferredOptions>;',
+    '',
+  ];
+}
+
 /**
  * Emits the resolver only when something calls it.
  *
@@ -457,9 +457,9 @@ function compact(lines: readonly string[]): string {
  * every contribution is a factory would otherwise fail to typecheck on an
  * unused helper.
  */
-function resolverFor(body: readonly string[], target: BuildTarget = 'cli'): string[] {
+function resolverFor(body: readonly string[]): string[] {
   const lines: string[] = [];
-  if (body.some((line) => line.includes('at('))) lines.push(resolver(target));
+  if (body.some((line) => line.includes('at('))) lines.push(resolver());
   if (body.some((line) => line.includes('via('))) lines.push(IDENTITY_HELPER);
   return lines.length > 0 ? [...lines, ''] : [];
 }
@@ -483,9 +483,11 @@ function scopeBody(
   indent: string,
 ): string[] {
   const object = [...(hooks === undefined ? [] : [`${indent}  ${hooks}`]), ...body];
-  if (prologue.length === 0) return [`${parameterFor(body)} => ({`, ...object, `${indent}}),`];
+  const asynchronous = [...prologue, ...body].some((line) => line.includes('await '));
+  const prefix = asynchronous ? 'async ' : '';
+  if (prologue.length === 0) return [`${prefix}${parameterFor(body)} => ({`, ...object, `${indent}}),`];
   return [
-    `${parameterFor([...prologue, ...body])} => {`,
+    `${prefix}${parameterFor([...prologue, ...body])} => {`,
     ...prologue.map((line) => `${indent}  ${line}`),
     `${indent}  return {`,
     ...object.map((line) => `  ${line}`),
@@ -516,19 +518,26 @@ export function renderCliEntry(resolution: TargetResolution, options: RenderOpti
       '  ',
       'session',
     ),
-    ...hatches.map((hatch) => `  ...at(${hatch.identifier}, ${innermost}),`),
+    ...hatches.map((hatch) => `  ...await at(${hatch.identifier}, ${innermost}),`),
   ];
   const factory = scopeBody(prologue, rootHooks(roots), body, '');
+  const optionIdentifiers = [
+    ...roots.map((root) => root.identifier),
+    ...bindings.map((binding) => binding.identifier),
+    ...hatches.map((hatch) => hatch.identifier),
+  ];
+  const infersOptions = optionIdentifiers.length > 0;
 
   return compact([
     HEADER,
-    cliImport([...prologue, ...body]),
+    cliImport([...prologue, ...body], infersOptions),
     ...(roots.length > 0 ? ["import { composeRootHooks } from '@agimon-ai/doompi-core/extension-file';"] : []),
     '',
     ...importsFor(bindings, hatches, roots, options.entryDir),
     '',
-    ...resolverFor(body, 'cli'),
-    `export const extension = definePiExtension('${options.packageName}', ${factory[0]}`,
+    ...cliOptionsType(optionIdentifiers),
+    ...resolverFor(body),
+    `export const extension = definePiExtension${infersOptions ? '<ExtensionOptions>' : ''}('${options.packageName}', ${factory[0]}`,
     ...factory.slice(1, -1),
     `${factory[factory.length - 1]?.replace(/,$/u, '')});`,
     '',
@@ -573,7 +582,7 @@ export function renderServerEntry(resolution: TargetResolution, options: RenderO
         '    ',
         scope,
       ),
-      ...here.map((hatch) => `    ...at(${hatch.identifier}, ${innermost}),`),
+      ...here.map((hatch) => `    ...await at(${hatch.identifier}, ${innermost}),`),
     ];
     if (body.length === 0 && roots.length === 0) continue;
     if (roots.length > 0) usesRoots = true;
@@ -588,7 +597,7 @@ export function renderServerEntry(resolution: TargetResolution, options: RenderO
     '',
     ...importsFor(bindings, hatches, allRoots, options.entryDir),
     '',
-    ...resolverFor(scopes, 'server'),
+    ...resolverFor(scopes),
     'export const facet = defineServerPlugin({',
     `  name: '${options.packageName}',`,
     ...scopes,
@@ -616,7 +625,9 @@ export function renderWebEntry(resolution: TargetResolution, options: RenderOpti
     const here = hatches.filter((h) => h.entry.scope === scope);
     const body = [
       ...bodyFor(visible, '    ', () => 'undefined', 'web', options),
-      ...here.map((hatch) => `    ...at(${hatch.identifier}, undefined),`),
+      // Frontend escape hatches are contribution data. Calling them would also
+      // call React components, so merge the authored object directly.
+      ...here.map((hatch) => `    ...${hatch.identifier},`),
     ];
     if (body.length === 0) continue;
     scopes.push(`  ${scope}: {`, ...body, '  },');
@@ -630,7 +641,7 @@ export function renderWebEntry(resolution: TargetResolution, options: RenderOpti
     '',
     ...importsFor(bindings, hatches, [], options.entryDir),
     '',
-    ...resolverFor(scopes, 'web'),
+    ...resolverFor(scopes),
     'export const webPlugin = defineWebPlugin({',
     `  id: '${options.pluginId}',`,
     ...scopes,

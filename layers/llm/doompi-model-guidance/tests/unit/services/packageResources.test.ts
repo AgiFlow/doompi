@@ -4,7 +4,10 @@ import { readPackageResource } from '../../../src/services/packageResources';
 
 describe('shipped model guidance resources', () => {
   it('finds the same skill from source and nested compiled module locations', async () => {
-    const source = new URL('../../../src/extensions/server.ts', import.meta.url);
+    const source = new URL(
+      '../../../src/extensions/workspaces/sessions/(backend)/resource/doompiUseModelGuidance.server.ts',
+      import.meta.url,
+    );
     const compiled = new URL('../../../dist/services/packageResources/index.mjs', import.meta.url);
     const file = 'src/prompts/doompi-use-model-guidance/SKILL.md';
     const content = await readPackageResource(file, source);

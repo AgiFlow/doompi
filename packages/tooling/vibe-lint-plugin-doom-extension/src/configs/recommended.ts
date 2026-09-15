@@ -124,6 +124,8 @@ const boundaries: BoundaryConfig[] = [
       'src/types/**',
       'src/constants',
       'src/constants/**',
+      'src/schemas',
+      'src/schemas/**',
       'src/extensions/**/(frontend)/**',
     ],
   },

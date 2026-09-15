@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateParams } from '../../../../src/tools/runWorktree';
+import { validateParams } from '../../../../src/extensions/workspaces/sessions/(backend)/tool/runWorktree.cli';
 
 describe('validateParams', () => {
   it.each([

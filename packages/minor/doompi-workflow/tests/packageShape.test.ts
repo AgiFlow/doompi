@@ -17,9 +17,14 @@ const PACKAGE_README = 'README.md';
 const RECOVERY_SKILL = 'skills/workflow-recovery/SKILL.md';
 const PROMPTS_ROOT = 'src/prompts';
 const SKILL_EXPORT = `./${RECOVERY_SKILL}`;
-// The web plugin is not an export: the cockpit's bundler compiles it from the
-// source named by doompiWeb.client. Server channels are owned by the server facet.
-const EXPORT_SUBPATHS = ['.', './extensions/pi', './extensions/server', './package.json', SKILL_EXPORT];
+const EXPORT_SUBPATHS = [
+  '.',
+  './extensions/pi',
+  './extensions/server',
+  './extensions/web',
+  './package.json',
+  SKILL_EXPORT,
+];
 const STANDARD_ENTRY = './dist/extensions/pi.mjs';
 
 function objectValue(value: unknown): JsonRecord {
@@ -90,7 +95,7 @@ describe('@agimon-ai/doompi-workflow package shape', () => {
     expect(pi.extensions).toEqual([STANDARD_ENTRY]);
     expect(PACKAGE_MANIFEST.doompiServer).toEqual({
       contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
-      entry: './src/extensions/server.ts',
+      entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
     });

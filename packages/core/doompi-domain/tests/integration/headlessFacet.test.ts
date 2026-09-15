@@ -12,7 +12,7 @@ import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { domainServerFacet as domainHeadlessFacet } from '../../src/extensions/server';
+import { facet as domainHeadlessFacet } from '../../generated/server';
 
 const roots: string[] = [];
 

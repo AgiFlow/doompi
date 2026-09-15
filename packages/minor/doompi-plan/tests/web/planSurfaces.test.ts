@@ -1,7 +1,7 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
 import { formatPlanStatus, PLAN_STATUS_KEY } from '../../src/types/planApi';
 const webPlugin = {
   id: scopedWebPlugin.id,

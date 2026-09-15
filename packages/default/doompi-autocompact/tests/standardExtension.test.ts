@@ -31,7 +31,7 @@ vi.mock('../src/services/autocompactTelemetry', async (importOriginal) => ({
   createAutocompactTelemetry: lifecycleMocks.createTelemetry,
 }));
 
-const { autocompactExtension } = await import('../src/extensions/pi');
+const { extension: autocompactExtension } = await import('../generated/pi');
 
 function testBus() {
   const handlers = new Map<string, Set<(payload: unknown) => void>>();

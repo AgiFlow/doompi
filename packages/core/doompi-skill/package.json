@@ -35,13 +35,19 @@
   ],
   "type": "module",
   "main": "./dist/index.cjs",
-  "types": "./dist/index.d.mts",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.cts",
   "jsnext:main": "./dist/index.mjs",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
+    },
+    "./api-contracts": {
+      "types": "./dist/api-contracts.d.mts",
+      "import": "./dist/api-contracts.mjs",
+      "require": "./dist/api-contracts.cjs"
     },
     "./catalog": {
       "types": "./dist/catalog.d.mts",
@@ -80,6 +86,7 @@
     "gpt-tokenizer": "4.0.0"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@agimon-ai/vibe-lint-plugin-doom-extension": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
     "@earendil-works/pi-coding-agent": "0.85.1",
@@ -106,7 +113,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"

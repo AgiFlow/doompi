@@ -2,8 +2,8 @@ import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
+import { facet as mcpServerFacet } from '../../../generated/server';
 import { mcpHubApi } from '../../../src/controllers/mcpHubApi';
-import { mcpServerFacet } from '../../../src/extensions/server';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
@@ -52,10 +52,10 @@ describe('mcpServerFacet', () => {
     expect(harness.state.disposed).toBe(1);
   });
 
-  it('registers nothing on the session scope', async () => {
+  it('cascades the API into the session scope', async () => {
     const harness = hostContext('session');
     const dispose = await mcpServerFacet.apply(harness.context);
     await dispose?.();
-    expect(harness.registered).toEqual([]);
+    expect(harness.registered).toEqual([mcpHubApi]);
   });
 });

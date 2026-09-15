@@ -101,7 +101,7 @@ describe('doom-mcp package boundary', () => {
     expect((manifest as unknown as Record<string, unknown>).doompiApi).toBeUndefined();
     expect(manifest.doompiServer).toEqual({
       contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
-      entry: './src/extensions/server.ts',
+      entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
     });
@@ -114,7 +114,9 @@ describe('doom-mcp package boundary', () => {
   it('exports one standard Pi adapter without a wildcard or alternate Doom entry', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
-    const publicEntries = Object.entries(exportsMap).filter(([subpath]) => subpath !== './package.json');
+    const publicEntries = Object.entries(exportsMap).filter(
+      ([subpath]) => subpath !== './package.json' && subpath !== './extensions/web',
+    );
 
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).toContain('./extensions/pi');

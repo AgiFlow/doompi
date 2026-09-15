@@ -39,7 +39,7 @@ vi.mock('@agimon-ai/doompi-telemetry', () => ({
   }),
 }));
 
-import { registerConfigExtension } from '../src/extensions/pi';
+import { extension as registerConfigExtension } from '../generated/pi';
 
 type Handler = (...argumentsValue: unknown[]) => unknown;
 

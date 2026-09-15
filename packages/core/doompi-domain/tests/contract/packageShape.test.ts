@@ -40,15 +40,7 @@ describe('doompi-domain package contract', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.publishConfig).toEqual({ access: 'public' });
     expect(manifest.files).toEqual(
-      expect.arrayContaining([
-        'dist',
-        'src/web',
-        'src/extensions/web.ts',
-        'llms.txt',
-        'src/prompts',
-        'README.md',
-        'package.json',
-      ]),
+      expect.arrayContaining(['dist', 'llms.txt', 'src/prompts', 'README.md', 'package.json']),
     );
     expect(manifest.keywords).toEqual([
       'ai',
@@ -73,9 +65,11 @@ describe('doompi-domain package contract', () => {
 
     expect(Object.keys(exportsMap)).toEqual([
       '.',
+      './api-contracts',
       './apply',
       './extensions/pi',
       './extensions/server',
+      './extensions/web',
       './mcp',
       './plugins',
       './resources',
@@ -84,6 +78,7 @@ describe('doompi-domain package contract', () => {
     expect(Object.keys(exportsMap)).not.toContain('./*');
     for (const subpath of [
       '.',
+      './api-contracts',
       './apply',
       './extensions/pi',
       './extensions/server',
@@ -93,6 +88,7 @@ describe('doompi-domain package contract', () => {
     ]) {
       expect(conditions(exportsMap[subpath]), subpath).toEqual(['types', 'import', 'require']);
     }
+    expect(conditions(exportsMap['./extensions/web'])).toEqual(['import']);
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
   });
 
@@ -102,15 +98,18 @@ describe('doompi-domain package contract', () => {
     expect(manifest.doompiWeb).toEqual({
       pluginId: 'domain',
       channels: [],
-      client: './src/extensions/web.ts',
+      client: './dist/extensions/web.mjs',
       scopes: ['session'],
     });
-    const client = await readFile(path.join(packageDirectory, 'src/extensions/web.ts'), 'utf8');
+    const client = await readFile(path.join(packageDirectory, 'generated/web.ts'), 'utf8');
+    const contribution = await readFile(
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(frontend)/extra.ts'),
+      'utf8',
+    );
     expect(client).toContain('export const webPlugin = defineWebPlugin');
-    const entry = client;
-    expect(entry).toContain('defineWebPlugin');
-    expect(entry).toContain("statusKey: 'doom-domain'");
-    expect(entry).toContain('multi: true');
+    expect(client).toContain('...extra');
+    expect(contribution).toContain("statusKey: 'doom-domain'");
+    expect(contribution).toContain('multi: true');
   });
 
   it('uses the shared core package for runtime and web capabilities', async () => {
@@ -119,16 +118,16 @@ describe('doompi-domain package contract', () => {
   });
 
   it('routes Pi discovery through the command and voice-tool factory', async () => {
-    const entry = await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8');
+    const entry = await readFile(path.join(packageDirectory, 'generated/pi.ts'), 'utf8');
     const factory = await readFile(path.join(packageDirectory, 'src/controllers/domainRuntime.ts'), 'utf8');
 
     expect(entry).toContain('definePiExtension');
-    expect(entry).toContain('export default domainsExtension');
+    expect(entry).toContain('export default extension');
     expect(factory).toContain('createDomainsCommand');
     expect(factory).toContain('registerDomainVoiceCapabilities');
     expect(factory).toContain('services:');
     expect(factory).toContain('commands:');
-    expect(entry).toContain('resources:');
+    expect(entry).toContain('extra');
     expect(factory).toContain('inject([DOOM_CONFIG_SERVICE, DOOM_TRANSITION_SERVICE]');
     expect(factory).not.toContain('new Context()');
   });

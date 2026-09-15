@@ -94,7 +94,7 @@ describe('renderCliEntry', () => {
       'src/extensions/(backend)/root.ts': EMPTY,
       'src/extensions/workspaces/sessions/(backend)/tool/write-plan.ts': EMPTY,
     });
-    expect(cli).toContain("definePiExtension('@agimon-ai/doompi-plan'");
+    expect(cli).toContain("definePiExtension<ExtensionOptions>('@agimon-ai/doompi-plan'");
     expect(cli).toContain('services: [');
     expect(cli).toContain('...piToolContributions(');
     expect(parses(cli)).toBe(true);
@@ -113,9 +113,11 @@ describe('renderCliEntry', () => {
     expect(cli).not.toContain(".ts'");
   });
 
-  it('spreads an escape hatch into the contributions object', () => {
+  it('spreads an escape hatch and infers its public options contract', () => {
     const { cli } = render({ 'src/extensions/(backend)/extra.cli.ts': EMPTY });
-    expect(cli).toMatch(/\.\.\.at\(\w+, context\),/u);
+    expect(cli).toMatch(/\.\.\.await at\(\w+, context\),/u);
+    expect(cli).toContain('type OptionsOf<T> = T extends (context: PiPluginContext<infer Options>)');
+    expect(cli).toContain('definePiExtension<ExtensionOptions>');
     expect(parses(cli)).toBe(true);
   });
 
@@ -131,7 +133,7 @@ describe('renderServerEntry', () => {
     const { server } = raw({
       'src/extensions/workspaces/sessions/(backend)/root.server.ts': EMPTY,
     });
-    expect(server).toContain('session: (context) => {');
+    expect(server).toContain('session: async (context) => {');
     expect(server).toContain(
       "get activities(): DoomServerSessionPlugin['activities'] { return [...(scopeSession.activities ?? [])]; }",
     );
@@ -190,6 +192,13 @@ describe('renderWebEntry', () => {
     const { web } = render({ 'src/extensions/(frontend)/tab/PlanPanel.tsx': EMPTY });
     expect(web).toContain('export const webPlugin = defineWebPlugin({');
     expect(web).toContain("id: 'plan',");
+  });
+
+  it('spreads a frontend escape hatch as contribution data without resolving it', () => {
+    const { web } = render({ 'src/extensions/(frontend)/extra.ts': EMPTY });
+    expect(web).toContain('...extra');
+    expect(web).not.toContain('const at =');
+    expect(web).not.toContain('at(extra');
   });
 
   it('never resolves a frontend export, because a component is a function too', () => {
@@ -396,14 +405,14 @@ describe('scope roots', () => {
 
   it('constructs each scope before the contributions that read it', () => {
     const { cli } = raw(TREE);
-    expect(cli).toContain('const scopeGlobal = rootGlobal(context);');
+    expect(cli).toContain('const scopeGlobal = await rootGlobal(context);');
     expect(cli).toContain('const contextGlobal = { ...context, root: scopeGlobal.value };');
     expect(cli.indexOf('const scopeGlobal')).toBeLessThan(cli.indexOf('const scopeSession'));
   });
 
   it('nests roots, so an inner scope builds on the context the outer one produced', () => {
     const { cli } = raw(TREE);
-    expect(cli).toContain('const scopeSession = rootSession(contextGlobal);');
+    expect(cli).toContain('const scopeSession = await rootSession(contextGlobal);');
     expect(cli).toContain('const contextSession = { ...contextGlobal, root: scopeSession.value };');
   });
 
@@ -426,7 +435,7 @@ describe('scope roots', () => {
     const { server } = raw(TREE);
     // The global scope sees only its own root; the session scope constructs
     // both, since a server facet reads one plugin[scope] and nothing above it.
-    expect(server).toContain('  global: (context) => {');
+    expect(server).toContain('  global: async (context) => {');
     expect(server).toContain('...composeRootHooks(scopeGlobal),');
     expect(server).toContain('...composeRootHooks(scopeGlobal, scopeSession),');
   });

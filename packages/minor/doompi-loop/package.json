@@ -27,15 +27,12 @@
   },
   "files": [
     "dist",
-    "src/web",
-    "src/extensions/web.ts",
     "llms.txt",
     "src/prompts",
     "src/types/loopView.ts",
     "README.md",
     "LICENSE",
-    "package.json",
-    "!src/web/**/*.stories.tsx"
+    "package.json"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -57,12 +54,15 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
-    "./package.json": "./package.json",
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
+    },
     "./loop-launchers": {
       "types": "./dist/loopLaunchers.d.mts",
       "import": "./dist/loopLaunchers.mjs",
       "require": "./dist/loopLaunchers.cjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
@@ -70,7 +70,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -82,6 +82,7 @@
     "@deepseek-ai/cordis": "4.0.2"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",
     "@types/node": "26.5.1",
@@ -110,7 +111,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
@@ -123,7 +124,7 @@
   "doompiWeb": {
     "pluginId": "loop",
     "channels": [],
-    "client": "./src/extensions/web.ts",
+    "client": "./dist/extensions/web.mjs",
     "scopes": [
       "session"
     ]

@@ -13,8 +13,8 @@ import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { facet as autoStopHeadlessFacet } from '../../generated/server';
 import { DEFAULT_AUTO_STOP_DELAYS } from '../../src/exports';
-import { autoStopServerFacet as autoStopHeadlessFacet } from '../../src/extensions/server';
 
 async function fixture(
   states: Array<{ hasPendingMessages: boolean; isIdle: boolean }>,

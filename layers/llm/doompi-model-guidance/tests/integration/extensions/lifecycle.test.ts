@@ -10,7 +10,7 @@ vi.mock('@agimon-ai/doompi-config', () => ({
   getHarnessState: () => ({ root: undefined }),
 }));
 
-const { activateModelGuidanceExtension } = await import('../../../src/extensions/pi');
+const { extension: activateModelGuidanceExtension } = await import('../../../generated/pi');
 
 type Listener = (...args: unknown[]) => unknown;
 

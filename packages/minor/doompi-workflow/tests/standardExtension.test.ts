@@ -31,7 +31,7 @@ vi.mock('../src/tools/workflowTools', () => ({
   createWorkflowTools: (tools: unknown) => tools,
 }));
 
-import { workflowExtension } from '../src/extensions/pi';
+import { extension as workflowExtension } from '../generated/pi';
 import type { WorkflowPiRuntime } from '../src/tui/workflowRuntime';
 
 function deferred(): { promise: Promise<void>; resolve(): void } {

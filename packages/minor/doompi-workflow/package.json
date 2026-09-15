@@ -31,11 +31,8 @@
     "README.md",
     "src/prompts",
     "skills/workflow-recovery/SKILL.md",
-    "src/web",
-    "src/extensions/web.ts",
     "src/types/webWorkflows.ts",
-    "src/types/webWorkflowTerminal.ts",
-    "!src/web/**/*.stories.tsx"
+    "src/types/webWorkflowTerminal.ts"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -57,8 +54,11 @@
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
     },
-    "./package.json": "./package.json",
-    "./skills/workflow-recovery/SKILL.md": "./skills/workflow-recovery/SKILL.md"
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
+    },
+    "./skills/workflow-recovery/SKILL.md": "./skills/workflow-recovery/SKILL.md",
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
@@ -66,7 +66,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -85,6 +85,7 @@
     "zod": "4.6.2"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-tui": "0.85.1",
     "@tanstack/react-store": "0.11.1",
@@ -115,7 +116,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "global",
@@ -130,10 +131,10 @@
   "doompiWeb": {
     "pluginId": "workflows",
     "channels": [
-      "workflow_runs",
-      "workflow_catalog"
+      "workflow_catalog",
+      "workflow_runs"
     ],
-    "client": "./src/extensions/web.ts",
+    "client": "./dist/extensions/web.mjs",
     "scopes": [
       "session"
     ]

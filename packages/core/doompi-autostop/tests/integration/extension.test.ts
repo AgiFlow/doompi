@@ -7,8 +7,8 @@ import { installDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { extension as autoStopExtension } from '../../generated/pi';
 import { DEFAULT_AUTO_STOP_DELAYS } from '../../src/exports';
-import { autoStopExtension } from '../../src/extensions/pi';
 import { createSessionHarness } from '../helpers/session';
 
 const { cooldownMs, recheckMs } = DEFAULT_AUTO_STOP_DELAYS;

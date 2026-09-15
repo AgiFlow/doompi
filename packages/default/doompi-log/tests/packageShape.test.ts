@@ -14,10 +14,12 @@ const PROJECT_CONFIG = readFileSync(resolve(PACKAGE_ROOT, 'project.json'), 'utf8
 const CONFIG_FILES = ['tsdown.config.ts', 'tsconfig.json', 'vitest.config.ts', 'vibe-lint.config.yaml'];
 const EXPORT_SUBPATHS = [
   '.',
+  './api-contracts',
   './extensions/pi',
   './extensions/server',
+  './extensions/web',
   './metrics',
-  './metricsSource',
+  './metrics-source',
   './metrics-overlay',
   './package.json',
 ];
@@ -74,7 +76,7 @@ describe('@agimon-ai/doompi-log package shape', () => {
     expect(pi.extensions).toEqual([PI_ENTRY]);
     expect(PACKAGE_MANIFEST.doompiServer).toEqual({
       contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
-      entry: './src/extensions/server.ts',
+      entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
     });

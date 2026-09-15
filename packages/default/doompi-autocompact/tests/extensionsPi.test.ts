@@ -1,7 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,10 +8,8 @@ vi.mock('@earendil-works/pi-coding-agent', async (importOriginal) => ({
 }));
 
 const { generateCheckpointWithPi } = await import('../src/services/autocompactRuntime');
-const { autocompactExtension } = await import('../src/extensions/pi');
-const standardPiExtension = (await import('../src/extensions/pi')).default;
-
-const adapterPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/extensions/pi.ts');
+const { extension: autocompactExtension } = await import('../generated/pi');
+const standardPiExtension = (await import('../generated/pi')).default;
 
 type SummarizationModel = NonNullable<ExtensionContext['model']>;
 
@@ -54,10 +48,6 @@ describe('Doom Autocompact Pi adapter boundary', () => {
 
   it('exposes one named standard Pi declaration with lifecycle cleanup', () => {
     expect(standardPiExtension).toBe(autocompactExtension);
-
-    const source = fs.readFileSync(adapterPath, 'utf8');
-    expect(source).toContain('export default autocompactExtension');
-    expect(source).not.toMatch(/session_start|session_shutdown|registerDoom/u);
   });
 
   it('summarizes through the provider the session resolved for the model', async () => {

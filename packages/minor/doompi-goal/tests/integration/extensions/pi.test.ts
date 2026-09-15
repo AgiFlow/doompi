@@ -3,8 +3,8 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
+import { extension as registerGoalExtension } from '../../../generated/pi';
 import { COMMAND_NAME } from '../../../src/constants/goal';
-import { goalExtension as registerGoalExtension } from '../../../src/extensions/pi';
 import type { GoalExtensionService } from '../../../src/types/extension';
 
 interface CommandDefinition {

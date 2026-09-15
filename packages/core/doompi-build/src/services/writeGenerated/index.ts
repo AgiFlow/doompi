@@ -9,26 +9,27 @@ export interface WriteResult {
 
 export class StaleGeneratedError extends Error {
   constructor(readonly stale: readonly string[]) {
-    super(
-      `Stale generated files: ${stale.join(', ')}. Run the package's build to regenerate them, then commit the result.`,
-    );
+    super(`Stale generated files: ${stale.join(', ')}. Run the package's build to regenerate them.`);
     this.name = 'StaleGeneratedError';
   }
 }
 
 /**
- * Write-if-changed locally, throw on stale under `check`.
+ * Write-if-changed locally, throw on stale under an explicit `check`.
  *
- * The same contract `ensureBuiltinWebPluginModules` already uses for the
- * cockpit's generated registry. Generated entries are committed so every
- * consumer, the Pi compiler and the server bundle loader included, keeps
- * reading a real file at a stable path. CI then proves the committed copy
- * matches the tree it came from.
+ * Generated entries are ignored build inputs, so normal and CI builds create
+ * them. Explicit check mode remains available to callers that need to compare
+ * an existing generated tree without changing it.
  *
  * Writing only on a real change matters for watch mode: an unconditional
  * write would retrigger the watcher that called it.
  */
-export function writeGenerated(packageDir: string, files: ReadonlyMap<string, string>, check = false): WriteResult {
+export function writeGenerated(
+  packageDir: string,
+  files: ReadonlyMap<string, string>,
+  check = false,
+  managed: readonly string[] = [],
+): WriteResult {
   const changed: string[] = [];
 
   for (const [relative, contents] of files) {
@@ -39,6 +40,14 @@ export function writeGenerated(packageDir: string, files: ReadonlyMap<string, st
     if (check) continue;
     fs.mkdirSync(path.dirname(absolute), { recursive: true });
     fs.writeFileSync(absolute, contents);
+  }
+
+  for (const relative of managed) {
+    if (files.has(relative)) continue;
+    const absolute = path.join(packageDir, relative);
+    if (!fs.existsSync(absolute)) continue;
+    changed.push(relative);
+    if (!check) fs.rmSync(absolute);
   }
 
   if (check && changed.length > 0) throw new StaleGeneratedError(changed);

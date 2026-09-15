@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createRunWorktreeTool } from '../../../../src/extensions/workspaces/sessions/(backend)/tool/runWorktree.cli';
 import type { WorktreeOperations } from '../../../../src/services/worktreeOperations';
-import { createRunWorktreeTool } from '../../../../src/tools/runWorktree';
 import type { WorktreeRecord } from '../../../../src/types/worktreeRegistry';
 
 const RECORD: WorktreeRecord = {

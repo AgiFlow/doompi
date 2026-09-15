@@ -9,7 +9,7 @@ import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { hookServerFacet } from '../../../src/extensions/server';
+import { facet as hookServerFacet } from '../../../generated/server';
 
 describe('hook headless facet', () => {
   it('records lifecycle hooks, clears shutdown status, and exposes authoring guidance', async () => {

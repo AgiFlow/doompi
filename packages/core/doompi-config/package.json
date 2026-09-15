@@ -47,6 +47,11 @@
       "import": "./dist/agentPluginMcp.mjs",
       "require": "./dist/agentPluginMcp.cjs"
     },
+    "./api-contracts": {
+      "types": "./dist/api-contracts.d.mts",
+      "import": "./dist/api-contracts.mjs",
+      "require": "./dist/api-contracts.cjs"
+    },
     "./atomicJson": {
       "types": "./dist/atomicJson.d.mts",
       "import": "./dist/atomicJson.mjs",
@@ -56,6 +61,11 @@
       "types": "./dist/config.d.mts",
       "import": "./dist/config.mjs",
       "require": "./dist/config.cjs"
+    },
+    "./config-schema": {
+      "types": "./dist/configSchema.d.mts",
+      "import": "./dist/configSchema.mjs",
+      "require": "./dist/configSchema.cjs"
     },
     "./configWriter": {
       "types": "./dist/configWriter.d.mts",
@@ -102,6 +112,11 @@
       "import": "./dist/majorModes.mjs",
       "require": "./dist/majorModes.cjs"
     },
+    "./pi-config": {
+      "types": "./dist/piConfig.d.mts",
+      "import": "./dist/piConfig.mjs",
+      "require": "./dist/piConfig.cjs"
+    },
     "./piContext": {
       "types": "./dist/piContext.d.mts",
       "import": "./dist/piContext.mjs",
@@ -122,22 +137,7 @@
       "import": "./dist/types.mjs",
       "require": "./dist/types.cjs"
     },
-    "./package.json": "./package.json",
-    "./pi-config": {
-      "types": "./dist/piConfig.d.mts",
-      "import": "./dist/piConfig.mjs",
-      "require": "./dist/piConfig.cjs"
-    },
-    "./config-schema": {
-      "types": "./dist/configSchema.d.mts",
-      "import": "./dist/configSchema.mjs",
-      "require": "./dist/configSchema.cjs"
-    },
-    "./api-contracts": {
-      "types": "./dist/api-contracts.d.mts",
-      "import": "./dist/api-contracts.mjs",
-      "require": "./dist/api-contracts.cjs"
-    }
+    "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public",
@@ -158,6 +158,7 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@types/node": "26.5.1",
     "@vitest/coverage-v8": "5.0.0",
@@ -172,7 +173,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "global",

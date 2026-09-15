@@ -9,7 +9,7 @@ import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { sandboxServerFacet as sandboxHeadlessFacet } from '../../../src/extensions/server';
+import { facet as sandboxHeadlessFacet } from '../../../generated/server';
 
 function fixture(environment: Readonly<Record<string, string | undefined>> = {}) {
   const client = {

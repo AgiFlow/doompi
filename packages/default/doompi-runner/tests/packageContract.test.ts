@@ -81,7 +81,7 @@ describe('doom runner package boundary', () => {
     expect(manifest.private).toBeUndefined();
     expect(manifest.type).toBe('module');
     expect(manifest.main).toBe('./dist/index.cjs');
-    expect(manifest.types).toBe('./dist/index.d.mts');
+    expect(manifest.types).toBe('./dist/index.d.cts');
     expect(manifest['jsnext:main']).toBe('./dist/index.mjs');
     expect(project.sourceRoot).toBe('packages/default/doompi-runner/src');
     expect(project.sourceTemplate).toBe('doom-extension');
@@ -103,7 +103,9 @@ describe('doom runner package boundary', () => {
   it('publishes every explicit entry as ESM, CJS, and declarations', async () => {
     const manifest = await readJsonFile<PackageManifest>(manifestPath);
     const exportsMap = manifest.exports ?? {};
-    const publicEntries = Object.entries(exportsMap).filter(([subpath]) => subpath !== './package.json');
+    const publicEntries = Object.entries(exportsMap).filter(
+      ([subpath]) => subpath !== './package.json' && subpath !== './extensions/web',
+    );
 
     expect(publicEntries.length).toBeGreaterThan(0);
     expect(Object.keys(exportsMap)).not.toContain('./*');

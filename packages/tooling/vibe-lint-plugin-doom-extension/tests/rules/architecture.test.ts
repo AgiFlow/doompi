@@ -992,6 +992,25 @@ describe('Doom deterministic architecture rules', () => {
       expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
     });
 
+    it('accepts a provider reached from a routed backend escape hatch', () => {
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
+      write(
+        'src/extensions/workspaces/sessions/(backend)/extra.cli.ts',
+        `import { mount } from '../../../../controllers/runtime';
+         export default (({ context }) => mount(context));`,
+      );
+      write(
+        'src/controllers/runtime.ts',
+        `import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
+         export const mount = (context: { provide(service: unknown, value: unknown): void }) => {
+           context.provide(DOOM_HELP_SERVICE, {});
+           return {};
+         };`,
+      );
+
+      expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
+    });
+
     it('accepts a stable Pi wrapper created and cleared by its owning injected callback', () => {
       const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-hook' }));
       write(
@@ -1482,6 +1501,10 @@ describe('Doom deterministic architecture rules', () => {
       expect(packageLayerOrder.check?.(manifest, root, boundaryContext())).toBeNull();
     });
 
+    it('treats the extension build preset as a contracts-tier build dependency', () => {
+      const manifest = manifestFor('@agimon-ai/doompi-config', { '@agimon-ai/doompi-build': 'workspace:*' });
+      expect(packageLayerOrder.check?.(manifest, root, boundaryContext())).toBeNull();
+    });
     it('rejects the platform tier depending on an extension', () => {
       const manifest = manifestFor('@agimon-ai/doompi-config', { '@agimon-ai/doompi-voice': 'workspace:*' });
       expect(packageLayerOrder.check?.(manifest, root, boundaryContext())).toContain(

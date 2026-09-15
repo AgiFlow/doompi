@@ -142,6 +142,7 @@ const DEFAULT_FIXED_CORE_PACKAGES = [
 const DEFAULT_PACKAGE_LAYER_ORDER = ['contracts', 'platform', 'integration', 'extension', 'host'];
 const DEFAULT_PACKAGE_LAYER_FALLBACK = 'extension';
 const DEFAULT_PACKAGE_LAYERS: Readonly<Record<string, string>> = {
+  '@agimon-ai/doompi-build': 'contracts',
   '@agimon-ai/doompi-core': 'contracts',
   '@agimon-ai/doompi-minor-mode': 'platform',
   '@agimon-ai/doompi-hashline': 'contracts',
@@ -1250,6 +1251,19 @@ function ownedCordisScopes(units: readonly CordisSourceUnit[]): OwnedCordisScope
     owned.set(callback, names);
     return names.size !== before;
   };
+  const markMountContext = (callback: ts.FunctionLikeDeclaration): void => {
+    const parameter = callback.parameters[0];
+    if (!parameter) return;
+    const names = owned.get(callback) ?? new Set<string>();
+    if (ts.isIdentifier(parameter.name)) names.add(`${parameter.name.text}.context`);
+    if (ts.isObjectBindingPattern(parameter.name)) {
+      for (const element of parameter.name.elements) {
+        const key = element.propertyName?.getText() ?? element.name.getText();
+        if (key === 'context' && ts.isIdentifier(element.name)) names.add(element.name.text);
+      }
+    }
+    owned.set(callback, names);
+  };
   const functionAncestors = (node: ts.Node): ts.FunctionLikeDeclaration[] => {
     const result: ts.FunctionLikeDeclaration[] = [];
     for (let current = node.parent; current; current = current.parent) {
@@ -1309,6 +1323,18 @@ function ownedCordisScopes(units: readonly CordisSourceUnit[]): OwnedCordisScope
 
   // A callback passed to Context.plugin owns the context Cordis gives it.
   for (const { filePath, sourceFile } of units) {
+    if (
+      /\/src\/extensions\/(?:[^/]+\/)*\(backend\)\/extra(?:\.(?:cli|server))?\.(?:cts|mts|ts)$/.test(
+        filePath.replaceAll('\\', '/'),
+      )
+    ) {
+      for (const statement of sourceFile.statements) {
+        if (!ts.isExportAssignment(statement)) continue;
+        const exported = unwrapArchitectureExpression(statement.expression);
+        if (ts.isArrowFunction(exported) || ts.isFunctionExpression(exported)) markMountContext(exported);
+        else for (const { node: target } of targetRecords(filePath, exported)) markMountContext(target);
+      }
+    }
     if (
       /\/src\/extensions\/(?:[^/]+\/)*\(backend\)\/root(?:\.(?:cli|server))?\.(?:cts|mts|ts)$/.test(
         filePath.replaceAll('\\', '/'),
@@ -1370,19 +1396,7 @@ function ownedCordisScopes(units: readonly CordisSourceUnit[]): OwnedCordisScope
       if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
         const helper = aliasesByFile.get(filePath)?.get(node.expression.text) ?? node.expression.text;
         if (helper === 'definePiExtension' || helper === 'defineServerPlugin') {
-          const markHookContext = (callback: ts.FunctionLikeDeclaration): void => {
-            const parameter = callback.parameters[0];
-            if (!parameter) return;
-            const names = owned.get(callback) ?? new Set<string>();
-            if (ts.isIdentifier(parameter.name)) names.add(`${parameter.name.text}.context`);
-            if (ts.isObjectBindingPattern(parameter.name)) {
-              for (const element of parameter.name.elements) {
-                const key = element.propertyName?.getText() ?? element.name.getText();
-                if (key === 'context' && ts.isIdentifier(element.name)) names.add(element.name.text);
-              }
-            }
-            owned.set(callback, names);
-          };
+          const markHookContext = markMountContext;
           const markService = (expression: ts.Expression): void => {
             if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) markParameter(expression, 0);
             else if (ts.isObjectLiteralExpression(expression)) {

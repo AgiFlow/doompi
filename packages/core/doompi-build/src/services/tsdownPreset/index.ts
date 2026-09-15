@@ -7,6 +7,19 @@ import type { GenerateOptions } from '../generate/type';
 import { toKebab } from '../identity';
 import { writeManifest } from '../syncManifest';
 
+interface EmittedFile {
+  readonly type: 'asset' | 'chunk';
+  readonly id?: string;
+  readonly name: string;
+  readonly source?: Buffer;
+}
+
+interface QueryAssetPlugin {
+  readonly name: string;
+  resolveId(source: string, importer: string | undefined): string | undefined;
+  load(this: { emitFile(file: EmittedFile): string }, id: string): string | undefined;
+}
+
 /** The shape a tsdown config needs from this preset, without importing tsdown's types. */
 interface BrowserPresetConfig {
   entry: Record<string, string>;
@@ -17,6 +30,7 @@ interface BrowserPresetConfig {
   platform: 'browser';
   fixedExtension: boolean;
   external: (id: string) => boolean;
+  plugins: QueryAssetPlugin[];
   sourcemap: boolean;
   unbundle: boolean;
 }
@@ -53,10 +67,8 @@ function exportEntries(packageDir: string, exportsDir: string): Record<string, s
  *
  * Entries come from the tree rather than a hand-written list, and the manifest
  * blocks that restate the tree are written after the build rather than kept in
- * step by hand.
- *
- * The cockpit entry is deliberately absent from `entry`: the browser half
- * ships as source and is compiled by the cockpit's bundler, not this one.
+ * step by hand. Browser contributions are emitted through a second bundled
+ * config because their routed source is not published.
  */
 export interface ExtensionPresetOptions extends GenerateOptions {
   /** Extra tsdown entries beyond the derived ones. */
@@ -66,16 +78,39 @@ export interface ExtensionPresetOptions extends GenerateOptions {
 }
 
 /**
- * The browser half, built as a browser bundle rather than shipped as source.
+ * Implements the Vite query imports extension browser code already uses.
  *
- * A separate config because platform is per output, and the two halves have
- * nothing in common: this one targets a browser, emits ESM only, and must not
- * clean, because the node build owns dist and runs first.
- *
- * Everything the cockpit supplies page-wide stays external. React is usually a
- * devDependency of a plugin, so tsdown's default externals would bundle it,
- * and a second React in the page does not share hook state with the first.
+ * `?url` copies an opaque asset and `?worker&url` emits a separately bundled
+ * worker chunk. Rolldown then replaces its file reference with an URL relative
+ * to the extension bundle, which remains valid when the cockpit composes it.
  */
+function queryAssetPlugin(): QueryAssetPlugin {
+  return {
+    name: 'doompi-query-assets',
+    resolveId(source, importer) {
+      const queryAt = source.indexOf('?');
+      if (queryAt < 0 || importer === undefined || !source.startsWith('.')) return undefined;
+      const importerFile = importer.split('?')[0] as string;
+      return `${path.resolve(path.dirname(importerFile), source.slice(0, queryAt))}${source.slice(queryAt)}`;
+    },
+    load(id) {
+      const queryAt = id.indexOf('?');
+      if (queryAt < 0) return undefined;
+      const file = id.slice(0, queryAt);
+      const query = new URLSearchParams(id.slice(queryAt + 1));
+      if (!query.has('url')) return undefined;
+      const worker = query.has('worker');
+      const reference = this.emitFile(
+        worker
+          ? { type: 'chunk', id: file, name: path.basename(file, path.extname(file)) }
+          : { type: 'asset', name: path.basename(file), source: fs.readFileSync(file) },
+      );
+      return `export default import.meta.ROLLUP_FILE_URL_${reference};`;
+    },
+  };
+}
+
+/** The separately bundled browser half of a routed extension. */
 function browserConfig(): BrowserPresetConfig {
   return {
     entry: { 'extensions/web': `${GENERATED_DIR}/web.ts` },
@@ -99,6 +134,7 @@ function browserConfig(): BrowserPresetConfig {
     // resolved id, so /^[^.]/ also matches the absolute path of this package's
     // own routed file and would leave a dangling import to unbuilt .tsx.
     external: (id: string) => !id.startsWith('.') && !path.isAbsolute(id),
+    plugins: [queryAssetPlugin()],
     sourcemap: true,
     // Bundled, unlike the node half. Unbundling would emit an import to the
     // routed source file, which is not published and is .tsx besides. One
@@ -111,7 +147,7 @@ export function doompiExtension(
   options: ExtensionPresetOptions = { packageDir: process.cwd() },
 ): PresetConfig | (PresetConfig | BrowserPresetConfig)[] {
   const packageDir = options.packageDir ?? process.cwd();
-  const result = generateExtension({ ...options, packageDir, check: options.check ?? Boolean(process.env.CI) });
+  const result = generateExtension({ ...options, packageDir, check: options.check ?? false });
 
   for (const notice of result.notices) process.stderr.write(`[doompi-build] ${notice.path}: ${notice.message}\n`);
 
@@ -130,12 +166,8 @@ export function doompiExtension(
     format: ['esm', 'cjs'],
     // No minify. This is a library build, and a mangled stack trace inside a
     // published extension is far more expensive than the bytes it saves.
-    // Not a restriction on what the code may use, and not a claim about the
-    // browser half, which tsdown does not build at all. It sets tsdown's
-    // fixedExtension, so output lands on .mjs and .d.mts rather than .js and
-    // .d.ts. Every consumer here requires that: pi.extensions and
-    // doompiServer.dist both name .mjs, and the server bundle schema rejects
-    // anything else outright. Both hosts this builds for are Node processes.
+    // Node output uses fixed extensions, so pi.extensions and doompiServer.dist
+    // both land on the .mjs filenames their hosts require.
     platform: 'node',
     sourcemap: true,
     unbundle: true,

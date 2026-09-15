@@ -9,7 +9,7 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { hookExtension } from '../../src/extensions/pi';
+import { extension as hookExtension } from '../../generated/pi';
 import { createHookDocumentReader } from '../../src/services/hookDocuments';
 import type { HookDocumentReader, HookOutcome } from '../../src/types/hooks';
 import { type PiHarness, piHarness, SESSION_ID, stubRunner, TEST_CORDIS_ROOT } from '../helpers/piSession';
@@ -136,7 +136,7 @@ describe('repository hook Pi lifecycle', () => {
     expect(first.listContributions()).toEqual([
       {
         source: '@agimon-ai/doompi-hook',
-        moduleUrl: expect.stringMatching(/extensions\/pi\.ts$/u),
+        moduleUrl: expect.stringMatching(/extensions\/workspaces\/sessions\/\(backend\)\/extra\.cli\.ts$/u),
         skills: [
           {
             name: 'doompi-author-hook',

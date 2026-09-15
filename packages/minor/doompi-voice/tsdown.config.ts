@@ -1,23 +1,18 @@
+import { doompiExtension } from '@agimon-ai/doompi-build/tsdown';
 import { defineConfig } from 'tsdown';
 
-export default defineConfig({
+const routed = doompiExtension({
+  packageDir: process.cwd(),
+  exportsDir: 'src/exports/_none',
   entry: {
     'api-contracts': 'src/exports/apiContracts.ts',
-    '*': ['src/exports/*.ts'],
-    'extensions/pi': 'src/extensions/pi.ts',
-    'extensions/server': 'src/extensions/server.ts',
+    index: 'src/exports/index.ts',
+    clientMedia: 'src/exports/clientMedia.ts',
+    voiceReloadHandoff: 'src/exports/voiceReloadHandoff.ts',
+    voiceTools: 'src/exports/voiceTools.ts',
     voiceWorker: 'src/services/voiceWorker/index.ts',
   },
-  clean: true,
-  dts: { incremental: true, parallel: false, eager: true },
-  exports: false,
-  format: ['esm', 'cjs'],
-  minify: {
-    compress: true,
-    mangle: { toplevel: true },
-    codegen: { removeWhitespace: true },
-  },
-  platform: 'node',
-  sourcemap: true,
-  unbundle: true,
 });
+if (!Array.isArray(routed)) throw new Error('voice requires its web bundle.');
+
+export default defineConfig([{ ...routed[0], exports: false }, routed[1]]);
