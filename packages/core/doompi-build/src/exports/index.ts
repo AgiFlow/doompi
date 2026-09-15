@@ -2,6 +2,8 @@ export { classifySegment, type Segment } from '../services/segments';
 export { parseFilename, type ParsedFilename } from '../services/filename';
 export { resolveRoutingRoot, scanExtensions } from '../services/scan';
 export type { ScanOptions } from '../services/scan/type';
+export { resolveTarget } from '../services/resolveTarget';
+export type { BuildTarget, ResolvedContribution, TargetResolution } from '../services/resolveTarget/type';
 export type {
   ExtensionEntry,
   ExtensionGate,
