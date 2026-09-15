@@ -1,5 +1,6 @@
 import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
 
-import contribution from './_lib/subagents-fleet.cli';
+import { openSubagentFleet } from '../../(frontend)/overlay/_lib/fleet.cli';
+import { createFleetContribution } from './_lib/subagents-fleet.cli';
 
-export default defineRoutedContribution(contribution, {});
+export default defineRoutedContribution(createFleetContribution(openSubagentFleet), {});

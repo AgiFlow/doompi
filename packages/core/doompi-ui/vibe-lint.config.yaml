@@ -20,6 +20,7 @@ rules:
   package-layer-order:
     - error
     - packageLayers:
+        "@agimon-ai/doompi-build": contracts
         "@agimon-ai/doompi-core": contracts
         "@agimon-ai/doompi-hashline": contracts
         "@agimon-ai/doompi-telemetry": contracts

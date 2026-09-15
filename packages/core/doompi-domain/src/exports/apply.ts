@@ -1,1 +1,1 @@
-export { applyDomains } from '../extensions/workspaces/sessions/(backend)/_lib/applyDomains';
+export { applyDomains } from '../services/applyDomains';

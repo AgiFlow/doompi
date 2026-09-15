@@ -1,3 +1,13 @@
+export interface NotificationExtensionOptions {
+  /** Replaces the worker-thread animator, which a host without worker threads cannot start. */
+  titleController?: ShellTitleController;
+  environment?: NodeJS.ProcessEnv;
+}
+
+export interface NotificationExecutor {
+  exec(command: string, args: string[], options: { timeout: number }): Promise<{ code: number | null }>;
+}
+
 /** Writes a shell-tab title to whatever terminal surface the host owns. */
 export type WriteTitle = (title: string) => void;
 

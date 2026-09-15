@@ -243,14 +243,16 @@ export function registerSessionVoiceNarrationService(
     const session = requireDoomCordisSession(sessionContext);
     const sessionAbort = new AbortController();
     let mounted = true;
-    sessionContext.provide(
-      DOOM_NARRATION_SERVICE,
-      createVoiceNarrationService(controller, {
-        generation: `${session.generation}:voice-narration`,
-        signal: sessionAbort.signal,
-        isCurrentSession: () => mounted && isNarrationRuntimeActive(runtimeProvider(), session.context),
-      }),
-    );
+    sessionContext.plugin((providerContext) => {
+      providerContext.provide(
+        DOOM_NARRATION_SERVICE,
+        createVoiceNarrationService(controller, {
+          generation: `${session.generation}:voice-narration`,
+          signal: sessionAbort.signal,
+          isCurrentSession: () => mounted && isNarrationRuntimeActive(runtimeProvider(), session.context),
+        }),
+      );
+    });
     return () => {
       mounted = false;
       sessionAbort.abort();
@@ -814,7 +816,9 @@ export function createVoiceRuntime(
       {
         apply(cordis: Context) {
           modeCatalog.apply(cordis);
-          cordis.provide(DOOM_VOICE_TOOLS_SERVICE, voiceTools);
+          cordis.plugin((providerContext) => {
+            providerContext.provide(DOOM_VOICE_TOOLS_SERVICE, voiceTools);
+          });
           cordis.effect(() => () => voiceTools.dispose());
           cordis.effect(() => () => {
             active = false;

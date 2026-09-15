@@ -10,7 +10,7 @@ import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { extension as notificationExtension } from '../../generated/pi';
-import { createMainThreadTitleController } from '../../src/extensions/workspaces/sessions/(backend)/_lib/shellTitleController';
+import { createMainThreadTitleController } from '../../src/services/shellTitleController';
 import { createPiHarness, type PiHarness } from '../helpers/piHarness';
 
 const COMMAND_TIMEOUT_MS = 3_000;

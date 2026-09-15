@@ -12,9 +12,9 @@ import {
   type MajorModeVoiceResult,
 } from '../../../../../schemas/majorModeVoiceTools';
 import { MAJOR_MODE_COMMAND, VOICE_SWITCH_TOKEN_PREFIX } from '../../../../../services/majorModeText';
+import { clearPendingSelection } from '../../../../../services/pendingSelection';
 import { MAJOR_MODE_SWITCH_HANDOFF_KIND } from '../../../../../types/majorMode';
 import { MAJOR_MODE_SOURCE, type MajorModeView } from '../../../../../types/majorMode';
-import { clearPendingSelection } from './pendingSelection';
 
 type VoiceMessageSender = (
   content: string,

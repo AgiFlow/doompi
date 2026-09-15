@@ -120,8 +120,10 @@ export function createMcpPiRuntime(runtime: DoomCordisRuntimeService) {
             generation: `${hostSession.generation}:mcp-tool-resolver`,
             resolve: (selectors: readonly string[]) => session.resolveToolSelectors(selectors),
           });
-          sessionContext.provide(DOOM_MCP_STATUS_SERVICE, status);
-          sessionContext.provide(DOOM_MCP_TOOL_RESOLVER_SERVICE, toolResolver);
+          sessionContext.plugin((providerContext) => {
+            providerContext.provide(DOOM_MCP_STATUS_SERVICE, status);
+            providerContext.provide(DOOM_MCP_TOOL_RESOLVER_SERVICE, toolResolver);
+          });
           for (const diagnostic of session.getDiagnostics()) context.ui?.notify(diagnostic, WARNING);
           return async () => {
             sessionActive = false;

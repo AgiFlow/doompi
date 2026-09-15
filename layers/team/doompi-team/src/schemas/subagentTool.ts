@@ -36,6 +36,17 @@ export function subagentActionAcceptsField(action: SubagentAction, field: string
   return (SUBAGENT_ACTION_FIELDS[action] as readonly string[]).includes(field);
 }
 
+/** Remove the one legacy field emitted by Doom Plan before strict validation. */
+export function normalizeSubagentToolParams(input: unknown): unknown {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+  const record = input as Record<string, unknown>;
+  if (!isSubagentAction(record.action) || record.action === SUBAGENT_ACTIONS.run || typeof record.model !== 'string') {
+    return input;
+  }
+  const { model: _model, ...normalized } = record;
+  return normalized;
+}
+
 const AgentScope = Type.Union([Type.Literal('user'), Type.Literal('project'), Type.Literal('both')]);
 
 const RunRequest = Type.Object(

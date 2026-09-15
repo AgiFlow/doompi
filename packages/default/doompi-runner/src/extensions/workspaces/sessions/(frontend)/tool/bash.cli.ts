@@ -1,7 +1,7 @@
 import { defineRoutedContribution } from '@agimon-ai/doompi-core/extension-file';
 
 import type { BashParams } from '../../../../../schemas/bashTool';
-import { renderBashCall, renderBashResult } from '../../../../../tui/bashRender';
+import { renderBashCall, renderBashResult } from './_lib/bashRender';
 export default defineRoutedContribution(
   {
     renderCall: (args: unknown, theme: Parameters<typeof renderBashCall>[1]) =>

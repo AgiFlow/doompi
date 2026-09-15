@@ -1,10 +1,11 @@
 import { requireHarnessRoot } from '@agimon-ai/doompi-config/harnessStore';
 import { readDoomConfigSelection, requireDoomConfigContext } from '@agimon-ai/doompi-config/piContext';
 import type { Context } from '@deepseek-ai/cordis';
-import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
-import { normalizeDomainNames } from '../../../../../services/domainText';
-import type { DomainCompletion, DomainListing } from '../../../../../types/domains';
+import type { DomainCompletion, DomainListing } from '../../types/domains';
+import { normalizeDomainNames } from '../domainText';
+
+type DomainSelectionContext = Parameters<typeof readDoomConfigSelection>[0];
 
 /**
  * The manifest reader every surface of this package shares.
@@ -17,7 +18,7 @@ export function createDomainCatalog(cordisContext: () => Context) {
   let config: Promise<typeof import('@agimon-ai/doompi-config/domains')> | undefined;
   const load = () => (config ??= import('@agimon-ai/doompi-config/domains'));
 
-  const list = async (ctx: ExtensionContext): Promise<DomainListing> => {
+  const list = async (ctx: DomainSelectionContext): Promise<DomainListing> => {
     const configContext = requireDoomConfigContext(cordisContext());
     const state = configContext.harness;
     const repoRoot = requireHarnessRoot(state);
@@ -37,7 +38,7 @@ export function createDomainCatalog(cordisContext: () => Context) {
     return { active, effective, available };
   };
 
-  const validate = async (_ctx: ExtensionContext, values: readonly string[]): Promise<string[]> => {
+  const validate = async (_ctx: DomainSelectionContext, values: readonly string[]): Promise<string[]> => {
     const selected = normalizeDomainNames(values);
     const state = requireDoomConfigContext(cordisContext()).harness;
     const repoRoot = requireHarnessRoot(state);
@@ -49,7 +50,7 @@ export function createDomainCatalog(cordisContext: () => Context) {
     return selected;
   };
 
-  const describe = async (_ctx: ExtensionContext): Promise<Record<string, string | undefined>> => {
+  const describe = async (_ctx: DomainSelectionContext): Promise<Record<string, string | undefined>> => {
     const root = requireDoomConfigContext(cordisContext()).harness.root;
     if (!root) return {};
     const { loadDomains } = await load();

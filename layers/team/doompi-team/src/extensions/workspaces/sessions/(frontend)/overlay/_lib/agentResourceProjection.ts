@@ -1,7 +1,19 @@
 import type { ResolvedSubagentCapabilityCeiling } from '../../../../../../schemas/team/capabilityCeiling';
 import { buildSkillInjection, type SkillDiscoveryContract } from '../../../../../../services/agentSkills';
 import { isPiRuntime } from '../../../../../../services/runtimeRegistry';
-import type { AgentConfig } from '../../../../../../types/agent';
+import type {
+  AgentCatalogEntry,
+  AgentConfig,
+  AgentResourceProjection,
+  ProjectedResource,
+  ResourceTabProjection,
+} from '../../../../../../types/agent';
+export type {
+  AgentCatalogEntry,
+  AgentResourceProjection,
+  ProjectedResource,
+  ResourceTabProjection,
+} from '../../../../../../types/agent';
 import { DOOMPI_CHILD_EXTENSIONS_ENV } from '../../../../../../types/environment';
 
 const CONDITIONAL_TOOLS = 'Request-specific internal tools';
@@ -109,31 +121,6 @@ function resolvePiSdkResourcePlan(input: {
     extensions: [...new Set([...inheritedExtensions(input.environment), ...configuredExtensions])],
     noAmbientExtensions: input.capabilityCeiling?.denyExtensions === true || input.extensions !== undefined,
   };
-}
-
-export interface ProjectedResource {
-  name: string;
-  detail?: string;
-}
-
-export interface ResourceTabProjection {
-  effective: readonly ProjectedResource[];
-  removed: readonly ProjectedResource[];
-  unresolved: readonly ProjectedResource[];
-}
-
-export interface AgentResourceProjection {
-  tools: ResourceTabProjection;
-  skills: ResourceTabProjection;
-  extensions: ResourceTabProjection;
-  notice: string;
-  configuredOnly: boolean;
-  error?: string;
-}
-
-export interface AgentCatalogEntry {
-  agent: AgentConfig;
-  resources: AgentResourceProjection;
 }
 
 export interface AgentResourceProjectionContext {

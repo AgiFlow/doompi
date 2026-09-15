@@ -1,32 +1,99 @@
 import { resolveRootSessionId } from '@agimon-ai/doompi-core/child-process';
 import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
 import type { PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
+import { SUBAGENT_FLEET_COMMAND } from '../../../../../../constants/team';
 import {
-  createFleetActionDispatcher,
-  SUBAGENT_FLEET_COMMAND,
-  type RegisterFleetCommandDeps,
-} from '../../../(frontend)/overlay/_lib/contributions';
-import { openSubagentFleet } from '../../../(frontend)/overlay/_lib/fleet.cli';
-import { createSessionScope } from '../../../../../../services/sessionPaths';
+  type AsyncJobTrackerContract,
+  type TrackedAsyncJobsContract,
+  resolveTrackedRunId,
+} from '../../../../../../services/asyncJobTracker';
+import type { ManagementActionsContract } from '../../../../../../services/managementActions';
+import type { PollSchedulerContract } from '../../../../../../services/pollScheduler';
+import { createSessionScope, type SessionScope } from '../../../../../../services/sessionPaths';
 import type { TeamPiScope } from '../../_lib/root.cli';
 import { readyCommand } from '.././_lib/ready';
 
-export default (context: WithRoot<PiPluginContext, TeamPiScope>) => {
-  const { pollScheduler, asyncJobTracker, management } = context.root.runtime;
-  const [command] = createFleetCommand({
-    scheduler: pollScheduler,
-    tracker: asyncJobTracker,
-    management,
-    readTranscriptPage: context.root.readTranscriptPage,
-    environment: context.root.environment,
-  });
-  return readyCommand(context.root, command);
-};
+export interface FleetActionRequest {
+  action: 'interrupt' | 'stop' | 'resume' | 'steer';
+  id: string;
+  message?: string;
+}
+
+export interface FleetActionResult {
+  status: string;
+  detail?: string;
+}
+
+export type FleetActionDispatcher = (request: FleetActionRequest) => Promise<FleetActionResult>;
+
+export interface RegisterFleetCommandDeps {
+  scheduler: PollSchedulerContract;
+  tracker: AsyncJobTrackerContract;
+  dispatchAction?: FleetActionDispatcher;
+  management?: ManagementActionsContract;
+  readTranscriptPage?: (
+    runId: string,
+    request: Omit<TranscriptPageRequest, 'threadId'>,
+    signal?: AbortSignal,
+  ) => Promise<TranscriptPage>;
+  environment: Readonly<Record<string, string | undefined>>;
+}
+
+export type OpenSubagentFleet = (
+  context: ExtensionContext,
+  scheduler: PollSchedulerContract,
+  jobs: TrackedAsyncJobsContract,
+  scope: SessionScope,
+  options: {
+    dispatchAction?: FleetActionDispatcher;
+    readTranscriptPage?: RegisterFleetCommandDeps['readTranscriptPage'];
+  },
+) => Promise<void>;
+
+export const createFleetContribution =
+  (openSubagentFleet: OpenSubagentFleet) => (context: WithRoot<PiPluginContext, TeamPiScope>) => {
+    const { pollScheduler, asyncJobTracker, management } = context.root.runtime;
+    const [command] = createFleetCommand(
+      {
+        scheduler: pollScheduler,
+        tracker: asyncJobTracker,
+        management,
+        readTranscriptPage: context.root.readTranscriptPage,
+        environment: context.root.environment,
+      },
+      openSubagentFleet,
+    );
+    return readyCommand(context.root, command);
+  };
+
+export function createFleetActionDispatcher(
+  management: ManagementActionsContract,
+  jobs: TrackedAsyncJobsContract,
+): FleetActionDispatcher {
+  return async (request) => {
+    const runId = resolveTrackedRunId(jobs, request.id);
+    if (request.action === 'interrupt') {
+      await management.interrupt(runId, request.message);
+      return { status: 'requested' };
+    }
+    if (request.action === 'stop') {
+      await management.stop(runId, request.message);
+      return { status: 'requested' };
+    }
+    if (request.action === 'steer') {
+      const result = await management.steer(runId, request.message ?? '');
+      return { status: result.state, detail: result.message };
+    }
+    throw new Error('Resume is not supported by the current subagent runtime.');
+  };
+}
 
 export function createFleetCommand(
   deps: RegisterFleetCommandDeps,
+  openSubagentFleet: OpenSubagentFleet,
 ): Array<readonly [string, Parameters<ExtensionAPI['registerCommand']>[1]]> {
   return [
     [

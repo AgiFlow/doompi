@@ -13,8 +13,8 @@ import type { HarnessState } from '@agimon-ai/doompi-config/types';
 import { loadSkills } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { applyDomains } from '../../src/extensions/workspaces/sessions/(backend)/_lib/applyDomains';
 import { activeDomainSkillPaths } from '../../src/extensions/workspaces/sessions/(backend)/_lib/domainRuntime';
+import { applyDomains } from '../../src/services/applyDomains';
 import { DISPATCHER_AGENT_NAME } from '../../src/services/resourceCollector';
 import { harnessContext } from '../helpers/session';
 

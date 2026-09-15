@@ -12,9 +12,9 @@ import {
   type SwitchDomainsInput,
 } from '../../../../../schemas/domainVoiceTools';
 import { DOMAIN_COMMAND, VOICE_SWITCH_TOKEN_PREFIX } from '../../../../../services/domainText';
+import type { DomainCatalogPort } from '../../../../../types/domainCommand';
 import { DOMAIN_SOURCE } from '../../../../../types/domains';
 import type { DomainSwitchHandoff, DomainSwitchHandoffStore } from '../../../../../types/handoff';
-import type { DomainCatalogPort } from './domainsCommand';
 
 const LIST_DOMAINS_ID = 'domains-list';
 const SWITCH_DOMAINS_ID = 'domains-switch';

@@ -9,19 +9,14 @@ import {
 import type { DoomConfigPendingSelection } from '@agimon-ai/doompi-config/types';
 import { alreadyComposed } from '@agimon-ai/doompi-core/child-process';
 import { type DoomTransitionResult, requireDoomTransitionCoordinator } from '@agimon-ai/doompi-core/transition';
-import type {
-  VoiceReloadHandoff,
-  VoiceReloadHandoffIdentity,
-  VoiceReloadHandoffStore,
-} from '@agimon-ai/doompi-core/voice-reload-handoff';
+import type { VoiceReloadHandoff, VoiceReloadHandoffIdentity } from '@agimon-ai/doompi-core/voice-reload-handoff';
 import { readDoomVoiceToolsService } from '@agimon-ai/doompi-core/voice-tools';
 import { readMinorModeCatalog } from '@agimon-ai/doompi-minor-mode';
 import {
   type MinorModeReloadHandoffHandle,
   prepareMinorModeReloadHandoff,
 } from '@agimon-ai/doompi-minor-mode/reload-handoff';
-import type { Context } from '@deepseek-ai/cordis';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 import {
   applySummary,
@@ -33,27 +28,18 @@ import {
   optionName,
   voiceSwitchToken,
 } from '../../../../../services/majorModeText';
+import {
+  bindPendingSelection,
+  clearPendingSelection,
+  selectionFromSnapshot,
+} from '../../../../../services/pendingSelection';
 import { colorStatus, STATUS_KEY } from '../../../../../services/statusLine';
-import { MAJOR_MODE_SWITCH_HANDOFF_KIND, type MajorModeView } from '../../../../../types/majorMode';
+import { MAJOR_MODE_SWITCH_HANDOFF_KIND } from '../../../../../types/majorMode';
+import type { MajorModeCommandDependencies } from '../../../../../types/majorModeCommand';
 import { MAJOR_MODE_EVENT, type MajorModeTelemetry } from '../../../../../types/telemetry';
-import { bindPendingSelection, clearPendingSelection, selectionFromSnapshot } from './pendingSelection';
 
 function transitionError(result: DoomTransitionResult): Error {
   return new Error(`Major-mode transition was ${result.outcome}: ${result.diagnostics.join(', ')}`);
-}
-
-export interface MajorModeCommandDependencies {
-  readonly cordisContext: () => Context;
-  readonly currentView: (ctx: ExtensionContext) => Promise<MajorModeView>;
-  readonly reloadHandoffs: VoiceReloadHandoffStore;
-  readonly loadPicker: () => Promise<typeof import('@agimon-ai/doompi-ui/matrix-picker')>;
-  readonly loadSelectionSwitch: () => Promise<typeof import('@agimon-ai/doompi-config/selectionSwitch')>;
-  readonly loadConfigJournal: () => Promise<typeof import('@agimon-ai/doompi-config/piContext')>;
-  readonly resolveLayers: (config: MajorModeView['config'], majorMode: string) => string[];
-  /** Whether an owning process supervisor listens for relaunch requests. */
-  readonly supervisedRelaunchAvailable: () => boolean;
-  /** Asks the supervisor to relaunch with the picked mode; call only at idle. */
-  readonly requestSupervisedRelaunch: (majorMode: string, operationId: string) => boolean;
 }
 
 export function createMajorModeCommand(

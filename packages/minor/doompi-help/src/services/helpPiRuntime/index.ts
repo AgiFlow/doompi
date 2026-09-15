@@ -39,7 +39,9 @@ export function createHelpPiRuntime(
           const runtime = createHelpRuntime(service, options);
           activeActivation = runtime.activation;
           try {
-            sessionContext.provide(DOOM_HELP_SERVICE, service);
+            sessionContext.plugin((providerContext) => {
+              providerContext.provide(DOOM_HELP_SERVICE, service);
+            });
             sessionContext.inject([DOOM_MINOR_MODE_CATALOG_SERVICE], (modeContext) => {
               const mode = registerHelpModeIntegration(requireMinorModeCatalog(modeContext), runtime.activation);
               return () => mode.dispose();

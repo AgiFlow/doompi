@@ -1,7 +1,5 @@
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-
-import { notificationBody } from '../../../../../services/notificationText';
-import type { DesktopNotification } from '../../../../../types/notifications';
+import type { DesktopNotification, NotificationExecutor } from '../../types/notifications';
+import { notificationBody } from '../notificationText';
 
 const CMUX_COMMAND = 'cmux';
 const COMMAND_TIMEOUT_MS = 3_000;
@@ -9,7 +7,7 @@ const DARWIN_PLATFORM = 'darwin';
 const OSASCRIPT_COMMAND = 'osascript';
 const OSASCRIPT_EXPRESSION_FLAG = '-e';
 
-async function execute(pi: ExtensionAPI, command: string, args: string[]): Promise<boolean> {
+async function execute(pi: NotificationExecutor, command: string, args: string[]): Promise<boolean> {
   try {
     const result = await pi.exec(command, args, { timeout: COMMAND_TIMEOUT_MS });
     return result.code === 0;
@@ -28,7 +26,7 @@ async function execute(pi: ExtensionAPI, command: string, args: string[]): Promi
  * and a host with neither stays silent rather than failing the turn.
  */
 export async function sendSystemNotification(
-  pi: ExtensionAPI,
+  pi: NotificationExecutor,
   notification: DesktopNotification,
   platform: string = process.platform,
 ): Promise<void> {

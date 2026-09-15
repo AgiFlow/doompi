@@ -341,7 +341,9 @@ export function createVoiceServer(
     services: [
       serverMinorModes([owner]),
       (context) => {
-        context.provide(DOOM_VOICE_TOOLS_SERVICE, registry);
+        context.plugin((providerContext) => {
+          providerContext.provide(DOOM_VOICE_TOOLS_SERVICE, registry);
+        });
       },
     ],
     methods: [defineServerMethod(voiceControlMethod, ({ action, target }) => control(action, target))],

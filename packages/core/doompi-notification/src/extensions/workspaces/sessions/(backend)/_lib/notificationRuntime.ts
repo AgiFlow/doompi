@@ -17,21 +17,15 @@ import {
   settledNotification,
   shellTabTitle,
 } from '../../../../../services/notificationText';
-import type { ShellTitleController, WriteTitle } from '../../../../../types/notifications';
+import { createWorkerTitleController } from '../../../../../services/shellTitleController';
+import type { NotificationExtensionOptions, WriteTitle } from '../../../../../types/notifications';
 import { createDoomNotificationRouter } from './notificationRouter';
-import { createWorkerTitleController } from './shellTitleController';
 
 const AGENT_SETTLED_EVENT = 'agent_settled';
 const AGENT_START_EVENT = 'agent_start';
 const EXTENSION_INPUT_SOURCE = 'extension';
 const INPUT_EVENT = 'input';
 const SESSION_START_EVENT = 'session_start';
-
-export interface NotificationExtensionOptions {
-  /** Replaces the worker-thread animator, which a host without worker threads cannot start. */
-  titleController?: ShellTitleController;
-  environment?: NodeJS.ProcessEnv;
-}
 
 /** Where the tab title is written, remembered so shutdown can restore it without an event. */
 interface TitleSurface {
@@ -175,7 +169,9 @@ export function createNotificationRuntime({
   return {
     services: [
       (cordis: Context) => {
-        cordis.provide(DOOM_NOTIFICATION_SERVICE, router);
+        cordis.plugin((providerContext) => {
+          providerContext.provide(DOOM_NOTIFICATION_SERVICE, router);
+        });
         cordis.inject([DOOM_CORDIS_SESSION_SERVICE], (sessionContext) => {
           const session = sessionContext.get(DOOM_CORDIS_SESSION_SERVICE) as DoomCordisSessionService;
           const context = session.context;

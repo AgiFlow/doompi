@@ -9,7 +9,7 @@ import {
 } from '@agimon-ai/doompi-core/notification';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 
-import { sendSystemNotification } from './systemNotification';
+import { sendSystemNotification } from '../../../../../services/systemNotification';
 
 const DEFAULT_TITLE = 'Pi';
 

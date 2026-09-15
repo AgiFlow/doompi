@@ -1,5 +1,5 @@
 import { defineMessageRenderer } from '@agimon-ai/doompi-core/pi-extension';
 
-import { createWorkflowFinishedRenderer } from '../../../../../tui/workflow/workflowFinishedMessage';
+import { createWorkflowFinishedRenderer } from './_lib/workflowFinishedRenderer';
 
 export default defineMessageRenderer(...createWorkflowFinishedRenderer());
