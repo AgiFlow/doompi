@@ -89,6 +89,9 @@ await test('every scaffold renders and all source imports resolve across the com
       const specifier = match.groups.specifier;
       assert.doesNotMatch(specifier, /(?:\/index|\.tsx?)$/u, filename);
       const target = path.posix.normalize(path.posix.join(path.posix.dirname(filename), specifier));
+      // generated/ is written by the build, not by the scaffold, so a test
+      // importing a host entry has nothing to resolve against here.
+      if (target.startsWith('generated/')) continue;
       assert.ok(
         [`${target}.ts`, `${target}.tsx`, `${target}/index.ts`].some((candidate) => files.has(candidate)),
         `${filename} imports missing ${specifier}`,
@@ -108,7 +111,7 @@ await test('every scaffold renders and all source imports resolve across the com
   }
 });
 
-await test('the base package publishes a direct named Pi entry and explicit build entries', async () => {
+await test('the base package routes its contributions and generates its host entries', async () => {
   const files = await render(config.boilerplate[0]);
   const manifest = JSON.parse(files.get('package.json'));
   assert.deepEqual(manifest.pi.extensions, ['./dist/extensions/pi.mjs']);
@@ -116,9 +119,23 @@ await test('the base package publishes a direct named Pi entry and explicit buil
     manifest.peerDependencies['@earendil-works/pi-coding-agent'],
     manifest.devDependencies['@earendil-works/pi-coding-agent'],
   );
-  assert.match(files.get('src/extensions/pi.ts'), /definePiExtension</u);
-  assert.match(files.get('src/extensions/pi.ts'), /commands: \[createFixtureCommand/u);
-  assert.match(files.get('tsdown.config.ts'), /'extensions\/pi': 'src\/extensions\/pi.ts'/u);
+
+  // No hand-written host entry: the build writes all three into generated/,
+  // which the package gitignores.
+  assert.ok(!files.has('src/extensions/pi.ts'));
+  assert.match(files.get('.gitignore'), /^\/generated$/mu);
+  assert.match(files.get('tsdown.config.ts'), /doompiExtension\(\)/u);
+  assert.equal(manifest.devDependencies['@agimon-ai/doompi-build'], 'workspace:*');
+
+  // The command is a routed file: its folder is the surface, its name is the
+  // command, and it declares itself through the typed helper.
+  const routed = [...files.keys()].find((name) => name.includes('(backend)/command/'));
+  assert.ok(routed, 'expected a routed command file');
+  assert.match(files.get(routed), /defineCommand\(/u);
+  assert.match(files.get(routed), /@agimon-ai\/doompi-core\/extension-file/u);
+
   assert.ok(files.has('src/services/extensionService/index.ts'));
   assert.ok(files.has('src/services/extensionService/type.ts'));
+  // src/tools is no longer a root; platform shape lives in the routed file.
+  assert.ok(![...files.keys()].some((name) => name.startsWith('src/tools/')));
 });

@@ -72,7 +72,12 @@ export function doompiExtension(options: ExtensionPresetOptions = { packageDir: 
     entry,
     clean: true,
     dts: { incremental: true, parallel: false, eager: true },
-    exports: true,
+    // The build never rewrites package.json. tsdown's own exports generation
+    // drops the `types` condition this repository's export maps carry, and a
+    // build that mutates a tracked file makes every cached test result
+    // unsound: the manifest can change after the test that read it. The
+    // manifest stays hand-written and lint-enforced instead.
+    exports: false,
     format: ['esm', 'cjs'],
     minify: { compress: options.minify !== false, mangle: { toplevel: true }, codegen: { removeWhitespace: true } },
     platform: 'node',
