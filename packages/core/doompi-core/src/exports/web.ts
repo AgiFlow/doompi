@@ -2,6 +2,7 @@ export { bindSessionApiWorkspace, sessionApiPath } from '../web/services/apiRout
 export { defineSessionChannel, defineSlot, defineWebPlugin } from '../extensions/webPlugin';
 export { defineGlobalStore } from '../web/models/globalStore';
 export { defineSessionStore } from '../web/models/sessionStore';
+export { defineWorkspaceStore } from '../web/models/workspaceStore';
 export {
   HUB_ADVERTISEMENT_VERSION,
   hubAdvertisementPath,
@@ -78,6 +79,8 @@ export type {
   WebPluginDefinition,
   WebPluginRuntime,
   WebPluginSlotProps,
+  WorkspaceRecords,
+  WorkspaceStore,
 } from '../web/types/webPlugin';
 
 export {
