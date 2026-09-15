@@ -27,7 +27,6 @@ export const CLI_FIELDS: Readonly<Record<string, string>> = {
   tool: 'tools',
   command: 'commands',
   hook: 'events',
-  service: 'services',
   mode: 'minorModes',
 };
 
@@ -35,18 +34,18 @@ export const SERVER_FIELDS: Readonly<Record<string, string>> = {
   tool: 'tools',
   command: 'commands',
   hook: 'hooks',
-  service: 'services',
   mode: 'minorModes',
   api: 'api',
   channel: 'channels',
   method: 'methods',
-  activity: 'activities',
+  resource: 'resources',
 };
 
 /** The terminal's own presentation surfaces, authored under `(frontend)` with a `.cli` suffix. */
 export const CLI_FRONTEND_FIELDS: Readonly<Record<string, string>> = {
   tool: MERGED_INTO_TOOL,
   message: 'messageRenderers',
+  overlay: NOT_A_CONTRIBUTION,
 };
 
 export const WEB_FIELDS: Readonly<Record<string, string>> = {

@@ -1,12 +1,15 @@
+import type { WithRoot } from '@agimon-ai/doompi-core/extension-file';
 import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
 import type { DoomApi, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
+import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
 
-import { AgentDiscoveryService, resolveActiveTeamModelSpecs } from '../services/agentDiscovery';
-import { loadConfig } from '../services/config';
-import { toModelInfo } from '../services/modelInfo';
-import { createSessionScope } from '../services/sessionPaths';
-import type { TeamExtensionRuntime } from '../services/teamRuntime';
-import { catalogModels, presentCatalog, type CatalogAgentInput } from '../services/webSubagentCatalog';
+import { AgentDiscoveryService, resolveActiveTeamModelSpecs } from '../../../../../services/agentDiscovery';
+import { loadConfig } from '../../../../../services/config';
+import { toModelInfo } from '../../../../../services/modelInfo';
+import { createSessionScope } from '../../../../../services/sessionPaths';
+import type { TeamExtensionRuntime } from '../../../../../services/teamRuntime';
+import { catalogModels, presentCatalog, type CatalogAgentInput } from '../../../../../services/webSubagentCatalog';
+import type { TeamServerScope } from '../root.server';
 
 export const TEAM_API_BASE_PATH = 'team';
 export const TEAM_CATALOG_ROUTE = '/catalog';
@@ -134,3 +137,6 @@ export function createTeamSessionApi(runtime: TeamExtensionRuntime, execution: D
       }),
   };
 }
+
+export default (context: WithRoot<DoomServerPluginContext, TeamServerScope>) =>
+  createTeamSessionApi(context.root.runtime, context.root.execution);

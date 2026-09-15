@@ -29,12 +29,10 @@
  *   session's scrollback away on every finished run
  */
 
-import type { ExtensionAPI, MessageRenderOptions, Theme } from '@earendil-works/pi-coding-agent';
-import type { Component } from '@earendil-works/pi-tui';
-import { Text } from '@earendil-works/pi-tui';
+import type { Theme } from '@earendil-works/pi-coding-agent';
 
 import { formatDuration } from '../services/displayFormat';
-import { type CompletionNotifyDetails, SUBAGENT_NOTIFY_MESSAGE_TYPE } from '../services/notify';
+import type { CompletionNotifyDetails } from '../services/notify';
 
 /** Status glyphs. Paused is distinct from failed: the run can still be resumed. */
 function statusIcon(status: CompletionNotifyDetails['status'], theme: Theme): string {
@@ -88,25 +86,4 @@ export function renderCompletionNotice(
   // Collapsed multi-run notices stay one line per run: a fan-out of ten
   // children would otherwise emit thirty-plus lines in one go.
   return [header, ...details.map((detail) => renderDetail(detail, options.expanded, theme))].join('\n');
-}
-
-function asDetails(value: unknown): CompletionNotifyDetails[] | undefined {
-  if (!Array.isArray(value) || value.length === 0) return undefined;
-  const isDetail = (entry: unknown): entry is CompletionNotifyDetails =>
-    typeof entry === 'object' && entry !== null && typeof (entry as CompletionNotifyDetails).agent === 'string';
-  return value.every(isDetail) ? value : undefined;
-}
-
-export function createCompletionRenderer(): readonly [string, Parameters<ExtensionAPI['registerMessageRenderer']>[1]] {
-  return [
-    SUBAGENT_NOTIFY_MESSAGE_TYPE,
-    (message, options: MessageRenderOptions, theme: Theme): Component => {
-      const content = typeof message.content === 'string' ? message.content : '';
-      const details = asDetails(message.details);
-      // See the module header: no details means a pre-field transcript entry,
-      // not a message to re-derive by parsing.
-      if (!details) return new Text(content, 0, 0);
-      return new Text(renderCompletionNotice(details, { expanded: options.expanded === true }, theme), 0, 0);
-    },
-  ];
 }

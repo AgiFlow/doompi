@@ -981,6 +981,17 @@ describe('Doom deterministic architecture rules', () => {
   });
 
   describe('Cordis required-service injection', () => {
+    it('accepts an inline Cordis service owned by a routed root', () => {
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
+      write(
+        'src/extensions/workspaces/sessions/(backend)/root.ts',
+        `import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+         import { DOOM_DELEGATION_SERVICE } from '@agimon-ai/doompi-core/delegation';
+         export default defineRoot(() => ({ value: {}, services: [(cordis) => { cordis.provide(DOOM_DELEGATION_SERVICE, bridge); }] }));`,
+      );
+      expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
+    });
+
     it('accepts a stable Pi wrapper created and cleared by its owning injected callback', () => {
       const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-hook' }));
       write(
@@ -1192,6 +1203,23 @@ describe('Doom deterministic architecture rules', () => {
       expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toContain(
         'DOOM_NARRATION_SERVICE is provided outside a mounted plugin or injection-owned context',
       );
+    });
+
+    it('recognizes a Cordis plugin returned in a backend scope root services field', () => {
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
+      write(
+        'src/extensions/workspaces/sessions/(backend)/root.server.ts',
+        [
+          "import { defineRoot } from '@agimon-ai/doompi-core/extension-file';",
+          "import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';",
+          'const root = defineRoot(() => {',
+          '  const provider = (ctx) => ctx.provide(DOOM_HELP_SERVICE, service);',
+          '  return { value: {}, services: [provider] };',
+          '});',
+          'export default root;',
+        ].join('\n'),
+      );
+      expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
     });
 
     it('does not mistake eager clears or escaped nested closures for provider-loss cleanup', () => {

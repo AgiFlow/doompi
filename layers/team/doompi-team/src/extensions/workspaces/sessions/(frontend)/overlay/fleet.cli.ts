@@ -35,15 +35,24 @@ import {
   wrapTextWithAnsi,
 } from '@earendil-works/pi-tui';
 
-import type { AsyncRunStatus } from '../services/asyncExecution';
-import type { TrackedAsyncJobsContract, TrackedAsyncJob } from '../services/asyncJobTracker';
-import { formatDuration, formatModelThinking, formatTokens } from '../services/displayFormat';
-import { type FleetTranscriptTail, readFleetTranscriptTail } from '../services/fleetTranscript';
-import { nativeTranscriptTail } from '../services/nativeFleetTranscript';
-import type { PollSchedulerContract } from '../services/pollScheduler';
-import type { SessionScope } from '../services/sessionPaths';
-import { agentSystemPromptFingerprint, fieldRow, readAgentSystemPrompt, renderAgentView } from './fleetAgentView';
-import { type FleetTranscriptRender, type FleetTranscriptVerbosity, renderFleetTranscript } from './fleetTranscript';
+import type { AsyncRunStatus } from '../../../../../services/asyncExecution';
+import type { TrackedAsyncJobsContract, TrackedAsyncJob } from '../../../../../services/asyncJobTracker';
+import { formatDuration, formatModelThinking, formatTokens } from '../../../../../services/displayFormat';
+import { type FleetTranscriptTail, readFleetTranscriptTail } from '../../../../../services/fleetTranscript';
+import { nativeTranscriptTail } from '../../../../../services/nativeFleetTranscript';
+import type { PollSchedulerContract } from '../../../../../services/pollScheduler';
+import type { SessionScope } from '../../../../../services/sessionPaths';
+import {
+  agentSystemPromptFingerprint,
+  fieldRow,
+  readAgentSystemPrompt,
+  renderAgentView,
+} from '../../../../../tui/fleetAgentView';
+import {
+  type FleetTranscriptRender,
+  type FleetTranscriptVerbosity,
+  renderFleetTranscript,
+} from '../../../../../tui/fleetTranscript';
 
 const DEFAULT_REFRESH_INTERVAL_MS = 750;
 const MIN_DETAIL_BODY_LINES = 15;
@@ -814,3 +823,5 @@ export async function openSubagentFleet(
     DOOM_FULLSCREEN_UI_OPTIONS,
   );
 }
+
+export default openSubagentFleet;

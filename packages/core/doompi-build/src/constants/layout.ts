@@ -68,16 +68,7 @@ export const FRONTEND_PLATFORMS: readonly string[] = ['cli', 'web', 'ios', 'andr
  * `mode` is absent on purpose: it is a gate folder, so it is consumed before
  * the surface check and its declaration file synthesises the surface instead.
  */
-export const BACKEND_SURFACES: readonly string[] = [
-  'tool',
-  'command',
-  'hook',
-  'service',
-  'api',
-  'channel',
-  'method',
-  'activity',
-];
+export const BACKEND_SURFACES: readonly string[] = ['tool', 'command', 'hook', 'api', 'channel', 'method', 'resource'];
 
 /**
  * Surfaces that produce contributions on the frontend side.
@@ -93,6 +84,7 @@ export const FRONTEND_SURFACES: readonly string[] = [
   'channel',
   'method',
   'message',
+  'overlay',
   'tab',
   'dock',
   'setting',

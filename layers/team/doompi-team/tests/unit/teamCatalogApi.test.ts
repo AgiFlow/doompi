@@ -4,7 +4,7 @@ import * as path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createTeamApiHandler } from '../../src/controllers/teamSessionApi';
+import { createTeamApiHandler } from '../../src/extensions/workspaces/sessions/(backend)/api/route.server';
 import type { SubagentCatalogPayload } from '../../src/types/webSubagents';
 
 const pluginAgent = {

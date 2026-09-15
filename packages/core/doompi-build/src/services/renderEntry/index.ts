@@ -69,9 +69,9 @@ const RESOLVER_CONTEXT: Readonly<Record<BuildTarget, string>> = {
 function resolver(target: BuildTarget): string {
   const context = RESOLVER_CONTEXT[target];
   return [
-    `type Factory<T> = (context: ${context}) => T;`,
-    `const at = <T>(value: T | Factory<T>, context: ${context}): T =>`,
-    "  typeof value === 'function' ? (value as Factory<T>)(context) : value;",
+    `type Factory<T, C extends ${context}> = (context: C) => T;`,
+    `const at = <T, C extends ${context}>(value: T | Factory<T, C>, context: C): T =>`,
+    "  typeof value === 'function' ? (value as Factory<T, C>)(context) : value;",
   ].join('\n');
 }
 
@@ -279,6 +279,14 @@ function member(binding: Binding, contextExpression: string, target: BuildTarget
   }
 
   const base = target === 'web' ? binding.identifier : `at(${binding.identifier}, ${contextExpression})`;
+  // Pi command tuples already carry their native name and handler. A path
+  // identity spread would turn the tuple into an object and lose both.
+  if (
+    target === 'cli' &&
+    binding.contribution.entry.surface === 'command' &&
+    binding.contribution.entry.platform === 'cli'
+  )
+    return base;
   // A terminal tool renderer is a field of the tool declaration, not a
   // registration of its own, so the pair is merged at runtime: three tool
   // shapes reach this array and each holds renderers somewhere different.
@@ -387,6 +395,36 @@ function bodyFor(
   return lines;
 }
 
+/** Root-owned registrations join routed registrations in the host's usual fields. */
+function withRootRegistrations(
+  body: readonly string[],
+  roots: readonly RootBinding[],
+  target: 'cli' | 'server',
+  indent: string,
+  scope: ExtensionScope,
+): string[] {
+  if (roots.length === 0) return [...body];
+  const lines = [...body];
+  const servicesIndex = lines.findIndex((line) => line.startsWith(`${indent}services: [`));
+  const routedServices =
+    servicesIndex < 0 ? '' : (lines.splice(servicesIndex, 1)[0]?.match(/services: \[(.*)\],$/u)?.[1] ?? '');
+  const services = [...roots.map((root) => `...(${root.declaration}.services ?? [])`), routedServices]
+    .filter(Boolean)
+    .join(', ');
+  lines.push(`${indent}services: [${services}],`);
+
+  if (target === 'server' && scope === 'session') {
+    const activitiesIndex = lines.findIndex((line) => line.startsWith(`${indent}get activities()`));
+    const routedActivities =
+      activitiesIndex < 0 ? '' : (lines.splice(activitiesIndex, 1)[0]?.match(/return \[(.*)\]; \},$/u)?.[1] ?? '');
+    const activities = [...roots.map((root) => `...(${root.declaration}.activities ?? [])`), routedActivities]
+      .filter(Boolean)
+      .join(', ');
+    lines.push(`${indent}get activities(): DoomServerSessionPlugin['activities'] { return [${activities}]; },`);
+  }
+  return lines;
+}
+
 function importsFor(
   bindings: readonly Binding[],
   hatches: readonly { identifier: string; entry: ExtensionEntry }[],
@@ -468,7 +506,13 @@ export function renderCliEntry(resolution: TargetResolution, options: RenderOpti
   const prologue = rootPrologue(roots, 'context');
   const innermost = roots[roots.length - 1]?.context ?? 'context';
   const body = [
-    ...bodyFor(bindings, '  ', (b) => contextForScope(roots, b.contribution.entry.scope, 'context'), 'cli', options),
+    ...withRootRegistrations(
+      bodyFor(bindings, '  ', (b) => contextForScope(roots, b.contribution.entry.scope, 'context'), 'cli', options),
+      roots,
+      'cli',
+      '  ',
+      'session',
+    ),
     ...hatches.map((hatch) => `  ...at(${hatch.identifier}, ${innermost}),`),
   ];
   const factory = scopeBody(prologue, rootHooks(roots), body, '');
@@ -513,12 +557,18 @@ export function renderServerEntry(resolution: TargetResolution, options: RenderO
     const roots = allRoots.filter((root) => SCOPE_ORDER.indexOf(root.entry.scope) <= index);
     const innermost = roots[roots.length - 1]?.context ?? 'context';
     const body = [
-      ...bodyFor(
-        visible,
-        '    ',
-        (b) => contextForScope(roots, b.contribution.entry.scope, 'context'),
+      ...withRootRegistrations(
+        bodyFor(
+          visible,
+          '    ',
+          (b) => contextForScope(roots, b.contribution.entry.scope, 'context'),
+          'server',
+          options,
+        ),
+        roots,
         'server',
-        options,
+        '    ',
+        scope,
       ),
       ...here.map((hatch) => `    ...at(${hatch.identifier}, ${innermost}),`),
     ];

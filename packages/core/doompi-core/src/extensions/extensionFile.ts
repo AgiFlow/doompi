@@ -103,7 +103,7 @@ export function defineHook<TEvent extends DoomHeadlessEventName = DoomHeadlessEv
   return file;
 }
 
-/** `service/<name>.ts`. A factory returning a Cordis plugin, so it can read the mount. */
+/** A Cordis service factory for a scope root. */
 export function defineService<TContext = unknown>(file: ServiceFile<TContext>): ServiceFile<TContext> {
   return file;
 }
@@ -123,7 +123,7 @@ export function defineMethod<TContext = unknown>(file: MethodFile<TContext>): Me
   return file;
 }
 
-/** `activity/<name>.ts`. */
+/** A server activity declaration for a session root. */
 export function defineActivity<TContext = unknown>(file: ActivityFile<TContext>): ActivityFile<TContext> {
   return file;
 }

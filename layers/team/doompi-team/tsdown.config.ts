@@ -9,5 +9,5 @@ export default defineConfig(
   // The cockpit keys this package's tab, its subagents.run-actions slot and
   // its leader bindings on 'subagents', so the id does not follow the package
   // name and deriving it would rename all three.
-  doompiExtension({ pluginId: 'subagents' }),
+  doompiExtension({ packageDir: process.cwd(), pluginId: 'subagents' }),
 );

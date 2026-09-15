@@ -20,11 +20,9 @@
  *   thirty lines into the scrollback
  */
 
-import type { ExtensionAPI, MessageRenderOptions, Theme } from '@earendil-works/pi-coding-agent';
-import type { Component } from '@earendil-works/pi-tui';
-import { Text } from '@earendil-works/pi-tui';
+import type { Theme } from '@earendil-works/pi-coding-agent';
 
-import { SLASH_RESULT_CUSTOM_TYPE, type SlashRunDetail } from '../models/slashResult';
+import type { SlashRunDetail } from '../models/slashResult';
 
 /** A concise prefix that remains usable by session-scoped management resolution. */
 const RUN_ID_PREFIX_LENGTH = 8;
@@ -57,28 +55,4 @@ function detailLine(detail: SlashRunDetail, theme: Theme): string {
  */
 export function renderSlashRunNotice(details: readonly SlashRunDetail[], theme: Theme): string {
   return details.map((detail) => detailLine(detail, theme)).join('\n');
-}
-
-function asDetails(value: unknown): SlashRunDetail[] | undefined {
-  if (!Array.isArray(value) || value.length === 0) return undefined;
-  const isDetail = (entry: unknown): entry is SlashRunDetail =>
-    typeof entry === 'object' &&
-    entry !== null &&
-    typeof (entry as SlashRunDetail).agent === 'string' &&
-    typeof (entry as SlashRunDetail).status === 'string';
-  return value.every(isDetail) ? value : undefined;
-}
-
-export function createSlashRunRenderer(): readonly [string, Parameters<ExtensionAPI['registerMessageRenderer']>[1]] {
-  return [
-    SLASH_RESULT_CUSTOM_TYPE,
-    (message, _options: MessageRenderOptions, theme: Theme): Component => {
-      const content = typeof message.content === 'string' ? message.content : '';
-      const details = asDetails(message.details);
-      // See the module header: no details means a plain-text report or a
-      // pre-field transcript entry, both correct to show verbatim.
-      if (!details) return new Text(content, 0, 0);
-      return new Text(renderSlashRunNotice(details, theme), 0, 0);
-    },
-  ];
 }

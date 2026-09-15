@@ -41,6 +41,7 @@ function importsExtensionApi(sourceFile: ts.SourceFile): boolean {
 function isHostLoadedEntry(relativePath: string, sourceFile: ts.SourceFile, declaredEntries: Set<string>): boolean {
   const stem = sourceStem(relativePath);
   if (stem && declaredEntries.has(stem)) return true;
+  if (relativePath.split('/').includes('_lib')) return false;
   return SOURCE_ENTRY_PATTERN.test(relativePath) && importsExtensionApi(sourceFile);
 }
 

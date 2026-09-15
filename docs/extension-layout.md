@@ -61,13 +61,9 @@ src/extensions/workspaces/            workspace   /api/workspaces/{w}/plugins/<i
 src/extensions/workspaces/sessions/   session     /api/workspaces/{w}/sessions/{s}/plugins/<id>/...
 ```
 
-The nesting mirrors the mount prefixes the hosts already use. Ids the host supplies, `workspaceId` and `sessionId`, stay implicit: the package is the plugin, and it never branches on them.
+These paths name the owner of a feature. Put machine-wide settings and plugin settings directly under `extensions/`, repository settings under `workspaces/`, and Pi commands, tools, hooks, and TUI views for the active agent under `workspaces/sessions/`. The host supplies `workspaceId` and `sessionId`; a routed file does not encode either id.
 
-All three scopes are real runtime mounts with their own lifetime. What differs is what each one selects. See [Extension lifecycles](lifecycles.md) for the mount semantics.
-
-**Declaration cascades downward.** A contribution declared at a broader scope registers at that scope and every narrower one. Place it at the narrowest scope it needs and it stays there.
-
-The cockpit already behaves this way, folding global into workspace into session. The server does not: a facet reads exactly one scope declaration and nothing from above it, which is why a package wanting one channel at all three scopes writes the same reference three times today. The generator emits those repetitions, so the author writes one file.
+The hosts use those paths differently. Pi has one extension mount per process, so the generator gathers its routed files into one Pi declaration; the session path describes ownership, not an additional Pi mount. The server has independent global, workspace, and session facets. Its generator repeats broader declarations into narrower facets, while a session file stays in the session facet. The browser merges broader contributions into narrower scopes when it mounts the cockpit. See [Extension lifecycles](lifecycles.md) for the runtime semantics.
 
 ## Axis 2: side is `(backend)` or `(frontend)`
 
@@ -79,7 +75,7 @@ Neither appears in any URL. The split is not cosmetic; it is a boundary three me
 | Import boundary | the browser allowlist is pinned to one literal file path                                                | the rule matches the whole side |
 | Published files | `files` lists web source paths by hand, because web ships as source and backend as dist                 | derived                         |
 
-**The two sides may never import each other.** Only `src/types`, `src/constants`, `src/schemas` and the generated API contract cross. That is a lint rule expressible purely by path, and it is what keeps a hand-written browser client from drifting away from the contract its server half declares.
+The sides separate logic from presentation; they do not name a host or an owner. A `.cli.ts` frontend file can render the Pi terminal, while a `.web.tsx` frontend file can render the browser. Browser code does not import backend code. A session CLI command may import a session frontend `overlay/*.cli.ts` route to open its TUI view; other cross-side imports are rejected by lint. Shared data contracts live in `src/types`, `src/constants`, `src/schemas`, or the generated API contract.
 
 The split also narrows the suffix namespace, so the common case needs no suffix at all. Inside `(backend)`, no suffix means CLI and server. Inside `(frontend)`, no suffix means every frontend.
 
@@ -102,12 +98,11 @@ A directory per kind, filename is identity.
 | `tool/`     | `tools` on CLI and server              | `toolRenderers`                                   |
 | `command/`  | `commands` on CLI and server           | `paletteCommands`                                 |
 | `hook/`     | CLI `events`, server `hooks`           | not scanned                                       |
-| `service/`  | `services` on CLI and server           | not scanned                                       |
 | `mode/`     | `minorModes`                           | `minorModes`                                      |
 | `api/`      | `api`, as a Next.js route tree         | generated typed client                            |
 | `channel/`  | `channels`, filename is the frame type | `channels`                                        |
 | `method/`   | `methods`, filename is the member      | typed caller                                      |
-| `activity/` | `activities`                           | not scanned                                       |
+| `resource/` | server `resources`                     | not scanned                                       |
 | `tab/`      | not scanned                            | `tabs`                                            |
 | `dock/`     | not scanned                            | `dockFaces`                                       |
 | `setting/`  | not scanned                            | `settingsSections` or `settingsPanels` by export  |
@@ -115,6 +110,9 @@ A directory per kind, filename is identity.
 | `fill/`     | not scanned                            | any host region or plugin slot                    |
 | `action/`   | not scanned                            | `contextActions`, `userMessageActions`            |
 | `store/`    | not scanned                            | a store at the folder's scope, not a contribution |
+| `overlay/`  | not scanned                            | CLI TUI view opened on demand, not a registration |
+
+The backend scope root owns service injection and startup work. It returns its Cordis `services` and, on the server session, any host `activities`, alongside shared state and cleanup hooks. An activity can bind a session intercom or report suspended runs; it is unrelated to the browser's `activity` slot or `activity-group/` surface. A frontend `overlay/*.cli.ts` file owns the interactive view that a session command opens through Pi's `ui.custom`; Pi has no overlay registration array.
 
 ### Gates are container folders
 
@@ -238,14 +236,15 @@ A parameter, never ambient. Both existing helpers already take a factory, and th
 
 Every routed file exports a declaration or a factory of one, and the factory receives a mount context narrowed by its folder position.
 
-| Position                                | Adds                                  |
-| --------------------------------------- | ------------------------------------- |
-| `src/extensions/**`                     | `scope`, `signal`, the Cordis context |
-| `src/extensions/workspaces/**`          | `workspaceId`, `workspaceRoot`        |
-| `src/extensions/workspaces/sessions/**` | `sessionId`, `cwd`, `agent`           |
-| `(backend)/*.cli.ts`                    | the Pi extension API and runtime      |
-| `(backend)/*.server.ts`                 | the server host service               |
-| `(frontend)/**`                         | the web plugin runtime, no Cordis     |
+| Position                                | Adds                                     |
+| --------------------------------------- | ---------------------------------------- |
+| `src/extensions/**`                     | `scope`, `signal`, the Cordis context    |
+| `src/extensions/workspaces/**`          | `workspaceId`, `workspaceRoot`           |
+| `src/extensions/workspaces/sessions/**` | `sessionId`, `cwd`, `agent`              |
+| `(backend)/*.cli.ts`                    | the Pi extension API and runtime         |
+| `(backend)/*.server.ts`                 | the server host service                  |
+| `(frontend)/*.web.tsx`                  | the web plugin runtime, no Cordis        |
+| `(frontend)/overlay/*.cli.ts`           | Pi's TUI context when a command opens it |
 
 None of these fields are new. The convention narrows an existing union by path instead of handing every file the same wide bag.
 
@@ -257,7 +256,7 @@ None of these fields are new. The convention narrows an existing union by path i
 
 `extra.*` is a reserved filename at a side root, the way `layout.tsx` is reserved in Next.js. `(backend)/extra.cli.ts`, `(backend)/extra.server.ts` and `(frontend)/extra.ts` export raw contributions that the generator merges with the scanned set.
 
-This covers surfaces with no folder, such as shortcuts, flags, providers, message renderers, markdown transformers, selection axes, leader bindings and file links. It also lets a package adopt the layout one folder at a time.
+This covers surfaces with no folder, such as shortcuts, flags, providers, markdown transformers, selection axes and file links. It also lets a package adopt the layout one folder at a time. Message renderers and leader bindings already have their own routed surfaces.
 
 A tool override is **not** one of them. Replacing a name Pi already ships stays in `tool/`, because from the author's side both are "this package provides grep":
 
@@ -291,7 +290,7 @@ Backend helpers come from `@agimon-ai/doompi-core/extension-file`, frontend help
 
 **Portable and native are different helpers, because they are different contracts.** `defineTool` marks a contribution the host adapts, which composes abort signals and turns a throw into an error result. `defineServerTool` is a native headless tool the host registers untouched. Picking one is a real decision, so it is spelled rather than inferred from the shape.
 
-One surface is deliberately unlike the rest. `service/` takes no helper wrapping and no derived identity, because a Cordis plugin is itself a function and nothing at runtime separates it from a `(context) => declaration` factory. The generator passes it straight through.
+Root-owned services are Cordis plugins. The generator reads them from the root's `services` field before the host builds deferred tools, commands, and other registrations.
 
 ## The generated entries live outside src
 
@@ -324,14 +323,14 @@ _shared/format.ts                     shared across both sides
 
 Inside `api/`, colocation needs no underscore at all: only `route.ts` is a route, so `api/plan/validate.ts` is already private.
 
-**Watch the near-collision between `service/` and `_services/`.** `service/telemetry.ts` is a surface: it registers a Cordis service that other extensions can inject by name. `_services/telemetry.ts` is colocated implementation that nothing registers. The underscore is the whole difference, so name a private folder something the surface list does not already use, such as `_lib` or `_internal`.
+Private helpers in `_lib` or `_internal` remain beside the routed file that uses them. Service injection and lifecycle cleanup belong in the scope root.
 
 The rule of thumb: shared across surfaces goes to the implementation roots below, used by one surface goes in a `_folder` beside it.
 
 ## What does not move
 
 - `src/prompts/<skill>/SKILL.md` stays. It is already a folder convention and a published path named by `llms.txt`. The generator derives the resource contributions from it.
-- `src/services`, `src/controllers`, `src/schemas`, `src/types`, `src/constants` and `src/web` remain available as implementation roots for code shared across surfaces. Routed files are thin declarations that call into them, or into a colocated `_folder`.
+- `src/services` holds platform-agnostic behavior. `src/schemas`, `src/types`, and `src/constants` hold shared contracts, while `src/web` holds browser presentation. Host registration and host-specific handlers live in routed files. A colocated `_folder` holds code shared by several files in one surface.
 
 ## Toolchain constraints
 

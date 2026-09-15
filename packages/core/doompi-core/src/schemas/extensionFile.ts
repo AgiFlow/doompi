@@ -19,9 +19,8 @@ import type { DoomServerMethod } from './serverFacet';
  * name keeps it. Removing the key would make that legal-at-runtime case a type
  * error.
  *
- * Every surface also accepts a factory, because a contribution that needs the
- * mount context cannot be built at module scope. The one exception is
- * `service/`, whose export is itself a function.
+ * Every routed surface also accepts a factory, because a contribution that
+ * needs the mount context cannot be built at module scope.
  *
  * See docs/extension-layout.md for which folder produces which of these.
  */
@@ -59,17 +58,18 @@ export type ServerToolFile<TParameters extends TSchema = TSchema, TContext = unk
 >;
 
 /**
- * What a scope's `root.ts` returns: the value its subtree shares, and the
- * lifetime hooks for that scope.
+ * What a scope's `root.ts` returns: the value its subtree shares, its
+ * injectable services, session startup work, and lifetime hooks.
  *
  * `value` joins the mount context of every contribution beneath it, under
- * `root`. The hooks are the reason a root exists at all rather than a service:
- * `onStart` runs after the host has registered everything, which is the only
- * point at which it is safe to start work that can call back into a
- * contribution.
+ * `root`. Services register before deferred contributions are built, and
+ * `onStart` runs after the host registers them. That is when startup work may
+ * call back into a contribution.
  */
 export interface RootDeclaration<TValue, TContext = unknown> extends PluginLifecycleHooks<TContext> {
   readonly value: TValue;
+  readonly services?: readonly Parameters<Context['plugin']>[0][];
+  readonly activities?: readonly DoomHeadlessActivity[];
 }
 
 /**
@@ -116,7 +116,7 @@ export type HookFile<TEvent extends DoomHeadlessEventName = DoomHeadlessEventNam
 >;
 
 /**
- * `service/<name>.ts`. A factory returning a Cordis plugin.
+ * A scope root service factory returning a Cordis plugin.
  *
  * Always a factory, never the plugin bare. A Cordis plugin is itself a
  * function, so no runtime test separates one from a `(context) => plugin`
@@ -140,5 +140,5 @@ export type RouteFile<TContext = unknown> = OrFactory<DoomApi, TContext>;
 /** `method/<member>.ts`. Build it with `defineServerMethod` to keep schema inference. */
 export type MethodFile<TContext = unknown> = OrFactory<DoomServerMethod, TContext>;
 
-/** `activity/<name>.ts`. The filename is not derived into the value; activities name themselves. */
+/** A session root activity. Activities name themselves. */
 export type ActivityFile<TContext = unknown> = OrFactory<DoomHeadlessActivity, TContext>;

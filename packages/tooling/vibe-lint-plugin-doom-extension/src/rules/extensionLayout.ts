@@ -54,7 +54,8 @@ export const doomRoutedFilePosition: RuleDefinition = {
 };
 
 /**
- * The two sides never import each other.
+ * Browser code cannot import backend code. A session CLI command may open a
+ * colocated TUI overlay through its frontend `.cli` route.
  *
  * They are compiled by different toolchains against different libraries and
  * shipped differently: the backend is built to dist for Node, the browser half
@@ -68,7 +69,7 @@ export const doomRoutedFilePosition: RuleDefinition = {
  */
 export const doomExtensionSideBoundary: RuleDefinition = {
   preflight: true,
-  rule: 'A (backend) file and a (frontend) file never import each other',
+  rule: 'Browser and backend code stay separate, except CLI commands opening session TUI overlays',
   rationale:
     'The two sides target different runtimes and ship by different routes. Crossing the line compiles today and breaks in the bundle, far from the import that caused it.',
   check(filePath, configRoot) {
@@ -85,7 +86,16 @@ export const doomExtensionSideBoundary: RuleDefinition = {
     const marker = `(${opposite})`;
     const crossing = [...contents.matchAll(/from\s+'([^']+)'|import\s*\(\s*'([^']+)'/gu)]
       .map((match) => match[1] ?? match[2] ?? '')
-      .find((specifier) => specifier.includes(marker));
+      .find((specifier) => {
+        if (!specifier.includes(marker)) return false;
+        if (
+          side === 'backend' &&
+          /^src\/extensions\/workspaces\/sessions\/\(backend\)\/command\/[^/]+\.cli\.tsx?$/u.test(relative) &&
+          /^\.\.\/\.\.\/\(frontend\)\/overlay\/[^/]+\.cli$/u.test(specifier)
+        )
+          return false;
+        return true;
+      });
 
     if (crossing === undefined) return null;
     return `This ${side} file imports '${crossing}', which is ${opposite} code. Move what both sides need into src/types, src/constants or src/schemas, or let the generated API contract carry it.`;

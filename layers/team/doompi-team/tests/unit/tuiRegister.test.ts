@@ -4,14 +4,14 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SUBAGENT_CAPABILITY_CEILING_ENV } from '../../src/exports/env';
+import { createFleetCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/subagents-fleet.cli';
+import { createAgentListCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/subagents-list.cli';
 import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
 import type { ManagementActionsContract } from '../../src/services/managementActions';
 import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
 import {
   createFleetActionDispatcher,
-  createAgentListCommand,
   createAgentStatus,
-  createFleetCommand,
   registerSubagentLeaderContribution,
   SUBAGENT_FLEET_COMMAND,
   SUBAGENT_LEADER_SOURCE,
@@ -50,7 +50,7 @@ const uiHub = {
 
 vi.mock('../../src/services/agentDiscovery', () => ({ resolveActiveTeamPackageConfig }));
 
-vi.mock('../../src/tui/agentCatalog', () => ({ openAgentCatalog }));
+vi.mock('../../src/extensions/workspaces/sessions/(frontend)/overlay/agent-catalog.cli', () => ({ openAgentCatalog }));
 
 class FakeScheduler implements PollSchedulerContract {
   subscriptions: PollSubscription[] = [];

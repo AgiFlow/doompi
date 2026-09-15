@@ -207,7 +207,7 @@ describe('Doom web plugin rules', () => {
       const result = webPluginManifest.check?.(manifest, root);
       expect(result).toContain("pluginId 'Bad Case' must be kebab-case");
       expect(result).toContain('registrationOrder must be a non-negative integer');
-      expect(result).toContain('client must be ./src/extensions/web.ts');
+      expect(result).toContain('client must be one of ./src/extensions/web.ts or ./dist/extensions/web.mjs');
       expect(result).toContain('has no src/web/tsconfig.json');
       expect(result).toContain('must not declare doompiWeb.hub');
       expect(result).toContain("web/ imports 'src/types/webDemo.ts', which is not in the files allowlist");
@@ -222,7 +222,9 @@ describe('Doom web plugin rules', () => {
         dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/web/index.ts' },
       });
-      expect(webPluginManifest.check?.(manifest, root)).toContain('client must be ./src/extensions/web.ts');
+      expect(webPluginManifest.check?.(manifest, root)).toContain(
+        'client must be one of ./src/extensions/web.ts or ./dist/extensions/web.mjs',
+      );
     });
 
     it('accepts a complete browser-only manifest with canonical client entries', () => {
@@ -285,6 +287,20 @@ describe('Doom web plugin rules', () => {
         files: ['dist', 'src/web', 'src/extensions/web.ts'],
         dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
+      });
+      expect(webPluginManifest.check?.(manifest, root)).toBeNull();
+    });
+
+    it('accepts source-only type imports when the published client is a bundle', () => {
+      write('src/web/index.ts', "import type { Demo } from '../types/demo'; export type View = Demo;");
+      write('src/types/demo.ts', 'export type Demo = string;');
+      write('src/web/tsconfig.json', '{}');
+      write('dist/extensions/web.mjs', 'export const webPlugin = {};');
+      const manifest = writeManifest({
+        name: 'p',
+        files: ['dist'],
+        dependencies: { [CORE_PACKAGE]: 'workspace:*' },
+        doompiWeb: { pluginId: 'demo', client: './dist/extensions/web.mjs' },
       });
       expect(webPluginManifest.check?.(manifest, root)).toBeNull();
     });
@@ -399,7 +415,9 @@ describe('Doom web plugin rules', () => {
         name: 'p',
         doompiWeb: { pluginId: 'demo', client: './src/exports/extensions/web.ts' },
       });
-      expect(webPluginManifest.check?.(manifest, root)).toContain('client must be ./src/extensions/web.ts');
+      expect(webPluginManifest.check?.(manifest, root)).toContain(
+        'client must be one of ./src/extensions/web.ts or ./dist/extensions/web.mjs',
+      );
     });
 
     it('follows one re-export hop to validate the client entry', () => {

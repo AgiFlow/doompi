@@ -469,9 +469,11 @@ export const webPluginManifest: RuleDefinition = {
       }
     }
     const imports = webImports(configRoot);
-    for (const typeFile of [...imports.typeFiles].sort()) {
-      if (!isPublished(files, typeFile))
-        problems.push(`${WEB_ROOT}/ imports '${typeFile}', which is not in the files allowlist`);
+    if (blocks.some((block) => normalizeEntry(block.client) !== './dist/extensions/web.mjs')) {
+      for (const typeFile of [...imports.typeFiles].sort()) {
+        if (!isPublished(files, typeFile))
+          problems.push(`${WEB_ROOT}/ imports '${typeFile}', which is not in the files allowlist`);
+      }
     }
     if (!hasBrowserRuntime(manifest, CONTRACTS_PACKAGE)) {
       problems.push(`${CONTRACTS_PACKAGE} must be a dependency: the synced bundle imports it at runtime`);

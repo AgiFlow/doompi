@@ -2,7 +2,7 @@ import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai
 import type { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
-import { teamServerFacet } from '../../../src/extensions/server';
+import { facet as teamServerFacet } from '../../../generated/server';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 type MountedChannel = Parameters<DoomServerHostService['registerChannel']>[0];
@@ -45,7 +45,7 @@ describe('teamServerFacet', () => {
     await (
       await teamServerFacet.apply(harness.context)
     )?.();
-    expect(harness.channels.map((channel) => channel.frameType)).toEqual(['subagent_runs', 'subagent_catalog']);
+    expect(harness.channels.map((channel) => channel.frameType).sort()).toEqual(['subagent_catalog', 'subagent_runs']);
     expect(harness.registered).toEqual([]);
     expect(harness.state.disposed).toBe(2);
   });
