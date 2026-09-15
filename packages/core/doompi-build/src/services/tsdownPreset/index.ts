@@ -72,7 +72,7 @@ export function doompiExtension(options: ExtensionPresetOptions = { packageDir: 
     entry,
     clean: true,
     dts: { incremental: true, parallel: false, eager: true },
-    exports: false,
+    exports: true,
     format: ['esm', 'cjs'],
     minify: { compress: options.minify !== false, mangle: { toplevel: true }, codegen: { removeWhitespace: true } },
     platform: 'node',

@@ -91,3 +91,41 @@ export const doomExtensionSideBoundary: RuleDefinition = {
     return `This ${side} file imports '${crossing}', which is ${opposite} code. Move what both sides need into src/types, src/constants or src/schemas, or let the generated API contract carry it.`;
   },
 };
+
+/**
+ * The roots the folder convention replaces.
+ *
+ * `src/tools` held whichever tool shape a package wrote first, so the same
+ * capability landed under `tools` for one host and `services` for the other,
+ * and neither root said which host it targeted. The convention splits it: a
+ * routed file under src/extensions is the shape one host expects, and a
+ * service is host-neutral.
+ *
+ * `src/web` is the same story for the browser half. It is only reported once
+ * a package has adopted the layout, because an unmigrated package has nowhere
+ * else to put it yet.
+ */
+export const doomLegacySourceRoot: RuleDefinition = {
+  preflight: true,
+  rule: 'Platform-specific code lives in a routed file, not in src/tools or a separate src/web tree',
+  rationale:
+    'A root named after a host tells you nothing about which host, and splits one capability across two roots. The routed file already says which host it targets, and the service beneath it says the logic targets none.',
+  check(filePath, configRoot) {
+    const relative = projectPath(filePath, configRoot);
+    if (!relative) return null;
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return null;
+
+    if (relative.startsWith('src/tools/')) {
+      return 'Move the host-neutral half to src/services and the host-specific shape to a routed file under src/extensions, such as (backend)/tool/<name>.cli.ts or .server.ts.';
+    }
+    if (relative.startsWith('src/web/') && hasRoutedFrontend(configRoot)) {
+      return 'This package is folder-routed, so its browser code colocates beside the routed file that renders it, in a _components or _lib folder under (frontend).';
+    }
+    return null;
+  },
+};
+
+/** Whether the package declares any browser contribution through the routing root. */
+function hasRoutedFrontend(configRoot: string): boolean {
+  return scanExtensions({ packageDir: configRoot }).entries.some((entry) => entry.side === 'frontend');
+}
