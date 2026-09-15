@@ -260,10 +260,29 @@ None of these fields are new. The convention narrows an existing union by path i
 
 This covers surfaces with no folder, such as shortcuts, flags, providers, message renderers, markdown transformers, tool overrides, selection axes, leader bindings and file links. It also lets a package adopt the layout one folder at a time.
 
+## Colocation
+
+A `_folder` is never scanned, at any depth, so implementation can sit next to the contribution that uses it. Prefer that over a distant shared root whenever exactly one surface uses the code.
+
+```text
+(backend)/tool/write-plan.ts          the contribution
+(backend)/tool/_lib/parse.ts          used only by it
+(backend)/_services/telemetry.ts      shared across this side, still not a contribution
+(frontend)/tab/PlanPanel.tsx          the contribution
+(frontend)/tab/_components/PlanRow.tsx  used only by it
+_shared/format.ts                     shared across both sides
+```
+
+Inside `api/`, colocation needs no underscore at all: only `route.ts` is a route, so `api/plan/validate.ts` is already private.
+
+**Watch the near-collision between `service/` and `_services/`.** `service/telemetry.ts` is a surface: it registers a Cordis service that other extensions can inject by name. `_services/telemetry.ts` is colocated implementation that nothing registers. The underscore is the whole difference, so name a private folder something the surface list does not already use, such as `_lib` or `_internal`.
+
+The rule of thumb: shared across surfaces goes to the implementation roots below, used by one surface goes in a `_folder` beside it.
+
 ## What does not move
 
 - `src/prompts/<skill>/SKILL.md` stays. It is already a folder convention and a published path named by `llms.txt`. The generator derives the resource contributions from it.
-- `src/services`, `src/controllers`, `src/schemas`, `src/types`, `src/constants` and `src/web` stay as implementation roots. Routed files are thin declarations that call into them.
+- `src/services`, `src/controllers`, `src/schemas`, `src/types`, `src/constants` and `src/web` remain available as implementation roots for code shared across surfaces. Routed files are thin declarations that call into them, or into a colocated `_folder`.
 
 ## Toolchain constraints
 

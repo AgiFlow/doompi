@@ -11,6 +11,18 @@ const RECORD_FIELDS: readonly string[] = ['events'];
 /** The one field whose members are factories rather than declarations. */
 const FACTORY_FIELDS: readonly string[] = ['channels'];
 
+/**
+ * Fields whose member is itself a function, so the export is passed through
+ * untouched.
+ *
+ * A Cordis plugin is a function, which makes it indistinguishable from a
+ * `(context) => declaration` factory at runtime. Resolving one through `at`
+ * would call the plugin with the mount context and register its return value,
+ * which is undefined. Nothing here may be resolved and nothing may carry a
+ * derived identity, so these are emitted as the bare imported binding.
+ */
+const PASSTHROUGH_FIELDS: readonly string[] = ['services'];
+
 const SCOPE_ORDER: readonly ExtensionScope[] = ['global', 'workspace', 'session'];
 
 /**
@@ -21,9 +33,26 @@ const SCOPE_ORDER: readonly ExtensionScope[] = ['global', 'workspace', 'session'
  */
 const RESOLVER = [
   'type Factory<T> = (context: unknown) => T;',
-  'const at = <T,>(value: T | Factory<T>, context: unknown): T =>',
+  'const at = <T>(value: T | Factory<T>, context: unknown): T =>',
   "  typeof value === 'function' ? (value as Factory<T>)(context) : value;",
 ].join('\n');
+
+/**
+ * Applies the identity the path derived, letting the authored value win.
+ *
+ * A call rather than an object literal on purpose. `{ name: 'x', ...value }`
+ * is what this means, but TypeScript reports TS2783 whenever the spread's type
+ * also declares the key, which is the common case here.
+ *
+ * The parameters are deliberately untyped so `T` is inferred from the
+ * contribution array this sits in rather than from either argument: the
+ * authored file supplies only the half the path cannot. The cost is that the
+ * merged shape is not checked against `T`, only its position is.
+ */
+// One line on purpose: at 118 characters it fits the repository's 120 print
+// width, so oxfmt would join a wrapped form and leave every build dirty.
+const IDENTITY_HELPER =
+  'const via = <T>(identity: Record<string, unknown>, value: unknown): T => ({ ...identity, ...(value as object) }) as T;';
 
 /**
  * Every fill is a slot fill. There is no host-region special case.
@@ -127,14 +156,16 @@ function hatchBindings(entries: readonly ExtensionEntry[]): { identifier: string
 
 /** One contribution as it appears inside its array, identity first so the file wins. */
 function member(binding: Binding, contextExpression: string): string {
+  if (PASSTHROUGH_FIELDS.includes(binding.contribution.field)) return binding.identifier;
+
   const resolved = `at(${binding.identifier}, ${contextExpression})`;
   const isFactory = FACTORY_FIELDS.includes(binding.contribution.field);
   if (binding.identity === undefined) return isFactory ? binding.identifier : resolved;
 
   const identity = renderIdentity(binding.identity);
-  // A channel array holds factories, so the identity is merged inside one.
-  if (isFactory) return `() => ({ ${identity}, ...${binding.identifier}() })`;
-  return `{ ${identity}, ...${resolved} }`;
+  // A channel array holds factories, so the identity is applied inside one.
+  if (isFactory) return `() => via({ ${identity} }, ${binding.identifier}())`;
+  return `via({ ${identity} }, ${resolved})`;
 }
 
 function bodyFor(bindings: readonly Binding[], indent: string, contextExpression: string): string[] {
@@ -186,7 +217,10 @@ function compact(lines: readonly string[]): string {
  * unused helper.
  */
 function resolverFor(body: readonly string[]): string[] {
-  return body.some((line) => line.includes('at(')) ? [RESOLVER, ''] : [];
+  const lines: string[] = [];
+  if (body.some((line) => line.includes('at('))) lines.push(RESOLVER);
+  if (body.some((line) => line.includes('via('))) lines.push(IDENTITY_HELPER);
+  return lines.length > 0 ? [...lines, ''] : [];
 }
 
 /** `noUnusedParameters` means a scope that never threads context takes none. */

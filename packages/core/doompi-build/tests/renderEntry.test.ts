@@ -158,7 +158,7 @@ describe('renderWebEntry', () => {
 
   it('sends a fill into a host region by naming that region as its slot', () => {
     const { web } = render({ 'src/extensions/workspaces/sessions/(frontend)/fill/PlanRail.rail.tsx': EMPTY });
-    expect(web).toContain("fills: [{ slot: 'rail', id: 'plan-rail', ...");
+    expect(web).toContain("fills: [via({ slot: 'rail', id: 'plan-rail' }, ");
     expect(parses(web)).toBe(true);
   });
 });
@@ -166,47 +166,69 @@ describe('renderWebEntry', () => {
 describe('identity derived from the path', () => {
   it('binds a tool renderer to the tool its filename names', () => {
     const { web } = render({ 'src/extensions/(frontend)/tool/write-plan.tsx': EMPTY });
-    expect(web).toContain("toolRenderers: [{ tools: ['write_plan'], ...");
+    expect(web).toContain("toolRenderers: [via({ tools: ['write_plan'] }, ");
   });
 
   it('names a backend tool and command from the filename, in snake case', () => {
     const { cli } = render({ 'src/extensions/(backend)/tool/write-plan.ts': EMPTY });
-    expect(cli).toContain("tools: [{ name: 'write_plan', ...");
+    expect(cli).toContain("tools: [via({ name: 'write_plan' }, ");
   });
 
   it('names a server hook event from the filename', () => {
     const { server } = render({ 'src/extensions/(backend)/hook/session-start.ts': EMPTY });
-    expect(server).toContain("hooks: [{ event: 'session_start', ...");
+    expect(server).toContain("hooks: [via({ event: 'session_start' }, ");
   });
 
   it('merges a channel frame type inside the factory the array expects', () => {
     const { server } = render({ 'src/extensions/(backend)/channel/tasks.ts': EMPTY });
-    expect(server).toContain("channels: [() => ({ frameType: 'tasks', ...channelTasks() })]");
+    expect(server).toContain("channels: [() => via({ frameType: 'tasks' }, channelTasks())]");
   });
 
   it('namespaces a declared slot under the plugin id', () => {
     const { web } = render({ 'src/extensions/(frontend)/slot/actions.ts': EMPTY });
-    expect(web).toContain("slots: [{ slot: 'plan.actions', ...");
+    expect(web).toContain("slots: [via({ slot: 'plan.actions' }, ");
   });
 
   it('gives a fill into another plugin slot both the slot and an id', () => {
     const { web } = render({ 'src/extensions/(frontend)/fill/PlanRef.task.detail.tsx': EMPTY });
-    expect(web).toContain("fills: [{ slot: 'task.detail', id: 'plan-ref', ...");
+    expect(web).toContain("fills: [via({ slot: 'task.detail', id: 'plan-ref' }, ");
   });
 
   it('names an activity group slot exactly as the cockpit spells it', () => {
     const { web } = render({ 'src/extensions/(frontend)/fill/PlanSection.activity.plan.tsx': EMPTY });
-    expect(web).toContain("fills: [{ slot: 'activity.plan', id: 'plan-section', ...");
+    expect(web).toContain("fills: [via({ slot: 'activity.plan', id: 'plan-section' }, ");
   });
 
   it('kebab-cases a PascalCase component filename into an id', () => {
     const { web } = render({ 'src/extensions/(frontend)/tab/PlanPanel.tsx': EMPTY });
-    expect(web).toContain("tabs: [{ id: 'plan-panel', ...");
+    expect(web).toContain("tabs: [via({ id: 'plan-panel' }, ");
   });
 
-  it('spreads the authored file last, so a file that states its own identity wins', () => {
+  it('passes a service through untouched, because a Cordis plugin is itself a function', () => {
+    // Resolving one would call the plugin with the mount context and register
+    // its return value. There is no runtime difference between a Cordis plugin
+    // and a `(context) => declaration` factory, so the surface decides.
+    const { cli, server } = render({ 'src/extensions/(backend)/service/telemetry.ts': EMPTY });
+    expect(cli).toContain('services: [serviceTelemetry]');
+    expect(server).toContain('services: [serviceTelemetry]');
+    expect(cli).not.toContain('at(serviceTelemetry');
+    expect(server).not.toContain('at(serviceTelemetry');
+  });
+
+  it('declares the helpers without a generic trailing comma, which oxfmt strips from a .ts file', () => {
+    // The generated entries are always .ts, so `<T,>` is the .tsx-only spelling
+    // and oxfmt rewrites it to `<T>`. Emitting it would make every build dirty
+    // the tree and fail `oxfmt --check` in the same package's lint target.
+    const { cli, server, web } = render({
+      'src/extensions/(backend)/tool/write-plan.ts': EMPTY,
+      'src/extensions/(frontend)/tab/PlanPanel.tsx': EMPTY,
+    });
+    for (const entry of [cli, server, web]) expect(entry).not.toContain('<T,>');
+  });
+
+  it('applies the authored file over the derived identity, so a file naming itself wins', () => {
     const { cli } = render({ 'src/extensions/(backend)/tool/write-plan.ts': EMPTY });
-    expect(cli).toMatch(/\{ name: 'write_plan', \.\.\.at\(\w+, context\) \}/u);
+    expect(cli).toMatch(/via\(\{ name: 'write_plan' \}, at\(\w+, context\)\)/u);
   });
 });
 

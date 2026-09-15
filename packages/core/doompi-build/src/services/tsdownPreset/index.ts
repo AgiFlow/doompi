@@ -11,7 +11,7 @@ interface PresetConfig {
   clean: boolean;
   dts: { incremental: boolean; parallel: boolean; eager: boolean };
   exports: boolean;
-  format: readonly ['esm', 'cjs'];
+  format: ('esm' | 'cjs')[];
   minify: { compress: boolean; mangle: { toplevel: boolean }; codegen: { removeWhitespace: boolean } };
   platform: 'node';
   sourcemap: boolean;
