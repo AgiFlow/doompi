@@ -54,8 +54,8 @@ export const doomRoutedFilePosition: RuleDefinition = {
 };
 
 /**
- * Browser code cannot import backend code. A session CLI command may open a
- * colocated TUI overlay through its frontend `.cli` route.
+ * Browser code cannot import backend code. Session Pi commands open frontend
+ * CLI overlays, and the session Pi root mounts their colocated status helper.
  *
  * They are compiled by different toolchains against different libraries and
  * shipped differently: the backend is built to dist for Node, the browser half
@@ -69,7 +69,7 @@ export const doomRoutedFilePosition: RuleDefinition = {
  */
 export const doomExtensionSideBoundary: RuleDefinition = {
   preflight: true,
-  rule: 'Browser and backend code stay separate, except CLI commands opening session TUI overlays',
+  rule: 'Browser and backend code stay separate, except session Pi entry points using CLI overlay presentation',
   rationale:
     'The two sides target different runtimes and ship by different routes. Crossing the line compiles today and breaks in the bundle, far from the import that caused it.',
   check(filePath, configRoot) {
@@ -92,6 +92,14 @@ export const doomExtensionSideBoundary: RuleDefinition = {
           side === 'backend' &&
           /^src\/extensions\/workspaces\/sessions\/\(backend\)\/command\/[^/]+\.cli\.tsx?$/u.test(relative) &&
           /^\.\.\/\.\.\/\(frontend\)\/overlay\/[^/]+\.cli$/u.test(specifier)
+        )
+          return false;
+        if (
+          side === 'backend' &&
+          /^src\/extensions\/workspaces\/sessions\/\(backend\)\/(?:root\.cli\.tsx?|command\/[^/]+\.cli\.tsx?)$/u.test(
+            relative,
+          ) &&
+          /^(?:\.\.\/|\.\.\/\.\.\/)\(frontend\)\/overlay\/_lib\/[^/]+$/u.test(specifier)
         )
           return false;
         return true;

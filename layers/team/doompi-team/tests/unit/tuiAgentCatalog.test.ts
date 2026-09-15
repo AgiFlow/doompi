@@ -1,18 +1,18 @@
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type {
+  AgentCatalogEntry,
+  AgentResourceProjection,
+  ProjectedResource,
+  ResourceTabProjection,
+} from '../../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/agentResourceProjection';
 import {
   AgentCatalogComponent,
   type AgentCatalogOptions,
   agentResourceSummary,
   openAgentCatalog,
 } from '../../src/extensions/workspaces/sessions/(frontend)/overlay/agent-catalog.cli';
-import type {
-  AgentCatalogEntry,
-  AgentResourceProjection,
-  ProjectedResource,
-  ResourceTabProjection,
-} from '../../src/tui/agentResourceProjection';
 import type { AgentConfig } from '../../src/types/agent';
 
 const KEY_ENTER = '\r';

@@ -10,13 +10,13 @@ import { fitStyledLine } from '@agimon-ai/doompi-ui/rendering';
 import type { ExtensionContext, Theme } from '@earendil-works/pi-coding-agent';
 import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui';
 
+import type { AgentConfig } from '../../../../../types/agent';
 import type {
   AgentCatalogEntry,
   AgentResourceProjection,
   ProjectedResource,
   ResourceTabProjection,
-} from '../../../../../tui/agentResourceProjection';
-import type { AgentConfig } from '../../../../../types/agent';
+} from './_lib/agentResourceProjection';
 
 export const AGENT_CATALOG_OVERLAY_OPTIONS = DOOM_FULLSCREEN_UI_OPTIONS.overlayOptions;
 export type AgentResourceTab = 'tools' | 'skills' | 'extensions';

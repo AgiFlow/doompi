@@ -3,7 +3,7 @@ import type { Component } from '@earendil-works/pi-tui';
 import { Text } from '@earendil-works/pi-tui';
 
 import { SLASH_RESULT_CUSTOM_TYPE, type SlashRunDetail } from '../../../../../models/slashResult';
-import { renderSlashRunNotice } from '../../../../../tui/slashRunNotice';
+import { renderSlashRunNotice } from './_lib/slashRunNotice';
 
 function asDetails(value: unknown): SlashRunDetail[] | undefined {
   if (!Array.isArray(value) || value.length === 0) return undefined;

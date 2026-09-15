@@ -1,10 +1,10 @@
 import type { ExtensionAPI, MessageRenderOptions, Theme } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
 
+import { renderCompletionNotice } from '../../src/extensions/workspaces/sessions/(frontend)/message/_lib/completionNotice';
 import { createCompletionRenderer } from '../../src/extensions/workspaces/sessions/(frontend)/message/subagent-notify.cli';
 import type { CompletionNotifyDetails } from '../../src/services/notify';
 import { SUBAGENT_NOTIFY_MESSAGE_TYPE } from '../../src/services/notify';
-import { renderCompletionNotice } from '../../src/tui/completionNotice';
 
 /**
  * Identity theme: every assertion here is about WHAT text is emitted and

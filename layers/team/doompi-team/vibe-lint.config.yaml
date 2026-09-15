@@ -22,20 +22,42 @@ boundaries:
   - name: cli-session-overlay-presentation
     pattern: src/extensions/**/(frontend)/overlay/*.cli.ts
     allowedImports:
-      - src/tui/**
       - src/types/**
       - src/constants/**
+      - src/services/**
+      - src/extensions/**/(frontend)/**
+  - name: cli-session-overlay-private
+    pattern: src/extensions/**/(frontend)/overlay/_lib/*.ts
+    allowedImports:
+      - src/types/**
+      - src/constants/**
+      - src/schemas/**
+      - src/services/**
+      - src/extensions/**/(frontend)/**
+  - name: cli-session-tool-presentation
+    pattern: src/extensions/**/(frontend)/tool/*.cli.ts
+    allowedImports:
+      - src/types/**
+      - src/constants/**
+      - src/schemas/**
       - src/services/**
       - src/extensions/**/(frontend)/**
   - name: cli-message-presentation
     pattern: src/extensions/**/(frontend)/message/*.cli.ts
     allowedImports:
-      - src/tui/**
       - src/types/**
       - src/constants/**
       - src/services/notify
       - src/services/notify/**
       - src/models/slashResult.ts
+      - src/extensions/**/(frontend)/**
+  - name: cli-message-private
+    pattern: src/extensions/**/(frontend)/message/_lib/*.ts
+    allowedImports:
+      - src/types/**
+      - src/constants/**
+      - src/models/**
+      - src/services/**
       - src/extensions/**/(frontend)/**
 
 overrides:

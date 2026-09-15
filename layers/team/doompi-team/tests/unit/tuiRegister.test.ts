@@ -6,9 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SUBAGENT_CAPABILITY_CEILING_ENV } from '../../src/exports/env';
 import { createFleetCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/subagents-fleet.cli';
 import { createAgentListCommand } from '../../src/extensions/workspaces/sessions/(backend)/command/subagents-list.cli';
-import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
-import type { ManagementActionsContract } from '../../src/services/managementActions';
-import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
 import {
   createFleetActionDispatcher,
   createAgentStatus,
@@ -16,8 +13,15 @@ import {
   SUBAGENT_FLEET_COMMAND,
   SUBAGENT_LEADER_SOURCE,
   SUBAGENT_LIST_COMMAND,
-} from '../../src/tui/contributions';
-import { AGENT_PULSE_FRAMES, COST_STATUS_KEY, FLEET_STATUS_KEY } from '../../src/tui/fleetStatus';
+} from '../../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/contributions';
+import {
+  AGENT_PULSE_FRAMES,
+  COST_STATUS_KEY,
+  FLEET_STATUS_KEY,
+} from '../../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/fleetStatus';
+import type { AsyncJobTrackerContract, TrackedAsyncJob } from '../../src/services/asyncJobTracker';
+import type { ManagementActionsContract } from '../../src/services/managementActions';
+import type { PollSchedulerContract, PollSubscription } from '../../src/services/pollScheduler';
 import type { AgentConfig } from '../../src/types/agent';
 
 const {
