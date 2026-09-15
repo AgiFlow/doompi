@@ -187,6 +187,27 @@ describe('scanExtensions', () => {
     expect(graph.notices[0]?.message).toContain('routed surface');
   });
 
+  it('colocates implementation in a _private folder at any depth, silently', () => {
+    const graph = scanExtensions({
+      packageDir: packageWith({
+        'src/extensions/(backend)/tool/write-plan.ts': EMPTY,
+        'src/extensions/(backend)/tool/_lib/parse.ts': EMPTY,
+        'src/extensions/(backend)/tool/_lib/nested/deep.ts': EMPTY,
+        'src/extensions/(backend)/_services/telemetry.ts': EMPTY,
+        'src/extensions/(backend)/api/plan/route.ts': EMPTY,
+        // Inside api/ only route.ts is a route, so this needs no underscore.
+        'src/extensions/(backend)/api/plan/validate.ts': EMPTY,
+        'src/extensions/(frontend)/tab/PlanPanel.tsx': EMPTY,
+        'src/extensions/(frontend)/tab/_components/PlanRow.tsx': EMPTY,
+        'src/extensions/_shared/format.ts': EMPTY,
+      }),
+    });
+    expect(graph.notices).toEqual([]);
+    expect(
+      graph.entries.map((entry) => entry.surface).sort((left, right) => (left ?? '').localeCompare(right ?? '')),
+    ).toEqual(['api', 'tab', 'tool']);
+  });
+
   it('notices a nested folder under a surface that takes files directly', () => {
     const graph = scanExtensions({
       packageDir: packageWith({ 'src/extensions/(frontend)/tab/nested/PlanPanel.tsx': EMPTY }),
