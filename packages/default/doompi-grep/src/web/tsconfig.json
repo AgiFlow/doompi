@@ -19,5 +19,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": [".", "../types", "../extensions/web.ts"]
+  "include": [".", "../types", "../extensions/web.ts", "../extensions/**/(frontend)/**/*"]
 }

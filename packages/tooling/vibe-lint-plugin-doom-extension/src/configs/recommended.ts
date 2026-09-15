@@ -100,7 +100,29 @@ const boundaries: BoundaryConfig[] = [
   {
     name: 'web-plugin-entry',
     pattern: 'src/extensions/web.ts',
-    allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
+    allowedImports: [
+      'src/web/**',
+      'src/types',
+      'src/types/**',
+      'src/constants',
+      'src/constants/**',
+      'src/extensions/**',
+    ],
+  },
+  {
+    // The browser half of a folder-routed package. Same policy as the entry
+    // above, matched by position rather than by one literal path, so a
+    // (frontend) group anywhere in the tree is held to it.
+    name: 'web-plugin-routed',
+    pattern: 'src/extensions/**/(frontend)/**',
+    allowedImports: [
+      'src/web/**',
+      'src/types',
+      'src/types/**',
+      'src/constants',
+      'src/constants/**',
+      'src/extensions/**/(frontend)/**',
+    ],
   },
   {
     name: 'extensions',
@@ -161,10 +183,14 @@ const boundaries: BoundaryConfig[] = [
   },
 ];
 
-/** Host loaders and build tools require default exports only at their direct entries. */
+/**
+ * Host loaders and build tools require default exports at their entries, and
+ * so does the folder convention: a routed file under src/extensions declares
+ * one contribution through its default export, the way a Next.js route does.
+ */
 const overrides: OverrideConfig[] = [
   {
-    files: ['src/extensions/pi.ts', 'src/extensions/server.ts', 'tsdown.config.ts', 'vitest.config.ts'],
+    files: ['src/extensions/**', 'tsdown.config.ts', 'vitest.config.ts'],
     rules: { 'no-default-export': 'off', 'direct-export-only': 'off' },
   },
 ];
