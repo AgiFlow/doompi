@@ -65,7 +65,7 @@ describe('renderCliEntry', () => {
     });
     expect(cli).toContain("definePiExtension('@agimon-ai/doompi-plan'");
     expect(cli).toContain('services: [');
-    expect(cli).toContain('tools: [');
+    expect(cli).toContain('...piToolContributions(');
     expect(parses(cli)).toBe(true);
   });
 
@@ -171,7 +171,7 @@ describe('identity derived from the path', () => {
 
   it('names a backend tool and command from the filename, in snake case', () => {
     const { cli } = render({ 'src/extensions/(backend)/tool/write-plan.ts': EMPTY });
-    expect(cli).toContain("tools: [via({ name: 'write_plan' }, ");
+    expect(cli).toContain("[via({ name: 'write_plan' }, ");
   });
 
   it('names a server hook event from the filename', () => {
@@ -202,6 +202,21 @@ describe('identity derived from the path', () => {
   it('kebab-cases a PascalCase component filename into an id', () => {
     const { web } = render({ 'src/extensions/(frontend)/tab/PlanPanel.tsx': EMPTY });
     expect(web).toContain("tabs: [via({ id: 'plan-panel' }, ");
+  });
+
+  it('splits CLI tools at runtime, because only the value knows if it claims a name', () => {
+    // A tool that replaces one Pi ships is an override claim the host
+    // arbitrates, not a second registration, and both are authored in tool/.
+    const { cli, server } = render({ 'src/extensions/(backend)/tool/grep.cli.ts': EMPTY });
+    expect(cli).toContain("...piToolContributions('@agimon-ai/doompi-plan', [");
+    expect(cli).toContain('import { definePiExtension, piToolContributions }');
+    // The server has no override mechanism, so its array stays plain.
+    expect(server).not.toContain('piToolContributions');
+  });
+
+  it('leaves the splitter out of an entry that contributes no tools', () => {
+    const { cli } = render({ 'src/extensions/(backend)/command/plan.ts': EMPTY });
+    expect(cli).not.toContain('piToolContributions');
   });
 
   it('passes a service through untouched, because a Cordis plugin is itself a function', () => {

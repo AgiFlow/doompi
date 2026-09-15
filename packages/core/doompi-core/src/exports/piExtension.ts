@@ -1,4 +1,9 @@
-export { definePiExtension, type DefinedPiExtension, type PiExtensionDefinition } from '../extensions/piExtension';
+export {
+  definePiExtension,
+  piToolContributions,
+  type DefinedPiExtension,
+  type PiExtensionDefinition,
+} from '../extensions/piExtension';
 export type {
   PiPluginContext,
   PiPluginContributions,

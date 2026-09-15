@@ -168,7 +168,25 @@ function member(binding: Binding, contextExpression: string): string {
   return `via({ ${identity} }, ${resolved})`;
 }
 
-function bodyFor(bindings: readonly Binding[], indent: string, contextExpression: string): string[] {
+/**
+ * The CLI keeps replacements apart from additions, and only the value knows
+ * which a tool is. A tool that claims a name Pi already ships is an override
+ * claim the host arbitrates, not a second registration, but both are authored
+ * in `tool/`, so the path cannot tell them apart. The generated entry defers
+ * to a runtime split instead.
+ */
+function wrapField(field: string, target: BuildTarget, rendered: string, options: RenderOptions): string {
+  if (field !== 'tools' || target !== 'cli') return `${field}: ${rendered},`;
+  return `...piToolContributions('${options.packageName}', ${rendered}),`;
+}
+
+function bodyFor(
+  bindings: readonly Binding[],
+  indent: string,
+  contextExpression: string,
+  target: BuildTarget,
+  options: RenderOptions,
+): string[] {
   const grouped = new Map<string, Binding[]>();
   for (const binding of bindings) {
     const held = grouped.get(binding.contribution.field);
@@ -189,7 +207,8 @@ function bodyFor(bindings: readonly Binding[], indent: string, contextExpression
       lines.push(`${indent}},`);
       continue;
     }
-    lines.push(`${indent}${field}: [${members.map((entry) => member(entry, contextExpression)).join(', ')}],`);
+    const rendered = `[${members.map((entry) => member(entry, contextExpression)).join(', ')}]`;
+    lines.push(`${indent}${wrapField(field, target, rendered, options)}`);
   }
   return lines;
 }
@@ -233,13 +252,15 @@ export function renderCliEntry(resolution: TargetResolution, options: RenderOpti
   const bindings = bind(resolution, options);
   const hatches = hatchBindings(resolution.escapeHatches);
   const body = [
-    ...bodyFor(bindings, '  ', 'context'),
+    ...bodyFor(bindings, '  ', 'context', resolution.target, options),
     ...hatches.map((hatch) => `  ...at(${hatch.identifier}, context),`),
   ];
 
   return compact([
     HEADER,
-    "import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';",
+    body.some((line) => line.includes('piToolContributions('))
+      ? "import { definePiExtension, piToolContributions } from '@agimon-ai/doompi-core/pi-extension';"
+      : "import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';",
     '',
     ...importsFor(bindings, hatches, options.root),
     '',
@@ -270,7 +291,7 @@ export function renderServerEntry(resolution: TargetResolution, options: RenderO
     const visible = bindings.filter((b) => SCOPE_ORDER.indexOf(b.contribution.entry.scope) <= index);
     const here = hatches.filter((h) => SCOPE_ORDER.indexOf(h.entry.scope) <= index);
     const body = [
-      ...bodyFor(visible, '    ', 'context'),
+      ...bodyFor(visible, '    ', 'context', 'server', options),
       ...here.map((hatch) => `    ...at(${hatch.identifier}, context),`),
     ];
     if (body.length === 0) continue;
@@ -310,7 +331,7 @@ export function renderWebEntry(resolution: TargetResolution, options: RenderOpti
     const visible = bindings.filter((b) => b.contribution.entry.scope === scope);
     const here = hatches.filter((h) => h.entry.scope === scope);
     const body = [
-      ...bodyFor(visible, '    ', 'undefined'),
+      ...bodyFor(visible, '    ', 'undefined', 'web', options),
       ...here.map((hatch) => `    ...at(${hatch.identifier}, undefined),`),
     ];
     if (body.length === 0) continue;

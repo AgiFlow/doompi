@@ -426,3 +426,35 @@ export function definePiExtension<TOptions = undefined>(
   };
   return Object.assign(activate, { install });
 }
+
+/**
+ * Splits routed tool files into the two arrays the Pi host keeps apart.
+ *
+ * A tool that replaces a name Pi already ships is not a second registration,
+ * it is a claim the override service arbitrates, and only the winner
+ * registers. The folder convention keeps both in `tool/`, because from the
+ * author's side both are "this package provides grep"; which one it is lives
+ * in the value, through `definePiTool(definition, { overrides: true })`.
+ *
+ * A generated entry therefore cannot decide this from the path, and calls
+ * this instead. Every claim from one package is one atomic set, which is what
+ * the override service expects.
+ */
+export function piToolContributions(
+  source: string,
+  items: readonly PiToolContribution[],
+): Pick<PiPluginContributions, 'tools' | 'toolOverrides'> {
+  const added: PiToolContribution[] = [];
+  const claimed: PiToolDeclaration[] = [];
+  for (const item of items) {
+    // Only a native declaration may claim a name: a replacement is handed to
+    // Pi's registry directly, which the portable shape is not.
+    if ('kind' in item && item.kind === 'pi-tool' && item.overrides === true) claimed.push(item);
+    else added.push(item);
+  }
+  if (claimed.length === 0) return { tools: added };
+  return {
+    tools: added,
+    toolOverrides: [{ source, tools: claimed.map((item) => item.name), replacements: claimed }],
+  };
+}
