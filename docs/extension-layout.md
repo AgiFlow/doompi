@@ -150,23 +150,19 @@ Most specific wins, and a platform file replaces the neutral one for that platfo
 
 **Filename is identity.** `(backend)/tool/write-plan.ts` declares tool `write_plan` and `(frontend)/tool/write-plan.tsx` renders it. This removes the cross-target strings an author matches by hand today: tool names, channel frame types, and status keys. A declaration may still pass an explicit name to keep a legacy identifier.
 
-### One `fill/` folder instead of eight arrays
+### One `fill/` folder, one rule
 
-The cockpit registry is already a slot-keyed fill mechanism internally, and most of the surface arrays desugar into it at install time. `fill/` exposes that directly, with a reserved vocabulary for host regions.
+Every fill names a slot, and there is no host-region special case. The cockpit declares its own regions as real slots (`overlay`, `rail`, `context`, `selection-bar`, `activity`, `composer-actions`, `composer-menu`), and an activity group opens `activity.<group>`. So filling a host region and filling another plugin's slot are the same operation, spelled the same way.
 
-| Target in `fill/`   | Region                |
-| ------------------- | --------------------- |
-| `activity`          | activity dock tail    |
-| `activity.<group>`  | one activity group    |
-| `context`           | context sections      |
-| `rail`              | session rail          |
-| `overlay`           | page overlays         |
-| `selection-bar`     | selection bar         |
-| `composer-actions`  | composer actions      |
-| `composer-menu`     | composer menu         |
-| `<pluginId>.<name>` | another plugin's slot |
+```text
+fill/PlanRail.rail.tsx                 -> { slot: 'rail', id: 'plan-rail' }
+fill/PlanSection.activity.plan.tsx     -> { slot: 'activity.plan', id: 'plan-section' }
+fill/PlanRef.task.detail.tsx           -> { slot: 'task.detail', id: 'plan-ref' }
+```
 
-`activity.<group>` is the common case by a wide margin and resolves late, after the set of installed activity groups is known. The others resolve immediately. The value here is learnability rather than deduplication: an author picks one folder instead of choosing between eight arrays.
+This is why the build tooling knows none of those names. A layout package can declare new regions and extensions fill them without anything in the toolchain changing, and a fill naming a slot nobody declares stays what it already is: an install diagnostic, not a failure.
+
+The older cockpit arrays (`overlays`, `railSections`, `contextSections`, `selectionBarItems`, `composerActions`, `composerMenuItems`, `activitySections`) remain as sugar over the same registry. Generated entries do not use them.
 
 ## A worked tree
 

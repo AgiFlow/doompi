@@ -174,8 +174,32 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
     if (parsed === undefined) return;
 
     if (state.surface === undefined) {
+      // Inside `mode/plan/`, a file called `mode.*` declares the gate itself
+      // rather than a contribution gated by it, and the gate's id names it.
+      const gate = state.gates[state.gates.length - 1];
+      if (gate !== undefined && parsed.name === gate.kind) {
+        entries.push({
+          file: relative,
+          scope: state.scope,
+          side: state.side,
+          gates: state.gates.slice(0, -1),
+          surface: gate.kind,
+          route: [],
+          name: gate.id,
+          target: parsed.target,
+          platform: parsed.platform,
+          escapeHatch: false,
+        });
+        return;
+      }
+
       if (parsed.name !== ESCAPE_HATCH_NAME) {
-        return note(relative, `only ${ESCAPE_HATCH_NAME}.* is read at a side root; everything else needs a surface`);
+        return note(
+          relative,
+          gate === undefined
+            ? `only ${ESCAPE_HATCH_NAME}.* is read at a side root; everything else needs a surface`
+            : `inside ${gate.kind}/${gate.id}/ a contribution needs a surface folder, or name the file ${gate.kind}.* to declare the gate`,
+        );
       }
       entries.push({
         file: relative,

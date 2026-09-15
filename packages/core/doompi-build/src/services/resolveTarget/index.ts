@@ -1,8 +1,6 @@
 import {
   ACTION_FIELDS,
-  ACTIVITY_FILL_TARGET,
   CLI_FIELDS,
-  FILL_FIELDS,
   NOT_A_CONTRIBUTION,
   SERVER_FIELDS,
   SETTING_FIELDS,
@@ -32,20 +30,6 @@ function logicalKey(entry: ExtensionEntry): string {
   return [entry.scope, gates, entry.surface ?? '', route, entry.name, entry.target ?? ''].join('|');
 }
 
-/** Splits `activity` and `activity.<group>` apart, since only the second resolves late. */
-function fillField(target: string | undefined): { field: string; activityGroup: string | undefined } | undefined {
-  if (target === undefined) return undefined;
-  const direct = FILL_FIELDS[target];
-  if (direct !== undefined) return { field: direct, activityGroup: undefined };
-
-  const [head, ...rest] = target.split('.');
-  if (head === ACTIVITY_FILL_TARGET && rest.length > 0) {
-    return { field: FILL_FIELDS[ACTIVITY_FILL_TARGET] as string, activityGroup: rest.join('.') };
-  }
-  // Anything else is `<pluginId>.<name>`, another plugin's slot.
-  return { field: 'fills', activityGroup: undefined };
-}
-
 /** Resolves the field for a surface whose filename target picks between two shapes. */
 function variantField(
   table: Readonly<Record<string, string>>,
@@ -56,24 +40,16 @@ function variantField(
   return table[entryTarget] ?? fallback;
 }
 
-function fieldFor(
-  entry: ExtensionEntry,
-  target: BuildTarget,
-): { field: string; activityGroup: string | undefined } | undefined {
+function fieldFor(entry: ExtensionEntry, target: BuildTarget): string | undefined {
   const surface = entry.surface;
   if (surface === undefined) return undefined;
 
   const declared = FIELDS_OF[target][surface];
   if (declared === undefined || declared === NOT_A_CONTRIBUTION) return undefined;
 
-  if (target === 'web' && surface === 'fill') return fillField(entry.target);
-  if (target === 'web' && surface === 'setting') {
-    return { field: variantField(SETTING_FIELDS, declared, entry.target), activityGroup: undefined };
-  }
-  if (target === 'web' && surface === 'action') {
-    return { field: variantField(ACTION_FIELDS, declared, entry.target), activityGroup: undefined };
-  }
-  return { field: declared, activityGroup: undefined };
+  if (target === 'web' && surface === 'setting') return variantField(SETTING_FIELDS, declared, entry.target);
+  if (target === 'web' && surface === 'action') return variantField(ACTION_FIELDS, declared, entry.target);
+  return declared;
 }
 
 /**
@@ -116,9 +92,9 @@ export function resolveTarget(graph: ExtensionGraph, target: BuildTarget): Targe
 
   const contributions: ResolvedContribution[] = [];
   for (const entry of winners.values()) {
-    const resolved = fieldFor(entry, target);
-    if (resolved === undefined) continue;
-    contributions.push({ entry, field: resolved.field, activityGroup: resolved.activityGroup });
+    const field = fieldFor(entry, target);
+    if (field === undefined) continue;
+    contributions.push({ entry, field });
   }
 
   return { target, contributions, escapeHatches, notices };
