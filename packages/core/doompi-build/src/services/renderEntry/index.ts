@@ -154,11 +154,18 @@ function hatchBindings(entries: readonly ExtensionEntry[]): { identifier: string
     .map((entry, index) => ({ identifier: `extra${index === 0 ? '' : index + 1}`, entry }));
 }
 
-/** One contribution as it appears inside its array, identity first so the file wins. */
-function member(binding: Binding, contextExpression: string): string {
+/**
+ * One contribution as it appears inside its array, identity first so the file wins.
+ *
+ * The browser half is never resolved. The cockpit builds its definition as
+ * data and starts it separately, so a frontend file has no mount context to
+ * receive, and resolving anyway would call any export that happens to be a
+ * function. A React component is a function, so that is not hypothetical.
+ */
+function member(binding: Binding, contextExpression: string, target: BuildTarget): string {
   if (PASSTHROUGH_FIELDS.includes(binding.contribution.field)) return binding.identifier;
 
-  const resolved = `at(${binding.identifier}, ${contextExpression})`;
+  const resolved = target === 'web' ? binding.identifier : `at(${binding.identifier}, ${contextExpression})`;
   const isFactory = FACTORY_FIELDS.includes(binding.contribution.field);
   if (binding.identity === undefined) return isFactory ? binding.identifier : resolved;
 
@@ -207,7 +214,7 @@ function bodyFor(
       lines.push(`${indent}},`);
       continue;
     }
-    const rendered = `[${members.map((entry) => member(entry, contextExpression)).join(', ')}]`;
+    const rendered = `[${members.map((entry) => member(entry, contextExpression, target)).join(', ')}]`;
     lines.push(`${indent}${wrapField(field, target, rendered, options)}`);
   }
   return lines;
