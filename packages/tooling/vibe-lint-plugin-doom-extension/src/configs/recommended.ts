@@ -2,6 +2,8 @@ import type { BoundaryConfig, OverrideConfig, PluginConfigPreset, Severity } fro
 
 const rules: Record<string, Severity> = {
   'composition-layout': 'error',
+  'routed-file-position': 'error',
+  'extension-side-boundary': 'error',
   'plugin-composition-wiring': 'error',
   'doom-constants': 'error',
   'neutral-extension-contracts': 'error',

@@ -2465,7 +2465,12 @@ function relativeImportRoot(filePath: string, specifier: string): string | undef
 /** Host entry modules compose the package's inward-facing declarations. */
 function isCompositionAdapter(filePath: string, configRoot: string): boolean {
   const relativePath = projectPath(filePath, configRoot);
-  return relativePath === 'src/extensions/pi.ts' || relativePath === 'src/extensions/server.ts';
+  return (
+    relativePath === 'src/extensions/pi.ts' ||
+    relativePath === 'src/extensions/server.ts' ||
+    relativePath === 'generated/pi.ts' ||
+    relativePath === 'generated/server.ts'
+  );
 }
 
 export const doomFolderLayout: RuleDefinition = {
@@ -3115,7 +3120,7 @@ export const doomCleanArchitectureBoundary: RuleDefinition = {
   },
 };
 
-const SERVER_PLUGIN_ENTRY = 'src/extensions/server.ts';
+const SERVER_PLUGIN_ENTRIES = new Set(['src/extensions/server.ts', 'generated/server.ts']);
 
 export const doomServerFacetShape: RuleDefinition = {
   preflight: true,
@@ -3127,7 +3132,8 @@ export const doomServerFacetShape: RuleDefinition = {
     if (!fs.existsSync(filePath)) return null;
     if (relativePath === 'src/adapters/headless/facet.ts')
       return 'Remove the separate headless facet; declare contributions in defineServerPlugin.';
-    if (relativePath !== SERVER_PLUGIN_ENTRY && relativePath !== 'src/adapters/server/facet.ts') return null;
+    if (relativePath === null) return null;
+    if (!SERVER_PLUGIN_ENTRIES.has(relativePath) && relativePath !== 'src/adapters/server/facet.ts') return null;
     const source = readSource(filePath);
     if (!source) return null;
     const violations: string[] = [];

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { GENERATED_DIR } from '../../constants/layout';
 import { generateExtension } from '../generate';
 import type { GenerateOptions } from '../generate/type';
 import { toKebab } from '../identity';
@@ -62,8 +63,8 @@ export function doompiExtension(options: ExtensionPresetOptions = { packageDir: 
 
   const entry: Record<string, string> = {
     ...exportEntries(packageDir, options.exportsDir ?? DEFAULT_EXPORTS_DIR),
-    ...(result.targets.includes('cli') ? { 'extensions/pi': `${result.graph.root}/pi.ts` } : {}),
-    ...(result.targets.includes('server') ? { 'extensions/server': `${result.graph.root}/server.ts` } : {}),
+    ...(result.targets.includes('cli') ? { 'extensions/pi': `${GENERATED_DIR}/pi.ts` } : {}),
+    ...(result.targets.includes('server') ? { 'extensions/server': `${GENERATED_DIR}/server.ts` } : {}),
     ...options.entry,
   };
 

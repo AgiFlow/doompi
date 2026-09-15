@@ -27,7 +27,17 @@ export const ESCAPE_HATCH_NAME = 'extra';
 /** The leaf filename of an HTTP route, as Next.js spells it. */
 export const ROUTE_FILE_NAME = 'route';
 
-/** Generated entries at the routing root. Never scanned, never hand-edited. */
+/**
+ * Where generated entries are written, package-relative.
+ *
+ * Not `src`. That directory is authored code, and a build that writes into it
+ * makes every package carry output its author did not write and must not edit.
+ * This one is gitignored per package, and the repository's formatter already
+ * skips a directory by this name.
+ */
+export const GENERATED_DIR = 'generated';
+
+/** Generated entry basenames. Never scanned, never hand-edited. */
 export const GENERATED_ENTRY_NAMES: readonly string[] = ['pi', 'server', 'web'];
 
 /** Platform suffixes, scoped to their side. A target may not reuse one of these words. */

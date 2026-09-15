@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
-import { extension } from '../src/extensions/pi';
+import { extension } from '../generated/pi';
 
 async function installWith(service: ReturnType<typeof createDoomToolOverridesService>): Promise<{
   readonly names: readonly string[];

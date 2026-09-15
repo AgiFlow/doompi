@@ -14,7 +14,7 @@ import { Context } from '@deepseek-ai/cordis';
 import { rgPath } from '@vscode/ripgrep';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { facet } from '../src/extensions/server';
+import { facet } from '../generated/server';
 
 const originalPath = process.env.PATH;
 let directory: string;

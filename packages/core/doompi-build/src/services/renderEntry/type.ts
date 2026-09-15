@@ -4,6 +4,8 @@ export interface RenderOptions {
   readonly packageName: string;
   /** The cockpit plugin id. */
   readonly pluginId: string;
-  /** Routing root, package-relative, so import specifiers can be made relative to it. */
+  /** Routing root, package-relative. */
   readonly root: string;
+  /** Where the generated entry is written, package-relative, so its imports can be made relative to it. */
+  readonly entryDir: string;
 }

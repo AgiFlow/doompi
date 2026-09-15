@@ -53,6 +53,11 @@ function renderClientModule(
 function pluginSourceRoot(plugin: DeclaredWebPlugin): string {
   const webRoot = path.join(plugin.packageDir, 'src', 'web');
   if (fs.existsSync(webRoot)) return webRoot;
+  // A folder-routed package colocates its components under src/extensions and
+  // generates the client entry elsewhere, so the entry's own directory holds
+  // no components at all. Scanning it would drop every utility class they use.
+  const routingRoot = path.join(plugin.packageDir, 'src', 'extensions');
+  if (fs.existsSync(routingRoot)) return routingRoot;
   return path.dirname(path.join(plugin.packageDir, plugin.client.entry));
 }
 

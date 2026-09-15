@@ -8,6 +8,9 @@ import { projectPath, readPackageManifest } from './manifestEntries.js';
 const ENTRIES = new Map([
   ['src/extensions/pi.ts', 'definePiExtension'],
   ['src/extensions/server.ts', 'defineServerPlugin'],
+  // A folder-routed package has the build write these instead of an author.
+  ['generated/pi.ts', 'definePiExtension'],
+  ['generated/server.ts', 'defineServerPlugin'],
   ['src/adapters/pi/extension.ts', 'definePiExtension'],
   ['src/adapters/server/facet.ts', 'defineServerPlugin'],
 ]);

@@ -1,3 +1,5 @@
+import { posix } from 'node:path';
+
 import type { ExtensionEntry, ExtensionScope } from '../../types/extensionGraph';
 import { type Identity, renderIdentity, toKebab, toSnake } from '../identity';
 import type { BuildTarget, ResolvedContribution, TargetResolution } from '../resolveTarget/type';
@@ -127,8 +129,10 @@ function identifierFor(contribution: ResolvedContribution, taken: Set<string>): 
 }
 
 /** The extensionless relative specifier from a generated entry to a routed file. */
-function specifierFor(file: string, root: string): string {
-  return `./${file.slice(root.length + 1).replace(/\.[^.]+$/u, '')}`;
+function specifierFor(file: string, entryDir: string): string {
+  const target = file.replace(/\.[^.]+$/u, '');
+  const relative = posix.relative(entryDir, target);
+  return relative.startsWith('.') ? relative : `./${relative}`;
 }
 
 interface Binding {
@@ -223,11 +227,11 @@ function bodyFor(
 function importsFor(
   bindings: readonly Binding[],
   hatches: readonly { identifier: string; entry: ExtensionEntry }[],
-  root: string,
+  entryDir: string,
 ): string[] {
   return [
-    ...bindings.map((b) => `import ${b.identifier} from '${specifierFor(b.contribution.entry.file, root)}';`),
-    ...hatches.map((h) => `import ${h.identifier} from '${specifierFor(h.entry.file, root)}';`),
+    ...bindings.map((b) => `import ${b.identifier} from '${specifierFor(b.contribution.entry.file, entryDir)}';`),
+    ...hatches.map((h) => `import ${h.identifier} from '${specifierFor(h.entry.file, entryDir)}';`),
   ];
 }
 
@@ -269,7 +273,7 @@ export function renderCliEntry(resolution: TargetResolution, options: RenderOpti
       ? "import { definePiExtension, piToolContributions } from '@agimon-ai/doompi-core/pi-extension';"
       : "import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';",
     '',
-    ...importsFor(bindings, hatches, options.root),
+    ...importsFor(bindings, hatches, options.entryDir),
     '',
     ...resolverFor(body),
     `export const extension = definePiExtension('${options.packageName}', ${parameterFor(body)} => ({`,
@@ -309,7 +313,7 @@ export function renderServerEntry(resolution: TargetResolution, options: RenderO
     HEADER,
     "import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';",
     '',
-    ...importsFor(bindings, hatches, options.root),
+    ...importsFor(bindings, hatches, options.entryDir),
     '',
     ...resolverFor(scopes),
     'export const facet = defineServerPlugin({',
@@ -349,7 +353,7 @@ export function renderWebEntry(resolution: TargetResolution, options: RenderOpti
     HEADER,
     "import { defineWebPlugin } from '@agimon-ai/doompi-core/web';",
     '',
-    ...importsFor(bindings, hatches, options.root),
+    ...importsFor(bindings, hatches, options.entryDir),
     '',
     ...resolverFor(scopes),
     'export const webPlugin = defineWebPlugin({',

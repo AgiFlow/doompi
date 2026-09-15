@@ -47,7 +47,7 @@ describe('generateExtension', () => {
     const result = generateExtension({ packageDir: dir });
 
     expect(result.targets).toEqual(['cli', 'server', 'web']);
-    for (const entry of ['pi.ts', 'server.ts', 'web.ts']) expect(exists(dir, `src/extensions/${entry}`)).toBe(true);
+    for (const entry of ['pi.ts', 'server.ts', 'web.ts']) expect(exists(dir, `generated/${entry}`)).toBe(true);
   });
 
   it('writes no cockpit entry for a package with no browser half', () => {
@@ -55,7 +55,7 @@ describe('generateExtension', () => {
     const result = generateExtension({ packageDir: dir });
 
     expect(result.targets).toEqual(['cli', 'server']);
-    expect(exists(dir, 'src/extensions/web.ts')).toBe(false);
+    expect(exists(dir, 'generated/web.ts')).toBe(false);
   });
 
   it('writes no backend entries for a cockpit-only package', () => {
@@ -63,8 +63,8 @@ describe('generateExtension', () => {
     const result = generateExtension({ packageDir: dir });
 
     expect(result.targets).toEqual(['web']);
-    expect(exists(dir, 'src/extensions/pi.ts')).toBe(false);
-    expect(exists(dir, 'src/extensions/server.ts')).toBe(false);
+    expect(exists(dir, 'generated/pi.ts')).toBe(false);
+    expect(exists(dir, 'generated/server.ts')).toBe(false);
   });
 
   it('takes the package name and plugin id from package.json', () => {
@@ -73,7 +73,7 @@ describe('generateExtension', () => {
 
     expect(result.packageName).toBe('@agimon-ai/doompi-task');
     expect(result.pluginId).toBe('task');
-    expect(read(dir, 'src/extensions/web.ts')).toContain("id: 'task',");
+    expect(read(dir, 'generated/web.ts')).toContain("id: 'task',");
   });
 
   it('reports a second run as unchanged, so a watcher is not retriggered', () => {
@@ -90,7 +90,7 @@ describe('generateExtension', () => {
     const result = generateExtension({ packageDir: dir });
 
     expect(result.notices).toHaveLength(1);
-    expect(exists(dir, 'src/extensions/pi.ts')).toBe(true);
+    expect(exists(dir, 'generated/pi.ts')).toBe(true);
   });
 
   it('does nothing at all for a package with no routing root', () => {
@@ -107,9 +107,9 @@ describe('the staleness contract', () => {
     const dir = packageWith({ 'src/extensions/(backend)/tool/grep.ts': EMPTY });
     generateExtension({ packageDir: dir });
 
-    fs.writeFileSync(path.join(dir, 'src/extensions/pi.ts'), '// hand-edited\n');
+    fs.writeFileSync(path.join(dir, 'generated/pi.ts'), '// hand-edited\n');
     expect(() => generateExtension({ packageDir: dir, check: true })).toThrow(StaleGeneratedError);
-    expect(read(dir, 'src/extensions/pi.ts')).toBe('// hand-edited\n');
+    expect(read(dir, 'generated/pi.ts')).toBe('// hand-edited\n');
   });
 
   it('passes under check when the committed entries match the tree', () => {

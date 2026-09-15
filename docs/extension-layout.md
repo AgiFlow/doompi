@@ -188,7 +188,6 @@ src/extensions/                                  GLOBAL
       (frontend)/channel/tasks.ts
       (frontend)/store/tasks.ts                  defineSessionStore
 
-  pi.ts  server.ts  web.ts                       generated, never hand-edited
 ```
 
 ## Transports
@@ -294,13 +293,21 @@ Backend helpers come from `@agimon-ai/doompi-core/extension-file`, frontend help
 
 One surface is deliberately unlike the rest. `service/` takes no helper wrapping and no derived identity, because a Cordis plugin is itself a function and nothing at runtime separates it from a `(context) => declaration` factory. The generator passes it straight through.
 
-## The generated entries are not committed
+## The generated entries live outside src
 
-`pi.ts`, `server.ts` and `web.ts` at the routing root are written by the build and listed in the package's own `.gitignore`. They are build output that happens to live in `src`, and a migrated package carries three fewer files to review.
+`src` is authored code. The build writes the three host entries to `generated/` at the package root instead, and the package gitignores that directory.
 
-They still have to exist at the paths the hosts expect, because `pi.extensions`, `doompiServer.entry` and `doompiWeb.client` name them, and the cockpit compiles the web one from source. Both hold: every Nx target that reads them depends on `^build`, and `files` wins over `.gitignore` when npm builds the tarball, so `src/extensions/web.ts` still ships.
+```text
+generated/pi.ts       built to dist/extensions/pi.mjs, named by pi.extensions
+generated/server.ts   built to dist/extensions/server.mjs, named by doompiServer
+generated/web.ts      shipped as source, named by doompiWeb.client
+```
 
-The ignore is per package rather than repository-wide, because a package that has not adopted the layout yet still hand-writes those three files and must keep them tracked.
+Three things follow. They never appear in a review, because nothing tracks them. They are never hand-edited, because the next build overwrites them. And the formatter already skips a directory by that name, so generated output cannot drift from the formatter and dirty the tree on every build.
+
+They still have to reach a consumer. `files` lists `generated/web.ts`, which is the one entry that ships as source for the cockpit to compile, and every Nx target that reads any of them depends on `^build`.
+
+One consequence worth knowing: the cockpit points Tailwind at a plugin's `src/web` when it exists, and the generated entry's own directory otherwise. For a routed package that directory holds no components, so the class scanner falls back to the routing root instead.
 
 ## Colocation
 
