@@ -44,11 +44,28 @@ const SCOPE_ORDER: readonly ExtensionScope[] = ['global', 'workspace', 'session'
  * generated entry has to as well. Emitted rather than imported, so a generated
  * entry carries no runtime dependency beyond the helper it is calling.
  */
-const RESOLVER = [
-  'type Factory<T> = (context: unknown) => T;',
-  'const at = <T>(value: T | Factory<T>, context: unknown): T =>',
-  "  typeof value === 'function' ? (value as Factory<T>)(context) : value;",
-].join('\n');
+const RESOLVER_CONTEXT: Readonly<Record<BuildTarget, string>> = {
+  cli: 'PiPluginContext',
+  server: 'DoomServerPluginContext',
+  web: 'never',
+};
+
+/**
+ * The mount context a routed file's factory receives, named rather than
+ * `unknown`.
+ *
+ * A factory that has to declare its parameter `unknown` and cast it back is a
+ * worse contract than the hand-written entry it replaced, so the resolver is
+ * typed with the host's own context and the entry imports that type.
+ */
+function resolver(target: BuildTarget): string {
+  const context = RESOLVER_CONTEXT[target];
+  return [
+    `type Factory<T> = (context: ${context}) => T;`,
+    `const at = <T>(value: T | Factory<T>, context: ${context}): T =>`,
+    "  typeof value === 'function' ? (value as Factory<T>)(context) : value;",
+  ].join('\n');
+}
 
 /**
  * Applies the identity the path derived, letting the authored value win.
@@ -202,6 +219,14 @@ function wrapField(field: string, target: BuildTarget, rendered: string, options
   return `...piToolContributions('${options.packageName}', ${rendered}),`;
 }
 
+/** The CLI entry imports only what its body actually uses. */
+function cliImport(body: readonly string[]): string {
+  const named = ['definePiExtension'];
+  if (body.some((line) => line.includes('piToolContributions('))) named.push('piToolContributions');
+  const types = body.some((line) => line.includes('at(')) ? ', type PiPluginContext' : '';
+  return `import { ${named.join(', ')}${types} } from '@agimon-ai/doompi-core/pi-extension';`;
+}
+
 function bodyFor(
   bindings: readonly Binding[],
   indent: string,
@@ -257,9 +282,9 @@ function compact(lines: readonly string[]): string {
  * every contribution is a factory would otherwise fail to typecheck on an
  * unused helper.
  */
-function resolverFor(body: readonly string[]): string[] {
+function resolverFor(body: readonly string[], target: BuildTarget = 'cli'): string[] {
   const lines: string[] = [];
-  if (body.some((line) => line.includes('at('))) lines.push(RESOLVER);
+  if (body.some((line) => line.includes('at('))) lines.push(resolver(target));
   if (body.some((line) => line.includes('via('))) lines.push(IDENTITY_HELPER);
   return lines.length > 0 ? [...lines, ''] : [];
 }
@@ -280,13 +305,11 @@ export function renderCliEntry(resolution: TargetResolution, options: RenderOpti
 
   return compact([
     HEADER,
-    body.some((line) => line.includes('piToolContributions('))
-      ? "import { definePiExtension, piToolContributions } from '@agimon-ai/doompi-core/pi-extension';"
-      : "import { definePiExtension } from '@agimon-ai/doompi-core/pi-extension';",
+    cliImport(body),
     '',
     ...importsFor(bindings, hatches, options.entryDir),
     '',
-    ...resolverFor(body),
+    ...resolverFor(body, 'cli'),
     `export const extension = definePiExtension('${options.packageName}', ${parameterFor(body)} => ({`,
     ...body,
     '}));',
@@ -322,11 +345,13 @@ export function renderServerEntry(resolution: TargetResolution, options: RenderO
 
   return compact([
     HEADER,
-    "import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';",
+    scopes.some((line) => line.includes('at('))
+      ? "import { defineServerPlugin, type DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';"
+      : "import { defineServerPlugin } from '@agimon-ai/doompi-core/server-facet';",
     '',
     ...importsFor(bindings, hatches, options.entryDir),
     '',
-    ...resolverFor(scopes),
+    ...resolverFor(scopes, 'server'),
     'export const facet = defineServerPlugin({',
     `  name: '${options.packageName}',`,
     ...scopes,
@@ -366,7 +391,7 @@ export function renderWebEntry(resolution: TargetResolution, options: RenderOpti
     '',
     ...importsFor(bindings, hatches, options.entryDir),
     '',
-    ...resolverFor(scopes),
+    ...resolverFor(scopes, 'web'),
     'export const webPlugin = defineWebPlugin({',
     `  id: '${options.pluginId}',`,
     ...scopes,

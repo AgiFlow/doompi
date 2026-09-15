@@ -227,7 +227,7 @@ describe('identity derived from the path', () => {
     // arbitrates, not a second registration, and both are authored in tool/.
     const { cli, server } = render({ 'src/extensions/(backend)/tool/grep.cli.ts': EMPTY });
     expect(cli).toContain("...piToolContributions('@agimon-ai/doompi-plan', [");
-    expect(cli).toContain('import { definePiExtension, piToolContributions }');
+    expect(cli).toContain('import { definePiExtension, piToolContributions');
     // The server has no override mechanism, so its array stays plain.
     expect(server).not.toContain('piToolContributions');
   });
