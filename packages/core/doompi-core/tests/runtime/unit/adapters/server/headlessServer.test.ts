@@ -248,6 +248,7 @@ describe('serveHeadlessServer', () => {
       { sessionId: 'live', workspaceId: 'test-workspace', cwd: '/repo', name: 'Live', createdAt: '2025-01-01' },
     ];
     const reviveSession = vi.fn(async () => undefined);
+    const removeDormantSession = vi.fn();
     await hub.mountFacets([], {
       scope: 'workspace',
       workspaceId: 'test-workspace',
@@ -258,6 +259,7 @@ describe('serveHeadlessServer', () => {
       headlessHub: hub,
       port: 0,
       dormantSessions: () => records,
+      removeDormantSession,
       reviveSession,
     });
     servers.push(server);
@@ -305,6 +307,10 @@ describe('serveHeadlessServer', () => {
       404,
     );
     expect(reviveSession).toHaveBeenCalledTimes(1);
+
+    const removed = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/asleep`, { method: 'DELETE' });
+    expect(removed.status).toBe(200);
+    expect(removeDormantSession).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'asleep' }));
     await hub.close();
   });
   it('serves compositions, assets, remote requests, and directory suggestions', async () => {

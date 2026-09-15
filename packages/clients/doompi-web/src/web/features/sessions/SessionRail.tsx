@@ -41,7 +41,7 @@ import { DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections';
 import { closeNewSession, openNewSession, newSessionStore } from '../../stores/newSessionStore';
 import { paletteStore } from '../../stores/paletteStore';
 import { openRemoteDialog, remoteAccessStore, turnRemoteAccessOff } from '../../stores/remoteAccessStore';
-import { resolveParentId, sessionsStore, type SessionMeta } from '../../stores/sessionsStore';
+import { applySessionRemoved, resolveParentId, sessionsStore, type SessionMeta } from '../../stores/sessionsStore';
 import { renameSession, sessionStoreFor } from '../../stores/sessionStore';
 import { NewSessionDialog } from './NewSessionDialog';
 import { ResumeSessionDialog } from './ResumeSessionDialog';
@@ -166,6 +166,7 @@ function SessionCard({
     enterMode('view');
     const result = await stopSession(summary.id);
     if ('error' in result) setError(result.error);
+    else applySessionRemoved({ sessionId: summary.id });
   };
   const restart = async (): Promise<void> => {
     enterMode('view');

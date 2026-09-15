@@ -49,6 +49,7 @@ export interface HeadlessServerOptions {
   resumeSession?: (session: HeadlessHubSession, targetSessionId: string) => Promise<string>;
   /** Recorded sessions this server has not reopened, surfaced so a client can ask for one. */
   dormantSessions?: () => readonly OpenSessionRecord[];
+  removeDormantSession?: (record: OpenSessionRecord) => void | Promise<void>;
   reviveSession?: (record: OpenSessionRecord) => Promise<void>;
 }
 
@@ -589,6 +590,14 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       return;
     }
     if (session === undefined || session.workspaceId !== workspaceId) {
+      const record = dormant().find(
+        (candidate) => candidate.sessionId === sessionId && candidate.workspaceId === workspaceId,
+      );
+      if (request.method === 'DELETE' && record !== undefined && options.removeDormantSession !== undefined) {
+        await options.removeDormantSession(record);
+        json(response, 200, { ok: true });
+        return;
+      }
       json(response, 404, { error: 'Session not found.' });
       return;
     }
