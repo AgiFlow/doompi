@@ -101,13 +101,14 @@ export const doomExtensionSideBoundary: RuleDefinition = {
  * routed file under src/extensions is the shape one host expects, and a
  * service is host-neutral.
  *
- * `src/web` is the same story for the browser half. It is only reported once
- * a package has adopted the layout, because an unmigrated package has nowhere
- * else to put it yet.
+ * `src/web` is deliberately not reported. Browser code used by one routed
+ * file should colocate beside it, but code shared across several surfaces has
+ * to live somewhere, and that root is the right somewhere. Colocation is a
+ * preference the layout doc states, not a rule worth failing a build over.
  */
 export const doomLegacySourceRoot: RuleDefinition = {
   preflight: true,
-  rule: 'Platform-specific code lives in a routed file, not in src/tools or a separate src/web tree',
+  rule: 'Platform-specific code lives in a routed file, not under src/tools',
   rationale:
     'A root named after a host tells you nothing about which host, and splits one capability across two roots. The routed file already says which host it targets, and the service beneath it says the logic targets none.',
   check(filePath, configRoot) {
@@ -118,14 +119,6 @@ export const doomLegacySourceRoot: RuleDefinition = {
     if (relative.startsWith('src/tools/')) {
       return 'Move the host-neutral half to src/services and the host-specific shape to a routed file under src/extensions, such as (backend)/tool/<name>.cli.ts or .server.ts.';
     }
-    if (relative.startsWith('src/web/') && hasRoutedFrontend(configRoot)) {
-      return 'This package is folder-routed, so its browser code colocates beside the routed file that renders it, in a _components or _lib folder under (frontend).';
-    }
     return null;
   },
 };
-
-/** Whether the package declares any browser contribution through the routing root. */
-function hasRoutedFrontend(configRoot: string): boolean {
-  return scanExtensions({ packageDir: configRoot }).entries.some((entry) => entry.side === 'frontend');
-}

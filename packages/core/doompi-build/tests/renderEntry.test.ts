@@ -189,6 +189,14 @@ describe('identity derived from the path', () => {
     expect(server).toContain("hooks: [via({ event: 'session_start' }, ");
   });
 
+  it('does not wrap a cockpit channel in a factory, unlike the server one', () => {
+    // `channels` means two different things: the server array holds
+    // () => DoomHubChannel, the cockpit array holds the contribution itself.
+    const { web } = render({ 'src/extensions/(frontend)/channel/tasks.ts': EMPTY });
+    expect(web).toContain("channels: [via({ channel: 'tasks' }, channelTasks)]");
+    expect(web).not.toContain('channelTasks()');
+  });
+
   it('merges a channel frame type inside the factory the array expects', () => {
     const { server } = render({ 'src/extensions/(backend)/channel/tasks.ts': EMPTY });
     expect(server).toContain("channels: [() => via({ frameType: 'tasks' }, channelTasks())]");

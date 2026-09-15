@@ -12,7 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const TSDOWN_CONFIG = `import { doompiExtension } from '@agimon-ai/doompi-build';
+const TSDOWN_CONFIG = `import { doompiExtension } from '@agimon-ai/doompi-build/tsdown';
 import { defineConfig } from 'tsdown';
 
 /**
@@ -60,22 +60,20 @@ function migrate(packageDir, check) {
     '@agimon-ai/doompi-build': 'workspace:*',
   });
 
-  // Host entries move out of src, so the manifest points at the generated ones.
-  if (manifest.doompiServer !== undefined) manifest.doompiServer.entry = './generated/server.ts';
-  if (hasWeb) manifest.doompiWeb.client = './generated/web.ts';
-
-  // The browser half ships as source and now lives beside what renders it.
+  // The build derives doompiServer, doompiWeb and pi from the tree, so they
+  // are left alone here: the first build after this rewrites them.
+  //
+  // files narrows to built output. The browser half used to ship as source for
+  // the cockpit to compile and is now a browser bundle in dist like the rest.
   manifest.files = [
     'dist',
-    ...(hasWeb ? ['generated/web.ts', 'src/extensions/**/(frontend)/**'] : []),
     ...(manifest.files ?? []).filter(
       (entry) =>
         !['dist', 'src/web', 'src/extensions/web.ts'].includes(entry) &&
-        !entry.startsWith('!src/web/') &&
+        !entry.startsWith('!') &&
         !entry.startsWith('generated/') &&
-        !entry.startsWith('src/extensions/'),
+        !entry.startsWith('src/'),
     ),
-    ...(hasWeb ? ['!src/extensions/**/*.stories.tsx'] : []),
   ];
 
   if (manifest.scripts?.typecheck !== undefined && hasWeb) {
@@ -93,7 +91,10 @@ function migrate(packageDir, check) {
   tsconfig.include = [...new Set([...(tsconfig.include ?? ['src', 'tests']), 'generated'])];
   tsconfig.exclude = [
     ...new Set([
-      ...(tsconfig.exclude ?? []).filter((entry) => entry !== 'src/web' && entry !== 'src/extensions/web.ts'),
+      // src/web stays excluded: a package with browser code shared across
+      // several routed files keeps it there rather than colocating it twice.
+      ...(tsconfig.exclude ?? []).filter((entry) => entry !== 'src/extensions/web.ts'),
+      ...(hasWeb ? ['src/web'] : []),
       ...(hasWeb ? ['src/extensions/**/(frontend)/**/*', 'generated/web.ts'] : []),
     ]),
   ];
@@ -108,7 +109,13 @@ function migrate(packageDir, check) {
     const browser = fs.existsSync(legacy)
       ? readJson(legacy)
       : { compilerOptions: { jsx: 'react-jsx', lib: ['ES2023', 'DOM', 'DOM.Iterable'], noEmit: true, strict: true } };
-    browser.include = ['src/types', 'src/constants', 'src/extensions/**/(frontend)/**/*', 'generated/web.ts'];
+    browser.include = [
+      'src/web',
+      'src/types',
+      'src/constants',
+      'src/extensions/**/(frontend)/**/*',
+      'generated/web.ts',
+    ];
     write('tsconfig.web.json', `${JSON.stringify(browser, null, 2)}\n`);
   }
 
