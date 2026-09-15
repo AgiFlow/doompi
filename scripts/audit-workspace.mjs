@@ -93,9 +93,9 @@ const packageByName = new Map(packageRecords.map((record) => [record.manifest.na
 const toolingManifest = readJson(path.join(toolingPackageDirectory, 'package.json'));
 const workspacePackageNames = new Set([...ownedNames, toolingPackageName, ...additionalToolingPackageNames]);
 
-if (packageDirectories.length !== 50 || ownedNames.size !== 50) {
+if (packageDirectories.length !== 51 || ownedNames.size !== 51) {
   fail(
-    `Expected exactly 50 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
+    `Expected exactly 51 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
   );
 }
 if (toolingManifest.name !== toolingPackageName || toolingManifest.private === true) {
@@ -307,5 +307,5 @@ if (rmuxPayloadCount !== 12) fail(`Expected 12 RMUX vendor files, found ${rmuxPa
 if (rtkPayloadCount !== 4) fail(`Expected 4 RTK vendor files, found ${rtkPayloadCount}`);
 
 console.log(
-  'Workspace audit passed: 49 publishable runtime packages, 1 private standalone client, 4 tooling packages, dispensable feature closure, registry-only externals, 12 materialized RMUX payloads, and 4 materialized RTK payloads.',
+  'Workspace audit passed: 50 publishable runtime packages, 1 private standalone client, 4 tooling packages, dispensable feature closure, registry-only externals, 12 materialized RMUX payloads, and 4 materialized RTK payloads.',
 );
