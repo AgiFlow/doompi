@@ -34,3 +34,5 @@ export { renderCliEntry, renderServerEntry, renderWebEntry } from '../services/r
 export type { RenderOptions } from '../services/renderEntry/type';
 export { StaleGeneratedError, writeGenerated } from '../services/writeGenerated';
 export type { WriteResult } from '../services/writeGenerated';
+export { syncManifest, writeManifest } from '../services/syncManifest';
+export type { ManifestSync } from '../services/syncManifest/type';
