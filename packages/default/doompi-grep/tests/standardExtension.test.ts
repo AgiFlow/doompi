@@ -12,7 +12,7 @@ vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
   connectDoomCordisHost: hostMocks.connect,
 }));
 
-const { extension } = await import('../src/extensions/pi');
+const { extension } = await import('../generated/pi');
 
 function createPi(): {
   readonly pi: ExtensionAPI;

@@ -93,8 +93,8 @@ describe('doompi-grep package contract', () => {
     // The browser half ships as source, colocated under the (frontend) groups.
     expect(manifest.files).toEqual([
       'dist',
+      'generated/web.ts',
       'src/extensions/**/(frontend)/**',
-      'src/extensions/web.ts',
       '!src/extensions/**/*.stories.tsx',
     ]);
     expect(manifest.files).not.toContain('src');

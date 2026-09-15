@@ -26,8 +26,8 @@
   },
   "files": [
     "dist",
+    "generated/web.ts",
     "src/extensions/**/(frontend)/**",
-    "src/extensions/web.ts",
     "!src/extensions/**/*.stories.tsx"
   ],
   "type": "module",
@@ -102,7 +102,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
@@ -115,7 +115,7 @@
   "doompiWeb": {
     "pluginId": "grep",
     "channels": [],
-    "client": "./src/extensions/web.ts",
+    "client": "./generated/web.ts",
     "scopes": [
       "session"
     ]

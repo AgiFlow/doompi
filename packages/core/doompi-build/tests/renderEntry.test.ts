@@ -16,7 +16,12 @@ afterEach(() => {
 
 const EMPTY = 'export default {};\n';
 
-const OPTIONS = { packageName: '@agimon-ai/doompi-plan', pluginId: 'plan', root: 'src/extensions' };
+const OPTIONS = {
+  packageName: '@agimon-ai/doompi-plan',
+  pluginId: 'plan',
+  root: 'src/extensions',
+  entryDir: 'generated',
+};
 
 function packageWith(files: Record<string, string>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-render-'));
@@ -78,7 +83,7 @@ describe('renderCliEntry', () => {
 
   it('keeps import specifiers relative, extensionless, and paren-safe', () => {
     const { cli } = render({ 'src/extensions/workspaces/sessions/(backend)/tool/write-plan.ts': EMPTY });
-    expect(cli).toContain("from './workspaces/sessions/(backend)/tool/write-plan'");
+    expect(cli).toContain("from '../src/extensions/workspaces/sessions/(backend)/tool/write-plan'");
     expect(cli).not.toContain(".ts'");
   });
 

@@ -28,6 +28,6 @@
     "outDir": "dist",
     "types": ["vitest/globals", "node"]
   },
-  "include": ["src", "tests", "vitest.config.ts", "tsdown.config.ts"],
-  "exclude": ["node_modules", "dist", "coverage", "src/extensions/web.ts", "src/extensions/**/(frontend)/**/*"]
+  "include": ["src", "tests", "generated", "vitest.config.ts", "tsdown.config.ts"],
+  "exclude": ["node_modules", "dist", "coverage", "src/extensions/**/(frontend)/**/*", "generated/web.ts"]
 }

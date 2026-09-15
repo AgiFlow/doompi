@@ -7,7 +7,19 @@ import ts from 'typescript';
 import { normalizeEntry, pluginBlocks, readManifest } from './webPlugin.js';
 
 const PACKAGE_MANIFEST_NAME = 'package.json';
-const SERVER_ENTRY = './src/extensions/server.ts';
+/**
+ * Where a server facet entry may live.
+ *
+ * Two spellings while the folder convention lands: a package that has not
+ * adopted it hand-writes src/extensions/server.ts, and a migrated one has the
+ * build write generated/server.ts, because src holds authored code only.
+ */
+const SERVER_ENTRIES: readonly string[] = ['./src/extensions/server.ts', './generated/server.ts'];
+
+/** Narrows as well as tests, so the checks below keep a defined entry path. */
+function isServerEntry(entry: string | undefined): entry is string {
+  return entry !== undefined && SERVER_ENTRIES.includes(entry);
+}
 const SERVER_DIST = './dist/extensions/server.mjs';
 const SERVER_SCOPES = new Set(['global', 'workspace', 'session']);
 const LEGACY_EXPORT_KEYS = new Set([
@@ -47,6 +59,7 @@ function hasServerImplementation(configRoot: string): boolean {
     'src/exports/extensions/server.ts',
     'src/extensions/server.ts',
     'src/extensions/headless.ts',
+    'generated/server.ts',
   ].some((relativePath) => hasFile(configRoot, relativePath));
 }
 
@@ -118,8 +131,8 @@ function serverCompositionViolations(manifest: ServerCompositionManifest, config
   if (!isRecord(block)) return ['doompiServer must be an object with entry, dist, and scopes'];
 
   const entry = typeof block.entry === 'string' ? block.entry : undefined;
-  if (entry !== SERVER_ENTRY) {
-    violations.push(`doompiServer.entry must be ${SERVER_ENTRY}`);
+  if (!isServerEntry(entry)) {
+    violations.push(`doompiServer.entry must be one of ${SERVER_ENTRIES.join(' or ')}`);
   } else if (!hasFile(configRoot, entry.slice(2))) {
     violations.push(`doompiServer.entry has no source file: ${entry}`);
   } else if (!hasDefaultServerExport(configRoot, entry)) {
@@ -140,7 +153,7 @@ function serverCompositionViolations(manifest: ServerCompositionManifest, config
     if (new Set(scopes).size !== scopes.length) violations.push('doompiServer.scopes must not contain duplicates');
   }
 
-  if (entry !== SERVER_ENTRY) return violations;
+  if (!isServerEntry(entry)) return violations;
   const exportKey = './extensions/server';
   const exportsMap = isRecord(manifest.exports) ? manifest.exports : undefined;
   const exported = exportsMap?.[exportKey];

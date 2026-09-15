@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { GENERATED_ENTRY_NAMES } from '../../constants/layout';
+import { GENERATED_DIR, GENERATED_ENTRY_NAMES } from '../../constants/layout';
 import type { ExtensionGraph, ExtensionNotice } from '../../types/extensionGraph';
 import { renderCliEntry, renderServerEntry, renderWebEntry } from '../renderEntry';
 import { resolveTarget } from '../resolveTarget';
@@ -60,8 +60,8 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
 
     targets.push(target);
     const render = RENDERERS[target];
-    const source = render(resolution, { packageName, pluginId, root: graph.root });
-    files.set(`${graph.root}/${ENTRY_FILENAME[target]}.${ENTRY_EXTENSION[target]}`, source);
+    const source = render(resolution, { packageName, pluginId, root: graph.root, entryDir: GENERATED_DIR });
+    files.set(`${GENERATED_DIR}/${ENTRY_FILENAME[target]}.${ENTRY_EXTENSION[target]}`, source);
   }
 
   const { changed } = writeGenerated(options.packageDir, files, options.check);
