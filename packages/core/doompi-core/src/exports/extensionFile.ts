@@ -1,0 +1,26 @@
+export {
+  defineActivity,
+  defineChannel,
+  defineCommand,
+  defineHook,
+  defineMethod,
+  defineRoute,
+  defineServerTool,
+  defineService,
+  defineTool,
+} from '../extensions/extensionFile';
+export type {
+  ActivityFile,
+  ChannelFile,
+  CommandContribution,
+  CommandFile,
+  HookFile,
+  MethodFile,
+  OrFactory,
+  PathSupplied,
+  RouteFile,
+  ServerToolFile,
+  ServiceFile,
+  ToolContribution,
+  ToolFile,
+} from '../schemas/extensionFile';

@@ -13,6 +13,7 @@ export default defineConfig({
     'cockpit-container': 'src/exports/cockpitContainer.ts',
     config: 'src/exports/config.ts',
     'context-contributions': 'src/exports/contextContributions.ts',
+    'extension-file': 'src/exports/extensionFile.ts',
     delegation: 'src/exports/delegation.ts',
     'cordis-host': 'src/exports/cordisHost.ts',
     footer: 'src/exports/footer.ts',

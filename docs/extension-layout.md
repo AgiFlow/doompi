@@ -258,7 +258,41 @@ None of these fields are new. The convention narrows an existing union by path i
 
 `extra.*` is a reserved filename at a side root, the way `layout.tsx` is reserved in Next.js. `(backend)/extra.cli.ts`, `(backend)/extra.server.ts` and `(frontend)/extra.ts` export raw contributions that the generator merges with the scanned set.
 
-This covers surfaces with no folder, such as shortcuts, flags, providers, message renderers, markdown transformers, tool overrides, selection axes, leader bindings and file links. It also lets a package adopt the layout one folder at a time.
+This covers surfaces with no folder, such as shortcuts, flags, providers, message renderers, markdown transformers, selection axes, leader bindings and file links. It also lets a package adopt the layout one folder at a time.
+
+A tool override is **not** one of them. Replacing a name Pi already ships stays in `tool/`, because from the author's side both are "this package provides grep":
+
+```text
+(backend)/tool/grep.cli.ts       definePiTool(tool, { overrides: true })
+(backend)/tool/grep.server.ts    defineServerTool(tool)
+```
+
+The difference lives in the value rather than the path, because only the value knows it. The generated CLI entry splits the two at runtime, so a claim reaches the override service, which arbitrates it, and an addition reaches the tool array. Hiding an override in the escape hatch would bury the most invasive thing one extension can do to another.
+
+## The export is typed, not free form
+
+A routed file's default export is its whole contract with the host, and the generated entry cannot check it: the entry merges the derived identity in and hands the result to a contribution array, where an excess or misspelled key is invisible. So each surface has a helper that types what that file may export.
+
+```ts
+// (backend)/tool/write-plan.ts
+import { defineTool } from '@agimon-ai/doompi-core/extension-file';
+
+export default defineTool((context) => ({
+  description: 'Write the plan',
+  parameters: WritePlanSchema,
+  async execute(input, execution) { ... },
+}));
+```
+
+Backend helpers come from `@agimon-ai/doompi-core/extension-file`, frontend helpers from `@agimon-ai/doompi-core/web`. Three rules shape them.
+
+**Derived keys are optional, not absent.** The path supplies the name and the generator spreads the authored value over it, so a file that states its own name keeps it. Removing the key from the type would make that legal case a type error.
+
+**A factory is always allowed on the backend.** A contribution needing the mount context cannot be built at module scope, so every backend helper accepts `declaration | ((context) => declaration)` and types the context. Frontend files have no factory form, because the cockpit builds its definition as data and starts it separately.
+
+**Portable and native are different helpers, because they are different contracts.** `defineTool` marks a contribution the host adapts, which composes abort signals and turns a throw into an error result. `defineServerTool` is a native headless tool the host registers untouched. Picking one is a real decision, so it is spelled rather than inferred from the shape.
+
+One surface is deliberately unlike the rest. `service/` takes no helper wrapping and no derived identity, because a Cordis plugin is itself a function and nothing at runtime separates it from a `(context) => declaration` factory. The generator passes it straight through.
 
 ## Colocation
 

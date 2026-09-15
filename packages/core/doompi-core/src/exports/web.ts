@@ -1,5 +1,35 @@
 export { bindSessionApiWorkspace, sessionApiPath } from '../web/services/apiRoutes';
-export { defineSessionChannel, defineSlot, defineWebPlugin } from '../extensions/webPlugin';
+export {
+  defineChannelFile,
+  defineContextAction,
+  defineDockFace,
+  defineFill,
+  defineMinorModeFile,
+  definePaletteCommand,
+  defineSessionChannel,
+  defineSettingsPanel,
+  defineSettingsSection,
+  defineSlot,
+  defineSlotFile,
+  defineTab,
+  defineToolRenderer,
+  defineUserMessageAction,
+  defineWebPlugin,
+} from '../extensions/webPlugin';
+export type {
+  ChannelFile,
+  ContextActionFile,
+  DockFaceFile,
+  FillFile,
+  MinorModeFile,
+  PaletteCommandFile,
+  SettingsPanelFile,
+  SettingsSectionFile,
+  SlotFile,
+  TabFile,
+  ToolRendererFile,
+  UserMessageActionFile,
+} from '../web/types/extensionFile';
 export { defineGlobalStore } from '../web/models/globalStore';
 export { defineSessionStore } from '../web/models/sessionStore';
 export { defineWorkspaceStore } from '../web/models/workspaceStore';
