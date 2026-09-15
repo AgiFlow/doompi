@@ -46,7 +46,7 @@ async function fixture(mode: 'live' | 'legacy' = 'live') {
     },
     registerTool: (tool: { name: string; execute(...args: unknown[]): unknown }) => {
       tools.set(tool.name, tool);
-      toolSurface?.refresh();
+      if (!activeTools.includes(tool.name)) activeTools.push(tool.name);
     },
     getAllTools: () => [...tools.values()],
     getActiveTools: () => activeTools,
@@ -175,6 +175,16 @@ describe('production live voice command wiring', () => {
     expect(cancelled.context.ui.notify).not.toHaveBeenCalled();
     expect(cancelled.host.start).not.toHaveBeenCalled();
   });
+  it('keeps dynamically refreshed Voice tools hidden while autonomous Voice is disabled', async () => {
+    const f = await fixture();
+    expect(f.pi.getActiveTools()).toEqual(['read']);
+
+    await f.events.get('session_start')!({}, f.context);
+
+    expect(f.tools.has('describe_voice_tools')).toBe(true);
+    expect(f.pi.getActiveTools()).toEqual(['read']);
+  });
+
   it('does not gate live tool descriptions or failed narration on local ASR', async () => {
     const f = await fixture();
     await f.events.get('session_start')!({}, f.context);

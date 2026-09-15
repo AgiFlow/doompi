@@ -131,7 +131,7 @@ With a healthy recorder and local model:
 
 - microphone activity SHOULD update at least 8 times per second;
 - endpointing MUST occur `utteranceIdleMs` after the last accepted voiced frame;
-- ASR MUST have a configurable `transcriptionTimeoutMs` deadline from 1,000 to 120,000 ms, defaulting to 15,000 ms;
+- ASR MUST have a configurable `transcriptionTimeoutMs` deadline from 1,000 to 120,000 ms, defaulting to 120,000 ms;
 - after the endpoint delay, target-machine endpoint-to-delivery p95 SHOULD be below 2.5 seconds once the local ASR model is warm.
 
 Latency measurements MUST separate endpoint waiting, recorder drain, WAV creation, ASR, transcript policy, delivery, and next-capture startup.

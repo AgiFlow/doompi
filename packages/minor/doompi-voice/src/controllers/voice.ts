@@ -556,6 +556,12 @@ export function createVoiceRuntime(
     if (autoController.selectedMode !== 'live') await options.waitUntilConfigured?.(context, signal);
   };
   let voiceToolFacades: ReturnType<typeof createVoiceToolFacades> | undefined;
+  const refreshVoiceToolFacades = (): void => {
+    voiceToolFacades?.refresh();
+    // Re-registering a dynamic tool can make it active in Pi. Reapply the gate
+    // after the registration so disabled autonomous Voice cannot leak a façade.
+    restrictionListeners.forEach((listener) => listener());
+  };
   const modeCatalog = createVoiceMinorModeCatalog();
 
   const modeToolContribution = voiceTools.register(createMinorModeVoiceTool(modeCatalog));
@@ -578,8 +584,7 @@ export function createVoiceRuntime(
     voiceToolSession?.setActive(enabled);
     voiceToolsVisible = enabled;
     narrationToolVisible = autoController.selectedMode !== 'live';
-    restrictionListeners.forEach((listener) => listener());
-    voiceToolFacades?.refresh();
+    refreshVoiceToolFacades();
   };
   const configuredMode = (): 'legacy' | 'live' =>
     configs.load(process.env.PI_PROJECT_ROOT ?? process.cwd()).voice?.mode === 'live' ? 'live' : 'legacy';
@@ -959,7 +964,7 @@ export function createVoiceRuntime(
           try {
             const session = voiceTools.bindSession(sessionId, ctx);
             voiceToolSession = session;
-            voiceToolCatalogSubscription = session.subscribe(() => voiceToolFacades?.refresh());
+            voiceToolCatalogSubscription = session.subscribe(refreshVoiceToolFacades);
             narrationToolRuntime = { context: ctx, session, controller: autoController };
             reloadHandoff = reason === 'reload' && reloadHandoffs.consume(sessionId) !== undefined;
           } catch (error) {
