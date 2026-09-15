@@ -181,7 +181,7 @@
     "@agimon-ai/doompi-minor-mode": "workspace:*",
     "@agimon-ai/doompi-telemetry": "workspace:*",
     "@deepseek-ai/cordis": "4.0.2",
-    "yaml": "2.9.0"
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@agimon-ai/doompi-core": "workspace:*",
