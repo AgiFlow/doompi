@@ -1,6 +1,8 @@
 import type {
+  ActivityGroupContribution,
   ContextActionContribution,
   DockFaceContribution,
+  LeaderBindingContribution,
   MinorModeContribution,
   PaletteCommandContribution,
   SessionChannelContribution,
@@ -59,6 +61,19 @@ export type ContextActionFile = PathSupplied<ContextActionContribution, 'id'>;
 
 /** `action/<name>.ts` offering an action on a user timeline message. */
 export type UserMessageActionFile = PathSupplied<UserMessageActionContribution, 'id'>;
+
+/** `activity-group/<name>.ts`. The filename is the group name and its slot. */
+export type ActivityGroupFile = PathSupplied<ActivityGroupContribution, 'name'>;
+
+/**
+ * `leader/<name>.ts`. The filename is the binding's local name, namespaced
+ * under the plugin id, because the key tree is shared across plugins.
+ */
+export type LeaderBindingFile = LeaderBindingContribution extends infer Binding
+  ? Binding extends { id: string }
+    ? Omit<Binding, 'id'> & Partial<Pick<Binding, 'id'>>
+    : never
+  : never;
 
 /** `mode/<name>/mode.ts`. The gate folder names the mode, in kebab case. */
 export type MinorModeFile = PathSupplied<MinorModeContribution, 'name'>;

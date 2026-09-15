@@ -58,8 +58,8 @@ export function defineHook<TEvent extends DoomHeadlessEventName = DoomHeadlessEv
   return file;
 }
 
-/** `service/<name>.ts`. Passed through untouched, because a Cordis plugin is itself a function. */
-export function defineService(file: ServiceFile): ServiceFile {
+/** `service/<name>.ts`. A factory returning a Cordis plugin, so it can read the mount. */
+export function defineService<TContext = unknown>(file: ServiceFile<TContext>): ServiceFile<TContext> {
   return file;
 }
 

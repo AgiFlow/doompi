@@ -41,7 +41,7 @@ function packageWith(files: Record<string, string>): string {
  * asserts the emitted form itself.
  */
 function fields(source: string): string {
-  return source.replaceAll(/get (\w+)\(\) \{ return (.*?); \},/gu, '$1: $2,');
+  return source.replaceAll(/get (\w+)\(\): [^{]+\{ return (.*?); \},/gu, '$1: $2,');
 }
 
 function raw(files: Record<string, string>): { cli: string; server: string; web: string } {
@@ -197,9 +197,10 @@ describe('ordering', () => {
       'src/extensions/(backend)/service/registry.ts': EMPTY,
       'src/extensions/(backend)/tool/write-plan.ts': EMPTY,
     });
-    expect(server).toContain('get tools() { return [');
+    expect(server).toContain("get tools(): DoomServerSessionPlugin['tools'] { return [");
     // services is what the helper reads first, so a getter buys it nothing.
-    expect(server).toContain('services: [serviceRegistry]');
+    // It is always called, because that surface is uniformly a factory.
+    expect(server).toContain('services: [serviceRegistry(context)]');
     expect(server).not.toContain('get services()');
   });
 });
@@ -268,13 +269,13 @@ describe('identity derived from the path', () => {
     expect(cli).not.toContain('piToolContributions');
   });
 
-  it('passes a service through untouched, because a Cordis plugin is itself a function', () => {
-    // Resolving one would call the plugin with the mount context and register
-    // its return value. There is no runtime difference between a Cordis plugin
-    // and a `(context) => declaration` factory, so the surface decides.
+  it('calls a service file, because that surface is always a factory', () => {
+    // Nothing at runtime separates a Cordis plugin from a (context) => plugin
+    // factory, so the surface is uniformly a factory rather than guessed at.
+    // It is also how a package publishes the graph its other files inject.
     const { cli, server } = render({ 'src/extensions/(backend)/service/telemetry.ts': EMPTY });
-    expect(cli).toContain('services: [serviceTelemetry]');
-    expect(server).toContain('services: [serviceTelemetry]');
+    expect(cli).toContain('services: [serviceTelemetry(context)]');
+    expect(server).toContain('services: [serviceTelemetry(context)]');
     expect(cli).not.toContain('at(serviceTelemetry');
     expect(server).not.toContain('at(serviceTelemetry');
   });
@@ -293,6 +294,63 @@ describe('identity derived from the path', () => {
   it('applies the authored file over the derived identity, so a file naming itself wins', () => {
     const { cli } = render({ 'src/extensions/(backend)/tool/write-plan.ts': EMPTY });
     expect(cli).toMatch(/via\(\{ name: 'write_plan' \}, at\(\w+, context\)\)/u);
+  });
+});
+
+/**
+ * The side axis is logic against presentation, not Node against browser. The
+ * terminal has both halves: a tool's execute is backend, and the renderCall
+ * that draws it is frontend, exactly as the cockpit's renderer is.
+ */
+describe('the terminal reads the frontend side too', () => {
+  const PAIR = {
+    'src/extensions/(backend)/tool/subagent.ts': EMPTY,
+    'src/extensions/(frontend)/tool/subagent.cli.tsx': EMPTY,
+    'src/extensions/(frontend)/tool/subagent.web.tsx': EMPTY,
+  };
+
+  it('folds a cli tool renderer into the tool it names, rather than beside it', () => {
+    const { cli } = render(PAIR);
+    expect(cli).toMatch(/via\(\{ name: 'subagent' \}, withPiRenderers\(at\(\w+, context\), \w+\)\)/u);
+    // One contribution, not two: the renderers are fields of the declaration,
+    // so the pair registers once rather than the renderer landing beside it.
+    expect(cli.match(/via\(/gu)).toHaveLength(1);
+    expect(cli).toContain('import { definePiExtension, piToolContributions, withPiRenderers,');
+  });
+
+  it('keeps the two hosts’ renderers apart, because only one of them is React', () => {
+    const { cli, web } = render(PAIR);
+    expect(cli).toContain('subagent.cli');
+    expect(cli).not.toContain('subagent.web');
+    expect(web).toContain('subagent.web');
+    expect(web).not.toContain('subagent.cli');
+  });
+
+  it('never gives the headless host a presentation file', () => {
+    const { server } = render({ ...PAIR, 'src/extensions/(frontend)/message/done.cli.tsx': EMPTY });
+    expect(server).not.toContain('(frontend)');
+    expect(server).not.toContain('withPiRenderers');
+  });
+
+  it('routes a message renderer to the terminal registry alone', () => {
+    const { cli, web } = render({ 'src/extensions/(frontend)/message/done.cli.tsx': EMPTY });
+    expect(cli).toContain('messageRenderers: [');
+    // The cockpit has no such registry: it draws a timeline entry with a tool
+    // renderer or a fill, so the surface is terminal-only for now.
+    expect(web).not.toContain('messageRenderers');
+  });
+
+  it('leaves a neutral frontend file to the cockpit, because a terminal cannot render it', () => {
+    const { cli, web } = render({ 'src/extensions/(frontend)/tool/subagent.tsx': EMPTY });
+    expect(cli).not.toContain('subagent');
+    expect(web).toContain('subagent');
+  });
+
+  it('reports a renderer whose tool no backend file contributes', () => {
+    const graph = scanExtensions({ packageDir: packageWith({ 'src/extensions/(frontend)/tool/gone.cli.tsx': EMPTY }) });
+    const { notices } = resolveTarget(graph, 'cli');
+    expect(notices).toHaveLength(1);
+    expect(notices[0]?.message).toContain('no backend file contributes');
   });
 });
 

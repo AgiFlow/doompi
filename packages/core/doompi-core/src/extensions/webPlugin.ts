@@ -1,8 +1,10 @@
 import type {
+  ActivityGroupFile,
   ChannelFile,
   ContextActionFile,
   DockFaceFile,
   FillFile,
+  LeaderBindingFile,
   MinorModeFile,
   PaletteCommandFile,
   SettingsPanelFile,
@@ -101,6 +103,16 @@ export function defineUserMessageAction(file: UserMessageActionFile): UserMessag
 
 /** `mode/<name>/mode.ts`. */
 export function defineMinorModeFile(file: MinorModeFile): MinorModeFile {
+  return file;
+}
+
+/** `activity-group/<name>.ts`. The filename names the group and its slot. */
+export function defineActivityGroup(file: ActivityGroupFile): ActivityGroupFile {
+  return file;
+}
+
+/** `leader/<name>.ts`. */
+export function defineLeaderBinding(file: LeaderBindingFile): LeaderBindingFile {
   return file;
 }
 
