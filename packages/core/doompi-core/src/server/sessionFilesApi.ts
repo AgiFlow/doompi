@@ -58,9 +58,14 @@ async function listSessionFiles(cwd: string, query: string, signal: AbortSignal)
         // walking a build cache is what exhausts the completion budget. The
         // trailing slash is what makes a directory-only rule such as
         // '.nx-cache/' match.
-        if (!EXCLUDED_DIRECTORIES.has(entry.name) && isIgnored?.(`${file}/`) !== true) pending.push(file);
-      } else if (entry.isFile() && isIgnored?.(file) !== true) {
-        if (file.toLowerCase().includes(query)) matches.push(file);
+        if (EXCLUDED_DIRECTORIES.has(entry.name) || isIgnored?.(`${file}/`) === true) continue;
+        pending.push(file);
+        // A folder is completable too, and the same trailing slash is what
+        // tells the client this is one and keeps a query like 'src/' matching
+        // the folder itself.
+        if (`${file}/`.toLowerCase().includes(query)) matches.push(`${file}/`);
+      } else if (entry.isFile() && isIgnored?.(file) !== true && file.toLowerCase().includes(query)) {
+        matches.push(file);
       }
     }
   }
