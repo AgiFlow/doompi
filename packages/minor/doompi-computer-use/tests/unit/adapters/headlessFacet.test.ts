@@ -23,6 +23,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { facet as computerUseHeadlessFacet } from '../../../generated/server';
 import type { ComputerUseSessionClient } from '../../../src/services/sessionApiClient';
 import type { ComputerUseObservation } from '../../../src/types/computerUse';
+import { COMPUTER_USE_STATUS_KEY } from '../../../src/types/computerUseApi';
 import type { ComputerUseSessionView } from '../../../src/types/computerUseApi';
 
 const clientState = vi.hoisted(() => ({ current: undefined as unknown }));
@@ -218,7 +219,7 @@ describe('computer use headless facet', () => {
     });
     expect(beforeStart.handle({}, test.execution)).toBeUndefined();
     await shutdown.handle({}, test.execution);
-    expect(test.execution.client.setStatus).toHaveBeenCalledWith('@agimon-ai/doompi-computer-use', undefined);
+    expect(test.execution.client.setStatus).toHaveBeenCalledWith(COMPUTER_USE_STATUS_KEY, undefined);
     await test.close?.();
     expect(test.dispose).toHaveBeenCalledOnce();
     expect(test.registrations.dispose).toHaveBeenCalled();
@@ -262,10 +263,9 @@ describe('computer use headless facet', () => {
     });
     expect(test.execution.selection.state?.['minor-mode']).toContain('computer-use');
     expect(test.publish).toHaveBeenCalled();
-    expect(test.execution.client.setStatus).toHaveBeenCalledWith(
-      '@agimon-ai/doompi-computer-use',
-      'computer use: active',
-    );
+    // The key the web activity group declares, not this package's owner id: the
+    // two differ, and publishing the owner id left the dock with nothing to read.
+    expect(test.execution.client.setStatus).toHaveBeenCalledWith(COMPUTER_USE_STATUS_KEY, 'computer use: active');
     expect(await mode.handleAction('doctor', {}, operation(test.execution))).toEqual({
       message: 'Computer use is active.',
     });

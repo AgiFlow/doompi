@@ -11,9 +11,10 @@ import { ComputerScriptRunner } from '../../services/computerScriptRunner';
 import { DefaultComputerUseExtensionService } from '../../services/extensionService';
 import { createComputerUseSessionClient } from '../../services/sessionApiClient';
 import type { ComputerUseAction, ComputerUseObservation } from '../../types/computerUse';
-import { COMPUTER_USE_MODE_ID } from '../../types/computerUseApi';
+import { COMPUTER_USE_MODE_ID, COMPUTER_USE_STATUS_KEY } from '../../types/computerUseApi';
 import type { ComputerUseSessionView } from '../../types/computerUseApi';
 
+/** This package's identity for mode, activity and restriction ownership, not a status key. */
 const SOURCE = '@agimon-ai/doompi-computer-use';
 
 const SCRIPT_PATHS_ENV = 'DOOMPI_COMPUTER_USE_SCRIPT_PATHS';
@@ -67,7 +68,7 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
   const applyState = (next: ComputerUseSessionView | undefined): void => {
     state = next;
     host.context.client.setStatus(
-      SOURCE,
+      COMPUTER_USE_STATUS_KEY,
       next === undefined || next.phase === 'inactive' ? undefined : `computer use: ${next.phase}`,
     );
     publishMode();
@@ -310,7 +311,7 @@ export function createComputerUseServer(host: DoomHeadlessHostService): Omit<
     onDispose() {
       stopActivity?.();
       stopActivity = undefined;
-      host.context.client.setStatus(SOURCE, undefined);
+      host.context.client.setStatus(COMPUTER_USE_STATUS_KEY, undefined);
     },
   };
 }

@@ -1,37 +1,41 @@
-import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
-import {
-  isPromptErrorResponse,
-  promptsUrl,
-  promptUrl,
-  type SavedPromptListResponse,
-  type SavedPromptView,
-} from '../../../../../../types/webPrompts';
+import { api } from '../../../../../../../generated/client';
+import { NAME_PARAM } from '../../../../../../constants/promptsApi';
+import { isPromptErrorResponse, type SavedPromptView } from '../../../../../../types/webPrompts';
 
 /**
  * The browser half of the prompt library API.
  *
  * DESIGN PATTERNS:
- * - Every call goes through the sealed transport, like every other cockpit
- *   plugin, so a remote listener gets the same protection the host expects.
+ * - The generated client owns every URL and picks the scope, so nothing here
+ *   spells a mount. Passing a session id selects the session's own copy of the
+ *   API; passing none addresses the hub, which is the same branch the deleted
+ *   URL builder made by hand.
  * - Failures come back as values, never thrown: the panel shows one message
  *   next to the thing that failed instead of losing the page to an error.
- * - URLs are built by src/types, never assembled here.
+ * - Every call still travels over the sealed transport, which is what the
+ *   client is built on, so a remote listener gets the protection the host
+ *   expects either way.
  *
  * AVOID:
  * - Caching answers in this module. The panel owns state.
  */
 
 const UNREACHABLE = 'The hub did not answer.';
-const ABORT_ERROR = 'AbortError';
 
 interface Failure {
   error: string;
 }
 
-function isAbort(error: unknown): boolean {
-  return error instanceof DOMException && error.name === ABORT_ERROR;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+/** The hub, or one session's own copy of it; a null session id is the hub. */
+function scoped(sessionId?: string | null) {
+  return sessionId == null ? api.global : api.session(sessionId);
+}
+
 
 async function readError(response: Response): Promise<string> {
   try {
@@ -43,26 +47,26 @@ async function readError(response: Response): Promise<string> {
   return `The hub answered ${String(response.status)}.`;
 }
 
+/** The message a reader is shown for a refused call: the route's own words, or the status. */
+function messageOf(result: { status: number; error: string }): string {
+  return result.error === '' ? `The hub answered ${String(result.status)}.` : result.error;
+}
+
 export async function fetchSavedPrompts(
   signal?: AbortSignal,
   sessionId?: string | null,
 ): Promise<{ prompts: readonly SavedPromptView[] } | Failure> {
-  let response: Response;
-  try {
-    response = await sealedTransport.fetch(promptsUrl(sessionId), signal ? { signal } : {});
-  } catch (error) {
-    // An aborted request is the caller replacing it, not a failure to report.
-    if (isAbort(error)) return { error: '' };
-    return { error: UNREACHABLE };
+  const result = await scoped(sessionId).list(signal ? { signal } : {});
+  if (!result.ok) {
+    // Status 0 is the transport never answering, which covers both a dead hub
+    // and the caller replacing this request. An abort is the caller's own doing
+    // and is reported as no answer rather than as a failure to show.
+    if (result.status === 0) return { error: signal?.aborted === true ? '' : UNREACHABLE };
+    return { error: messageOf(result) };
   }
-
-  if (!response.ok) return { error: await readError(response) };
-  try {
-    const body = (await response.json()) as SavedPromptListResponse;
-    return { prompts: body.prompts ?? [] };
-  } catch {
-    return { error: 'The hub sent a malformed prompt list.' };
-  }
+  if (!isRecord(result.data)) return { error: 'The hub sent a malformed prompt list.' };
+  const prompts = result.data.prompts;
+  return { prompts: Array.isArray(prompts) ? (prompts as readonly SavedPromptView[]) : [] };
 }
 
 export async function saveSavedPrompt(
@@ -70,25 +74,11 @@ export async function saveSavedPrompt(
   text: string,
   sessionId?: string | null,
 ): Promise<Failure | undefined> {
-  let response: Response;
-  try {
-    response = await sealedTransport.fetch(promptUrl(name, sessionId), {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-  } catch {
-    return { error: UNREACHABLE };
-  }
-  return response.ok ? undefined : { error: await readError(response) };
+  const result = await scoped(sessionId).save({ params: { [NAME_PARAM]: name }, body: { text } });
+  return result.ok ? undefined : { error: failureOf(result) };
 }
 
 export async function deleteSavedPrompt(name: string, sessionId?: string | null): Promise<Failure | undefined> {
-  let response: Response;
-  try {
-    response = await sealedTransport.fetch(promptUrl(name, sessionId), { method: 'DELETE' });
-  } catch {
-    return { error: UNREACHABLE };
-  }
-  return response.ok ? undefined : { error: await readError(response) };
+  const result = await scoped(sessionId).remove({ params: { [NAME_PARAM]: name } });
+  return result.ok ? undefined : { error: failureOf(result) };
 }

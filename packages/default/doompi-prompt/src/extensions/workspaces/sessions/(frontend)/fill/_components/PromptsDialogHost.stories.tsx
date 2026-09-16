@@ -37,7 +37,10 @@ const body: SavedPromptListResponse = {
 const liveFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-  if (!url.includes(`/api/plugins/${API_BASE_PATH}${PROMPTS_PATH}`)) return liveFetch(input, init);
+  // The suffix, not the whole URL: the host renders this story inside a
+  // session, so the same route arrives with a workspace and session prefix in
+  // front of the mount.
+  if (!url.includes(`/plugins/${API_BASE_PATH}${PROMPTS_PATH}`)) return liveFetch(input, init);
   return Promise.resolve(
     new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }),
   );

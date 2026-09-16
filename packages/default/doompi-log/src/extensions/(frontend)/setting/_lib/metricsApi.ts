@@ -1,9 +1,9 @@
-import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
+import type { ApiResult } from '@agimon-ai/doompi-core/web';
 
+import { api } from '../../../../../generated/client';
 import {
   isMetricsUnavailable,
-  issuesUrl,
-  metricsUrl,
+  METRICS_QUERY_PARAMS,
   type MetricsDimension,
   type MetricsPeriod,
   type MetricsResponse,
@@ -12,19 +12,24 @@ import {
 
 /**
  * The page's half of this package's metrics API. The only place the cockpit
- * talks HTTP to the hub for metrics, so if the transport ever changes, it
- * changes here alone.
+ * talks to the hub for metrics, so if the transport ever changes, it changes
+ * here alone.
  *
- * The transport is the shared sealed one rather than bare fetch: a plugin
- * calling fetch directly sends plaintext to the tunnel's relay.
+ * These are adapters now, not a transport. The generated client owns the URL
+ * and the sealed transport with it, so nothing here spells a route or reaches
+ * for `fetch`; a plugin calling `fetch` directly would send plaintext to the
+ * tunnel's relay. What stays is this package's own vocabulary: which of the
+ * empty states a reader is shown, and which answers are states rather than
+ * failures.
  */
 
 const UNREACHABLE = 'The cockpit hub is unreachable.';
 
 /**
  * A hub with no package APIs mounted serves the SPA shell for this route, so
- * the answer is a 200 of HTML rather than an error status. Reported as an
- * uninstalled feature, which is what it is.
+ * the answer is a 200 of HTML rather than an error status. The client parses no
+ * JSON out of it and reports no body at all, which is read here as an
+ * uninstalled feature, because that is what it is.
  */
 const NO_API_DETAIL = 'This cockpit is running a bundle without the log package API, so there are no metrics to read.';
 
@@ -34,6 +39,30 @@ export type MetricsResult = { report: MetricsResponse } | { error: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** A body the hub sent, or which of the two silences it was. */
+type Outcome = { body: Record<string, unknown> } | { noApi: true } | { error: string };
+
+/**
+ * What the hub's answer means, before either route reads its own shape out of
+ * it.
+ *
+ * `status: 0` is the transport never answering, which covers both a dead hub
+ * and a caller that aborted. The client cannot tell those apart, so the signal
+ * is asked: an abort is the caller replacing this request, and reporting it
+ * would overwrite whatever the replacement renders.
+ */
+function outcomeOf(result: ApiResult<unknown>, signal?: AbortSignal): Outcome {
+  if (result.status === 0) return { error: signal?.aborted === true ? '' : UNREACHABLE };
+  const status = `The hub answered ${String(result.status)}.`;
+  // No body at all: unparseable and successful is the SPA fallback answering,
+  // so the route is not mounted. Unparseable and failed is a hub that broke
+  // mid-response, which is only worth the status it carried.
+  if (result.data === undefined) return result.ok ? { noApi: true } : { error: status };
+  if (!isRecord(result.data)) return { error: 'The hub returned a response the cockpit could not read.' };
+  if (!result.ok) return { error: result.error === '' ? status : result.error };
+  return { body: result.data };
 }
 
 /**
@@ -49,32 +78,20 @@ export async function fetchMetrics(
   focus?: string,
   signal?: AbortSignal,
 ): Promise<MetricsResult> {
-  let response: Response;
-  try {
-    response = await sealedTransport.fetch(metricsUrl(dimension, period, focus), { signal });
-  } catch (error) {
-    // An aborted request is the caller replacing it, not a failure to report.
-    if (error instanceof DOMException && error.name === 'AbortError') return { error: '' };
-    return { error: UNREACHABLE };
-  }
+  const result = await api.global.metrics({
+    query: {
+      [METRICS_QUERY_PARAMS.dimension]: dimension,
+      [METRICS_QUERY_PARAMS.period]: period,
+      [METRICS_QUERY_PARAMS.focus]: focus === '' ? undefined : focus,
+    },
+    ...(signal === undefined ? {} : { signal }),
+  });
 
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    // Unparseable and successful means the SPA fallback answered, so the route
-    // is not mounted. Unparseable and failed is a hub that broke mid-response.
-    if (response.ok) return { report: NO_API };
-    return { error: `The hub answered ${String(response.status)}.` };
-  }
+  const outcome = outcomeOf(result, signal);
+  if ('error' in outcome) return { error: outcome.error };
+  if ('noApi' in outcome) return { report: NO_API };
 
-  if (!isRecord(body)) return { error: 'The hub returned a response the cockpit could not read.' };
-  if (!response.ok) {
-    const detail = typeof body.error === 'string' ? body.error : `The hub answered ${String(response.status)}.`;
-    return { error: detail };
-  }
-
-  const report = body as unknown as MetricsResponse;
+  const report = outcome.body as unknown as MetricsResponse;
   if (!isMetricsUnavailable(report) && !Array.isArray(report.groups)) {
     return { error: 'The hub returned a report the cockpit could not read.' };
   }
@@ -90,26 +107,13 @@ export type IssuesResult = { issues: IssuesResponse } | { error: string };
  * the report would make every refresh wait on the slowest transport.
  */
 export async function fetchIssues(focus?: string, signal?: AbortSignal): Promise<IssuesResult> {
-  let response: Response;
-  try {
-    response = await sealedTransport.fetch(issuesUrl(focus), { signal });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') return { error: '' };
-    return { error: UNREACHABLE };
-  }
+  const result = await api.global.issues({
+    query: { [METRICS_QUERY_PARAMS.focus]: focus === '' ? undefined : focus },
+    ...(signal === undefined ? {} : { signal }),
+  });
 
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    if (response.ok) return { issues: { unavailable: 'no-api', detail: NO_API_DETAIL } };
-    return { error: `The hub answered ${String(response.status)}.` };
-  }
-
-  if (!isRecord(body)) return { error: 'The hub returned a response the cockpit could not read.' };
-  if (!response.ok) {
-    const detail = typeof body.error === 'string' ? body.error : `The hub answered ${String(response.status)}.`;
-    return { error: detail };
-  }
-  return { issues: body as unknown as IssuesResponse };
+  const outcome = outcomeOf(result, signal);
+  if ('error' in outcome) return { error: outcome.error };
+  if ('noApi' in outcome) return { issues: { unavailable: 'no-api', detail: NO_API_DETAIL } };
+  return { issues: outcome.body as unknown as IssuesResponse };
 }

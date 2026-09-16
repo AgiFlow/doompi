@@ -15,7 +15,7 @@ import { NodeGitStatusAdapter } from '../../services/gitStatus';
 import { NodeSnapshotStoreAdapter } from '../../services/snapshotStore';
 import { TimelineStore } from '../../services/timelineStore';
 import { NodeTreeManifestAdapter } from '../../services/treeManifest';
-import { filesChannelType } from '../../types/webFiles';
+import { filesChannelType, filesStatusKey } from '../../types/webFiles';
 import { api } from '../fileEditsApi';
 import { readSessionFiles } from '../webFilesChannel';
 
@@ -53,10 +53,21 @@ export function createFileEditSession({ agent, host }: DoomServerPluginContext):
         readonly snapshotsPath: string;
       }
     | undefined;
+  /**
+   * The channel carries the rows; the status decides whether the group exists.
+   *
+   * A cockpit drives this facet and never the Pi runtime, so without the status
+   * the dock had the file list on the wire and no frame to draw it in. The empty
+   * string is deliberate: the group declares `hideWhenEmpty`, so a session that
+   * has edited nothing publishes a key with no content and stays hidden.
+   */
   const publish = (runtime: NonNullable<typeof active>): void => {
-    directEvents.publish(filesChannelType, runtime.context.sessionId, {
-      items: readSessionFiles(runtime.timelinePath, runtime.context.cwd),
-    });
+    const items = readSessionFiles(runtime.timelinePath, runtime.context.cwd);
+    directEvents.publish(filesChannelType, runtime.context.sessionId, { items });
+    runtime.context.client.setStatus(
+      filesStatusKey,
+      items.length === 0 ? '' : `${items.length} ${items.length === 1 ? 'file' : 'files'}`,
+    );
   };
   const activity: DoomHeadlessActivity = {
     name: 'file-edits',
@@ -77,6 +88,7 @@ export function createFileEditSession({ agent, host }: DoomServerPluginContext):
       return async () => {
         if (active !== runtime) return;
         active = undefined;
+        executionContext.client.setStatus(filesStatusKey, undefined);
         editTracker.reset();
       };
     },

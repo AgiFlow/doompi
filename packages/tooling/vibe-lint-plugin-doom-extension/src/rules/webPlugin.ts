@@ -583,6 +583,12 @@ export const webPluginNoHandBuiltApiUrl: RuleDefinition = {
     // The rest still hand-build their URLs, and telling them off for it before
     // the alternative exists would be noise they cannot act on.
     if (!fs.existsSync(path.join(configRoot, 'src/types/apiRoutes.ts'))) return null;
+    // A story replaces the global fetch and matches the request by URL, which
+    // is the seam it has. createRpcStub is the better pattern, because a
+    // matcher keyed off a client method cannot rot the way a substring does,
+    // but a story naming a URL is doing its job rather than going around the
+    // client.
+    if (filePath.endsWith(STORY_SUFFIX)) return null;
     const relative = projectPath(filePath, configRoot);
     if (relative === null || !isBrowserFile(relative)) return null;
 

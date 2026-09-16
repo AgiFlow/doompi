@@ -11,6 +11,11 @@
  * ponytail: the stub matches on the path segment rather than parsing the query,
  * so every dimension and period draws the same report. Widen it only if a story
  * needs to compare two selections side by side.
+ *
+ * The match is on the mount's suffix rather than on a whole URL, because the
+ * generated client prefixes the scope: the same route is reached under the api
+ * root globally and under a workspace's own root below a workspace, so only the
+ * plugins/log/metrics tail is common to both.
  */
 import { LOG_API_BASE_PATH, type MetricsReport } from '../../../../types/webMetrics';
 import { MetricsPanel } from './MetricsPanel';
@@ -75,7 +80,8 @@ const report: MetricsReport = {
 const liveFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-  if (!url.includes(`/api/plugins/${LOG_API_BASE_PATH}/metrics`)) return liveFetch(input, init);
+  const path = url.split('?')[0] ?? '';
+  if (!path.endsWith(`/plugins/${LOG_API_BASE_PATH}/metrics`)) return liveFetch(input, init);
   return Promise.resolve(
     new Response(JSON.stringify(report), { status: 200, headers: { 'content-type': 'application/json' } }),
   );

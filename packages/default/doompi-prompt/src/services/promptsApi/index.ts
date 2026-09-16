@@ -3,9 +3,10 @@ import { Hono } from 'hono';
 
 import { NAME_PARAM, MAX_PROMPT_BYTES, STATUS } from '../../constants/promptsApi';
 import { PROMPT_NAME_RULE } from '../../constants/savedPromptDocument';
-import { API_BASE_PATH, PROMPTS_PATH } from '../../constants/webPrompts';
+import { API_BASE_PATH } from '../../constants/webPrompts';
 import { createNodeSavedPromptStore } from '../../services/promptStore';
 import { describePrompt, isValidPromptName } from '../../services/savedPromptDocument';
+import routes from '../../types/apiRoutes';
 import type { SavedPrompt, SavedPromptStore } from '../../types/prompt';
 import {
   type SavedPromptListResponse,
@@ -21,7 +22,9 @@ import {
  *   belong to the machine, so no route names a session.
  * - The store is injected. The same port the Pi commands write through answers
  *   the browser, so the two surfaces cannot disagree about the format on disk.
- * - Routes are declared relative to the mount the host strips.
+ * - Paths come from src/types/apiRoutes, the one table the browser reads too,
+ *   so this app and the cockpit cannot disagree about where a route lives.
+ *   They stay relative to the mount the host strips.
  *
  * AVOID:
  * - Validating names here by hand. The rule lives in src/services with the
@@ -59,7 +62,7 @@ export function createPromptHubApi(options: HubApiOptions = {}): Hono {
   const store = options.store ?? createNodeSavedPromptStore();
   const app = new Hono();
 
-  app.get(PROMPTS_PATH, async (context) => {
+  app.get(routes.list.path, async (context) => {
     try {
       const prompts = await store.list();
       return context.json<SavedPromptListResponse>({ prompts: prompts.map(toView) });
@@ -68,7 +71,7 @@ export function createPromptHubApi(options: HubApiOptions = {}): Hono {
     }
   });
 
-  app.put(`${PROMPTS_PATH}/:${NAME_PARAM}`, async (context) => {
+  app.put(routes.save.path, async (context) => {
     const name = context.req.param(NAME_PARAM);
     if (!isValidPromptName(name)) {
       return context.json(
@@ -93,7 +96,7 @@ export function createPromptHubApi(options: HubApiOptions = {}): Hono {
     }
   });
 
-  app.delete(`${PROMPTS_PATH}/:${NAME_PARAM}`, async (context) => {
+  app.delete(routes.remove.path, async (context) => {
     const name = context.req.param(NAME_PARAM);
     if (!isValidPromptName(name)) {
       return context.json({ error: `"${name}" is not a usable prompt name.` }, STATUS.badRequest);

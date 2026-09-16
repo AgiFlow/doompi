@@ -1,6 +1,10 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import type { DoomHeadlessHostService, DoomHeadlessModelSettings } from '@agimon-ai/doompi-core/headless';
 import type { MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ config: vi.fn(), owners: vi.fn(), writeFile: vi.fn(), mkdir: vi.fn() }));
 vi.mock('node:fs/promises', async (original) => ({
@@ -32,13 +36,19 @@ function fixture() {
     settings = { ...settings, ...next };
   });
   const request = vi.fn(async (): Promise<unknown> => undefined);
+  const setStatus = vi.fn();
+  // A real directory: the pointer is written with node:fs, and the restart case
+  // is only meaningful if it can be read back.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-plan-server-'));
+  homes.push(home);
   const host = {
     context: {
       repoRoot: '/repo',
       cwd: '/repo/subdir',
-      environment: { HOME: '/test-home' },
+      environment: { HOME: home },
+      sessionId: 'plan-server-session-test',
       selection,
-      client: { request },
+      client: { request, setStatus },
       session: {
         readModelSettings: async () => settings,
         setModelSettings,
@@ -70,11 +80,29 @@ function fixture() {
     const hook = plugin.hooks?.find((hook) => hook.event === 'session_start');
     await hook?.handle({}, host.context);
   };
-  return { host, plugin, entries, mount, restart, request, settings: () => settings, setModelSettings, selection };
+  return {
+    host,
+    plugin,
+    entries,
+    mount,
+    restart,
+    request,
+    setStatus,
+    home,
+    settings: () => settings,
+    setModelSettings,
+    selection,
+  };
 }
+
+const homes: string[] = [];
 
 beforeEach(() => {
   mocks.config.mockReturnValue({ modes: { planning: { main: { model: 'test/planner', thinking: 'max' } } } });
+});
+
+afterEach(() => {
+  while (homes.length > 0) fs.rmSync(homes.pop()!, { recursive: true, force: true });
 });
 
 describe('server planning model settings', () => {

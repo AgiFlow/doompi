@@ -29,7 +29,9 @@ describe('reading the library', () => {
     await expect(fetchSavedPrompts()).resolves.toEqual({
       prompts: [{ name: 'review', description: 'r', text: 'r' }],
     });
-    expect(transport).toHaveBeenCalledWith('/api/plugins/prompts/prompts', {});
+    // The generated client names the method on every call, including the read
+    // the old builder sent with a bare init; the URL is unchanged.
+    expect(transport).toHaveBeenCalledWith('/api/plugins/prompts/prompts', { method: 'GET' });
   });
 
   it('routes a focused session through its selected hub bundle', async () => {
@@ -39,7 +41,7 @@ describe('reading the library', () => {
 
     expect(transport).toHaveBeenCalledWith(
       '/api/workspaces/test-workspace/sessions/session%2Fa/plugins/prompts/prompts',
-      {},
+      { method: 'GET' },
     );
   });
 
@@ -49,13 +51,21 @@ describe('reading the library', () => {
 
     await fetchSavedPrompts(controller.signal);
 
-    expect(transport).toHaveBeenCalledWith('/api/plugins/prompts/prompts', { signal: controller.signal });
+    expect(transport).toHaveBeenCalledWith('/api/plugins/prompts/prompts', {
+      method: 'GET',
+      signal: controller.signal,
+    });
   });
 
   it('treats an abort as no answer rather than a failure to show', async () => {
+    // The client reports an unanswered call as status 0 whatever threw, so the
+    // caller's own signal is what tells a replaced request from a dead hub.
+    // Only a caller that passed one can be aborted, which is why this one does.
+    const controller = new AbortController();
+    controller.abort();
     transport.mockRejectedValue(new DOMException('aborted', 'AbortError'));
 
-    await expect(fetchSavedPrompts()).resolves.toEqual({ error: '' });
+    await expect(fetchSavedPrompts(controller.signal)).resolves.toEqual({ error: '' });
   });
 
   it('reports an unreachable hub', async () => {

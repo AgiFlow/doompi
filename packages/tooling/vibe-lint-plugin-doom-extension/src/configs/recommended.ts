@@ -121,6 +121,12 @@ const boundaries: BoundaryConfig[] = [
       'src/schemas',
       'src/schemas/**',
       'src/extensions/**/(frontend)/**',
+      // The build's typed API client. Kept in step with the bare-specifier
+      // list in web-plugin-import-allowlist: one rule reads the AST and this
+      // one reads globs, and a browser file has to satisfy both, so a target
+      // added to one and not the other is allowed and rejected at once.
+      'generated/client',
+      'generated/client.ts',
     ],
   },
   {

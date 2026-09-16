@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 
 import { createIssuesSource } from '../../services/issuesSource';
 import { createMetricsSource } from '../../services/metricsSource';
+import routes from '../../types/apiRoutes';
 import type { IssuesSource } from '../../types/issuesSource';
 import type { MetricsFilter, MetricsSource } from '../../types/metricsSource';
 import {
@@ -166,7 +167,7 @@ export function createLogHubApi(options: HubApiOptions = {}): Hono {
   const source = options.source ?? createMetricsSource();
   const issues = options.issues ?? createIssuesSource();
 
-  app.get('/metrics', async (context) => {
+  app.get(routes.metrics.path, async (context) => {
     const requestedDimension = context.req.query(METRICS_QUERY_PARAMS.dimension) ?? DEFAULT_DIMENSION;
     const requestedPeriod = context.req.query(METRICS_QUERY_PARAMS.period) ?? DEFAULT_PERIOD;
     if (!isMetricsDimension(requestedDimension)) {
@@ -217,7 +218,7 @@ export function createLogHubApi(options: HubApiOptions = {}): Hono {
    * folding it into every report would make the whole page as slow as its
    * slowest transport.
    */
-  app.get('/issues', async (context) => {
+  app.get(routes.issues.path, async (context) => {
     const focus = context.req.query(METRICS_QUERY_PARAMS.focus);
     try {
       const report = await issues.query({
