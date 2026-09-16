@@ -39,6 +39,7 @@ interface StubRuntime {
 
 function stubRuntime(entries: Entry[], options?: { parentSessionId?: string; failWrites?: boolean }): StubRuntime {
   const appended: { customType: string; data: unknown }[] = [];
+  let nextEntryId = 1;
   let listener: ((event: HarnessEvent, context: never) => void | Promise<void>) | undefined;
   const readEntries = vi.fn(async () => ({ entries, leafId: entries.at(-1)?.id ?? null }));
   const runtime = {
@@ -55,7 +56,18 @@ function stubRuntime(entries: Entry[], options?: { parentSessionId?: string; fai
     appendCustomEntry: async (customType: string, data: unknown) => {
       if (options?.failWrites === true) throw new Error('storage is quarantined');
       appended.push({ customType, data });
-      return 'appended-id';
+      const entry: Entry = {
+        type: 'custom',
+        id: `appended-${nextEntryId++}`,
+        parentId: entries.at(-1)?.id ?? null,
+        seq: entries.length + 1,
+        timestamp: CREATED_AT,
+        customType,
+        data: data as never,
+      };
+      entries.push(entry);
+      await listener?.({ type: 'entry_added', lane: 'main', entry }, undefined as never);
+      return entry.id;
     },
     onEvent: (next: typeof listener) => {
       listener = next;
@@ -266,7 +278,13 @@ async function loadedHost(
   await host.load();
   // bindCore copies the host's actions onto the shared runtime, which is the object every
   // extension's ExtensionAPI calls through. Reaching it here exercises the real seam.
-  return { host, actions: preload.runtime, emit: stub.emit, readEntries: stub.readEntries };
+  return {
+    host,
+    actions: preload.runtime,
+    emit: stub.emit,
+    readEntries: stub.readEntries,
+    appended: stub.appended,
+  };
 }
 
 describe('Pi extension tool surface in the headless host', () => {
@@ -537,5 +555,113 @@ describe('Pi lifecycle events in the headless host', () => {
       expect.anything(),
     );
     expect(readEntries).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves one lifecycle and monotonic turn indexes across run suspension', async () => {
+    const starts = vi.fn();
+    const ends = vi.fn();
+    const turns: number[] = [];
+    const handlers = new Map<string, unknown>([
+      ['agent_start', [starts]],
+      ['agent_end', [ends]],
+      ['turn_start', [vi.fn((event: { turnIndex: number }) => turns.push(event.turnIndex))]],
+    ]);
+    const { emit } = await loadedHost([], undefined, handlers);
+    const assistant = (text: string): Extract<AgentMessage, { role: 'assistant' }> => ({
+      role: 'assistant',
+      content: [{ type: 'text', text }],
+      api: 'anthropic-messages',
+      provider: 'anthropic',
+      model: 'claude',
+      usage: {
+        input: 1,
+        output: 1,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 2,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: 'stop',
+      timestamp: CREATED_AT,
+    });
+    const first = assistant('first');
+    const second = assistant('second');
+
+    await emit({ type: 'run_start', lane: 'main', runId: 'run-1', startedAt: CREATED_AT });
+    await emit({ type: 'turn_start', lane: 'main', runId: 'run-1', turnId: 'turn-1' });
+    await emit({ type: 'message_end', lane: 'main', runId: 'run-1', message: first });
+    await emit({
+      type: 'turn_end',
+      lane: 'main',
+      runId: 'run-1',
+      turnId: 'turn-1',
+      message: first,
+      toolResults: [],
+    });
+    await emit({
+      type: 'run_suspend',
+      lane: 'main',
+      runId: 'run-1',
+      reason: 'deferred',
+      deferred: { id: 'deferred-1' },
+      poll: 1,
+    } as HarnessEvent);
+    await emit({ type: 'run_resume', lane: 'main', runId: 'run-1' });
+    await emit({ type: 'turn_start', lane: 'main', runId: 'run-1', turnId: 'turn-2' });
+    await emit({ type: 'message_end', lane: 'main', runId: 'run-1', message: second });
+    await emit({
+      type: 'turn_end',
+      lane: 'main',
+      runId: 'run-1',
+      turnId: 'turn-2',
+      message: second,
+      toolResults: [],
+    });
+    await emit({
+      type: 'run_end',
+      lane: 'main',
+      runId: 'run-1',
+      fromTipId: null,
+      tipId: null,
+      endedAt: CREATED_AT,
+      status: 'completed',
+    });
+
+    expect(starts).toHaveBeenCalledTimes(1);
+    expect(turns).toEqual([0, 1]);
+    expect(ends).toHaveBeenCalledTimes(1);
+    expect(ends.mock.calls[0]?.[0]).toMatchObject({ type: 'agent_end', messages: [first, second] });
+  });
+
+  it('captures and deduplicates history written by session_start handlers', async () => {
+    let manager: SessionManager | undefined;
+    const handlers = new Map<string, unknown>([
+      [
+        'session_start',
+        [
+          vi.fn((_event: unknown, context: { sessionManager: SessionManager }) => {
+            manager = context.sessionManager;
+            context.sessionManager.appendCustomEntry('startup', { ready: true });
+            context.sessionManager.appendModelChange('anthropic', 'claude');
+          }),
+        ],
+      ],
+    ]);
+
+    const { emit, appended } = await loadedHost([], undefined, handlers);
+    const user: Extract<AgentMessage, { role: 'user' }> = {
+      role: 'user',
+      content: 'after startup',
+      timestamp: CREATED_AT,
+    };
+    await emit({
+      type: 'entry_added',
+      lane: 'main',
+      entry: messageEntry('user-after-startup', user, 'appended-2'),
+    });
+
+    expect(appended.map((entry) => entry.customType)).toEqual(['startup', 'pi.model_change']);
+    expect(manager?.getEntries().map((entry) => entry.type)).toEqual(['custom', 'model_change', 'message']);
+    expect(manager?.getBranch().map((entry) => entry.type)).toEqual(['custom', 'model_change', 'message']);
   });
 });

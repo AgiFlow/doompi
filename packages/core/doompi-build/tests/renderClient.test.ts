@@ -161,7 +161,6 @@ describe('packages with no browser half', () => {
       'src/types/apiRoutes.ts': ROUTE_TABLE,
       'src/extensions/(frontend)/tab/Panel.web.tsx': FRONTEND,
       'src/extensions/(backend)/api/settings/route.server.ts': ROUTE_LEAF,
-      'src/extensions/(frontend)/tab/Panel.web.tsx': FRONTEND,
     });
     generateExtension({ packageDir: dir });
     expect(clientOf(dir)).toContain("basePath: 'settings',");

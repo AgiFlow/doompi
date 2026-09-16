@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 
 import type {
   AgentHarnessTool,
@@ -40,6 +41,7 @@ import { contextTokensOf, contextUsageOf, latestAssistantUsage } from '../../ser
 import {
   fromPiSessionEntry,
   toPiFileEntries,
+  toPiSessionEntries,
   toPiSessionEntry,
   type PiSessionHeaderInput,
 } from '../../services/piSessionEntries';
@@ -248,7 +250,7 @@ function toHarnessCompactResult(
 }
 
 function piBranchEntries(entries: readonly Entry[]): SessionEntry[] {
-  return entries.map((entry) => toPiSessionEntry(entry)).filter((entry): entry is SessionEntry => entry !== undefined);
+  return toPiSessionEntries(entries);
 }
 
 function toHarnessTool(
@@ -435,7 +437,13 @@ function createHeadlessUiContext(
   };
 }
 
-const bridgedSessionAppenders = new WeakMap<SessionManager, (entry: SessionEntry) => void>();
+interface BridgedSessionSync {
+  append(entry: Entry): void;
+  toHarnessId(entryId: string): string;
+  toPiId(entryId: string | null): string | null;
+}
+
+const bridgedSessionSync = new WeakMap<SessionManager, BridgedSessionSync>();
 
 export async function createBridgedSessionManager(
   runtime: DirectHarnessRuntime,
@@ -471,26 +479,64 @@ export async function createBridgedSessionManager(
   }
 
   let syncingHarnessEntry = false;
+  const pendingMirrors: Array<{
+    readonly entry: SessionEntry;
+    readonly mirrored: { customType: string; data: unknown };
+  }> = [];
+  const harnessToPiId = new Map<string, string>();
+  const piToHarnessId = new Map<string, string>();
   const persist = manager._persist.bind(manager);
   manager._persist = (entry) => {
     persist(entry);
     if (syncingHarnessEntry) return;
     const mirrored = fromPiSessionEntry(entry);
     if (mirrored === undefined) return;
+    const pending = { entry, mirrored };
+    pendingMirrors.push(pending);
     void runtime.appendCustomEntry(mirrored.customType, mirrored.data).catch((error: unknown) => {
+      const index = pendingMirrors.indexOf(pending);
+      if (index !== -1) pendingMirrors.splice(index, 1);
       onNotice?.(
         `Pi session write for '${mirrored.customType}' was not mirrored: ${error instanceof Error ? error.message : String(error)}`,
       );
     });
   };
-  bridgedSessionAppenders.set(manager, (entry) => {
-    if (manager.getEntry(entry.id) !== undefined) return;
-    syncingHarnessEntry = true;
-    try {
-      append.call(manager, entry);
-    } finally {
-      syncingHarnessEntry = false;
-    }
+  const resolvePiId = (entryId: string | null): string | null => {
+    if (entryId === null) return null;
+    return harnessToPiId.get(entryId) ?? entryId;
+  };
+  bridgedSessionSync.set(manager, {
+    append(entry) {
+      if (manager.getEntry(entry.id) !== undefined) return;
+      if (entry.type === 'custom') {
+        const pendingIndex = pendingMirrors.findIndex(
+          (pending) =>
+            pending.mirrored.customType === entry.customType && isDeepStrictEqual(pending.mirrored.data, entry.data),
+        );
+        if (pendingIndex !== -1) {
+          const pending = pendingMirrors.splice(pendingIndex, 1)[0];
+          if (pending !== undefined) {
+            harnessToPiId.set(entry.id, pending.entry.id);
+            piToHarnessId.set(pending.entry.id, entry.id);
+          }
+          return;
+        }
+      }
+      const converted =
+        entry.type === 'compaction'
+          ? toPiSessionEntry(entry, boundaryEntryId(manager.getBranch(), entry.retainedTail.length))
+          : toPiSessionEntry(entry);
+      if (converted === undefined) return;
+      const parentId = resolvePiId(converted.parentId);
+      syncingHarnessEntry = true;
+      try {
+        append.call(manager, parentId === converted.parentId ? converted : { ...converted, parentId });
+      } finally {
+        syncingHarnessEntry = false;
+      }
+    },
+    toHarnessId: (entryId) => piToHarnessId.get(entryId) ?? entryId,
+    toPiId: resolvePiId,
   });
 
   return manager;
@@ -500,7 +546,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   const { cwd, agentDir, models, runtime, preload } = options;
   let runner: ExtensionRunner | undefined;
   let sessionManager: SessionManager | undefined;
-  let appendHarnessEntry: ((entry: SessionEntry) => void) | undefined;
+  let sessionSync: BridgedSessionSync | undefined;
   let tools: readonly AgentHarnessTool<object | undefined>[] = [];
   let skills: readonly Skill[] = [];
   let registered: readonly RegisteredTool[] = [];
@@ -576,7 +622,9 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     // Harness SessionMetadata carries no display name, and Pi allows this to be absent.
     getSessionName: () => undefined,
     setLabel: (entryId, label) => {
-      void runtime.setLabel(entryId, label).catch((error: unknown) => report('set_label', error));
+      void runtime
+        .setLabel(sessionSync?.toHarnessId(entryId) ?? entryId, label)
+        .catch((error: unknown) => report('set_label', error));
     },
     getActiveTools: () => activeTools().map((tool) => tool.name),
     getAllTools: (): ToolInfo[] =>
@@ -638,8 +686,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
 
   const piCompactionEntry = async (entryId: string): Promise<CompactionEntry | undefined> => {
     const { entries } = await runtime.readEntries();
-    const entry = entries.find((candidate) => candidate.id === entryId);
-    const converted = entry === undefined ? undefined : toPiSessionEntry(entry);
+    const converted = toPiSessionEntries(entries).find((entry) => entry.id === entryId);
     return converted?.type === 'compaction' ? converted : undefined;
   };
 
@@ -647,12 +694,14 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   const handleHarnessEvent = async (event: HarnessEvent): Promise<void> => {
     switch (event.type) {
       case 'run_start':
-      case 'run_resume':
         currentOperation = 'run';
         turnIndex = 0;
         runMessages = [];
         toolArguments.clear();
         await runner?.emit({ type: 'agent_start' });
+        return;
+      case 'run_resume':
+        currentOperation = 'run';
         return;
       case 'turn_start':
         await runner?.emit({ type: 'turn_start', turnIndex, timestamp: Date.now() });
@@ -702,11 +751,9 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
           isError: event.isError,
         });
         return;
-      case 'entry_added': {
-        const converted = toPiSessionEntry(event.entry);
-        if (converted !== undefined) appendHarnessEntry?.(converted);
+      case 'entry_added':
+        sessionSync?.append(event.entry);
         return;
-      }
       case 'queue_update':
         queuedMessages = event.queues.filter((item) => item.kind !== 'write').length;
         return;
@@ -766,13 +813,15 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       case 'navigation_end': {
         currentOperation = null;
         if (event.status !== 'completed') return;
-        if (event.tipId === null) sessionManager?.resetLeaf();
-        else if (sessionManager?.getEntry(event.tipId) !== undefined) sessionManager.branch(event.tipId);
-        const leaf = event.tipId === null ? undefined : sessionManager?.getEntry(event.tipId);
+        const newLeafId = sessionSync?.toPiId(event.tipId) ?? event.tipId;
+        const oldLeafId = sessionSync?.toPiId(event.fromTipId) ?? event.fromTipId;
+        if (newLeafId === null) sessionManager?.resetLeaf();
+        else if (sessionManager?.getEntry(newLeafId) !== undefined) sessionManager.branch(newLeafId);
+        const leaf = newLeafId === null ? undefined : sessionManager?.getEntry(newLeafId);
         await runner?.emit({
           type: 'session_tree',
-          newLeafId: event.tipId,
-          oldLeafId: event.fromTipId,
+          newLeafId,
+          oldLeafId,
           ...(leaf?.type === 'branch_summary' ? { summaryEntry: leaf } : {}),
         });
         return;
@@ -872,8 +921,8 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
 
       sessionManager = await createBridgedSessionManager(runtime, cwd, options.onNotice, entries);
       const manager = sessionManager;
-      appendHarnessEntry = bridgedSessionAppenders.get(manager);
-      if (appendHarnessEntry === undefined) throw new Error('The live Pi session bridge was not initialized');
+      sessionSync = bridgedSessionSync.get(manager);
+      if (sessionSync === undefined) throw new Error('The live Pi session bridge was not initialized');
 
       runner = new ExtensionRunner(loaded, preload.runtime, cwd, manager, new ModelRegistry(models));
       // 'rpc' is the accurate mode for a server with no terminal, and it must be set before any
@@ -885,19 +934,19 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       registered = loaded.flatMap((extension) => [...extension.tools.values()]);
       tools = registered.map((tool) => toHarnessTool(tool, requireRunner, (name) => activeNames.has(name)));
       activeNames = new Set(tools.map((tool) => tool.name));
+      // Subscribe before extension lifecycle handlers run: those handlers may write history,
+      // and missing their entry_added acknowledgement would permanently stale this mirror.
+      unsubscribeEvents = runtime.onEvent(onHarnessEvent);
       // Pi opens session-scoped extension services before resource discovery. Doom tool
       // restrictions depend on the same ordering.
       await runner.emit({ type: 'session_start', reason: 'startup' });
       skills = await loadPiSkills(runner, cwd, agentDir, options.onNotice);
-      // Subscribed last: an extension must have registered its handlers before the first
-      // harness event reaches them.
-      unsubscribeEvents = runtime.onEvent(onHarnessEvent);
     },
 
     async shutdown(): Promise<void> {
       unsubscribeEvents?.();
       unsubscribeEvents = undefined;
-      appendHarnessEntry = undefined;
+      sessionSync = undefined;
       sessionManager = undefined;
       runMessages = [];
       toolArguments.clear();

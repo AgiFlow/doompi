@@ -12,6 +12,7 @@
 import type { Entry } from '@earendil-works/pi-agent-core';
 import {
   CURRENT_SESSION_VERSION,
+  sessionEntryToContextMessages,
   type BranchSummaryEntry,
   type CompactionEntry,
   type CustomEntry,
@@ -49,8 +50,8 @@ export function toPiSessionHeader(input: PiSessionHeaderInput): SessionHeader {
   };
 }
 
-/** Convert one harness entry. Returns undefined for entries with no Pi representation. */
-export function toPiSessionEntry(entry: Entry): SessionEntry | undefined {
+/** Convert one harness entry. Compactions require their retained boundary when the tail is non-empty. */
+export function toPiSessionEntry(entry: Entry, firstKeptEntryId?: string): SessionEntry | undefined {
   // `seq` is deliberately dropped: Pi orders entries by file position and the parent link.
   const base: Omit<SessionEntryBase, 'type'> = {
     id: entry.id,
@@ -63,13 +64,13 @@ export function toPiSessionEntry(entry: Entry): SessionEntry | undefined {
       return message;
     }
     case 'compaction': {
-      // Pi names the retained boundary by entry id while the harness carries the retained messages
-      // inline, so the compaction entry itself is the earliest entry still in context.
+      const retainedBoundary = firstKeptEntryId ?? (entry.retainedTail.length === 0 ? entry.parentId : null);
+      if (retainedBoundary === null) return undefined;
       const compaction: CompactionEntry = {
         ...base,
         type: 'compaction',
         summary: entry.summary,
-        firstKeptEntryId: entry.id,
+        firstKeptEntryId: retainedBoundary,
         tokensBefore: entry.tokensBefore,
         fromHook: entry.fromHook,
         ...(entry.details === undefined ? {} : { details: entry.details }),
@@ -108,14 +109,33 @@ export function toPiSessionEntry(entry: Entry): SessionEntry | undefined {
   }
 }
 
+/** Convert every representable entry while deriving compaction boundaries from prior branch context. */
+export function toPiSessionEntries(entries: readonly Entry[]): SessionEntry[] {
+  const converted: SessionEntry[] = [];
+  for (const entry of entries) {
+    const firstKeptEntryId =
+      entry.type === 'compaction' ? boundaryEntryId(converted, entry.retainedTail.length) : undefined;
+    const next = toPiSessionEntry(entry, firstKeptEntryId);
+    if (next !== undefined) converted.push(next);
+  }
+  return converted;
+}
+
+function boundaryEntryId(branchEntries: readonly SessionEntry[], retainedCount: number): string | undefined {
+  let remaining = retainedCount;
+  for (let index = branchEntries.length - 1; index >= 0; index -= 1) {
+    const entry = branchEntries[index];
+    if (entry === undefined) continue;
+    if (remaining <= 0) return entry.id;
+    remaining -= sessionEntryToContextMessages(entry).length;
+    if (remaining <= 0) return entry.id;
+  }
+  return branchEntries[0]?.id;
+}
+
 /** Header followed by every convertible entry, preserving input order. */
 export function toPiFileEntries(header: PiSessionHeaderInput, entries: readonly Entry[]): FileEntry[] {
-  const files: FileEntry[] = [toPiSessionHeader(header)];
-  for (const entry of entries) {
-    const converted = toPiSessionEntry(entry);
-    if (converted !== undefined) files.push(converted);
-  }
-  return files;
+  return [toPiSessionHeader(header), ...toPiSessionEntries(entries)];
 }
 
 /** Reverse direction, for mirroring extension-initiated writes back into the harness. */

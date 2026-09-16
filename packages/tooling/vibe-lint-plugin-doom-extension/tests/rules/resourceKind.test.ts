@@ -28,7 +28,7 @@ describe('Doom resource kind rule', () => {
   function check(): string | null {
     const manifest = path.join(root, 'package.json');
     fs.writeFileSync(manifest, JSON.stringify({ name: 'fixture' }), 'utf8');
-    return doomResourceKind.check(manifest, root, boundaryContext() as never) as string | null;
+    return doomResourceKind.check!(manifest, root, boundaryContext() as never) as string | null;
   }
 
   it('accepts live session state registered as context', () => {
