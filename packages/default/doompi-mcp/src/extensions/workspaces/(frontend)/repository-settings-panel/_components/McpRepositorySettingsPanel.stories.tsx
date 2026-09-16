@@ -6,6 +6,11 @@
  * that one route instead of stubbing anything global. The catalog is typed as
  * McpRepositoryCatalog, so a change to the wire shape breaks the story.
  *
+ * The matcher names the mount and the route, not the scope in front of them:
+ * the real URL is workspace-scoped, and the `/api/plugins/mcp/...` this used to
+ * look for never occurred, so the story rendered the panel's failure state
+ * while claiming to show a synced catalog.
+ *
  * Only one panel is given a repository: the settings store is a module
  * singleton keyed by repository id, so two loaded panels would fight over it.
  */
@@ -44,7 +49,7 @@ const catalog: McpRepositoryCatalog = {
 
 const request: RepositorySettingsPanelProps['request'] = (input) =>
   Promise.resolve(
-    input.includes('/api/plugins/mcp/repository')
+    input.includes('/plugins/mcp/repository')
       ? new Response(JSON.stringify(catalog), { status: 200, headers: { 'content-type': 'application/json' } })
       : new Response('{}', { status: 404, headers: { 'content-type': 'application/json' } }),
   );

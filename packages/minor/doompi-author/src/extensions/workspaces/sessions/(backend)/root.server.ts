@@ -12,7 +12,7 @@ import { AUTHOR_FACADE_TOOL_NAMES } from '../../../../constants/author';
 import { authorMinorMode } from '../../../../models/authorMode';
 import { createAuthorCatalog } from '../../../../services/authorCatalog';
 import { OPEN_AUTHORING_FILE_TOOL_NAME } from '../../../../types/author';
-import { api, createAuthorSessionApi } from './api/_lib/authorApi';
+import { api, createAuthorSessionApi } from './api/author/_lib/authorApi';
 
 export default defineRoot(({ agent }: DoomServerPluginContext) => {
   const session = agent ? createAuthorSessionApi(agent.context.cwd, agent.context.sessionId) : undefined;

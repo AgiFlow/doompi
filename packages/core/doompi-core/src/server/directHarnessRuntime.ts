@@ -5,6 +5,7 @@ import {
   AgentHarness,
   HarnessFault,
   type AgentHarnessTool,
+  type AgentMessage,
   type AgentLane,
   type HarnessEvent,
 } from '@earendil-works/pi-agent-core';
@@ -886,7 +887,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   };
 
   const admitPrompt = async (
-    text: string,
+    text: string | AgentMessage,
     images?: ImageContent[],
     streamingBehavior?: 'steer' | 'followUp',
   ): Promise<{ settled: Promise<void> }> => {
@@ -944,6 +945,10 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   };
   const appendCustomEntry = async (customType: string, data?: unknown): Promise<string> =>
     writable(() => lane.appendCustomEntry(customType, data as never, context));
+  const appendMessage = async (message: AgentMessage): Promise<string> =>
+    writable(() => lane.appendMessage(message, context));
+  const setLabel = async (targetId: string, label: string | undefined): Promise<void> =>
+    writable(() => harness.setLabel(targetId, label, context));
   const recordUsage = async (
     usage: Usage,
     options?: { entryId?: string; details?: import('@earendil-works/pi-agent-core').JsonValue },
@@ -966,12 +971,17 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     const submission = await submitPrompt(text, images);
     await submission.settled;
   };
-  const steer = async (text: string, images?: ImageContent[]): Promise<void> => {
-    const result = await writable(() => lane.steer(text, images, context));
+  const admitMessage = (message: AgentMessage): Promise<{ settled: Promise<void> }> => admitPrompt(message);
+  const steer = async (message: string | AgentMessage, images?: ImageContent[]): Promise<void> => {
+    const result = await writable(() => lane.steer(message, images, context));
     if (!result.ok) resultError(result);
   };
-  const followUp = async (text: string, images?: ImageContent[]): Promise<void> => {
-    const result = await writable(() => lane.followUp(text, images, context));
+  const followUp = async (message: string | AgentMessage, images?: ImageContent[]): Promise<void> => {
+    const result = await writable(() => lane.followUp(message, images, context));
+    if (!result.ok) resultError(result);
+  };
+  const nextRun = async (message: string | AgentMessage, images?: ImageContent[]): Promise<void> => {
+    const result = await writable(() => lane.nextRun(message, images, context));
     if (!result.ok) resultError(result);
   };
   const abort = async (): Promise<void> => {
@@ -1123,11 +1133,15 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     replaceResources,
     readResources,
     appendCustomEntry,
+    appendMessage,
+    setLabel,
     recordUsage,
     submitPrompt,
     prompt,
+    admitMessage,
     steer,
     followUp,
+    nextRun,
     abort,
     compact,
     resume,

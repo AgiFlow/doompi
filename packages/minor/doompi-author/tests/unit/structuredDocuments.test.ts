@@ -7,10 +7,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AUTHOR_DOCUMENT_MAX_BYTES,
-  AUTHOR_DOCUMENT_OPEN_PATH,
-  AUTHOR_DOCUMENT_SERIALIZE_PATH,
   createAuthorDocumentApi,
-} from '../../src/extensions/workspaces/sessions/(backend)/api/_lib/authorDocumentApi';
+} from '../../src/extensions/workspaces/sessions/(backend)/api/author/_lib/authorDocumentApi';
 import { parseCsv, preflightCsv, serializeCsv } from '../../src/services/structuredDocuments/csv';
 import {
   parseMarkdownSlides,
@@ -20,6 +18,7 @@ import {
 import { readOoxmlArchive } from '../../src/services/structuredDocuments/ooxmlArchive';
 import { parsePptx, preflightPptx, serializePptx } from '../../src/services/structuredDocuments/pptx';
 import { parseXlsx, preflightXlsx, serializeXlsx } from '../../src/services/structuredDocuments/xlsx';
+import routes from '../../src/types/apiRoutes';
 
 const PACKAGE_ROOT = path.resolve(fileURLToPath(import.meta.url), '..', '..', '..');
 const FIXTURES = path.join(PACKAGE_ROOT, 'tests/fixtures/structured');
@@ -117,7 +116,7 @@ describe('structured document adapters', () => {
     const original = await fixture('slides.md');
     const app = createAuthorDocumentApi({ cwd: PACKAGE_ROOT });
     const relativePath = 'tests/fixtures/structured/slides.md';
-    const opened = await app.request(AUTHOR_DOCUMENT_OPEN_PATH, {
+    const opened = await app.request(routes.documentsOpen.path, {
       method: 'POST',
       body: JSON.stringify({ path: relativePath, format: 'markdown-slides' }),
       headers: { 'content-type': 'application/json' },
@@ -125,7 +124,7 @@ describe('structured document adapters', () => {
     expect(((await opened.json()) as { manifest: { fragmentCount: number } }).manifest.fragmentCount).toBe(2);
     const operations = [{ fragmentId: 'slide:1', replacement: '# API' }];
     const report = preflightMarkdownSlides(original, operations);
-    const serialized = await app.request(AUTHOR_DOCUMENT_SERIALIZE_PATH, {
+    const serialized = await app.request(routes.documentsSerialize.path, {
       method: 'POST',
       body: JSON.stringify({
         path: relativePath,
@@ -144,7 +143,7 @@ describe('structured document adapters', () => {
       const target = path.join(root, 'large.csv');
       await fs.writeFile(target, '');
       await fs.truncate(target, AUTHOR_DOCUMENT_MAX_BYTES + 1);
-      const response = await createAuthorDocumentApi({ cwd: root }).request(AUTHOR_DOCUMENT_OPEN_PATH, {
+      const response = await createAuthorDocumentApi({ cwd: root }).request(routes.documentsOpen.path, {
         method: 'POST',
         body: JSON.stringify({ path: 'large.csv', format: 'csv' }),
         headers: { 'content-type': 'application/json' },

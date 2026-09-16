@@ -3,10 +3,11 @@ import { randomUUID } from 'node:crypto';
 import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-core/package-api';
 import { Hono } from 'hono';
 
-import { createAuthorBridgeState, type AuthorBridgeState } from '../../../../../../models/authorBridgeState';
-import type { AuthorCatalog } from '../../../../../../services/authorCatalog/type';
-import { readDocument } from '../../../../../../services/structuredDocuments/document';
-import { API_BASE_PATH, AUTHOR_STATE_PATH, type AuthorSessionView } from '../../../../../../types/authorApi';
+import { createAuthorBridgeState, type AuthorBridgeState } from '../../../../../../../models/authorBridgeState';
+import type { AuthorCatalog } from '../../../../../../../services/authorCatalog/type';
+import { readDocument } from '../../../../../../../services/structuredDocuments/document';
+import routes from '../../../../../../../types/apiRoutes';
+import { API_BASE_PATH, type AuthorSessionView } from '../../../../../../../types/authorApi';
 import { createAuthorBridgeApi } from './authorBridgeApi';
 import { createAuthorDocumentApi } from './authorDocumentApi';
 
@@ -32,7 +33,7 @@ const createBridge = (): AuthorBridgeState =>
 export function createAuthorApi(options: AuthorApiOptions = {}): Hono {
   const app = new Hono();
   const bridge = options.bridge ?? createBridge();
-  app.get(AUTHOR_STATE_PATH, (context) =>
+  app.get(routes.state.path, (context) =>
     context.json({
       sessionId: options.sessionId ?? null,
       ...(options.readState ?? inactiveState)(),

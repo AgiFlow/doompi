@@ -20,6 +20,7 @@ import {
   STATE_POLL_MS,
 } from '../../constants/runnerLogApi';
 import {
+  RUN_ID_PARAM,
   RUNNER_API_BASE_PATH,
   RUNNER_LOG_PING_EVENT,
   RUNNER_LOG_STREAM_EVENT,
@@ -32,6 +33,7 @@ import { RmuxBackend } from '../../services/rmuxBackend';
 import { RunnerPaths, resolveRunnerStoreDirectory, runnerStateDirFor } from '../../services/runnerPaths';
 import { TmuxBackend } from '../../services/tmuxBackend';
 import { parseRunnerRecord } from '../../services/webRunnerRuns';
+import routes from '../../types/apiRoutes';
 import type { ILogReader, LogQuery } from '../../types/logReader';
 import type { ILogTail } from '../../types/logTail';
 import type { IRmuxBackend } from '../../types/rmuxBackend';
@@ -134,6 +136,10 @@ function logQueryOf(url: URL): LogQuery {
  * and nothing else; the session is the host, not a parameter. The reader only
  * ever returns the last N lines of what matched, so both routes stay bounded no
  * matter how large the file on disk is.
+ *
+ * Paths come from src/types/apiRoutes, the one table the browser's generated
+ * client reads too, so this app and the cockpit cannot disagree about where a
+ * route lives. They stay relative to the mount the host strips.
  */
 export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
   const logReader = options.logReader ?? new LogReader();
@@ -173,8 +179,8 @@ export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
     if (target === undefined || !MULTIPLEXER_BACKENDS.has(record.backend) || !isSafeSegment(target)) return undefined;
     return { record, target };
   };
-  app.get('/runners/:runId/log', (context) => {
-    const runId = context.req.param('runId');
+  app.get(routes.log.path, (context) => {
+    const runId = context.req.param(RUN_ID_PARAM);
     const record = runnerOf(runId);
     if (record === undefined) return context.json({ error: `No runner '${runId}' in this session.` }, 404);
     const slice = logReader.read(record.logPath, logQueryOf(new URL(context.req.url)));
@@ -182,8 +188,8 @@ export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
     return context.json(body);
   });
 
-  app.get('/runners/:runId/log/stream', (context) => {
-    const runId = context.req.param('runId');
+  app.get(routes.logStream.path, (context) => {
+    const runId = context.req.param(RUN_ID_PARAM);
     const record = runnerOf(runId);
     if (record === undefined) return context.json({ error: `No runner '${runId}' in this session.` }, 404);
     const from = numberParam(
@@ -236,8 +242,8 @@ export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
     });
   });
 
-  app.get('/runners/:runId/screen/stream', (context) => {
-    const runId = context.req.param('runId');
+  app.get(routes.screenStream.path, (context) => {
+    const runId = context.req.param(RUN_ID_PARAM);
     const attachable = attachableOf(runId);
     if (attachable === undefined) return context.json({ error: NOT_ATTACHABLE }, 404);
     // The record's log path is already proven to sit inside this session's own
@@ -314,8 +320,8 @@ export function createRunnerLogApi(options: RunnerLogApiOptions): Hono {
    * is deliberately narrow: an owned target, still running, started
    * interactive, and a body that is nothing but text.
    */
-  app.post('/runners/:runId/screen/input', async (context) => {
-    const runId = context.req.param('runId');
+  app.post(routes.input.path, async (context) => {
+    const runId = context.req.param(RUN_ID_PARAM);
     const attachable = attachableOf(runId);
     if (attachable === undefined) return context.json({ error: NOT_ATTACHABLE }, 404);
 

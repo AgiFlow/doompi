@@ -1,14 +1,15 @@
-import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
-
-import { RUNNER_SCREEN_EVENT } from '../../../../../constants/webRunnerLog';
-import { type RunnerScreenEvent, runnerInputUrl, runnerScreenStreamUrl } from '../../../../../types/webRunnerLog';
+import { api } from '../../../../../../generated/client';
+import { RUN_ID_PARAM, RUNNER_SCREEN_EVENT } from '../../../../../constants/webRunnerLog';
+import { RUNNER_LOG_PARAMS, type RunnerInputRequest, type RunnerScreenEvent } from '../../../../../types/webRunnerLog';
 
 /**
  * The page's half of the attached pane.
  *
  * Two directions over two mechanisms, because the hub proxies requests and
  * server-sent events but cannot upgrade a socket: pane bytes arrive on an
- * EventSource, and keystrokes go back as ordinary POSTs.
+ * EventSource, and keystrokes go back as ordinary POSTs. Both addresses come
+ * from the generated client: the stream route offers a URL and no call method,
+ * which is exactly what an EventSource wants and all it can be given.
  */
 
 /** Turns one base64 chunk back into the bytes a terminal was sent. */
@@ -45,7 +46,11 @@ export function watchRunnerScreen(
 
   const open = (): void => {
     if (closed) return;
-    const current = new EventSource(runnerScreenStreamUrl(sessionId, runId, offset));
+    const current = new EventSource(
+      api
+        .session(sessionId)
+        .screenStream.url({ params: { [RUN_ID_PARAM]: runId }, query: { [RUNNER_LOG_PARAMS.from]: offset } }),
+    );
     source = current;
     current.addEventListener(RUNNER_SCREEN_EVENT, (message) => {
       let parsed: unknown;
@@ -91,14 +96,7 @@ export function watchRunnerScreen(
 
 /** Sends one batch of keystrokes. Resolves to whether the pane took them. */
 export async function sendRunnerInput(sessionId: string, runId: string, text: string): Promise<boolean> {
-  try {
-    const response = await sealedTransport.fetch(runnerInputUrl(sessionId, runId), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
+  const body: RunnerInputRequest = { text };
+  const result = await api.session(sessionId).input({ params: { [RUN_ID_PARAM]: runId }, body });
+  return result.ok;
 }

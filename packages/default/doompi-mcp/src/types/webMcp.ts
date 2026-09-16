@@ -122,6 +122,9 @@ function isSessionAuthStatusItem(value: unknown): value is McpSessionAuthStatusI
 export const MCP_REPOSITORY_API_PATH = '/repository';
 export const MCP_DISCOVERY_API_PATH = '/repository/discover';
 export const MCP_AUTHORIZATION_API_PATH = '/repository/authorize';
+/** The repository every route is asked about, and the flow segment the two flow routes carry. */
+export const MCP_REPOSITORY_ID_QUERY = 'repositoryId';
+export const MCP_FLOW_ID_PARAM = 'flowId';
 
 export type McpRepositoryServerState =
   | 'not-connected'

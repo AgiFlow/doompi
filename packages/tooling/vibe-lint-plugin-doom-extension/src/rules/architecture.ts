@@ -119,6 +119,10 @@ const DEFAULT_PACKAGE_LAYERS: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-minor-mode': 'platform',
   '@agimon-ai/doompi-hashline': 'contracts',
   '@agimon-ai/doompi-telemetry': 'contracts',
+  // The browser's sealed transport. Every generated API client imports it,
+  // so a package at any tier depends on it the moment it declares a route
+  // table, and that dependency does not point upward.
+  '@agimon-ai/doompi-web-security': 'contracts',
   '@agimon-ai/doompi-web-components': 'contracts',
   '@agimon-ai/doompi-config': 'platform',
   '@agimon-ai/doompi-ui': 'platform',

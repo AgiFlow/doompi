@@ -1,50 +1,39 @@
-import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
-
-import { contentUrl, currentUrl, type PlanDetailView, type PlanSaveView } from '../../../../../../types/planApi';
+import { api } from '../../../../../../../generated/client';
+import type { PlanDetailView } from '../../../../../../types/planApi';
 
 /**
  * The page's half of this package's session API: the current plan, and the
- * manual save. The only place the cockpit talks HTTP for a plan, so if the
- * transport changes, it changes here alone.
+ * manual save.
+ *
+ * These are adapters now, not a transport. The generated client owns the URL
+ * and the sealed transport with it, so nothing here spells a route or reaches
+ * for `fetch`. What stays is this package's own vocabulary: which refusals the
+ * reader is shown, and the stale-save contract the editor depends on.
  */
 
 const UNREACHABLE = 'The session is unreachable.';
 const NO_PLAN = 'This session has not written a plan yet.';
-const JSON_HEADERS = { 'content-type': 'application/json' };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** The error a route reported, or a generic one; never an empty message. */
-function errorOf(body: unknown, fallback: string): string {
-  return isRecord(body) && typeof body.error === 'string' && body.error !== '' ? body.error : fallback;
-}
-
-async function readBody(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (text === '') return undefined;
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return undefined;
-  }
+/** The message a reader is shown: the route's own words, or why there were none. */
+function messageOf(result: { status: number; error: string }): string {
+  if (result.status === 0) return UNREACHABLE;
+  return result.error === '' ? `The session answered ${String(result.status)}.` : result.error;
 }
 
 export type FetchPlanResult = { ok: true; detail: PlanDetailView } | { ok: false; error: string };
 
 export async function fetchPlan(sessionId: string): Promise<FetchPlanResult> {
-  let response: Response;
-  try {
-    response = await sealedTransport.fetch(currentUrl(sessionId));
-  } catch {
-    return { ok: false, error: UNREACHABLE };
-  }
-  const body = await readBody(response);
-  if (response.status === 404) return { ok: false, error: errorOf(body, NO_PLAN) };
-  if (!response.ok) return { ok: false, error: errorOf(body, `The session answered ${String(response.status)}.`) };
-  if (!isRecord(body)) return { ok: false, error: 'The session answered with no plan.' };
-  return { ok: true, detail: body as unknown as PlanDetailView };
+  const result = await api.session(sessionId).current();
+  // A session that has written nothing answers 404, which is not a failure the
+  // reader should be shown as one.
+  if (result.status === 404) return { ok: false, error: result.ok || result.error === '' ? NO_PLAN : result.error };
+  if (!result.ok) return { ok: false, error: messageOf(result) };
+  if (!isRecord(result.data)) return { ok: false, error: 'The session answered with no plan.' };
+  return { ok: true, detail: result.data };
 }
 
 export type SavePlanResult =
@@ -54,29 +43,20 @@ export type SavePlanResult =
   | { ok: false; stale: false; error: string };
 
 export async function savePlan(sessionId: string, expectedHash: string, content: string): Promise<SavePlanResult> {
-  let response: Response;
-  try {
-    response = await sealedTransport.fetch(contentUrl(sessionId), {
-      method: 'PUT',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ expectedHash, content }),
-    });
-  } catch {
-    return { ok: false, stale: false, error: UNREACHABLE };
-  }
-  const body = await readBody(response);
-  if (response.status === 409) {
-    const hash = isRecord(body) && typeof body.hash === 'string' ? body.hash : undefined;
+  const result = await api.session(sessionId).save({ body: { expectedHash, content } });
+  // The agent can rewrite the plan while a reader is still editing it. A moved
+  // hash is the one refusal the editor recovers from, so it is read before the
+  // generic failure.
+  if (result.status === 409) {
+    const data = result.ok ? undefined : result.data;
+    const hash = isRecord(data) && typeof data.hash === 'string' ? data.hash : undefined;
     return {
       ok: false,
       stale: true,
-      error: errorOf(body, 'The plan changed since it was opened.'),
+      error: result.ok ? 'The plan changed since it was opened.' : messageOf(result),
       ...(hash === undefined ? {} : { hash }),
     };
   }
-  if (!response.ok) {
-    return { ok: false, stale: false, error: errorOf(body, `The session answered ${String(response.status)}.`) };
-  }
-  const saved = body as PlanSaveView | undefined;
-  return { ok: true, hash: saved?.hash ?? '' };
+  if (!result.ok) return { ok: false, stale: false, error: messageOf(result) };
+  return { ok: true, hash: isRecord(result.data) && typeof result.data.hash === 'string' ? result.data.hash : '' };
 }

@@ -7,11 +7,18 @@
  * no hub behind it, so every view but the error one would be unreachable. The
  * plan route is answered here at module scope, from the same PlanDetailView the
  * route returns; anything else still goes to the page's own fetch.
+ *
+ * The client resolves which workspace owns a session through the host's
+ * lookup, and the renderer mounts no sessions store, so one is bound here.
  */
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 
-import { currentUrl, type PlanDetailView } from '../../../../../../types/planApi';
+import routes from '../../../../../../types/apiRoutes';
+import { API_BASE_PATH, type PlanDetailView } from '../../../../../../types/planApi';
 import { PlanPanel } from './PlanPanel';
+
+bindSessionApiWorkspace(() => 'stories');
 
 const PLAN: PlanDetailView = {
   path: '.doom/plans/story-coverage.md',
@@ -49,14 +56,27 @@ const UNAVAILABLE: PlanDetailView = {
 };
 
 const answers: Readonly<Record<string, PlanDetailView>> = {
-  [currentUrl('plan-preview')]: PLAN,
-  [currentUrl('plan-unavailable')]: UNAVAILABLE,
+  'plan-preview': PLAN,
+  'plan-unavailable': UNAVAILABLE,
 };
+
+/**
+ * Which story a request belongs to, read off the session segment of the URL the
+ * client built. Matching the tail rather than the whole URL keeps this story
+ * independent of the mount the host resolves a session to.
+ */
+const CURRENT_SUFFIX = `/plugins/${API_BASE_PATH}${routes.current.path}`;
+
+function answerFor(url: string): PlanDetailView | undefined {
+  if (!url.endsWith(CURRENT_SUFFIX)) return undefined;
+  const session = url.slice(0, -CURRENT_SUFFIX.length).split('/').pop();
+  return session === undefined ? undefined : answers[session];
+}
 
 const pageFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-  const detail = answers[url];
+  const detail = answerFor(url);
   if (detail === undefined) return pageFetch(input, init);
   return Promise.resolve(
     new Response(JSON.stringify(detail), { status: 200, headers: { 'content-type': 'application/json' } }),

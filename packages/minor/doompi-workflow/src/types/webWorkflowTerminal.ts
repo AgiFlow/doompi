@@ -6,16 +6,17 @@
  * event names live here rather than being spelled twice.
  */
 
-/** Segment this package's API is mounted under, below /api/plugins/. */
+/**
+ * Segment this package's API is mounted under, below /api/plugins/.
+ *
+ * The same word names `src/extensions/(backend)/api/workflow/`, which is where
+ * the build reads the mount for the browser's client, so the two cannot drift.
+ * The routes themselves are declared in `apiRoutes.ts`.
+ */
 export const WORKFLOW_API_BASE_PATH = 'workflow';
 
 /** The SSE event name the screen stream writes. */
 export const WORKFLOW_SCREEN_EVENT = 'screen';
-
-/** Where a run's routes live, below the mount every hub-scoped package API shares. */
-export function workflowRunPath(workspace: string, runKey: string): string {
-  return `/api/plugins/${WORKFLOW_API_BASE_PATH}/runs/${encodeURIComponent(workspace)}/${encodeURIComponent(runKey)}`;
-}
 
 /** What a surface may do with one run's terminal, and why anything is missing. */
 export interface WorkflowTerminalCapabilitiesView {

@@ -8,11 +8,19 @@
  * the story seeds the same store that channel writes into, exactly as
  * WorkflowsActivitySection.stories.tsx does.
  */
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 
 import type { WorkflowRunView } from '../../../../../types/webWorkflows';
 import { workflows } from '../_lib/workflowsStore';
 import { WorkflowsPanel } from './WorkflowsPanel';
+
+/*
+ * The cockpit host resolves which workspace owns a session, and a story has no
+ * host. Without this the generated client throws while building its first URL,
+ * which happens inside the effect this story's component runs on mount.
+ */
+bindSessionApiWorkspace(() => 'stories');
 
 /** Its own session id, so seeding this store cannot disturb another story's. */
 const SESSION_ID = 'workflows-panel';

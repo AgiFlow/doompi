@@ -1,11 +1,27 @@
-import type { McpAuthorizationFlow, McpRepositoryCatalog } from '../../../../../types/webMcp';
+import { api } from '../../../../../../generated/client';
 import {
-  MCP_AUTHORIZATION_API_PATH,
-  MCP_DISCOVERY_API_PATH,
-  MCP_REPOSITORY_API_PATH,
+  MCP_FLOW_ID_PARAM,
+  MCP_REPOSITORY_ID_QUERY,
+  type McpAuthorizationFlow,
+  type McpRepositoryCatalog,
 } from '../../../../../types/webMcp';
 
-const apiRoot = (repositoryId: string): string => `/api/workspaces/${encodeURIComponent(repositoryId)}/plugins/mcp`;
+/**
+ * The panel's half of this package's repository API.
+ *
+ * The generated client owns every URL, addressed at the workspace scope the
+ * repository names, so nothing here spells a mount. The workspace prefix, the
+ * plugins segment and the base path used to be concatenated at the top of this
+ * file, the only copy of that shape outside the host, and it agreed with the
+ * route by inspection alone.
+ *
+ * The transport stays injected, which is the one way this package differs from
+ * its siblings. Every write here is step-up gated: the panel passes the
+ * elevated request for discovery, authorization and cancellation and the plain
+ * one for reads, and that choice belongs to the caller. So the client is asked
+ * for the URL and the method, and the caller's own request issues them.
+ */
+
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
 export type McpRequest = (input: string, init?: RequestInit) => Promise<Response>;
@@ -32,9 +48,8 @@ export async function readMcpCatalog(
   request: McpRequest,
   repositoryId: string,
 ): Promise<McpApiResult<McpRepositoryCatalog>> {
-  const response = await request(
-    `${apiRoot(repositoryId)}${MCP_REPOSITORY_API_PATH}?repositoryId=${encodeURIComponent(repositoryId)}`,
-  );
+  const route = api.workspace(repositoryId).catalog;
+  const response = await request(route.url({ query: { [MCP_REPOSITORY_ID_QUERY]: repositoryId } }));
   return await resultOf(response, 'The synced MCP catalog could not be read.');
 }
 
@@ -42,8 +57,9 @@ export async function discoverMcpCatalog(
   requestWithStepUp: McpRequest,
   repositoryId: string,
 ): Promise<McpApiResult<McpRepositoryCatalog>> {
-  const response = await requestWithStepUp(`${apiRoot(repositoryId)}${MCP_DISCOVERY_API_PATH}`, {
-    method: 'POST',
+  const route = api.workspace(repositoryId).discover;
+  const response = await requestWithStepUp(route.url(), {
+    method: route.spec.method,
     headers: JSON_HEADERS,
     body: JSON.stringify({ repositoryId }),
   });
@@ -55,8 +71,9 @@ export async function startMcpAuthorization(
   repositoryId: string,
   serverName: string,
 ): Promise<McpApiResult<McpAuthorizationFlow>> {
-  const response = await requestWithStepUp(`${apiRoot(repositoryId)}${MCP_AUTHORIZATION_API_PATH}`, {
-    method: 'POST',
+  const route = api.workspace(repositoryId).authorize;
+  const response = await requestWithStepUp(route.url(), {
+    method: route.spec.method,
     headers: JSON_HEADERS,
     body: JSON.stringify({ repositoryId, serverName }),
   });
@@ -68,8 +85,9 @@ export async function readMcpAuthorization(
   repositoryId: string,
   flowId: string,
 ): Promise<McpApiResult<McpAuthorizationFlow>> {
+  const route = api.workspace(repositoryId).readAuthorization;
   const response = await request(
-    `${apiRoot(repositoryId)}${MCP_AUTHORIZATION_API_PATH}/${encodeURIComponent(flowId)}?repositoryId=${encodeURIComponent(repositoryId)}`,
+    route.url({ params: { [MCP_FLOW_ID_PARAM]: flowId }, query: { [MCP_REPOSITORY_ID_QUERY]: repositoryId } }),
   );
   return await resultOf(response, 'The authorization state could not be read.');
 }
@@ -79,9 +97,10 @@ export async function cancelMcpAuthorization(
   repositoryId: string,
   flowId: string,
 ): Promise<McpApiResult<McpAuthorizationFlow>> {
+  const route = api.workspace(repositoryId).cancelAuthorization;
   const response = await requestWithStepUp(
-    `${apiRoot(repositoryId)}${MCP_AUTHORIZATION_API_PATH}/${encodeURIComponent(flowId)}?repositoryId=${encodeURIComponent(repositoryId)}`,
-    { method: 'DELETE' },
+    route.url({ params: { [MCP_FLOW_ID_PARAM]: flowId }, query: { [MCP_REPOSITORY_ID_QUERY]: repositoryId } }),
+    { method: route.spec.method },
   );
   return await resultOf(response, 'The authorization flow could not be cancelled.');
 }

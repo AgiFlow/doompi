@@ -48,6 +48,23 @@ describe('workflow hub API bundle routing', () => {
     expect(artifactContentUrl('repo/a', 'run one', 'report.md', true, 'session/a')).toContain('?raw=1&download=1');
   });
 
+  it('addresses the hub itself when no session is named', async () => {
+    fetch.mockImplementation(async () => Response.json({ artifacts: [] }));
+
+    followScreen('repo/a', 'run one', () => undefined);
+    await fetchArtifacts('repo', 'run');
+    await fetchArtifact('repo', 'run', 'reports/a b.md');
+
+    expect(eventSourceUrls).toEqual(['/api/plugins/workflow/runs/repo%2Fa/run%20one/screen/stream']);
+    expect(fetch.mock.calls.map(([url]) => url)).toEqual([
+      '/api/plugins/workflow/runs/repo/run/artifacts',
+      '/api/plugins/workflow/runs/repo/run/artifacts/reports/a%20b.md',
+    ]);
+    expect(artifactContentUrl('repo', 'run', 'report.md')).toBe(
+      '/api/plugins/workflow/runs/repo/run/artifacts/report.md?raw=1',
+    );
+  });
+
   it('routes reads, writes, and deletion through the selected session bundle', async () => {
     fetch.mockImplementation(async (_input, init) => {
       if (init?.method === 'DELETE') return Response.json({ deleted: true });

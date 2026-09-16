@@ -5,21 +5,16 @@ import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-
 import { Hono } from 'hono';
 
 import { PlanPointerService } from '../../services/planPointer';
-import {
-  API_BASE_PATH,
-  contentPath,
-  currentPath,
-  type PlanDetailView,
-  type PlanSaveRequest,
-  type PlanSaveView,
-} from '../../types/planApi';
+import routes from '../../types/apiRoutes';
+import { API_BASE_PATH, type PlanDetailView, type PlanSaveRequest, type PlanSaveView } from '../../types/planApi';
 import type { PlanPointerPort } from '../../types/planPointer';
 
 /**
  * This package's HTTP surface: the session's current plan, and the manual save.
  *
- * Routes are relative to the mount its host gives it, so nothing here repeats
- * where it was mounted. The host is one session's own server, which is what
+ * Each path comes from the route table the browser reads, so a route the page
+ * calls and the route this serves cannot be spelled apart. Both are relative
+ * to the mount its host gives it, so nothing here repeats where it was mounted. The host is one session's own server, which is what
  * makes the session id available without the page supplying it.
  *
  * Neither route takes a path. A session has exactly one current plan, and the
@@ -73,7 +68,7 @@ export function createPlanApi(options: PlanApiOptions = {}): Hono {
   const pointerFor = (): ReturnType<PlanPointerPort['read']> =>
     options.sessionId === undefined ? undefined : pointers.read(options.sessionId);
 
-  app.get(currentPath(), async (context) => {
+  app.get(routes.current.path, async (context) => {
     const pointer = pointerFor();
     if (pointer === undefined) return context.json({ error: NO_PLAN }, 404);
     const view: PlanDetailView = {
@@ -86,7 +81,7 @@ export function createPlanApi(options: PlanApiOptions = {}): Hono {
     return context.json(view);
   });
 
-  app.put(contentPath(), async (context) => {
+  app.put(routes.save.path, async (context) => {
     let request: PlanSaveRequest;
     try {
       request = (await context.req.json()) as PlanSaveRequest;

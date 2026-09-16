@@ -1,9 +1,9 @@
-import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
+import { api } from '../../../../../../generated/client';
+import { ARTIFACT_DOWNLOAD_PARAM, ARTIFACT_NAME_PARAM, ARTIFACT_RAW_PARAM } from '../../../../../types/apiRoutes';
 import {
   WORKFLOW_SCREEN_EVENT,
-  workflowRunPath,
   type WorkflowArtifactContentResponse,
   type WorkflowArtifactsResponse,
   type WorkflowControlResponse,
@@ -13,49 +13,81 @@ import {
 
 /**
  * The page's half of this package's hub API: one run's terminal and the files
- * its run directory holds. The only place the cockpit talks HTTP for a
- * workflow, so if the transport changes, it changes here alone.
+ * its run directory holds.
+ *
+ * These are adapters now, not a transport. The generated client owns the URL
+ * and the sealed transport with it, so nothing here spells a mount. What stays
+ * is this package's own vocabulary: which refusals the reader is shown, and the
+ * shapes the terminal expects back.
+ *
+ * A run belongs to its multiplexer rather than to a session, so the same API
+ * answers at the hub and inside a session's own server. Passing a session id
+ * addresses that session's copy and passing none addresses the hub. The deleted
+ * builder made that branch the other way round: it always built the hub's
+ * absolute URL, then rewrote the plugin prefix into the session's with
+ * String.replace, so a session's URL was a hub URL with its head swapped.
  */
 
 const UNREACHABLE = 'The cockpit hub is unreachable.';
-const JSON_HEADERS = { 'content-type': 'application/json' };
 
-function sessionUrl(path: string, sessionId?: string | null): string {
-  if (sessionId === undefined || sessionId === null) return path;
-  return path.replace('/api/plugins/', `${sessionApiPath(sessionId)}/plugins/`);
+/** One of the scopes this API mounts at; every route is the same on all of them. */
+type WorkflowScope = typeof api.global;
+
+/** The hub, or one session's own copy of it; a null session id is the hub. */
+function scoped(sessionId?: string | null): WorkflowScope {
+  return sessionId == null ? api.global : api.session(sessionId);
 }
+
+/** The run every route addresses, as the route table's two path parameters. */
+function runParams(workspace: string, runKey: string): { workspace: string; runKey: string } {
+  return { workspace, runKey };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** The error a route reported, or a generic one; never an empty message. */
-function errorOf(body: unknown, fallback: string): string {
-  return isRecord(body) && typeof body.error === 'string' && body.error !== '' ? body.error : fallback;
+/**
+ * The message a reader is shown: the route's own words, or why there were none.
+ *
+ * `error` is optional because an answered call that simply carried the wrong
+ * shape reaches here too, and that result has no error field at all.
+ */
+function messageOf(result: { status: number; error?: string }, fallback: string): string {
+  if (result.status === 0) return UNREACHABLE;
+  return result.error === undefined || result.error === '' ? fallback : result.error;
 }
 
-async function post(
-  path: string,
-  body: unknown,
-  sessionId?: string | null,
-): Promise<{ status: number; body: unknown }> {
-  try {
-    const response = await sealedTransport.fetch(sessionUrl(path, sessionId), {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify(body),
-    });
-    const text = await response.text();
-    return { status: response.status, body: text === '' ? undefined : (JSON.parse(text) as unknown) };
-  } catch {
-    return { status: 0, body: undefined };
-  }
+/**
+ * One artifact's URL, with its path filled in.
+ *
+ * An artifact is named by its path inside the run directory, which Hono matches
+ * as the one multi-segment parameter `:name{.+}`. The client's own `params`
+ * substitution fills a single segment and percent-encodes the separating slash
+ * with it, which would move every nested artifact's URL, so that one segment is
+ * substituted here instead: each segment encoded, the slashes between them
+ * kept. Everything left of it still comes from the client.
+ */
+function artifactUrl(
+  scope: WorkflowScope,
+  workspace: string,
+  runKey: string,
+  artifactPath: string,
+  query?: Record<string, number>,
+): string {
+  return scope.artifact
+    .url({ params: runParams(workspace, runKey), ...(query === undefined ? {} : { query }) })
+    .replace(ARTIFACT_NAME_PARAM, artifactPath.split('/').map(encodeURIComponent).join('/'));
 }
 
 /**
  * Follows one run's screen until the run settles or the caller stops.
  *
  * Returns the stop function. The stream is server-sent events, so a hub that
- * restarts reconnects on its own and the page keeps painting.
+ * restarts reconnects on its own and the page keeps painting. The route is
+ * declared `stream: true`, which is why the client hands out its address and no
+ * call: an `EventSource` opens it directly, and a relayed call would buffer a
+ * response that never ends.
  */
 export function followScreen(
   workspace: string,
@@ -63,7 +95,7 @@ export function followScreen(
   onEvent: (event: WorkflowScreenEvent) => void,
   sessionId?: string | null,
 ): () => void {
-  const source = new EventSource(sessionUrl(`${workflowRunPath(workspace, runKey)}/screen/stream`, sessionId));
+  const source = new EventSource(scoped(sessionId).screen.url({ params: runParams(workspace, runKey) }));
   const handler = (message: MessageEvent<string>): void => {
     let parsed: unknown;
     try {
@@ -88,10 +120,14 @@ export async function takeControl(
   token?: string,
   sessionId?: string | null,
 ): Promise<WorkflowControlResponse> {
-  const { status, body } = await post(`${workflowRunPath(workspace, runKey)}/control`, { token }, sessionId);
-  if (status === 0) return { held: false, reason: UNREACHABLE };
-  if (isRecord(body) && typeof body.held === 'boolean') return body as unknown as WorkflowControlResponse;
-  return { held: false, reason: errorOf(body, 'The run refused the keyboard.') };
+  const result = await scoped(sessionId).control({ params: runParams(workspace, runKey), body: { token } });
+  if (result.status === 0) return { held: false, reason: UNREACHABLE };
+  // A refusal carries the same shape as a grant, so the body is read before the
+  // status: a 409 says who holds the keyboard and why, which is the answer.
+  if (isRecord(result.data) && typeof result.data.held === 'boolean') {
+    return result.data as unknown as WorkflowControlResponse;
+  }
+  return { held: false, reason: messageOf(result, 'The run refused the keyboard.') };
 }
 
 export async function releaseControl(
@@ -100,7 +136,7 @@ export async function releaseControl(
   token: string,
   sessionId?: string | null,
 ): Promise<void> {
-  await post(`${workflowRunPath(workspace, runKey)}/control`, { token, release: true }, sessionId);
+  await scoped(sessionId).control({ params: runParams(workspace, runKey), body: { token, release: true } });
 }
 
 /** Sends literal keystrokes; the reason comes back when the lease has moved on. */
@@ -111,10 +147,9 @@ export async function sendKeys(
   data: string,
   sessionId?: string | null,
 ): Promise<{ error?: string }> {
-  const { status, body } = await post(`${workflowRunPath(workspace, runKey)}/keys`, { token, data }, sessionId);
-  if (status === 0) return { error: UNREACHABLE };
-  if (status === 204) return {};
-  return { error: errorOf(body, 'The run would not take those keys.') };
+  const result = await scoped(sessionId).keys({ params: runParams(workspace, runKey), body: { token, data } });
+  if (result.ok) return {};
+  return { error: messageOf(result, 'The run would not take those keys.') };
 }
 
 /** Matches the run's terminal to the viewport of whoever holds the keyboard. */
@@ -126,7 +161,7 @@ export async function resizeRun(
   rows: number,
   sessionId?: string | null,
 ): Promise<void> {
-  await post(`${workflowRunPath(workspace, runKey)}/resize`, { token, columns, rows }, sessionId);
+  await scoped(sessionId).resize({ params: runParams(workspace, runKey), body: { token, columns, rows } });
 }
 
 export type DeleteWorkflowResult = { result: WorkflowDeleteResponse } | { error: string };
@@ -137,17 +172,10 @@ export async function deleteWorkflowRun(
   runKey: string,
   sessionId?: string | null,
 ): Promise<DeleteWorkflowResult> {
-  try {
-    const response = await sealedTransport.fetch(sessionUrl(workflowRunPath(workspace, runKey), sessionId), {
-      method: 'DELETE',
-    });
-    const body = (await response.json()) as unknown;
-    if (!response.ok) return { error: errorOf(body, 'The workflow could not be deleted.') };
-    if (isRecord(body) && body.deleted === true) return { result: { deleted: true } };
-    return { error: 'The workflow hub returned an invalid deletion response.' };
-  } catch {
-    return { error: UNREACHABLE };
-  }
+  const result = await scoped(sessionId).remove({ params: runParams(workspace, runKey) });
+  if (!result.ok) return { error: messageOf(result, 'The workflow could not be deleted.') };
+  if (result.data.deleted === true) return { result: { deleted: true } };
+  return { error: 'The workflow hub returned an invalid deletion response.' };
 }
 
 export type ArtifactsResult = { artifacts: WorkflowArtifactsResponse } | { error: string };
@@ -157,16 +185,9 @@ export async function fetchArtifacts(
   runKey: string,
   sessionId?: string | null,
 ): Promise<ArtifactsResult> {
-  try {
-    const response = await sealedTransport.fetch(
-      sessionUrl(`${workflowRunPath(workspace, runKey)}/artifacts`, sessionId),
-    );
-    const body = (await response.json()) as unknown;
-    if (!response.ok) return { error: errorOf(body, 'This run has no directory to read.') };
-    return { artifacts: body as WorkflowArtifactsResponse };
-  } catch {
-    return { error: UNREACHABLE };
-  }
+  const result = await scoped(sessionId).artifacts({ params: runParams(workspace, runKey) });
+  if (!result.ok) return { error: messageOf(result, 'This run has no directory to read.') };
+  return { artifacts: result.data };
 }
 
 export type ArtifactResult = { artifact: WorkflowArtifactContentResponse } | { error: string };
@@ -179,13 +200,19 @@ export function artifactContentUrl(
   download = false,
   sessionId?: string | null,
 ): string {
-  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
-  return sessionUrl(
-    `${workflowRunPath(workspace, runKey)}/artifacts/${encodedPath}?raw=1${download ? '&download=1' : ''}`,
-    sessionId,
-  );
+  return artifactUrl(scoped(sessionId), workspace, runKey, path, {
+    [ARTIFACT_RAW_PARAM]: 1,
+    ...(download ? { [ARTIFACT_DOWNLOAD_PARAM]: 1 } : {}),
+  });
 }
 
+/**
+ * One artifact's metadata and text.
+ *
+ * The only route here that addresses itself rather than being called: its path
+ * parameter spans segments, so the URL comes from `artifactUrl` and the request
+ * goes over the same sealed transport the client is built on.
+ */
 export async function fetchArtifact(
   workspace: string,
   runKey: string,
@@ -193,14 +220,12 @@ export async function fetchArtifact(
   sessionId?: string | null,
 ): Promise<ArtifactResult> {
   try {
-    const response = await sealedTransport.fetch(
-      sessionUrl(
-        `${workflowRunPath(workspace, runKey)}/artifacts/${path.split('/').map(encodeURIComponent).join('/')}`,
-        sessionId,
-      ),
-    );
+    const response = await sealedTransport.fetch(artifactUrl(scoped(sessionId), workspace, runKey, path));
     const body = (await response.json()) as unknown;
-    if (!response.ok) return { error: errorOf(body, 'That file has not been written.') };
+    if (!response.ok) {
+      const error = isRecord(body) && typeof body.error === 'string' && body.error !== '' ? body.error : '';
+      return { error: error === '' ? 'That file has not been written.' : error };
+    }
     return { artifact: body as WorkflowArtifactContentResponse };
   } catch {
     return { error: UNREACHABLE };

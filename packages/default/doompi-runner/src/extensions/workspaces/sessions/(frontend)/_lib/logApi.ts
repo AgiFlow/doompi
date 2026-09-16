@@ -1,18 +1,22 @@
-import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
-
-import { RUNNER_LOG_STREAM_EVENT } from '../../../../../constants/webRunnerLog';
+import { api } from '../../../../../../generated/client';
+import { RUN_ID_PARAM, RUNNER_LOG_STREAM_EVENT } from '../../../../../constants/webRunnerLog';
 import {
+  RUNNER_LOG_PARAMS,
   type RunnerLogQueryParams,
   type RunnerLogResponse,
   type RunnerLogStreamEvent,
-  runnerLogStreamUrl,
-  runnerLogUrl,
 } from '../../../../../types/webRunnerLog';
 
 /**
  * The page's half of this package's log API. The only place the cockpit talks
  * HTTP to the hub for a runner, so if the transport ever changes, it changes
  * here alone.
+ *
+ * The generated client owns every URL: a route is named, a session id selects
+ * that session's own copy of the API, and the run id is a path parameter the
+ * client substitutes and encodes. Nothing here spells a mount, a prefix or a
+ * proxy parameter, which is what the four deleted URL builders each did by
+ * hand.
  */
 
 export type RunnerLogResult = { slice: RunnerLogResponse } | { error: string };
@@ -30,25 +34,29 @@ export async function fetchRunnerLog(
   params: RunnerLogQueryParams = {},
   signal?: AbortSignal,
 ): Promise<RunnerLogResult> {
-  let response: Response;
-  try {
-    response = await sealedTransport.fetch(runnerLogUrl(sessionId, runId, params), { signal });
-  } catch (error) {
-    // An aborted request is the caller replacing it, not a failure to report.
-    if (error instanceof DOMException && error.name === 'AbortError') return { error: '' };
-    return { error: UNREACHABLE };
+  const result = await api.session(sessionId).log({
+    params: { [RUN_ID_PARAM]: runId },
+    // An unset parameter is left out rather than sent empty: the route reads a
+    // missing one as its own default, and an empty grep as no filter at all.
+    query: {
+      [RUNNER_LOG_PARAMS.lines]: params.lines,
+      [RUNNER_LOG_PARAMS.grep]: params.grep === '' ? undefined : params.grep,
+      [RUNNER_LOG_PARAMS.ignoreCase]: params.ignoreCase === true ? true : undefined,
+      [RUNNER_LOG_PARAMS.contextLines]: params.contextLines,
+    },
+    ...(signal === undefined ? {} : { signal }),
+  });
+  if (!result.ok) {
+    // Status 0 is the transport never answering, which covers both a dead hub
+    // and the caller replacing this request. An abort is the caller's own doing
+    // and is reported as no answer rather than as a failure to show.
+    if (result.status === 0) return { error: signal?.aborted === true ? '' : UNREACHABLE };
+    return { error: result.error === '' ? `The hub answered ${String(result.status)}.` : result.error };
   }
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    body = undefined;
+  if (!isRecord(result.data) || typeof result.data.text !== 'string') {
+    return { error: `The hub answered ${String(result.status)}.` };
   }
-  if (response.ok && isRecord(body) && typeof body.text === 'string') {
-    return { slice: body as unknown as RunnerLogResponse };
-  }
-  const error = isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`;
-  return { error };
+  return { slice: result.data };
 }
 
 export interface RunnerLogFollow {
@@ -84,7 +92,11 @@ export function followRunnerLog(
 
   const open = (): void => {
     if (closed) return;
-    const current = new EventSource(runnerLogStreamUrl(sessionId, runId, offset));
+    const current = new EventSource(
+      api
+        .session(sessionId)
+        .logStream.url({ params: { [RUN_ID_PARAM]: runId }, query: { [RUNNER_LOG_PARAMS.from]: offset } }),
+    );
     source = current;
     current.addEventListener(RUNNER_LOG_STREAM_EVENT, (message) => {
       let parsed: unknown;

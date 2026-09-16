@@ -8,8 +8,17 @@
  * the states it reaches without one. The rows themselves are covered by
  * WorkflowsPanel, which reads the same registry from a seeded store.
  */
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
+
 import type { WorkflowRunView } from '../../../../../types/webWorkflows';
 import { ArtifactsPane } from './ArtifactsPane';
+
+/*
+ * The cockpit host resolves which workspace owns a session, and a story has no
+ * host. Without this the generated client throws while building its first URL,
+ * which happens inside the effect this story's component runs on mount.
+ */
+bindSessionApiWorkspace(() => 'stories');
 
 const MINUTE_MS = 60_000;
 

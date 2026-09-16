@@ -8,12 +8,12 @@ import {
   type DoomApiHandler,
 } from '@agimon-ai/doompi-core/package-api';
 
+import routes from '../../types/apiRoutes';
 import {
   API_BASE_PATH,
   computerUseChannelType,
   COMPUTER_USE_CONFIRMATION_WINDOW_MS,
   COMPUTER_USE_MAX_DURATION_MS,
-  COMPUTER_USE_ROUTES,
   COMPUTER_USE_WAKE_LIMIT,
   type ComputerUseActivationRequest,
   type ComputerUseArtifactView,
@@ -247,39 +247,38 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
   public async fetch(request: Request): Promise<Response> {
     if (this.closed) return jsonError('Computer-use broker is closed.', 503);
     const path = new URL(request.url).pathname;
-    if (request.method === 'POST' && path === COMPUTER_USE_ROUTES.activate) return this.requestActivation(request);
+    if (request.method === 'POST' && path === routes.activate.path) return this.requestActivation(request);
     const agent = path.startsWith('/agent/');
     const hub = path.startsWith('/hub/');
     if ((agent && !this.authorized(request, this.internalToken)) || (hub && !this.authorized(request, this.hubToken)))
       return jsonError('Not found.', 404);
 
-    if (request.method === 'GET' && (path === COMPUTER_USE_ROUTES.agentState || path === COMPUTER_USE_ROUTES.hubState))
+    if (request.method === 'GET' && (path === routes.agentState.path || path === routes.hubState.path))
       return Response.json(this.state());
-    if (request.method === 'POST' && path === COMPUTER_USE_ROUTES.agentObserve)
+    if (request.method === 'POST' && path === routes.agentObserve.path)
       return this.enqueue('observe', undefined, request.signal);
-    if (request.method === 'POST' && path === COMPUTER_USE_ROUTES.agentAction) {
+    if (request.method === 'POST' && path === routes.agentAction.path) {
       const action = await body(request);
       if (!semanticAction(action)) return jsonError('A valid semantic action is required.', 400);
       return this.enqueue('act', action, request.signal);
     }
-    if (request.method === 'POST' && path === COMPUTER_USE_ROUTES.agentStop) {
+    if (request.method === 'POST' && path === routes.agentStop.path) {
       if (this.phase !== 'active') return jsonError('Computer use is not active.', 409);
       this.phase = 'stopping';
       this.rejectPending('The computer-use request was stopped.');
       this.changed();
       return Response.json(this.state(), { status: 202 });
     }
-    if (request.method === 'GET' && path === COMPUTER_USE_ROUTES.hubActivation) {
+    if (request.method === 'GET' && path === routes.hubActivation.path) {
       if (this.activation === undefined || this.phase !== 'awaiting_confirmation') return Response.json(null);
       this.phase = 'activating';
       this.changed();
       return Response.json(this.activation);
     }
-    if (request.method === 'GET' && path === COMPUTER_USE_ROUTES.hubAuthorization)
+    if (request.method === 'GET' && path === routes.hubAuthorization.path)
       return Response.json(this.grantId === undefined ? null : { grantId: this.grantId, expiresAt: this.expiresAt });
-    if (request.method === 'GET' && path === COMPUTER_USE_ROUTES.hubNext)
-      return Response.json(this.pending?.request ?? null);
-    if (request.method === 'POST' && path === COMPUTER_USE_ROUTES.hubComplete) {
+    if (request.method === 'GET' && path === routes.hubNext.path) return Response.json(this.pending?.request ?? null);
+    if (request.method === 'POST' && path === routes.hubComplete.path) {
       const input = await body(request);
       const id = typeof input.id === 'string' ? input.id : undefined;
       if (this.pending === undefined || this.pending.request.id !== id) return jsonError('The request is stale.', 409);
@@ -291,7 +290,7 @@ export class ComputerUseRequestBroker implements DoomApiHandler {
       else pending.resolve(input.result);
       return Response.json(this.state());
     }
-    if (request.method === 'POST' && path === COMPUTER_USE_ROUTES.hubStop) {
+    if (request.method === 'POST' && path === routes.hubStop.path) {
       const input = await body(request);
       if (this.phase === 'activating') {
         if (typeof input.error === 'string') {

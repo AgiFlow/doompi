@@ -5,6 +5,7 @@
  * rather than a hand-rolled stub, so a change to the slot contract breaks this
  * story at the type level instead of silently drifting.
  */
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 
 import type { RunnerRunView } from '../../../../../types/webRunners';
@@ -13,6 +14,13 @@ import { RunnerShellPanel } from './RunnerShellPanel';
 
 /** Its own session id, so a story that seeds this store cannot disturb another's. */
 const SESSION_ID = 'runner-shell';
+
+/*
+ * The cockpit host resolves which workspace owns a session, and a story has no
+ * host. The pane opens its stream from the client's own URL, so without this
+ * the panel throws while mounting rather than rendering an empty emulator.
+ */
+bindSessionApiWorkspace(() => 'stories');
 
 const run = (overrides: Partial<RunnerRunView> & Pick<RunnerRunView, 'id' | 'name'>): RunnerRunView => ({
   pid: 4242,

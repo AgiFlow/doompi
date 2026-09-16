@@ -1,6 +1,17 @@
 import { readFileSync } from 'node:fs';
 
-import type { AgentHarnessTool, Skill, ThinkingLevel } from '@earendil-works/pi-agent-core';
+import type {
+  AgentHarnessTool,
+  AgentMessage,
+  CompactionPreparation as HarnessCompactionPreparation,
+  Entry,
+  HarnessEvent,
+  HookMap,
+  JsonValue,
+  Skill,
+  ThinkingLevel,
+} from '@earendil-works/pi-agent-core';
+import { createCustomMessage } from '@earendil-works/pi-agent-core/harness/messages';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import {
   createEventBus,
@@ -10,6 +21,10 @@ import {
   initTheme,
   loadSkills,
   SessionManager,
+  sessionEntryToContextMessages,
+  type CompactionEntry,
+  type CompactionPreparation as PiCompactionPreparation,
+  type CompactionResult,
   type Extension,
   type ExtensionActions,
   type ExtensionContextActions,
@@ -17,11 +32,18 @@ import {
   type LoadExtensionsResult,
   type ModelRuntime,
   type RegisteredTool,
+  type SessionEntry,
   type ToolInfo,
 } from '@earendil-works/pi-coding-agent';
 
 import type { DoomHeadlessClient, DoomHeadlessClientRequest } from '../../exports/headless';
-import { fromPiSessionEntry, toPiFileEntries, type PiSessionHeaderInput } from '../../services/piSessionEntries';
+import { contextTokensOf, contextUsageOf, latestAssistantUsage } from '../../services/contextUsage';
+import {
+  fromPiSessionEntry,
+  toPiFileEntries,
+  toPiSessionEntry,
+  type PiSessionHeaderInput,
+} from '../../services/piSessionEntries';
 import { readSyncRegistration } from '../../services/syncRegistration';
 import type { ToolPromptEntry } from '../../services/toolPrompt';
 import type { DirectHarnessRuntime } from '../../types/server/directHarnessRuntime';
@@ -106,6 +128,12 @@ export async function preloadPiExtensions(options: {
  * retracted, so they are merged at the harness apply boundary rather than contributed to the
  * headless kernel, whose active layers come solely from server bundle candidates and would
  * drop any owner that is not a declared facet package.
+ *
+ * Their event handlers are a second surface. Pi drives them from an interactive
+ * AgentSession this server does not run, so the handful the harness can speak to
+ * faithfully are bridged here: the two agent-loop notifications an extension needs
+ * to observe a turn, and the three hooks that let one shape or replace context.
+ * Everything else stays undelivered rather than being approximated.
  */
 export interface PiExtensionHostOptions {
   readonly cwd: string;
@@ -148,13 +176,79 @@ export interface PiExtensionHost {
   readonly toolGuidance: readonly ToolPromptEntry[];
   /** Session lifetime skills contributed by Pi extensions, in discovery order. */
   readonly skills: readonly Skill[];
+  /**
+   * Pi's `context` event, as one step in the host's transform chain.
+   *
+   * Returns the messages unchanged when no extension is loaded, so the caller can
+   * chain it unconditionally.
+   */
+  transformContext(messages: AgentMessage[]): Promise<AgentMessage[]>;
+  /** Pi's `session_before_compact` event, translated into the harness hook's answer. */
+  beforeCompaction(
+    event: HookMap['before_compaction']['event'],
+  ): Promise<HookMap['before_compaction']['result']>;
   load(): Promise<void>;
   shutdown(): Promise<void>;
 }
 
-/** Members of Pi's extension action surface that the headless server does not back. */
-function unsupported(member: string): never {
-  throw new Error(`Pi extension action '${member}' is not available in the headless server`);
+/**
+ * The compaction boundary, named the way Pi names it.
+ *
+ * Pi identifies the cut by the first entry it keeps; the harness carries the kept
+ * messages inline instead. Counting whole entries back from the tip until the kept
+ * messages are covered recovers the id, and {@link retainedTailFrom} is its exact
+ * inverse, so an extension that echoes the id it was given gets its own tail back.
+ */
+function boundaryEntryId(branchEntries: readonly SessionEntry[], retainedCount: number): string | undefined {
+  let remaining = retainedCount;
+  for (let index = branchEntries.length - 1; index >= 0; index -= 1) {
+    const entry = branchEntries[index];
+    if (entry === undefined) continue;
+    if (remaining <= 0) return entry.id;
+    remaining -= sessionEntryToContextMessages(entry).length;
+    if (remaining <= 0) return entry.id;
+  }
+  return branchEntries[0]?.id;
+}
+
+/** The messages an entry id keeps, which is what the harness stores on the compaction entry. */
+function retainedTailFrom(branchEntries: readonly SessionEntry[], firstKeptEntryId: string): AgentMessage[] {
+  const index = branchEntries.findIndex((entry) => entry.id === firstKeptEntryId);
+  if (index === -1) return [];
+  return branchEntries.slice(index).flatMap((entry) => sessionEntryToContextMessages(entry));
+}
+
+function toPiCompactionPreparation(
+  preparation: HarnessCompactionPreparation,
+  branchEntries: readonly SessionEntry[],
+): PiCompactionPreparation {
+  return {
+    firstKeptEntryId: boundaryEntryId(branchEntries, preparation.retainedTail.length) ?? '',
+    messagesToSummarize: preparation.messagesToSummarize,
+    turnPrefixMessages: preparation.turnPrefixMessages,
+    isSplitTurn: preparation.isSplitTurn,
+    tokensBefore: preparation.tokensBefore,
+    ...(preparation.previousSummary === undefined ? {} : { previousSummary: preparation.previousSummary }),
+    fileOps: preparation.fileOps,
+    settings: preparation.settings,
+  };
+}
+
+function toHarnessCompactResult(
+  result: CompactionResult,
+  branchEntries: readonly SessionEntry[],
+): NonNullable<NonNullable<HookMap['before_compaction']['result']>['compaction']> {
+  return {
+    summary: result.summary,
+    tokensBefore: result.tokensBefore,
+    retainedTail: retainedTailFrom(branchEntries, result.firstKeptEntryId),
+    ...(result.usage === undefined ? {} : { usage: result.usage }),
+    ...(result.details === undefined ? {} : { details: result.details as JsonValue }),
+  };
+}
+
+function piBranchEntries(entries: readonly Entry[]): SessionEntry[] {
+  return entries.map((entry) => toPiSessionEntry(entry)).filter((entry): entry is SessionEntry => entry !== undefined);
 }
 
 function toHarnessTool(

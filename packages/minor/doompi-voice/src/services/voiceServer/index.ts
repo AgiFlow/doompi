@@ -24,6 +24,7 @@ import { defineMinorMode, serverMinorModes, type MinorModeOwner } from '@agimon-
 import { createDoomTelemetry } from '@agimon-ai/doompi-telemetry';
 import { Check } from 'typebox/value';
 
+import { VOICE_API_BASE_PATH } from '../../constants/voice';
 import { voiceControlMethod } from '../../schemas/voiceControl';
 import { ClientTtsAdapter } from '../../services/clientMedia';
 import { VoiceCommandCorrector } from '../../services/commandCorrection';
@@ -379,7 +380,7 @@ export function createVoiceServer(
     methods: [defineServerMethod(voiceControlMethod, ({ action, target }) => control(action, target))],
     api: [
       {
-        basePath: 'voice',
+        basePath: VOICE_API_BASE_PATH,
         start: () => ({
           async fetch(request) {
             const path = new URL(request.url).pathname;

@@ -14,6 +14,7 @@ import { type Context, Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 
 import { createWorkflowTerminalService } from '../../services/workflowTerminal';
+import routes, { ARTIFACT_DOWNLOAD_PARAM, ARTIFACT_RAW_PARAM } from '../../types/apiRoutes';
 import {
   WORKFLOW_API_BASE_PATH,
   WORKFLOW_SCREEN_EVENT,
@@ -143,7 +144,7 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     error: `No workflow run '${runKey}' in workspace '${workspace}'.`,
   });
 
-  app.get('/runs/:workspace/:runKey/screen/stream', async (context) => {
+  app.get(routes.screen.path, async (context) => {
     const workspace = context.req.param('workspace');
     const runKey = context.req.param('runKey');
     const record = await runOf(workspace, runKey);
@@ -175,7 +176,7 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     });
   });
 
-  app.post('/runs/:workspace/:runKey/control', async (context) => {
+  app.post(routes.control.path, async (context) => {
     const workspace = context.req.param('workspace');
     const runKey = context.req.param('runKey');
     const record = await runOf(workspace, runKey);
@@ -202,7 +203,7 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     return context.json(held);
   });
 
-  app.post('/runs/:workspace/:runKey/keys', async (context) => {
+  app.post(routes.keys.path, async (context) => {
     const workspace = context.req.param('workspace');
     const runKey = context.req.param('runKey');
     const record = await runOf(workspace, runKey);
@@ -219,7 +220,7 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     return context.body(null, 204);
   });
 
-  app.post('/runs/:workspace/:runKey/resize', async (context) => {
+  app.post(routes.resize.path, async (context) => {
     const workspace = context.req.param('workspace');
     const runKey = context.req.param('runKey');
     const record = await runOf(workspace, runKey);
@@ -237,7 +238,7 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     }
   });
 
-  app.delete('/runs/:workspace/:runKey', async (context) => {
+  app.delete(routes.remove.path, async (context) => {
     const workspace = context.req.param('workspace');
     const runKey = context.req.param('runKey');
     const record = await runOf(workspace, runKey);
@@ -254,7 +255,7 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     return context.json(response);
   });
 
-  app.get('/runs/:workspace/:runKey/artifacts', async (context) => {
+  app.get(routes.artifacts.path, async (context) => {
     const workspace = context.req.param('workspace');
     const runKey = context.req.param('runKey');
     const record = await runOf(workspace, runKey);
@@ -268,7 +269,7 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     return context.json(body);
   });
 
-  app.get('/runs/:workspace/:runKey/artifacts/:name{.+}', async (context) => {
+  app.get(routes.artifact.path, async (context) => {
     const workspace = context.req.param('workspace');
     const runKey = context.req.param('runKey');
     const record = await runOf(workspace, runKey);
@@ -277,12 +278,12 @@ export function createWorkflowHubApi(options: WorkflowHubApiOptions = {}): Hono 
     const requested = context.req.param('name');
     const resolved = resolveInside(runDir, requested);
     if (resolved === undefined) return context.json({ error: `'${requested}' is not inside this run.` }, 400);
-    if (context.req.query('raw') === '1') {
+    if (context.req.query(ARTIFACT_RAW_PARAM) === '1') {
       const response = streamArtifact(
         resolved,
         requested,
         context.req.header('range'),
-        context.req.query('download') === '1',
+        context.req.query(ARTIFACT_DOWNLOAD_PARAM) === '1',
       );
       return response ?? context.json({ error: `'${requested}' has not been written.` }, 404);
     }

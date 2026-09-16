@@ -8,9 +8,17 @@
  * headless renderer has no backend for. What a story can show is the frame:
  * the header naming the job and step, and the empty terminal body.
  */
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 
 import { StepTerminalPanel, type StepTabTarget } from './StepTerminalPanel';
+
+/*
+ * The cockpit host resolves which workspace owns a session, and a story has no
+ * host. Without this the generated client throws while building its first URL,
+ * which happens inside the effect this story's component runs on mount.
+ */
+bindSessionApiWorkspace(() => 'stories');
 
 const props = slotPropsFixture({ sessionId: 'step-terminal' }).props;
 

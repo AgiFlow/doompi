@@ -58,11 +58,19 @@ describe('runner log HTTP API', () => {
       slice,
     });
     expect(fetch).toHaveBeenCalledWith(
-      '/api/workspaces/test-workspace/sessions/session%2Fa/plugins/runner/runners/run%20one/log?session=session%2Fa&grep=done',
-      {
-        signal: controller.signal,
-      },
+      '/api/workspaces/test-workspace/sessions/session%2Fa/plugins/runner/runners/run%20one/log?grep=done',
+      { method: 'GET', signal: controller.signal },
     );
+  });
+
+  it('leaves an unasked-for parameter out rather than sending an empty one', async () => {
+    fetch.mockResolvedValue(Response.json({ text: '' }));
+
+    await fetchRunnerLog('s', 'r', { grep: '', ignoreCase: false });
+
+    expect(fetch).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions/s/plugins/runner/runners/r/log', {
+      method: 'GET',
+    });
   });
 
   it('uses a structured hub error when one is returned', async () => {
@@ -83,8 +91,12 @@ describe('runner log HTTP API', () => {
   });
 
   it('distinguishes replaced requests from an unreachable hub', async () => {
+    // The client reports every unanswered call the same way, so the caller's
+    // own signal is what says whether it was this caller that abandoned it.
+    const controller = new AbortController();
+    controller.abort();
     fetch.mockRejectedValueOnce(new DOMException('replaced', 'AbortError'));
-    await expect(fetchRunnerLog('s', 'r')).resolves.toEqual({ error: '' });
+    await expect(fetchRunnerLog('s', 'r', {}, controller.signal)).resolves.toEqual({ error: '' });
 
     fetch.mockRejectedValueOnce(new Error('offline'));
     await expect(fetchRunnerLog('s', 'r')).resolves.toEqual({ error: 'The cockpit hub is unreachable.' });
@@ -150,7 +162,7 @@ describe('runner screen API', () => {
 
     await expect(sendRunnerInput('session/a', 'run one', 'x')).resolves.toBe(true);
     expect(fetch).toHaveBeenCalledWith(
-      '/api/workspaces/test-workspace/sessions/session%2Fa/plugins/runner/runners/run%20one/screen/input?session=session%2Fa',
+      '/api/workspaces/test-workspace/sessions/session%2Fa/plugins/runner/runners/run%20one/screen/input',
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

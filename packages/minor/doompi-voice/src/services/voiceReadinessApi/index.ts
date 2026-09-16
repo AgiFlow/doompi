@@ -1,9 +1,10 @@
 import type { DoomApi } from '@agimon-ai/doompi-core/package-api';
 
+import { VOICE_API_BASE_PATH } from '../../constants/voice';
 import { voiceReadiness } from '../../services/voiceReadiness';
 
 export const voiceReadinessApi: DoomApi = {
-  basePath: 'voice',
+  basePath: VOICE_API_BASE_PATH,
   start(context) {
     if (!context.homeDirectory) throw new Error('Voice readiness requires the configured server home.');
     const homeDirectory = context.homeDirectory;

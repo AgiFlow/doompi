@@ -4,8 +4,8 @@ beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { api } from '../generated/client';
 import { fetchPlan, savePlan } from '../src/extensions/workspaces/sessions/(frontend)/fill/_lib/planApi';
-import { contentUrl, currentUrl } from '../src/types/planApi';
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fetch: vi.fn() } }));
 
@@ -34,12 +34,12 @@ afterEach(() => {
 });
 
 describe('reading the plan from the page', () => {
-  it('asks the session route, through the hub, with the session in the query', async () => {
+  it('asks the session route the generated client addresses', async () => {
     answering(200, { path: '/plans/one.md', title: 'one', content: '# one', hash: 'h', unavailable: false });
 
     await fetchPlan('s1');
 
-    expect(transport).toHaveBeenCalledWith(currentUrl('s1'));
+    expect(transport).toHaveBeenCalledWith(api.session('s1').current.url(), expect.objectContaining({ method: 'GET' }));
   });
 
   it('answers the plan the session sent', async () => {
@@ -79,7 +79,7 @@ describe('saving the plan from the page', () => {
     const result = await savePlan('s1', 'held', '# edited');
 
     expect(transport).toHaveBeenCalledWith(
-      contentUrl('s1'),
+      api.session('s1').save.url(),
       expect.objectContaining({ method: 'PUT', body: JSON.stringify({ expectedHash: 'held', content: '# edited' }) }),
     );
     expect(result).toEqual({ ok: true, hash: 'next' });

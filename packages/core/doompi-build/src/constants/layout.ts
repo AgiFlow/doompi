@@ -73,11 +73,14 @@ export const GENERATED_CLIENT_NAME = 'client';
  */
 export const API_ROUTES_MODULE = 'src/types/apiRoutes.ts';
 
-/** Every generated basename. Never scanned, never hand-edited. Order carries no meaning. */
-export const GENERATED_ENTRY_NAMES: readonly string[] = [
-  ...Object.values(GENERATED_ENTRY_FILENAMES),
-  GENERATED_CLIENT_NAME,
-];
+/**
+ * Every generated basename. Never scanned, never hand-edited.
+ *
+ * Spelled out rather than derived from the two declarations above, because a
+ * constants module holds data a reader can see without running it. The cost is
+ * that the names appear twice; the generate tests assert the two agree.
+ */
+export const GENERATED_ENTRY_NAMES: readonly string[] = ['pi', 'server', 'web', 'client'];
 
 /**
  * Platform suffixes, scoped to their side. A target may not reuse one of these words.

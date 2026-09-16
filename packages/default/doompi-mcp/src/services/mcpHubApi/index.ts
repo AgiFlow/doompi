@@ -1,7 +1,17 @@
 import type { DoomApi, DoomApiContext } from '@agimon-ai/doompi-core/package-api';
 
 import { McpSettingsManager } from '../../services/mcpSettingsManager';
-import { MCP_AUTHORIZATION_API_PATH, MCP_DISCOVERY_API_PATH, MCP_REPOSITORY_API_PATH } from '../../types/webMcp';
+import routes from '../../types/apiRoutes';
+import { MCP_FLOW_ID_PARAM, MCP_REPOSITORY_ID_QUERY } from '../../types/webMcp';
+
+/**
+ * What sits above a flow id, read off the flow route itself.
+ *
+ * This handler matches paths by hand rather than through a router, so the one
+ * route carrying a parameter is split here: everything before `:flowId` is the
+ * prefix a request must start with, and what follows it is the id.
+ */
+const AUTHORIZATION_FLOW_PREFIX = routes.readAuthorization.path.replace(`:${MCP_FLOW_ID_PARAM}`, '');
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
 const REPOSITORY_ID = /^(?:[a-f0-9]{32}|repo-[A-Za-z0-9_-]{24})$/u;
@@ -57,7 +67,7 @@ function errorStatus(error: unknown): { status: number; message: string } {
 }
 
 async function handleCatalog(request: Request, context: DoomApiContext): Promise<Response> {
-  const repositoryId = repositoryIdOf(new URL(request.url).searchParams.get('repositoryId'));
+  const repositoryId = repositoryIdOf(new URL(request.url).searchParams.get(MCP_REPOSITORY_ID_QUERY));
   if (!repositoryId) return json({ error: 'A valid repositoryId is required.' }, 400);
   const repositoryRoot = resolveRepository(context, repositoryId);
   if (!repositoryRoot) return json({ error: 'That repository is not available to this hub.' }, 404);
@@ -107,14 +117,14 @@ async function handleAuthorize(request: Request, context: DoomApiContext): Promi
 }
 
 async function handleAuthorizationFlow(request: Request, context: DoomApiContext, path: string): Promise<Response> {
-  const flowId = path.slice(`${MCP_AUTHORIZATION_API_PATH}/`.length);
-  const repositoryId = repositoryIdOf(new URL(request.url).searchParams.get('repositoryId'));
+  const flowId = path.slice(AUTHORIZATION_FLOW_PREFIX.length);
+  const repositoryId = repositoryIdOf(new URL(request.url).searchParams.get(MCP_REPOSITORY_ID_QUERY));
   if (!repositoryId || !FLOW_ID.test(flowId))
     return json({ error: 'A valid repositoryId and flow id are required.' }, 400);
   if (!resolveRepository(context, repositoryId)) {
     return json({ error: 'That repository is not available to this hub.' }, 404);
   }
-  if (request.method === 'DELETE') {
+  if (request.method === routes.cancelAuthorization.method) {
     const flow = await manager.cancelAuthorization(flowId, repositoryId);
     return flow ? json(flow) : json({ error: 'That authorization flow was not found.' }, 404);
   }
@@ -128,18 +138,19 @@ export const mcpHubApi: DoomApi = {
     return {
       async fetch(request) {
         const path = new URL(request.url).pathname;
-        if (request.method === 'GET' && path === MCP_REPOSITORY_API_PATH) {
+        if (request.method === routes.catalog.method && path === routes.catalog.path) {
           return await handleCatalog(request, context);
         }
-        if (request.method === 'POST' && path === MCP_DISCOVERY_API_PATH) {
+        if (request.method === routes.discover.method && path === routes.discover.path) {
           return await handleDiscovery(request, context);
         }
-        if (request.method === 'POST' && path === MCP_AUTHORIZATION_API_PATH) {
+        if (request.method === routes.authorize.method && path === routes.authorize.path) {
           return await handleAuthorize(request, context);
         }
         if (
-          (request.method === 'GET' || request.method === 'DELETE') &&
-          path.startsWith(`${MCP_AUTHORIZATION_API_PATH}/`)
+          (request.method === routes.readAuthorization.method ||
+            request.method === routes.cancelAuthorization.method) &&
+          path.startsWith(AUTHORIZATION_FLOW_PREFIX)
         ) {
           return await handleAuthorizationFlow(request, context, path);
         }

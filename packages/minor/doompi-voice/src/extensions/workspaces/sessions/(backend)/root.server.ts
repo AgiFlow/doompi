@@ -7,6 +7,7 @@ import { VoiceMediaBroker } from '../../../../services/clientMediaApi';
 import { createRealtimeRuntime } from '../../../../services/realtimeRuntime';
 import { createVoiceServer } from '../../../../services/voiceServer';
 import { createVoiceSessionApi } from '../../../../services/voiceSessionApi';
+import { VOICE_MEDIA_API_BASE_PATH } from '../../../../types/clientMedia';
 
 export default defineRoot(({ agent, host }: DoomServerPluginContext) => {
   const { directEvents, homeDirectory, sessionId, internalToken, hubToken } = host.context;
@@ -25,7 +26,7 @@ export default defineRoot(({ agent, host }: DoomServerPluginContext) => {
     api: [
       ...(voice.api ?? []),
       {
-        basePath: 'voice-media',
+        basePath: VOICE_MEDIA_API_BASE_PATH,
         start: () =>
           createVoiceSessionApi({ directEvents, media: broker, projectRoot: agent.context.repoRoot, homeDirectory }),
       },

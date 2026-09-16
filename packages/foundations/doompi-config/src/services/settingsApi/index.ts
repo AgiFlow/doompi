@@ -1,6 +1,7 @@
 import type { DoomApi } from '@agimon-ai/doompi-core/package-api';
 
-import { KEY_SEPARATOR } from '../../constants/settings';
+import { KEY_QUERY_PARAM, KEY_SEPARATOR } from '../../constants/settings';
+import routes from '../../types/apiRoutes';
 import type { SettingsRepository } from '../../types/settings';
 import { repositoryDoomConfigPath } from '../config';
 import { configScopeOf } from '../configPolicy';
@@ -18,6 +19,9 @@ import {
   selectionEdits,
   validateSelectionChanges,
 } from '../settings';
+
+/** One declared route, as much of it as a comparison needs. */
+type RouteSpec = { readonly method: string; readonly path: string };
 
 /** Config handlers are bound to their mount. Request paths cannot choose a different repository. */
 export const settingsApi: DoomApi = {
@@ -44,19 +48,26 @@ export const settingsApi: DoomApi = {
     const dispatch = async (request: Request): Promise<Response> => {
       if (closed) return Response.json({ error: 'Configuration mount is closed.' }, { status: 503 });
       const url = new URL(request.url);
+      /**
+       * Whether this request addresses one declared route.
+       *
+       * The table owns both halves of the comparison, so the path this mount
+       * answers and the path the client asks for cannot drift apart: there is
+       * one spelling of each, in `src/types/apiRoutes`.
+       */
+      const addresses = (route: RouteSpec): boolean => url.pathname === route.path && request.method === route.method;
       const currentRepository = repository();
-      if (url.pathname === '/' && request.method === 'GET')
-        return Response.json(configView(context, url.searchParams.getAll('key')));
-      if (url.pathname === '/repositories' && request.method === 'GET')
-        return Response.json({ repositories: context.repositories?.() ?? [] });
-      if (url.pathname === '/repository' && request.method === 'GET') {
+      if (addresses(routes.config)) return Response.json(configView(context, url.searchParams.getAll(KEY_QUERY_PARAM)));
+      if (addresses(routes.repositories)) return Response.json({ repositories: context.repositories?.() ?? [] });
+      if (addresses(routes.repository)) {
         return currentRepository
           ? Response.json(repositorySettingsView(currentRepository, homeDirectory))
           : Response.json({ error: 'Choose a workspace.' }, { status: 404 });
       }
-      if (url.pathname === '/images' && context.scope === 'global') {
-        if (request.method === 'GET') return Response.json(imageView());
-        if (request.method === 'PUT') {
+      // One path, two methods, so the branch is on the path the pair share.
+      if (url.pathname === routes.images.path && context.scope === 'global') {
+        if (request.method === routes.images.method) return Response.json(imageView());
+        if (request.method === routes.saveImages.method) {
           const body: unknown = await request.json();
           if (
             !isRecord(body) ||
@@ -76,7 +87,7 @@ export const settingsApi: DoomApi = {
           return Response.json(imageView());
         }
       }
-      if (url.pathname === '/repository/selection' && request.method === 'PUT') {
+      if (addresses(routes.selection)) {
         const body = parseSelectionWrite(await request.json());
         if (!body)
           return Response.json({ error: 'A selection write needs typed changes and a file hash.' }, { status: 400 });
@@ -96,7 +107,7 @@ export const settingsApi: DoomApi = {
         context.configurationChanged?.();
         return Response.json(repositorySettingsView(currentRepository, homeDirectory));
       }
-      if (url.pathname === '/value' && request.method === 'PUT') {
+      if (addresses(routes.value)) {
         const body = parseWrite(await request.json());
         if (!body)
           return Response.json({ error: 'A save requires a scope, key, value and file hash.' }, { status: 400 });

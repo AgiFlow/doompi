@@ -16,7 +16,7 @@ interface ManualComposerRecorderDependencies {
 const DEFAULT_DEPENDENCIES: ManualComposerRecorderDependencies = {
   start: startManualBrowserRecording,
   transcribe: async (audio, sessionId, durationMs, signal) =>
-    await transcribeManualRecording(audio, sessionId, durationMs, undefined, signal),
+    await transcribeManualRecording(audio, sessionId, durationMs, signal),
 };
 
 /** Coordinates one button-only manual recording without touching autonomous voice services. */

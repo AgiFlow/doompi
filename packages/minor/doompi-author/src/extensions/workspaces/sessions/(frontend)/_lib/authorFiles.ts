@@ -1,12 +1,12 @@
-import { sessionApiPath } from '@agimon-ai/doompi-core/web';
+import type { ApiMethod } from '@agimon-ai/doompi-core/web';
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 
+import { api } from '../../../../../../generated/client';
+import { SESSION_QUERY_PARAM } from '../../../../../types/authorApi';
 import type {
   CsvDialect,
   DocumentFragment,
   DocumentOperation,
-  DocumentPreflightReport,
-  ParsedStructuredDocument,
   StructuredDocumentFormat,
 } from '../../../../../types/structuredDocuments';
 import type { AuthorDocumentInput, AuthorDocumentKind } from './authorViewportTypes';
@@ -36,25 +36,32 @@ export function authorKindForPath(path: string): AuthorDocumentKind {
   return 'opaque';
 }
 
+/**
+ * Where a document's bytes are read from and written back to.
+ *
+ * This is the host's route, not this package's, which is why the route table
+ * marks it `host: true` and it lands beside the session rather than under
+ * `/plugins`. It stays a raw transfer rather than a call: the body is the file
+ * itself, and the digest travels in a header on both legs.
+ */
 export function authorSessionFileUrl(sessionId: string, path: string): string {
-  return `${sessionApiPath(sessionId)}/file?path=${encodeURIComponent(path)}`;
+  return api.session(sessionId).file.url({ query: { path } });
 }
 
-function authorDocumentApiUrl(sessionId: string, operation: 'open' | 'preflight' | 'serialize'): string {
-  return `${sessionApiPath(sessionId)}/plugins/author/documents/${operation}?session=${encodeURIComponent(sessionId)}`;
-}
-
-async function jsonRequest<T>(url: string, body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
-  const response = await sealedTransport.fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal,
+/** One document route, with the refusal the reader is shown: the route's own words, or its status. */
+async function documentRequest<T>(
+  method: ApiMethod<T>,
+  sessionId: string,
+  body: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const result = await method({
+    body,
+    query: { [SESSION_QUERY_PARAM]: sessionId },
+    ...(signal === undefined ? {} : { signal }),
   });
-  const value = (await response.json()) as T & { error?: unknown };
-  if (!response.ok)
-    throw new Error(typeof value.error === 'string' ? value.error : `Author document API failed (${response.status})`);
-  return value;
+  if (!result.ok) throw new Error(result.error === '' ? `Author document API failed (${result.status})` : result.error);
+  return result.data;
 }
 
 export async function loadAuthorDocument(
@@ -69,11 +76,7 @@ export async function loadAuthorDocument(
   const sourceSha256 = response.headers.get('X-File-SHA256') ?? undefined;
   const format = structuredFormat(path);
   if (format !== undefined) {
-    const parsed = await jsonRequest<ParsedStructuredDocument>(
-      authorDocumentApiUrl(sessionId, 'open'),
-      { path, format },
-      signal,
-    );
+    const parsed = await documentRequest(api.session(sessionId).documentsOpen, sessionId, { path, format }, signal);
     const parsedDigest = parsed.manifest?.sourceDigest;
     if (sourceSha256 !== undefined && parsedDigest !== undefined && sourceSha256 !== parsedDigest) {
       throw new Error('Document source changed while opening. Reopen the document.');
@@ -163,18 +166,15 @@ async function bytesToSave(sessionId: string, document: AuthorDocumentInput, sig
     operations,
     ...(document.csvDialect === undefined ? {} : { csvDialect: document.csvDialect }),
   };
-  const preflight = await jsonRequest<DocumentPreflightReport>(
-    authorDocumentApiUrl(sessionId, 'preflight'),
-    request,
-    signal,
-  );
+  const preflight = await documentRequest(api.session(sessionId).documentsPreflight, sessionId, request, signal);
   if (preflight.sourceDigest !== undefined && preflight.sourceDigest !== document.sourceSha256) {
     throw new Error('Document source changed before saving. Reopen the document.');
   }
   if (!preflight.accepted)
     throw new Error(preflight.issues.map((issue) => issue.message).join('\n') || 'Author preflight rejected the edit.');
-  const serialized = await jsonRequest<{ bytes: string; encoding: string }>(
-    authorDocumentApiUrl(sessionId, 'serialize'),
+  const serialized = await documentRequest(
+    api.session(sessionId).documentsSerialize,
+    sessionId,
     { ...request, preflightDigest: preflight.digest },
     signal,
   );

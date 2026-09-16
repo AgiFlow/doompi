@@ -5,6 +5,7 @@
  * rather than a hand-rolled stub, so a change to the slot contract breaks this
  * story at the type level instead of silently drifting.
  */
+import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 
 import type { RunnerRunView } from '../../../../../types/webRunners';
@@ -13,6 +14,13 @@ import { RunnerLogPanel } from './RunnerLogPanel';
 
 /** Its own session id, so a story that seeds this store cannot disturb another's. */
 const SESSION_ID = 'runner-log';
+
+/*
+ * The cockpit host resolves which workspace owns a session, and a story has no
+ * host. Without this the generated client throws while building its first URL,
+ * which is early enough that the stubbed route below would never be reached.
+ */
+bindSessionApiWorkspace(() => 'stories');
 const MINUTE_MS = 60_000;
 
 const LOG_LINES = [
@@ -61,7 +69,9 @@ runners.update(SESSION_ID, () => ({
  * follow stream is left unanswered: it fails, the panel stops following, and
  * the shot is the settled state rather than a race.
  */
-const LOG_URL = /\/plugins\/runner\/runners\/([^/?]+)\/log\?/u;
+// An unfiltered read now carries no query at all, so the match ends at the
+// route rather than at the '?' the deleted URL builder always appended.
+const LOG_URL = /\/plugins\/runner\/runners\/([^/?]+)\/log(?:\?|$)/u;
 const realFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const url = input instanceof Request ? input.url : String(input);

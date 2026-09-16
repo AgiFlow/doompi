@@ -4,20 +4,18 @@ import {
   parseStructuredDocument,
   preflightStructuredDocument,
   serializeStructuredDocument,
-} from '../../../../../../services/structuredDocuments';
-import { readDocument } from '../../../../../../services/structuredDocuments/document';
-import type { AuthorOpenFileResult } from '../../../../../../types/author';
+} from '../../../../../../../services/structuredDocuments';
+import { readDocument } from '../../../../../../../services/structuredDocuments/document';
+import routes from '../../../../../../../types/apiRoutes';
+import type { AuthorOpenFileResult } from '../../../../../../../types/author';
 import type {
   CsvDialect,
   DocumentOperation,
   StructuredDocumentFormat,
-} from '../../../../../../types/structuredDocuments';
+} from '../../../../../../../types/structuredDocuments';
 
-export { AUTHOR_DOCUMENT_MAX_BYTES } from '../../../../../../services/structuredDocuments/document';
+export { AUTHOR_DOCUMENT_MAX_BYTES } from '../../../../../../../services/structuredDocuments/document';
 
-export const AUTHOR_DOCUMENT_OPEN_PATH = '/documents/open';
-export const AUTHOR_DOCUMENT_PREFLIGHT_PATH = '/documents/preflight';
-export const AUTHOR_DOCUMENT_SERIALIZE_PATH = '/documents/serialize';
 interface DocumentRequest {
   path?: unknown;
   format?: unknown;
@@ -73,7 +71,7 @@ export function createAuthorDocumentApi(options: AuthorDocumentApiOptions = {}):
   const app = new Hono();
   const cwd = options.cwd ?? process.cwd();
 
-  app.post(AUTHOR_DOCUMENT_OPEN_PATH, async (context) => {
+  app.post(routes.documentsOpen.path, async (context) => {
     try {
       const body = await bodyOf(context.req.raw);
       const bytes = await readDocument(cwd, body.path);
@@ -88,7 +86,7 @@ export function createAuthorDocumentApi(options: AuthorDocumentApiOptions = {}):
     }
   });
 
-  app.post(AUTHOR_DOCUMENT_PREFLIGHT_PATH, async (context) => {
+  app.post(routes.documentsPreflight.path, async (context) => {
     try {
       const body = await bodyOf(context.req.raw);
       const bytes = await readDocument(cwd, body.path);
@@ -105,7 +103,7 @@ export function createAuthorDocumentApi(options: AuthorDocumentApiOptions = {}):
     }
   });
 
-  app.post(AUTHOR_DOCUMENT_SERIALIZE_PATH, async (context) => {
+  app.post(routes.documentsSerialize.path, async (context) => {
     try {
       const body = await bodyOf(context.req.raw);
       if (typeof body.preflightDigest !== 'string') throw new Error('A preflight report digest is required.');

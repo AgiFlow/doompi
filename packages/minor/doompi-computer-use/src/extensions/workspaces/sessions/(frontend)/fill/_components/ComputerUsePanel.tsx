@@ -2,11 +2,8 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useState } from 'react';
 
-import {
-  activationUrl,
-  COMPUTER_USE_DEFAULT_DURATION_MS,
-  computerUseChannelType,
-} from '../../../../../../types/computerUseApi';
+import { api } from '../../../../../../../generated/client';
+import { COMPUTER_USE_DEFAULT_DURATION_MS, computerUseChannelType } from '../../../../../../types/computerUseApi';
 import { computerUse } from '../../_lib/computerUseStore';
 
 function text(value: unknown, fallback: string): string {
@@ -35,14 +32,18 @@ export function ComputerUsePanel({ sessionId, sendSessionFrame }: WebPluginSlotP
   const confirm = async () => {
     if (confirmationTarget === undefined) return;
     setError(undefined);
-    const response = await fetch(activationUrl(sessionId), {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ target: confirmationTarget, durationMs: COMPUTER_USE_DEFAULT_DURATION_MS }),
+    // Through the generated client, which carries the sealed transport: this
+    // request names an application window a reader just agreed to hand over,
+    // and the global fetch it used to call handed that to a remote session's
+    // relay in the clear.
+    const result = await api.session(sessionId).activate({
+      body: { target: confirmationTarget, durationMs: COMPUTER_USE_DEFAULT_DURATION_MS },
     });
-    if (!response.ok) {
-      const value = (await response.json()) as { error?: unknown };
-      setError(typeof value.error === 'string' ? value.error : `Activation failed with HTTP ${response.status}.`);
+    if (!result.ok) {
+      // `status: 0` is the one case nothing answered at all, which the old
+      // bare fetch reported by rejecting into nobody's handler.
+      if (result.status === 0) setError('The session is unreachable.');
+      else setError(result.error === '' ? `Activation failed with HTTP ${result.status}.` : result.error);
       return;
     }
     setConfirmationTarget(undefined);

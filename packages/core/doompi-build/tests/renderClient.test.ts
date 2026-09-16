@@ -14,6 +14,8 @@ afterEach(() => {
 
 const ROUTE_LEAF = 'export default defineRoute(api);\n';
 const ROUTE_TABLE = 'export default {};\n';
+/** A browser half, which is what makes a client worth emitting at all. */
+const FRONTEND = 'export default {};\n';
 
 function packageWith(files: Readonly<Record<string, string>>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-client-'));
@@ -36,6 +38,7 @@ describe('the generated client', () => {
   it('injects the base path and the scope the folder tree declares', () => {
     const dir = packageWith({
       'src/types/apiRoutes.ts': ROUTE_TABLE,
+      'src/extensions/(frontend)/tab/Panel.web.tsx': FRONTEND,
       'src/extensions/workspaces/sessions/(backend)/api/file-edits/route.server.ts': ROUTE_LEAF,
     });
     generateExtension({ packageDir: dir });
@@ -49,6 +52,7 @@ describe('the generated client', () => {
   it('cascades a global mount down, because a facet serves every scope below it', () => {
     const dir = packageWith({
       'src/types/apiRoutes.ts': ROUTE_TABLE,
+      'src/extensions/(frontend)/tab/Panel.web.tsx': FRONTEND,
       'src/extensions/(backend)/api/log/route.server.ts': ROUTE_LEAF,
     });
     generateExtension({ packageDir: dir });
@@ -58,6 +62,7 @@ describe('the generated client', () => {
   it('gives a package with several mounts one client each, named from the folder', () => {
     const dir = packageWith({
       'src/types/apiRoutes.ts': ROUTE_TABLE,
+      'src/extensions/(frontend)/tab/Panel.web.tsx': FRONTEND,
       'src/extensions/(backend)/api/voice-client-settings/route.server.ts': ROUTE_LEAF,
       'src/extensions/workspaces/sessions/(backend)/api/voice-media/route.server.ts': ROUTE_LEAF,
     });
@@ -87,6 +92,7 @@ describe('the generated client', () => {
   it('emits nothing for the flat api/ folder that predates the convention', () => {
     const dir = packageWith({
       'src/types/apiRoutes.ts': ROUTE_TABLE,
+      'src/extensions/(frontend)/tab/Panel.web.tsx': FRONTEND,
       'src/extensions/workspaces/sessions/(backend)/api/route.server.ts': ROUTE_LEAF,
     });
     generateExtension({ packageDir: dir });
@@ -96,6 +102,7 @@ describe('the generated client', () => {
   it('reports a route table that no api folder mounts', () => {
     const dir = packageWith({
       'src/types/apiRoutes.ts': ROUTE_TABLE,
+      'src/extensions/(frontend)/tab/Panel.web.tsx': FRONTEND,
       'src/extensions/(backend)/tool/grep.server.ts': 'export default {};\n',
     });
     const result = generateExtension({ packageDir: dir });
@@ -107,6 +114,7 @@ describe('the generated client', () => {
   it('deletes a stale client when the route table goes away', () => {
     const dir = packageWith({
       'src/types/apiRoutes.ts': ROUTE_TABLE,
+      'src/extensions/(frontend)/tab/Panel.web.tsx': FRONTEND,
       'src/extensions/workspaces/sessions/(backend)/api/file-edits/route.server.ts': ROUTE_LEAF,
     });
     generateExtension({ packageDir: dir });
@@ -120,6 +128,7 @@ describe('the generated client', () => {
   it('never writes a doompi-core import as anything but text, so the build stays dependency-free', () => {
     const dir = packageWith({
       'src/types/apiRoutes.ts': ROUTE_TABLE,
+      'src/extensions/(frontend)/tab/Panel.web.tsx': FRONTEND,
       'src/extensions/workspaces/sessions/(backend)/api/file-edits/route.server.ts': ROUTE_LEAF,
     });
     generateExtension({ packageDir: dir });
@@ -127,5 +136,34 @@ describe('the generated client', () => {
     expect(client).toContain("from '@agimon-ai/doompi-core/web'");
     expect(client).toContain("from '@agimon-ai/doompi-web-security/browser'");
     expect(JSON.parse(fs.readFileSync('package.json', 'utf8')).dependencies).toBeUndefined();
+  });
+});
+
+describe('packages with no browser half', () => {
+  const FRONTEND = 'export default {};\n';
+
+  /**
+   * The client carries the sealed transport and exists to be called from a
+   * page. A node-only package that emitted one would have to depend on a
+   * browser runtime it never loads, to satisfy a file nothing imports.
+   */
+  it('emits no client for a backend-only package, even with a route table', () => {
+    const dir = packageWith({
+      'src/types/apiRoutes.ts': ROUTE_TABLE,
+      'src/extensions/(backend)/api/settings/route.server.ts': ROUTE_LEAF,
+    });
+    generateExtension({ packageDir: dir });
+    expect(clientOf(dir)).toBeUndefined();
+  });
+
+  it('emits one as soon as the package grows a browser half', () => {
+    const dir = packageWith({
+      'src/types/apiRoutes.ts': ROUTE_TABLE,
+      'src/extensions/(frontend)/tab/Panel.web.tsx': FRONTEND,
+      'src/extensions/(backend)/api/settings/route.server.ts': ROUTE_LEAF,
+      'src/extensions/(frontend)/tab/Panel.web.tsx': FRONTEND,
+    });
+    generateExtension({ packageDir: dir });
+    expect(clientOf(dir)).toContain("basePath: 'settings',");
   });
 });

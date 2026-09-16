@@ -6,8 +6,23 @@ import type {
   DoomHubChannel,
 } from '@agimon-ai/doompi-core/hub-channel';
 
-import { API_BASE_PATH, AUTHOR_BRIDGE_ROUTES } from '../../types/authorApi';
+import routes from '../../types/apiRoutes';
+import { API_BASE_PATH } from '../../types/authorApi';
 import { authorChannelType, type AuthorBrowserMessage, type AuthorHubMessage } from '../../types/webAuthor';
+
+/**
+ * Which route carries each message the browser sends.
+ *
+ * The paths come from the package's one route table, so the hub cannot address
+ * a bridge route the session no longer serves. `release` is absent because it
+ * is answered by the disconnect route rather than one of its own.
+ */
+const BRIDGE_ROUTE: Readonly<Record<Exclude<AuthorBrowserMessage['kind'], 'release'>, string>> = {
+  register: routes.bridgeRegister.path,
+  catalog: routes.bridgeCatalog.path,
+  result: routes.bridgeResult.path,
+  cancelled: routes.bridgeCancelled.path,
+};
 
 interface Binding {
   scope: DoomHubSessionScope;
@@ -59,7 +74,7 @@ export function createAuthorChannel(): DoomHubChannel {
       try {
         const response = await send(
           binding.scope,
-          AUTHOR_BRIDGE_ROUTES.next,
+          routes.bridgeNext.path,
           {
             bindingId: binding.connectionId,
             generation: binding.generation,
@@ -89,7 +104,7 @@ export function createAuthorChannel(): DoomHubChannel {
             if (binding.scope.sessionId !== sessionId) continue;
             binding.poll?.abort();
             bindings.delete(key);
-            void send(binding.scope, AUTHOR_BRIDGE_ROUTES.disconnect, {
+            void send(binding.scope, routes.bridgeDisconnect.path, {
               bindingId: binding.connectionId,
               generation: binding.generation,
             }).catch((error: unknown) => host?.onNotice(error instanceof Error ? error.message : String(error)));
@@ -99,7 +114,7 @@ export function createAuthorChannel(): DoomHubChannel {
           closed = true;
           for (const binding of bindings.values()) {
             binding.poll?.abort();
-            void send(binding.scope, AUTHOR_BRIDGE_ROUTES.disconnect, {
+            void send(binding.scope, routes.bridgeDisconnect.path, {
               bindingId: binding.connectionId,
               generation: binding.generation,
             }).catch((error: unknown) => host?.onNotice(error instanceof Error ? error.message : String(error)));
@@ -119,13 +134,13 @@ export function createAuthorChannel(): DoomHubChannel {
           if (previous === undefined || previous.generation !== message.generation) return;
           previous.poll?.abort();
           bindings.delete(key);
-          await send(scope, AUTHOR_BRIDGE_ROUTES.disconnect, {
+          await send(scope, routes.bridgeDisconnect.path, {
             bindingId: connection.connectionId,
             generation: message.generation,
           });
           return;
         }
-        const route = AUTHOR_BRIDGE_ROUTES[message.kind];
+        const route = BRIDGE_ROUTE[message.kind];
         const response = await send(scope, route, { ...message, bindingId: connection.connectionId });
         const reply = await responsePayload(response);
         if (reply.kind === 'accepted') {
@@ -147,7 +162,7 @@ export function createAuthorChannel(): DoomHubChannel {
         if (binding.connectionId !== connection.connectionId) continue;
         binding.poll?.abort();
         bindings.delete(key);
-        void send(binding.scope, AUTHOR_BRIDGE_ROUTES.disconnect, {
+        void send(binding.scope, routes.bridgeDisconnect.path, {
           bindingId: binding.connectionId,
           generation: binding.generation,
         }).catch((error: unknown) => host?.onNotice(error instanceof Error ? error.message : String(error)));

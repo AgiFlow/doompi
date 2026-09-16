@@ -84,12 +84,19 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
   // Not a fourth build target: no host loads it as an entry, and adding one to
   // the target loop would mean a resolution pass and a contribution field for
   // something that is only ever imported by a routed frontend file.
+  //
+  // Only for a package that has a browser half. The client exists to be called
+  // from a page and it carries the sealed transport, so emitting one into a
+  // node-only package asks that package to depend on a browser runtime it never
+  // loads, to satisfy a file nothing imports.
   const hasRouteTable = fs.existsSync(path.join(options.packageDir, API_ROUTES_MODULE));
-  const client = hasRouteTable
-    ? renderApiClient(graph, { packageName, pluginId, root: graph.root, entryDir: GENERATED_DIR })
-    : undefined;
+  const hasBrowserHalf = targets.includes('web');
+  const client =
+    hasRouteTable && hasBrowserHalf
+      ? renderApiClient(graph, { packageName, pluginId, root: graph.root, entryDir: GENERATED_DIR })
+      : undefined;
   if (client !== undefined) files.set(`${GENERATED_DIR}/${GENERATED_CLIENT_NAME}.ts`, client);
-  if (hasRouteTable && client === undefined) {
+  if (hasRouteTable && hasBrowserHalf && client === undefined) {
     notices.push({
       path: API_ROUTES_MODULE,
       message: 'declares API routes, but no (backend)/api/<base-path>/ folder says where they are mounted',

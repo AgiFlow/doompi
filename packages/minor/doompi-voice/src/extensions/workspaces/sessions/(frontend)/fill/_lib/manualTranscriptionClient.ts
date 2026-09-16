@@ -1,15 +1,10 @@
-import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
-
-import { voiceMediaClientUrl } from '../../../../../../types/clientMedia';
+import { voiceMedia } from '../../../../../../../generated/client';
 import {
   MANUAL_TRANSCRIPTION_DURATION_HEADER,
   MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,
   MANUAL_TRANSCRIPTION_MAX_DURATION_MS,
-  MANUAL_TRANSCRIPTION_ROUTE,
   type ManualTranscriptionResult,
 } from '../../../../../../types/manualTranscription';
-
-type RequestAudio = (input: string, init?: RequestInit) => Promise<Response>;
 
 function transcriptOf(value: unknown): string | undefined {
   if (typeof value !== 'object' || value === null || !('transcript' in value)) return undefined;
@@ -22,7 +17,6 @@ export async function transcribeManualRecording(
   audio: Blob,
   sessionId: string,
   durationMs: number,
-  request: RequestAudio = sealedTransport.fetch.bind(sealedTransport),
   signal?: AbortSignal,
 ): Promise<string> {
   if (audio.size === 0) throw new Error('The recording is empty.');
@@ -32,8 +26,9 @@ export async function transcribeManualRecording(
   if (!Number.isSafeInteger(durationMs) || durationMs < 0 || durationMs > MANUAL_TRANSCRIPTION_MAX_DURATION_MS) {
     throw new Error('The recording duration is invalid.');
   }
-  const response = await request(voiceMediaClientUrl(sessionId, MANUAL_TRANSCRIPTION_ROUTE), {
-    method: 'POST',
+  // The Blob goes through the declared call untouched: the client encodes only
+  // what is not already a body the sealed relay can carry, and a recording is.
+  const result = await voiceMedia.session(sessionId).manualTranscribe({
     headers: {
       'content-type': audio.type,
       [MANUAL_TRANSCRIPTION_DURATION_HEADER]: String(durationMs),
@@ -41,19 +36,11 @@ export async function transcribeManualRecording(
     body: audio,
     ...(signal === undefined ? {} : { signal }),
   });
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch {
-    body = undefined;
-  }
-  const transcript = transcriptOf(body);
-  if (!response.ok) {
-    const message =
-      typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string'
-        ? body.error
-        : `Voice transcription failed with status ${String(response.status)}.`;
-    throw new Error(message);
+  const transcript = transcriptOf(result.data);
+  if (!result.ok) {
+    throw new Error(
+      result.error === '' ? `Voice transcription failed with status ${String(result.status)}.` : result.error,
+    );
   }
   if (transcript === undefined) throw new Error('Voice transcription returned an invalid response.');
   return transcript;

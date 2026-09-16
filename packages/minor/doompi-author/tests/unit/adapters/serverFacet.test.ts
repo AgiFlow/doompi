@@ -6,7 +6,7 @@ import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
 import authorServerFacetDefault, { facet as authorServerFacet } from '../../../generated/server';
-import { api } from '../../../src/extensions/workspaces/sessions/(backend)/api/_lib/authorApi';
+import { api } from '../../../src/extensions/workspaces/sessions/(backend)/api/author/_lib/authorApi';
 import authorPromptResource from '../../../src/extensions/workspaces/sessions/(backend)/resource/doompi-use-author.server';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];

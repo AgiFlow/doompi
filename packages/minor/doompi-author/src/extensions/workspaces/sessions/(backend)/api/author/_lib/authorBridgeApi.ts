@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
 
-import { AuthorBridgeError, type AuthorBridgeState } from '../../../../../../models/authorBridgeState';
-import { parseUseAuthorToolInput } from '../../../../../../schemas/authorTools';
-import type { AuthorViewportCapabilityDescriptor } from '../../../../../../types/author';
-import { AUTHOR_BRIDGE_ROUTES } from '../../../../../../types/authorApi';
+import { AuthorBridgeError, type AuthorBridgeState } from '../../../../../../../models/authorBridgeState';
+import { parseUseAuthorToolInput } from '../../../../../../../schemas/authorTools';
+import routes from '../../../../../../../types/apiRoutes';
+import type { AuthorViewportCapabilityDescriptor } from '../../../../../../../types/author';
 
 function record(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value))
@@ -35,11 +35,11 @@ export function createAuthorBridgeApi(state: AuthorBridgeState): Hono {
       error instanceof AuthorBridgeError ? error.status : 500,
     ),
   );
-  app.post(AUTHOR_BRIDGE_ROUTES.register, async (context) => {
+  app.post(routes.bridgeRegister.path, async (context) => {
     const value = await body(context.req.raw);
     return context.json(state.register(text(value, 'bindingId'), generation(value)));
   });
-  app.post(AUTHOR_BRIDGE_ROUTES.catalog, async (context) => {
+  app.post(routes.bridgeCatalog.path, async (context) => {
     const value = await body(context.req.raw);
     const tools = value.tools;
     if (!Array.isArray(tools)) throw new AuthorBridgeError('Invalid Author catalog.', 400);
@@ -52,13 +52,13 @@ export function createAuthorBridgeApi(state: AuthorBridgeState): Hono {
       ),
     );
   });
-  app.post(AUTHOR_BRIDGE_ROUTES.next, async (context) => {
+  app.post(routes.bridgeNext.path, async (context) => {
     const value = await body(context.req.raw);
     return context.json(
       await state.next(text(value, 'bindingId'), generation(value), text(value, 'ownerToken'), context.req.raw.signal),
     );
   });
-  app.post(AUTHOR_BRIDGE_ROUTES.result, async (context) => {
+  app.post(routes.bridgeResult.path, async (context) => {
     const value = await body(context.req.raw);
     state.result(
       text(value, 'bindingId'),
@@ -70,7 +70,7 @@ export function createAuthorBridgeApi(state: AuthorBridgeState): Hono {
     );
     return context.json({ accepted: true });
   });
-  app.post(AUTHOR_BRIDGE_ROUTES.cancelled, async (context) => {
+  app.post(routes.bridgeCancelled.path, async (context) => {
     const value = await body(context.req.raw);
     state.cancelled(
       text(value, 'bindingId'),
@@ -81,13 +81,13 @@ export function createAuthorBridgeApi(state: AuthorBridgeState): Hono {
     );
     return context.json({ accepted: true });
   });
-  app.post(AUTHOR_BRIDGE_ROUTES.disconnect, async (context) => {
+  app.post(routes.bridgeDisconnect.path, async (context) => {
     const value = await body(context.req.raw);
     state.disconnect(text(value, 'bindingId'), generation(value));
     return context.json({ accepted: true });
   });
-  app.get(AUTHOR_BRIDGE_ROUTES.describe, (context) => context.json(state.describe()));
-  app.post(AUTHOR_BRIDGE_ROUTES.invoke, async (context) => {
+  app.get(routes.bridgeDescribe.path, (context) => context.json(state.describe()));
+  app.post(routes.bridgeInvoke.path, async (context) => {
     const value = parseUseAuthorToolInput(await context.req.raw.json());
     return context.json(await state.invoke(value, context.req.raw.signal));
   });

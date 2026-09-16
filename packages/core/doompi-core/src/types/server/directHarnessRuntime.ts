@@ -171,6 +171,16 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   replaceResources(resources: AgentHarnessResources): Promise<void>;
   readResources(): Promise<AgentHarnessResources>;
   appendCustomEntry(customType: string, data?: unknown): Promise<string>;
+  /**
+   * Records a message without waking the agent.
+   *
+   * The lane defers the write while an operation runs, so a message appended
+   * mid-turn lands after the turn's tool results rather than between a tool
+   * call and its result, which providers reject on replay.
+   */
+  appendMessage(message: AgentMessage): Promise<string>;
+  /** Names an entry in the session tree. */
+  setLabel(targetId: string, label: string | undefined): Promise<void>;
   recordUsage(
     usage: Usage,
     options?: { entryId?: string; details?: import('@earendil-works/pi-agent-core').JsonValue },
@@ -181,8 +191,12 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
     streamingBehavior?: 'steer' | 'followUp',
   ): Promise<{ settled: Promise<void>; handledCommand?: boolean }>;
   prompt(text: string, images?: ImageContent[]): Promise<void>;
-  steer(text: string, images?: ImageContent[]): Promise<void>;
-  followUp(text: string, images?: ImageContent[]): Promise<void>;
+  /** Starts a run from an already-composed message, without awaiting the run. */
+  admitMessage(message: AgentMessage): Promise<{ settled: Promise<void> }>;
+  steer(message: string | AgentMessage, images?: ImageContent[]): Promise<void>;
+  followUp(message: string | AgentMessage, images?: ImageContent[]): Promise<void>;
+  /** Queues for the run after the current one, rather than into it. */
+  nextRun(message: string | AgentMessage, images?: ImageContent[]): Promise<void>;
   abort(): Promise<void>;
   compact(customInstructions?: string): Promise<void>;
   /** Continues a persisted in-flight operation; false when the lane had none. */
