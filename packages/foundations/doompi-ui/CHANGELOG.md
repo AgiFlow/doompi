@@ -1,3 +1,26 @@
+## 0.0.1-alpha.73 (2026-09-16)
+
+### 🚀 Features
+
+- **core,build,file-edit:** generated RPC clients with build-injected URL shapes ([afdfd7c6](https://github.com/AgiFlow/doompi/commit/afdfd7c6))
+
+### 🩹 Fixes
+
+- **root:** repair references after the core package split ([603cfb9a](https://github.com/AgiFlow/doompi/commit/603cfb9a))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-hashline to 0.0.1-alpha.42
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.73
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.72 (2026-09-15)
 
 ### 🔥 Performance

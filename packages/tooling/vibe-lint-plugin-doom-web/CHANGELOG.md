@@ -1,3 +1,17 @@
+## 0.0.1-alpha.67 (2026-09-16)
+
+### 🩹 Fixes
+
+- **skill:** follow symlinked skill directories and reconcile $ on domain switch ([f62c2b72](https://github.com/AgiFlow/doompi/commit/f62c2b72))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.2
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.66 (2026-09-15)
 
 This was a version bump only for @agimon-ai/vibe-lint-plugin-doom-web to align it with other projects, there were no code changes.

@@ -1,3 +1,29 @@
+## 0.0.1-alpha.62 (2026-09-16)
+
+### 🚀 Features
+
+- complete folder-based extension migration ([6ad1d3eb](https://github.com/AgiFlow/doompi/commit/6ad1d3eb))
+- complete extension layout migration ([9047a61c](https://github.com/AgiFlow/doompi/commit/9047a61c))
+- adopt folder-based extension layout ([e72511ee](https://github.com/AgiFlow/doompi/commit/e72511ee))
+
+### 🩹 Fixes
+
+- **team,task,core:** wake the headless agent when a subagent finishes ([694c76d9](https://github.com/AgiFlow/doompi/commit/694c76d9))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-voice to 0.0.1-alpha.74
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.73
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.61 (2026-09-15)
 
 ### 🧱 Updated Dependencies

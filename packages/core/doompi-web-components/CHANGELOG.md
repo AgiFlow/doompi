@@ -1,3 +1,18 @@
+## 0.0.1-alpha.31 (2026-09-16)
+
+### 🩹 Fixes
+
+- **root:** repair references after the core package split ([603cfb9a](https://github.com/AgiFlow/doompi/commit/603cfb9a))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.67
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.30 (2026-09-15)
 
 ### 🩹 Fixes

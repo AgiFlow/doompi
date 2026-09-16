@@ -1,3 +1,36 @@
+## 0.0.1-alpha.68 (2026-09-16)
+
+### 🚀 Features
+
+- move voice, plan, workflow and computer-use onto declared API routes ([bd524ece](https://github.com/AgiFlow/doompi/commit/bd524ece))
+- **vibe-lint:** enforce the resource-kind contract that nothing enforced ([84fd6f5e](https://github.com/AgiFlow/doompi/commit/84fd6f5e))
+- **core,git:** one package-resource reader, and stop one bad file killing a session ([d34b9a85](https://github.com/AgiFlow/doompi/commit/d34b9a85))
+- complete folder-based extension migration ([6ad1d3eb](https://github.com/AgiFlow/doompi/commit/6ad1d3eb))
+- finish folder layout migration and warn subagents ([79ac3117](https://github.com/AgiFlow/doompi/commit/79ac3117))
+- adopt folder-based extension layout ([e72511ee](https://github.com/AgiFlow/doompi/commit/e72511ee))
+- **doompi-team:** colocate session routes and root lifecycle ([2392f201](https://github.com/AgiFlow/doompi/commit/2392f201))
+- **doompi-build:** build the browser half instead of shipping source ([c9a8217e](https://github.com/AgiFlow/doompi/commit/c9a8217e))
+- **vibe-lint-plugin-doom-extension:** make the legacy roots the migration worklist ([bf652c1d](https://github.com/AgiFlow/doompi/commit/bf652c1d))
+- **doompi-grep:** migrate to the folder-based extension layout ([d4de9273](https://github.com/AgiFlow/doompi/commit/d4de9273))
+
+### 🩹 Fixes
+
+- **core:** synchronize extension session writes ([e08b2b0c](https://github.com/AgiFlow/doompi/commit/e08b2b0c))
+- **task:** only count live delegations as running activity ([5571a789](https://github.com/AgiFlow/doompi/commit/5571a789))
+- **core,voice:** stop mode-gated tools leaking into the headless surface ([56bea74a](https://github.com/AgiFlow/doompi/commit/56bea74a))
+- **root:** repair folder migration regressions ([9f8a1f22](https://github.com/AgiFlow/doompi/commit/9f8a1f22))
+- **doompi-build:** a cockpit channel is not a factory ([0006e979](https://github.com/AgiFlow/doompi/commit/0006e979))
+- **vibe-lint-plugin-doom-extension:** teach the layout rules about routed packages ([ba952530](https://github.com/AgiFlow/doompi/commit/ba952530))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.2
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.67 (2026-09-15)
 
 This was a version bump only for @agimon-ai/vibe-lint-plugin-doom-extension to align it with other projects, there were no code changes.

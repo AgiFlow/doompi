@@ -1,3 +1,34 @@
+## 0.0.1-alpha.73 (2026-09-16)
+
+### 🚀 Features
+
+- **core,build,file-edit:** generated RPC clients with build-injected URL shapes ([afdfd7c6](https://github.com/AgiFlow/doompi/commit/afdfd7c6))
+- **core,git:** one package-resource reader, and stop one bad file killing a session ([d34b9a85](https://github.com/AgiFlow/doompi/commit/d34b9a85))
+- complete folder-based extension migration ([6ad1d3eb](https://github.com/AgiFlow/doompi/commit/6ad1d3eb))
+- finish folder layout migration and warn subagents ([79ac3117](https://github.com/AgiFlow/doompi/commit/79ac3117))
+- adopt folder-based extension layout ([e72511ee](https://github.com/AgiFlow/doompi/commit/e72511ee))
+
+### 🩹 Fixes
+
+- **core:** synchronize extension session writes ([e08b2b0c](https://github.com/AgiFlow/doompi/commit/e08b2b0c))
+- **root:** repair references after the core package split ([603cfb9a](https://github.com/AgiFlow/doompi/commit/603cfb9a))
+- **root:** align generated extension contracts ([4aa1f1d5](https://github.com/AgiFlow/doompi/commit/4aa1f1d5))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.33
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.72 (2026-09-15)
 
 ### 🩹 Fixes

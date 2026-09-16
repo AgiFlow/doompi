@@ -1,3 +1,45 @@
+## 0.0.1-alpha.73 (2026-09-16)
+
+### 🚀 Features
+
+- move voice, plan, workflow and computer-use onto declared API routes ([bd524ece](https://github.com/AgiFlow/doompi/commit/bd524ece))
+- **core,build,file-edit:** generated RPC clients with build-injected URL shapes ([afdfd7c6](https://github.com/AgiFlow/doompi/commit/afdfd7c6))
+- complete folder-based extension migration ([6ad1d3eb](https://github.com/AgiFlow/doompi/commit/6ad1d3eb))
+- finish folder layout migration and warn subagents ([79ac3117](https://github.com/AgiFlow/doompi/commit/79ac3117))
+- adopt folder-based extension layout ([e72511ee](https://github.com/AgiFlow/doompi/commit/e72511ee))
+
+### 🩹 Fixes
+
+- stabilize folder-based runtime pipeline ([02a5b097](https://github.com/AgiFlow/doompi/commit/02a5b097))
+- **core:** synchronize extension session writes ([e08b2b0c](https://github.com/AgiFlow/doompi/commit/e08b2b0c))
+- **team,task,core:** wake the headless agent when a subagent finishes ([694c76d9](https://github.com/AgiFlow/doompi/commit/694c76d9))
+- **root:** repair references after the core package split ([603cfb9a](https://github.com/AgiFlow/doompi/commit/603cfb9a))
+- **root:** align generated extension contracts ([4aa1f1d5](https://github.com/AgiFlow/doompi/commit/4aa1f1d5))
+- **root:** repair folder migration regressions ([9f8a1f22](https://github.com/AgiFlow/doompi/commit/9f8a1f22))
+- **root:** satisfy extension architecture contracts ([f2b5865f](https://github.com/AgiFlow/doompi/commit/f2b5865f))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.33
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.72 (2026-09-15)
 
 ### 🩹 Fixes
