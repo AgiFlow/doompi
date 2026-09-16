@@ -205,6 +205,10 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
           sessionScope: createSessionScope(execution.sessionId),
           availableModels,
           ...(execution.model ? { parentModel: execution.model } : {}),
+          // Read fresh per request, exactly as the Pi facet does at root.cli.ts.
+          // Omitting this is what made every headless `context: 'fork'`
+          // delegation report that the parent had no capturable branch.
+          captureForkSource: () => execution.session.forkSource?.(),
         }),
       );
       const backgroundWork = createBackgroundWorkService(providerContext);

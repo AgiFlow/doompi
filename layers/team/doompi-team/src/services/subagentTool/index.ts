@@ -24,6 +24,7 @@ import { isPiRuntime } from '../runtimeRegistry';
 import { createSessionScope, type SessionScope } from '../sessionPaths';
 import {
   captureSessionForkSource,
+  forkRequestFields,
   type SpawnPlannerContract,
   type SpawnPlanRequest,
   type SpawnPlanResult,
@@ -218,13 +219,7 @@ export class SubagentToolService implements SubagentToolContract {
       agentScope: scopeOrDefault(params.scope),
       sessionScope: scope,
       parentSessionId: ctx.sessionManager.getSessionId(),
-      ...(parentForkSource
-        ? {
-            parentForkSource: parentForkSource.terminalSource,
-            ...(parentForkSource.sessionFile ? { parentSessionFile: parentForkSource.sessionFile } : {}),
-            parentLeafId: parentForkSource.leafId,
-          }
-        : {}),
+      ...forkRequestFields(parentForkSource),
       ...(params.concurrency !== undefined ? { concurrency: params.concurrency } : {}),
       ...(params.artifacts !== undefined ? { artifacts: params.artifacts } : {}),
       availableModels: authenticatedModelInfos(ctx.modelRegistry),

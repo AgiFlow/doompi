@@ -19,6 +19,7 @@ import type { PollSchedulerContract } from '../../../../../../services/pollSched
 import { createSessionScope } from '../../../../../../services/sessionPaths';
 import {
   captureSessionForkSource,
+  forkRequestFields,
   type SpawnPlannerContract,
   type SpawnPlanResult,
 } from '../../../../../../services/spawnPlan';
@@ -204,13 +205,7 @@ export async function launchSingleAgentRun(
         parentSessionId: ctx.sessionManager.getSessionId(),
         ...(taskInput.model ? { model: taskInput.model } : {}),
         ...(taskInput.context ? { context: taskInput.context } : {}),
-        ...(parentForkSource
-          ? {
-              parentForkSource: parentForkSource.terminalSource,
-              ...(parentForkSource.sessionFile ? { parentSessionFile: parentForkSource.sessionFile } : {}),
-              parentLeafId: parentForkSource.leafId,
-            }
-          : {}),
+        ...forkRequestFields(parentForkSource),
         availableModels: authenticatedModelInfos(ctx.modelRegistry),
         ...(parentModel ? { parentModel } : {}),
       },

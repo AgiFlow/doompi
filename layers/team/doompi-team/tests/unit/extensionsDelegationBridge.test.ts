@@ -18,6 +18,18 @@ interface StoredEvent {
 
 const roots: Context[] = [];
 
+/**
+ * Wait until `request()` has registered its poll subscription.
+ *
+ * The bridge awaits the parent fork capture before spawning, so how many
+ * microtask ticks that takes is an implementation detail. Counting ticks made
+ * these tests fail the moment the capture became asynchronous; waiting for the
+ * observable state does not.
+ */
+async function settleUntil(ready: () => unknown): Promise<void> {
+  for (let tick = 0; tick < 50 && !ready(); tick += 1) await Promise.resolve();
+}
+
 afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.allSettled(roots.splice(0).map((root) => root.fiber.dispose()));
@@ -104,7 +116,7 @@ describe('createDelegationBridge live metrics', () => {
       cwd: '/repo',
     };
     const pending = service.request(request);
-    await Promise.resolve();
+    await settleUntil(() => schedulerSubscription);
     expect(events[0]).toEqual({
       name: DOOM_DELEGATION_ACCEPTED_EVENT,
       payload: { requestId: 'request-1' },
@@ -208,7 +220,7 @@ describe('createDelegationBridge live metrics', () => {
       prompt: 'work',
       cwd: '/repo',
     });
-    await Promise.resolve();
+    await settleUntil(() => schedulerSubscription);
     expect(steer).not.toHaveBeenCalled();
 
     now = 1_081_000;
@@ -272,13 +284,16 @@ describe('createDelegationBridge fork source', () => {
     const ctx = new Context();
     roots.push(ctx);
     let current = {
-      sessionFile: '/tmp/parent.jsonl',
-      leafId: 'leaf-1',
-      terminalSource: {
-        kind: 'terminal-pi-fork' as const,
-        sourceSessionId: 'session-1',
-        sourceLeafId: 'leaf-1',
-        snapshotJsonl: '{}\n',
+      ok: true as const,
+      source: {
+        sessionFile: '/tmp/parent.jsonl',
+        leafId: 'leaf-1',
+        terminalSource: {
+          kind: 'terminal-pi-fork' as const,
+          sourceSessionId: 'session-1',
+          sourceLeafId: 'leaf-1',
+          snapshotJsonl: '{}\n',
+        },
       },
     };
     const service = bridge.createService(ctx, {
@@ -290,13 +305,16 @@ describe('createDelegationBridge fork source', () => {
 
     await service.request(forkRequest('request-1'));
     current = {
-      sessionFile: '/tmp/parent.jsonl',
-      leafId: 'leaf-2',
-      terminalSource: {
-        kind: 'terminal-pi-fork',
-        sourceSessionId: 'session-1',
-        sourceLeafId: 'leaf-2',
-        snapshotJsonl: '{}\n',
+      ok: true as const,
+      source: {
+        sessionFile: '/tmp/parent.jsonl',
+        leafId: 'leaf-2',
+        terminalSource: {
+          kind: 'terminal-pi-fork' as const,
+          sourceSessionId: 'session-1',
+          sourceLeafId: 'leaf-2',
+          snapshotJsonl: '{}\n',
+        },
       },
     };
     await service.request(forkRequest('request-2'));
@@ -313,7 +331,7 @@ describe('createDelegationBridge fork source', () => {
       sessionId: 'session-1',
       sessionScope: TEST_SESSION_SCOPE,
       availableModels: [],
-      captureForkSource: () => undefined,
+      captureForkSource: () => ({ ok: false as const, reason: 'no-leaf' as const }),
     });
 
     await service.request(forkRequest('request-1'));

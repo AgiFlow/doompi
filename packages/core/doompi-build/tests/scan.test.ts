@@ -306,7 +306,7 @@ describe('the mandatory platform suffix', () => {
       {
         path: 'src/extensions/(backend)/tool/write-plan.ts',
         message:
-          'names no platform; add one of cli, server before .ts (a backend file with no platform contributes to no host)',
+          'names no platform; add one of cli, server before .ts (without one the host is inferred from the side rather than declared)',
       },
     ]);
     expect(graph.entries).toHaveLength(1);

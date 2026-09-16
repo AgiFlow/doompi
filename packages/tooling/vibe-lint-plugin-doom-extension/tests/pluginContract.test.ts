@@ -161,6 +161,25 @@ describe('Doom extension plugin contract', () => {
     ]);
   });
 
+  it('holds terminal routed files to composition before the browser allowlist', () => {
+    const boundaries = recommended.boundaries ?? [];
+    const terminal = boundaries.findIndex((boundary) => boundary.name === 'cli-routed-presentation');
+    const browser = boundaries.findIndex((boundary) => boundary.name === 'web-plugin-routed');
+    expect(terminal).toBeGreaterThanOrEqual(0);
+    expect(terminal).toBeLessThan(browser);
+    expect(boundaries[terminal]?.pattern).toBe(
+      'src/extensions/**/(frontend)/{**/*.cli.{ts,tsx},overlay/**,message/**}',
+    );
+    const allowed = boundaries[terminal]?.allowedImports ?? [];
+    for (const root of ['constants', 'models', 'schemas', 'services', 'types']) {
+      expect(allowed).toContain(`src/${root}`);
+      expect(allowed).toContain(`src/${root}/**`);
+    }
+    expect(allowed).toContain('src/extensions/**/(frontend)/**');
+    // The browser half stays on the narrower policy it had.
+    expect(boundaries[browser]?.allowedImports).not.toContain('src/services/**');
+  });
+
   it('provides a warning-only migration preset', () => {
     expect(migration.rules).toEqual(Object.fromEntries(EXPECTED_RULE_IDS.map((ruleId) => [ruleId, 'warn'])));
   });

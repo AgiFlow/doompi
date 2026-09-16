@@ -331,10 +331,12 @@ export class CompletionNotifier implements CompletionNotifierContract {
         { customType: SUBAGENT_NOTIFY_MESSAGE_TYPE, content, display: true, details: options.details },
         { triggerTurn: options.triggerTurn, deliverAs: 'steer' },
       );
-      return pending === undefined ? true : pending.then(
-        () => true,
-        () => false,
-      );
+      return pending === undefined
+        ? true
+        : pending.then(
+            () => true,
+            () => false,
+          );
     } catch {
       return false;
     }

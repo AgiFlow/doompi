@@ -45,7 +45,7 @@ import type { ManagementActionsContract } from '../managementActions';
 import type { AvailableModelInfo, ParentModel } from '../modelFallback';
 import type { PollSchedulerContract } from '../pollScheduler';
 import type { SessionScope } from '../sessionPaths';
-import type { SpawnPlannerContract, SessionForkSource } from '../spawnPlan';
+import { forkRequestFields, type ParentForkCapture, type SpawnPlannerContract } from '../spawnPlan';
 import type { SubagentWaiterContract } from '../subagentWait';
 
 const DEFAULT_DELEGATION_TIMEOUT_MS = 20 * 60 * 1000;
@@ -88,7 +88,7 @@ export interface DelegationSessionContext {
    * transcript until the session's first assistant message, so a value captured
    * when the session binds is empty for a new session and stale after a resume.
    */
-  captureForkSource?: () => SessionForkSource | undefined;
+  captureForkSource?: () => Promise<ParentForkCapture> | ParentForkCapture;
 }
 
 export interface DelegationBridgeDeps {
@@ -278,7 +278,7 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
     ctx.emit(DOOM_DELEGATION_ACCEPTED_EVENT, { requestId: request.requestId });
 
     try {
-      const forkSource = session.captureForkSource?.();
+      const forkSource = await session.captureForkSource?.();
       const result = await deps.planner.spawn(
         {
           single: {
@@ -292,13 +292,7 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
           agentScope: 'both',
           sessionScope: session.sessionScope,
           parentSessionId: session.sessionId,
-          ...(forkSource
-            ? {
-                parentForkSource: forkSource.terminalSource,
-                ...(forkSource.sessionFile ? { parentSessionFile: forkSource.sessionFile } : {}),
-                parentLeafId: forkSource.leafId,
-              }
-            : {}),
+          ...forkRequestFields(forkSource),
           availableModels: session.availableModels,
           ...(session.parentModel ? { parentModel: session.parentModel } : {}),
         },

@@ -90,6 +90,22 @@ const boundaries: BoundaryConfig[] = [
     allowedImports: layer('constants', 'models', 'schemas', 'services', 'types'),
   },
   {
+    // The terminal half of a folder-routed package. A (frontend) file is
+    // frontend code that need not run in a browser: a .cli file draws a TUI
+    // view, and the overlay/ and message/ surfaces are the terminal's outright.
+    // Such a file composes the package the way any presentation does, so it is
+    // ranked above web-plugin-routed to keep the browser-only allowlist off it.
+    // The split is spelled as globs because boundaries are matched by
+    // minimatch, where a bare (frontend) is literal, and not by the build's
+    // browser/terminal predicate.
+    name: 'cli-routed-presentation',
+    pattern: 'src/extensions/**/(frontend)/{**/*.cli.{ts,tsx},overlay/**,message/**}',
+    allowedImports: [
+      ...layer('constants', 'models', 'schemas', 'services', 'types'),
+      'src/extensions/**/(frontend)/**',
+    ],
+  },
+  {
     // The browser half of a folder-routed package, kept to the browser-only
     // policy before general composition. Matched by position rather than by a
     // literal path, so a (frontend) group anywhere in the tree is held to it.

@@ -8,6 +8,7 @@ import {
   type DoomHeadlessTool,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
+import { DOOM_DELEGATION_SERVICE, type DoomDelegationService } from '@agimon-ai/doompi-core/delegation';
 import type { DoomApi } from '@agimon-ai/doompi-core/package-api';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import type { Context } from '@deepseek-ai/cordis';
@@ -233,6 +234,39 @@ describe('teamHeadlessFacet', () => {
     }
   });
 
+  // The HTTP route above wired its own fork capture, so it passed while the
+  // delegation service, which every `context: 'fork'` subagent goes through on
+  // this facet, silently had none and refused every fork.
+  it('gives the delegation service a fork source, so a fork delegation is not refused', async () => {
+    const test = await fixture();
+    const spawn = vi.spyOn(test.runtime.spawnPlanner, 'spawn').mockResolvedValue({
+      outcomes: [{ agent: 'mock-agent', task: 'Review', childIndex: 0, runId: 'delegated-run' }],
+    });
+    const provided = (test.context.provide as unknown as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0] === DOOM_DELEGATION_SERVICE,
+    );
+    const delegation = provided?.[1] as DoomDelegationService | undefined;
+    if (!delegation) throw new Error('Team headless facet did not provide a delegation service');
+
+    try {
+      await delegation.request({
+        requestId: 'request-1',
+        taskId: 'task-1',
+        agent: 'mock-agent',
+        prompt: 'Review',
+        cwd: test.execution.cwd,
+        context: 'fork',
+      });
+      expect(spawn.mock.calls[0]?.[0]).toMatchObject({
+        single: { agent: 'mock-agent', context: 'fork' },
+        parentForkSource: { kind: 'v4-fork', sessionFile: '/sessions/parent.sqlite', branch: 'main' },
+      });
+      expect(spawn.mock.calls[0]?.[0]).not.toHaveProperty('parentForkFailure');
+    } finally {
+      spawn.mockRestore();
+      await test.dispose();
+    }
+  });
   it('detaches intercom on activity stop and stops every runtime worker on final disposal', async () => {
     vi.useFakeTimers();
     const test = await fixture();

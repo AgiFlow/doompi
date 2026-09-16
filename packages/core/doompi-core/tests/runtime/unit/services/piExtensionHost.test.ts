@@ -197,10 +197,7 @@ describe('Pi extension UI theme access', () => {
   });
 });
 
-function stubExtension(
-  names: readonly string[],
-  handlers: Map<string, unknown> = new Map(),
-): Extension {
+function stubExtension(names: readonly string[], handlers: Map<string, unknown> = new Map()): Extension {
   const tools = new Map<string, RegisteredTool>();
   for (const name of names) {
     tools.set(name, {
@@ -317,9 +314,16 @@ describe('Pi extension tool surface in the headless host', () => {
     actions.setActiveTools(['alpha']);
 
     await expect(
-      beta.execute('call-1', {}, () => {}, undefined as never, undefined as never, {
-        abortSignal: undefined,
-      } as never),
+      beta.execute(
+        'call-1',
+        {},
+        () => {},
+        undefined as never,
+        undefined as never,
+        {
+          abortSignal: undefined,
+        } as never,
+      ),
     ).rejects.toThrow("Tool 'beta' is no longer active");
   });
 });

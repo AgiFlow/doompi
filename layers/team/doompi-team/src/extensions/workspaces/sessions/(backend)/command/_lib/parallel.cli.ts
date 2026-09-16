@@ -10,7 +10,7 @@ import {
 } from '../../../../../../services/chainExpression';
 import { normalizeParentModel } from '../../../../../../services/modelFallback';
 import { authenticatedModelInfos } from '../../../../../../services/modelResolution';
-import { captureSessionForkSource } from '../../../../../../services/spawnPlan';
+import { captureSessionForkSource, forkRequestFields } from '../../../../../../services/spawnPlan';
 import { taskInputFromParsedStep, UnsupportedInlineConfigError } from '../../../../../../services/spawnRequestMapping';
 import { launchParallelSubagents } from '../../../../../../services/subagentLaunch';
 import type { AgentScope } from '../../../../../../types/agent';
@@ -75,13 +75,7 @@ export function createParallelCommand(
               agentScope: 'both',
               sessionScope: scope,
               parentSessionId: ctx.sessionManager.getSessionId(),
-              ...(parentForkSource
-                ? {
-                    parentForkSource: parentForkSource.terminalSource,
-                    ...(parentForkSource.sessionFile ? { parentSessionFile: parentForkSource.sessionFile } : {}),
-                    parentLeafId: parentForkSource.leafId,
-                  }
-                : {}),
+              ...forkRequestFields(parentForkSource),
               availableModels: authenticatedModelInfos(ctx.modelRegistry),
               ...(parentModel ? { parentModel } : {}),
             },

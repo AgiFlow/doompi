@@ -2,11 +2,21 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
+import type { DoomHeadlessHostService, DoomHeadlessTool } from '@agimon-ai/doompi-core/headless';
+import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { describe, expect, it, vi } from 'vitest';
 
 import { VoiceMediaBroker } from '../../../src/services/clientMediaApi';
 import { createVoiceServer } from '../../../src/services/voiceServer';
+
+// A facet may contribute headless tools or portable plugin tools, and the two
+// call shapes differ. Voice contributes headless ones, so narrow on the `kind`
+// discriminant the plugin shape carries rather than calling through the union.
+function headlessTool(tools: DoomServerSessionPlugin['tools'], name: string): DoomHeadlessTool {
+  const tool = tools?.find((candidate) => candidate.name === name);
+  if (!tool || 'kind' in tool) throw new Error(`Expected a headless ${name} tool.`);
+  return tool;
+}
 
 describe('native Voice session', () => {
   it('exposes status and controls without terminal adapters or false active tools', async () => {
@@ -89,16 +99,16 @@ describe('native Voice session', () => {
     });
     const facet = createVoiceServer(host, broker, home);
     try {
-      const narrate = facet.tools!.find((tool) => tool.name === 'narrate')!;
-      const refused = await narrate.execute('call-1', { text: 'should not speak' }, undefined as never);
+      const narrate = headlessTool(facet.tools, 'narrate');
+      const refused = await narrate.execute('call-1', { text: 'should not speak' }, undefined, undefined, host.context);
       expect(refused.isError).toBe(true);
       expect(refused.details).toMatchObject({
         outcome: 'failed',
         error: { code: 'VOICE_TOOL_INACTIVE' },
       });
 
-      const transfer = facet.tools!.find((tool) => tool.name === 'transfer_voice')!;
-      const refusedTransfer = await transfer.execute('call-2', { target: 1 }, undefined as never);
+      const transfer = headlessTool(facet.tools, 'transfer_voice');
+      const refusedTransfer = await transfer.execute('call-2', { target: 1 }, undefined, undefined, host.context);
       expect(refusedTransfer.isError).toBe(true);
       expect(refusedTransfer.details).toMatchObject({ error: { code: 'VOICE_TOOL_INACTIVE' } });
     } finally {

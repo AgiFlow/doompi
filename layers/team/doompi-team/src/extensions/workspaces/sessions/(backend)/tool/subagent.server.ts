@@ -117,6 +117,9 @@ function subagentTool(
               partial: true,
             }),
           );
+          // An agent whose resolved default context is `fork` needs a parent
+          // branch here too, not only on the delegation path.
+          const parentForkSource = await execution.session.forkSource?.();
           const plan = await runtime.spawnPlanner.spawn(
             {
               tasks: params.requests.map((request) => ({
@@ -136,6 +139,7 @@ function subagentTool(
               ...(params.artifacts === undefined ? {} : { artifacts: params.artifacts }),
               availableModels,
               ...(execution.model ? { parentModel: execution.model } : {}),
+              ...(parentForkSource ? { parentForkSource } : {}),
             },
             loadConfig().config,
           );

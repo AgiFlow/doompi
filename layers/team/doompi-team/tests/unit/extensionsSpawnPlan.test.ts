@@ -1329,18 +1329,21 @@ describe('persisted session forks', () => {
     const parentSessionFile = parent.getSessionFile()!;
     const before = fs.readFileSync(parentSessionFile);
 
-    const toolSource = captureSessionForkSource(parent, 'tool');
-    const settledSource = captureSessionForkSource(parent, 'settled');
+    const toolCapture = captureSessionForkSource(parent, 'tool');
+    const settledCapture = captureSessionForkSource(parent, 'settled');
+    if (!toolCapture.ok || !settledCapture.ok) throw new Error('Expected both captures to succeed.');
+    const toolSource = toolCapture.source;
+    const settledSource = settledCapture.source;
     expect(toolSource).toMatchObject({ sessionFile: parentSessionFile, leafId: userId });
-    expect(toolSource?.terminalSource).toMatchObject({
+    expect(toolSource.terminalSource).toMatchObject({
       kind: 'terminal-pi-fork',
       sourceSessionId: parent.getSessionId(),
       sourceLeafId: userId,
     });
-    expect(toolSource?.terminalSource.snapshotJsonl).toContain(userId);
-    expect(toolSource?.terminalSource.snapshotJsonl).not.toContain(assistantId);
+    expect(toolSource.terminalSource.snapshotJsonl).toContain(userId);
+    expect(toolSource.terminalSource.snapshotJsonl).not.toContain(assistantId);
     expect(settledSource).toMatchObject({ sessionFile: parentSessionFile, leafId: assistantId });
-    expect(settledSource?.terminalSource.snapshotJsonl).toContain(assistantId);
+    expect(settledSource.terminalSource.snapshotJsonl).toContain(assistantId);
     expect(fs.readFileSync(parentSessionFile)).toEqual(before);
   });
 });

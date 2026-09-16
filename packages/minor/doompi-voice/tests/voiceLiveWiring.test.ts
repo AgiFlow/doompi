@@ -136,7 +136,7 @@ async function createFixture(runtime: typeof voiceRuntime, mode: 'live' | 'legac
 describe.each([
   ['extracted service', voiceRuntime],
   ['public compatibility service', publicVoiceRuntime],
-] as const)('production live voice command wiring through the %s', (serviceName, runtime) => {
+] as const)('production live voice command wiring through the %s', (_serviceName, runtime) => {
   const fixture = (mode: 'live' | 'legacy' = 'live') => createFixture(runtime, mode);
   it('reports login startup failure without exposing authentication details', async () => {
     const f = await fixture();

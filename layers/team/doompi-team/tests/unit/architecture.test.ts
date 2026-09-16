@@ -23,15 +23,13 @@ function readConfig(): VibeLintConfig {
 describe('import boundaries', () => {
   const config = readConfig();
 
-  it('uses the repository-owned boundary preset with CLI presentation exceptions', () => {
+  // The preset's cli-routed-presentation boundary now covers the terminal half
+  // of the session routes, so the local copies of it are gone. A package
+  // boundary outranks a preset one, so re-declaring one here would silently
+  // shadow the shared policy.
+  it('uses the repository-owned boundary preset without local overrides', () => {
     expect(config.extends).toContain('doom-extension/recommended');
-    expect(config.boundaries?.map((boundary) => boundary.name)).toEqual([
-      'cli-session-overlay-presentation',
-      'cli-session-overlay-private',
-      'cli-session-tool-presentation',
-      'cli-message-presentation',
-      'cli-message-private',
-    ]);
+    expect(config.boundaries ?? []).toEqual([]);
   });
 
   it('enforces deterministic boundary findings as errors', () => {

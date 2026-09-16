@@ -72,7 +72,10 @@ describe('task headless delegation notifier', () => {
   it('wakes the model, records the full content, and keeps the toast to one line', async () => {
     const test = await fixture();
 
-    test.notify({ customType: 'doom-task-notify', content: CONTENT, display: true }, { triggerTurn: true, deliverAs: 'steer' });
+    test.notify(
+      { customType: 'doom-task-notify', content: CONTENT, display: true },
+      { triggerTurn: true, deliverAs: 'steer' },
+    );
 
     // `admitPrompt` is the only call that reaches the model. `prompt(_, 'steer')`
     // would not: it is enqueue-only and parks the message on an idle lane.

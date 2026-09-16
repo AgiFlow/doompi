@@ -14,51 +14,6 @@ rules:
   boundary-import-allowlist: error
   file-naming-convention: error
 
-boundaries:
-  - name: cli-session-shared-presentation
-    pattern: src/extensions/**/(frontend)/_shared/*.ts
-    allowedImports:
-      - src/types/**
-      - src/constants/**
-      - src/models/**
-      - src/schemas/**
-      - src/services/**
-      - src/extensions/**/(frontend)/**
-  - name: cli-session-overlay-presentation
-    pattern: src/extensions/**/(frontend)/overlay/*.cli.ts
-    allowedImports:
-      - src/types/**
-      - src/constants/**
-      - src/models/**
-      - src/schemas/**
-      - src/services/**
-      - src/extensions/**/(frontend)/**
-  - name: cli-session-overlay-private
-    pattern: src/extensions/**/(frontend)/overlay/_lib/*.ts
-    allowedImports:
-      - src/types/**
-      - src/constants/**
-      - src/models/**
-      - src/schemas/**
-      - src/services/**
-      - src/extensions/**/(frontend)/**
-  - name: cli-session-tool-presentation
-    pattern: src/extensions/**/(frontend)/tool/*.cli.ts
-    allowedImports:
-      - src/types/**
-      - src/constants/**
-      - src/models/**
-      - src/schemas/**
-      - src/services/**
-      - src/extensions/**/(frontend)/**
-  - name: cli-session-message-presentation
-    pattern: src/extensions/**/(frontend)/message/*.cli.ts
-    allowedImports:
-      - src/types/**
-      - src/constants/**
-      - src/services/**
-      - src/extensions/**/(frontend)/**
-
 overrides:
   # Routed filenames carry contribution identities and follow their own grammar.
   - files:
