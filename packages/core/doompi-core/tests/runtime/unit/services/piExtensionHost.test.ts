@@ -494,14 +494,16 @@ describe('Pi lifecycle events in the headless host', () => {
     expect(readEntries).toHaveBeenCalledTimes(1);
   });
 
-  it('dispatches navigation, session metadata and failed compaction lifecycle events', async () => {
+  it('dispatches navigation, session metadata and compaction lifecycle events', async () => {
     const tree = vi.fn();
     const info = vi.fn();
     const failed = vi.fn();
+    const compacted = vi.fn();
     const handlers = new Map<string, unknown>([
       ['session_tree', [tree]],
       ['session_info_changed', [info]],
       ['session_compact_failed', [failed]],
+      ['session_compact', [compacted]],
     ]);
     const { emit, readEntries } = await loadedHost([], undefined, handlers);
     const user = { role: 'user', content: 'hello', timestamp: CREATED_AT } as const;
@@ -539,7 +541,34 @@ describe('Pi lifecycle events in the headless host', () => {
       endedAt: CREATED_AT,
       status: 'aborted',
     });
-
+    const compaction: Extract<Entry, { type: 'compaction' }> = {
+      type: 'compaction',
+      id: 'compaction-1',
+      parentId: 'user-1',
+      seq: 2,
+      timestamp: CREATED_AT,
+      summary: 'older context',
+      retainedTail: [user],
+      tokensBefore: 100,
+      fromHook: false,
+    };
+    await emit({ type: 'entry_added', lane: 'main', entry: compaction });
+    await emit({
+      type: 'compaction_start',
+      lane: 'main',
+      runId: 'compact-2',
+      reason: 'threshold',
+      startedAt: CREATED_AT,
+    });
+    await emit({
+      type: 'compaction_end',
+      lane: 'main',
+      runId: 'compact-2',
+      reason: 'threshold',
+      endedAt: CREATED_AT,
+      status: 'completed',
+      entryId: compaction.id,
+    });
     expect(tree).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'session_tree', newLeafId: 'user-1', oldLeafId: null }),
       expect.objectContaining({ sessionManager: expect.any(SessionManager) }),
@@ -554,7 +583,16 @@ describe('Pi lifecycle events in the headless host', () => {
       }),
       expect.anything(),
     );
-    expect(readEntries).toHaveBeenCalledTimes(1);
+    expect(compacted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'session_compact',
+        compactionEntry: expect.objectContaining({ id: compaction.id, firstKeptEntryId: 'user-1' }),
+        reason: 'threshold',
+        willRetry: false,
+      }),
+      expect.anything(),
+    );
+    expect(readEntries).toHaveBeenCalledTimes(2);
   });
 
   it('preserves one lifecycle and monotonic turn indexes across run suspension', async () => {
