@@ -130,9 +130,12 @@ export function createRunnerServerRuntime(
     name: 'runner',
     start: async (executionContext: DoomHeadlessExecutionContext) => {
       await startSupervision(executionContext);
-      requestPublish(executionContext.sessionId);
-      const unsubscribe = container.runnerRegistry.subscribe(() => requestPublish(executionContext.sessionId));
+      const unsubscribe = container.runnerRegistry.subscribe(
+        () => requestPublish(executionContext.sessionId),
+        executionContext.sessionId,
+      );
       unsubscribeRunnerUpdates = unsubscribe;
+      requestPublish(executionContext.sessionId);
       return () => {
         unsubscribe();
         if (unsubscribeRunnerUpdates === unsubscribe) unsubscribeRunnerUpdates = undefined;

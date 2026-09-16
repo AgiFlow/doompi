@@ -44,7 +44,7 @@ export async function reconcileActiveRunners(dependencies: ReconcileDependencies
     try {
       const persisted = await dependencies.registry.get(record.id, record.sessionId);
       if (persisted?.state === COMPLETED_STATE) {
-        await dependencies.registry.release(record.id);
+        await dependencies.registry.release(record.id, record.sessionId);
         result.reclaimed.push(record.id);
         continue;
       }
@@ -136,7 +136,7 @@ export async function cleanupLegacyRunnerStore(
           continue;
         }
       }
-      await dependencies.registry.release(record.id);
+      await dependencies.registry.release(record.id, record.sessionId);
       result.reclaimed.push(record.id);
     } catch (error) {
       result.errors.push(`Could not reclaim legacy runner ${record.id}: ${String(error)}`);

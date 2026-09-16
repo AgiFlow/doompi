@@ -9,6 +9,9 @@ export async function runServer(args: readonly string[]): Promise<number> {
   const stop = () => controller.abort();
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
+  // An IPC parent owns this server's lifetime. Its channel closes even when the
+  // parent is killed before it can forward a termination signal.
+  process.on('disconnect', stop);
   try {
     return await runServerRuntime(options, {
       cwd: process.cwd(),
@@ -30,5 +33,6 @@ export async function runServer(args: readonly string[]): Promise<number> {
   } finally {
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
+    process.off('disconnect', stop);
   }
 }

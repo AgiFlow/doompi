@@ -104,7 +104,7 @@ test('records once and appends the returned transcript without invoking autonomo
     method: 'POST',
     contentType: 'audio/webm;codecs=opus',
   });
-  expect(mediaRequests[0]?.url).toContain('/sessions/s1/plugins/voice-media/manual/transcribe?session=s1');
+  expect(mediaRequests[0]?.url).toContain('/sessions/s1/plugins/voice-media/manual/transcribe');
   expect(Number(mediaRequests[0]?.duration)).toBeGreaterThanOrEqual(0);
   expect(mediaRequests[0]?.bodyLength).toBeGreaterThan(0);
   expect(

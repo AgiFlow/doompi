@@ -468,6 +468,8 @@ export function createRunnerRuntime(pi: ExtensionAPI): RunnerRuntime {
 
       [SESSION_START_EVENT]: (_event, ctx) => {
         if (!active) return;
+        unsubscribeRegistry?.();
+        unsubscribeRegistry = undefined;
         const context = ctx as ExtensionContext;
         loadRunnerSettings(context);
         const activeSessionId = context.sessionManager.getSessionId();
@@ -508,6 +510,9 @@ export function createRunnerRuntime(pi: ExtensionAPI): RunnerRuntime {
           await activeTelemetry.recordEvent('doom_runner.session_started', { outcome: 'started' });
           if (!stillCurrent()) return [];
           paths.setSessionId(activeSessionId);
+          unsubscribeRegistry = registry.subscribe(() => {
+            if (isCurrent(generation, activeSessionId)) scheduleRefresh(false);
+          }, activeSessionId);
           // Awaited before anything can launch, so every runner this session starts
           // finds a lifeline it can connect to rather than a socket that is not
           // listening yet, which would read as an owner that is already gone.
@@ -721,7 +726,6 @@ export function createRunnerRuntime(pi: ExtensionAPI): RunnerRuntime {
       processControl = container.processControl;
       lifeline = container.lifeline;
       initialized = true;
-      unsubscribeRegistry = registry.subscribe(() => scheduleRefresh(false));
       statusPoll = setInterval(() => scheduleRefresh(true), RUNNER_STATUS_POLL_MS);
       statusPoll.unref?.();
       historySweepPoll = setInterval(() => scheduleHistorySweep(), HISTORY_SWEEP_INTERVAL_MS);

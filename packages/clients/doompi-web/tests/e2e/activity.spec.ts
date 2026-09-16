@@ -31,8 +31,6 @@ test('keeps the workflow launcher available before any package reports work', as
   await expect(page.getByTestId('activity-workflows')).toBeVisible();
   await expect(page.getByTestId('activity-workflow-launch')).toBeVisible();
   await expect(page.getByTestId('activity-empty')).toBeHidden();
-  await expect(page.getByTestId('activity-loops')).toHaveAttribute('data-active', 'false');
-  await expect(page.getByTestId('activity-loop-default-launch')).toBeVisible();
   await expect(page.getByTestId('activity-busy')).toBeHidden();
   await expect(page.getByTestId('background-work-notice')).toBeHidden();
 });
@@ -96,9 +94,9 @@ test('shows Loop lifecycle rows and routes the single manage action through /loo
       { instanceId: 'loop-release', label: 'Release watcher', detail: 'every 60s · Check release status', state },
     ]);
 
+  cockpit.session.emit(status('doom-loop-instances', loop('starting')));
   await expect(page.getByTestId('activity-loops')).toBeVisible();
   await expect(page.getByTestId('activity-loop-default-launch')).toBeVisible();
-  cockpit.session.emit(status('doom-loop-instances', loop('starting')));
 
   const row = page.getByTestId('activity-loop-loop-release');
   await expect(page.getByTestId('activity-loops')).toBeVisible();
@@ -153,6 +151,7 @@ test('clicking Loop focuses idle Activity loops instead of opening a generic lau
     },
   });
 
+  cockpit.session.emit(status('doom-loop-instances'));
   await expect(page.getByTestId('activity-loops')).toBeVisible();
   await expect(page.getByTestId('activity-loop-default-launch')).toBeVisible();
   await page.getByTestId('axis-minor').click();

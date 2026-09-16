@@ -669,6 +669,68 @@ describe('the web plugin registry', () => {
     expect(log).toEqual(['drop:one:s9', 'drop:two:s9']);
   });
 
+  it('installs every same-id fill from a scoped session plugin', () => {
+    installSessionWebPlugins('session-a', [
+      defineWebPlugin({
+        id: 'voice',
+        session: {
+          fills: [
+            { slot: HOST_SLOTS.activity, id: 'voice', component: Panel },
+            { slot: HOST_SLOTS.composerActions, id: 'voice', component: Other },
+            { slot: HOST_SLOTS.overlay, id: 'voice', component: Panel },
+          ],
+        },
+      }),
+    ]);
+    activateWebPluginSession('session-a');
+
+    expect(slotFills(HOST_SLOTS.activity)).toEqual([
+      expect.objectContaining({ pluginId: 'voice', id: 'voice', component: Panel }),
+    ]);
+    expect(slotFills(HOST_SLOTS.composerActions)).toEqual([
+      expect.objectContaining({ pluginId: 'voice', id: 'voice', component: Other }),
+    ]);
+    expect(slotFills(HOST_SLOTS.overlay)).toEqual([
+      expect.objectContaining({ pluginId: 'voice', id: 'voice', component: Panel }),
+    ]);
+  });
+
+  it('replaces a parent fill only when its slot and id both match', () => {
+    installGlobalWebPlugins([
+      defineWebPlugin({
+        id: 'voice',
+        global: {
+          fills: [
+            { slot: HOST_SLOTS.activity, id: 'voice', component: Panel },
+            { slot: HOST_SLOTS.composerActions, id: 'voice', component: Panel },
+          ],
+        },
+      }),
+    ]);
+    installSessionWebPlugins('session-a', [
+      defineWebPlugin({
+        id: 'voice',
+        session: {
+          fills: [
+            { slot: HOST_SLOTS.activity, id: 'voice', component: Other },
+            { slot: HOST_SLOTS.overlay, id: 'voice', component: Other },
+          ],
+        },
+      }),
+    ]);
+    activateWebPluginSession('session-a');
+
+    expect(slotFills(HOST_SLOTS.activity)).toEqual([
+      expect.objectContaining({ pluginId: 'voice', id: 'voice', component: Other }),
+    ]);
+    expect(slotFills(HOST_SLOTS.composerActions)).toEqual([
+      expect.objectContaining({ pluginId: 'voice', id: 'voice', component: Panel }),
+    ]);
+    expect(slotFills(HOST_SLOTS.overlay)).toEqual([
+      expect.objectContaining({ pluginId: 'voice', id: 'voice', component: Other }),
+    ]);
+  });
+
   it('isolates contributions and channels by session', () => {
     const log: string[] = [];
     installSessionWebPlugins('session-a', [

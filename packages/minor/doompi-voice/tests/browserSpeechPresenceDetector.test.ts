@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { BrowserSpeechPresenceDetector } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserSpeechPresenceDetector';
 
@@ -68,6 +68,34 @@ describe('browser speech-presence worker client', () => {
     await Promise.resolve();
     worker.reply(3, [{ speech: false, sampleCount: 512 }]);
     await expect(current).resolves.toEqual([{ speech: false, sampleCount: 512 }]);
+  });
+
+  it('bounds stalled inference so capture finalization can continue without disabling voice', async () => {
+    vi.useFakeTimers();
+    try {
+      const worker = new FakeWorker();
+      const terminalFailure = vi.fn();
+      const detector = new BrowserSpeechPresenceDetector(worker, terminalFailure, 25);
+      const initialized = detector.initialize('/silero.onnx');
+      await Promise.resolve();
+      worker.reply(0, true);
+      await initialized;
+
+      const push = detector.push(oneFrame());
+      const reset = detector.reset();
+      const resetRejection = expect(reset).rejects.toThrow('response timed out');
+      await Promise.resolve();
+      expect(worker.messages).toHaveLength(2);
+
+      await vi.advanceTimersByTimeAsync(25);
+
+      await expect(push).resolves.toEqual([]);
+      await resetRejection;
+      expect(worker.terminated).toBe(true);
+      expect(terminalFailure).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('terminally rejects in-flight and queued work when the worker fails', async () => {

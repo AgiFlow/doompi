@@ -71,6 +71,7 @@ export class VoiceMediaClient {
   private readonly abortController = new AbortController();
   private capture: VoiceMediaCapture | undefined;
   private captureId: string | undefined;
+  private advertisedCapabilities: VoiceMediaCapabilities | undefined;
   private captureGeneration = 0;
   private speechDetector: SpeechPresenceDetector | undefined;
   private activityLifecycle: ClientCaptureActivityLifecycle | undefined;
@@ -123,6 +124,7 @@ export class VoiceMediaClient {
     const connectionId = this.activeConnectionId;
     if (connectionId !== undefined) await this.transport.disconnect(this.clientId, connectionId).catch(() => undefined);
     this.activeConnectionId = undefined;
+    this.advertisedCapabilities = undefined;
     this.resolveListening(false);
     this.onConnectionState('disconnected');
   }
@@ -147,6 +149,7 @@ export class VoiceMediaClient {
           return;
         }
         this.activeConnectionId = connectionId;
+        this.advertisedCapabilities = advertisedCapabilities;
         this.onConnectionState('connected');
         this.prepareCapabilities(connectionId, advertisedCapabilities, attemptController.signal);
         let cursor = connected.cursor;
@@ -168,6 +171,7 @@ export class VoiceMediaClient {
         if (this.activeConnectionId === connectionId) {
           await this.transport.disconnect(this.clientId, connectionId).catch(() => undefined);
           this.activeConnectionId = undefined;
+          this.advertisedCapabilities = undefined;
         }
         await delay(RECONNECT_DELAY_MS, signal);
       } finally {
@@ -189,7 +193,9 @@ export class VoiceMediaClient {
           return;
         const preparedCapabilities = snapshotCapabilities(this.device.capabilities);
         if (capabilitiesMatch(advertisedCapabilities, preparedCapabilities)) return;
-        await this.transport.refreshCapabilities?.(this.clientId, connectionId, preparedCapabilities);
+        if (!this.transport.refreshCapabilities) return;
+        await this.transport.refreshCapabilities(this.clientId, connectionId, preparedCapabilities);
+        if (this.activeConnectionId === connectionId) this.advertisedCapabilities = preparedCapabilities;
       } catch {
         // Optional client-side activity processing degrades to host control.
       }
@@ -443,12 +449,26 @@ export class VoiceMediaClient {
   }
 
   private async finishCapture(captureId: string, connectionId: string, acknowledge: boolean): Promise<void> {
+    const advertisedCapabilities = this.advertisedCapabilities;
     await this.capture?.stop();
     this.capture = undefined;
     await this.audioUploads;
     await this.speechDetector?.reset().catch(() => undefined);
     this.speechDetector = undefined;
     this.activityLifecycle = undefined;
+    const currentCapabilities = snapshotCapabilities(this.device.capabilities);
+    if (
+      advertisedCapabilities !== undefined &&
+      !capabilitiesMatch(advertisedCapabilities, currentCapabilities) &&
+      this.transport.refreshCapabilities
+    ) {
+      try {
+        await this.transport.refreshCapabilities(this.clientId, connectionId, currentCapabilities);
+        if (this.activeConnectionId === connectionId) this.advertisedCapabilities = currentCapabilities;
+      } catch {
+        // The next capture keeps the last server-advertised capabilities.
+      }
+    }
     if (this.audioUploadError !== undefined) {
       const error = this.audioUploadError;
       await this.transport

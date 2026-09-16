@@ -555,23 +555,18 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       dormantSessions: () => openSessions.list(),
       removeDormantSession: (record: OpenSessionRecord) => openSessions.remove(record.sessionId),
       reviveSession: async (record: OpenSessionRecord) => {
-        try {
-          await openSession(
-            {
-              cwd: record.cwd,
-              name: record.name,
-              ...(record.parentSessionId === undefined ? {} : { parentSessionId: record.parentSessionId }),
-              ...(record.sessionProvenance === undefined ? {} : { sessionProvenance: record.sessionProvenance }),
-            },
-            record.sessionId,
-          );
-        } catch (error) {
-          // A record whose journal or worktree is gone will fail the same way on
-          // every attempt, so it is dropped rather than left offering a card
-          // that cannot wake.
-          openSessions.remove(record.sessionId);
-          throw error;
-        }
+        // A failed wake may be transient, for example while another server still
+        // owns the journal. Keep the record so the user can retry after resolving
+        // the conflict instead of losing the session from the cockpit.
+        await openSession(
+          {
+            cwd: record.cwd,
+            name: record.name,
+            ...(record.parentSessionId === undefined ? {} : { parentSessionId: record.parentSessionId }),
+            ...(record.sessionProvenance === undefined ? {} : { sessionProvenance: record.sessionProvenance }),
+          },
+          record.sessionId,
+        );
       },
       requestAsset: (request) => webCompositions?.request(request) ?? Promise.resolve(undefined),
       compositions: () => ({
