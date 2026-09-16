@@ -30,7 +30,7 @@ import { isBlocked } from '../../../../../../models/taskGraph';
 import { MSG_NO_TASKS, TASK_STATUSES } from '../../../../../../schemas/task';
 import { applyTaskMutation, isCommittingOp, type Op, singleItemOutcome } from '../../../../../../services/reducer';
 import type { TaskStore } from '../../../../../../services/taskStore';
-import { overlayStatusGlyph, STATUS_LABEL } from '../../_shared/format';
+import { overlayStatusGlyph, STATUS_LABEL } from '../../_shared/format.cli';
 import { countTasks, visibleTasks } from '.././_lib/selectors';
 
 export const TASK_SPACE_OVERLAY_OPTIONS = DOOM_FULLSCREEN_UI_OPTIONS.overlayOptions;

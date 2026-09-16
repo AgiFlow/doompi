@@ -14,7 +14,7 @@ import {
   renderTaskResult,
   STATUS_GLYPH,
   STATUS_LABEL,
-} from '../src/extensions/workspaces/sessions/(frontend)/_shared/format';
+} from '../src/extensions/workspaces/sessions/(frontend)/_shared/format.cli';
 import {
   deriveTaskProjection,
   groupTasks,

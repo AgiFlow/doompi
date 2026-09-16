@@ -84,6 +84,175 @@ function preview(message: string): string {
   return flat.length > MESSAGE_PREVIEW_CHARS ? `${flat.slice(0, MESSAGE_PREVIEW_CHARS - 1)}${ELLIPSIS}` : flat;
 }
 
+/** Structured rows kept in a collapsed result, before the card is expanded. */
+export const COLLAPSED_RESULT_ROWS = 8;
+
+export type SubagentRowTone = 'ok' | 'error' | 'running' | 'idle';
+
+/** One line of a structured subagent result: who, what, and the state flushed right. */
+export interface SubagentRow {
+  key: string;
+  /** The run id or the agent name. */
+  label: string;
+  /** What it is doing, says, or failed with. Truncates. */
+  detail: string;
+  /** The state word on the right, empty when the row has none. */
+  state: string;
+  tone: SubagentRowTone;
+}
+
+export type SubagentResultKind = 'agents' | 'run' | 'fleet' | 'status' | 'suspended' | 'control';
+
+/** A finished subagent result as the card shows it, narrowed from the wire details. */
+export interface SubagentResultView {
+  kind: SubagentResultKind;
+  rows: SubagentRow[];
+  /** The count under the rows, or a control action's one-line confirmation. */
+  summary: string;
+  tone: SubagentRowTone;
+}
+
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function parts(values: unknown[]): string {
+  return values.filter((value): value is string => typeof value === 'string' && value.trim() !== '').join(' · ');
+}
+
+function firstLine(value: unknown): string {
+  return asString(value).split('\n')[0] ?? '';
+}
+
+function stateTone(state: string): SubagentRowTone {
+  if (state === 'failed' || state === 'error') return 'error';
+  if (state === 'complete' || state === 'completed') return 'ok';
+  if (state === 'running' || state === 'starting') return 'running';
+  return 'idle';
+}
+
+function countSummary(count: number, noun: string): string {
+  return count === 0 ? `no ${noun}s` : `${count} ${noun}${count === 1 ? '' : 's'}`;
+}
+
+function agentsView(value: unknown): SubagentResultView {
+  const rows = records(value).map((agent, index) => ({
+    key: `${asString(agent.name)}-${index}`,
+    label: asString(agent.name),
+    detail: preview(asString(agent.description)),
+    state: asString(agent.source),
+    tone: 'idle' as const,
+  }));
+  return { kind: 'agents', rows, summary: countSummary(rows.length, 'agent'), tone: 'idle' };
+}
+
+function runView(value: unknown): SubagentResultView {
+  const outcomes = records(value);
+  const rows = outcomes.map((outcome, index) => {
+    const runId = asString(outcome.runId);
+    return {
+      key: runId || `${asString(outcome.agent)}-${index}`,
+      label: asString(outcome.agent),
+      detail: runId || preview(asString(outcome.error)) || 'unknown error',
+      state: runId ? 'started' : 'failed',
+      tone: (runId ? 'ok' : 'error') as SubagentRowTone,
+    };
+  });
+  const started = rows.filter((row) => row.state === 'started').length;
+  const failed = rows.length - started;
+  return {
+    kind: 'run',
+    rows,
+    summary: failed === 0 ? `${started} started` : `${started} started · ${failed} failed`,
+    tone: failed === 0 ? 'ok' : 'error',
+  };
+}
+
+function fleetView(value: unknown): SubagentResultView {
+  const rows = records(value).map((job, index) => {
+    const state = asString(job.status) || 'starting';
+    return {
+      key: asString(job.runId) || `run-${index}`,
+      label: asString(job.runId),
+      detail: preview(parts([job.agent, job.currentTool, job.activityState, job.attentionReason, job.error])),
+      state,
+      tone: stateTone(state),
+    };
+  });
+  return { kind: 'fleet', rows, summary: countSummary(rows.length, 'run'), tone: 'idle' };
+}
+
+function suspendedView(value: unknown): SubagentResultView {
+  const runs = isRecord(value) ? [value] : records(value);
+  const rows = runs.map((run, index) => {
+    const resumable = run.resumable;
+    return {
+      key: asString(run.runId) || `suspended-${index}`,
+      label: asString(run.runId),
+      detail: preview(parts([run.agent, firstLine(run.task)])),
+      state: resumable === false ? 'not resumable' : resumable === true ? 'resumable' : 'suspended',
+      tone: (resumable === false ? 'error' : 'idle') as SubagentRowTone,
+    };
+  });
+  return { kind: 'suspended', rows, summary: countSummary(rows.length, 'suspended run'), tone: 'idle' };
+}
+
+function statusView(details: Record<string, unknown>): SubagentResultView {
+  const runId = asString(details.runId);
+  const status = isRecord(details.status) ? details.status : undefined;
+  const state = status ? asString(status.state) : '';
+  if (!state) return { kind: 'status', rows: [], summary: `${runId} has no status yet`, tone: 'idle' };
+  return {
+    kind: 'status',
+    rows: [
+      {
+        key: runId,
+        label: runId,
+        detail: preview(parts([status?.agent, status?.activityState, status?.summary, status?.error])),
+        state,
+        tone: stateTone(state),
+      },
+    ],
+    summary: '',
+    tone: stateTone(state),
+  };
+}
+
+function controlView(summary: string, tone: SubagentRowTone): SubagentResultView {
+  return { kind: 'control', rows: [], summary, tone };
+}
+
+/**
+ * Narrows the wire `details` of a subagent result to the rows the card draws.
+ * Null when they are not a finished subagent result at all, which is what a
+ * partial update or an error message is: the card then falls back to the text.
+ */
+export function subagentResultView(details: unknown): SubagentResultView | null {
+  if (!isRecord(details) || details.partial === true) return null;
+  if (Array.isArray(details.agents)) return agentsView(details.agents);
+  if (Array.isArray(details.outcomes)) return runView(details.outcomes);
+  if (isRecord(details.spawn) && Array.isArray(details.spawn.outcomes)) return runView(details.spawn.outcomes);
+  if (Array.isArray(details.runs)) return fleetView(details.runs);
+  if (Array.isArray(details.fleet)) return fleetView(details.fleet);
+  if (details.suspended !== undefined) return suspendedView(details.suspended);
+  if (isRecord(details.control)) {
+    return controlView(`stop requested for ${asString(details.runId)}`, 'ok');
+  }
+  if (isRecord(details.steer)) {
+    const state = asString(details.steer.state);
+    return controlView(
+      `steer ${state}${details.steer.message ? `: ${preview(asString(details.steer.message))}` : ''}`,
+      state === 'failed' ? 'error' : 'ok',
+    );
+  }
+  if (isRecord(details.restore)) {
+    const restore = details.restore;
+    return controlView(`restored ${asString(restore.restoredFrom)} as ${asString(restore.runId)}`, 'ok');
+  }
+  if (typeof details.runId === 'string') return statusView(details);
+  return null;
+}
+
 export interface IntercomCallSummary {
   action: string;
   /** The member or request the action addresses, empty for members and pending. */

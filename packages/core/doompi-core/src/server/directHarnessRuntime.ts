@@ -909,7 +909,17 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
         context,
       ),
     );
-    if (!admission.ok) resultError(admission);
+    if (!admission.ok) {
+      // A turn can begin between the inspectExecution read above and this accept. The lane then
+      // reports LaneBusy, and a caller that named a streaming behaviour wants delivery into the
+      // live turn rather than a failure, so it is steered in.
+      if (streamingBehavior !== undefined && admission.error._tag === 'LaneBusy') {
+        const queued = await writable(() => lane.steer(text, images, context));
+        if (!queued.ok) resultError(queued);
+        return { settled: Promise.resolve() };
+      }
+      resultError(admission);
+    }
     return { settled: drive(admission.value.operationId) };
   };
 
@@ -945,11 +955,12 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   const submitPrompt = async (
     text: string,
     images?: ImageContent[],
+    streamingBehavior?: 'steer' | 'followUp',
   ): Promise<{ settled: Promise<void>; handledCommand?: boolean }> => {
     if (await options.dispatchCommand?.(text)) {
       return { settled: Promise.resolve(), handledCommand: true };
     }
-    return admitPrompt(text, images);
+    return admitPrompt(text, images, streamingBehavior);
   };
   const prompt = async (text: string, images?: ImageContent[]): Promise<void> => {
     const submission = await submitPrompt(text, images);

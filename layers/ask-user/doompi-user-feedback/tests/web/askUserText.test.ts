@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { askCallSummary, askResultView } from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/askUserText';
+import {
+  askCallSummary,
+  askResultView,
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/askUserText';
 
 describe('the ask_user_question card text', () => {
   it('counts the questions and lists their headers', () => {

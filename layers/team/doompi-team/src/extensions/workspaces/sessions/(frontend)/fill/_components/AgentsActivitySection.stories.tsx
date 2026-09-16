@@ -42,7 +42,7 @@ subagents.update('agents-busy', (current) => ({
       state: 'running',
       startedAt: NOW - 2 * MINUTE,
       toolCount: 6,
-      tail: ['pnpm exec vitest run src/web'],
+      tail: ['pnpm exec vitest run src/extensions'],
     }),
     run({ runId: 'run-8f23', agent: 'scout', state: 'queued', startedAt: NOW, toolCount: 0 }),
     run({ runId: 'run-8f14', agent: 'reviewer', state: 'done', summary: 'two defects filed' }),

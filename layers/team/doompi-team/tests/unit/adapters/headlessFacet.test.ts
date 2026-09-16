@@ -34,6 +34,12 @@ async function fixture(options: { serverHost?: unknown } = {}) {
       entries: () => [],
       appendCustomEntry: vi.fn(),
       prompt: vi.fn(),
+      // `admitPrompt` is the wake primitive: 'steer' means "how to deliver if a
+      // turn is running", and an idle agent is woken either way. `prompt` is
+      // kept beside it because it is a different contract - enqueue-only for
+      // 'steer' - and the facet must never reach for it to wake anything.
+      admitPrompt: vi.fn(async () => undefined),
+      activity: vi.fn(async () => ({ hasPendingMessages: false, isIdle: true })),
       abort: vi.fn(),
       compact: vi.fn(),
       forkSource: vi.fn(async () => ({
@@ -219,6 +225,7 @@ describe('teamHeadlessFacet', () => {
         parentForkSource: { kind: 'v4-fork', sessionFile: '/sessions/parent.sqlite', branch: 'main' },
       });
       expect(test.execution.session.prompt).not.toHaveBeenCalled();
+      expect(test.execution.session.admitPrompt).not.toHaveBeenCalled();
     } finally {
       handler.close();
       spawn.mockRestore();
@@ -321,7 +328,7 @@ describe('teamHeadlessFacet', () => {
     }
   });
 
-  it('attaches completion notifications to the headless client', async () => {
+  it('wakes the model on a completion and records the full result in the transcript', async () => {
     const test = await fixture();
     try {
       await expect(
@@ -332,11 +339,95 @@ describe('teamHeadlessFacet', () => {
           summary: 'failed',
         }),
       ).resolves.toBe(true);
-      expect(test.client.notify).toHaveBeenCalledWith(
-        expect.objectContaining({ body: expect.stringContaining('failed') }),
+
+      // The toast is a headline. Routing the model-facing text here is what
+      // produced the wall of run-on prose: the notification schema collapses
+      // every newline and caps the body at 4096 characters.
+      expect(test.client.notify).toHaveBeenCalledWith({
+        body: 'Background task failed: worker (headless-completion)',
+        level: 'warning',
+      });
+
+      // The transcript keeps the full multi-line content and the structured
+      // details, under the same custom type the TUI renderer is keyed on.
+      expect(test.execution.session.appendCustomEntry).toHaveBeenCalledWith(
+        'subagent-notify',
+        expect.objectContaining({
+          content: expect.stringContaining('run id: headless-completion'),
+          details: [expect.objectContaining({ runId: 'headless-completion', status: 'failed' })],
+        }),
       );
+
+      // The wake itself. `prompt` must stay untouched: `prompt(_, 'steer')` is
+      // enqueue-only and parks the message on an idle lane.
+      expect(test.execution.session.admitPrompt).toHaveBeenCalledWith(
+        expect.stringContaining('Background task failed'),
+        'steer',
+      );
+      expect(test.execution.session.prompt).not.toHaveBeenCalled();
     } finally {
       await test.dispose();
     }
+  });
+
+  it('sequences two completions that settle in the same tick', async () => {
+    const test = await fixture();
+    try {
+      // Failures bypass the notifier's batcher, so both emit immediately.
+      // Without sequencing these would race two lane admissions against each
+      // other and one could be silently dropped.
+      const [first, second] = await Promise.all([
+        test.runtime.completionNotifier.deliver({ runId: 'run-a', agent: 'a', success: false, summary: 'boom a' }),
+        test.runtime.completionNotifier.deliver({ runId: 'run-b', agent: 'b', success: false, summary: 'boom b' }),
+      ]);
+      expect([first, second]).toEqual([true, true]);
+
+      const admit = test.execution.session.admitPrompt as ReturnType<typeof vi.fn>;
+      expect(admit).toHaveBeenCalledTimes(2);
+      expect(admit.mock.calls[0]?.[0]).toContain('run-a');
+      expect(admit.mock.calls[1]?.[0]).toContain('run-b');
+    } finally {
+      await test.dispose();
+    }
+  });
+
+  it('reports non-delivery when the wake fails so the result claim survives', async () => {
+    const test = await fixture();
+    try {
+      // Consumers call `acknowledgeHandoff` on `true`, which drops
+      // `ResultWatcher`'s claim. Reporting an optimistic `true` here would lose
+      // the completion for good.
+      (test.execution.session.admitPrompt as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('lane closed'));
+      await expect(
+        test.runtime.completionNotifier.deliver({
+          runId: 'undelivered',
+          agent: 'worker',
+          success: false,
+          summary: 'failed',
+        }),
+      ).resolves.toBe(false);
+    } finally {
+      await test.dispose();
+    }
+  });
+
+  it('starts the poll scheduler on mount so registered subscriptions tick', async () => {
+    const test = await fixture();
+    // The delegation bridge registers a progress subscription against this
+    // scheduler and then calls `wake()`. `wake()` returns immediately while the
+    // scheduler is not running, so never starting it left that subscription -
+    // and the pre-timeout nudge it drives - permanently dead in headless.
+    const ticked = vi.fn();
+    const unregister = test.runtime.pollScheduler.register({ id: 'probe', intervalMs: 1000, run: ticked });
+    try {
+      test.runtime.pollScheduler.wake();
+      expect(ticked).toHaveBeenCalled();
+    } finally {
+      unregister();
+      await test.dispose();
+    }
+    ticked.mockClear();
+    test.runtime.pollScheduler.wake();
+    expect(ticked).not.toHaveBeenCalled();
   });
 });

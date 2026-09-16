@@ -6,7 +6,7 @@ import { type TUI, truncateToWidth } from '@earendil-works/pi-tui';
 import type { Task } from '../../../../../../models/task';
 import { COLLAPSE_KEY_OFF, getMaxWidgetLines, resolveCollapseKey } from '../../../../../../services/config';
 import type { DelegationManager } from '../../../../../../services/delegation';
-import { formatOverlayTaskLine } from '../../_shared/format';
+import { formatOverlayTaskLine } from '../../_shared/format.cli';
 import { deriveTaskProjection, selectOverlayLayoutFromProjection, visibleTasks } from './selectors';
 
 const WIDGET_KEY = 'doom-tasks';

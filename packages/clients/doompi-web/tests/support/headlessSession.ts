@@ -307,8 +307,13 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
     readResources: async () => ({}) as never,
     appendCustomEntry: async () => '',
     recordUsage: async () => '',
-    submitPrompt: async (message: string, images?: unknown[]) => {
-      record({ type: 'prompt', message, ...(images === undefined ? {} : { images }) });
+    submitPrompt: async (message: string, images?: unknown[], streamingBehavior?: 'steer' | 'followUp') => {
+      record({
+        type: 'prompt',
+        message,
+        ...(images === undefined ? {} : { images }),
+        ...(streamingBehavior === undefined ? {} : { streamingBehavior }),
+      });
       await answer('prompt', undefined);
       return { settled: Promise.resolve() };
     },
@@ -373,6 +378,12 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
           : delivery === 'followUp'
             ? runtime.followUp(text)
             : runtime.prompt(text),
+      admitPrompt: async (text, delivery) => {
+        // followUp stays enqueue-only, mirroring headlessSessionHost: voiceServer/index.ts:120 asks
+        // for 'followUp' while idle whenever a capture is queued.
+        if (delivery === 'followUp') return runtime.followUp(text);
+        await runtime.submitPrompt(text, undefined, delivery === 'steer' ? 'steer' : undefined);
+      },
       abort: () => runtime.abort(),
       compact: (instructions) => runtime.compact(instructions),
       activity: async () => ({ hasPendingMessages: false, isIdle: true }),

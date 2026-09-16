@@ -1,7 +1,7 @@
 import { definePiToolRenderer } from '@agimon-ai/doompi-core/pi-extension';
 
 import type { BashParams } from '../../../../../schemas/bashTool';
-import { renderBashCall, renderBashResult } from './_lib/bashRender';
+import { renderBashCall, renderBashResult } from './_lib/bashRender.cli';
 export default definePiToolRenderer({
   renderCall: (args: unknown, theme: Parameters<typeof renderBashCall>[1]) => renderBashCall(args as BashParams, theme),
   renderResult: (

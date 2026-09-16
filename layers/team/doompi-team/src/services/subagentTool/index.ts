@@ -69,7 +69,8 @@ function scopeOrDefault(scope: AgentScope | undefined): AgentScope {
   return scope ?? 'both';
 }
 
-function formatAgentList(agents: AgentConfig[]): string {
+/** The agent roster, as the model reads it. Shared with the headless tool so both hosts word it alike. */
+export function formatAgentList(agents: AgentConfig[]): string {
   return [
     'Executable agents:',
     ...(agents.length
@@ -80,7 +81,11 @@ function formatAgentList(agents: AgentConfig[]): string {
   ].join('\n');
 }
 
-function publicAgent(agent: AgentConfig): Record<string, unknown> {
+/**
+ * The fields of an agent a caller may see. Deliberately not the whole
+ * `AgentConfig`: `systemPrompt` and `filePath` are ours, not the model's.
+ */
+export function publicAgent(agent: AgentConfig): Record<string, unknown> {
   const tools = [...(agent.tools ?? []), ...(agent.mcpDirectTools ?? []).map((tool) => `mcp:${tool}`)];
   return {
     name: agent.name,
@@ -98,7 +103,8 @@ function publicSuspendedRun(run: SuspendedRun): SuspendedRun & { resumable: bool
   return { ...run, resumable: isSuspendedRunResumable(run) };
 }
 
-function formatAgentDetail(agent: AgentConfig): string {
+/** One agent in full, as the model reads it. Shared with the headless tool. */
+export function formatAgentDetail(agent: AgentConfig): string {
   const detail = publicAgent(agent);
   return [
     `Agent: ${agent.name} (${agent.source})`,

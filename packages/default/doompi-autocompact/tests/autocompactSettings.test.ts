@@ -1,6 +1,7 @@
 import { DOOM_PLANNING_THINKING_LEVELS, parseAutocompactModeConfig } from '@agimon-ai/doompi-config';
 import { describe, expect, it } from 'vitest';
 
+import { autocompactSettingsSection } from '../src/extensions/(frontend)/_lib/autocompactSettings';
 import globalSettings from '../src/extensions/(frontend)/setting/autocompact.web';
 import workspaceSettings from '../src/extensions/workspaces/(frontend)/setting/autocompact.web';
 import {
@@ -8,7 +9,6 @@ import {
   AUTOCOMPACT_SETTING_SHAPES,
   AUTOCOMPACT_THINKING_LEVELS,
 } from '../src/types/autocompactSettings';
-import { autocompactSettingsSection } from '../src/extensions/(frontend)/_lib/autocompactSettings';
 const webPlugin = {
   id: 'autocompact',
   settingsSections: [globalSettings, workspaceSettings],

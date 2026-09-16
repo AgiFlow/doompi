@@ -51,6 +51,11 @@ export interface DoomHeadlessClientRequest {
 }
 
 export interface DoomHeadlessClient {
+  /**
+   * Operator-facing surface only: the body is flattened to one line and capped at 4096 characters
+   * by schemas/notification.ts:73-83, and the model never sees it. Use session.admitPrompt to
+   * reach the model.
+   */
   notify(request: DoomNotificationRequest): void | Promise<void>;
   request(request: DoomHeadlessClientRequest, signal?: AbortSignal): Promise<unknown>;
   setStatus(source: string, text: string | undefined): void;
@@ -72,8 +77,16 @@ export interface DoomHeadlessSession {
     limit?: number;
   }): readonly Record<string, unknown>[] | Promise<readonly Record<string, unknown>[]>;
   appendCustomEntry(type: string, data: unknown): Promise<void>;
+  /**
+   * Delivers and awaits the turn. 'steer' and 'followUp' only enqueue into a running turn; they do
+   * NOT wake an idle agent.
+   */
   prompt(text: string, delivery?: 'prompt' | 'steer' | 'followUp'): Promise<void>;
-  /** Resolves when accepted by the session, before the agent turn settles. */
+  /**
+   * Resolves when accepted by the session, before the agent turn settles. Here 'steer' describes
+   * how to deliver IF a turn is already running; an idle agent is woken either way, matching Pi's
+   * ExtensionAPI.sendMessage({ triggerTurn: true, deliverAs: 'steer' }).
+   */
   admitPrompt?(text: string, delivery?: 'prompt' | 'steer' | 'followUp'): Promise<void>;
   abort(): Promise<void>;
   compact(instructions?: string): Promise<void>;

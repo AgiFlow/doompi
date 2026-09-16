@@ -46,9 +46,13 @@ function routedSegments(relativePath: string): readonly string[] | undefined {
  *   is what tells `tool/x.cli.tsx` from `tool/x.web.tsx`.
  *
  * Everything else under `(frontend)` is browser, including the private folders
- * colocated beside a surface. A private folder sitting directly at the side
- * root names no surface to read, and counts as browser; a terminal helper in
- * that position has to move under the surface it serves.
+ * colocated beside a surface, and a private folder at the side root, which
+ * names no surface to read.
+ *
+ * That default is why a private terminal helper carries `.cli` even though the
+ * scan never routes it: on a shared surface such as `tool/`, the folder says
+ * nothing about which host draws the file, so `_lib/bashRender.cli.ts` is the
+ * only thing distinguishing a TUI renderer from a cockpit one sitting beside it.
  *
  * Path in, answer out: nothing here reads the file or the filesystem.
  */

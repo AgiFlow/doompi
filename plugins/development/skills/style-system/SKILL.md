@@ -35,7 +35,7 @@ each configured package extends one by name.
 
 - `packages/core/doompi-web-components` extends `doom-components`
 - `packages/clients/doompi-web` extends `doom-web-app`
-- every package with a `src/web/components` tree extends `doom-plugin`
+- every package with colocated browser components under `src/extensions/**/(frontend)/**/_components` extends `doom-plugin`
 
 Resolution is `defaults` then the preset then the project file, replacing whole
 values per field. There is no upward directory walk: a project config is read only

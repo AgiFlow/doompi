@@ -175,7 +175,11 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
     usage: Usage,
     options?: { entryId?: string; details?: import('@earendil-works/pi-agent-core').JsonValue },
   ): Promise<string>;
-  submitPrompt(text: string, images?: ImageContent[]): Promise<{ settled: Promise<void>; handledCommand?: boolean }>;
+  submitPrompt(
+    text: string,
+    images?: ImageContent[],
+    streamingBehavior?: 'steer' | 'followUp',
+  ): Promise<{ settled: Promise<void>; handledCommand?: boolean }>;
   prompt(text: string, images?: ImageContent[]): Promise<void>;
   steer(text: string, images?: ImageContent[]): Promise<void>;
   followUp(text: string, images?: ImageContent[]): Promise<void>;
