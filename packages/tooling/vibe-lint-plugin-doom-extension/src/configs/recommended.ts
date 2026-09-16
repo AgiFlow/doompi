@@ -25,6 +25,7 @@ const rules: Record<string, Severity> = {
   'schema-placement': 'error',
   'doom-package-shape': 'error',
   'doom-prompt-shape': 'error',
+  'doom-resource-kind': 'error',
   'doom-server-facet-shape': 'error',
   'pi-peer-version': 'error',
   'prefer-cordis-container': 'error',

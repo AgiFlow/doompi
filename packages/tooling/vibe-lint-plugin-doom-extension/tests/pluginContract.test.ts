@@ -20,6 +20,7 @@ const EXPECTED_RULE_IDS = [
   'doom-layer-boundary',
   'doom-package-shape',
   'doom-prompt-shape',
+  'doom-resource-kind',
   'doom-server-facet-shape',
   'extension-side-boundary',
   'flat-service-layout',

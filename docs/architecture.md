@@ -82,6 +82,30 @@ owning package links its prompts from `llms.txt` and registers their descriptors
 through the shared Help service. Package-root `skills/**` remains available for
 skills that Pi discovers and executes directly.
 
+### Resource kinds and what they cost
+
+A `DoomHeadlessResource` declares a `kind`, and the choice decides what the model
+is billed for on every turn.
+
+| kind      | cost                                     | what reaches the model                                                        | use for                                              |
+| --------- | ---------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `context` | eager, full text, **every prompt build** | the text verbatim                                                             | small live session state that exists nowhere on disk |
+| `skill`   | ~40 tokens                               | name, description and path; the agent reads the file when it matches the task | every file the package ships                         |
+| `prompt`  | none until invoked                       | nothing                                                                       | `/`-invoked templates                                |
+
+The rule in one line: **if it is a file the package ships, it is a `skill`.** A
+README registered as `context` costs its full length on every single turn, and
+`read()` re-runs from disk each time.
+
+A `context` resource that must carry a shipped file anyway, such as a Help catalog
+index, needs a `when` clause so it stays out of the default prompt. The
+`doom-resource-kind` lint rule enforces both halves.
+
+Resolve shipped files with `packageResourcePath` / `readPackageResource` from
+`@agimon-ai/doompi-core/server-facet`. They anchor on the nearest ancestor
+`package.json`, which is the only sentinel correct from `src/` and `dist/` alike;
+a hand-counted `new URL('../../..', import.meta.url)` resolves into `dist/` at
+runtime and silently substitutes placeholder prose into the system prompt.
 Selectable packages resolve from the consumer repository through normal `node_modules` lookup or Pi's project-local `.pi/npm` store. Fixed host entries may fall back to the root package dependency closure. When a required bare package is missing, DoomPi asks Pi to resolve `npm:<package-name>` and reuses the installed result. Optional packages and local paths are not installed automatically.
 
 ### Cockpit plugin source

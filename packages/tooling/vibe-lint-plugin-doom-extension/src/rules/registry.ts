@@ -48,6 +48,7 @@ import { packageApiManifest } from './packageApi.js';
 import { piExtensionDefaultFactory } from './piExtensionContract.js';
 import { pluginCompositionWiring } from './pluginWiring.js';
 import { doomPromptShape } from './prompts.js';
+import { doomResourceKind } from './resourceKind.js';
 import {
   webPluginEntry,
   webPluginGeneratedClientWiring,
@@ -93,6 +94,7 @@ export const rules: Record<string, RuleDefinition> = {
   'schema-placement': schemaPlacement,
   'doom-package-shape': doomPackageShape,
   'doom-prompt-shape': doomPromptShape,
+  'doom-resource-kind': doomResourceKind,
   'pi-peer-version': piPeerVersion,
   'prefer-cordis-container': preferCordisContainer,
   'pi-extension-default-factory': piExtensionDefaultFactory,
