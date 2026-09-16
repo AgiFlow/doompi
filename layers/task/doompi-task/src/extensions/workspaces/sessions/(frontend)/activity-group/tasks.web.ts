@@ -1,6 +1,5 @@
 import { defineActivityGroup } from '@agimon-ai/doompi-core/web';
 
-import { isDelegationActive } from '../../../../../models/task';
 import { tasks } from '../channel/_lib/tasksStore';
 
 /**
@@ -21,7 +20,9 @@ export default defineActivityGroup({
       return () => subscription.unsubscribe();
     },
     isActive(sessionId: string | null) {
-      return tasks.select(tasks.store.state, sessionId).tasks.some(isDelegationActive);
+      return tasks
+        .select(tasks.store.state, sessionId)
+        .tasks.some((task) => task.delegation?.state === 'requested' || task.delegation?.state === 'running');
     },
   },
   order: 65,
