@@ -61,6 +61,26 @@ describe('No raw theme colour rule', () => {
     expect(check('src/components/Dot.tsx', "const fill = 'hsla(0, 100%, 50%, 0.4)';\n")).toContain('hardcodes');
   });
 
+  it('covers a component colocated beside a routed browser surface', () => {
+    const result = check(
+      'src/extensions/workspaces/sessions/(frontend)/tool/_components/GrepToolMessage.tsx',
+      "const row = 'rounded-md bg-[#312A1C]';\nexport const GrepToolMessage = () => null;\n",
+    );
+
+    expect(result).toContain("hardcodes 'rounded-md bg-[#312A1C]'");
+  });
+
+  it('leaves the terminal half of the frontend side alone', () => {
+    const overlay = check(
+      'src/extensions/workspaces/sessions/(frontend)/overlay/taskOverlay.cli.ts',
+      "const bg = '#282c34';\n",
+    );
+    const tool = check('src/extensions/workspaces/sessions/(frontend)/tool/grep.cli.ts', "const bg = '#282c34';\n");
+
+    expect(overlay).toBeNull();
+    expect(tool).toBeNull();
+  });
+
   it('leaves the theme runtime, the theme configs and the tests alone', () => {
     expect(check('src/theme/builtinThemes.ts', "export const bg = '#282c34';\n")).toBeNull();
     expect(check('tests/theme/theme.test.ts', "expect(theme.tokens.bg).toBe('#282c34');\n")).toBeNull();

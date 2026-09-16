@@ -97,6 +97,30 @@ describe('Prefer shared primitive rule', () => {
     );
   });
 
+  it('covers a component colocated beside a routed browser surface', () => {
+    const result = check(
+      'src/extensions/workspaces/sessions/(frontend)/tool/_components/GrepToolMessage.tsx',
+      'export const P = () => <button className="px-2">run</button>;',
+    );
+
+    expect(result).toContain('<button> (use Button)');
+  });
+
+  it('leaves the terminal half of the frontend side alone', () => {
+    // A terminal-only surface draws with pi-tui, where these tags are not DOM elements.
+    const overlay = check(
+      'src/extensions/workspaces/sessions/(frontend)/overlay/_components/Row.tsx',
+      'export const P = () => <button />;',
+    );
+    const tool = check(
+      'src/extensions/workspaces/sessions/(frontend)/overlay/taskOverlay.cli.ts',
+      'export const P = () => <button />;',
+    );
+
+    expect(overlay).toBeNull();
+    expect(tool).toBeNull();
+  });
+
   it('leaves the component library alone, since that is where the primitives are built', () => {
     fs.mkdirSync(path.join(root, 'src', 'components'), { recursive: true });
     expect(check('src/components/Button.tsx', 'export const B = () => <button />;')).toBeNull();

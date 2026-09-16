@@ -37,6 +37,11 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     },
+    "./browser-file": {
+      "types": "./dist/browserFile.d.mts",
+      "import": "./dist/browserFile.mjs",
+      "require": "./dist/browserFile.cjs"
+    },
     "./tsdown": {
       "types": "./dist/tsdown.d.mts",
       "import": "./dist/tsdown.mjs",

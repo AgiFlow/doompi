@@ -84,8 +84,50 @@ describe('skill headless facet', () => {
     await namedSkill.execute('', execution);
     await namedSkill.execute('extra context', execution);
     expect(prompt).toHaveBeenCalledWith(expect.stringContaining('extra context'));
+    // Repository skills belong to the repository, so no selection gates them.
+    expect(namedSkill.when).toBeUndefined();
 
     await close?.();
     expect(disposers.every((dispose) => dispose.mock.calls.length === 1)).toBe(true);
+  });
+
+  it('gates a domain plugin skill on that domain so a selection switch reconciles it', async () => {
+    const cwd = await mkdtemp(path.join(tmpdir(), 'doompi-skill-domains-'));
+    temporaryDirectories.push(cwd);
+    const pluginSkill = path.join(cwd, 'plugins', 'writing', 'skills', 'outline');
+    await mkdir(pluginSkill, { recursive: true });
+    await writeFile(path.join(pluginSkill, 'SKILL.md'), '---\nname: outline\ndescription: Outline\n---\n# Outline\n');
+    // Root discovery only registers a directory that declares itself a plugin.
+    await mkdir(path.join(cwd, 'plugins', 'writing', '.claude-plugin'), { recursive: true });
+    await writeFile(
+      path.join(cwd, 'plugins', 'writing', '.claude-plugin', 'plugin.json'),
+      JSON.stringify({ name: 'writing', version: '0.1.0', description: 'Writing' }),
+    );
+    await mkdir(path.join(cwd, '.doom'), { recursive: true });
+    await writeFile(
+      path.join(cwd, '.doom', 'domains.yaml'),
+      'plugins:\n  roots: [plugins]\n\ndomains:\n  writing:\n    plugins: [writing]\n',
+    );
+
+    const commands = new Map<string, DoomHeadlessCommand>();
+    const host = {
+      context: { cwd, repoRoot: cwd, environment: { HOME: cwd } },
+      registerResource: () => ({ dispose: vi.fn() }),
+      registerCommand: (registered: DoomHeadlessCommand) => {
+        commands.set(registered.name, registered);
+        return { dispose: vi.fn() };
+      },
+    } as unknown as DoomHeadlessHostService;
+    const close = await skillHeadlessFacet.apply({
+      effect() {},
+      get: (name: string) => (name === 'doom/server-host' ? { scope: 'session' } : host),
+    } as unknown as Context);
+
+    // The facet mounts once, so the command has to carry the condition rather
+    // than be rebuilt: this is what lets a cockpit /domains switch add and
+    // remove it without restarting the session.
+    expect(commands.get('skill:outline')?.when).toEqual({ domain: 'writing' });
+
+    await close?.();
   });
 });
