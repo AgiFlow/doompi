@@ -174,3 +174,23 @@ describe('path parameters', () => {
     );
   });
 });
+
+describe('multi-segment path parameters', () => {
+  const session = { scope: 'session', workspaceId: WORKSPACE, sessionId: SESSION } as const;
+
+  it("keeps the slashes inside a Hono ':name{.+}' value, escaping each piece", () => {
+    expect(pluginApiUrl(session, 'workflow', '/artifacts/:name{.+}', undefined, { name: 'reports/a b.md' })).toBe(
+      '/api/workspaces/ws-1/sessions/s-1/plugins/workflow/artifacts/reports/a%20b.md',
+    );
+  });
+
+  it('still escapes a slash in a single-segment parameter', () => {
+    expect(pluginApiUrl(session, 'workflow', '/runs/:runKey', undefined, { runKey: 'a/b' })).toBe(
+      '/api/workspaces/ws-1/sessions/s-1/plugins/workflow/runs/a%2Fb',
+    );
+  });
+
+  it('leaves a catch-all with no value as its literal segment', () => {
+    expect(pluginApiUrl(session, 'workflow', '/artifacts/:name{.+}', undefined, {})).toContain(':name{.+}');
+  });
+});

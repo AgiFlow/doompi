@@ -17,9 +17,7 @@ import type { SavedPromptListResponse, SavedPromptWriteResponse } from './webPro
  * cannot move on one side alone.
  *
  * `:name` is Hono's own parameter syntax, because the app registers `path`
- * verbatim. The generated client has no way to fill a path parameter, so the
- * two routes carrying one are addressed through `url()` with that one segment
- * substituted; see the page's `_lib/promptsApi.ts`.
+ * verbatim, and the client fills it from `params` on the call.
  */
 export default defineApiRoutes({
   list: {

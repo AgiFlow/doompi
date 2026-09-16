@@ -111,8 +111,15 @@ export function applyPathParams(path: string, params: ApiParams | undefined): st
     .split('/')
     .map((segment) => {
       if (!segment.startsWith(':')) return segment;
-      const value = params[segment.slice(1)];
-      return value === undefined ? segment : encodeURIComponent(value);
+      // Hono writes a multi-segment parameter as `:name{.+}`. Its value is a
+      // relative path, so the slashes inside it are structure the route means
+      // to keep; encoding them would address one oddly-named file instead of a
+      // nested one. Each piece is still escaped on its own.
+      const catchAll = segment.endsWith('}');
+      const name = catchAll ? segment.slice(1, segment.indexOf('{')) : segment.slice(1);
+      const value = params[name];
+      if (value === undefined) return segment;
+      return catchAll ? value.split('/').map(encodeURIComponent).join('/') : encodeURIComponent(value);
     })
     .join('/');
 }
