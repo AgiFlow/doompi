@@ -156,19 +156,18 @@ describe('Doom extension plugin contract', () => {
     // builds generated/web.ts instead, so nothing targets that literal path.
     expect(boundaries.some((boundary) => boundary.pattern === 'src/extensions/web.ts')).toBe(false);
     expect(doomExtensionPlugin.patterns?.['doom-web-plugin-entry']).toBeUndefined();
-    expect(doomExtensionPlugin.patterns?.['doom-web-plugin-store']?.includes).toEqual(['src/web/stores/**/*.ts']);
+    expect(doomExtensionPlugin.patterns?.['doom-web-plugin-store']?.includes).toEqual([
+      'src/extensions/**/_lib/**/*Store.ts',
+    ]);
   });
 
   it('provides a warning-only migration preset', () => {
     expect(migration.rules).toEqual(Object.fromEntries(EXPECTED_RULE_IDS.map((ruleId) => [ruleId, 'warn'])));
   });
 
-  it('publishes the web plugin boundary and lets tests reach it', () => {
-    expect(recommended.boundaries).toContainEqual({
-      name: 'web-plugin',
-      pattern: 'src/web/**',
-      allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
-    });
+  it('retires the src/web boundary and keeps the browser patterns on colocated folders', () => {
+    expect(recommended.boundaries?.some((boundary) => boundary.name === 'web-plugin')).toBe(false);
+    expect(recommended.boundaries?.some((boundary) => boundary.pattern === 'src/web/**')).toBe(false);
     // tests reach the browser half through the src/** entry, so no separate
     // web entry is needed here any more.
     expect(recommended.boundaries).toContainEqual({
@@ -177,7 +176,12 @@ describe('Doom extension plugin contract', () => {
       allowedImports: ['src/**', 'tests/**', 'generated/**'],
     });
     for (const id of ['doom-web-plugin-store', 'doom-web-plugin-components', 'doom-web-plugin-lib']) {
-      expect(doomExtensionPlugin.patterns?.[id]?.includes.length, id).toBeGreaterThan(0);
+      const includes = doomExtensionPlugin.patterns?.[id]?.includes ?? [];
+      expect(includes.length, id).toBeGreaterThan(0);
+      expect(
+        includes.every((include) => include.startsWith('src/extensions/')),
+        id,
+      ).toBe(true);
     }
   });
 

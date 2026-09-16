@@ -86,7 +86,7 @@ Selectable packages resolve from the consumer repository through normal `node_mo
 
 ### Cockpit plugin source
 
-A package's browser plugin is generated from named routes under `src/extensions/**/(frontend)`. Tabs, channels, settings, fills, actions, stores, lifecycle hooks, and other presentation surfaces each directly default-export one typed `define*` declaration. Browser implementation lives in private `_components` or `_lib` folders beside its route, or in `src/web` when it is shared across frontend surfaces. Shared wire contracts stay in `src/types`. Browser code never imports backend routes.
+A package's browser plugin is generated from named routes under `src/extensions/**/(frontend)`. Tabs, channels, settings, fills, actions, stores, lifecycle hooks, and other presentation surfaces each directly default-export one typed `define*` declaration. Browser implementation lives in private `_components` or `_lib` folders beside its route, and a `_folder` higher up the `(frontend)` tree when several routes share it. There is no `src/web` root in an extension package. Shared wire contracts stay in `src/types`. Browser code never imports backend routes.
 
 ## Runtime ownership
 

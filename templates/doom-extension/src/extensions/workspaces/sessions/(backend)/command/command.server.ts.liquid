@@ -1,10 +1,10 @@
 import { defineCommand } from '@agimon-ai/doompi-core/extension-file';
 
-import { {{ commandName | pascalCase }}_DESCRIPTION } from '../../../../../constants/{{ commandName | camelCase }}';
+import { COMMAND_DESCRIPTION } from '../../../../../constants/{{ commandName | camelCase }}';
 import { Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService } from '../../../../../services/extensionService';
 
 /**
- * `/{{ commandName }}`, on both backend hosts.
+ * `/{{ commandName }}` on the headless host.
  *
  * The filename is the command name, so nothing repeats it. A factory rather
  * than a literal because the service is constructed per mount; a command with
@@ -13,9 +13,10 @@ import { Default{{ packageName | replace: "doompi-", "" | pascalCase }}Extension
 export default defineCommand(() => {
   const service = new Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService();
   return {
-    description: {{ commandName | pascalCase }}_DESCRIPTION,
+    description: COMMAND_DESCRIPTION,
     async execute(_args, execution) {
-      execution.notify({ body: await service.describe() });
+      const { message, level } = await service.execute();
+      await execution.notify({ body: message, level });
     },
   };
 });

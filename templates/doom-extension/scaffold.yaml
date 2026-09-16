@@ -77,9 +77,12 @@ boilerplate:
       - tests/integration/extensions/pi.test.ts
       - tests/contract/packageShape.test.ts
       - .gitignore
-      - "src/extensions/workspaces/sessions/(backend)/command/command.ts->src/extensions/workspaces/sessions/(backend)/command/{{ commandName | kebabCase }}.ts"
+      - "src/extensions/workspaces/sessions/(backend)/command/command.cli.ts->src/extensions/workspaces/sessions/(backend)/command/{{ commandName | kebabCase }}.cli.ts"
+      - "src/extensions/workspaces/sessions/(backend)/command/command.server.ts->src/extensions/workspaces/sessions/(backend)/command/{{ commandName | kebabCase }}.server.ts"
     instruction: |-
       The path declares the contribution. A file under src/extensions is routed: its folder nesting is the scope (workspaces, then sessions), a (backend) or (frontend) group selects the build side, the next folder is the surface (tool, command, api, channel, tab, fill, setting, slot), and the filename is the contribution's identity. Never hand-write pi.ts, server.ts or web.ts; the build generates all three into generated/, which the package gitignores.
+
+      The filename also names the platform it builds for: cli or server inside (backend), web or cli inside (frontend). Every public routed file carries one of those suffixes and there is no neutral file, so a contribution both backend hosts want is a .cli.ts and a .server.ts pair, not one shared file. A .cli command reaches Pi as a native declaration, so it uses defineCliCommand and carries its own name; the .server half uses defineCommand and takes its name from the path. Files inside a _folder are not routed and carry no suffix.
 
       A routed file exports one contribution through a define* helper, from @agimon-ai/doompi-core/extension-file on the backend and @agimon-ai/doompi-core/web on the frontend. Export the declaration, or a factory of one when it needs the mount context. The path supplies identity, so omit the name, id, slot or event the filename already carries.
 
@@ -120,7 +123,7 @@ features:
       - src/schemas/pluginMethod.ts->src/schemas/{{ methodName | camelCase }}Method.ts
       - "src/extensions/method.global.ts->src/extensions/(backend)/method/{{ methodName | kebabCase }}.server.ts?scope=global"
       - "src/extensions/method.workspace.ts->src/extensions/workspaces/(backend)/method/{{ methodName | kebabCase }}.server.ts?scope=workspace"
-      - "src/web/api/pluginMethod.ts->src/extensions/workspaces/sessions/(frontend)/_lib/{{ methodName | camelCase }}.ts"
+      - "src/extensions/webPluginMethod.ts->src/extensions/workspaces/sessions/(frontend)/_lib/{{ methodName | camelCase }}.ts"
     instruction: Replace example JSON shapes with the package contract. The generated named method route owns the exact {{ scope }} server contribution. The browser helper stays private beside routed frontend contributions and calls the typed method through WebPluginRuntime. Use HTTP for binary transfers. Test request and response validation.
     patterns:
       - src/types/**/*.ts
@@ -295,7 +298,8 @@ features:
       additionalProperties: false
     includes:
       - src/constants/featureCommand.ts->src/constants/{{ commandName | camelCase }}.ts
-      - "src/extensions/featureCommand.ts->src/extensions/workspaces/sessions/(backend)/command/{{ commandName | kebabCase }}.ts"
+      - "src/extensions/featureCommand.cli.ts->src/extensions/workspaces/sessions/(backend)/command/{{ commandName | kebabCase }}.cli.ts"
+      - "src/extensions/featureCommand.server.ts->src/extensions/workspaces/sessions/(backend)/command/{{ commandName | kebabCase }}.server.ts"
       - tests/integration/extensions/featureCommand.test.ts->tests/integration/extensions/{{ commandName | camelCase }}Command.test.ts
     instruction: Declare one shared command through defineCommand in its named routed file. Its execute handler delegates to a service when behavior is nontrivial and uses execution.notify. Metadata lives in constants and host-neutral behavior lives in services. Document the command and test its result.
     patterns:
@@ -428,11 +432,11 @@ features:
         - channelName
       additionalProperties: false
     includes:
-      - "src/extensions/webTab.tsx->src/extensions/workspaces/sessions/(frontend)/tab/{{ pluginId | kebabCase }}.tsx"
-      - "src/extensions/webChannel.ts->src/extensions/workspaces/sessions/(frontend)/channel/{{ channelName | kebabCase }}.ts"
-      - "src/web/topicStore.ts->src/extensions/workspaces/sessions/(frontend)/_lib/{{ topic | camelCase }}Store.ts"
-      - "src/web/TopicPanel.tsx->src/extensions/workspaces/sessions/(frontend)/_components/{{ topic | pascalCase }}Panel.tsx"
-      - src/web/tsconfig.json->tsconfig.web.json
+      - "src/extensions/webTab.tsx->src/extensions/workspaces/sessions/(frontend)/tab/{{ pluginId | kebabCase }}.web.tsx"
+      - "src/extensions/webChannel.ts->src/extensions/workspaces/sessions/(frontend)/channel/{{ channelName | kebabCase }}.web.ts"
+      - "src/extensions/webTopicStore.ts->src/extensions/workspaces/sessions/(frontend)/_lib/{{ topic | camelCase }}Store.ts"
+      - "src/extensions/webTopicPanel.tsx->src/extensions/workspaces/sessions/(frontend)/_components/{{ topic | pascalCase }}Panel.tsx"
+      - tsconfig.web.json
       - src/types/webTopic.ts->src/types/web{{ topic | pascalCase }}.ts
       - tests/unit/webTopicStore.test.ts->tests/unit/web{{ topic | pascalCase }}Store.test.ts
       - tests/web/topicPanel.test.ts->tests/web/{{ topic | camelCase }}Panel.test.ts
@@ -466,8 +470,8 @@ features:
         - toolSummary
       additionalProperties: false
     includes:
-      - "src/web/ToolCard.tsx->src/extensions/workspaces/sessions/(frontend)/_components/{{ toolName | pascalCase }}ToolCard.tsx"
-      - "src/web/toolRender.ts->src/extensions/workspaces/sessions/(frontend)/_lib/{{ toolName | camelCase }}ToolRender.ts"
+      - "src/extensions/webToolCard.tsx->src/extensions/workspaces/sessions/(frontend)/_components/{{ toolName | pascalCase }}ToolCard.tsx"
+      - "src/extensions/webToolRender.ts->src/extensions/workspaces/sessions/(frontend)/_lib/{{ toolName | camelCase }}ToolRender.ts"
       - tests/unit/webToolRender.test.ts->tests/unit/web{{ toolName | pascalCase }}ToolRender.test.ts
     instruction: |-
       Generate a timeline item in the routed frontend contribution's private _components folder and its pure view logic in sibling _lib. Compose the card from the shared MessageItem shell.

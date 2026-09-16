@@ -318,7 +318,7 @@ Three things follow. They never appear in a review, because nothing tracks them.
 
 They still have to reach a consumer. `files` lists `generated/web.ts`, which is the one entry that ships as source for the cockpit to compile, and every Nx target that reads any of them depends on `^build`.
 
-One consequence worth knowing: the cockpit points Tailwind at a plugin's `src/web` when it exists, and the generated entry's own directory otherwise. For a routed package that directory holds no components, so the class scanner falls back to the routing root instead.
+One consequence worth knowing: the cockpit points Tailwind at a plugin's `src/extensions` when it exists, and falls back to a legacy `src/web` root or, failing that, the generated entry's own directory. The routing root comes first because `existsSync` is true for a half-emptied `src/web` that holds nothing but a tsconfig, and scanning that hands Tailwind a directory with no components in it and silently drops every class.
 
 ## Colocation
 
@@ -337,6 +337,8 @@ Inside `api/`, colocation needs no underscore at all: only `route.ts` is a route
 
 Terminal presentation follows the same rule: `overlay/fleet.cli.ts` owns the TUI view, `overlay/_lib/fleetTranscript.ts` belongs beside it, `message/subagent-notify.cli.ts` owns its message renderer, and `tool/subagent.cli.ts` supplies the Pi tool's renderers. These files stay at the session frontend scope instead of a separate `src/tui` root.
 
+That retires `src/tui` as a place for a package's own presentation, in the six packages that used it that way, and nothing else. `src/tui` survives in the five packages that publish terminal primitives for other packages to render with, where it is a public surface re-exported through `src/exports` like `src/services` is. The test is who renders the code: your own routed file, or someone else's.
+
 Private helpers in `_lib` or `_internal` remain beside the routed file that uses them. Service injection and lifecycle cleanup belong in the scope root.
 
 The rule of thumb: shared across surfaces goes to the implementation roots below, used by one surface goes in a `_folder` beside it.
@@ -344,7 +346,9 @@ The rule of thumb: shared across surfaces goes to the implementation roots below
 ## What does not move
 
 - `src/prompts/<skill>/SKILL.md` stays. It is already a folder convention and a published path named by `llms.txt`. The generator derives the resource contributions from it.
-- `src/services` holds platform-agnostic behavior. `src/schemas`, `src/types`, and `src/constants` hold shared contracts, while `src/web` holds browser presentation. Host registration and host-specific handlers live in routed files. A colocated `_folder` holds code shared by several files in one surface.
+- `src/services` holds platform-agnostic behavior. `src/schemas`, `src/types`, and `src/constants` hold shared contracts. Host registration and host-specific handlers live in routed files. A colocated `_folder` holds code shared by several files in one surface.
+
+`src/web` does move. Browser presentation colocates with the routed `(frontend)` file that renders it, in a `_components` folder for components and a `_lib` folder for everything else, and no extension package keeps a `src/web` root. The cockpit host and the core packages that publish a browser contract keep theirs, because those are published surfaces rather than one package's own presentation.
 
 ## Toolchain constraints
 

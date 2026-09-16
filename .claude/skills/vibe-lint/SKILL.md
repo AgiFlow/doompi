@@ -39,7 +39,11 @@ reproducible, needs no provider, and is what the hooks and CI use.
 `package.json` export subpath. `src/extensions/` is the host composition surface.
 Every scanned route directly default-exports one typed `define*` declaration and
 contains no named exports or freeform implementation. Shared implementation lives
-in `src/services`, shared contracts, or private `_lib` and `_components` folders.
+in `src/services` or shared contracts; implementation used by one surface lives in
+a private `_folder` beside its route, `_components` for components and `_lib` for
+everything else. The build never scans a `_folder`, at any depth, so nothing in
+one is a contribution. There is no `src/web` root in an extension package:
+browser code colocates the same way.
 
 `src/prompts/<prompt-name>/SKILL.md` is the package-owned Help resource surface.
 Every prompt directory is kebab-case, is linked from `llms.txt`, and ships through
@@ -49,16 +53,16 @@ hold runtime-discovered Pi skills.
 Dependencies point inward. A layer may import only from itself and the layers
 below it:
 
-| layer        | may import                                                        |
-| ------------ | ----------------------------------------------------------------- |
-| `types/`     | `types`                                                           |
-| `schemas/`   | `schemas`, `types`                                                |
-| `services/`  | `services`, `schemas`, `types` — no `node:*`, no Pi, no container |
-| `adapters/`  | `adapters`, `services`, `schemas`, `types`                        |
-| `commands/`  | `commands`, `services`, `schemas`, `types`                        |
-| `tui/`       | `tui`, `services`, `schemas`, `types`                             |
-| `container/` | everything above                                                  |
-| `exports/`   | everything above                                                  |
+| layer        | may import                                                                |
+| ------------ | ------------------------------------------------------------------------- |
+| `types/`     | `types`                                                                   |
+| `schemas/`   | `schemas`, `types`                                                        |
+| `services/`  | `services`, `schemas`, `types` — no `node:*`, no Pi, no container         |
+| `adapters/`  | `adapters`, `services`, `schemas`, `types`                                |
+| `commands/`  | `commands`, `services`, `schemas`, `types`                                |
+| `tui/`       | `tui`, `services`, `schemas`, `types`. Published terminal primitives only |
+| `container/` | everything above                                                          |
+| `exports/`   | everything above                                                          |
 
 `src/extensions/**/root.cli.ts` and `root.server.ts` construct scoped shared
 state, services, startup work, and lifecycle. Named routes own each tool, command,

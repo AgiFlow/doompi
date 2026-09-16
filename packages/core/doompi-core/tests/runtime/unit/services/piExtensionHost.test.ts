@@ -197,7 +197,10 @@ describe('Pi extension UI theme access', () => {
   });
 });
 
-function stubExtension(names: readonly string[]): Extension {
+function stubExtension(
+  names: readonly string[],
+  handlers: Map<string, unknown> = new Map(),
+): Extension {
   const tools = new Map<string, RegisteredTool>();
   for (const name of names) {
     tools.set(name, {
@@ -214,7 +217,7 @@ function stubExtension(names: readonly string[]): Extension {
   return {
     path: '/extensions/stub.mjs',
     tools,
-    handlers: new Map(),
+    handlers,
     commands: new Map(),
     flags: new Map(),
     shortcuts: new Map(),
@@ -222,10 +225,14 @@ function stubExtension(names: readonly string[]): Extension {
   } as unknown as Extension;
 }
 
-async function loadedHost(names: readonly string[], onActiveToolsChanged?: () => void) {
+async function loadedHost(
+  names: readonly string[],
+  onActiveToolsChanged?: () => void,
+  handlers: Map<string, unknown> = new Map(),
+) {
   const { runtime } = stubRuntime([]);
   const preload: LoadExtensionsResult = {
-    extensions: [stubExtension(names)],
+    extensions: [stubExtension(names, handlers)],
     errors: [],
     runtime: createExtensionRuntime(),
   };
@@ -286,5 +293,33 @@ describe('Pi extension tool surface in the headless host', () => {
     actions.setActiveTools(['alpha', 'ghost']);
 
     expect(host.tools.map((tool) => tool.name)).toEqual(['alpha']);
+  });
+
+  // The Doom Cordis host opens its session from this event, and
+  // DOOM_TOOL_SURFACE_SERVICE is provided there. Without the emit every
+  // DoomToolRestriction stayed inert on this runtime, so mode-gated tools such
+  // as narrate and plan mode's excluded write stayed active.
+  it('starts the Pi session so extension restrictions can take effect', async () => {
+    const started = vi.fn();
+    await loadedHost(['alpha'], undefined, new Map([['session_start', [started]]]));
+
+    expect(started).toHaveBeenCalledTimes(1);
+    expect(started.mock.calls[0]?.[0]).toMatchObject({ type: 'session_start', reason: 'startup' });
+  });
+
+  // Admission, not visibility. The harness keeps the list it was last given, so
+  // a dropped name stays dispatchable until the next replaceTools. The facet
+  // path refuses the same way.
+  it('refuses a captured tool whose name left the active set', async () => {
+    const { host, actions } = await loadedHost(['alpha', 'beta']);
+    const beta = host.tools.find((tool) => tool.name === 'beta')!;
+
+    actions.setActiveTools(['alpha']);
+
+    await expect(
+      beta.execute('call-1', {}, () => {}, undefined as never, undefined as never, {
+        abortSignal: undefined,
+      } as never),
+    ).rejects.toThrow("Tool 'beta' is no longer active");
   });
 });

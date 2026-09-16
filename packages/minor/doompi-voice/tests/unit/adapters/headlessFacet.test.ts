@@ -62,6 +62,50 @@ describe('native Voice session', () => {
     expect(broker.readiness().closed).toBe(true);
     expect(host.context.client.setStatus).toHaveBeenLastCalledWith('doom-voice', undefined);
   });
+
+  // The tools are registered for the whole session and their condition tracks
+  // the minor-mode selection, not the controller, so a call can arrive while
+  // voice is off. Hiding a tool is not the same as refusing it.
+  it('refuses narrate and transfer_voice while the voice controller is not active', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'voice-inactive-'));
+    const host = {
+      context: {
+        cwd: home,
+        repoRoot: home,
+        sessionId: 'native',
+        environment: {},
+        selection: { majorMode: 'copilot', activeLayers: [], domains: [] },
+        client: { notify: vi.fn(), setStatus: vi.fn(), request: vi.fn(), appendComposerText: vi.fn() },
+        session: { activity: async () => ({ isIdle: true }), admitPrompt: vi.fn() },
+      },
+      assertActive: vi.fn(),
+      changeSelection: vi.fn(),
+      registerTool: vi.fn(() => ({ dispose: vi.fn() })),
+    } as unknown as DoomHeadlessHostService;
+    const broker = new VoiceMediaBroker({
+      directEvents: { publish: vi.fn(), subscribe: () => () => undefined, close() {} },
+      sessionId: 'native',
+      clientConnectWaitMs: 0,
+    });
+    const facet = createVoiceServer(host, broker, home);
+    try {
+      const narrate = facet.tools!.find((tool) => tool.name === 'narrate')!;
+      const refused = await narrate.execute('call-1', { text: 'should not speak' }, undefined as never);
+      expect(refused.isError).toBe(true);
+      expect(refused.details).toMatchObject({
+        outcome: 'failed',
+        error: { code: 'VOICE_TOOL_INACTIVE' },
+      });
+
+      const transfer = facet.tools!.find((tool) => tool.name === 'transfer_voice')!;
+      const refusedTransfer = await transfer.execute('call-2', { target: 1 }, undefined as never);
+      expect(refusedTransfer.isError).toBe(true);
+      expect(refusedTransfer.details).toMatchObject({ error: { code: 'VOICE_TOOL_INACTIVE' } });
+    } finally {
+      await facet.onDispose?.({} as never);
+      await rm(home, { recursive: true, force: true });
+    }
+  });
 });
 
 it('activates live voice through the native ownership broker and exposes tools only after browser readiness', async () => {

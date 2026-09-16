@@ -799,8 +799,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
 
   const applyToolSurface = async (tools: readonly HeadlessTool[]): Promise<void> => {
     const facetTools = tools.map((tool) => toolAdapter(tool, () => headlessHost!.context, reportedToolErrors));
-    // Facet tools win a name collision: they are the reconciled, mode-aware set.
-    const facetNames = new Set(facetTools.map((tool) => tool.name));
+    // Facet tools win a name collision, including when the collision is with a
+    // name the facet surface declared and then gated out. The reconciled set
+    // owns the name either way, so a Pi extension tool never fills a slot a
+    // mode-aware facet deliberately left empty.
+    const facetNames = headlessHost?.declaredToolNames ?? new Set(facetTools.map((tool) => tool.name));
     const piTools = (piHost?.tools ?? []).filter((tool) => !facetNames.has(tool.name));
     toolGuidance = [
       ...(piHost?.toolGuidance ?? []).filter((entry) => !facetNames.has(entry.name)),

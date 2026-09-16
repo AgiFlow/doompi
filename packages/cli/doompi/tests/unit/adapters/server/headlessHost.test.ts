@@ -266,6 +266,28 @@ describe('retained headless contributions', () => {
     }
   });
 
+  // A name the facet surface declared and then gated out is still spoken for.
+  // The merged surface uses this to stop a Pi extension tool of the same name
+  // filling the slot the facet deliberately left empty.
+  it('declares a gated tool name even while the gate keeps it unapplied', async () => {
+    const applyTools = vi.fn();
+    const fixture = await setup(applyTools, { gatedTool: true, required: false });
+    try {
+      await fixture.host.select({});
+      const applied = (applyTools.mock.calls.at(-1)?.[0] ?? []) as readonly { name: string }[];
+      expect(applied.map((tool) => tool.name)).toContain('test_tool');
+      expect(applied.map((tool) => tool.name)).not.toContain('gated_tool');
+
+      expect([...fixture.host.declaredToolNames]).toEqual(expect.arrayContaining(['test_tool', 'gated_tool']));
+
+      // Owner eligibility stays the outer gate: a major mode this candidate does
+      // not own declares nothing at all.
+      await fixture.host.select({ majorMode: 'review' });
+      expect([...fixture.host.declaredToolNames]).toEqual([]);
+    } finally {
+      await fixture.close();
+    }
+  });
   it('applies one profile axis change without rebuilding tools or activities', async () => {
     const applyTools = vi.fn();
     const fixture = await setup(applyTools);

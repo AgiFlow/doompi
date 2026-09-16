@@ -3,7 +3,7 @@ import { createPiTestHost } from '@agimon-ai/doompi-core/testing';
 import { expect, it } from 'vitest';
 
 import { {{ commandName | snakeCase | upper }}_COMMAND_NAME } from '../../../src/constants/{{ commandName | camelCase }}';
-import command from '../../../src/extensions/workspaces/sessions/(backend)/command/{{ commandName | kebabCase }}';
+import command from '../../../src/extensions/workspaces/sessions/(backend)/command/{{ commandName | kebabCase }}.cli';
 
 it('maps the command result to a host notification', async () => {
   const host = createPiTestHost();

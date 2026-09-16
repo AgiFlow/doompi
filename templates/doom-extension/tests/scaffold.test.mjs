@@ -112,6 +112,9 @@ await test('every scaffold renders and all source imports resolve across the com
       const privateFile = filename.split('/').some((segment) => segment.startsWith('_'));
       const colocatedApiFile = filename.includes('/api/') && !/\/route(?:\.[^.]+)?\.tsx?$/u.test(filename);
       if (/\.tsx?$/u.test(filename) && !privateFile && !colocatedApiFile) {
+        // Every public routed file names its platform. There is no neutral
+        // file, so nothing is read off a missing suffix.
+        assert.match(filename, /\.(?:cli|server|web)\.tsx?$/u, filename);
         assert.match(content, /\bexport\s+default\s+define[A-Z][A-Za-z0-9]*\s*\(/u, filename);
         assert.doesNotMatch(content, /\bexport\s+(?!default\b)/u, filename);
       }

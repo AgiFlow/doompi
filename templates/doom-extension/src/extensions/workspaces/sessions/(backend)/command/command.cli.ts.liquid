@@ -1,0 +1,25 @@
+import { defineCliCommand } from '@agimon-ai/doompi-core/extension-file';
+import { defineCommand } from '@agimon-ai/doompi-core/pi-extension';
+
+import { COMMAND_DESCRIPTION, COMMAND_NAME } from '../../../../../constants/{{ commandName | camelCase }}';
+import { Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService } from '../../../../../services/extensionService';
+
+/**
+ * `/{{ commandName }}` in the terminal.
+ *
+ * Pi takes the command as a native declaration, so the generated entry leaves
+ * it alone and this half names itself rather than reading the name off its
+ * path. A factory rather than a literal because the service is constructed per
+ * mount; a command with no per-mount state can export the declaration directly.
+ */
+export default defineCliCommand(() => {
+  const service = new Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService();
+  return defineCommand({
+    name: COMMAND_NAME,
+    description: COMMAND_DESCRIPTION,
+    async execute(_args, execution) {
+      const { message, level } = await service.execute();
+      await execution.notify({ body: message, level });
+    },
+  });
+});

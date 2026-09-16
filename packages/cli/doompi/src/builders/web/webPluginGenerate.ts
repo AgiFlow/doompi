@@ -44,20 +44,22 @@ function renderClientModule(
 /**
  * The directory Tailwind scans for a plugin's class names.
  *
- * A plugin's components live in its `src/web` root. The client entry is not a
- * reliable stand-in: it is published through `src/exports/webClient.ts`, a
- * one-line re-export, and pointing Tailwind at that directory silently drops
- * every class the panels use. The entry's own directory is the fallback for a
- * plugin that keeps no src/web root at all.
+ * `src/extensions` wins, because a plugin's components colocate with the routed
+ * file that renders them, in private `_components` and `_lib` folders. The
+ * legacy `src/web` root is only a fallback: `existsSync` is true for a
+ * half-emptied directory holding nothing but a tsconfig, and packages have been
+ * in exactly that state, so preferring it would hand Tailwind a directory with
+ * no components in it and silently drop every class.
+ *
+ * The client entry's own directory is the last resort. It is published through
+ * `src/exports/webClient.ts`, a one-line re-export, or generated outside `src`
+ * entirely, so it holds no components either.
  */
 function pluginSourceRoot(plugin: DeclaredWebPlugin): string {
-  const webRoot = path.join(plugin.packageDir, 'src', 'web');
-  if (fs.existsSync(webRoot)) return webRoot;
-  // A folder-routed package colocates its components under src/extensions and
-  // generates the client entry elsewhere, so the entry's own directory holds
-  // no components at all. Scanning it would drop every utility class they use.
   const routingRoot = path.join(plugin.packageDir, 'src', 'extensions');
   if (fs.existsSync(routingRoot)) return routingRoot;
+  const webRoot = path.join(plugin.packageDir, 'src', 'web');
+  if (fs.existsSync(webRoot)) return webRoot;
   return path.dirname(path.join(plugin.packageDir, plugin.client.entry));
 }
 

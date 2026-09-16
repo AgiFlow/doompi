@@ -160,6 +160,7 @@ function unsupported(member: string): never {
 function toHarnessTool(
   registered: RegisteredTool,
   runner: () => ExtensionRunner,
+  isActive: (name: string) => boolean,
 ): AgentHarnessTool<object | undefined> {
   const definition = registered.definition;
   return {
@@ -169,6 +170,11 @@ function toHarnessTool(
     parameters: definition.parameters,
     ...(definition.executionMode === undefined ? {} : { executionMode: definition.executionMode }),
     async execute(toolCallId, parameters, onUpdate, _toolContext, _invocation, context) {
+      // Admission, not visibility. The harness keeps the tool list it was last
+      // given, so a name dropped from the active set stays dispatchable until
+      // the next replaceTools. The facet path checks the same thing in
+      // systems/main/adapters/headlessHost.
+      if (!isActive(definition.name)) throw new Error(`Tool '${definition.name}' is no longer active`);
       const prepared = definition.prepareArguments ? definition.prepareArguments(parameters) : parameters;
       const result = await definition.execute(
         toolCallId,
@@ -502,9 +508,17 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       runner.bindCore(actions, contextActions);
 
       registered = loaded.flatMap((extension) => [...extension.tools.values()]);
-      tools = registered.map((tool) => toHarnessTool(tool, requireRunner));
+      tools = registered.map((tool) => toHarnessTool(tool, requireRunner, (name) => activeNames.has(name)));
       activeNames = new Set(tools.map((tool) => tool.name));
       skills = await loadPiSkills(runner, cwd, agentDir, options.onNotice);
+      // Pi extensions open their session-scoped services from this event, and
+      // DOOM_TOOL_SURFACE_SERVICE is one of them. Without it every
+      // DoomToolRestriction stayed inert on this runtime, so plan mode kept
+      // offering write and voice kept offering narrate with the mode off.
+      // 'startup' is accurate: this runner is built once per session process.
+      // It runs after activeNames is seeded, because setActiveTools narrows
+      // that set and the seed would otherwise overwrite the narrowing.
+      await runner.emit({ type: 'session_start', reason: 'startup' });
     },
 
     async shutdown(): Promise<void> {

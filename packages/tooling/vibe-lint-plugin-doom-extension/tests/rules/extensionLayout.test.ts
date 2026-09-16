@@ -94,6 +94,14 @@ describe('canonical routed layout', () => {
     expect(doomLegacySourceRoot.check?.(write(relativePath), root)).toMatch(/named routed file/u);
   });
 
+  // doom-folder-layout lets a pure re-export through, so src/web only stays
+  // retired if this rule catches the barrel too.
+  it.each(['src/web/DemoPanel.tsx', 'src/web/index.ts'])('rejects retired src/web file %s', (relativePath) => {
+    expect(doomLegacySourceRoot.check?.(write(relativePath, "export * from './DemoPanel';\n"), root)).toMatch(
+      /\(frontend\)\/_components/u,
+    );
+  });
+
   it.each([
     'src/extensions/(backend)/extra.cli.ts',
     'src/extensions/(backend)/extra.server.ts',

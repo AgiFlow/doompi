@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import { loadDoomConfig, resolveVoiceConfig } from '@agimon-ai/doompi-config';
 import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
 import { defineServerMethod, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
-import { DOOM_VOICE_AUTO_MODE_ID, DOOM_VOICE_TOOLS_SERVICE } from '@agimon-ai/doompi-core/voice-tools';
+import {
+  DOOM_VOICE_AUTO_MODE_ID,
+  DOOM_VOICE_TOOLS_SERVICE,
+  VOICE_TOOL_ERROR_CODE,
+  type VoiceToolErrorCode,
+} from '@agimon-ai/doompi-core/voice-tools';
 import {
   VoiceToolDescribeInputSchema,
   VoiceToolUseInputSchema,
@@ -268,6 +273,23 @@ export function createVoiceServer(
   const result = (value: unknown) => ({
     content: [{ type: 'text' as const, text: typeof value === 'string' ? value : JSON.stringify(value) }],
   });
+  /**
+   * A voice capability the user switched off refuses the call.
+   *
+   * Registration gating is not containment: these tools are registered for the
+   * whole session and their condition tracks the minor-mode selection, not the
+   * controller. Mirrors the Pi-side refusal in services/narrationTool.
+   */
+  const refusal = (code: VoiceToolErrorCode, message: string) => ({
+    content: [{ type: 'text' as const, text: message }],
+    details: { outcome: 'failed', error: { code, message, retryable: true } },
+    isError: true,
+  });
+  const voiceInactive = () => {
+    if (closed) return refusal(VOICE_TOOL_ERROR_CODE.sessionShutdown, 'The Voice session is shutting down.');
+    if (mode.state !== 'active') return refusal(VOICE_TOOL_ERROR_CODE.inactive, 'Autonomous Voice is not active.');
+    return undefined;
+  };
   let narrated = false;
   let finalText = '';
   const close = async () => {
@@ -318,6 +340,8 @@ export function createVoiceServer(
         additionalProperties: false,
       },
       async execute(_id, input, signal) {
+        const refused = voiceInactive();
+        if (refused) return refused;
         narrated = true;
         return result(await mode.narrateAgent((input as { text: string }).text, signal));
       },
@@ -333,6 +357,8 @@ export function createVoiceServer(
         additionalProperties: false,
       },
       async execute(_id: string, input: unknown) {
+        const refused = voiceInactive();
+        if (refused) return refused;
         return result(await control('transfer', (input as { target: number }).target));
       },
     },

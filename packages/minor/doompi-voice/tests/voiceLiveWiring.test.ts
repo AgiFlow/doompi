@@ -179,17 +179,15 @@ describe.each([
     expect(cancelled.context.ui.notify).not.toHaveBeenCalled();
     expect(cancelled.host.start).not.toHaveBeenCalled();
   });
-  if (serviceName === 'extracted service') {
-    it('keeps dynamically refreshed Voice tools hidden while autonomous Voice is disabled', async () => {
-      const f = await fixture();
-      expect(f.pi.getActiveTools()).toEqual(['read']);
+  it('keeps dynamically refreshed Voice tools hidden while autonomous Voice is disabled', async () => {
+    const f = await fixture();
+    expect(f.pi.getActiveTools()).toEqual(['read']);
 
-      await f.events.get('session_start')!({}, f.context);
+    await f.events.get('session_start')!({}, f.context);
 
-      expect(f.tools.has('describe_voice_tools')).toBe(true);
-      expect(f.pi.getActiveTools()).toEqual(['read']);
-    });
-  }
+    expect(f.tools.has('describe_voice_tools')).toBe(true);
+    expect(f.pi.getActiveTools()).toEqual(['read']);
+  });
 
   it('does not gate live tool descriptions or failed narration on local ASR', async () => {
     const f = await fixture();

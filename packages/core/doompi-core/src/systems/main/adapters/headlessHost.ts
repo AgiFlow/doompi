@@ -195,6 +195,19 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     return this.resolvedResources;
   }
 
+  /**
+   * Every tool name this composition's eligible owners declare, including the
+   * ones a condition or a restriction currently gates out.
+   *
+   * `appliedTools` answers what runs now. A merge that places another surface's
+   * tools beside these needs what is spoken for, so a name a facet deliberately
+   * withheld is not handed to an unreconciled surface instead. Owner
+   * eligibility stays the outer gate: a package the selection excluded declares
+   * nothing here.
+   */
+  get declaredToolNames(): ReadonlySet<string> {
+    return new Set(this.kernel.activeValues<Owned<DoomHeadlessTool>>('tools').map((entry) => entry.value.name));
+  }
   getContextInventory(
     selection: DoomHeadlessSelection = this.applied,
     countTokens?: CountTokens,
