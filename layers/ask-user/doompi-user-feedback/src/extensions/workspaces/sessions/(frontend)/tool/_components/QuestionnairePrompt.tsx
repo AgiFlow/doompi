@@ -12,7 +12,7 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 
-import { encodeAnswerEnvelope } from '../../types/askUserWire';
+import { encodeAnswerEnvelope } from '../../../../../../types/askUserWire';
 import {
   chooseOption,
   CUSTOM_LABEL,
@@ -27,7 +27,7 @@ import {
   readPromptQuestions,
   setCustom,
   setNotes,
-} from '../lib/questionnaireDraft';
+} from '../_lib/questionnaireDraft';
 
 /** The step bar: which questions are answered, which one is open, and a click back to any of them. */
 function StepBar({

@@ -8,7 +8,7 @@
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 
-import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../types/webMcp';
+import { formatMcpSessionAuthStatus, MCP_SESSION_AUTH_STATUS_KEY } from '../../../../../../types/webMcp';
 import { McpSessionAuthSection } from './McpSessionAuthSection';
 
 const status = formatMcpSessionAuthStatus([

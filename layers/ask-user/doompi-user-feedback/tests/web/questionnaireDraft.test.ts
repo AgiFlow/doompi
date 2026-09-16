@@ -12,7 +12,7 @@ import {
   readPromptQuestions,
   setCustom,
   setNotes,
-} from '../../src/web/lib/questionnaireDraft';
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/questionnaireDraft';
 
 const args = {
   questions: [

@@ -7,9 +7,9 @@
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 
-import type { WorktreeView } from '../../types/webWorktrees';
-import { worktreeActivity } from '../stores/worktreesActivityStore';
-import { WorktreesPanel } from './WorktreesPanel';
+import type { WorktreeView } from '../../../../../../types/webWorktrees';
+import { worktreeActivity } from '../../_lib/worktreesActivityStore';
+import { WorktreesActivitySection } from './WorktreesActivitySection';
 
 const WORKTREES: WorktreeView[] = [
   {
@@ -38,18 +38,18 @@ const WORKTREES: WorktreeView[] = [
   },
 ];
 
-worktreeActivity.update('panel-live', () => ({ worktrees: WORKTREES, pending: undefined, error: undefined }));
-worktreeActivity.update('panel-busy', () => ({
+worktreeActivity.update('s-live', () => ({ worktrees: WORKTREES, pending: undefined, error: undefined }));
+worktreeActivity.update('s-busy', () => ({
   worktrees: WORKTREES.slice(0, 1),
   pending: 'starting session\u2026',
-  error: 'close refused: wt/split-hub has uncommitted changes',
+  error: undefined,
 }));
 
 const slot = (sessionId: string | null) => slotPropsFixture({ sessionId }).props;
 
 const meta = {
-  title: 'Git/WorktreesPanel',
-  component: WorktreesPanel,
+  title: 'Git/WorktreesActivitySection',
+  component: WorktreesActivitySection,
   tags: ['style-system'],
 };
 
@@ -58,19 +58,24 @@ export default meta;
 export const Playground = {
   render: () => (
     <div className="flex flex-col gap-6 bg-doom-bg p-6">
-      <div className="flex w-96 flex-col gap-2">
-        <span className="text-2xs text-doom-dim uppercase tracking-widest">empty</span>
-        <WorktreesPanel {...slot('panel-empty')} />
+      <div className="flex w-80 flex-col gap-2">
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">idle · launcher stays</span>
+        <WorktreesActivitySection {...slot('s-idle')} />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
+      <div className="flex w-80 flex-col gap-2">
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">idle · no focused session</span>
+        <WorktreesActivitySection {...slot(null)} />
+      </div>
+
+      <div className="flex w-80 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">three worktrees</span>
-        <WorktreesPanel {...slot('panel-live')} />
+        <WorktreesActivitySection {...slot('s-live')} />
       </div>
 
-      <div className="flex w-96 flex-col gap-2">
-        <span className="text-2xs text-doom-dim uppercase tracking-widest">work in flight · last failure</span>
-        <WorktreesPanel {...slot('panel-busy')} />
+      <div className="flex w-80 flex-col gap-2">
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">work in flight</span>
+        <WorktreesActivitySection {...slot('s-busy')} />
       </div>
     </div>
   ),

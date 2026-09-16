@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { GOAL_TOOL_NAMES, goalCallSummary, goalResultLines } from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/goalToolRender';
+import {
+  GOAL_TOOL_NAMES,
+  goalCallSummary,
+  goalResultLines,
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/goalToolRender';
 
 const text = (value: string, details?: unknown) => ({ content: [{ type: 'text', text: value }], details });
 const done = { expanded: false, isError: false, isPartial: false };

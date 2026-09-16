@@ -3,11 +3,6 @@ import { readFile } from 'node:fs/promises';
 import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership';
-import { VoiceActivitySection } from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection';
-import { VoiceComposerAction } from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceComposerAction';
-import { VoiceToolMessage } from '../src/extensions/workspaces/sessions/(frontend)/tool/_components/VoiceToolMessage';
-import { browserVoiceMediaClientId } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserMediaIdentity';
 import {
   activeVoiceSession,
   voiceMediaBrowserState,
@@ -16,6 +11,11 @@ import {
   voiceOwnershipChannel,
   waitForVoiceMediaWake,
 } from '../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMediaWakeStore';
+import { VoiceActivitySection } from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection';
+import { VoiceComposerAction } from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceComposerAction';
+import { browserVoiceMediaClientId } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserMediaIdentity';
+import { VoiceToolMessage } from '../src/extensions/workspaces/sessions/(frontend)/tool/_components/VoiceToolMessage';
+import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership';
 
 afterEach(() => {
   activeVoiceSession.reset();
@@ -64,7 +64,10 @@ describe('browser voice media', () => {
     expect(source).toContain("id: 'voice.toggle'");
     expect(source).toContain("command: 'minor voice-auto'");
     const runtimeSource = await readFile(
-      new URL('../src/extensions/workspaces/sessions/(frontend)/lifecycle/_components/VoiceMediaRuntime.tsx', import.meta.url),
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_components/VoiceMediaRuntime.tsx',
+        import.meta.url,
+      ),
       'utf8',
     );
     expect(runtimeSource).toContain('this.device.armUserGesture()');
@@ -196,23 +199,38 @@ describe('browser voice media', () => {
   });
 
   it('identifies a sealed remote controller when it claims the session media lease', async () => {
-    const source = await readFile(new URL('../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/clientMediaTransport.ts', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/clientMediaTransport.ts',
+        import.meta.url,
+      ),
+      'utf8',
+    );
 
     expect(source).toContain("const controlLocation = sealedTransport.active() ? 'remote' : 'local'");
     expect(source).toContain('this.controlLocation = controlLocation');
   });
 
   it('keeps the iOS Web Audio capture graph live without audible microphone feedback', async () => {
-    const source = await readFile(new URL('../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserMediaDevice.ts', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL('../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserMediaDevice.ts', import.meta.url),
+      'utf8',
+    );
 
-    expect(source).toContain("import browserCaptureWorkletUrl from '../lib/browserCaptureWorklet.js?url'");
+    expect(source).toContain("import browserCaptureWorkletUrl from './browserCaptureWorklet.js?url'");
     expect(source).toContain('audioWorklet.addModule(browserCaptureWorkletUrl)');
     expect(source).toContain('const SILENT_OUTPUT_GAIN = 1e-8');
     expect(source).toContain('muted.gain.value = SILENT_OUTPUT_GAIN');
   });
 
   it('fills the composer action with manual recording and blocks it during autonomous voice', async () => {
-    const source = await readFile(new URL('../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceComposerAction.tsx', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceComposerAction.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
 
     expect(source).toContain('data-testid="composer-voice-action"');
     expect(source).not.toContain('data-testid="composer-voice-error"');
@@ -248,7 +266,13 @@ describe('browser voice media', () => {
   });
 
   it('does not expose the session-backed manual recording control in the browser activity dock', async () => {
-    const source = await readFile(new URL('../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection.tsx', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
 
     expect(source).not.toContain("sendCommand('/voice')");
     expect(source).not.toContain('voice-recording-stop');
@@ -276,7 +300,13 @@ describe('browser voice media', () => {
     );
     expect(manual.html).not.toContain('voice-autonomous-microphone-toggle');
 
-    const source = await readFile(new URL('../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection.tsx', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
     expect(source).toContain("`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`");
   });
 
@@ -322,7 +352,13 @@ describe('browser voice media', () => {
   });
 
   it('keeps browser media page-global while route-scoped plugin runtimes remount', async () => {
-    const source = await readFile(new URL('../src/extensions/workspaces/sessions/(frontend)/lifecycle/_components/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_components/VoiceMediaRuntime.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
 
     expect(source).toContain('activeVoiceSession.store.subscribe');
     expect(source).toContain('voiceMediaPageRuntime.store.state');

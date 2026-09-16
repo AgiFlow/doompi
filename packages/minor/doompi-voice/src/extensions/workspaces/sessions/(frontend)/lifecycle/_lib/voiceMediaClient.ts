@@ -1,4 +1,7 @@
-import { ClientCaptureActivityLifecycle, type SpeechPresenceDetector } from '../../../../../../types/clientCaptureActivity';
+import {
+  ClientCaptureActivityLifecycle,
+  type SpeechPresenceDetector,
+} from '../../../../../../types/clientCaptureActivity';
 import {
   type VoiceMediaCapabilities,
   type VoiceMediaCapture,

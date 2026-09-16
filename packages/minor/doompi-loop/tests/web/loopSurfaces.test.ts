@@ -3,8 +3,8 @@ import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
 import { webPlugin as scopedWebPlugin } from '../../generated/web';
+import { LoopActivityItems } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/LoopsActivitySection';
 import { LOOP_VIEW_STATUS_KEY } from '../../src/types/loopView';
-import { LoopActivityItems } from '../../src/web/components/LoopsActivitySection';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

@@ -23,7 +23,6 @@ const CANONICAL_ROOTS = new Set([
   'services',
   'tui',
   'types',
-  'web',
 ]);
 const RESOURCE_ROOTS = new Set(['prompts']);
 const FORBIDDEN_ROOTS = new Set([
@@ -70,13 +69,12 @@ const ALLOWED_ROOT_DEPENDENCIES: Readonly<Record<string, ReadonlySet<string>>> =
   constants: new Set(['constants']),
   models: new Set(['constants', 'models', 'schemas', 'types']),
   exports: new Set(['constants', 'models', 'schemas', 'services', 'tui', 'types']),
-  extensions: new Set(['extensions', 'constants', 'models', 'schemas', 'services', 'tui', 'types', 'web']),
+  extensions: new Set(['extensions', 'constants', 'models', 'schemas', 'services', 'tui', 'types']),
   schemas: new Set(['constants', 'schemas', 'types']),
   services: new Set(['constants', 'models', 'schemas', 'services', 'types']),
   tui: new Set(['constants', 'models', 'schemas', 'services', 'tui', 'types']),
   types: new Set(['constants', 'types']),
-  web: new Set(['constants', 'types', 'web']),
-  bin: new Set(['bin', 'constants', 'models', 'schemas', 'services', 'tui', 'types', 'web']),
+  bin: new Set(['bin', 'constants', 'models', 'schemas', 'services', 'tui', 'types']),
 };
 
 const DEFAULT_COMPOSITION_PACKAGES = ['@agimon-ai/doompi'];
@@ -2740,7 +2738,7 @@ export const doomFolderLayout: RuleDefinition = {
     const detail = FORBIDDEN_ROOTS.has(root)
       ? `Legacy root "${root}" is forbidden.`
       : `Unknown root "${root}" is not canonical.`;
-    return `${detail} Move host-neutral implementation under services, models, constants, schemas, or types. Put host-specific contributions under named routes in extensions, public re-exports under flat exports, and Help resources under prompts.`;
+    return `${detail} Move host-neutral implementation under services, models, constants, schemas, or types. Put host-specific contributions under named routes in extensions, browser code beside the routed file that renders it in src/extensions/**/(frontend)/_components (.tsx) and _lib (.ts), public re-exports under flat exports, and Help resources under prompts.`;
   },
 };
 

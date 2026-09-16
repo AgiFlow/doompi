@@ -28,8 +28,8 @@ import { Button, Dot, EmptyState, Input, Spinner, StatusBadge } from '@agimon-ai
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
 
-import type { WorktreeView } from '../../types/webWorktrees';
-import { requestWorktreeClose, requestWorktreeCreate, worktreeActivity } from '../stores/worktreesActivityStore';
+import type { WorktreeView } from '../../../../../types/webWorktrees';
+import { requestWorktreeClose, requestWorktreeCreate, worktreeActivity } from '../_lib/worktreesActivityStore';
 
 const WORKTREES_TAB_ID = 'git-worktrees';
 

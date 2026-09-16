@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  VoiceMediaClient,
+  type RealtimeBrowserSessionFactory,
+} from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/voiceMediaClient';
 import { LiveVoiceController } from '../src/services/liveVoiceController';
 import type { RealtimeHost } from '../src/services/realtimeHost';
 import type { AutoCaptureUi, IClock } from '../src/types';
@@ -21,7 +25,6 @@ import type {
 } from '../src/types/realtime';
 import { REALTIME_ROUTES } from '../src/types/realtime';
 import { VOICE_OWNERSHIP_ROUTES } from '../src/types/voiceOwnership';
-import { VoiceMediaClient, type RealtimeBrowserSessionFactory } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/voiceMediaClient';
 import { createTestVoiceMediaApi as createVoiceMediaApi } from './support';
 
 const clock: IClock = {

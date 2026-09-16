@@ -1,5 +1,9 @@
-import type { McpAuthorizationFlow, McpRepositoryCatalog } from '../../types/webMcp';
-import { MCP_AUTHORIZATION_API_PATH, MCP_DISCOVERY_API_PATH, MCP_REPOSITORY_API_PATH } from '../../types/webMcp';
+import type { McpAuthorizationFlow, McpRepositoryCatalog } from '../../../../../types/webMcp';
+import {
+  MCP_AUTHORIZATION_API_PATH,
+  MCP_DISCOVERY_API_PATH,
+  MCP_REPOSITORY_API_PATH,
+} from '../../../../../types/webMcp';
 
 const apiRoot = (repositoryId: string): string => `/api/workspaces/${encodeURIComponent(repositoryId)}/plugins/mcp`;
 const JSON_HEADERS = { 'content-type': 'application/json' };

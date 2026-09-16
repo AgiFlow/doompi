@@ -11,7 +11,7 @@ import {
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 
-import { readCallView } from '../lib/readToolView';
+import { readCallView } from '../_lib/readToolView';
 
 const IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 

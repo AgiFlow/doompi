@@ -20,7 +20,7 @@ export default defineConfig({
         '**/*.config.*',
         '**/coverage/**',
         // Static rendering proves surfaces mount; Playwright covers their interactions.
-        'src/web/**/*.tsx',
+        'src/extensions/**/_components/**/*.tsx',
       ],
       reportOnFailure: false,
       enabled: true,

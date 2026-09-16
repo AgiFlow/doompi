@@ -14,10 +14,6 @@ import {
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 
-import { startManualBrowserRecording } from '../_lib/manualBrowserRecorder';
-import { ManualComposerRecorder, type ManualComposerRecorderState } from '../_lib/manualComposerRecorder';
-import { transcribeManualRecording } from '../_lib/manualTranscriptionClient';
-import { voiceActivityView } from '../_lib/voiceActivityView';
 import { activeVoiceSession } from '../../_lib/voiceMediaWakeStore';
 import {
   voiceMicrophoneConstraints,
@@ -27,6 +23,10 @@ import {
   selectVoiceMicrophone,
   voiceMicrophone,
 } from '../../_lib/voiceMicrophoneStore';
+import { startManualBrowserRecording } from '../_lib/manualBrowserRecorder';
+import { ManualComposerRecorder, type ManualComposerRecorderState } from '../_lib/manualComposerRecorder';
+import { transcribeManualRecording } from '../_lib/manualTranscriptionClient';
+import { voiceActivityView } from '../_lib/voiceActivityView';
 
 const MANUAL_UNAVAILABLE_LABEL = 'manual voice is unavailable while autonomous voice is active';
 

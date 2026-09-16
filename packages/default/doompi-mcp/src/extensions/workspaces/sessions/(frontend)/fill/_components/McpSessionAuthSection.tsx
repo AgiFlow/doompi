@@ -12,7 +12,7 @@ import {
 } from '@agimon-ai/doompi-web-components';
 import { useEffect, useRef, useState } from 'react';
 
-import { MCP_SESSION_AUTH_STATUS_KEY, parseMcpSessionAuthStatus } from '../../types/webMcp';
+import { MCP_SESSION_AUTH_STATUS_KEY, parseMcpSessionAuthStatus } from '../../../../../../types/webMcp';
 
 /** Requests authorization through Pi's command frame, never through a shell. */
 export function requestMcpSessionAuthorization(

@@ -7,7 +7,7 @@ import {
   toolTone,
 } from '@agimon-ai/doompi-web-components';
 
-import { askCallSummary, askResultView } from '../lib/askUserText';
+import { askCallSummary, askResultView } from '../_lib/askUserText';
 
 /** The answered list, or the outcome that stood in for it. */
 function AskUserQuestionBody({ result, output, running, isError }: ToolMessageRenderProps) {

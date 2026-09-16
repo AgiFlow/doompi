@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  VoiceMediaClient,
+  type RealtimeBrowserSessionFactory,
+} from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/voiceMediaClient';
 import type {
   VoiceMediaCapture,
   VoiceMediaClientEvent,
@@ -9,7 +13,6 @@ import type {
   VoiceMediaTransport,
 } from '../src/types/clientMedia';
 import type { BrowserRealtimeOptions, RealtimeBrowserState } from '../src/types/realtime';
-import { VoiceMediaClient, type RealtimeBrowserSessionFactory } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/voiceMediaClient';
 
 function deferred<T>(): { promise: Promise<T>; resolve(value: T): void; reject(error: Error): void } {
   let resolve!: (value: T) => void;

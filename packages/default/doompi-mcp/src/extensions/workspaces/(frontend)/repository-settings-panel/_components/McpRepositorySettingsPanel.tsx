@@ -10,7 +10,7 @@ import {
   followMcpAuthorization,
   loadMcpSettings,
   mcpSettings,
-} from '../stores/mcpSettingsStore';
+} from '../_lib/mcpSettingsStore';
 
 const TERMINAL_AUTHORIZATION = new Set(['completed', 'failed', 'cancelled', 'expired']);
 

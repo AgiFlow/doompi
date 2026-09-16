@@ -16,7 +16,7 @@ const result = (details: unknown = null) => ({ content: [{ type: 'text', text: E
 const props = (overrides: Omit<Parameters<typeof toolMessagePropsFixture>[0], 'toolName'>) =>
   toolMessagePropsFixture({ toolName: 'ls', ...overrides }).props;
 
-const args = { path: 'src/web' };
+const args = { path: 'src/extensions/workspaces/sessions/(frontend)/tool' };
 
 const meta = {
   title: 'Ui/LsToolMessage',

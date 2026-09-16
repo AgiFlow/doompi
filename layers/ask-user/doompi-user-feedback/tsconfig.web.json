@@ -19,5 +19,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["src/web", "src/types", "src/extensions/**/(frontend)/**/*", "generated/web.ts"]
+  "include": ["src/types", "src/extensions/**/(frontend)/**/*", "generated/web.ts"]
 }

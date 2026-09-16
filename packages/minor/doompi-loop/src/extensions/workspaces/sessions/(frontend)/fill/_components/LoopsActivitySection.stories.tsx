@@ -5,7 +5,7 @@
  */
 import { slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 
-import { LOOP_VIEW_STATUS_KEY } from '../../types/loopView';
+import { LOOP_VIEW_STATUS_KEY } from '../../../../../../types/loopView';
 import { LoopsActivitySection } from './LoopsActivitySection';
 
 const LOOPS = JSON.stringify([

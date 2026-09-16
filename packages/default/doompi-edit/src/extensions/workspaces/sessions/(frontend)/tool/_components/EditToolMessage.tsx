@@ -11,7 +11,7 @@ import {
   useSyntaxLines,
 } from '@agimon-ai/doompi-web-components';
 
-import { type DiffRow, editCallView, editResultView, resultTextLines } from '../lib/editToolView';
+import { type DiffRow, editCallView, editResultView, resultTextLines } from '../_lib/editToolView';
 
 /** Diff rows shown until the item expands; about what the old scroll box held. */
 const COLLAPSED_ROWS = 24;

@@ -2,9 +2,9 @@ import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testi
 import { describe, expect, it } from 'vitest';
 
 import { webPlugin as scopedWebPlugin } from '../../generated/web';
-import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../src/types/goalView';
 import { EditGoalDialog } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/EditGoalDialog';
 import { GoalActivitySection } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/GoalActivitySection';
+import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../src/types/goalView';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

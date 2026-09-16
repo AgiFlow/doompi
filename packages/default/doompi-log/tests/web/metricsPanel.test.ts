@@ -1,7 +1,6 @@
 import { renderPlugin } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { IssueSample, MetricsBucket, MetricsGroup, MetricsTool } from '../../src/types/webMetrics';
 import { GroupBars } from '../../src/extensions/(frontend)/setting/_components/charts/GroupBars';
 import { TimelineChart } from '../../src/extensions/(frontend)/setting/_components/charts/TimelineChart';
 import { IssuesDetail } from '../../src/extensions/(frontend)/setting/_components/IssuesDetail';
@@ -9,6 +8,7 @@ import { IssuesSection } from '../../src/extensions/(frontend)/setting/_componen
 import { EmptyForReason, FocusNotice } from '../../src/extensions/(frontend)/setting/_components/MetricsNotice';
 import { MetricsPanel } from '../../src/extensions/(frontend)/setting/_components/MetricsPanel';
 import { MetricsReportView } from '../../src/extensions/(frontend)/setting/_components/MetricsReportView';
+import type { IssueSample, MetricsBucket, MetricsGroup, MetricsTool } from '../../src/types/webMetrics';
 
 /**
  * The drawn parts of the page, rendered to static markup.

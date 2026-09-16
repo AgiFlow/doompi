@@ -96,7 +96,6 @@ const boundaries: BoundaryConfig[] = [
     name: 'web-plugin-routed',
     pattern: 'src/extensions/**/(frontend)/**',
     allowedImports: [
-      'src/web/**',
       'src/types',
       'src/types/**',
       'src/constants',
@@ -109,7 +108,7 @@ const boundaries: BoundaryConfig[] = [
   {
     name: 'extensions',
     pattern: 'src/extensions/**',
-    allowedImports: layer('constants', 'extensions', 'models', 'schemas', 'services', 'tui', 'types', 'web'),
+    allowedImports: layer('constants', 'extensions', 'models', 'schemas', 'services', 'tui', 'types'),
   },
   {
     name: 'tui',
@@ -124,16 +123,7 @@ const boundaries: BoundaryConfig[] = [
   {
     name: 'bin',
     pattern: 'src/bin/**',
-    allowedImports: layer('bin', 'constants', 'models', 'schemas', 'services', 'tui', 'types', 'web'),
-  },
-  // The web cockpit plugin's browser half lives in src/web. It may reach its
-  // own files and the shared src/types shapes (web-plugin-import-allowlist
-  // checks the bare specifiers); tests reach it through the src/** entry above
-  // like any other package source.
-  {
-    name: 'web-plugin',
-    pattern: 'src/web/**',
-    allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
+    allowedImports: layer('bin', 'constants', 'models', 'schemas', 'services', 'tui', 'types'),
   },
   // generated/** is the routed package's host entries, which its contract and
   // lifecycle tests import the way they used to import src/extensions/pi.ts.

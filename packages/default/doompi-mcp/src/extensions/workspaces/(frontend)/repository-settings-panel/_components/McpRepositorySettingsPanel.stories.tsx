@@ -11,7 +11,7 @@
  */
 import type { RepositorySettingsPanelProps } from '@agimon-ai/doompi-core/web';
 
-import type { McpRepositoryCatalog } from '../../types/webMcp';
+import type { McpRepositoryCatalog } from '../../../../../types/webMcp';
 import { McpRepositorySettingsPanel } from './McpRepositorySettingsPanel';
 
 const catalog: McpRepositoryCatalog = {

@@ -9,13 +9,15 @@ import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 
 import { ListingBody } from './ListingBody';
 
+const DIR = 'src/extensions/workspaces/sessions/(frontend)/tool/_components';
+
 /** Past the twenty-line collapsed budget, so the collapsed body reports what it hid. */
-const ENTRIES = Array.from({ length: 26 }, (_, index) => `src/web/components/Panel${String(index + 1)}.tsx`).join('\n');
+const ENTRIES = Array.from({ length: 26 }, (_, index) => `${DIR}/Panel${String(index + 1)}.tsx`).join('\n');
 
 const result = (details: unknown = null) => ({ content: [{ type: 'text', text: ENTRIES }], details });
 
 const props = (overrides: Omit<Parameters<typeof toolMessagePropsFixture>[0], 'toolName'>) =>
-  toolMessagePropsFixture({ toolName: 'ls', args: { path: 'src/web' }, ...overrides }).props;
+  toolMessagePropsFixture({ toolName: 'ls', args: { path: DIR }, ...overrides }).props;
 
 const body = { tool: 'ls', limitKey: 'entryLimitReached', limitUnit: 'entries' };
 

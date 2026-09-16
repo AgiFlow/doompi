@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { BrowserVoiceMediaDevice, Pcm16Resampler } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserMediaDevice';
+import {
+  BrowserVoiceMediaDevice,
+  Pcm16Resampler,
+} from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserMediaDevice';
 class FakeNode {
   public connect(): void {}
   public disconnect(): void {}

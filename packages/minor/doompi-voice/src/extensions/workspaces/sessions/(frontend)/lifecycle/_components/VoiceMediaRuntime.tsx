@@ -1,11 +1,6 @@
 import type { WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 
 import type { RealtimeBrowserState } from '../../../../../../types/realtime';
-import { BrowserVoiceMediaDevice } from '../_lib/browserMediaDevice';
-import { BrowserRealtimeSession } from '../_lib/browserRealtimeSession';
-import { VoiceMediaClient, type VoiceMediaClientConnectionState } from '../_lib/voiceMediaClient';
-import { browserVoiceMediaClientId } from '../_lib/browserMediaIdentity';
-import { BrowserVoiceMediaTransport } from '../_lib/clientMediaTransport';
 import {
   activeVoiceSession,
   voiceMediaBrowserState,
@@ -13,6 +8,11 @@ import {
   voiceRealtimeBrowserControls,
 } from '../../_lib/voiceMediaWakeStore';
 import { voiceMicrophoneConstraints } from '../../_lib/voiceMicrophoneStore';
+import { BrowserVoiceMediaDevice } from '../_lib/browserMediaDevice';
+import { browserVoiceMediaClientId } from '../_lib/browserMediaIdentity';
+import { BrowserRealtimeSession } from '../_lib/browserRealtimeSession';
+import { BrowserVoiceMediaTransport } from '../_lib/clientMediaTransport';
+import { VoiceMediaClient, type VoiceMediaClientConnectionState } from '../_lib/voiceMediaClient';
 
 class PageVoiceMediaRuntime {
   private readonly device = new BrowserVoiceMediaDevice(true, voiceMicrophoneConstraints);

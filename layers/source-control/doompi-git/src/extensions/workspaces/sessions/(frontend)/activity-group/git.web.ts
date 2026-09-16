@@ -1,7 +1,7 @@
 import { defineActivityGroup } from '@agimon-ai/doompi-core/web';
 
-import { worktreesTab } from '../../../../../web/components/WorktreesPanel';
-import { worktreeActivitySource } from '../../../../../web/stores/worktreesActivityStore';
+import { worktreesTab } from '../_components/WorktreesPanel';
+import { worktreeActivitySource } from '../_lib/worktreesActivityStore';
 
 export default defineActivityGroup({
   keys: 'g w',

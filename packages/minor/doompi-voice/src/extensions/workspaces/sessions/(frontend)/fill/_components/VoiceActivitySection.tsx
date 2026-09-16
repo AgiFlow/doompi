@@ -2,8 +2,8 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Button, Dot, type DotTone } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 
-import { type VoiceTone, voiceActivityView } from '../_lib/voiceActivityView';
 import { voiceMediaBrowserState, voiceRealtimeBrowserControls } from '../../_lib/voiceMediaWakeStore';
+import { type VoiceTone, voiceActivityView } from '../_lib/voiceActivityView';
 
 const TONE_DOT: Readonly<Record<VoiceTone, DotTone>> = {
   idle: 'muted',

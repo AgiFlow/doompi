@@ -46,7 +46,8 @@ export const patterns: Record<string, PatternDefinition> = {
     includes: ['src/extensions/**/*.ts'],
   },
   'doom-tui': {
-    description: 'Overlay, footer, and other terminal presentation components.',
+    description:
+      "Terminal primitives a package publishes to other packages through src/exports, such as shared overlay and footer components. A package's own terminal presentation is not published: it belongs in a private (frontend)/**/_lib folder beside the .cli route that renders it.",
     includes: ['src/tui/**/*.ts'],
   },
   'doom-bin': {
@@ -56,18 +57,18 @@ export const patterns: Record<string, PatternDefinition> = {
   },
   'doom-web-plugin-store': {
     description:
-      "Per-session plugin state: one `defineSessionStore<T>(empty)` per topic, where T is the whole record for a session (the hub's last payload plus this page's own ephemeral state such as dismissed ids or the open run). The channel is `store.channel({ channel, parse, reduce })`: parse gates the wire, reduce folds one payload and reconciles the ephemeral fields; drop and reset belong to the helper. Actions are plain functions calling `store.update`, and one that sends takes a `SessionFrameSender` first. No top-level let.",
-    includes: ['src/web/stores/**/*.ts'],
+      "Per-session plugin state, in the private `_lib` folder beside the routed file that reads it: one `defineSessionStore<T>(empty)` per topic, where T is the whole record for a session (the hub's last payload plus this page's own ephemeral state such as dismissed ids or the open run). The channel is `store.channel({ channel, parse, reduce })`: parse gates the wire, reduce folds one payload and reconciles the ephemeral fields; drop and reset belong to the helper. Actions are plain functions calling `store.update`, and one that sends takes a `SessionFrameSender` first. No top-level let.",
+    includes: ['src/extensions/**/_lib/**/*Store.ts'],
   },
   'doom-web-plugin-components': {
     description:
-      'Panels, activity sections, overlays, and tool messages. A tool message is a `message` renderer, one component per claimed tool receiving ToolMessageRenderProps, composed from MessageItem, MessageItemHeader, MessageItemBody, MessageItemStatus, and MessageLines from @agimon-ai/doompi-web-components: the shell owns the frame, the outcome tone, the status badge, and the expand toggle (`expandable` when the card hides lines), the card supplies the header summary and the body. Every Pi tool the package registers is listed in a toolRenderers entry (web-plugin-tool-renderers). Read with `useStore(x.store, (state) => x.select(state, sessionId))`, act with `props.sendSessionFrame`, navigate with `props.openTab`, render own slots with `props.renderSlot`. Tailwind classes as complete literals; imports limited to react, the two TanStack packages, the web contract, the shared components, own src/web/**, src/types/**, and src/constants/**; plugins never import each other.',
-    includes: ['src/web/**/*.tsx'],
+      'Panels, activity sections, overlays, and tool messages, in the private `_components` folder beside the routed file that renders them. A tool message is a `message` renderer, one component per claimed tool receiving ToolMessageRenderProps, composed from MessageItem, MessageItemHeader, MessageItemBody, MessageItemStatus, and MessageLines from @agimon-ai/doompi-web-components: the shell owns the frame, the outcome tone, the status badge, and the expand toggle (`expandable` when the card hides lines), the card supplies the header summary and the body. Every Pi tool the package registers is listed in a toolRenderers entry (web-plugin-tool-renderers). Read with `useStore(x.store, (state) => x.select(state, sessionId))`, act with `props.sendSessionFrame`, navigate with `props.openTab`, render own slots with `props.renderSlot`. Tailwind classes as complete literals; imports limited to react, the two TanStack packages, the web contract, the shared components, its own colocated `_components` and `_lib` files, src/types/**, and src/constants/**; plugins never import each other.',
+    includes: ['src/extensions/**/_components/**/*.tsx'],
   },
   'doom-web-plugin-lib': {
     description:
-      'Pure view logic the components share: formatting, matching, folding. Host-neutral, no React state, no module-level mutable state, tested from tests/ directly.',
-    includes: ['src/web/lib/**/*.ts'],
+      'Pure view logic the colocated components share, in the private `_lib` folder beside them: formatting, matching, folding. Host-neutral, no React state, no module-level mutable state, tested from tests/ directly.',
+    includes: ['src/extensions/**/_lib/**/*.ts'],
   },
   'doom-tests': {
     description: 'Unit, integration, and package-contract verification.',

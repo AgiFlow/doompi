@@ -1,4 +1,4 @@
-import type { McpResultBlock } from '../../types/webMcp';
+import type { McpResultBlock } from '../../../../../../types/webMcp';
 
 /**
  * Pure view logic for MCP tool cards, the browser counterpart of
@@ -7,9 +7,9 @@ import type { McpResultBlock } from '../../types/webMcp';
  */
 
 /**
- * The footer status the session half publishes (src/adapters/pi/mcpConstants.ts
- * MCP_STATUS_KEY). Duplicated because web/ may import only src/types; a test
- * keeps the two literals equal.
+ * The footer status the session half publishes (src/constants/piMcp.ts
+ * MCP_STATUS_KEY). Duplicated because the browser half may import only
+ * src/types and src/constants; a test keeps the two literals equal.
  */
 export const MCP_STATUS_KEY = 'doom-mcp';
 const SERVER_SEPARATOR = ',';

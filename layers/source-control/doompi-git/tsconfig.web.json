@@ -19,7 +19,6 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": [
-    "src/web",
     "src/types/worktreeRegistry.ts",
     "src/types/webWorktrees.ts",
     "src/extensions/**/(frontend)/**/*",

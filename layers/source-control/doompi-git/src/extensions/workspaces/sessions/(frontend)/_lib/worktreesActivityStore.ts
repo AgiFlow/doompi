@@ -19,7 +19,7 @@
  */
 import { defineGlobalStore, defineSessionStore, type WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 
-import { GIT_WORKTREES_TYPE, type GitWorktreesCommand, type WorktreeView } from '../../types/webWorktrees';
+import { GIT_WORKTREES_TYPE, type GitWorktreesCommand, type WorktreeView } from '../../../../../types/webWorktrees';
 
 export interface WorktreesSession {
   /** The worktrees the hub last reported for this session's repository. */

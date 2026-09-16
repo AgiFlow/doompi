@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { barFraction, evenPositions, formatTokens, seriesMax } from '../src/extensions/(frontend)/setting/_lib/chartScale';
+import {
+  barFraction,
+  evenPositions,
+  formatTokens,
+  seriesMax,
+} from '../src/extensions/(frontend)/setting/_lib/chartScale';
 
 /**
  * The chart arithmetic, tested as functions. The failure that matters here is

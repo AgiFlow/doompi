@@ -10,7 +10,7 @@ import {
   mcpResultBlocks,
   mcpResultView,
   mcpServers,
-} from '../src/web/lib/mcpToolMatch';
+} from '../src/extensions/workspaces/sessions/(frontend)/tool/_lib/mcpToolMatch';
 
 describe('the mcp web tool matcher', () => {
   it('reads the same status key the session publishes', () => {

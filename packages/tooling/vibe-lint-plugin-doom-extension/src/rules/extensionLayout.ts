@@ -113,9 +113,9 @@ export const doomExtensionSideBoundary: RuleDefinition = {
 /** Legacy implementation roots replaced by named routed surfaces and host-neutral services. */
 export const doomLegacySourceRoot: RuleDefinition = {
   preflight: true,
-  rule: 'Host-specific code lives in named routed files, not under src/controllers or src/tools',
+  rule: 'Host-specific code lives in named routed files, not under src/controllers, src/tools or src/web',
   rationale:
-    'Generic controller and tool roots hide scope, side, and surface identity. Routed paths state those contracts and services hold host-neutral logic.',
+    'Generic controller, tool, and web roots hide scope, side, and surface identity. Routed paths state those contracts, colocated private folders hold their surface code, and services hold host-neutral logic.',
   check(filePath, configRoot) {
     const relative = projectPath(filePath, configRoot);
     if (!relative) return null;
@@ -123,6 +123,9 @@ export const doomLegacySourceRoot: RuleDefinition = {
 
     if (relative.startsWith('src/tools/') || relative.startsWith('src/controllers/')) {
       return 'Move host-neutral logic to src/services and each host contribution to a named routed file under src/extensions.';
+    }
+    if (relative.startsWith('src/web/')) {
+      return 'src/web is retired. Colocate browser code under src/extensions/**/(frontend)/_components (.tsx) and _lib (.ts), beside the routed file that renders it.';
     }
     return null;
   },

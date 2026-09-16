@@ -4,12 +4,6 @@ beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  MANUAL_TRANSCRIPTION_DURATION_HEADER,
-  MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,
-  MANUAL_TRANSCRIPTION_MAX_DURATION_MS,
-  MANUAL_TRANSCRIPTION_ROUTE,
-} from '../src/types/manualTranscription';
-import {
   ManualRecordingSilenceGate,
   startManualBrowserRecording,
   type ManualBrowserRecording,
@@ -17,6 +11,12 @@ import {
 } from '../src/extensions/workspaces/sessions/(frontend)/fill/_lib/manualBrowserRecorder';
 import { ManualComposerRecorder } from '../src/extensions/workspaces/sessions/(frontend)/fill/_lib/manualComposerRecorder';
 import { transcribeManualRecording } from '../src/extensions/workspaces/sessions/(frontend)/fill/_lib/manualTranscriptionClient';
+import {
+  MANUAL_TRANSCRIPTION_DURATION_HEADER,
+  MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,
+  MANUAL_TRANSCRIPTION_MAX_DURATION_MS,
+  MANUAL_TRANSCRIPTION_ROUTE,
+} from '../src/types/manualTranscription';
 
 function recorderFixture() {
   const stopTrack = vi.fn();

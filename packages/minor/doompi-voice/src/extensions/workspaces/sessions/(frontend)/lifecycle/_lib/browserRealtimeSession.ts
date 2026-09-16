@@ -1,5 +1,9 @@
 import type { VoiceMicrophoneConstraints } from '../../../../../../types/clientMedia';
-import { REALTIME_LIMITS, type BrowserRealtimeOptions, type RealtimeBrowserState } from '../../../../../../types/realtime';
+import {
+  REALTIME_LIMITS,
+  type BrowserRealtimeOptions,
+  type RealtimeBrowserState,
+} from '../../../../../../types/realtime';
 
 interface BrowserMediaTrack {
   readonly kind: string;

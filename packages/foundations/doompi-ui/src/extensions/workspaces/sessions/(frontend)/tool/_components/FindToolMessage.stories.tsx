@@ -9,13 +9,15 @@ import { toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 
 import { FindToolMessage } from './FindToolMessage';
 
+const DIR = 'src/extensions/workspaces/sessions/(frontend)/tool';
+
 const MATCHES = [
-  'src/web/components/FindToolMessage.tsx:10:export function FindToolMessage(props',
-  'src/web/components/LsToolMessage.tsx:10:export function LsToolMessage(props',
-  'src/web/components/ListingBody.tsx:9:export function ListingBody({',
-  'src/web/components/WriteToolMessage.tsx:47:export function WriteToolMessage({',
-  'src/web/lib/builtinToolView.ts:57:export function writeCallView(args',
-  'src/web/lib/builtinToolView.ts:70:export function findCallView(args',
+  `${DIR}/_components/FindToolMessage.tsx:10:export function FindToolMessage(props`,
+  `${DIR}/_components/LsToolMessage.tsx:10:export function LsToolMessage(props`,
+  `${DIR}/_components/ListingBody.tsx:9:export function ListingBody({`,
+  `${DIR}/_components/WriteToolMessage.tsx:47:export function WriteToolMessage({`,
+  `${DIR}/_lib/builtinToolView.ts:57:export function writeCallView(args`,
+  `${DIR}/_lib/builtinToolView.ts:70:export function findCallView(args`,
 ].join('\n');
 
 const result = (details: unknown = null) => ({ content: [{ type: 'text', text: MATCHES }], details });
@@ -23,7 +25,7 @@ const result = (details: unknown = null) => ({ content: [{ type: 'text', text: M
 const props = (overrides: Omit<Parameters<typeof toolMessagePropsFixture>[0], 'toolName'>) =>
   toolMessagePropsFixture({ toolName: 'find', ...overrides }).props;
 
-const args = { pattern: 'export function', path: 'src/web' };
+const args = { pattern: 'export function', path: DIR };
 
 const meta = {
   title: 'Ui/FindToolMessage',
@@ -61,7 +63,7 @@ export const Playground = {
         <span className="text-2xs text-doom-dim uppercase tracking-widest">failed</span>
         <FindToolMessage
           {...props({
-            args: { pattern: '[unclosed', path: 'src/web' },
+            args: { pattern: '[unclosed', path: DIR },
             result: { content: [{ type: 'text', text: 'invalid regex: missing ]' }], details: null },
             output: 'invalid regex: missing ]',
             isError: true,

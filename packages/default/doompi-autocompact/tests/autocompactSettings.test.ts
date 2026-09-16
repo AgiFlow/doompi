@@ -8,7 +8,7 @@ import {
   AUTOCOMPACT_SETTING_SHAPES,
   AUTOCOMPACT_THINKING_LEVELS,
 } from '../src/types/autocompactSettings';
-import { autocompactSettingsSection } from '../src/web/lib/autocompactSettings';
+import { autocompactSettingsSection } from '../src/extensions/(frontend)/_lib/autocompactSettings';
 const webPlugin = {
   id: 'autocompact',
   settingsSections: [globalSettings, workspaceSettings],

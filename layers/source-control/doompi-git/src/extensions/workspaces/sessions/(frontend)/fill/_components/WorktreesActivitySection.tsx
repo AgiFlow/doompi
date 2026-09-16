@@ -16,9 +16,9 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Button, Dot, Spinner, StatusBadge } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 
-import type { WorktreeView } from '../../types/webWorktrees';
-import { worktreeActivity } from '../stores/worktreesActivityStore';
-import { worktreesTab } from './WorktreesPanel';
+import type { WorktreeView } from '../../../../../../types/webWorktrees';
+import { worktreesTab } from '../../_components/WorktreesPanel';
+import { worktreeActivity } from '../../_lib/worktreesActivityStore';
 
 export function WorktreesActivitySection({ sessionId, openTransientTab }: WebPluginSlotProps) {
   const session = useStore(worktreeActivity.store, (state) => worktreeActivity.select(state, sessionId));

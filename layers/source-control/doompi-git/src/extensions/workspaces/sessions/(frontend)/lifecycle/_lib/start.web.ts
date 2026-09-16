@@ -1,3 +1,3 @@
-import { startWorktreeRuntime } from '../../../../../../web/stores/worktreesActivityStore';
+import { startWorktreeRuntime } from '../../_lib/worktreesActivityStore';
 
 export default startWorktreeRuntime;

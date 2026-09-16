@@ -7,4 +7,4 @@ The previous fixture note attributed it to the first 2.5 seconds of this upstrea
 - Reported upstream file: https://github.com/snakers4/silero-vad/raw/refs/tags/v6.2.1/files/silero_vad_test.wav
 - Reported release: `v6.2.1`
 
-That provenance, the recording's ownership, and its redistribution license remain unverified. The Silero model's MIT license in [`../../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/models/SILERO-LICENSE`](../../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/models/SILERO-LICENSE) does not establish rights to this recording. Verify the source and recording-specific permissions before redistributing it.
+That provenance, the recording's ownership, and its redistribution license remain unverified. The Silero model's MIT license in [`../../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/models/SILERO-LICENSE`](<../../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/models/SILERO-LICENSE>) does not establish rights to this recording. Verify the source and recording-specific permissions before redistributing it.
