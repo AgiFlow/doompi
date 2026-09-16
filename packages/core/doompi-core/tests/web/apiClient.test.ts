@@ -186,3 +186,20 @@ describe('session ownership', () => {
     expect(() => api.session('s-1')).toThrow('Workspace is unavailable');
   });
 });
+
+describe('cancellation', () => {
+  it('forwards an abort signal, which loopback honours', async () => {
+    const transport = vi.fn<ApiTransport>(() => Promise.resolve(json(200, {})));
+    const controller = new AbortController();
+    await clientWith(transport).session('s-1').detail({ signal: controller.signal });
+    expect(transport.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+  });
+
+  it('reports an aborted call as unanswered, so a caller can tell it apart', async () => {
+    const api = clientWith(() => Promise.reject(new DOMException('aborted', 'AbortError')));
+    const result = await api.session('s-1').detail();
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.status).toBe(0);
+  });
+});

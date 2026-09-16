@@ -66,16 +66,26 @@ type ResponseOf<TSpec> = TSpec extends { readonly response: ApiResponseOf<infer 
 /**
  * What a call may carry.
  *
- * Deliberately no `signal`, `cache`, `credentials`, `redirect` or `mode`: the
- * sealed transport drops all five when a session is remote, so accepting them
- * would promise cancellation that silently does not happen. Their absence
- * turns that into a compile error at the one place that can fix it.
+ * No `cache`, `credentials`, `redirect` or `mode`. The sealed transport copies
+ * only the method, the headers and the body, so those four would be discarded
+ * on every remote session and honoured on no one's.
+ *
+ * `signal` is here because it is the one of the five that is not always a lie.
+ * On loopback the transport is a plain `fetch` pass-through and cancellation
+ * works, which callers already rely on to drop a superseded refresh. Over a
+ * tunnel the request is resealed and relayed, and the signal goes no further
+ * than this process: the call still settles, so a caller that treats an abort
+ * as "no answer is coming" stays correct, but the work at the far end is not
+ * stopped. Refusing the field outright would have regressed every caller that
+ * cancels today, which is a worse trade than describing the limit.
  */
 export interface ApiCallInit {
   readonly query?: ApiQuery;
   readonly headers?: Readonly<Record<string, string>>;
   /** JSON-encoded unless it is already a string, Blob, buffer or URLSearchParams. */
   readonly body?: unknown;
+  /** Honoured on loopback; dropped when the session is remote. */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -233,6 +243,7 @@ function methodFor(
     try {
       response = await options.transport(url(init), {
         method: spec.method,
+        ...(init?.signal === undefined ? {} : { signal: init.signal }),
         ...(Object.keys(headers).length === 0 ? {} : { headers }),
         // Cast because the node build's `BodyInit` enumerates concrete typed
         // arrays rather than accepting `ArrayBufferView`. Every value reaching
