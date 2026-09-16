@@ -900,16 +900,13 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       if (!queued.ok) resultError(queued);
       return { settled: Promise.resolve() };
     }
-    const admission = await writable(() =>
-      lane.accept(
-        {
-          kind: 'prompt',
-          prompt: text,
-          ...(images === undefined ? {} : { images }),
-        },
-        context,
-      ),
-    );
+    // `images` belongs to the text form of the request only: a composed message already
+    // carries its own content, so the two shapes are separate members of the union.
+    const request =
+      typeof text === 'string'
+        ? ({ kind: 'prompt', prompt: text, ...(images === undefined ? {} : { images }) } as const)
+        : ({ kind: 'prompt', prompt: text } as const);
+    const admission = await writable(() => lane.accept(request, context));
     if (!admission.ok) {
       // A turn can begin between the inspectExecution read above and this accept. The lane then
       // reports LaneBusy, and a caller that named a streaming behaviour wants delivery into the

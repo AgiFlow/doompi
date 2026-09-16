@@ -544,7 +544,9 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           systemPrompt = patch.systemPrompt;
         }
       }
-      return { messages, systemPrompt };
+      // Pi extensions transform last, the same precedence the tool surface gives facets:
+      // a facet name wins over a Pi name, so a Pi contribution is the outer layer.
+      return { messages: await (piHost?.transformContext(messages) ?? messages), systemPrompt };
     },
     beforeTool: async (event) => {
       if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
@@ -644,7 +646,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         );
         return { decline: true };
       }
-      return undefined;
+      return piHost?.beforeCompaction(event);
     },
     systemPrompt: async () => {
       try {
