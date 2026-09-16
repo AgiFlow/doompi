@@ -152,6 +152,7 @@ lifecycle machine below.
 
 In the browser, `VoiceMediaRuntime.tsx` stores one media runtime in a page-global plugin store. Session routes may remount their plugin compositions, but those route disposers do not reset server-selected ownership or disconnect the media client. The runtime follows ownership changes reactively and closes its microphone, device, and lease on the browser `pagehide` teardown event. Ownership removal also releases those resources. This keeps capture alive when cockpit focus moves away from and back to the owning session.
 
+Capture resolves its input through the page-global microphone store. Fewer than two detected inputs means the input the browser is already on; several inputs with no matching saved answer opens the cockpit overlay dialog once, and the answer is kept in that browser's local storage until the set of inputs changes. The answer only ever narrows the device: the audio processing the echo discriminator depends on is pinned either way.
 ---
 
 ## 2. One autonomous turn

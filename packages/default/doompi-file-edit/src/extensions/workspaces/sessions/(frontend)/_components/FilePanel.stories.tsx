@@ -77,10 +77,14 @@ globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Respo
   const url = String(input instanceof Request ? input.url : input);
   const filePath = new URL(url, globalThis.location.origin).searchParams.get('path') ?? '';
   const detail = DETAILS[filePath];
-  if (url.includes('/api/plugins/file-edits/detail') && detail !== undefined) {
+  // Matches the suffix, not a whole URL. The previous matcher named
+  // '/api/plugins/file-edits/detail', which the session-scoped route has never
+  // produced, so it never fired and the byte matcher below answered the detail
+  // request with an octet-stream instead.
+  if (url.includes('/plugins/file-edits/detail') && detail !== undefined) {
     return Promise.resolve(new Response(JSON.stringify(detail), { status: 200 }));
   }
-  if (url.includes('/api/workspaces/test-workspace/sessions/')) {
+  if (url.includes('/file?')) {
     return Promise.resolve(new Response(new Blob(['\u0000\u0001binary'], { type: 'application/octet-stream' })));
   }
   return realFetch(input, init);

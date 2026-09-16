@@ -2,7 +2,6 @@ import {
   type DoomHeadlessActivity,
   type DoomHeadlessCommand,
   type DoomHeadlessHook,
-  type DoomHeadlessResource,
 } from '@agimon-ai/doompi-core/headless';
 import { createDoomTelemetry, type DoomTelemetry } from '@agimon-ai/doompi-telemetry';
 
@@ -10,21 +9,6 @@ const PACKAGE_SOURCE = '@agimon-ai/doompi-log';
 
 export function createServerTelemetry() {
   let telemetry: DoomTelemetry | undefined;
-  const resource: DoomHeadlessResource = {
-    name: 'doompi/log-status',
-    kind: 'context',
-    read: (execution) =>
-      JSON.stringify(
-        {
-          sessionId: execution.sessionId,
-          active: telemetry !== undefined,
-          status: telemetry?.status(),
-        },
-        null,
-        2,
-      ),
-  };
-
   const activity: DoomHeadlessActivity = {
     name: PACKAGE_SOURCE,
     start(execution) {
@@ -77,5 +61,7 @@ export function createServerTelemetry() {
       },
     },
   ];
-  return { resources: [resource], activities: [activity], commands: [command], hooks };
+  // Telemetry sink status is operator information, not model-actionable. The
+  // log-metrics command below serves it on demand instead of every prompt build.
+  return { activities: [activity], commands: [command], hooks };
 }

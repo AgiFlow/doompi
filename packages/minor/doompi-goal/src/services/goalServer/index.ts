@@ -4,7 +4,7 @@ import {
   type DoomHeadlessTool,
   type DoomHeadlessCommand,
 } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
 import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';
@@ -12,7 +12,6 @@ import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';
 import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../../constants/goal';
 import { decodeGoalStateEntries } from '../../models/stateCodec';
 import { createGoal, goalSummary, isContradictoryCompletionSummary, transitionGoal } from '../../models/stateMachine';
-import { readGoalSkill } from '../../services/packageResources';
 import { parseGoalCommand, validateObjective } from '../../services/parser';
 import { buildGoalSystemPrompt } from '../../services/prompts';
 import {
@@ -164,7 +163,7 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
         when: { state: { 'minor-mode': 'goal' }, attribution: { kind: 'minor', mode: 'goal' } },
         name: 'doompi-use-goal',
         kind: 'skill',
-        read: () => readGoalSkill(),
+        read: () => readPackageResource(import.meta.url, 'src/prompts/doompi-use-goal/SKILL.md'),
       },
     ],
     tools: [

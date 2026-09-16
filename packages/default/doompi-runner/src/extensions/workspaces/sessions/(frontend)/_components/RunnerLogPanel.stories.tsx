@@ -61,7 +61,7 @@ runners.update(SESSION_ID, () => ({
  * follow stream is left unanswered: it fails, the panel stops following, and
  * the shot is the settled state rather than a race.
  */
-const LOG_URL = /\/api\/plugin\/runner\/runners\/([^/?]+)\/log\?/u;
+const LOG_URL = /\/plugins\/runner\/runners\/([^/?]+)\/log\?/u;
 const realFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const url = input instanceof Request ? input.url : String(input);

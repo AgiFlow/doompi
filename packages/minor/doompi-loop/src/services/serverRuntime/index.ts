@@ -4,7 +4,6 @@ import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agim
 import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../../constants/loop';
 import type { DoomLoopLaunchersService, LoopLauncherRegistration, StoppableLoop } from '../../schemas/loopLaunchers';
 import { createDoomLoopLaunchersService, type LoopLaunchersDependencies } from '../../services/loopLaunchers';
-import { readLoopResource } from '../../services/loopResource';
 
 const SOURCE = '@agimon-ai/doompi-loop';
 const MODE_ID = 'loop.active';
@@ -33,7 +32,7 @@ function numberInput(value: unknown, fallback: number): number {
 }
 
 import { type DoomHeadlessExecutionContext, type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 export function createSessionState(host: DoomHeadlessHostService): DoomServerSessionPlugin {
   let launchers: DoomLoopLaunchersService | undefined;
   let defaultRegistration: LoopLauncherRegistration | undefined;
@@ -197,7 +196,7 @@ export function createSessionState(host: DoomHeadlessHostService): DoomServerSes
         when: { state: { 'minor-mode': MODE_ID }, attribution: { kind: 'minor', mode: MODE_ID } },
         name: 'doompi-use-loop',
         kind: 'skill',
-        read: () => readLoopResource(),
+        read: () => readPackageResource(import.meta.url, 'src/prompts/doompi-use-loop/SKILL.md'),
       },
     ],
     activities: [

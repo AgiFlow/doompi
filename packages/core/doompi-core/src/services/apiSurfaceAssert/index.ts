@@ -29,14 +29,39 @@ export interface ApiSurfaceOptions {
   readonly mount?: Omit<MountPackageApiOptions, 'scope'>;
   /**
    * Extra request detail for a route a bare request cannot reach, keyed by
-   * contract id. A route needing a body reports 400, which passes; one needing
-   * a path parameter substituted would report 404, which does not.
+   * contract id, most often a path parameter to substitute.
    */
   readonly probe?: Readonly<Record<string, RequestInit & { readonly path?: string }>>;
 }
 
 function sorted(values: Iterable<string>): string[] {
   return [...new Set(values)].sort();
+}
+
+/** A path under the same mount that no contract declares, used to calibrate. */
+const CONTROL_PATH = '/__doom_surface_control__';
+
+/**
+ * Whether a response is the framework's own miss rather than a handler's answer.
+ *
+ * Status alone cannot tell them apart: a route that refuses an unknown record
+ * answers 404 legitimately, and reading that as "not mounted" would fail every
+ * honest API. So the same request is sent to a path nothing declares, and the
+ * two are compared. A declared route answering exactly what an undeclared one
+ * answers is not being served.
+ *
+ * A catch-all route would match the control too and read as unrouted. No
+ * package has one; if one appears it should probe an explicit path instead.
+ */
+async function isUnrouted(
+  mounted: { readonly mountPath: string; fetch(path: string, init?: RequestInit): Promise<Response> },
+  response: Response,
+  init: RequestInit,
+): Promise<boolean> {
+  if (response.status !== 404 && response.status !== 405) return false;
+  const control = await mounted.fetch(`${mounted.mountPath}${CONTROL_PATH}`, init);
+  if (control.status !== response.status) return false;
+  return (await control.text()) === (await response.text());
 }
 
 /** Throws with the disagreement spelled out, or returns having found none. */
@@ -65,16 +90,13 @@ export async function assertContractSurface(options: ApiSurfaceOptions): Promise
       for (const route of routes.filter((entry) => entry.basePath === api.basePath)) {
         const probe = options.probe?.[route.id];
         const path = probe?.path ?? route.path;
-        const response = await mounted.fetch(`${mounted.mountPath}${path === '/' ? '' : path}`, {
-          method: route.method,
-          ...probe,
-        });
-        if (response.status === 404 || response.status === 405) {
-          throw new Error(
-            `${route.method} ${mounted.mountPath}${path} is declared as '${route.id}' but answered ` +
-              `${response.status}, so no handler serves it.`,
-          );
-        }
+        const init = { method: route.method, ...probe };
+        const response = await mounted.fetch(`${mounted.mountPath}${path === '/' ? '' : path}`, init);
+        if (!(await isUnrouted(mounted, response, init))) continue;
+        throw new Error(
+          `${route.method} ${mounted.mountPath}${path} is declared as '${route.id}' but answered ` +
+            `${response.status} exactly as an unrouted path does, so no handler serves it.`,
+        );
       }
     } finally {
       mounted.close();

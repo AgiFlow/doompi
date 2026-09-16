@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { voiceMicrophone, voiceMicrophoneConstraints } from '../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMicrophoneStore';
+import {
+  voiceMicrophone,
+  voiceMicrophoneConstraints,
+} from '../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMicrophoneStore';
 
 const built = { deviceId: 'built-in', groupId: 'internal', label: 'MacBook microphone' };
 const usb = { deviceId: 'usb', groupId: 'external', label: 'USB microphone' };

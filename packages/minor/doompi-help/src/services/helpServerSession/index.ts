@@ -2,12 +2,10 @@ import { type DoomHeadlessCommand, type DoomHeadlessResource } from '@agimon-ai/
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 
-import { readHelpResource } from '../../services/helpResources';
-
 const HELP_MODE_ID = 'help';
 
 import { type DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
-import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { type DoomServerSessionPlugin, readPackageResource } from '@agimon-ai/doompi-core/server-facet';
 export function createHelpServerSession(host: DoomHeadlessHostService): DoomServerSessionPlugin {
   let modeOwner: MinorModeOwner | undefined;
   const modeState = (): MinorModeState => {
@@ -44,20 +42,24 @@ export function createHelpServerSession(host: DoomHeadlessHostService): DoomServ
       when: { state: { 'minor-mode': HELP_MODE_ID }, attribution: { kind: 'minor', mode: HELP_MODE_ID } },
       name: 'doompi-help',
       kind: 'context',
-      read: () => readHelpResource('llms.txt'),
+      read: () => readPackageResource(import.meta.url, 'llms.txt'),
     },
     {
       when: { state: { 'minor-mode': HELP_MODE_ID }, attribution: { kind: 'minor', mode: HELP_MODE_ID } },
       name: 'doompi-use-help',
       kind: 'skill',
-      read: () => readHelpResource('src/prompts/doompi-use-help/SKILL.md'),
+      read: () => readPackageResource(import.meta.url, 'src/prompts/doompi-use-help/SKILL.md'),
     },
   ];
   const command: DoomHeadlessCommand = {
     name: 'doom-help',
     description: 'Show DoomPi help resources available in this session.',
     async execute(_args, execution) {
-      await execution.client.notify({ title: 'DoomPi help', body: await readHelpResource('llms.txt'), level: 'info' });
+      await execution.client.notify({
+        title: 'DoomPi help',
+        body: await readPackageResource(import.meta.url, 'llms.txt'),
+        level: 'info',
+      });
     },
   };
   modeOwner = defineMinorMode({

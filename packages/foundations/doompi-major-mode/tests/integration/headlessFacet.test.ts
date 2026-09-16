@@ -77,23 +77,15 @@ async function setup() {
 }
 
 describe('headless major-mode command validation', () => {
-  it('projects current metadata, reads its skill, and disposes every contribution', async () => {
+  it('exposes only its authoring skill, and no selection blobs, then disposes every contribution', async () => {
     const { resources, execution, dispose, disposed } = await setup();
-    const modes = resources.find((resource) => resource.name === 'doompi/modes-config')!;
-    const model = resources.find((resource) => resource.name === 'doompi/model')!;
-    const authoring = resources.find((resource) => resource.name === 'doompi-author-major-mode')!;
-    expect(JSON.parse(await modes.read(execution))).toEqual({ majorMode: 'development', activeLayers: [] });
-    expect(JSON.parse(await model.read(execution))).toBeNull();
+    // doompi/modes-config and doompi/model are gone. majorMode and activeLayers are
+    // already in doompi/config, and the model does not need telling its own id.
+    expect(resources.map((resource) => resource.name)).toEqual(['doompi-author-major-mode']);
+    const authoring = resources[0]!;
     expect(await authoring.read(execution)).toContain('doompi-author-major-mode');
-    const changed = {
-      ...execution,
-      selection: { ...execution.selection, majorMode: 'review', activeLayers: ['tools'] },
-      model: { provider: 'test-provider', id: 'test-model' },
-    };
-    expect(JSON.parse(await modes.read(changed))).toEqual({ majorMode: 'review', activeLayers: ['tools'] });
-    expect(JSON.parse(await model.read(changed))).toEqual(changed.model);
     await dispose?.();
-    expect(disposed).toHaveBeenCalledTimes(4);
+    expect(disposed).toHaveBeenCalledTimes(2);
   });
 
   it('rejects unknown modes from the admitted repository before requesting a transition', async () => {

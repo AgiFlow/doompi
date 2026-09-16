@@ -1,7 +1,4 @@
-import {
-  CLIENT_DEFAULT_MICROPHONE,
-  type VoiceMicrophoneConstraints,
-} from '../../../../../../types/clientMedia';
+import { CLIENT_DEFAULT_MICROPHONE, type VoiceMicrophoneConstraints } from '../../../../../../types/clientMedia';
 import {
   MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,
   MANUAL_TRANSCRIPTION_MAX_DURATION_MS,

@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { facet as uiServerFacet } from '../../generated/server';
 
 describe('UI headless inventory', () => {
-  it('reports sorted unique tool names through the resource and command', async () => {
+  it('reports sorted unique tool names through the command, and contributes no prompt section', async () => {
     let resource: DoomHeadlessResource | undefined;
     let command: DoomHeadlessCommand | undefined;
     const disposers: Array<ReturnType<typeof vi.fn>> = [];
@@ -33,7 +33,11 @@ describe('UI headless inventory', () => {
     context.provide('doom/server-host', { scope: 'session' });
     context.provide('doom/headless-host', host);
     const close = await uiServerFacet.apply(context);
-    if (!resource || !command) throw new Error('UI headless registrations were not created');
+    // Inventory is observed from the transcript, so it is not the tool surface the
+    // current selection exposes. As a context resource it contradicted the prompt's
+    // own `Available tools:` block, so it is a command only.
+    expect(resource).toBeUndefined();
+    if (!command) throw new Error('UI headless registrations were not created');
     const notify = vi.fn();
     const entries = vi.fn(() => [
       {
@@ -49,7 +53,6 @@ describe('UI headless inventory', () => {
     ]);
     const execution = { client: { notify }, session: { entries } } as unknown as DoomHeadlessExecutionContext;
 
-    expect(await resource.read(execution)).toBe('read\nwrite');
     await command.execute('', execution);
     expect(notify).toHaveBeenCalledWith({ title: 'DoomPi tools', body: 'read\nwrite', level: 'info' });
 

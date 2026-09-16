@@ -1,4 +1,8 @@
 import { defineResource } from '@agimon-ai/doompi-core/extension-file';
+import { readPackageResource } from '@agimon-ai/doompi-core/server-facet';
 
-import { readPromptSkill } from '../../../../../services/savedPrompts';
-export default defineResource({ name: 'doompi-use-prompt', kind: 'skill' as const, read: readPromptSkill });
+export default defineResource({
+  name: 'doompi-use-prompt',
+  kind: 'skill' as const,
+  read: () => readPackageResource(import.meta.url, 'src/prompts/doompi-use-prompt/SKILL.md'),
+});

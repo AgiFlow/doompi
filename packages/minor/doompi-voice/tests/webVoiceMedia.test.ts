@@ -11,14 +11,14 @@ import {
   voiceOwnershipChannel,
   waitForVoiceMediaWake,
 } from '../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMediaWakeStore';
+import { voiceMicrophone } from '../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMicrophoneStore';
 import { VoiceActivitySection } from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection';
 import { VoiceComposerAction } from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceComposerAction';
-import { browserVoiceMediaClientId } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserMediaIdentity';
 import {
   microphoneOptions,
   VoiceMicrophoneDialog,
 } from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceMicrophoneDialog';
-import { voiceMicrophone } from '../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMicrophoneStore';
+import { browserVoiceMediaClientId } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserMediaIdentity';
 import { VoiceToolMessage } from '../src/extensions/workspaces/sessions/(frontend)/tool/_components/VoiceToolMessage';
 import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership';
 

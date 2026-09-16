@@ -136,12 +136,12 @@ describe('headless domains command', () => {
     await expect(command.execute('web', execution)).rejects.toThrow('Selection was not applied');
   });
 
-  it('projects domain metadata, reads its skill, and disposes every contribution', async () => {
+  it('exposes only its authoring skill, and no domain blob, then disposes every contribution', async () => {
     const { resources, execution, dispose, disposed } = await setup();
-    const texts = await Promise.all(resources.map((resource) => Promise.resolve(resource.read(execution))));
-    expect(JSON.parse(texts[0]!)).toEqual({ domains: ['default'] });
-    expect(texts[1]).toContain('doompi-author-domain');
+    // doompi/domain-config is gone: `domains` is already carried by doompi/config.
+    expect(resources.map((resource) => resource.name)).toEqual(['doompi-author-domain']);
+    expect(await resources[0]!.read(execution)).toContain('doompi-author-domain');
     await dispose?.();
-    expect(disposed).toHaveBeenCalledTimes(3);
+    expect(disposed).toHaveBeenCalledTimes(2);
   });
 });

@@ -2,7 +2,6 @@ import {
   type DoomHeadlessActivity,
   type DoomHeadlessCommand,
   type DoomHeadlessContent,
-  type DoomHeadlessResource,
   type DoomHeadlessTool,
 } from '@agimon-ai/doompi-core/headless';
 
@@ -50,12 +49,6 @@ function readConfig(environment: Readonly<Record<string, string | undefined>>, c
 
 export function createMcpServerRuntime() {
   let runtime: McpRuntimeOwner | undefined;
-  const resource: DoomHeadlessResource = {
-    name: 'doompi/mcp-config',
-    kind: 'context',
-    read: (execution) => readConfig(execution.environment, execution.cwd),
-  };
-
   const activity: DoomHeadlessActivity = {
     name: 'doompi-mcp-runtime',
     async start(execution) {
@@ -148,5 +141,7 @@ export function createMcpServerRuntime() {
       });
     },
   };
-  return { resources: [resource], activities: [activity], commands: [command], tools: [tool] };
+  // The MCP config block named local filesystem paths and diagnostics, none of it
+  // model-actionable: the servers themselves already appear as tools.
+  return { activities: [activity], commands: [command], tools: [tool] };
 }

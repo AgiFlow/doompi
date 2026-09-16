@@ -1,8 +1,8 @@
 import { defineResource } from '@agimon-ai/doompi-core/extension-file';
+import { readPackageResource } from '@agimon-ai/doompi-core/server-facet';
 
-import { readPackageResource } from '../../../../../services/packageResources';
 export default defineResource({
   name: 'doompi-author-domain',
   kind: 'skill' as const,
-  read: () => readPackageResource('src/prompts/doompi-author-domain/SKILL.md'),
+  read: () => readPackageResource(import.meta.url, 'src/prompts/doompi-author-domain/SKILL.md'),
 });

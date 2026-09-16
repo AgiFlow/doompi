@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { type DoomHeadlessHostService, type DoomHeadlessModelSettings } from '@agimon-ai/doompi-core/headless';
 import { type DoomHeadlessToolResult } from '@agimon-ai/doompi-core/headless';
-import { type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { readPackageResource, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 import { serverMinorModes } from '@agimon-ai/doompi-minor-mode';
 import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agimon-ai/doompi-minor-mode';
 
@@ -15,7 +15,6 @@ import {
   buildPlanModeBasePrompt,
   type DebugEvidencePacket,
   type PlanningFlavor,
-  readPlanSkill,
 } from '../../services/prompts';
 import {
   CONTINUE_PLAN_DECISION,
@@ -261,7 +260,7 @@ export function createPlanServerSession(
         when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
         name: 'doompi-use-plan',
         kind: 'skill',
-        read: () => readPlanSkill(),
+        read: () => readPackageResource(import.meta.url, 'src/prompts/doompi-use-plan/SKILL.md'),
       },
     ],
     tools: [

@@ -1,7 +1,4 @@
-import {
-  CLIENT_DEFAULT_MICROPHONE,
-  type VoiceMicrophoneConstraints,
-} from '../../../../../../types/clientMedia';
+import { CLIENT_DEFAULT_MICROPHONE, type VoiceMicrophoneConstraints } from '../../../../../../types/clientMedia';
 import {
   REALTIME_LIMITS,
   type BrowserRealtimeOptions,

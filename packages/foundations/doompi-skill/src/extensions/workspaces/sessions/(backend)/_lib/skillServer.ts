@@ -1,7 +1,6 @@
 import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import { type DoomServerSessionPlugin, readPackageResource } from '@agimon-ai/doompi-core/server-facet';
 
-import { readPackageResource } from '../../../../../services/packageResources';
 import { discoverServerSkills } from '../../../../../services/serverInventory';
 import { createSkillCommands } from './skillCommands';
 export async function createSkillServer(
@@ -16,7 +15,7 @@ export async function createSkillServer(
       ...['doompi-author-skill', 'doompi-use-skill'].map((name) => ({
         name,
         kind: 'skill' as const,
-        read: () => readPackageResource(`src/prompts/${name}/SKILL.md`),
+        read: () => readPackageResource(import.meta.url, `src/prompts/${name}/SKILL.md`),
       })),
     ],
   };

@@ -15,8 +15,8 @@ import { NodeSnapshotStoreAdapter } from '../src/services/snapshotStore';
 import { TimelineStore } from '../src/services/timelineStore';
 import { NodeTreeManifestAdapter } from '../src/services/treeManifest';
 import { readSessionFiles } from '../src/services/webFilesChannel';
+import routes from '../src/types/apiRoutes';
 import type { FileEditsDetailView } from '../src/types/fileEditsApi';
-import { detailUrl } from '../src/types/fileEditsApi';
 import type { GitStatusPort } from '../src/types/gitStatus';
 
 /**
@@ -98,11 +98,8 @@ function readHubRows() {
 /** The API half: it is handed only a session id and a working directory too. */
 async function readApiDetail(filePath: string): Promise<FileEditsDetailView> {
   const app = createFileEditsApi({ sessionId: SESSION_ID, cwd });
-  const response = await app.fetch(
-    new Request(
-      `http://host${detailUrl(SESSION_ID, filePath).replace(/^\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/plugins\/file-edits/, '')}`,
-    ),
-  );
+  const search = new URLSearchParams({ path: filePath }).toString();
+  const response = await app.fetch(new Request(`http://host${routes.detail.path}?${search}`));
   expect(response.status).toBe(200);
   return (await response.json()) as FileEditsDetailView;
 }

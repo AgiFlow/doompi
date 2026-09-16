@@ -10,6 +10,7 @@ import { FileEditPaths } from '../../services/fileEditPaths';
 import { lineDiff, lineDiffFromEmpty } from '../../services/lineDiff';
 import { NodeSnapshotStoreAdapter } from '../../services/snapshotStore';
 import { TimelineStore } from '../../services/timelineStore';
+import routes from '../../types/apiRoutes';
 import type { FileEditVersion } from '../../types/domain';
 import type { IFileEditPaths } from '../../types/fileEditPaths';
 import {
@@ -249,7 +250,7 @@ export function createFileEditsApi(options: FileEditsApiOptions = {}): Hono {
     return versions.length === 0 ? undefined : versions;
   };
 
-  app.get('/detail', async (context) => {
+  app.get(routes.detail.path, async (context) => {
     const requested = context.req.query(PATH_QUERY_PARAM);
     const versions = await recordedVersions(requested);
     if (versions === undefined || requested === undefined) {
@@ -278,7 +279,7 @@ export function createFileEditsApi(options: FileEditsApiOptions = {}): Hono {
    * these routes no working directory has no boundary to enforce and so serves
    * nothing.
    */
-  app.get('/preview', async (context) => {
+  app.get(routes.preview.path, async (context) => {
     const requested = context.req.query(PATH_QUERY_PARAM);
     if (requested === undefined || requested === '' || requested.includes('\0')) {
       return context.json({ error: 'A preview names a path.' }, 400);
@@ -297,7 +298,7 @@ export function createFileEditsApi(options: FileEditsApiOptions = {}): Hono {
     return context.json(body);
   });
 
-  app.put('/content', async (context) => {
+  app.put(routes.save.path, async (context) => {
     let request: FileEditsSaveRequest;
     try {
       request = (await context.req.json()) as FileEditsSaveRequest;
@@ -326,7 +327,7 @@ export function createFileEditsApi(options: FileEditsApiOptions = {}): Hono {
     return context.json(body);
   });
 
-  app.delete('/content', async (context) => {
+  app.delete(routes.remove.path, async (context) => {
     const requested = context.req.query(PATH_QUERY_PARAM);
     if ((await recordedVersions(requested)) === undefined || requested === undefined) {
       return context.json({ error: 'This session recorded no changes to that file.' }, 404);

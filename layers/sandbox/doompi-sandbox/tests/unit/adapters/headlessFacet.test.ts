@@ -12,7 +12,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { facet as sandboxHeadlessFacet } from '../../../generated/server';
 import {
   createSandboxContextResource,
-  createSandboxReadmeResource,
   createSandboxSkillResource,
 } from '../../../src/extensions/workspaces/sessions/(backend)/_lib/sandboxResources';
 
@@ -79,7 +78,6 @@ describe('sandbox headless facet', () => {
 
     expect(createSandboxContextResource({})).toBeUndefined();
     expect(createSandboxSkillResource({})).toBeUndefined();
-    expect(createSandboxReadmeResource({})).toBeUndefined();
 
     await dispose?.();
     await context.fiber.dispose();
@@ -89,11 +87,13 @@ describe('sandbox headless facet', () => {
     const test = fixture({ DOOMPI_SANDBOX_BROKER: '0' });
     const dispose = await sandboxHeadlessFacet.apply(test.context);
 
-    expect(test.resources.map((resource) => resource.name)).toEqual([
-      'doompi-sandbox',
-      'doompi-use-sandbox',
-      'doompi-sandbox-readme',
-    ]);
+    // The README is no longer a resource at all: a packaging document is not
+    // system-prompt material. The index stays, gated to Help mode.
+    expect(test.resources.map((resource) => resource.name)).toEqual(['doompi-sandbox', 'doompi-use-sandbox']);
+    expect(test.resources[0]!.when).toEqual({
+      state: { 'minor-mode': 'help' },
+      attribution: { kind: 'minor', mode: 'help' },
+    });
     for (const resource of test.resources) await resource.read(test.execution);
     expect(test.activities).toHaveLength(1);
     expect(test.commands.map((command) => command.name)).toEqual(['doom-sandbox']);

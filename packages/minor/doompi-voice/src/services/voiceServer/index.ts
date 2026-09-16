@@ -3,7 +3,11 @@ import { join } from 'node:path';
 
 import { loadDoomConfig, resolveVoiceConfig } from '@agimon-ai/doompi-config';
 import type { DoomHeadlessHostService } from '@agimon-ai/doompi-core/headless';
-import { defineServerMethod, type DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
+import {
+  defineServerMethod,
+  readPackageResource,
+  type DoomServerSessionPlugin,
+} from '@agimon-ai/doompi-core/server-facet';
 import {
   DOOM_VOICE_AUTO_MODE_ID,
   DOOM_VOICE_TOOLS_SERVICE,
@@ -32,7 +36,6 @@ import {
 } from '../../services/infrastructure';
 import { SessionVoiceOwnership, SessionVoiceOwnershipBridge } from '../../services/sessionVoiceOwnership';
 import { VoiceTranscriptAdjudicator } from '../../services/transcriptAdmission';
-import { readVoicePrompt } from '../../services/voicePrompt';
 import { voiceReadiness } from '../../services/voiceReadiness';
 import { createDoomVoiceToolsService } from '../../services/voiceTools';
 import { VoiceWorkerAutoCaptureController } from '../../services/voiceWorkerAutoCaptureController';
@@ -408,7 +411,14 @@ export function createVoiceServer(
     },
     onDispose: close,
     onStop: close,
-    resources: [{ when, name: 'doompi-use-voice', kind: 'skill', read: readVoicePrompt }],
+    resources: [
+      {
+        when,
+        name: 'doompi-use-voice',
+        kind: 'skill',
+        read: () => readPackageResource(import.meta.url, 'src/prompts/doompi-use-voice/SKILL.md'),
+      },
+    ],
     commands: [
       {
         name: 'voice',

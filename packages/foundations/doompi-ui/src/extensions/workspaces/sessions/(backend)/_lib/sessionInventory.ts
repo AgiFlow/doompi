@@ -7,19 +7,14 @@ import { toolNames } from '../../../../../services/sessionToolInventory';
 /**
  * The TUI shell itself stays Pi-only. Inventory is the shared part and is exposed
  * from session data rather than silently installing a fake editor/widget host.
+ *
+ * Inventory is a command, never a context resource. It reports the tools observed
+ * in the transcript, which is not the tool surface the current selection exposes:
+ * as a prompt section it listed tools the session had since gated out, directly
+ * contradicting the `Available tools:` block, and it grew for the whole session.
  */
 export function createUiServerContributions(): DoomServerSessionPlugin {
   return {
-    resources: [
-      {
-        name: 'doompi/tool-inventory',
-        kind: 'context',
-        read: async (execution) => {
-          const names = toolNames(await execution.session.entries({ type: 'message' }));
-          return names.length > 0 ? names.join('\n') : '(no tool calls recorded in this session)';
-        },
-      },
-    ],
     commands: [
       {
         name: TOOLS_COMMAND,

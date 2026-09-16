@@ -10,17 +10,22 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createFileEditsApi } from '../../src/services/fileEditsApi';
 import { NodeSnapshotStoreAdapter } from '../../src/services/snapshotStore';
 import { TimelineStore } from '../../src/services/timelineStore';
+import routes from '../../src/types/apiRoutes';
 import type { FileEditsDetailView, FileEditsErrorView, FileEditsPreviewView } from '../../src/types/fileEditsApi';
-import { contentUrl, deleteUrl, detailUrl, previewUrl } from '../../src/types/fileEditsApi';
 
 let cwd: string;
 let timeline: TimelineStore;
 let snapshots: NodeSnapshotStoreAdapter;
 let app: ReturnType<typeof createFileEditsApi>;
 
-/** The URL builders carry the mount prefix, which the host strips before the app sees it. */
-function mounted(url: string): string {
-  return `http://host${url.replace(/^\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/plugins\/file-edits/, '')}`;
+/**
+ * A request for one declared route, as the app sees it after the host strips
+ * the mount. The path comes from the same table the app registers from, so a
+ * route cannot move on one side alone.
+ */
+function routeUrl(key: keyof typeof routes, query?: Readonly<Record<string, string>>): string {
+  const search = new URLSearchParams(query ?? {}).toString();
+  return `http://host${routes[key].path}${search === '' ? '' : `?${search}`}`;
 }
 
 beforeEach(() => {
@@ -59,7 +64,7 @@ describe('the file-edits session API', () => {
     const filePath = await recordEdit('app.ts', 'one\n', 'one\ntwo\n', 10);
     await recordEdit('app.ts', 'one\ntwo\n', 'one\ntwo\nthree\n', 20);
 
-    const response = await app.fetch(new Request(mounted(detailUrl('s1', filePath))));
+    const response = await app.fetch(new Request(routeUrl('detail', { path: filePath })));
     expect(response.status).toBe(200);
     const body = (await response.json()) as FileEditsDetailView;
     expect(body.relPath).toBe('app.ts');
@@ -87,7 +92,7 @@ describe('the file-edits session API', () => {
     });
 
     const body = (await (
-      await app.fetch(new Request(mounted(detailUrl('s1', filePath))))
+      await app.fetch(new Request(routeUrl('detail', { path: filePath })))
     ).json()) as FileEditsDetailView;
     expect(body.versions[0]?.hunks).toBeUndefined();
     expect(body.versions[0]?.note).toContain('no baseline');
@@ -108,7 +113,7 @@ describe('the file-edits session API', () => {
       after: await snapshots.put('untouched content'),
     });
 
-    const response = await app.fetch(new Request(mounted(detailUrl('s1', filePath))));
+    const response = await app.fetch(new Request(routeUrl('detail', { path: filePath })));
     // The list already hides this row, so its history must not reintroduce it.
     // The same lookup is what authorizes these routes, so an unconfirmed touch
     // stops being a file this session will serve as one of its own changes.
@@ -131,7 +136,7 @@ describe('the file-edits session API', () => {
     });
 
     const body = (await (
-      await app.fetch(new Request(mounted(detailUrl('s1', filePath))))
+      await app.fetch(new Request(routeUrl('detail', { path: filePath })))
     ).json()) as FileEditsDetailView;
     // A creation has an empty baseline, not a missing one, so every line arrives.
     expect(body.versions[0]?.note).toBeUndefined();
@@ -155,7 +160,7 @@ describe('the file-edits session API', () => {
     });
 
     const body = (await (
-      await app.fetch(new Request(mounted(detailUrl('s1', filePath))))
+      await app.fetch(new Request(routeUrl('detail', { path: filePath })))
     ).json()) as FileEditsDetailView;
     // Not a creation, so the honest answer names the side that went uncaptured.
     expect(body.versions[0]?.note).toContain('previous content');
@@ -166,7 +171,7 @@ describe('the file-edits session API', () => {
     const filePath = await recordEdit('gone.ts', 'content\n', 'content\n', 10);
     fs.rmSync(filePath);
     const body = (await (
-      await app.fetch(new Request(mounted(detailUrl('s1', filePath))))
+      await app.fetch(new Request(routeUrl('detail', { path: filePath })))
     ).json()) as FileEditsDetailView;
     expect(body.working.unavailable).toBe(true);
     expect(body.working.reason).toContain('no longer exists');
@@ -174,19 +179,19 @@ describe('the file-edits session API', () => {
 
   it('refuses a file this session never changed', async () => {
     fs.writeFileSync(path.join(cwd, 'secret.env'), 'TOKEN=1');
-    const response = await app.fetch(new Request(mounted(detailUrl('s1', path.join(cwd, 'secret.env')))));
+    const response = await app.fetch(new Request(routeUrl('detail', { path: path.join(cwd, 'secret.env') })));
     expect(response.status).toBe(404);
   });
 
   it('refuses a path that climbs out of the session, because the timeline never held it', async () => {
-    const response = await app.fetch(new Request(mounted(detailUrl('s1', '../../etc/passwd'))));
+    const response = await app.fetch(new Request(routeUrl('detail', { path: '../../etc/passwd' })));
     expect(response.status).toBe(404);
   });
 
   it('previews a file the session never changed, read only', async () => {
     const filePath = path.join(cwd, 'untouched.ts');
     fs.writeFileSync(filePath, 'export const x = 1;\n');
-    const response = await app.fetch(new Request(mounted(previewUrl('s1', filePath))));
+    const response = await app.fetch(new Request(routeUrl('preview', { path: filePath })));
     expect(response.status).toBe(200);
     const body = (await response.json()) as FileEditsPreviewView;
     expect(body.relPath).toBe('untouched.ts');
@@ -195,9 +200,9 @@ describe('the file-edits session API', () => {
   });
 
   it('refuses a preview that climbs out of the working directory', async () => {
-    const escaping = await app.fetch(new Request(mounted(previewUrl('s1', path.join(cwd, '..', 'passwd')))));
+    const escaping = await app.fetch(new Request(routeUrl('preview', { path: path.join(cwd, '..', 'passwd') })));
     expect(escaping.status).toBe(403);
-    const relative = await app.fetch(new Request(mounted(previewUrl('s1', '../../etc/passwd'))));
+    const relative = await app.fetch(new Request(routeUrl('preview', { path: '../../etc/passwd' })));
     expect(relative.status).toBe(403);
   });
 
@@ -206,7 +211,7 @@ describe('the file-edits session API', () => {
     try {
       fs.writeFileSync(path.join(outside, 'secret.env'), 'TOKEN=1');
       fs.symlinkSync(path.join(outside, 'secret.env'), path.join(cwd, 'linked.env'));
-      const response = await app.fetch(new Request(mounted(previewUrl('s1', path.join(cwd, 'linked.env')))));
+      const response = await app.fetch(new Request(routeUrl('preview', { path: path.join(cwd, 'linked.env') })));
       expect(response.status).toBe(403);
     } finally {
       fs.rmSync(outside, { recursive: true, force: true });
@@ -214,7 +219,7 @@ describe('the file-edits session API', () => {
   });
 
   it('reports a preview of a file that is not there rather than refusing', async () => {
-    const response = await app.fetch(new Request(mounted(previewUrl('s1', path.join(cwd, 'absent.ts')))));
+    const response = await app.fetch(new Request(routeUrl('preview', { path: path.join(cwd, 'absent.ts') })));
     expect(response.status).toBe(200);
     const body = (await response.json()) as FileEditsPreviewView;
     expect(body.working.unavailable).toBe(true);
@@ -222,18 +227,18 @@ describe('the file-edits session API', () => {
 
   it('serves no preview at all when the host gave it no working directory', async () => {
     const unbounded = createFileEditsApi({ sessionId: 's1', timeline, snapshots });
-    const response = await unbounded.fetch(new Request(mounted(previewUrl('s1', '/etc/passwd'))));
+    const response = await unbounded.fetch(new Request(routeUrl('preview', { path: '/etc/passwd' })));
     expect(response.status).toBe(403);
   });
 
   it('writes a manual save and answers the new hash', async () => {
     const filePath = await recordEdit('app.ts', 'one\n', 'one\ntwo\n', 10);
     const detail = (await (
-      await app.fetch(new Request(mounted(detailUrl('s1', filePath))))
+      await app.fetch(new Request(routeUrl('detail', { path: filePath })))
     ).json()) as FileEditsDetailView;
 
     const response = await app.fetch(
-      new Request(mounted(contentUrl('s1')), {
+      new Request(routeUrl('save'), {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: filePath, expectedHash: detail.working.hash, content: 'hand written\n' }),
@@ -246,13 +251,13 @@ describe('the file-edits session API', () => {
   it('refuses a save whose file moved under the editor, and says what it holds now', async () => {
     const filePath = await recordEdit('app.ts', 'one\n', 'one\ntwo\n', 10);
     const detail = (await (
-      await app.fetch(new Request(mounted(detailUrl('s1', filePath))))
+      await app.fetch(new Request(routeUrl('detail', { path: filePath })))
     ).json()) as FileEditsDetailView;
     // The agent rewrites the file while the reader is still editing it.
     fs.writeFileSync(filePath, 'the agent got there first\n');
 
     const response = await app.fetch(
-      new Request(mounted(contentUrl('s1')), {
+      new Request(routeUrl('save'), {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: filePath, expectedHash: detail.working.hash, content: 'hand written\n' }),
@@ -270,7 +275,7 @@ describe('the file-edits session API', () => {
   it('refuses a save for a file this session never changed', async () => {
     fs.writeFileSync(path.join(cwd, 'secret.env'), 'TOKEN=1');
     const response = await app.fetch(
-      new Request(mounted(contentUrl('s1')), {
+      new Request(routeUrl('save'), {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ path: path.join(cwd, 'secret.env'), expectedHash: '', content: 'TOKEN=2' }),
@@ -282,7 +287,7 @@ describe('the file-edits session API', () => {
 
   it('deletes a file the session changed', async () => {
     const filePath = await recordEdit('app.ts', 'one\n', 'one\ntwo\n', 10);
-    const response = await app.fetch(new Request(mounted(deleteUrl('s1', filePath)), { method: 'DELETE' }));
+    const response = await app.fetch(new Request(routeUrl('remove', { path: filePath }), { method: 'DELETE' }));
     expect(response.status).toBe(204);
     expect(fs.existsSync(filePath)).toBe(false);
   });
@@ -290,14 +295,14 @@ describe('the file-edits session API', () => {
   it('treats deleting an already absent file as done rather than failed', async () => {
     const filePath = await recordEdit('app.ts', 'one\n', 'one\n', 10);
     fs.rmSync(filePath);
-    const response = await app.fetch(new Request(mounted(deleteUrl('s1', filePath)), { method: 'DELETE' }));
+    const response = await app.fetch(new Request(routeUrl('remove', { path: filePath }), { method: 'DELETE' }));
     expect(response.status).toBe(204);
   });
 
   it('refuses to delete a file this session never changed', async () => {
     const secret = path.join(cwd, 'secret.env');
     fs.writeFileSync(secret, 'TOKEN=1');
-    const response = await app.fetch(new Request(mounted(deleteUrl('s1', secret)), { method: 'DELETE' }));
+    const response = await app.fetch(new Request(routeUrl('remove', { path: secret }), { method: 'DELETE' }));
     expect(response.status).toBe(404);
     expect(fs.existsSync(secret)).toBe(true);
   });
@@ -311,7 +316,7 @@ describe('the file-edits session API', () => {
       `${JSON.stringify({ version: 1, path: filePath, tool: 'write', at: 5 })}\n`,
     );
     const body = (await (
-      await app.fetch(new Request(mounted(detailUrl('s1', filePath))))
+      await app.fetch(new Request(routeUrl('detail', { path: filePath })))
     ).json()) as FileEditsDetailView;
     expect(body.versions[0]?.note).toContain('before this session began capturing');
     expect(body.versions[0]?.note).not.toContain('command');
@@ -322,7 +327,7 @@ describe('the file-edits session API', () => {
     ['a body naming no path', JSON.stringify({ expectedHash: '', content: 'x' })],
   ])('refuses %s', async (_name, body) => {
     const response = await app.fetch(
-      new Request(mounted(contentUrl('s1')), {
+      new Request(routeUrl('save'), {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body,

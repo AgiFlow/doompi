@@ -1,4 +1,4 @@
-import { type DoomHeadlessHook, type DoomHeadlessResource } from '@agimon-ai/doompi-core/headless';
+import { type DoomHeadlessHook } from '@agimon-ai/doompi-core/headless';
 
 import { canonicalJson } from '../../../../../services/canonical';
 import { sha256Base64Url } from '../../../../../services/digest';
@@ -28,21 +28,6 @@ function modelIdentity(
 function cacheNamespace(context: { sessionId: string; selection: Record<string, unknown> }): string {
   return `dph_${sha256Base64Url(canonicalJson({ version: 1, session: context.sessionId, selection: context.selection }))}`;
 }
-
-export const cacheResource: DoomHeadlessResource = {
-  name: 'doompi/prompt-cache-selection',
-  kind: 'context',
-  read: (execution) =>
-    JSON.stringify(
-      {
-        sessionId: execution.sessionId,
-        selection: execution.selection,
-        model: execution.model,
-      },
-      null,
-      2,
-    ),
-};
 
 export const cacheHooks: DoomHeadlessHook[] = [
   {

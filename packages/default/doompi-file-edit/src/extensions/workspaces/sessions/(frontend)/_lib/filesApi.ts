@@ -1,94 +1,68 @@
-import { sessionApiPath } from '@agimon-ai/doompi-core/web';
-import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
-
+import { api } from '../../../../../../generated/client';
 import {
-  contentUrl,
-  deleteUrl,
-  detailUrl,
   type FileEditsDetailView,
   type FileEditsPreviewView,
-  type FileEditsSaveView,
-  previewUrl,
+  PATH_QUERY_PARAM,
 } from '../../../../../types/fileEditsApi';
 
 /**
  * The page's half of this package's session API: one file's history, the
- * manual save, and the deletion. The only place the cockpit talks HTTP for a
- * file, so if the transport changes, it changes here alone.
+ * manual save, and the deletion.
  *
- * Every call goes through `sealedTransport` rather than `fetch`. Over a tunnel
- * a bare `fetch` hands the relay the plaintext, and what travels here is file
- * contents in both directions, which is the worst thing in the cockpit to leak.
- * On loopback the transport is a pass-through, so this costs nothing there.
+ * These are adapters now, not a transport. The generated client owns the URL
+ * and the sealed transport with it, so nothing here spells a route or reaches
+ * for `fetch`. What stays is this package's own vocabulary: which refusals the
+ * reader is shown, and the stale-save contract the editor depends on.
+ *
+ * Sealing still matters and still happens, one layer down. What travels here is
+ * file contents in both directions, which is the worst thing in the cockpit to
+ * hand a tunnel's relay in the clear.
  */
 
 const UNREACHABLE = 'The session is unreachable.';
-const JSON_HEADERS = { 'content-type': 'application/json' };
-
-/**
- * Where a file's raw bytes are served from, for the ones the page shows rather
- * than edits.
- *
- * This is the host's route, not this package's. The cockpit already serves any
- * file under a session's working directory, for the previews an @-mention
- * raises, and that route carries the traversal guard, the size cap and the
- * content-type mapping a bytes route needs. Adding a second one here would
- * duplicate a security boundary to avoid duplicating a URL, which is the wrong
- * way round. The path is relative to the session's working directory, which is
- * the form the file list already holds.
- */
-export function sessionFileUrl(sessionId: string, relPath: string): string {
-  return `${sessionApiPath(sessionId)}/file?path=${encodeURIComponent(relPath)}`;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** The error a route reported, or a generic one; never an empty message. */
-function errorOf(body: unknown, fallback: string): string {
-  return isRecord(body) && typeof body.error === 'string' && body.error !== '' ? body.error : fallback;
+/**
+ * Where a file's raw bytes are served from, for the ones the page shows rather
+ * than edits.
+ *
+ * This is the host's route, not this package's, which is why the route table
+ * marks it `host: true` and it lands beside the session rather than under
+ * `/plugins`. The cockpit already serves any file under a session's working
+ * directory, and that route carries the traversal guard, the size cap and the
+ * content-type mapping. A second one here would duplicate a security boundary
+ * to avoid duplicating a URL, which is the wrong way round.
+ */
+export function sessionFileUrl(sessionId: string, relPath: string): string {
+  return api.session(sessionId).file.url({ query: { [PATH_QUERY_PARAM]: relPath } });
 }
 
-async function readBody(response: Response): Promise<unknown> {
-  const text = await response.text();
-  if (text === '') return undefined;
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return undefined;
-  }
+/** The message a reader is shown: the route's own words, or why there were none. */
+function messageOf(result: { status: number; error: string }): string {
+  if (result.status === 0) return UNREACHABLE;
+  return result.error === '' ? `The session answered ${result.status}.` : result.error;
 }
 
 export type FetchDetailResult = { ok: true; detail: FileEditsDetailView } | { ok: false; error: string };
 
 export async function fetchFileDetail(sessionId: string, filePath: string): Promise<FetchDetailResult> {
-  let response: Response;
-  try {
-    response = await sealedTransport.fetch(detailUrl(sessionId, filePath));
-  } catch {
-    return { ok: false, error: UNREACHABLE };
-  }
-  const body = await readBody(response);
-  if (!response.ok) return { ok: false, error: errorOf(body, `The session answered ${response.status}.`) };
-  if (!isRecord(body)) return { ok: false, error: 'The session answered with no detail.' };
-  return { ok: true, detail: body as unknown as FileEditsDetailView };
+  const result = await api.session(sessionId).detail({ query: { [PATH_QUERY_PARAM]: filePath } });
+  if (!result.ok) return { ok: false, error: messageOf(result) };
+  if (!isRecord(result.data)) return { ok: false, error: 'The session answered with no detail.' };
+  return { ok: true, detail: result.data };
 }
 
 export type FetchPreviewResult = { ok: true; preview: FileEditsPreviewView } | { ok: false; error: string };
 
 /** One file the session never changed, read only; the route bounds it to the working directory. */
 export async function fetchFilePreview(sessionId: string, filePath: string): Promise<FetchPreviewResult> {
-  let response: Response;
-  try {
-    response = await sealedTransport.fetch(previewUrl(sessionId, filePath));
-  } catch {
-    return { ok: false, error: UNREACHABLE };
-  }
-  const body = await readBody(response);
-  if (!response.ok) return { ok: false, error: errorOf(body, `The session answered ${response.status}.`) };
-  if (!isRecord(body)) return { ok: false, error: 'The session answered with no file.' };
-  return { ok: true, preview: body as unknown as FileEditsPreviewView };
+  const result = await api.session(sessionId).preview({ query: { [PATH_QUERY_PARAM]: filePath } });
+  if (!result.ok) return { ok: false, error: messageOf(result) };
+  if (!isRecord(result.data)) return { ok: false, error: 'The session answered with no file.' };
+  return { ok: true, preview: result.data };
 }
 
 export type SaveResult =
@@ -103,31 +77,22 @@ export async function saveFileContent(
   expectedHash: string,
   content: string,
 ): Promise<SaveResult> {
-  let response: Response;
-  try {
-    response = await sealedTransport.fetch(contentUrl(sessionId), {
-      method: 'PUT',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ path: filePath, expectedHash, content }),
-    });
-  } catch {
-    return { ok: false, stale: false, error: UNREACHABLE };
-  }
-  const body = await readBody(response);
-  if (response.status === 409) {
-    const hash = isRecord(body) && typeof body.hash === 'string' ? body.hash : undefined;
+  const result = await api.session(sessionId).save({ body: { path: filePath, expectedHash, content } });
+  // The agent runs in the same working directory, so it can rewrite the file
+  // while a reader is still editing it. A moved hash is the one refusal the
+  // editor recovers from, so it is read before the generic failure.
+  if (result.status === 409) {
+    const data = result.ok ? undefined : result.data;
+    const hash = isRecord(data) && typeof data.hash === 'string' ? data.hash : undefined;
     return {
       ok: false,
       stale: true,
-      error: errorOf(body, 'The file changed since it was opened.'),
+      error: result.ok ? 'The file changed since it was opened.' : messageOf(result),
       ...(hash === undefined ? {} : { hash }),
     };
   }
-  if (!response.ok) {
-    return { ok: false, stale: false, error: errorOf(body, `The session answered ${response.status}.`) };
-  }
-  const saved = body as FileEditsSaveView | undefined;
-  return { ok: true, hash: saved?.hash ?? '' };
+  if (!result.ok) return { ok: false, stale: false, error: messageOf(result) };
+  return { ok: true, hash: isRecord(result.data) && typeof result.data.hash === 'string' ? result.data.hash : '' };
 }
 
 export type DeleteResult = { ok: true } | { ok: false; error: string };
@@ -140,12 +105,6 @@ export type DeleteResult = { ok: true } | { ok: false; error: string };
  * check would guard nothing. The confirmation in front of it is the guard.
  */
 export async function deleteFile(sessionId: string, filePath: string): Promise<DeleteResult> {
-  let response: Response;
-  try {
-    response = await sealedTransport.fetch(deleteUrl(sessionId, filePath), { method: 'DELETE' });
-  } catch {
-    return { ok: false, error: UNREACHABLE };
-  }
-  if (response.ok) return { ok: true };
-  return { ok: false, error: errorOf(await readBody(response), `The session answered ${response.status}.`) };
+  const result = await api.session(sessionId).remove({ query: { [PATH_QUERY_PARAM]: filePath } });
+  return result.ok ? { ok: true } : { ok: false, error: messageOf(result) };
 }

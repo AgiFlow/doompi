@@ -1,6 +1,6 @@
 import { type DoomHeadlessHook, type DoomHeadlessResource } from '@agimon-ai/doompi-core/headless';
+import { readPackageResource } from '@agimon-ai/doompi-core/server-facet';
 
-import { readHookResource } from '../../services/hookResource';
 function hookEntry(event: Readonly<Record<string, unknown>>): Record<string, unknown> {
   return {
     version: 1,
@@ -12,7 +12,7 @@ function hookEntry(event: Readonly<Record<string, unknown>>): Record<string, unk
 export const hookResource: DoomHeadlessResource = {
   name: 'doompi-author-hook',
   kind: 'skill',
-  read: readHookResource,
+  read: () => readPackageResource(import.meta.url, 'src/prompts/doompi-author-hook/SKILL.md'),
 };
 
 export const serverHooks: DoomHeadlessHook[] = [

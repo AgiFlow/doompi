@@ -7,23 +7,19 @@ config API, including file hashes, atomic saves, numeric values, and scope valid
 remain global settings. Browser input selection is separate from the host ffmpeg
 `voice.recorder.device` option.
 
-Choose a microphone beside the composer Voice button. The browser registers physical inputs
-after microphone permission and saves the choice under the server home's
-`.pi/.doom/voice/clients.json`. The preference identity survives browser reloads; each tab
-keeps its own media connection lease. If no choice is saved, the default alias is resolved only
-when it matches exactly one physical device. Manual dictation appends to the draft until Send.
+The composer Voice button records on whatever input the browser is already using; there is no
+device picker. Autonomous voice asks which input to open only when the browser reports more than
+one, and remembers the answer in that browser's local storage until the set of inputs changes.
+Dismissing that dialog uses the browser's own default input. Each tab keeps its own media
+connection lease. Manual dictation appends to the draft until Send.
 
 Voice owns these authenticated server endpoints:
 
-| Mount                                   | Endpoint                        | Purpose                                                  |
-| --------------------------------------- | ------------------------------- | -------------------------------------------------------- |
-| `/api/plugins/voice`                    | `GET /readiness`                | Check configuration and local transcription dependencies |
-| same                                    | `GET /clients/:clientId`        | Read browser microphone preferences                      |
-| same                                    | `PUT /clients/:clientId/inputs` | Register `{inputs: [{deviceId, groupId, label}]}`        |
-| same                                    | `PUT /clients/:clientId`        | Save `{deviceId}`; null clears selection                 |
-| same                                    | `DELETE /clients/:clientId`     | Clear the saved selection                                |
-| `/api/sessions/:sessionId/plugin/voice` | `GET /status`                   | Read lifecycle and media readiness                       |
-| same                                    | `POST /control`                 | Send `{action, target?}`                                 |
+| Mount                                   | Endpoint         | Purpose                                                  |
+| --------------------------------------- | ---------------- | -------------------------------------------------------- |
+| `/api/plugins/voice`                    | `GET /readiness` | Check configuration and local transcription dependencies |
+| `/api/sessions/:sessionId/plugin/voice` | `GET /status`    | Read lifecycle and media readiness                       |
+| same                                    | `POST /control`  | Send `{action, target?}`                                 |
 
 Control actions are `status`, `manual`, `activate`, `deactivate`, `mute`, `unmute`, `interrupt`,
 and `transfer` (with a target catalog order). The typed session method `voice.control` uses the

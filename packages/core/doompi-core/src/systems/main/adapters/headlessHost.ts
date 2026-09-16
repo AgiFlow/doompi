@@ -56,13 +56,21 @@ function sameSelection(left: DoomHeadlessSelection, right: DoomHeadlessSelection
   );
 }
 
-/** Maps one typed headless resource to the exact skill shape installed in AgentHarness. */
+/**
+ * Maps one typed headless resource to the exact skill shape installed in AgentHarness.
+ *
+ * Prefers the resource's own `description` and `path`. The fallbacks below are what
+ * every skill used to get, and they are only good enough for explicit invocation,
+ * which matches on name: `doom-headless://` is not a path any tool can open, and
+ * "Headless skill from <source>" gives the model nothing to select on. A skill is
+ * only advertised in the prompt once it carries a real path.
+ */
 export function headlessHarnessSkill(resource: ResolvedHeadlessResource) {
   return {
     name: resource.name,
-    description: `Headless skill from ${resource.source}`,
+    description: resource.description ?? `Headless skill from ${resource.source}`,
     content: resource.text,
-    filePath: `doom-headless://${resource.source}/${resource.name}`,
+    filePath: resource.path ?? `doom-headless://${resource.source}/${resource.name}`,
   };
 }
 
