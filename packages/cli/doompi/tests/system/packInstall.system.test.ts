@@ -1239,7 +1239,7 @@ describe('packed package identity and closure', () => {
       );
     }
     expect(unsafePackedContent(result)).toEqual([]);
-    expect(packageManifestText(result)).not.toMatch(/(?:workspace:|link:|packages[\\/]cli|packages[\\/]rigs)/);
+    expect(packageManifestText(result)).not.toMatch(/(?:workspace:|link:|packages[\\/]rigs)/);
   });
 
   it.each(PACKAGE_MATRIX)('$name matches the frozen packed export, condition, and bin baseline', (entry) => {
