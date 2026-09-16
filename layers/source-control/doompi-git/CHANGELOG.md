@@ -1,3 +1,23 @@
+## 0.0.1-alpha.9 (2026-09-16)
+
+### 🚀 Features
+
+- **core,git:** one package-resource reader, and stop one bad file killing a session ([d34b9a85](https://github.com/AgiFlow/doompi/commit/d34b9a85))
+- complete folder-based extension migration ([6ad1d3eb](https://github.com/AgiFlow/doompi/commit/6ad1d3eb))
+- adopt folder-based extension layout ([e72511ee](https://github.com/AgiFlow/doompi/commit/e72511ee))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.31
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.68
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.8 (2026-09-15)
 
 ### 🩹 Fixes

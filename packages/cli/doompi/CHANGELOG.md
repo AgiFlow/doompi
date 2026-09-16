@@ -1,3 +1,40 @@
+## 0.0.1-alpha.74 (2026-09-16)
+
+### 🚀 Features
+
+- **core,log,prompt:** path parameters, and two more adopters ([4c35743f](https://github.com/AgiFlow/doompi/commit/4c35743f))
+- **core:** advertise server skills instead of only billing for them ([f0f27c07](https://github.com/AgiFlow/doompi/commit/f0f27c07))
+- **core,git:** one package-resource reader, and stop one bad file killing a session ([d34b9a85](https://github.com/AgiFlow/doompi/commit/d34b9a85))
+
+### 🩹 Fixes
+
+- stabilize folder-based runtime pipeline ([02a5b097](https://github.com/AgiFlow/doompi/commit/02a5b097))
+- **core,voice:** stop mode-gated tools leaking into the headless surface ([56bea74a](https://github.com/AgiFlow/doompi/commit/56bea74a))
+- **root:** repair references after the core package split ([603cfb9a](https://github.com/AgiFlow/doompi/commit/603cfb9a))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.50
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.39
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.50
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.51
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.33
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.73
+- Updated @agimon-ai/vibe-lint-plugin-doom-cli to 0.0.1-alpha.4
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.73 (2026-09-15)
 
 ### 🚀 Features

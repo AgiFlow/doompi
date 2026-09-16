@@ -1,3 +1,32 @@
+## 0.0.1-alpha.73 (2026-09-16)
+
+### 🚀 Features
+
+- **core,build,file-edit:** generated RPC clients with build-injected URL shapes ([afdfd7c6](https://github.com/AgiFlow/doompi/commit/afdfd7c6))
+- complete folder-based extension migration ([6ad1d3eb](https://github.com/AgiFlow/doompi/commit/6ad1d3eb))
+- **doompi-task:** adopt folder-based extension layout ([1d832843](https://github.com/AgiFlow/doompi/commit/1d832843))
+
+### 🩹 Fixes
+
+- **doompi-task:** keep routed web imports in boundary ([fe07a99c](https://github.com/AgiFlow/doompi/commit/fe07a99c))
+- **task:** only count live delegations as running activity ([5571a789](https://github.com/AgiFlow/doompi/commit/5571a789))
+- **team,task,core:** wake the headless agent when a subagent finishes ([694c76d9](https://github.com/AgiFlow/doompi/commit/694c76d9))
+- **task:** let the activity dock own the tasks section frame ([85e106ad](https://github.com/AgiFlow/doompi/commit/85e106ad))
+- **root:** satisfy extension architecture contracts ([f2b5865f](https://github.com/AgiFlow/doompi/commit/f2b5865f))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.31
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.72 (2026-09-15)
 
 ### 🧱 Updated Dependencies

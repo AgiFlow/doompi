@@ -1,3 +1,35 @@
+## 0.0.1-alpha.37 (2026-09-16)
+
+### 🚀 Features
+
+- **core:** give server sessions the project context and cwd Pi always had ([f5511656](https://github.com/AgiFlow/doompi/commit/f5511656))
+- **core,build,file-edit:** generated RPC clients with build-injected URL shapes ([afdfd7c6](https://github.com/AgiFlow/doompi/commit/afdfd7c6))
+- **core,git:** one package-resource reader, and stop one bad file killing a session ([d34b9a85](https://github.com/AgiFlow/doompi/commit/d34b9a85))
+- **doompi-task:** adopt folder-based extension layout ([1d832843](https://github.com/AgiFlow/doompi/commit/1d832843))
+
+### 🩹 Fixes
+
+- stabilize folder-based runtime pipeline ([02a5b097](https://github.com/AgiFlow/doompi/commit/02a5b097))
+- **team,task,core:** wake the headless agent when a subagent finishes ([694c76d9](https://github.com/AgiFlow/doompi/commit/694c76d9))
+- **task:** let the activity dock own the tasks section frame ([85e106ad](https://github.com/AgiFlow/doompi/commit/85e106ad))
+- **root:** repair references after the core package split ([603cfb9a](https://github.com/AgiFlow/doompi/commit/603cfb9a))
+- **root:** repair folder migration regressions ([9f8a1f22](https://github.com/AgiFlow/doompi/commit/9f8a1f22))
+- **doompi-web:** remove dormant sessions directly ([d1ae0381](https://github.com/AgiFlow/doompi/commit/d1ae0381))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.74
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.33
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.67
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.36 (2026-09-15)
 
 ### 🚀 Features

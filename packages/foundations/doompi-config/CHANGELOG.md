@@ -1,3 +1,20 @@
+## 0.0.1-alpha.72 (2026-09-16)
+
+### 🚀 Features
+
+- move voice, plan, workflow and computer-use onto declared API routes ([bd524ece](https://github.com/AgiFlow/doompi/commit/bd524ece))
+- **core,build,file-edit:** generated RPC clients with build-injected URL shapes ([afdfd7c6](https://github.com/AgiFlow/doompi/commit/afdfd7c6))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.70
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.71 (2026-09-15)
 
 ### 🩹 Fixes

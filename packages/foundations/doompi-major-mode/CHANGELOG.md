@@ -1,3 +1,24 @@
+## 0.0.1-alpha.51 (2026-09-16)
+
+### 🚀 Features
+
+- **core,build,file-edit:** generated RPC clients with build-injected URL shapes ([afdfd7c6](https://github.com/AgiFlow/doompi/commit/afdfd7c6))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-voice to 0.0.1-alpha.74
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.73
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.50 (2026-09-15)
 
 ### 🧱 Updated Dependencies

@@ -1,3 +1,33 @@
+## 0.0.1-alpha.45 (2026-09-16)
+
+### 🚀 Features
+
+- complete folder-based extension migration ([6ad1d3eb](https://github.com/AgiFlow/doompi/commit/6ad1d3eb))
+- **doompi-build:** make the side axis logic against presentation ([d79e35d6](https://github.com/AgiFlow/doompi/commit/d79e35d6))
+- **doompi-build:** build the browser half instead of shipping source ([c9a8217e](https://github.com/AgiFlow/doompi/commit/c9a8217e))
+- **doompi-core:** type what a folder-routed file may export ([122fd491](https://github.com/AgiFlow/doompi/commit/122fd491))
+- **doompi-grep:** migrate to the folder-based extension layout ([d4de9273](https://github.com/AgiFlow/doompi/commit/d4de9273))
+
+### 🩹 Fixes
+
+- **team,task,core:** wake the headless agent when a subagent finishes ([694c76d9](https://github.com/AgiFlow/doompi/commit/694c76d9))
+- **root:** repair references after the core package split ([603cfb9a](https://github.com/AgiFlow/doompi/commit/603cfb9a))
+- **root:** satisfy extension architecture contracts ([f2b5865f](https://github.com/AgiFlow/doompi/commit/f2b5865f))
+- **doompi-build:** stop the build rewriting package.json ([5f6b0990](https://github.com/AgiFlow/doompi/commit/5f6b0990))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-hashline to 0.0.1-alpha.42
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.31
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.44 (2026-09-15)
 
 ### 🧱 Updated Dependencies

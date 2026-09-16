@@ -1,3 +1,31 @@
+## 0.0.1-alpha.17 (2026-09-16)
+
+### 🚀 Features
+
+- move voice, plan, workflow and computer-use onto declared API routes ([bd524ece](https://github.com/AgiFlow/doompi/commit/bd524ece))
+- complete folder-based extension migration ([6ad1d3eb](https://github.com/AgiFlow/doompi/commit/6ad1d3eb))
+- finish folder layout migration and warn subagents ([79ac3117](https://github.com/AgiFlow/doompi/commit/79ac3117))
+- adopt folder-based extension layout ([e72511ee](https://github.com/AgiFlow/doompi/commit/e72511ee))
+
+### 🩹 Fixes
+
+- **root:** satisfy migrated test lint contracts ([b9c11e75](https://github.com/AgiFlow/doompi/commit/b9c11e75))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.2
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.31
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.33
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.68
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.73
+
+### ❤️ Thank You
+
+- Vuong Ngo
+- vuongngo
+
 ## 0.0.1-alpha.16 (2026-09-15)
 
 ### 🩹 Fixes
