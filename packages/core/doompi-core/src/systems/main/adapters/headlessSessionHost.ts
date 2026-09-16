@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import type { Context as CordisContext } from '@deepseek-ai/cordis';
+import { formatSkillsForSystemPrompt } from '@earendil-works/pi-agent-core';
 import type { AgentHarnessResources, AgentHarnessTool, AgentMessage, HookMap } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import { value } from '@earendil-works/pi-agent-core/harness/session';
@@ -246,20 +247,32 @@ async function resolveModel(
 function mapResources(resources: readonly ResolvedHeadlessResource[]): {
   harness: AgentHarnessResources;
   context: string[];
+  advertised: NonNullable<AgentHarnessResources['skills']>;
 } {
   const skills: NonNullable<AgentHarnessResources['skills']> = [];
+  const advertised: NonNullable<AgentHarnessResources['skills']> = [];
   const promptTemplates: NonNullable<AgentHarnessResources['promptTemplates']> = [];
   const context: string[] = [];
   for (const resource of resources) {
     if (resource.kind === 'skill') {
-      skills.push(headlessHarnessSkill(resource));
+      const skill = headlessHarnessSkill(resource);
+      skills.push(skill);
+      // Advertised only with a path the agent can open. Without one the prompt would
+      // point at a doom-headless:// URI no tool resolves, so such a skill stays
+      // explicitly invocable and silent, exactly as it was before.
+      if (resource.path !== undefined) advertised.push(skill);
     } else if (resource.kind === 'prompt') {
       promptTemplates.push({ name: resource.name, content: resource.text });
     } else {
+      // Deliberately unwrapped. A generic "this is data, not instructions" fence here
+      // would also wrap doompi/profile-config, which carries the operator's persona
+      // and *is* authoritative instruction, and demoting it would be worse than the
+      // anonymity it fixes. A resource whose body is untrusted owns its own boundary,
+      // the way doompi-goal fences a user objective in escaped <goal_objective>.
       context.push(resource.text);
     }
   }
-  return { harness: { skills, promptTemplates }, context };
+  return { harness: { skills, promptTemplates }, context, advertised };
 }
 
 function toolAdapter(
@@ -430,10 +443,17 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
    * pure; the hook pass that follows it there is not, which is why the context
    * panel is shown this rather than a prompt built for the panel's sake.
    */
-  const composeSystemPrompt = (resources: readonly ResolvedHeadlessResource[]): string =>
-    [initialSystemPrompt, formatToolPrompt(toolGuidance), ...mapResources(resources).context]
+  const composeSystemPrompt = (resources: readonly ResolvedHeadlessResource[]): string => {
+    const mapped = mapResources(resources);
+    // formatSkillsForSystemPrompt is the same renderer headlessHost already uses to
+    // bill these skills to the context panel. Until now nothing emitted it, so the
+    // panel charged for an <available_skills> block the model never received. It
+    // returns '' for an empty list and leads with a blank line of its own.
+    const skills = formatSkillsForSystemPrompt(mapped.advertised).trim();
+    return [initialSystemPrompt, formatToolPrompt(toolGuidance), skills, ...mapped.context]
       .filter(Boolean)
       .join('\n\n');
+  };
   /** The last prompt a turn actually built, once one has. */
   let builtSystemPrompt: string | undefined;
   /**

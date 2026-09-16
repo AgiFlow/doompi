@@ -27,6 +27,11 @@ import { RemoveGoalDialog } from './RemoveGoalDialog';
  * They are deliberate acts on work the agent is part-way through, and a button
  * sitting under the pointer beside a row that updates on its own is one
  * misclick away from ending a turn.
+ *
+ * The group declares `hideWhenEmpty`, so a session with no goal drops the whole
+ * frame and this component never mounts. Reaching the fallback below therefore
+ * means the opposite of "no goal": the session published something and this
+ * page could not read it.
  */
 
 /** What the row is doing: showing itself, its menu, an edit, or asking before a clear. */
@@ -38,8 +43,8 @@ export function GoalActivitySection({ sessionId, statuses, sendSessionFrame }: W
 
   if (view === undefined) {
     return (
-      <p data-testid="activity-summary-goal" className="px-1 text-xs text-doom-faint">
-        no goal set yet
+      <p data-testid="activity-goal-unavailable" className="px-1 text-xs text-doom-faint">
+        goal status unavailable
       </p>
     );
   }

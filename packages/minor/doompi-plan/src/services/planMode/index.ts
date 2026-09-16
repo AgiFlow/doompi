@@ -282,8 +282,13 @@ interface PlanVoiceReviewServices {
   readonly narration: Pick<DoomNarrationService, 'request'>;
 }
 
+/** The plan's own heading, as the status line and the pointer record word it. */
+export function planTitleOf(markdown: string): string {
+  return markdown.match(/^#\s+(.+?)\s*$/m)?.[1] ?? DEFAULT_PLAN_TITLE;
+}
+
 export function planTitleSlug(markdown: string): string {
-  const heading = markdown.match(/^#\s+(.+?)\s*$/m)?.[1] ?? DEFAULT_PLAN_TITLE;
+  const heading = planTitleOf(markdown);
   return (
     heading
       .normalize('NFKD')
@@ -300,7 +305,7 @@ export function planTitleSlug(markdown: string): string {
  * shown as it came rather than as an invalid date: the stamp's other job is to
  * change on a rewrite, and it can still do that.
  */
-function planStampOf(writtenAt: string): string {
+export function planStampOf(writtenAt: string): string {
   const at = new Date(writtenAt);
   return Number.isNaN(at.getTime()) ? writtenAt : at.toLocaleTimeString();
 }

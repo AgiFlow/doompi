@@ -21,11 +21,16 @@ import {
   EXIT_PLAN_DECISION,
   PLAN_REVIEW_CHOICES,
   PLAN_REVIEW_TITLE,
+  PLAN_STATUS_KEY,
+  formatPlanStatus,
 } from '../../types/planApi';
+import { PlanPointerService } from '../planPointer';
 import {
   parseDebugEvidencePacket,
   PLAN_CONTINUE_TEXT,
   PLAN_EXIT_APPROVED_TEXT,
+  planStampOf,
+  planTitleOf,
   planTitleSlug,
   visiblePlanForToolCall,
 } from '../planMode';
@@ -96,6 +101,23 @@ export function createPlanServerSession(
       host.context.repoRoot,
       homeDirectory(),
     );
+  const pointers = new PlanPointerService({ env: host.context.environment });
+  /**
+   * The activity group's line, and the pointer its panel reads.
+   *
+   * A cockpit drives this facet and never the Pi runtime, so both were written
+   * only on the Pi side: the group never appeared, and when it did its panel
+   * had no pointer to answer from.
+   */
+  const announcePlanDocument = (filePath: string, title: string, writtenAt: string): void => {
+    try {
+      pointers.write(host.context.sessionId, { path: filePath, title, writtenAt });
+    } catch {
+      // The plan is on disk either way. Losing the cockpit's view of it is not
+      // a reason to fail the write that produced it.
+    }
+    host.context.client.setStatus(PLAN_STATUS_KEY, formatPlanStatus(title, planStampOf(writtenAt)));
+  };
   const modeState = (): MinorModeState => {
     const active = modeSelected();
     return {
@@ -351,10 +373,18 @@ export function createPlanServerSession(
             if (!content.trim()) throw new Error('No implementation plan content was supplied.');
             const directory = plansDirectory();
             await mkdir(directory, { recursive: true, mode: 0o700 });
+            const title = planTitleOf(content);
+            const writtenAt = new Date().toISOString();
             const filename = `${planTitleSlug(content)}-${Date.now()}.md`;
             const filePath = path.join(directory, filename);
             await writeFile(filePath, `${content.trim()}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
-            await host.context.session.appendCustomEntry(PLAN_DOCUMENT, { path: filePath, content: content.trim() });
+            await host.context.session.appendCustomEntry(PLAN_DOCUMENT, {
+              path: filePath,
+              content: content.trim(),
+              title,
+              writtenAt,
+            });
+            announcePlanDocument(filePath, title, writtenAt);
             await selectPlan(true);
             return output({ path: filePath, written: true });
           } catch (error) {
@@ -430,6 +460,14 @@ export function createPlanServerSession(
         event: 'session_start',
         async handle() {
           await restorePlanState();
+          // A plan written in an earlier session is still the session's plan, so
+          // the dock has to hear about it again on every restart.
+          const pointer = pointers.read(host.context.sessionId);
+          if (pointer)
+            host.context.client.setStatus(
+              PLAN_STATUS_KEY,
+              formatPlanStatus(pointer.title, planStampOf(pointer.writtenAt)),
+            );
           // Restore a saved model override if Plan was not restored with the session.
           if (!modeSelected()) await restoreModel();
         },

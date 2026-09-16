@@ -9,8 +9,10 @@ export {
   apiQueryString,
   pluginApiBase,
   pluginApiUrl,
+  applyPathParams,
   scopeApiRoot,
   SETTINGS_BASE_PATH,
+  type ApiParams,
   type ApiQuery,
   type ApiScopeAddress,
 } from '../web/services/apiPaths';

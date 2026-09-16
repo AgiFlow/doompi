@@ -12,7 +12,7 @@
  * moment it mattered, so it accepts nothing beyond that.
  */
 
-import { type ApiQuery, type ApiScopeAddress, pluginApiUrl } from '../apiPaths';
+import { type ApiParams, type ApiQuery, type ApiScopeAddress, pluginApiUrl } from '../apiPaths';
 
 /** Scope names a package API can mount at. */
 export type ApiScopeName = ApiScopeAddress['scope'];
@@ -80,6 +80,8 @@ type ResponseOf<TSpec> = TSpec extends { readonly response: ApiResponseOf<infer 
  * cancels today, which is a worse trade than describing the limit.
  */
 export interface ApiCallInit {
+  /** Values for the route's `:name` path segments. */
+  readonly params?: ApiParams;
   readonly query?: ApiQuery;
   readonly headers?: Readonly<Record<string, string>>;
   /** JSON-encoded unless it is already a string, Blob, buffer or URLSearchParams. */
@@ -117,13 +119,13 @@ export type ApiTransport = (input: string, init?: RequestInit) => Promise<Respon
 export interface ApiMethod<T> {
   (init?: ApiCallInit): Promise<ApiResult<T>>;
   /** The absolute URL, for an `EventSource`, an `<img src>`, or a download. */
-  url(init?: Pick<ApiCallInit, 'query'>): string;
+  url(init?: Pick<ApiCallInit, 'query' | 'params'>): string;
   readonly spec: ApiRouteSpec<unknown>;
 }
 
 /** A streaming route: addressable, not callable. */
 export interface ApiStreamMethod {
-  url(init?: Pick<ApiCallInit, 'query'>): string;
+  url(init?: Pick<ApiCallInit, 'query' | 'params'>): string;
   readonly spec: ApiRouteSpec<unknown>;
 }
 

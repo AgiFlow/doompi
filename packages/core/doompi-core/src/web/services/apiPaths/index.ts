@@ -25,6 +25,9 @@ export type ApiScopeAddress =
   | { readonly scope: 'workspace'; readonly workspaceId: string }
   | { readonly scope: 'session'; readonly workspaceId: string; readonly sessionId: string };
 
+/** Path parameter values, substituted into a route's `:name` segments. */
+export type ApiParams = Readonly<Record<string, string>>;
+
 /** Query values a route may carry. `undefined` drops the parameter rather than sending 'undefined'. */
 export type ApiQuery = Readonly<Record<string, string | number | boolean | undefined>>;
 
@@ -88,6 +91,28 @@ export function pluginApiUrl(
   basePath: string | undefined,
   path: string,
   query?: ApiQuery,
+  params?: ApiParams,
 ): string {
-  return `${pluginApiBase(address, basePath)}${path === '/' ? '' : path}${apiQueryString(query)}`;
+  const resolved = applyPathParams(path, params);
+  return `${pluginApiBase(address, basePath)}${resolved === '/' ? '' : resolved}${apiQueryString(query)}`;
+}
+
+/**
+ * Substitutes a route's `:name` segments, as Hono spells them.
+ *
+ * Encoded per segment, so a value containing a slash names one segment rather
+ * than inventing another. A declared parameter with no value is left as the
+ * literal `:name`, which fails visibly at the route instead of silently
+ * addressing the collection above it.
+ */
+export function applyPathParams(path: string, params: ApiParams | undefined): string {
+  if (params === undefined || !path.includes(':')) return path;
+  return path
+    .split('/')
+    .map((segment) => {
+      if (!segment.startsWith(':')) return segment;
+      const value = params[segment.slice(1)];
+      return value === undefined ? segment : encodeURIComponent(value);
+    })
+    .join('/');
 }

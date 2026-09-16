@@ -29,8 +29,10 @@ export const Playground = {
   render: () => (
     <div className="flex flex-col gap-6 bg-doom-bg p-6">
       <div className="flex flex-col gap-2">
-        <span className="text-2xs text-doom-dim uppercase tracking-widest">no goal set</span>
-        <GoalActivitySection {...slot()} />
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">unreadable status</span>
+        {/* Not "no goal set": that session publishes nothing, and the dock drops
+            the whole group before this component mounts. */}
+        <GoalActivitySection {...slot('active 12.4k/100k')} />
       </div>
 
       <div className="flex flex-col gap-2">

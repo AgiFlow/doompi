@@ -40,11 +40,16 @@ describe('the goal group in the activity dock', () => {
     expect(rendered.html).not.toContain('data-testid="activity-goal"');
   });
 
-  it('says so when the session has set no goal', () => {
-    const rendered = renderPlugin(GoalActivitySection, slotPropsFixture().props);
+  it('reports an unreadable status rather than claiming no goal is set', () => {
+    // A session with no goal publishes nothing, the group declares hideWhenEmpty,
+    // and the dock drops the frame before this component mounts. So the only way
+    // to reach the fallback is a status that arrived and would not parse.
+    const fixture = slotPropsFixture({ statuses: { [GOAL_VIEW_STATUS_KEY]: 'active 12.4k/100k' } });
+
+    const rendered = renderPlugin(GoalActivitySection, fixture.props);
 
     expect(rendered.error).toBeUndefined();
-    expect(rendered.includes('no goal set yet')).toBe(true);
+    expect(rendered.includes('goal status unavailable')).toBe(true);
     expect(rendered.html).not.toContain('data-testid="activity-goal-menu"');
   });
 

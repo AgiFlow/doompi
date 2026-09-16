@@ -142,3 +142,35 @@ describe('agreement with the host', () => {
     }
   });
 });
+
+describe('path parameters', () => {
+  const session = { scope: 'session', workspaceId: WORKSPACE, sessionId: SESSION } as const;
+
+  it('substitutes a named segment, as Hono spells it', () => {
+    expect(pluginApiUrl(session, 'prompts', '/prompts/:name', undefined, { name: 'draft' })).toBe(
+      '/api/workspaces/ws-1/sessions/s-1/plugins/prompts/prompts/draft',
+    );
+  });
+
+  it('encodes per segment, so a slash in a value cannot invent one', () => {
+    expect(pluginApiUrl(session, 'prompts', '/prompts/:name', undefined, { name: 'a/b c' })).toBe(
+      '/api/workspaces/ws-1/sessions/s-1/plugins/prompts/prompts/a%2Fb%20c',
+    );
+  });
+
+  it('substitutes every segment of a multi-parameter route', () => {
+    expect(
+      pluginApiUrl(session, 'runner', '/runners/:runId/log/:kind', undefined, { runId: 'r 1', kind: 'tail' }),
+    ).toBe('/api/workspaces/ws-1/sessions/s-1/plugins/runner/runners/r%201/log/tail');
+  });
+
+  it('leaves a missing value as the literal segment, which fails at the route rather than silently', () => {
+    expect(pluginApiUrl(session, 'prompts', '/prompts/:name', undefined, {})).toContain('/prompts/:name');
+  });
+
+  it('carries a query alongside the parameter', () => {
+    expect(pluginApiUrl(session, 'prompts', '/prompts/:name', { force: true }, { name: 'x' })).toBe(
+      '/api/workspaces/ws-1/sessions/s-1/plugins/prompts/prompts/x?force=true',
+    );
+  });
+});

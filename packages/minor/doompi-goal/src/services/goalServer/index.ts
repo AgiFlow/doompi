@@ -11,7 +11,13 @@ import type { MinorModeState } from '@agimon-ai/doompi-minor-mode';
 
 import { COMMAND_NAME, COMMAND_DESCRIPTION } from '../../constants/goal';
 import { decodeGoalStateEntries } from '../../models/stateCodec';
-import { createGoal, goalSummary, isContradictoryCompletionSummary, transitionGoal } from '../../models/stateMachine';
+import {
+  createGoal,
+  formatStatus,
+  goalSummary,
+  isContradictoryCompletionSummary,
+  transitionGoal,
+} from '../../models/stateMachine';
 import { parseGoalCommand, validateObjective } from '../../services/parser';
 import { buildGoalSystemPrompt } from '../../services/prompts';
 import {
@@ -22,6 +28,7 @@ import {
   type GoalCompleteInput,
 } from '../../services/tools';
 import type { ActiveGoal } from '../../types/goal';
+import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../types/goalView';
 
 const COMPLETE_TOOL = 'goal_complete';
 const BLOCKED_TOOL = 'goal_blocked';
@@ -83,7 +90,23 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
       ],
     };
   };
-  const publishMode = (): void => modeOwner?.publish();
+  /**
+   * The objective, for the cockpit's activity dock.
+   *
+   * The Pi manager publishes this key too, but only for a terminal-less client
+   * and only for sessions it drives. A cockpit dispatches `/goal` to this facet
+   * and never to Pi, so without this the dock has no goal to draw.
+   */
+  const publishGoalView = (): void =>
+    host.context.client.setStatus(
+      GOAL_VIEW_STATUS_KEY,
+      goal ? formatGoalStatusView(goal.text, formatStatus(goal) ?? goal.status) : undefined,
+    );
+  /** Both surfaces that show the goal: the minor-mode catalog and the activity dock. */
+  const publishMode = (): void => {
+    modeOwner?.publish();
+    publishGoalView();
+  };
   const updateToolRestriction = async (): Promise<void> => {
     await host.changeSelection({ axis: 'state', key: 'goal-tools', values: goalToolNamesForState(goal) });
   };

@@ -288,7 +288,16 @@ describe('headless startup', () => {
               return resourceText;
             },
           });
+          // No `path`, so it stays invocable but unadvertised: the prompt must not
+          // point the model at a doom-headless:// URI it cannot open.
           host.registerResource({ name: 'fixture-skill', kind: 'skill', read: () => 'Skill body' });
+          host.registerResource({
+            name: 'fixture-documented-skill',
+            kind: 'skill',
+            description: 'Fixture skill the model can select',
+            path: '/fixture/SKILL.md',
+            read: () => 'Documented skill body',
+          });
           host.registerHook({
             event: 'before_agent_start',
             handle: (event) => ({ systemPrompt: `${String(event.systemPrompt)}\nFirst patch` }),
@@ -523,9 +532,26 @@ describe('headless startup', () => {
       expect(readContextDetail('startup-test', admittedEnvironment)).toMatchObject({ revision: 2 });
       expect(streamSimple.mock.calls[0]?.[1].tools?.map((tool) => tool.name)).toEqual(['fixture_tool']);
       expect(started).toHaveBeenCalledTimes(1);
-      expect(streamSimple.mock.calls[0]?.[1].systemPrompt).toBe(
-        'Fixture context\n\n[PERSONA] You are operating as the person described below (source: agents/writer).\n\n# Writer\n\nStartup context\nFirst patch\nSecond patch',
+      const SKILLS_BLOCK =
+        '<available_skills>\n' +
+        '  <skill>\n' +
+        '    <name>fixture-documented-skill</name>\n' +
+        '    <description>Fixture skill the model can select</description>\n' +
+        '    <location>/fixture/SKILL.md</location>\n' +
+        '  </skill>\n' +
+        '</available_skills>';
+      const firstPrompt = streamSimple.mock.calls[0]?.[1].systemPrompt as string;
+      // Context resources stay unwrapped, so the persona still reads as instruction.
+      expect(firstPrompt).toContain(
+        'Fixture context\n\n[PERSONA] You are operating as the person described below (source: agents/writer).',
       );
+      expect(firstPrompt).toContain('Startup context\nFirst patch\nSecond patch');
+      // A path-bearing skill is advertised by name and location only; its body is not
+      // in the prompt, and the pathless sibling is not advertised at all.
+      expect(firstPrompt).toContain(SKILLS_BLOCK);
+      expect(firstPrompt).not.toContain('Documented skill body');
+      expect(firstPrompt).not.toContain('fixture-skill<');
+      expect(firstPrompt).not.toContain('Skill body');
       await session.runtime.prompt('/mode review');
       expect(session.host!.context.selection.activeLayers).toEqual([]);
       expect(await contextEntries()).toHaveLength(3);
@@ -548,8 +574,8 @@ describe('headless startup', () => {
       expect(executeCommand).toHaveBeenCalledTimes(3);
       resourceText = 'Updated context';
       await session.runtime.prompt('Reenabled');
-      expect(streamSimple.mock.calls[2]?.[1].systemPrompt).toBe(
-        'Updated context\n\n[PERSONA] You are operating as the person described below (source: agents/writer).\n\n# Writer\n\nStartup context\nFirst patch\nSecond patch',
+      expect(streamSimple.mock.calls[2]?.[1].systemPrompt).toContain(
+        'Updated context\n\n[PERSONA] You are operating as the person described below (source: agents/writer).',
       );
       resourceFailure = true;
       await session.runtime.prompt('Resource failure');

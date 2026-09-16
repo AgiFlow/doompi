@@ -16,6 +16,19 @@ import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
 import { facet as goalServerFacet } from '../../generated/server';
+import { GOAL_VIEW_STATUS_KEY, parseGoalStatusView } from '../../src/types/goalView';
+
+/**
+ * The last value this facet published for the activity dock.
+ *
+ * Read back through the dock's own parser rather than compared to a literal, so
+ * the assertion pins the wire format and not the duration formatting inside it.
+ */
+function lastGoalView(client: DoomHeadlessExecutionContext['client']): string | undefined {
+  const calls = vi.mocked(client.setStatus).mock.calls.filter(([key]) => key === GOAL_VIEW_STATUS_KEY);
+  if (calls.length === 0) throw new Error(`The facet never published ${GOAL_VIEW_STATUS_KEY}`);
+  return calls[calls.length - 1]?.[1];
+}
 
 async function fixture() {
   let selection: DoomHeadlessSelection = {
@@ -171,5 +184,39 @@ describe('goal server facet', () => {
 
     await test.close?.();
     expect(test.dispose).toHaveBeenCalled();
+  });
+
+  it('publishes the objective to the activity dock, and clears it when the goal goes', async () => {
+    // A cockpit dispatches /goal to this facet and never to the Pi manager, so
+    // this facet is the only thing that can put a goal in the activity dock.
+    const test = await fixture();
+    const command = test.commands.find(({ name }) => name === 'goal');
+    const startHook = test.hooks.find(({ event }) => event === 'session_start') as
+      | DoomHeadlessHook<'session_start'>
+      | undefined;
+    if (!command || !startHook) throw new Error('Goal command or session_start hook was not registered');
+
+    await startHook.handle({}, test.execution);
+    await command.execute('Ship the feature', test.execution);
+    expect(parseGoalStatusView(lastGoalView(test.execution.client))).toMatchObject({
+      objective: 'Ship the feature',
+      state: expect.stringContaining('active'),
+    });
+
+    await command.execute('pause', test.execution);
+    expect(parseGoalStatusView(lastGoalView(test.execution.client))).toMatchObject({
+      objective: 'Ship the feature',
+      state: 'paused',
+    });
+
+    await command.execute('resume', test.execution);
+    expect(parseGoalStatusView(lastGoalView(test.execution.client))?.state).toContain('active');
+
+    // Clearing publishes nothing rather than an empty objective: the group
+    // declares hideWhenEmpty, so this is what removes the row from the dock.
+    await command.execute('clear', test.execution);
+    expect(lastGoalView(test.execution.client)).toBeUndefined();
+
+    await test.close?.();
   });
 });
