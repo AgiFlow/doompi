@@ -6,7 +6,7 @@ export interface ParsedFilename {
   readonly name: string;
   /** The relationship target, such as the slot a fill names. */
   readonly target: string | undefined;
-  /** The platform this file serves, or undefined for the side's neutral file. */
+  /** The platform this file serves, or undefined when the filename names none. */
   readonly platform: string | undefined;
   readonly extension: string;
 }
@@ -21,6 +21,10 @@ export interface ParsedFilename {
  *
  * The one word a target may not be is a platform name for its own side, since
  * the last segment is read as a platform whenever it matches.
+ *
+ * A filename that names no platform still parses, with `platform: undefined`.
+ * Requiring one is the scan's job, since only the scan knows whether the file
+ * is public: a private `_lib` helper and an `api/` route sibling name none.
  */
 export function parseFilename(fileName: string, platforms: readonly string[]): ParsedFilename | undefined {
   const lastDot = fileName.lastIndexOf('.');

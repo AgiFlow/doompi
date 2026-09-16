@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { GENERATED_DIR, GENERATED_ENTRY_NAMES } from '../../constants/layout';
+import { BUILD_TARGET_PLATFORMS, GENERATED_DIR, GENERATED_ENTRY_NAMES } from '../../constants/layout';
 import type { ExtensionGraph, ExtensionNotice } from '../../types/extensionGraph';
 import { renderCliEntry, renderServerEntry, renderWebEntry } from '../renderEntry';
 import { resolveTarget } from '../resolveTarget';
@@ -52,6 +52,18 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
   const notices: ExtensionNotice[] = [...graph.notices];
   const files = new Map<string, string>();
   const targets: BuildTarget[] = [];
+
+  // Here rather than in the scan, deliberately. The doomRoutedFilePosition lint
+  // rule calls scanExtensions() directly, so a scan notice would make `.ios` a
+  // hard preflight failure and cost us the forward-looking platforms we kept on
+  // purpose. resolveTarget runs once per target, which would print this 3x.
+  for (const entry of graph.entries) {
+    if (entry.platform === undefined || BUILD_TARGET_PLATFORMS.includes(entry.platform)) continue;
+    notices.push({
+      path: entry.file,
+      message: `'${entry.platform}' is a forward-looking platform with no build target; this file is not emitted for cli, server or web`,
+    });
+  }
 
   for (const target of ['cli', 'server', 'web'] as const) {
     const resolution = resolveTarget(graph, target);

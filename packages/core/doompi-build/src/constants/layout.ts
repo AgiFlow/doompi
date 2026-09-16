@@ -50,6 +50,9 @@ export const GENERATED_ENTRY_NAMES: readonly string[] = ['pi', 'server', 'web'];
 /**
  * Platform suffixes, scoped to their side. A target may not reuse one of these words.
  *
+ * Every public routed file names one of these, so which host reads it is read
+ * off the filename rather than inferred. A file that names none is a notice.
+ *
  * `cli` appears on both sides, because the interactive host has both. Its
  * backend files hold a tool's `execute` and its services; its frontend files
  * hold the TUI that draws them. A terminal is a frontend that happens not to
@@ -58,6 +61,9 @@ export const GENERATED_ENTRY_NAMES: readonly string[] = ['pi', 'server', 'web'];
  */
 export const BACKEND_PLATFORMS: readonly string[] = ['cli', 'server'];
 export const FRONTEND_PLATFORMS: readonly string[] = ['cli', 'web', 'ios', 'android', 'desktop'];
+
+/** The hosts this build emits. A frontend platform outside this set is authorable but unbuildable. */
+export const BUILD_TARGET_PLATFORMS: readonly string[] = ['cli', 'server', 'web'];
 
 /**
  * Surfaces that produce contributions on the backend side.

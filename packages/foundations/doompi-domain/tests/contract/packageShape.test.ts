@@ -103,7 +103,7 @@ describe('doompi-domain package contract', () => {
     });
     const client = await readFile(path.join(packageDirectory, 'generated/web.ts'), 'utf8');
     const contribution = await readFile(
-      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(frontend)/selection-axis/domains.ts'),
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(frontend)/selection-axis/domains.web.ts'),
       'utf8',
     );
     expect(client).toContain('export const webPlugin = defineWebPlugin');

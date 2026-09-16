@@ -27,7 +27,7 @@ import type {
   ExtensionSide,
   RouteSegment,
 } from '../../types/extensionGraph';
-import { parseFilename } from '../filename';
+import { type ParsedFilename, parseFilename } from '../filename';
 import { classifySegment } from '../segments';
 import type { ScanOptions } from './type';
 
@@ -104,6 +104,21 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
   const entries: ExtensionEntry[] = [];
   const notices: ExtensionNotice[] = [];
   const note = (relativePath: string, message: string): void => void notices.push({ path: relativePath, message });
+
+  /**
+   * Every public routed file names its platform, so a host is never inferred.
+   *
+   * Checked at each push rather than once at the top of readFile, because a
+   * file sitting somewhere the convention does not define has a position
+   * problem, and reporting the missing suffix instead would hide it.
+   */
+  const notePlatform = (relative: string, parsed: ParsedFilename, side: ExtensionSide): void => {
+    if (parsed.platform !== undefined) return;
+    note(
+      relative,
+      `names no platform; add one of ${platformsFor(side, options).join(', ')} before .${parsed.extension} (without one the host is inferred from the side rather than declared)`,
+    );
+  };
 
   const walk = (relativeDir: string, state: WalkState): void => {
     const absolute = path.join(options.packageDir, relativeDir);
@@ -196,6 +211,7 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
       // rather than a contribution gated by it, and the gate's id names it.
       const gate = state.gates[state.gates.length - 1];
       if (gate !== undefined && parsed.name === gate.kind) {
+        notePlatform(relative, parsed, state.side);
         entries.push({
           file: relative,
           scope: state.scope,
@@ -216,6 +232,7 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
       // lifetime, and a gate that could switch it off would leave everything
       // below it holding a context nothing built.
       if (parsed.name === ROOT_FILE_NAME && gate === undefined) {
+        notePlatform(relative, parsed, state.side);
         entries.push({
           file: relative,
           scope: state.scope,
@@ -243,6 +260,7 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
     // it is colocation, which is the whole reason Next.js reserves the name.
     if (ROUTED_SURFACES.includes(state.surface) && parsed.name !== ROUTE_FILE_NAME) return;
 
+    notePlatform(relative, parsed, state.side);
     entries.push({
       file: relative,
       scope: state.scope,

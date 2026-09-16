@@ -42,8 +42,9 @@ describe('defaultPluginId', () => {
 describe('generateExtension', () => {
   it('writes an entry for each host the tree contributes to', () => {
     const dir = packageWith({
-      'src/extensions/(backend)/tool/grep.ts': EMPTY,
-      'src/extensions/(frontend)/tool/grep.tsx': EMPTY,
+      'src/extensions/(backend)/tool/grep.cli.ts': EMPTY,
+      'src/extensions/(backend)/tool/grep.server.ts': EMPTY,
+      'src/extensions/(frontend)/tool/grep.web.tsx': EMPTY,
     });
     const result = generateExtension({ packageDir: dir });
 
@@ -52,7 +53,10 @@ describe('generateExtension', () => {
   });
 
   it('writes no cockpit entry for a package with no browser half', () => {
-    const dir = packageWith({ 'src/extensions/(backend)/tool/grep.ts': EMPTY });
+    const dir = packageWith({
+      'src/extensions/(backend)/tool/grep.cli.ts': EMPTY,
+      'src/extensions/(backend)/tool/grep.server.ts': EMPTY,
+    });
     const result = generateExtension({ packageDir: dir });
 
     expect(result.targets).toEqual(['cli', 'server']);
@@ -69,7 +73,7 @@ describe('generateExtension', () => {
   });
 
   it('writes no backend entries for a cockpit-only package', () => {
-    const dir = packageWith({ 'src/extensions/(frontend)/tab/Panel.tsx': EMPTY });
+    const dir = packageWith({ 'src/extensions/(frontend)/tab/Panel.web.tsx': EMPTY });
     const result = generateExtension({ packageDir: dir });
 
     expect(result.targets).toEqual(['web']);
@@ -78,7 +82,7 @@ describe('generateExtension', () => {
   });
 
   it('takes the package name and plugin id from package.json', () => {
-    const dir = packageWith({ 'src/extensions/(frontend)/tab/Panel.tsx': EMPTY }, '@agimon-ai/doompi-task');
+    const dir = packageWith({ 'src/extensions/(frontend)/tab/Panel.web.tsx': EMPTY }, '@agimon-ai/doompi-task');
     const result = generateExtension({ packageDir: dir });
 
     expect(result.packageName).toBe('@agimon-ai/doompi-task');
@@ -87,7 +91,10 @@ describe('generateExtension', () => {
   });
 
   it('reports a second run as unchanged, so a watcher is not retriggered', () => {
-    const dir = packageWith({ 'src/extensions/(backend)/tool/grep.ts': EMPTY });
+    const dir = packageWith({
+      'src/extensions/(backend)/tool/grep.cli.ts': EMPTY,
+      'src/extensions/(backend)/tool/grep.server.ts': EMPTY,
+    });
     expect(generateExtension({ packageDir: dir }).changed).toHaveLength(2);
     expect(generateExtension({ packageDir: dir }).changed).toEqual([]);
   });
@@ -95,12 +102,29 @@ describe('generateExtension', () => {
   it('gathers scan and resolution notices instead of throwing', () => {
     const dir = packageWith({
       'src/extensions/(frontend)/tabs/Panel.tsx': EMPTY,
-      'src/extensions/(backend)/tool/grep.ts': EMPTY,
+      'src/extensions/(backend)/tool/grep.cli.ts': EMPTY,
     });
     const result = generateExtension({ packageDir: dir });
 
     expect(result.notices).toHaveLength(1);
     expect(exists(dir, 'generated/pi.ts')).toBe(true);
+  });
+
+  it('reports a platform this build has no host for, once, without dropping the rest', () => {
+    const dir = packageWith({
+      'src/extensions/(frontend)/tab/Panel.ios.tsx': EMPTY,
+      'src/extensions/(frontend)/tab/Panel.web.tsx': EMPTY,
+    });
+    const result = generateExtension({ packageDir: dir });
+
+    expect(result.notices).toEqual([
+      {
+        path: 'src/extensions/(frontend)/tab/Panel.ios.tsx',
+        message:
+          "'ios' is a forward-looking platform with no build target; this file is not emitted for cli, server or web",
+      },
+    ]);
+    expect(read(dir, 'generated/web.ts')).not.toContain('Panel.ios');
   });
 
   it('does nothing at all for a package with no routing root', () => {
@@ -112,11 +136,11 @@ describe('generateExtension', () => {
   });
 
   it('removes an obsolete generated target when its last contribution disappears', () => {
-    const dir = packageWith({ 'src/extensions/(frontend)/tab/Panel.tsx': EMPTY });
+    const dir = packageWith({ 'src/extensions/(frontend)/tab/Panel.web.tsx': EMPTY });
     generateExtension({ packageDir: dir });
     expect(exists(dir, 'generated/web.ts')).toBe(true);
 
-    fs.rmSync(path.join(dir, 'src/extensions/(frontend)/tab/Panel.tsx'));
+    fs.rmSync(path.join(dir, 'src/extensions/(frontend)/tab/Panel.web.tsx'));
     const result = generateExtension({ packageDir: dir });
 
     expect(result.changed).toEqual(['generated/web.ts']);
@@ -126,7 +150,10 @@ describe('generateExtension', () => {
 
 describe('doompiExtension', () => {
   it('generates ignored entries during CI builds unless check mode is explicit', () => {
-    const dir = packageWith({ 'src/extensions/(backend)/tool/grep.ts': EMPTY });
+    const dir = packageWith({
+      'src/extensions/(backend)/tool/grep.cli.ts': EMPTY,
+      'src/extensions/(backend)/tool/grep.server.ts': EMPTY,
+    });
     const previous = process.env.CI;
     process.env.CI = '1';
     try {
@@ -142,7 +169,7 @@ describe('doompiExtension', () => {
 
 describe('the staleness contract', () => {
   it('throws under check when a generated entry is out of date, and writes nothing', () => {
-    const dir = packageWith({ 'src/extensions/(backend)/tool/grep.ts': EMPTY });
+    const dir = packageWith({ 'src/extensions/(backend)/tool/grep.cli.ts': EMPTY });
     generateExtension({ packageDir: dir });
 
     fs.writeFileSync(path.join(dir, 'generated/pi.ts'), '// hand-edited\n');
@@ -151,13 +178,13 @@ describe('the staleness contract', () => {
   });
 
   it('passes under check when the committed entries match the tree', () => {
-    const dir = packageWith({ 'src/extensions/(backend)/tool/grep.ts': EMPTY });
+    const dir = packageWith({ 'src/extensions/(backend)/tool/grep.cli.ts': EMPTY });
     generateExtension({ packageDir: dir });
     expect(() => generateExtension({ packageDir: dir, check: true })).not.toThrow();
   });
 
   it('names every stale file so the message is actionable', () => {
-    const dir = packageWith({ 'src/extensions/(backend)/tool/grep.ts': EMPTY });
+    const dir = packageWith({ 'src/extensions/(backend)/tool/grep.cli.ts': EMPTY });
     try {
       writeGenerated(
         dir,

@@ -216,12 +216,83 @@ describe('skill discovery', () => {
     ]);
   });
 
-  it('refuses a skill whose frontmatter carries no name', () => {
+  it('names a skill after its directory when the frontmatter omits one', async () => {
     const skills = path.join(root, 'skills');
     fs.mkdirSync(path.join(skills, 'unnamed'), { recursive: true });
     fs.writeFileSync(path.join(skills, 'unnamed', 'SKILL.md'), '---\ndescription: Nameless\n---\n');
 
-    expect(() => discoverSkills(root, skills, 'recursive', path.join(root, 'cache'))).toThrow('requires a name');
+    // Pi names such a skill after its directory rather than rejecting it. This
+    // walk feeds the whole resource collection, so throwing would turn one
+    // malformed third-party skill into a failed session launch.
+    expect(discoverSkills(root, skills, 'recursive', path.join(root, 'cache')).map((skill) => skill.name)).toEqual([
+      'unnamed',
+    ]);
+    await expect(discoverSkillsAsync(root, skills, 'recursive', path.join(root, 'cache-async'))).resolves.toMatchObject(
+      [{ name: 'unnamed' }],
+    );
+  });
+
+  it('discovers a skill behind a symlinked directory, as Pi does', async () => {
+    const skills = path.join(root, 'skills');
+    const external = path.join(root, 'external', 'playwriter');
+    fs.mkdirSync(path.join(skills, 'local'), { recursive: true });
+    fs.mkdirSync(external, { recursive: true });
+    fs.writeFileSync(path.join(skills, 'local', 'SKILL.md'), '---\nname: local\ndescription: Local\n---\n');
+    fs.writeFileSync(path.join(external, 'SKILL.md'), '---\nname: playwriter\ndescription: Plays\n---\n');
+    // readdir reports this with lstat semantics, so the entry answers false to
+    // both isDirectory() and isFile().
+    fs.symlinkSync(external, path.join(skills, 'playwriter'), 'dir');
+
+    expect(discoverSkills(root, skills, 'recursive', path.join(root, 'cache')).map((skill) => skill.name)).toEqual([
+      'local',
+      'playwriter',
+    ]);
+    await expect(discoverSkillsAsync(root, skills, 'recursive', path.join(root, 'cache-async'))).resolves.toMatchObject(
+      [{ name: 'local' }, { name: 'playwriter' }],
+    );
+
+    // The point of the fix: Pi loads what the walker reports, and no more.
+    const loaded = loadSkills({
+      cwd: root,
+      agentDir: path.join(root, '.pi-agent'),
+      skillPaths: discoverSkills(root, skills, 'recursive', path.join(root, 'cache')).map((skill) => skill.path),
+      includeDefaults: false,
+    });
+    expect(loaded.skills.map((skill) => skill.name).sort()).toEqual(['local', 'playwriter']);
+    expect(loaded.diagnostics).toEqual([]);
+  });
+
+  it('accepts a symlinked SKILL.md and skips a broken link', async () => {
+    const skills = path.join(root, 'skills');
+    const target = path.join(root, 'external', 'shared.md');
+    fs.mkdirSync(path.join(skills, 'linked'), { recursive: true });
+    fs.mkdirSync(path.join(skills, 'broken'), { recursive: true });
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, '---\nname: shared\ndescription: Shared\n---\n');
+    fs.symlinkSync(target, path.join(skills, 'linked', 'SKILL.md'));
+    fs.symlinkSync(path.join(root, 'absent', 'SKILL.md'), path.join(skills, 'broken', 'SKILL.md'));
+    fs.symlinkSync(path.join(root, 'absent-directory'), path.join(skills, 'gone'), 'dir');
+
+    expect(discoverSkills(root, skills, 'recursive', path.join(root, 'cache')).map((skill) => skill.name)).toEqual([
+      'shared',
+    ]);
+    await expect(discoverSkillsAsync(root, skills, 'recursive', path.join(root, 'cache-async'))).resolves.toMatchObject(
+      [{ name: 'shared' }],
+    );
+  });
+
+  it('terminates on a symlink cycle without repeating a skill', async () => {
+    const skills = path.join(root, 'skills');
+    fs.mkdirSync(path.join(skills, 'one'), { recursive: true });
+    fs.writeFileSync(path.join(skills, 'one', 'SKILL.md'), '---\nname: one\ndescription: One\n---\n');
+    fs.symlinkSync(skills, path.join(skills, 'one', 'loop'), 'dir');
+
+    expect(discoverSkills(root, skills, 'recursive', path.join(root, 'cache')).map((skill) => skill.name)).toEqual([
+      'one',
+    ]);
+    await expect(discoverSkillsAsync(root, skills, 'recursive', path.join(root, 'cache-async'))).resolves.toMatchObject(
+      [{ name: 'one' }],
+    );
   });
 });
 

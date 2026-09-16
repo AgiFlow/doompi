@@ -91,8 +91,8 @@ describe('renderCliEntry', () => {
 
   it('emits one mount holding every backend contribution, whatever scope declared it', () => {
     const { cli } = render({
-      'src/extensions/(backend)/root.ts': EMPTY,
-      'src/extensions/workspaces/sessions/(backend)/tool/write-plan.ts': EMPTY,
+      'src/extensions/(backend)/root.cli.ts': EMPTY,
+      'src/extensions/workspaces/sessions/(backend)/tool/write-plan.cli.ts': EMPTY,
     });
     expect(cli).toContain("definePiExtension<ExtensionOptions>('@agimon-ai/doompi-plan'");
     expect(cli).toContain('services: [');
@@ -101,7 +101,7 @@ describe('renderCliEntry', () => {
   });
 
   it('renders Pi events as a record keyed by the event name', () => {
-    const { cli } = render({ 'src/extensions/(backend)/hook/session-start.ts': EMPTY });
+    const { cli } = render({ 'src/extensions/(backend)/hook/session-start.cli.ts': EMPTY });
     expect(cli).toContain('events: {');
     expect(cli).toContain('session_start: at(');
     expect(cli).toContain("as NonNullable<PiPluginContributions['events']>['session_start']");
@@ -109,13 +109,13 @@ describe('renderCliEntry', () => {
   });
 
   it('keeps import specifiers relative, extensionless, and paren-safe', () => {
-    const { cli } = render({ 'src/extensions/workspaces/sessions/(backend)/tool/write-plan.ts': EMPTY });
-    expect(cli).toContain("from '../src/extensions/workspaces/sessions/(backend)/tool/write-plan'");
+    const { cli } = render({ 'src/extensions/workspaces/sessions/(backend)/tool/write-plan.cli.ts': EMPTY });
+    expect(cli).toContain("from '../src/extensions/workspaces/sessions/(backend)/tool/write-plan.cli'");
     expect(cli).not.toContain(".ts'");
   });
 
   it('emits a valid empty extension when nothing is declared', () => {
-    const { cli } = render({ 'src/extensions/(frontend)/tab/Panel.tsx': EMPTY });
+    const { cli } = render({ 'src/extensions/(frontend)/tab/Panel.web.tsx': EMPTY });
     expect(cli).toContain('definePiExtension');
     expect(parses(cli)).toBe(true);
   });
@@ -135,14 +135,14 @@ describe('renderServerEntry', () => {
   });
 
   it('cascades a global contribution into every narrower scope', () => {
-    const { server } = render({ 'src/extensions/(backend)/channel/tasks.ts': EMPTY });
+    const { server } = render({ 'src/extensions/(backend)/channel/tasks.server.ts': EMPTY });
     for (const scope of ['global', 'workspace', 'session']) expect(server).toContain(`${scope}: () => ({`);
     expect(server.match(/channels: \[/gu)).toHaveLength(3);
     expect(parses(server)).toBe(true);
   });
 
   it('keeps a session contribution out of the broader scopes', () => {
-    const { server } = render({ 'src/extensions/workspaces/sessions/(backend)/tool/grep.ts': EMPTY });
+    const { server } = render({ 'src/extensions/workspaces/sessions/(backend)/tool/grep.server.ts': EMPTY });
     expect(server).toContain('session: (context) => ({');
     expect(server).not.toContain('global:');
     expect(server).not.toContain('workspace:');
@@ -150,20 +150,20 @@ describe('renderServerEntry', () => {
   });
 
   it('omits a scope that has nothing in it', () => {
-    const { server } = render({ 'src/extensions/workspaces/(backend)/api/repos/route.ts': EMPTY });
+    const { server } = render({ 'src/extensions/workspaces/(backend)/api/repos/route.server.ts': EMPTY });
     expect(server).not.toContain('global:');
     expect(server).toContain('workspace: (context) => ({');
     expect(server).toContain('session: (context) => ({');
   });
 
   it('takes no context parameter and emits no resolver when nothing needs them', () => {
-    const { server } = render({ 'src/extensions/(backend)/channel/tasks.ts': EMPTY });
+    const { server } = render({ 'src/extensions/(backend)/channel/tasks.server.ts': EMPTY });
     expect(server).not.toContain('context');
     expect(server).not.toContain('const at =');
   });
 
   it('names the facet after the package', () => {
-    const { server } = render({ 'src/extensions/(backend)/tool/grep.ts': EMPTY });
+    const { server } = render({ 'src/extensions/(backend)/tool/grep.server.ts': EMPTY });
     expect(server).toContain("name: '@agimon-ai/doompi-plan',");
   });
 });
@@ -171,8 +171,8 @@ describe('renderServerEntry', () => {
 describe('renderWebEntry', () => {
   it('places each contribution at its declared scope and does not cascade', () => {
     const { web } = render({
-      'src/extensions/(frontend)/setting/account.tsx': EMPTY,
-      'src/extensions/workspaces/sessions/(frontend)/tab/PlanPanel.tsx': EMPTY,
+      'src/extensions/(frontend)/setting/account.web.tsx': EMPTY,
+      'src/extensions/workspaces/sessions/(frontend)/tab/PlanPanel.web.tsx': EMPTY,
     });
     expect(web.match(/settingsSections: \[/gu)).toHaveLength(1);
     expect(web.match(/tabs: \[/gu)).toHaveLength(1);
@@ -182,7 +182,7 @@ describe('renderWebEntry', () => {
   });
 
   it('exports webPlugin under the plugin id', () => {
-    const { web } = render({ 'src/extensions/(frontend)/tab/PlanPanel.tsx': EMPTY });
+    const { web } = render({ 'src/extensions/(frontend)/tab/PlanPanel.web.tsx': EMPTY });
     expect(web).toContain('export const webPlugin = defineWebPlugin({');
     expect(web).toContain("id: 'plan',");
   });
@@ -191,7 +191,7 @@ describe('renderWebEntry', () => {
     // The cockpit builds its definition as data and starts it separately, so
     // there is no mount context. Resolving anyway would call any export that
     // happens to be a function, which every React component is.
-    const { web } = render({ 'src/extensions/(frontend)/tab/PlanPanel.tsx': EMPTY });
+    const { web } = render({ 'src/extensions/(frontend)/tab/PlanPanel.web.tsx': EMPTY });
     expect(web).not.toContain('at(');
     expect(web).not.toContain('const at =');
     expect(web).not.toContain('context');
@@ -200,7 +200,7 @@ describe('renderWebEntry', () => {
   });
 
   it('sends a fill into a host region by naming that region as its slot', () => {
-    const { web } = render({ 'src/extensions/workspaces/sessions/(frontend)/fill/PlanRail.rail.tsx': EMPTY });
+    const { web } = render({ 'src/extensions/workspaces/sessions/(frontend)/fill/PlanRail.rail.web.tsx': EMPTY });
     expect(web).toContain("fills: [via({ slot: 'rail', id: 'plan-rail' }, ");
     expect(parses(web)).toBe(true);
   });
@@ -210,8 +210,9 @@ describe('routed cardinality', () => {
   it('omits optional array and record members without changing ordinary routes', () => {
     const OPTIONAL = "export default defineRoutedContribution({}, { cardinality: 'optional' });\n";
     const { cli, server } = render({
-      'src/extensions/(backend)/hook/session-start.ts': OPTIONAL,
-      'src/extensions/(backend)/resource/guidance.ts': OPTIONAL,
+      'src/extensions/(backend)/hook/session-start.cli.ts': OPTIONAL,
+      'src/extensions/(backend)/hook/session-start.server.ts': OPTIONAL,
+      'src/extensions/(backend)/resource/guidance.cli.ts': OPTIONAL,
     });
     expect(cli).toContain("...keyed('session_start', at(");
     expect(cli).toContain('resources: defined([');
@@ -222,7 +223,10 @@ describe('routed cardinality', () => {
 
   it('flattens a many route into its standard surface array', () => {
     const MANY = "export default defineRoutedContribution([], { cardinality: 'many' });\n";
-    const { cli, server } = render({ 'src/extensions/(backend)/resource/discovered.ts': MANY });
+    const { cli, server } = render({
+      'src/extensions/(backend)/resource/discovered.cli.ts': MANY,
+      'src/extensions/(backend)/resource/discovered.server.ts': MANY,
+    });
     expect(cli).toContain('...many(resourceDiscovered, context)');
     expect(server).toContain('...many(resourceDiscovered, context)');
     expect(cli).toContain('const many =');
@@ -243,8 +247,8 @@ describe('ordering', () => {
     // plain property is built when the factory returns, which is too early for
     // a routed file to inject a service the same mount publishes.
     const { server } = raw({
-      'src/extensions/(backend)/root.ts': EMPTY,
-      'src/extensions/(backend)/tool/write-plan.ts': EMPTY,
+      'src/extensions/(backend)/root.server.ts': EMPTY,
+      'src/extensions/(backend)/tool/write-plan.server.ts': EMPTY,
     });
     expect(server).toContain("get tools(): DoomServerSessionPlugin['tools'] { return [");
     // services is what the helper reads first, so a getter buys it nothing.
@@ -255,57 +259,58 @@ describe('ordering', () => {
 
 describe('identity derived from the path', () => {
   it('binds a tool renderer to the tool its filename names', () => {
-    const { web } = render({ 'src/extensions/(frontend)/tool/write-plan.tsx': EMPTY });
+    const { web } = render({ 'src/extensions/(frontend)/tool/write-plan.web.tsx': EMPTY });
     expect(web).toContain("toolRenderers: [via({ tools: ['write_plan'] }, ");
   });
 
   it('names a backend tool from the filename, in snake case', () => {
-    const { cli } = render({ 'src/extensions/(backend)/tool/write-plan.ts': EMPTY });
+    const { cli } = render({ 'src/extensions/(backend)/tool/write-plan.cli.ts': EMPTY });
     expect(cli).toContain("[via({ name: 'write_plan' }, ");
   });
 
   it('names a command in kebab case, because that is what the user types', () => {
     // The name reaches registerCommand verbatim, so a snake-cased one would
-    // publish /subagents_doctor and nobody would find it.
-    const { cli } = render({ 'src/extensions/(backend)/command/subagents-doctor.ts': EMPTY });
-    expect(cli).toContain("commands: [via({ name: 'subagents-doctor' }, ");
+    // publish /subagents_doctor and nobody would find it. Read off the server,
+    // because a `.cli` command is a native Pi tuple that carries its own name.
+    const { server } = render({ 'src/extensions/(backend)/command/subagents-doctor.server.ts': EMPTY });
+    expect(server).toContain("commands: [via({ name: 'subagents-doctor' }, ");
   });
 
   it('names a server hook event from the filename', () => {
-    const { server } = render({ 'src/extensions/(backend)/hook/session-start.ts': EMPTY });
+    const { server } = render({ 'src/extensions/(backend)/hook/session-start.server.ts': EMPTY });
     expect(server).toContain("hooks: [via({ event: 'session_start' }, ");
   });
 
   it('does not wrap a cockpit channel in a factory, unlike the server one', () => {
     // `channels` means two different things: the server array holds
     // () => DoomHubChannel, the cockpit array holds the contribution itself.
-    const { web } = render({ 'src/extensions/(frontend)/channel/tasks.ts': EMPTY });
+    const { web } = render({ 'src/extensions/(frontend)/channel/tasks.web.ts': EMPTY });
     expect(web).toContain("channels: [via({ channel: 'tasks' }, channelTasks)]");
     expect(web).not.toContain('channelTasks()');
   });
 
   it('merges a channel frame type inside the factory the array expects', () => {
-    const { server } = render({ 'src/extensions/(backend)/channel/tasks.ts': EMPTY });
+    const { server } = render({ 'src/extensions/(backend)/channel/tasks.server.ts': EMPTY });
     expect(server).toContain("channels: [() => via({ frameType: 'tasks' }, channelTasks())]");
   });
 
   it('namespaces a declared slot under the plugin id', () => {
-    const { web } = render({ 'src/extensions/(frontend)/slot/actions.ts': EMPTY });
+    const { web } = render({ 'src/extensions/(frontend)/slot/actions.web.ts': EMPTY });
     expect(web).toContain("slots: [via({ slot: 'plan.actions' }, ");
   });
 
   it('gives a fill into another plugin slot both the slot and an id', () => {
-    const { web } = render({ 'src/extensions/(frontend)/fill/PlanRef.task.detail.tsx': EMPTY });
+    const { web } = render({ 'src/extensions/(frontend)/fill/PlanRef.task.detail.web.tsx': EMPTY });
     expect(web).toContain("fills: [via({ slot: 'task.detail', id: 'plan-ref' }, ");
   });
 
   it('names an activity group slot exactly as the cockpit spells it', () => {
-    const { web } = render({ 'src/extensions/(frontend)/fill/PlanSection.activity.plan.tsx': EMPTY });
+    const { web } = render({ 'src/extensions/(frontend)/fill/PlanSection.activity.plan.web.tsx': EMPTY });
     expect(web).toContain("fills: [via({ slot: 'activity.plan', id: 'plan-section' }, ");
   });
 
   it('kebab-cases a PascalCase component filename into an id', () => {
-    const { web } = render({ 'src/extensions/(frontend)/tab/PlanPanel.tsx': EMPTY });
+    const { web } = render({ 'src/extensions/(frontend)/tab/PlanPanel.web.tsx': EMPTY });
     expect(web).toContain("tabs: [via({ id: 'plan-panel' }, ");
   });
 
@@ -320,14 +325,16 @@ describe('identity derived from the path', () => {
   });
 
   it('leaves the splitter out of an entry that contributes no tools', () => {
-    const { cli } = render({ 'src/extensions/(backend)/command/plan.ts': EMPTY });
+    const { cli } = render({ 'src/extensions/(backend)/command/plan.cli.ts': EMPTY });
     expect(cli).not.toContain('piToolContributions');
   });
 
   it('registers services from each enclosing root', () => {
     const { cli, server } = render({
-      'src/extensions/(backend)/root.ts': EMPTY,
-      'src/extensions/workspaces/sessions/(backend)/root.ts': EMPTY,
+      'src/extensions/(backend)/root.cli.ts': EMPTY,
+      'src/extensions/(backend)/root.server.ts': EMPTY,
+      'src/extensions/workspaces/sessions/(backend)/root.cli.ts': EMPTY,
+      'src/extensions/workspaces/sessions/(backend)/root.server.ts': EMPTY,
     });
     expect(cli).toContain('services: [...(scopeGlobal.services ?? []), ...(scopeSession.services ?? [])]');
     expect(server).toContain('services: [...(scopeGlobal.services ?? []), ...(scopeSession.services ?? [])]');
@@ -338,14 +345,14 @@ describe('identity derived from the path', () => {
     // and oxfmt rewrites it to `<T>`. Emitting it would make every build dirty
     // the tree and fail `oxfmt --check` in the same package's lint target.
     const { cli, server, web } = render({
-      'src/extensions/(backend)/tool/write-plan.ts': EMPTY,
-      'src/extensions/(frontend)/tab/PlanPanel.tsx': EMPTY,
+      'src/extensions/(backend)/tool/write-plan.cli.ts': EMPTY,
+      'src/extensions/(frontend)/tab/PlanPanel.web.tsx': EMPTY,
     });
     for (const entry of [cli, server, web]) expect(entry).not.toContain('<T,>');
   });
 
   it('applies the authored file over the derived identity, so a file naming itself wins', () => {
-    const { cli } = render({ 'src/extensions/(backend)/tool/write-plan.ts': EMPTY });
+    const { cli } = render({ 'src/extensions/(backend)/tool/write-plan.cli.ts': EMPTY });
     expect(cli).toMatch(/via\(\{ name: 'write_plan' \}, at\(\w+, context\)\)/u);
   });
 });
@@ -357,7 +364,7 @@ describe('identity derived from the path', () => {
  */
 describe('the terminal reads the frontend side too', () => {
   const PAIR = {
-    'src/extensions/(backend)/tool/subagent.ts': EMPTY,
+    'src/extensions/(backend)/tool/subagent.cli.ts': EMPTY,
     'src/extensions/(frontend)/tool/subagent.cli.tsx': EMPTY,
     'src/extensions/(frontend)/tool/subagent.web.tsx': EMPTY,
   };
@@ -393,8 +400,8 @@ describe('the terminal reads the frontend side too', () => {
     expect(web).not.toContain('messageRenderers');
   });
 
-  it('leaves a neutral frontend file to the cockpit, because a terminal cannot render it', () => {
-    const { cli, web } = render({ 'src/extensions/(frontend)/tool/subagent.tsx': EMPTY });
+  it('leaves a .web frontend file to the cockpit, because a terminal cannot render it', () => {
+    const { cli, web } = render({ 'src/extensions/(frontend)/tool/subagent.web.tsx': EMPTY });
     expect(cli).not.toContain('subagent');
     expect(web).toContain('subagent');
   });
@@ -414,10 +421,12 @@ describe('the terminal reads the frontend side too', () => {
  */
 describe('scope roots', () => {
   const TREE = {
-    'src/extensions/(backend)/root.ts': EMPTY,
-    'src/extensions/(backend)/tool/subagent.ts': EMPTY,
-    'src/extensions/workspaces/sessions/(backend)/root.ts': EMPTY,
-    'src/extensions/workspaces/sessions/(backend)/tool/plan.ts': EMPTY,
+    'src/extensions/(backend)/root.cli.ts': EMPTY,
+    'src/extensions/(backend)/root.server.ts': EMPTY,
+    'src/extensions/(backend)/tool/subagent.cli.ts': EMPTY,
+    'src/extensions/workspaces/sessions/(backend)/root.cli.ts': EMPTY,
+    'src/extensions/workspaces/sessions/(backend)/root.server.ts': EMPTY,
+    'src/extensions/workspaces/sessions/(backend)/tool/plan.cli.ts': EMPTY,
   };
 
   it('constructs each scope before the contributions that read it', () => {
@@ -458,19 +467,19 @@ describe('scope roots', () => {
   });
 
   it('leaves an entry with no root exactly as it was', () => {
-    const { cli } = raw({ 'src/extensions/(backend)/tool/subagent.ts': EMPTY });
+    const { cli } = raw({ 'src/extensions/(backend)/tool/subagent.cli.ts': EMPTY });
     expect(cli).not.toContain('composeRootHooks');
     expect(cli).toContain('(context) => ({');
   });
 
   it('does not declare a root context when nothing reads it', () => {
-    const { cli } = raw({ 'src/extensions/workspaces/sessions/(backend)/root.ts': EMPTY });
+    const { cli } = raw({ 'src/extensions/workspaces/sessions/(backend)/root.cli.ts': EMPTY });
     expect(cli).toContain('const scopeSession = await rootSession(context);');
     expect(cli).not.toContain('const contextSession');
   });
 
   it('reports a root on the frontend, which has no mount context to construct from', () => {
-    const graph = scanExtensions({ packageDir: packageWith({ 'src/extensions/(frontend)/root.tsx': EMPTY }) });
+    const graph = scanExtensions({ packageDir: packageWith({ 'src/extensions/(frontend)/root.web.tsx': EMPTY }) });
     const { notices, roots } = resolveTarget(graph, 'web');
     expect(roots).toEqual([]);
     expect(notices[0]?.message).toContain('backend file');
@@ -486,8 +495,8 @@ it('keeps native CLI command tuples intact', () => {
 describe('every generated entry', () => {
   it('gives colliding filenames distinct identifiers', () => {
     const { server } = render({
-      'src/extensions/(backend)/tool/grep.ts': EMPTY,
-      'src/extensions/workspaces/(backend)/tool/grep.ts': EMPTY,
+      'src/extensions/(backend)/tool/grep.server.ts': EMPTY,
+      'src/extensions/workspaces/(backend)/tool/grep.server.ts': EMPTY,
     });
     const identifiers = [...server.matchAll(/^import (\w+) from/gmu)].map((match) => match[1]);
     expect(new Set(identifiers).size).toBe(identifiers.length);
@@ -495,15 +504,15 @@ describe('every generated entry', () => {
   });
 
   it('carries the do-not-edit header', () => {
-    const rendered = render({ 'src/extensions/(backend)/tool/grep.ts': EMPTY });
+    const rendered = render({ 'src/extensions/(backend)/tool/grep.cli.ts': EMPTY });
     for (const source of Object.values(rendered)) expect(source.startsWith('// Generated by')).toBe(true);
   });
 
   it('is byte-identical across repeated renders of the same tree', () => {
     const files = {
-      'src/extensions/(backend)/tool/a.ts': EMPTY,
-      'src/extensions/(backend)/tool/b.ts': EMPTY,
-      'src/extensions/workspaces/sessions/(frontend)/tab/P.tsx': EMPTY,
+      'src/extensions/(backend)/tool/a.cli.ts': EMPTY,
+      'src/extensions/(backend)/tool/b.cli.ts': EMPTY,
+      'src/extensions/workspaces/sessions/(frontend)/tab/P.web.tsx': EMPTY,
     };
     expect(render(files)).toEqual(render(files));
   });

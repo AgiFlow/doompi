@@ -29,7 +29,7 @@ import { toPiToolName } from '../toolNames';
 
 export const DISPATCHER_AGENT_NAME = 'agiflow-dispatcher';
 const DISPATCHER_TOOLS = ['read', 'grep', 'find', 'ls', 'bash', 'launch_workflow', 'list_workflows'];
-const SKILL_MANIFEST_VERSION = 2;
+const SKILL_MANIFEST_VERSION = 3;
 const SKILL_MANIFEST_HASH_LENGTH = 16;
 const AGENT_PLUGIN_SCHEMA = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json';
 const PLUGIN_DATA_DIRECTORY = 'plugin-data';
@@ -340,29 +340,86 @@ async function writeSkillManifestAsync(manifestPath: string, manifest: SkillMani
   }
 }
 
+/**
+ * A directory entry resolved through any symlink, or undefined for a broken one.
+ *
+ * `readdir` reports symlinks with lstat semantics, so a symlinked skill
+ * directory answers false to both `isDirectory()` and `isFile()` and would be
+ * skipped by a naive branch. Pi stats through the link instead
+ * (dist/core/skills.js:171-183) and treats a failing stat as a broken link to
+ * skip, which is what keeps a shared skill published as a symlink visible.
+ */
+function resolveEntryKind(entry: fs.Dirent, candidate: string): { directory: boolean; file: boolean } | undefined {
+  if (!entry.isSymbolicLink()) return { directory: entry.isDirectory(), file: entry.isFile() };
+  try {
+    const stat = fs.statSync(candidate);
+    return { directory: stat.isDirectory(), file: stat.isFile() };
+  } catch {
+    return undefined;
+  }
+}
+
+async function resolveEntryKindAsync(
+  entry: fs.Dirent,
+  candidate: string,
+): Promise<{ directory: boolean; file: boolean } | undefined> {
+  if (!entry.isSymbolicLink()) return { directory: entry.isDirectory(), file: entry.isFile() };
+  try {
+    const stat = await fs.promises.stat(candidate);
+    return { directory: stat.isDirectory(), file: stat.isFile() };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The skill's declared name, or the name of the directory holding it.
+ *
+ * Pi falls back to the containing directory rather than rejecting the file
+ * (dist/core/skills.js:245). Rejecting is worse than one missing skill here:
+ * this walk feeds the whole resource collection, so a single unnamed SKILL.md
+ * from a third-party plugin would fail session launch outright rather than
+ * degrade.
+ */
+function skillName(filePath: string, attributes: JsonObject): string {
+  const declared = typeof attributes.name === 'string' ? attributes.name.trim() : '';
+  if (declared) return declared;
+  const fallback = path.basename(path.dirname(filePath));
+  if (!fallback) throw new Error(`Resource requires a name: ${filePath}`);
+  return fallback;
+}
+
 function scanSkillManifest(root: string, discovery: PluginSkillDiscovery): SkillManifest {
   const directories: SkillManifestDirectory[] = [];
   const files: SkillManifestFile[] = [];
+  // Following symlinks makes a cycle reachable, and this walk records every
+  // directory it visits, so an unguarded cycle would exhaust the stack and the
+  // manifest together. Real paths are what a cycle repeats.
+  const visited = new Set<string>();
   const walk = (directory: string, depth: number): void => {
     if (!fs.existsSync(directory)) return;
+    const realDirectory = fs.realpathSync(directory);
+    if (visited.has(realDirectory)) return;
+    visited.add(realDirectory);
     const directoryStat = fs.statSync(directory);
     directories.push({ path: directory, mtimeMs: directoryStat.mtimeMs, ctimeMs: directoryStat.ctimeMs });
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const candidate = path.join(directory, entry.name);
-      if (entry.isDirectory()) {
+      const kind = resolveEntryKind(entry, candidate);
+      if (!kind) continue;
+      if (kind.directory) {
         if (discovery === 'recursive' || depth === 0) walk(candidate, depth + 1);
         continue;
       }
-      if (!entry.isFile() || entry.name !== 'SKILL.md' || (discovery === 'direct-children' && depth !== 1)) {
+      if (!kind.file || entry.name !== 'SKILL.md' || (discovery === 'direct-children' && depth !== 1)) {
         continue;
       }
       const content = fs.readFileSync(candidate, 'utf8');
       const { attributes } = splitFrontmatter(content);
-      if (typeof attributes.name !== 'string') throw new Error(`Resource requires a name: ${candidate}`);
       const stat = fs.statSync(candidate);
       files.push({
         path: candidate,
-        name: attributes.name,
+        name: skillName(candidate, attributes),
         digest: createHash('sha256').update(content).digest('hex'),
         size: stat.size,
         mtimeMs: stat.mtimeMs,
@@ -395,9 +452,13 @@ export function discoverSkills(
 async function scanSkillManifestAsync(root: string, discovery: PluginSkillDiscovery): Promise<SkillManifest> {
   const directories: SkillManifestDirectory[] = [];
   const files: SkillManifestFile[] = [];
+  const visited = new Set<string>();
   const walk = async (directory: string, depth: number): Promise<void> => {
     let entries: fs.Dirent[];
     try {
+      const realDirectory = await fs.promises.realpath(directory);
+      if (visited.has(realDirectory)) return;
+      visited.add(realDirectory);
       const directoryStat = await fs.promises.stat(directory);
       directories.push({ path: directory, mtimeMs: directoryStat.mtimeMs, ctimeMs: directoryStat.ctimeMs });
       entries = await fs.promises.readdir(directory, { withFileTypes: true });
@@ -407,20 +468,21 @@ async function scanSkillManifestAsync(root: string, discovery: PluginSkillDiscov
     }
     for (const entry of entries) {
       const candidate = path.join(directory, entry.name);
-      if (entry.isDirectory()) {
+      const kind = await resolveEntryKindAsync(entry, candidate);
+      if (!kind) continue;
+      if (kind.directory) {
         if (discovery === 'recursive' || depth === 0) await walk(candidate, depth + 1);
         continue;
       }
-      if (!entry.isFile() || entry.name !== 'SKILL.md' || (discovery === 'direct-children' && depth !== 1)) {
+      if (!kind.file || entry.name !== 'SKILL.md' || (discovery === 'direct-children' && depth !== 1)) {
         continue;
       }
       const content = await fs.promises.readFile(candidate, 'utf8');
       const { attributes } = splitFrontmatter(content);
-      if (typeof attributes.name !== 'string') throw new Error(`Resource requires a name: ${candidate}`);
       const stat = await fs.promises.stat(candidate);
       files.push({
         path: candidate,
-        name: attributes.name,
+        name: skillName(candidate, attributes),
         digest: createHash('sha256').update(content).digest('hex'),
         size: stat.size,
         mtimeMs: stat.mtimeMs,

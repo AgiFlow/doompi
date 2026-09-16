@@ -5,9 +5,9 @@
  * A surface missing from a host's table is legitimately absent there, such
  * as api/ on the CLI, and is skipped without complaint.
  *
- * Two hosts read the frontend side. The cockpit takes the neutral and `.web`
- * files; the terminal takes only the `.cli` ones, and puts them somewhere
- * else, which is why that side needs a table per host rather than one shared.
+ * Two hosts read the frontend side. The cockpit takes the `.web` files; the
+ * terminal takes only the `.cli` ones, and puts them somewhere else, which is
+ * why that side needs a table per host rather than one shared.
  */
 
 /** A surface that produces nothing registrable, but is still published. */

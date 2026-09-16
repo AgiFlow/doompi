@@ -92,7 +92,7 @@ describe('doompi-profile package contract', () => {
     });
     const client = await readFile(path.join(packageDirectory, 'generated/web.ts'), 'utf8');
     const contribution = await readFile(
-      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(frontend)/selection-axis/profile.ts'),
+      path.join(packageDirectory, 'src/extensions/workspaces/sessions/(frontend)/selection-axis/profile.web.ts'),
       'utf8',
     );
     expect(client).toContain('defineWebPlugin');

@@ -52,7 +52,7 @@ export interface ExtensionEntry {
   readonly name: string;
   /** Relationship target, such as the slot a fill names. */
   readonly target: string | undefined;
-  /** Platform this file serves, or undefined for the side's neutral file. */
+  /** Platform this file serves. Undefined only for a file the scan has already reported. */
   readonly platform: string | undefined;
   /** Helper-declared cardinality. Omitted means exactly one contribution. */
   readonly cardinality?: 'optional' | 'many' | 'collection';

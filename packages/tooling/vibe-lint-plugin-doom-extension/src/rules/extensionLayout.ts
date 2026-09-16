@@ -36,9 +36,9 @@ function sideOf(posixPath: string): 'backend' | 'frontend' | undefined {
  */
 export const doomRoutedFilePosition: RuleDefinition = {
   preflight: true,
-  rule: 'A file under the extensions routing root sits at a position the folder convention defines',
+  rule: 'A file under the extensions routing root sits at a position the folder convention defines and names the platform it serves',
   rationale:
-    'The generator reads the path and nothing else. A file it cannot place contributes nothing, and does so without failing, which is the most expensive way for a layout mistake to behave.',
+    'The generator reads the path and nothing else. A file it cannot place contributes nothing, and does so without failing, which is the most expensive way for a layout mistake to behave. The filename is half of that position: a public file naming no platform is read as neutral, and the convention no longer has a neutral file.',
   check(filePath, configRoot) {
     const relative = projectPath(filePath, configRoot);
     if (!relative || !relative.startsWith('src/extension')) return null;

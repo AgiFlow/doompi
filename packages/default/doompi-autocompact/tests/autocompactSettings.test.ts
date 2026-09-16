@@ -1,8 +1,8 @@
 import { DOOM_PLANNING_THINKING_LEVELS, parseAutocompactModeConfig } from '@agimon-ai/doompi-config';
 import { describe, expect, it } from 'vitest';
 
-import globalSettings from '../src/extensions/(frontend)/setting/autocompact';
-import workspaceSettings from '../src/extensions/workspaces/(frontend)/setting/autocompact';
+import globalSettings from '../src/extensions/(frontend)/setting/autocompact.web';
+import workspaceSettings from '../src/extensions/workspaces/(frontend)/setting/autocompact.web';
 import {
   AUTOCOMPACT_CONFIG_SECTION_ID,
   AUTOCOMPACT_SETTING_SHAPES,

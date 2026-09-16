@@ -20,9 +20,9 @@ const SCOPE_DEPTH: Readonly<Record<string, number>> = { global: 0, workspace: 1,
  *
  * The side axis is logic against presentation, not Node against browser, so
  * the terminal reads both: every backend file, plus the frontend files that
- * name it. A neutral frontend file is cockpit code, which a terminal cannot
- * render, so the CLI takes only explicit `.cli` ones. The headless server has
- * no presentation at all.
+ * name it. A frontend file that does not name the terminal is cockpit code,
+ * which a terminal cannot render, so the CLI takes only explicit `.cli` ones.
+ * The headless server has no presentation at all.
  */
 function drawsFrom(entry: ExtensionEntry, target: BuildTarget): boolean {
   if (target === 'web') return entry.side === 'frontend';
@@ -109,11 +109,12 @@ function mergeRenderers(
 /**
  * Picks the winning file per logical contribution for one host.
  *
- * Metro and Expo semantics: a file naming this platform replaces the neutral
- * one, and a neutral file serves every platform on its side that has no more
- * specific sibling. Two files naming the same platform for the same
- * contribution is an authoring mistake, so the first wins and the second
- * becomes a notice rather than silently disappearing.
+ * Metro and Expo semantics: a file naming this platform replaces a sibling
+ * that names none, and a file naming none serves every platform on its side
+ * that has no more specific sibling. The scan reports the unnamed one, so this
+ * is a fallback rather than a supported way to author. Two files naming the
+ * same platform for the same contribution is an authoring mistake, so the
+ * first wins and the second becomes a notice rather than silently disappearing.
  */
 export function resolveTarget(graph: ExtensionGraph, target: BuildTarget): TargetResolution {
   const notices: ExtensionNotice[] = [];
@@ -152,7 +153,7 @@ export function resolveTarget(graph: ExtensionGraph, target: BuildTarget): Targe
       notices.push({ path: entry.file, message: `duplicates ${held.file} for ${target}; the first one wins` });
       continue;
     }
-    // A platform file always beats the neutral sibling it overrides.
+    // A platform file always beats the unsuffixed sibling it overrides.
     if (entry.platform !== undefined) winners.set(key, entry);
   }
 

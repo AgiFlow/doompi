@@ -43,10 +43,10 @@ describe('browser voice media', () => {
     const source = (
       await Promise.all(
         [
-          'channel/voice-media-wake.ts',
-          'channel/voice-ownership.ts',
-          'fill/Voice.composer-actions.tsx',
-          'leader/toggle.ts',
+          'channel/voice-media-wake.web.ts',
+          'channel/voice-ownership.web.ts',
+          'fill/Voice.composer-actions.web.tsx',
+          'leader/toggle.web.ts',
           'lifecycle/start.web.ts',
         ].map((file) =>
           readFile(new URL(`../src/extensions/workspaces/sessions/(frontend)/${file}`, import.meta.url), 'utf8'),
@@ -72,7 +72,7 @@ describe('browser voice media', () => {
 
   it('does not classify autonomous voice capture as background work', async () => {
     const source = await readFile(
-      new URL('../src/extensions/workspaces/sessions/(frontend)/activity-group/voice.ts', import.meta.url),
+      new URL('../src/extensions/workspaces/sessions/(frontend)/activity-group/voice.web.ts', import.meta.url),
       'utf8',
     );
 
@@ -81,7 +81,7 @@ describe('browser voice media', () => {
 
   it('presents narration as readable conversational output', async () => {
     const source = await readFile(
-      new URL('../src/extensions/workspaces/sessions/(frontend)/tool/narrate.tsx', import.meta.url),
+      new URL('../src/extensions/workspaces/sessions/(frontend)/tool/narrate.web.tsx', import.meta.url),
       'utf8',
     );
     const rendered = renderPlugin(

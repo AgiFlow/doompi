@@ -48,7 +48,7 @@ scanExtensions({
   packageDir,
   root: 'src/extensions',
   sides: { backend: 'backend', frontend: 'frontend' },
-  platforms: { backend: ['cli', 'server'], frontend: ['web', 'ios', 'android', 'desktop'] },
+  platforms: { backend: ['cli', 'server'], frontend: ['cli', 'web', 'ios', 'android', 'desktop'] },
   generatedEntries: ['pi', 'server', 'web'],
 });
 ```

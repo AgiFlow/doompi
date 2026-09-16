@@ -77,17 +77,16 @@ Neither appears in any URL. The split is not cosmetic; it is a boundary three me
 
 The sides separate logic from presentation; they do not name a host or an owner. A `.cli.ts` frontend file can render the Pi terminal, while a `.web.tsx` frontend file can render the browser. Browser code does not import backend code. A session CLI command may import a session frontend `overlay/*.cli.ts` route to open its TUI view or a private helper beside it. The session Pi root may import a private overlay helper to mount terminal status. Other cross-side imports are rejected by lint. Shared data contracts live in `src/types`, `src/constants`, `src/schemas`, or the generated API contract.
 
-The split also narrows the suffix namespace, so the common case needs no suffix at all. Inside `(backend)`, no suffix means CLI and server. Inside `(frontend)`, no suffix means every frontend.
+The split also narrows the suffix namespace, so each side reads only its own platform words: `cli` and `server` inside `(backend)`, and `cli`, `web`, `ios`, `android` or `desktop` inside `(frontend)`. Every public routed file names one of them. There is no neutral file, so nothing is read off a missing suffix. Files inside a `_folder` are not routed and carry no platform suffix.
 
 ```text
-(backend)/tool/write-plan.ts           CLI and server
 (backend)/tool/write-plan.cli.ts       CLI only
 (backend)/tool/write-plan.server.ts    server only
-(frontend)/tool/write-plan.tsx         that tool's renderer, every frontend
-(frontend)/tool/write-plan.ios.tsx     iOS override
+(frontend)/tool/write-plan.web.tsx     that tool's renderer in the browser
+(frontend)/tool/write-plan.ios.tsx     iOS override. no iOS build target yet, so no host builds it
 ```
 
-Matching filenames across the two sides are the join. `(backend)/channel/tasks.ts` and `(frontend)/channel/tasks.ts` are one frame type. `(backend)/tool/write-plan.ts` and `(frontend)/tool/write-plan.tsx` are one tool and its renderer.
+Matching names across the two sides are the join, and the platform suffix is not part of the name. `(backend)/channel/tasks.server.ts` and `(frontend)/channel/tasks.web.ts` are one frame type. `(backend)/tool/write-plan.server.ts` and `(frontend)/tool/write-plan.web.tsx` are one tool and its renderer.
 
 ## Axis 3: surface is the folder
 
@@ -140,17 +139,18 @@ One gate, two host mechanisms, and hiding that is the point. The server gates th
 `{name}` is the first segment and is the contribution's identity. `{target}` appears only where the surface is relationship-bearing. `{platform}` is a closed set scoped to the side. Parsing runs right to left, so a dotted slot name stays unambiguous.
 
 ```text
-fill/PlanRef.task.detail.tsx          fills plugin slot `task.detail`
-fill/PlanSummary.activity.tsx         fills the host activity region
-fill/PlanSection.activity.plan.tsx    fills activity group `plan`
-slot/actions.ts                       declares slot `<thisPluginId>.actions`
-hook/session-start.ts                 CLI `events.session_start`, server hook `session_start`
-tool/write-plan.ts                    tool `write_plan`
+fill/PlanRef.task.detail.web.tsx          fills plugin slot `task.detail`
+fill/PlanSummary.activity.web.tsx         fills the host activity region
+fill/PlanSection.activity.plan.web.tsx    fills activity group `plan`
+slot/actions.web.ts                       declares slot `<thisPluginId>.actions`
+hook/session-start.cli.ts                 CLI `events.session_start`
+hook/session-start.server.ts              server hook `session_start`
+tool/write-plan.server.ts                 tool `write_plan`
 ```
 
-Most specific wins, and a platform file replaces the neutral one for that platform.
+Most specific wins. A surface a host does not read is skipped there without complaint, so a file reaches exactly the host its platform names.
 
-**Filename is identity.** `(backend)/tool/write-plan.ts` declares tool `write_plan` and `(frontend)/tool/write-plan.tsx` renders it. This removes the cross-target strings an author matches by hand today: tool names, channel frame types, and status keys. A declaration may still pass an explicit name to keep a legacy identifier.
+**Filename is identity, and the platform is not part of it.** `(backend)/tool/write-plan.server.ts` declares tool `write_plan` and `(frontend)/tool/write-plan.web.tsx` renders it. This removes the cross-target strings an author matches by hand today: tool names, channel frame types, and status keys. A declaration may still pass an explicit name to keep a legacy identifier.
 
 ### One `fill/` folder, one rule
 
