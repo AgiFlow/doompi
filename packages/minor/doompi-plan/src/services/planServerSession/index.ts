@@ -14,6 +14,7 @@ import {
   buildFlavorPlanningPrompt,
   buildPlanModeBasePrompt,
   type DebugEvidencePacket,
+  type PlanHostCapabilities,
   type PlanningFlavor,
 } from '../../services/prompts';
 import {
@@ -49,6 +50,15 @@ const PLAN_DOCUMENT = 'plan-document';
  * reported honestly rather than as an idle run that is about to start.
  */
 const PLAN_SERVER_FABLE_STAGE = 'unavailable';
+/**
+ * What this facet's tools accept: complete_plan declares no parameters, there is no narrated
+ * review to answer, and run_fable_plan is a stub because no broker seam is configured.
+ */
+export const PLAN_SERVER_CAPABILITIES: PlanHostCapabilities = {
+  completePlanTakesDecision: false,
+  narratesReview: false,
+  fableAvailable: false,
+};
 const PLAN_MODE_ALLOWED_TOOLS = [
   'add_directory',
   'ask_user_question',
@@ -437,8 +447,14 @@ export function createPlanServerSession(
           const prompt = typeof event.systemPrompt === 'string' ? event.systemPrompt : '';
           const directory = plansDirectory();
           const sections = [
-            buildPlanModeBasePrompt(directory),
-            buildFlavorPlanningPrompt(flavor, directory, debugEvidence, PLAN_SERVER_FABLE_STAGE),
+            buildPlanModeBasePrompt(directory, PLAN_SERVER_CAPABILITIES),
+            buildFlavorPlanningPrompt(
+              flavor,
+              directory,
+              debugEvidence,
+              PLAN_SERVER_FABLE_STAGE,
+              PLAN_SERVER_CAPABILITIES,
+            ),
           ];
           const saved = await latestEntry(PLAN_DOCUMENT);
           if (saved !== undefined && saved !== null && typeof saved === 'object' && 'path' in saved) {

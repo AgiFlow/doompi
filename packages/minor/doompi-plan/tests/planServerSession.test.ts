@@ -406,7 +406,10 @@ describe('server planning system prompt', () => {
     const prompt = await promptFor(f, plugin);
 
     expect(prompt).toContain('[PLAN MODE ACTIVE: FABLE]');
-    expect(prompt).toContain('Current Fable stage: unavailable');
+    // This host declares no Fable broker, so the brief says so outright instead of describing a
+    // run_fable_plan handoff the stub tool would refuse.
+    expect(prompt).toContain('Fable planning is unavailable in this host');
+    expect(prompt).not.toContain('call run_fable_plan');
   });
 
   it('keeps the flavor across a restart instead of silently planning as normal', async () => {

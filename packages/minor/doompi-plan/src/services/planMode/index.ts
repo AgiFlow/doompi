@@ -76,6 +76,7 @@ import {
   buildFlavorPlanningPrompt,
   buildPlanModeBasePrompt,
   type DebugEvidencePacket,
+  type PlanHostCapabilities,
   type PlanningFlavor,
 } from '../../services/prompts';
 import {
@@ -89,6 +90,16 @@ import {
   PLAN_STATUS_KEY,
 } from '../../types/planApi';
 import type { PlanPointerPort } from '../../types/planPointer';
+
+/**
+ * What this facet's tools accept: complete_plan declares a `decision` enum, the voice path
+ * narrates the review, and a Fable broker is resolved for run_fable_plan.
+ */
+export const PLAN_CLI_CAPABILITIES: PlanHostCapabilities = {
+  completePlanTakesDecision: true,
+  narratesReview: true,
+  fableAvailable: true,
+};
 
 const PLAN_MODE_ENTRY = 'agent-harness-plan-mode';
 const PLAN_MODE_CONTEXT = 'agent-harness-plan-mode-context';
@@ -2059,8 +2070,8 @@ export function createPlanModeRuntime(
             os.homedir(),
           );
           sections.push(
-            buildPlanModeBasePrompt(plansDirectory),
-            buildFlavorPlanningPrompt(activeFlavor!, plansDirectory, debugEvidence, fableStage),
+            buildPlanModeBasePrompt(plansDirectory, PLAN_CLI_CAPABILITIES),
+            buildFlavorPlanningPrompt(activeFlavor!, plansDirectory, debugEvidence, fableStage, PLAN_CLI_CAPABILITIES),
           );
         }
         if (currentPlan) {
