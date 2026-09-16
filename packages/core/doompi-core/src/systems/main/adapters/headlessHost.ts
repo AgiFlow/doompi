@@ -584,6 +584,8 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
         source: resource.source,
         name: resource.value.name,
         kind: resource.value.kind,
+        ...(resource.value.description === undefined ? {} : { description: resource.value.description }),
+        ...(resource.value.path === undefined ? {} : { path: resource.value.path }),
         text: value,
       });
     }
