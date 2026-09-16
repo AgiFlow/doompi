@@ -128,8 +128,15 @@ describe('the workspace web plugin composition', () => {
     expect(loop?.activityGroups).toEqual([
       expect.objectContaining({ name: 'loops', keys: 'l l', statusKey: 'doom-loop-instances', order: 40 }),
     ]);
-    expect(activityGroups({}, [], 'session-1')).toContainEqual(
+    // The group used to appear on a placeholder activeSource that was hard-wired
+    // to inactive. It now appears on the status its server facet publishes, which
+    // is empty until a loop runs and is what lets a running loop mark work.
+    expect(activityGroups({}, [], 'session-1')).not.toContainEqual(expect.objectContaining({ name: 'loops' }));
+    expect(activityGroups({ 'doom-loop-instances': '' }, [], 'session-1')).toContainEqual(
       expect.objectContaining({ name: 'loops', active: false }),
+    );
+    expect(activityGroups({ 'doom-loop-instances': '[{"instanceId":"a"}]' }, [], 'session-1')).toContainEqual(
+      expect.objectContaining({ name: 'loops', active: true }),
     );
     expect(loop?.fills).toContainEqual(expect.objectContaining({ slot: 'activity.loops', id: 'loops' }));
   });

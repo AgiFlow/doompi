@@ -24,7 +24,6 @@ import {
   PLAN_STATUS_KEY,
   formatPlanStatus,
 } from '../../types/planApi';
-import { PlanPointerService } from '../planPointer';
 import {
   parseDebugEvidencePacket,
   PLAN_CONTINUE_TEXT,
@@ -34,6 +33,7 @@ import {
   planTitleSlug,
   visiblePlanForToolCall,
 } from '../planMode';
+import { PlanPointerService } from '../planPointer';
 
 const RECORD_DEBUG_EVIDENCE_TOOL = 'record_debug_evidence';
 const RUN_FABLE_PLAN_TOOL = 'run_fable_plan';
