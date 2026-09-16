@@ -221,3 +221,34 @@ describe('path parameters through the client', () => {
     expect(transport.mock.calls[0]?.[0]).toBe('/api/workspaces/ws-1/sessions/s-1/plugins/file-edits/prompts/review');
   });
 });
+
+describe('routes that answer bytes', () => {
+  const BYTES = defineApiRoutes({ audio: { method: 'GET', path: '/playback-audio', raw: true } });
+
+  const rawClient = (transport: ApiTransport) =>
+    createApiClient(BYTES, {
+      scopes: ['session'],
+      basePath: 'voice',
+      transport,
+      sessionAddress: SESSION_ADDRESS,
+    });
+
+  it('leaves the body unread, so the caller still gets its bytes', async () => {
+    const pcm = new Uint8Array([1, 2, 3, 4]);
+    const api = rawClient(() => Promise.resolve(new Response(pcm)));
+    const result = await api.session('s-1').audio();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toBeUndefined();
+    expect(new Uint8Array(await result.response.arrayBuffer())).toEqual(pcm);
+  });
+
+  it('still reports a refusal, without spending the body read', async () => {
+    const api = rawClient(() => Promise.resolve(new Response(new Uint8Array([9]), { status: 503 })));
+    const result = await api.session('s-1').audio();
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.status).toBe(503);
+    expect(result.response?.bodyUsed).toBe(false);
+  });
+});

@@ -56,6 +56,15 @@ export interface ApiRouteSpec<T = void> {
    * returning, so calling one over a tunnel would never return at all.
    */
   readonly stream?: true;
+  /**
+   * Answers bytes rather than JSON.
+   *
+   * The body is left unread, so `data` is undefined and the caller takes
+   * `result.response` and reads it however it needs: `arrayBuffer`, `blob`,
+   * `text`. Without this the client would consume the body to parse it, and
+   * hand back a `Response` that throws on the second read.
+   */
+  readonly raw?: true;
   readonly response?: ApiResponseOf<T>;
 }
 
@@ -256,6 +265,12 @@ function methodFor(
       });
     } catch {
       return { ok: false, status: 0, error: '', data: undefined };
+    }
+    // A raw route's body belongs to the caller, and reading it here to look
+    // for an `error` would spend the one read it gets.
+    if (spec.raw === true) {
+      if (!response.ok) return { ok: false, status: response.status, error: '', data: undefined, response };
+      return { ok: true, status: response.status, data: undefined, response };
     }
     const data = await readBody(response);
     if (!response.ok) return { ok: false, status: response.status, error: errorOf(data), data, response };
