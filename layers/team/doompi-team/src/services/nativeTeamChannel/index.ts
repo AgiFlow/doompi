@@ -24,7 +24,7 @@ import { DoomTeamExpectedError, invalidRequest } from '../errors';
 /** Wire literal. The model calls the tool by this name, so it is not renamed. */
 export const NATIVE_TEAM_TOOL_NAME = 'intercom';
 
-const TEAM_MESSAGE_CUSTOM_TYPE = 'intercom_message';
+export const TEAM_MESSAGE_CUSTOM_TYPE = 'intercom_message';
 const MAIN_MEMBER_ID = 'main';
 const RESERVED_NAME_FALLBACK = 'main-agent';
 const FALLBACK_MEMBER_NAME = 'agent';
@@ -295,18 +295,33 @@ function publicMember(context: TeamMemberContext): NativeTeamMemberSnapshot {
   };
 }
 
+export interface IntercomMessageDetails {
+  readonly kind: 'send' | 'ask';
+  readonly from: NativeTeamMemberSnapshot;
+  readonly message: string;
+  readonly requestId: string;
+}
+
+interface DirectMessage {
+  readonly content: string;
+  readonly details: IntercomMessageDetails;
+}
+
 function formatDirectMessage(
   from: TeamMemberContext,
-  kind: 'send' | 'ask',
+  kind: IntercomMessageDetails['kind'],
   requestId: string,
   message: string,
-): string {
-  return `${kind === 'ask' ? 'Question' : 'Message'} from ${from.memberId}${from.inline ? ' (inline)' : ''}${from.agent ? ` [${from.agent}]` : ''}.\n\n${message}${kind === 'ask' ? `\n\nReply with ${NATIVE_TEAM_TOOL_NAME}({ action: "reply", requestId: "${requestId}", message: "..." }).` : ''}`;
+): DirectMessage {
+  return {
+    content: `${kind === 'ask' ? 'Question' : 'Message'} from ${from.memberId}${from.inline ? ' (inline)' : ''}${from.agent ? ` [${from.agent}]` : ''}.\n\n${message}${kind === 'ask' ? `\n\nReply with ${NATIVE_TEAM_TOOL_NAME}({ action: "reply", requestId: "${requestId}", message: "..." }).` : ''}`,
+    details: { kind, from: publicMember(from), message, requestId },
+  };
 }
 
 interface DirectMember {
   readonly context: TeamMemberContext;
-  deliver?: (message: string) => Promise<void>;
+  deliver?: (message: DirectMessage) => Promise<void>;
 }
 
 interface DirectAsk {
@@ -344,7 +359,12 @@ class NativeTeamDirectChannel {
       context,
       deliver: async (message) => {
         transport.sendMessage(
-          { customType: TEAM_MESSAGE_CUSTOM_TYPE, content: message, display: true },
+          {
+            customType: TEAM_MESSAGE_CUSTOM_TYPE,
+            content: message.content,
+            display: true,
+            details: message.details,
+          },
           { triggerTurn: true, deliverAs: 'steer' },
         );
       },
@@ -377,7 +397,7 @@ class NativeTeamDirectChannel {
       bindRuntime: (runtime: DoomChildSessionRuntime): DoomChildSessionTool => {
         const member = this.members.get(memberId);
         if (!member || disposed) throw new Error(`Native team member '${memberId}' is no longer active.`);
-        member.deliver = (message) => runtime.steer(message);
+        member.deliver = (message) => runtime.steer(message.content);
         return {
           name: NATIVE_TEAM_TOOL_NAME,
           description: 'Communicate with active native agents in this root session.',
@@ -586,7 +606,7 @@ class NativeTeamDirectChannel {
     );
   }
 
-  private async deliver(target: DirectMember, message: string): Promise<void> {
+  private async deliver(target: DirectMember, message: DirectMessage): Promise<void> {
     if (!target.deliver) {
       throw new DoomTeamExpectedError(
         'communication_unavailable',

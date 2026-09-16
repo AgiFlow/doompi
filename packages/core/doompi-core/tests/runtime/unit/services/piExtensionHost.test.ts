@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import type { Entry } from '@earendil-works/pi-agent-core';
+import type { AgentMessage, Entry, HarnessEvent } from '@earendil-works/pi-agent-core';
 import type { Extension, LoadExtensionsResult, RegisteredTool, SessionEntry } from '@earendil-works/pi-coding-agent';
 import {
   createExtensionRuntime,
@@ -33,10 +33,14 @@ function temporaryRoot(): string {
 interface StubRuntime {
   runtime: DirectHarnessRuntime;
   appended: { customType: string; data: unknown }[];
+  emit(event: HarnessEvent): Promise<void>;
+  readEntries: ReturnType<typeof vi.fn>;
 }
 
 function stubRuntime(entries: Entry[], options?: { parentSessionId?: string; failWrites?: boolean }): StubRuntime {
   const appended: { customType: string; data: unknown }[] = [];
+  let listener: ((event: HarnessEvent, context: never) => void | Promise<void>) | undefined;
+  const readEntries = vi.fn(async () => ({ entries, leafId: entries.at(-1)?.id ?? null }));
   const runtime = {
     session: {
       metadata: {
@@ -47,14 +51,28 @@ function stubRuntime(entries: Entry[], options?: { parentSessionId?: string; fai
         ...(options?.parentSessionId === undefined ? {} : { parentSessionId: options.parentSessionId }),
       },
     },
-    readEntries: async () => ({ entries, leafId: entries.at(-1)?.id ?? null }),
+    readEntries,
     appendCustomEntry: async (customType: string, data: unknown) => {
       if (options?.failWrites === true) throw new Error('storage is quarantined');
       appended.push({ customType, data });
       return 'appended-id';
     },
+    onEvent: (next: typeof listener) => {
+      listener = next;
+      return () => {
+        listener = undefined;
+      };
+    },
   } as unknown as DirectHarnessRuntime;
-  return { runtime, appended };
+  return {
+    runtime,
+    appended,
+    readEntries,
+    async emit(event) {
+      if (event.type === 'entry_added') entries.push(event.entry);
+      await listener?.(event, undefined as never);
+    },
+  };
 }
 
 afterEach(() => {
@@ -227,7 +245,7 @@ async function loadedHost(
   onActiveToolsChanged?: () => void,
   handlers: Map<string, unknown> = new Map(),
 ) {
-  const { runtime } = stubRuntime([]);
+  const stub = stubRuntime([]);
   const preload: LoadExtensionsResult = {
     extensions: [stubExtension(names, handlers)],
     errors: [],
@@ -238,7 +256,7 @@ async function loadedHost(
     cwd: '/workspace/project',
     agentDir: '/workspace/project/.pi',
     models: {} as unknown as ConstructorParameters<typeof ModelRegistry>[0],
-    runtime,
+    runtime: stub.runtime,
     preload,
     getModel: () => undefined,
     getThinkingLevel: () => 'off',
@@ -248,7 +266,7 @@ async function loadedHost(
   await host.load();
   // bindCore copies the host's actions onto the shared runtime, which is the object every
   // extension's ExtensionAPI calls through. Reaching it here exercises the real seam.
-  return { host, actions: preload.runtime };
+  return { host, actions: preload.runtime, emit: stub.emit, readEntries: stub.readEntries };
 }
 
 describe('Pi extension tool surface in the headless host', () => {
@@ -325,5 +343,199 @@ describe('Pi extension tool surface in the headless host', () => {
         } as never,
       ),
     ).rejects.toThrow("Tool 'beta' is no longer active");
+  });
+});
+
+function messageEntry(id: string, message: AgentMessage, parentId: string | null = null): Entry {
+  return { id, parentId, seq: 1, timestamp: CREATED_AT, type: 'message', message };
+}
+
+describe('Pi lifecycle events in the headless host', () => {
+  it('dispatches agent, turn, message and tool events in Pi order without rereading history', async () => {
+    const seen: string[] = [];
+    const branchAtTurnEnd: string[][] = [];
+    const handlers = new Map<string, unknown>();
+    for (const type of [
+      'agent_start',
+      'turn_start',
+      'message_start',
+      'message_end',
+      'tool_execution_start',
+      'tool_execution_update',
+      'tool_execution_end',
+      'turn_end',
+      'agent_end',
+      'agent_settled',
+    ]) {
+      handlers.set(type, [
+        vi.fn((event: { type: string }, context: { sessionManager: SessionManager }) => {
+          seen.push(event.type);
+          if (event.type === 'turn_end')
+            branchAtTurnEnd.push(context.sessionManager.getBranch().map((entry) => entry.id));
+        }),
+      ]);
+    }
+    const { emit, readEntries } = await loadedHost([], undefined, handlers);
+    const user: Extract<AgentMessage, { role: 'user' }> = {
+      role: 'user',
+      content: 'hello',
+      timestamp: CREATED_AT,
+    };
+    const assistant: Extract<AgentMessage, { role: 'assistant' }> = {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'done' }],
+      api: 'anthropic-messages',
+      provider: 'anthropic',
+      model: 'claude',
+      usage: {
+        input: 1,
+        output: 1,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 2,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: 'stop',
+      timestamp: CREATED_AT,
+    };
+
+    await emit({ type: 'run_start', lane: 'main', runId: 'run-1', startedAt: CREATED_AT });
+    await emit({ type: 'turn_start', lane: 'main', runId: 'run-1', turnId: 'turn-1' });
+    await emit({ type: 'message_start', lane: 'main', runId: 'run-1', message: user });
+    await emit({ type: 'message_end', lane: 'main', runId: 'run-1', message: user, entryId: 'user-1' });
+    await emit({ type: 'entry_added', lane: 'main', entry: messageEntry('user-1', user) });
+    await emit({
+      type: 'tool_start',
+      lane: 'main',
+      runId: 'run-1',
+      turnId: 'turn-1',
+      toolCallId: 'tool-1',
+      toolName: 'read',
+      args: { path: 'README.md' },
+    });
+    await emit({
+      type: 'tool_update',
+      lane: 'main',
+      runId: 'run-1',
+      turnId: 'turn-1',
+      toolCallId: 'tool-1',
+      toolName: 'read',
+      partialResult: { content: [{ type: 'text', text: 'partial' }], details: undefined },
+    });
+    await emit({
+      type: 'tool_end',
+      lane: 'main',
+      runId: 'run-1',
+      turnId: 'turn-1',
+      toolCallId: 'tool-1',
+      toolName: 'read',
+      result: { content: [{ type: 'text', text: 'complete' }], details: undefined },
+      isError: false,
+      terminate: false,
+    });
+    await emit({ type: 'message_start', lane: 'main', runId: 'run-1', message: assistant });
+    await emit({ type: 'message_end', lane: 'main', runId: 'run-1', message: assistant, entryId: 'assistant-1' });
+    await emit({
+      type: 'entry_added',
+      lane: 'main',
+      entry: messageEntry('assistant-1', assistant, 'user-1'),
+    });
+    await emit({
+      type: 'turn_end',
+      lane: 'main',
+      runId: 'run-1',
+      turnId: 'turn-1',
+      message: assistant,
+      toolResults: [],
+    });
+    await emit({
+      type: 'run_end',
+      lane: 'main',
+      runId: 'run-1',
+      fromTipId: null,
+      tipId: 'assistant-1',
+      endedAt: CREATED_AT,
+      status: 'completed',
+    });
+
+    expect(seen).toEqual([
+      'agent_start',
+      'turn_start',
+      'message_start',
+      'message_end',
+      'tool_execution_start',
+      'tool_execution_update',
+      'tool_execution_end',
+      'message_start',
+      'message_end',
+      'turn_end',
+      'agent_end',
+      'agent_settled',
+    ]);
+    expect(branchAtTurnEnd).toEqual([['user-1', 'assistant-1']]);
+    expect(readEntries).toHaveBeenCalledTimes(1);
+  });
+
+  it('dispatches navigation, session metadata and failed compaction lifecycle events', async () => {
+    const tree = vi.fn();
+    const info = vi.fn();
+    const failed = vi.fn();
+    const handlers = new Map<string, unknown>([
+      ['session_tree', [tree]],
+      ['session_info_changed', [info]],
+      ['session_compact_failed', [failed]],
+    ]);
+    const { emit, readEntries } = await loadedHost([], undefined, handlers);
+    const user = { role: 'user', content: 'hello', timestamp: CREATED_AT } as const;
+
+    await emit({ type: 'entry_added', lane: 'main', entry: messageEntry('user-1', user) });
+    await emit({
+      type: 'navigation_start',
+      lane: 'main',
+      runId: 'navigation-1',
+      targetId: 'user-1',
+      startedAt: CREATED_AT,
+    });
+    await emit({
+      type: 'navigation_end',
+      lane: 'main',
+      runId: 'navigation-1',
+      fromTipId: null,
+      tipId: 'user-1',
+      endedAt: CREATED_AT,
+      status: 'completed',
+    });
+    await emit({ type: 'value_update', value: 'session_name', name: 'Lifecycle session' });
+    await emit({
+      type: 'compaction_start',
+      lane: 'main',
+      runId: 'compact-1',
+      reason: 'manual',
+      startedAt: CREATED_AT,
+    });
+    await emit({
+      type: 'compaction_end',
+      lane: 'main',
+      runId: 'compact-1',
+      reason: 'manual',
+      endedAt: CREATED_AT,
+      status: 'aborted',
+    });
+
+    expect(tree).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'session_tree', newLeafId: 'user-1', oldLeafId: null }),
+      expect.objectContaining({ sessionManager: expect.any(SessionManager) }),
+    );
+    expect(info).toHaveBeenCalledWith({ type: 'session_info_changed', name: 'Lifecycle session' }, expect.anything());
+    expect(failed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'session_compact_failed',
+        reason: 'manual',
+        aborted: true,
+        willRetry: false,
+      }),
+      expect.anything(),
+    );
+    expect(readEntries).toHaveBeenCalledTimes(1);
   });
 });

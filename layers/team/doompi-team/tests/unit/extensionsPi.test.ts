@@ -287,13 +287,14 @@ describe('Team standard runtime', () => {
     expect(host.commands.length).toBeGreaterThan(1);
   });
 
-  it('registers the completion renderer, so a finished run renders as more than raw markdown', async () => {
+  it('registers the Team message renderers instead of leaving custom messages in Pi fallback chrome', async () => {
     resetRuntimeState();
     const host = fakePi();
 
     await activateTeamForTest(host.pi);
 
     expect(host.renderers).toContain('subagent-notify');
+    expect(host.renderers).toContain('intercom_message');
   });
 
   /**

@@ -23,7 +23,6 @@ import {
   sessionEntryToContextMessages,
   type CompactionEntry,
   type CompactionResult,
-  type CustomMessage,
   type SessionBeforeCompactEvent,
   type Extension,
   type ExtensionActions,
@@ -436,6 +435,8 @@ function createHeadlessUiContext(
   };
 }
 
+const bridgedSessionAppenders = new WeakMap<SessionManager, (entry: SessionEntry) => void>();
+
 export async function createBridgedSessionManager(
   runtime: DirectHarnessRuntime,
   cwd: string,
@@ -464,10 +465,16 @@ export async function createBridgedSessionManager(
   if (typeof manager._persist !== 'function') {
     throw new Error("Pi's SessionManager no longer exposes '_persist'; the headless session bridge must be updated");
   }
+  const append = (manager as unknown as { _appendEntry?: (entry: SessionEntry) => void })._appendEntry;
+  if (typeof append !== 'function') {
+    throw new Error("Pi's SessionManager no longer exposes '_appendEntry'; the live session bridge must be updated");
+  }
 
+  let syncingHarnessEntry = false;
   const persist = manager._persist.bind(manager);
   manager._persist = (entry) => {
     persist(entry);
+    if (syncingHarnessEntry) return;
     const mirrored = fromPiSessionEntry(entry);
     if (mirrored === undefined) return;
     void runtime.appendCustomEntry(mirrored.customType, mirrored.data).catch((error: unknown) => {
@@ -476,6 +483,15 @@ export async function createBridgedSessionManager(
       );
     });
   };
+  bridgedSessionAppenders.set(manager, (entry) => {
+    if (manager.getEntry(entry.id) !== undefined) return;
+    syncingHarnessEntry = true;
+    try {
+      append.call(manager, entry);
+    } finally {
+      syncingHarnessEntry = false;
+    }
+  });
 
   return manager;
 }
@@ -483,6 +499,8 @@ export async function createBridgedSessionManager(
 export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtensionHost {
   const { cwd, agentDir, models, runtime, preload } = options;
   let runner: ExtensionRunner | undefined;
+  let sessionManager: SessionManager | undefined;
+  let appendHarnessEntry: ((entry: SessionEntry) => void) | undefined;
   let tools: readonly AgentHarnessTool<object | undefined>[] = [];
   let skills: readonly Skill[] = [];
   let registered: readonly RegisteredTool[] = [];
@@ -492,13 +510,14 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
   let unsubscribeEvents: (() => void) | undefined;
 
   // Pi's ExtensionContext getters are synchronous while every harness read is not, so the
-  // facts they answer from are tracked off the harness event stream and primed from history
-  // at load. Each is updated by the event that changes it, which is the same moment Pi's own
-  // value would change, so a handler never reads a figure from before the event it is handling.
+  // facts they answer from are tracked off the harness event stream and primed from history.
+  // Hot lifecycle events update only bounded, incremental state. No event rereads history.
   let contextTokens: number | null = null;
   let currentOperation: 'run' | 'compaction' | 'navigation' | null = null;
   let queuedMessages = 0;
   let turnIndex = 0;
+  let runMessages: AgentMessage[] = [];
+  const toolArguments = new Map<string, unknown>();
   /** Whether the compaction now running came from a Pi extension rather than the harness. */
   let compactionFromExtension = false;
 
@@ -534,7 +553,7 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
 
   const actions: ExtensionActions = {
     sendMessage: (message, sendOptions) => {
-      const custom: CustomMessage = {
+      const custom: Extract<AgentMessage, { role: 'custom' }> = {
         role: 'custom',
         customType: message.customType,
         // Untyped extensions can pass missing content; Pi normalizes it at the same point.
@@ -624,27 +643,72 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     return converted?.type === 'compaction' ? converted : undefined;
   };
 
-  /** Harness events, translated into the Pi events an extension registered for. */
+  /** Harness events, translated into Pi events in AgentSession order. */
   const handleHarnessEvent = async (event: HarnessEvent): Promise<void> => {
     switch (event.type) {
       case 'run_start':
+      case 'run_resume':
         currentOperation = 'run';
         turnIndex = 0;
+        runMessages = [];
+        toolArguments.clear();
+        await runner?.emit({ type: 'agent_start' });
         return;
-      case 'compaction_start':
-        currentOperation = 'compaction';
+      case 'turn_start':
+        await runner?.emit({ type: 'turn_start', turnIndex, timestamp: Date.now() });
         return;
-      case 'navigation_start':
-        currentOperation = 'navigation';
+      case 'message_start':
+        await runner?.emit({ type: 'message_start', message: event.message });
         return;
-      case 'navigation_end':
-        currentOperation = null;
-        return;
-      case 'queue_update':
-        queuedMessages = event.queues.filter((item) => item.kind !== 'write').length;
+      case 'message_update':
+        await runner?.emit({
+          type: 'message_update',
+          message: event.message,
+          assistantMessageEvent: event.event,
+        });
         return;
       case 'message_end':
+        if (event.runId !== undefined) runMessages.push(event.message);
         if (event.message.role === 'assistant') contextTokens = contextTokensOf(event.message.usage);
+        // Harness persistence has already committed at this boundary, so replacement results cannot
+        // be honored faithfully. The handler still observes the same lifecycle boundary.
+        await runner?.emitMessageEnd({ type: 'message_end', message: event.message });
+        return;
+      case 'tool_start':
+        toolArguments.set(event.toolCallId, event.args);
+        await runner?.emit({
+          type: 'tool_execution_start',
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          args: event.args,
+        });
+        return;
+      case 'tool_update':
+        await runner?.emit({
+          type: 'tool_execution_update',
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          args: toolArguments.get(event.toolCallId),
+          partialResult: event.partialResult,
+        });
+        return;
+      case 'tool_end':
+        toolArguments.delete(event.toolCallId);
+        await runner?.emit({
+          type: 'tool_execution_end',
+          toolCallId: event.toolCallId,
+          toolName: event.toolName,
+          result: event.result,
+          isError: event.isError,
+        });
+        return;
+      case 'entry_added': {
+        const converted = toPiSessionEntry(event.entry);
+        if (converted !== undefined) appendHarnessEntry?.(converted);
+        return;
+      }
+      case 'queue_update':
+        queuedMessages = event.queues.filter((item) => item.kind !== 'write').length;
         return;
       case 'turn_end': {
         const index = turnIndex;
@@ -659,13 +723,29 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       }
       case 'run_end':
         currentOperation = null;
+        await runner?.emit({ type: 'agent_end', messages: runMessages });
         await runner?.emit({ type: 'agent_settled' });
+        runMessages = [];
+        toolArguments.clear();
+        return;
+      case 'compaction_start':
+        currentOperation = 'compaction';
         return;
       case 'compaction_end': {
         currentOperation = null;
         const fromExtension = compactionFromExtension;
         compactionFromExtension = false;
-        if (event.status !== 'completed') return;
+        if (event.status !== 'completed') {
+          await runner?.emit({
+            type: 'session_compact_failed',
+            reason: event.reason,
+            ...(event.status === 'failed' ? { errorMessage: event.error.message } : {}),
+            aborted: event.status === 'aborted',
+            willRetry: event.reason === 'overflow',
+            fromExtension,
+          });
+          return;
+        }
         // Usage measured against the pre-compaction context no longer describes this one.
         contextTokens = null;
         const compactionEntry = await piCompactionEntry(event.entryId);
@@ -680,6 +760,45 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
         });
         return;
       }
+      case 'navigation_start':
+        currentOperation = 'navigation';
+        return;
+      case 'navigation_end': {
+        currentOperation = null;
+        if (event.status !== 'completed') return;
+        if (event.tipId === null) sessionManager?.resetLeaf();
+        else if (sessionManager?.getEntry(event.tipId) !== undefined) sessionManager.branch(event.tipId);
+        const leaf = event.tipId === null ? undefined : sessionManager?.getEntry(event.tipId);
+        await runner?.emit({
+          type: 'session_tree',
+          newLeafId: event.tipId,
+          oldLeafId: event.fromTipId,
+          ...(leaf?.type === 'branch_summary' ? { summaryEntry: leaf } : {}),
+        });
+        return;
+      }
+      case 'value_update':
+        if (event.value === 'session_name') {
+          await runner?.emit({ type: 'session_info_changed', name: event.name });
+        }
+        return;
+      case 'config_update':
+        if (event.property === 'model') {
+          const model = models.getModel(event.value.provider, event.value.modelId);
+          const previous = event.previous as { provider?: unknown; modelId?: unknown } | undefined;
+          const previousModel =
+            typeof previous?.provider === 'string' && typeof previous.modelId === 'string'
+              ? models.getModel(previous.provider, previous.modelId)
+              : undefined;
+          if (model !== undefined) await runner?.emit({ type: 'model_select', model, previousModel, source: 'set' });
+        } else if (event.property === 'thinkingLevel') {
+          await runner?.emit({
+            type: 'thinking_level_select',
+            level: event.value,
+            previousLevel: event.previous,
+          });
+        }
+        return;
       default:
         return;
     }
@@ -751,8 +870,12 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
 
       const loaded: Extension[] = [...preload.extensions];
 
-      const sessionManager = await createBridgedSessionManager(runtime, cwd, options.onNotice, entries);
-      runner = new ExtensionRunner(loaded, preload.runtime, cwd, sessionManager, new ModelRegistry(models));
+      sessionManager = await createBridgedSessionManager(runtime, cwd, options.onNotice, entries);
+      const manager = sessionManager;
+      appendHarnessEntry = bridgedSessionAppenders.get(manager);
+      if (appendHarnessEntry === undefined) throw new Error('The live Pi session bridge was not initialized');
+
+      runner = new ExtensionRunner(loaded, preload.runtime, cwd, manager, new ModelRegistry(models));
       // 'rpc' is the accurate mode for a server with no terminal, and it must be set before any
       // extension runs. Provider registrations were already drained against this same ModelRuntime
       // by preloadPiExtensions, so bindCore finds an empty queue here.
@@ -762,15 +885,10 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
       registered = loaded.flatMap((extension) => [...extension.tools.values()]);
       tools = registered.map((tool) => toHarnessTool(tool, requireRunner, (name) => activeNames.has(name)));
       activeNames = new Set(tools.map((tool) => tool.name));
-      skills = await loadPiSkills(runner, cwd, agentDir, options.onNotice);
-      // Pi extensions open their session-scoped services from this event, and
-      // DOOM_TOOL_SURFACE_SERVICE is one of them. Without it every
-      // DoomToolRestriction stayed inert on this runtime, so plan mode kept
-      // offering write and voice kept offering narrate with the mode off.
-      // 'startup' is accurate: this runner is built once per session process.
-      // It runs after activeNames is seeded, because setActiveTools narrows
-      // that set and the seed would otherwise overwrite the narrowing.
+      // Pi opens session-scoped extension services before resource discovery. Doom tool
+      // restrictions depend on the same ordering.
       await runner.emit({ type: 'session_start', reason: 'startup' });
+      skills = await loadPiSkills(runner, cwd, agentDir, options.onNotice);
       // Subscribed last: an extension must have registered its handlers before the first
       // harness event reaches them.
       unsubscribeEvents = runtime.onEvent(onHarnessEvent);
@@ -779,6 +897,10 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
     async shutdown(): Promise<void> {
       unsubscribeEvents?.();
       unsubscribeEvents = undefined;
+      appendHarnessEntry = undefined;
+      sessionManager = undefined;
+      runMessages = [];
+      toolArguments.clear();
       if (runner === undefined) return;
       await runner.emit({ type: 'session_shutdown', reason: 'quit' });
     },

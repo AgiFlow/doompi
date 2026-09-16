@@ -10,11 +10,13 @@ interface FakeTool {
 
 function makePi() {
   const tools = new Map<string, FakeTool>();
-  const sendMessageCalls: Array<{ message: { content: string; details?: Record<string, unknown> } }> = [];
+  const sendMessageCalls: Array<{
+    message: { content: string; customType?: string; details?: Record<string, unknown> };
+  }> = [];
   const pi = {
     getAllTools: () => [...tools.keys()].map((name) => ({ name })),
     registerTool: (tool: FakeTool & { name: string }) => tools.set(tool.name, tool),
-    sendMessage: (message: { content: string; details?: Record<string, unknown> }) =>
+    sendMessage: (message: { content: string; customType?: string; details?: Record<string, unknown> }) =>
       sendMessageCalls.push({ message }),
     sendUserMessage: () => undefined,
     on: () => undefined,
@@ -67,7 +69,17 @@ describe('direct in-process native Team channel', () => {
 
     await childTool!.execute('send-to-main', { action: 'send', to: 'main', message: 'done' });
     expect(mainPi.sendMessageCalls).toEqual([
-      expect.objectContaining({ message: expect.objectContaining({ content: expect.stringContaining('done') }) }),
+      expect.objectContaining({
+        message: expect.objectContaining({
+          content: expect.stringContaining('done'),
+          customType: 'intercom_message',
+          details: expect.objectContaining({
+            kind: 'send',
+            from: expect.objectContaining({ agent: 'worker' }),
+            message: 'done',
+          }),
+        }),
+      }),
     ]);
 
     intercom?.dispose?.();
