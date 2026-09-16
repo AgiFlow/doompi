@@ -29,8 +29,10 @@ describe('Loop web surfaces', () => {
     expect(webPlugin.activityGroups).toEqual([
       expect.objectContaining({ name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, order: 40 }),
     ]);
-    expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive('s1')).toBe(false);
-    expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive(null)).toBe(false);
+    // No activeSource: the group's visibility is the status the server facet
+    // publishes, so a running loop marks background work instead of a
+    // placeholder source hard-wiring it to false.
+    expect(webPlugin.activityGroups?.[0]?.activeSource).toBeUndefined();
     expect(webPlugin.slots?.map(({ slot }) => slot)).toEqual(['loop.items', 'loop.registration']);
     expect(webPlugin.fills?.map(({ slot, id }) => ({ slot, id }))).toEqual([
       { slot: 'loop.items', id: 'instances' },

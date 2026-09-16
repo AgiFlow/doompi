@@ -174,6 +174,8 @@ describe('headless startup', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-headless-startup-'));
     vi.stubEnv('PI_CODING_AGENT_DIR', path.join(root, 'agent'));
     fs.mkdirSync(path.join(root, '.doom'));
+    // The repository's own instructions. The server used to drop these entirely.
+    fs.writeFileSync(path.join(root, 'AGENTS.md'), 'Fixture repository instructions.');
     fs.mkdirSync(path.join(root, 'agents', 'writer'), { recursive: true });
     fs.mkdirSync(path.join(root, 'agents', 'reviewer'), { recursive: true });
     fs.writeFileSync(path.join(root, 'agents', 'writer', 'profile.md'), '# Writer');
@@ -541,11 +543,22 @@ describe('headless startup', () => {
         '  </skill>\n' +
         '</available_skills>';
       const firstPrompt = streamSimple.mock.calls[0]?.[1].systemPrompt as string;
+      // AGENTS.md now reaches a server session, in Pi's own framing, as it always has
+      // in the terminal. Ungated, matching Pi: AGENTS.md is not a trust-gated resource.
+      expect(firstPrompt).toContain('<project_context>');
+      expect(firstPrompt).toContain('Project-specific instructions and guidelines:');
+      expect(firstPrompt).toContain('Fixture repository instructions.');
+      expect(firstPrompt).toContain('</project_instructions>');
       // Context resources stay unwrapped, so the persona still reads as instruction.
       expect(firstPrompt).toContain(
         'Fixture context\n\n[PERSONA] You are operating as the person described below (source: agents/writer).',
       );
-      expect(firstPrompt).toContain('Startup context\nFirst patch\nSecond patch');
+      expect(firstPrompt).toContain('Startup context');
+      // Pi puts the working directory last in the composed prompt; before_agent_start
+      // patches land after it, so the hook chain's output trails the cwd line.
+      expect(firstPrompt).toContain('Current working directory: ');
+      expect(firstPrompt).toContain('First patch\nSecond patch');
+      expect(firstPrompt.indexOf('Current working directory: ')).toBeLessThan(firstPrompt.indexOf('First patch'));
       // A path-bearing skill is advertised by name and location only; its body is not
       // in the prompt, and the pathless sibling is not advertised at all.
       expect(firstPrompt).toContain(SKILLS_BLOCK);

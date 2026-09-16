@@ -4,6 +4,7 @@ import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agim
 import { LIST_COMMAND_NAME, START_COMMAND_NAME } from '../../constants/loop';
 import type { DoomLoopLaunchersService, LoopLauncherRegistration, StoppableLoop } from '../../schemas/loopLaunchers';
 import { createDoomLoopLaunchersService, type LoopLaunchersDependencies } from '../../services/loopLaunchers';
+import { formatLoopStatusView, LOOP_VIEW_STATUS_KEY } from '../../types/loopView';
 
 const SOURCE = '@agimon-ai/doompi-loop';
 const MODE_ID = 'loop.active';
@@ -61,7 +62,20 @@ export function createSessionState(host: DoomHeadlessHostService): DoomServerSes
       ],
     };
   };
-  const publishMode = (): void => modeOwner?.publish();
+  /**
+   * The instances the activity dock lists.
+   *
+   * An empty list publishes an empty value rather than nothing, because the key
+   * being present is what keeps the group on screen as a launcher. The group
+   * declares no `hideWhenEmpty`, so an empty value is a header with no rows.
+   */
+  const publishView = (): void =>
+    host.context.client.setStatus(LOOP_VIEW_STATUS_KEY, formatLoopStatusView(launchers?.listInstances() ?? []));
+  /** Both surfaces a loop shows up on: the minor-mode catalog and the activity dock. */
+  const publishMode = (): void => {
+    modeOwner?.publish();
+    publishView();
+  };
   const startActivity = async (execution: typeof host.context): Promise<() => Promise<void>> => {
     if (launchers !== undefined) return async () => undefined;
     const dependencies: LoopLaunchersDependencies = {
@@ -241,6 +255,15 @@ export function createSessionState(host: DoomHeadlessHostService): DoomServerSes
       },
     ],
     hooks: [
+      {
+        // Ungated on purpose: the dock's loops group is a way in, so it has to
+        // exist before anyone selects loop mode. The activity below is gated on
+        // that selection and cannot do this job.
+        event: 'session_start',
+        async handle() {
+          publishView();
+        },
+      },
       {
         when: { state: { 'minor-mode': MODE_ID }, attribution: { kind: 'minor', mode: MODE_ID } },
         event: 'session_shutdown',

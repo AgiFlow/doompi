@@ -306,7 +306,11 @@ describe('active headless execution hooks', () => {
 
         await session.runtime.prompt('allowed');
         expect(contextEvents[0]).toMatchObject({ systemPrompt: expect.stringContaining('base') });
-        expect(contexts[0]?.systemPrompt).toBe('base transformed twice');
+        // The composed prompt now also carries Pi's working-directory line, so the
+        // hook chain's contribution is asserted rather than the whole string.
+        expect(contexts[0]?.systemPrompt).toContain('base');
+        expect(contexts[0]?.systemPrompt).toContain('transformed twice');
+        expect(contexts[0]?.systemPrompt).toContain('Current working directory:');
         const transformPayload = payloadCallbacks[0];
         expect(transformPayload).toBeTypeOf('function');
         await expect(transformPayload!({ raw: true }, model)).resolves.toEqual({
@@ -376,11 +380,11 @@ describe('active headless execution hooks', () => {
         contextFailure = true;
         await session.runtime.prompt('failed context').catch(() => undefined);
         expect(streamSimple).toHaveBeenCalledTimes(failure === 'throws' ? 9 : 8);
-        if (failure === 'throws') expect(contexts[8]?.systemPrompt).toBe('base twice');
+        if (failure === 'throws') expect(contexts[8]?.systemPrompt).toContain('twice');
         contextFailure = false;
         await session.runtime.prompt('recovered context');
         expect(streamSimple).toHaveBeenCalledTimes(failure === 'throws' ? 10 : 9);
-        expect(contexts[failure === 'throws' ? 9 : 8]?.systemPrompt).toBe('base transformed twice');
+        expect(contexts[failure === 'throws' ? 9 : 8]?.systemPrompt).toContain('transformed twice');
       } finally {
         await session?.dispose().catch(() => undefined);
         await apis?.close().catch(() => undefined);

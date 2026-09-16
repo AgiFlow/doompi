@@ -1,7 +1,6 @@
-
 import { api } from '../../../../../../../generated/client';
 import { NAME_PARAM } from '../../../../../../constants/promptsApi';
-import { isPromptErrorResponse, type SavedPromptView } from '../../../../../../types/webPrompts';
+import type { SavedPromptView } from '../../../../../../types/webPrompts';
 
 /**
  * The browser half of the prompt library API.
@@ -36,17 +35,6 @@ function scoped(sessionId?: string | null) {
   return sessionId == null ? api.global : api.session(sessionId);
 }
 
-
-async function readError(response: Response): Promise<string> {
-  try {
-    const body: unknown = await response.json();
-    if (isPromptErrorResponse(body)) return body.error;
-  } catch {
-    // A body that is not JSON tells the reader nothing useful; the status does.
-  }
-  return `The hub answered ${String(response.status)}.`;
-}
-
 /** The message a reader is shown for a refused call: the route's own words, or the status. */
 function messageOf(result: { status: number; error: string }): string {
   return result.error === '' ? `The hub answered ${String(result.status)}.` : result.error;
@@ -75,10 +63,10 @@ export async function saveSavedPrompt(
   sessionId?: string | null,
 ): Promise<Failure | undefined> {
   const result = await scoped(sessionId).save({ params: { [NAME_PARAM]: name }, body: { text } });
-  return result.ok ? undefined : { error: failureOf(result) };
+  return result.ok ? undefined : { error: result.status === 0 ? UNREACHABLE : messageOf(result) };
 }
 
 export async function deleteSavedPrompt(name: string, sessionId?: string | null): Promise<Failure | undefined> {
   const result = await scoped(sessionId).remove({ params: { [NAME_PARAM]: name } });
-  return result.ok ? undefined : { error: failureOf(result) };
+  return result.ok ? undefined : { error: result.status === 0 ? UNREACHABLE : messageOf(result) };
 }

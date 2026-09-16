@@ -112,7 +112,9 @@ describe('writing the library', () => {
   });
 
   it('keeps the selected hub bundle on mutations', async () => {
-    transport.mockResolvedValue(jsonResponse({ prompt: {}, replaced: false }));
+    // A fresh Response per call: a body can only be read once, and the client
+    // reads every answer to produce its data.
+    transport.mockImplementation(() => Promise.resolve(jsonResponse({ prompt: {}, replaced: false })));
 
     await saveSavedPrompt('review', 'body', 'session-a');
     await deleteSavedPrompt('review', 'session-a');

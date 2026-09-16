@@ -233,7 +233,8 @@ function methodFor(
   options: ApiClientOptions<ApiScopeName>,
 ): ApiMethod<unknown> | ApiStreamMethod {
   const basePath = spec.host === true ? undefined : options.basePath;
-  const url = (init?: Pick<ApiCallInit, 'query'>): string => pluginApiUrl(address, basePath, spec.path, init?.query);
+  const url = (init?: Pick<ApiCallInit, 'query' | 'params'>): string =>
+    pluginApiUrl(address, basePath, spec.path, init?.query, init?.params);
 
   const call = async (init?: ApiCallInit): Promise<ApiResult<unknown>> => {
     const encoded = encodeBody(init?.body);

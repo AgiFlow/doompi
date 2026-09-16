@@ -25,9 +25,22 @@ vi.mock('@agimon-ai/doompi-minor-mode', async (original) => ({
 }));
 
 import { PLAN_CONTINUE_TEXT, PLAN_EXIT_APPROVED_TEXT } from '../src/services/planMode';
+import { PlanPointerService } from '../src/services/planPointer';
 import { createPlanServerSession } from '../src/services/planServerSession';
-import { CONTINUE_PLANNING_CHOICE, EXIT_PLAN_MODE_CHOICE, PLAN_REVIEW_TITLE } from '../src/types/planApi';
+import {
+  CONTINUE_PLANNING_CHOICE,
+  EXIT_PLAN_MODE_CHOICE,
+  parsePlanStatus,
+  PLAN_REVIEW_TITLE,
+  PLAN_STATUS_KEY,
+} from '../src/types/planApi';
 
+/** The last activity-dock line the facet published, read back through the dock's parser. */
+function lastPlanStatus(setStatus: ReturnType<typeof vi.fn>): string | undefined {
+  const calls = setStatus.mock.calls.filter(([key]) => key === PLAN_STATUS_KEY);
+  if (calls.length === 0) throw new Error(`The facet never published ${PLAN_STATUS_KEY}`);
+  return calls[calls.length - 1]?.[1] as string | undefined;
+}
 function fixture() {
   let settings: DoomHeadlessModelSettings = { model: { provider: 'test', id: 'chat' }, thinkingLevel: 'medium' };
   const entries: Record<string, unknown>[] = [];
@@ -110,7 +123,7 @@ describe('server planning model settings', () => {
     const f = fixture();
     const activate = f.mount();
     await activate('activate', { flavor: 'normal' });
-    expect(mocks.config).toHaveBeenCalledWith('/repo', '/test-home');
+    expect(mocks.config).toHaveBeenCalledWith('/repo', f.home);
     expect(f.settings()).toEqual({ model: { provider: 'test', id: 'planner' }, thinkingLevel: 'max' });
     await activate('activate', { flavor: 'debug' });
     expect(f.setModelSettings).toHaveBeenCalledTimes(1);
@@ -162,6 +175,35 @@ describe('server planning evidence', () => {
       '# Approved Plan\n\n1. Verify settings.\n',
       expect.objectContaining({ flag: 'wx' }),
     );
+  });
+
+  it('announces the written plan to the activity dock, and again after a restart', async () => {
+    // A cockpit drives this facet and never the Pi runtime, so this is the only
+    // code that can put a plan in the dock or leave its panel a pointer to read.
+    const f = fixture();
+    f.selection.state['minor-mode'] = ['plan'];
+    f.entries.push({
+      type: 'message',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: '# Approved Plan\n\n1. Verify settings.' },
+          { type: 'toolCall', id: 'write', name: 'write_plan', arguments: {} },
+        ],
+      },
+    });
+    const tool = f.plugin().tools.find((tool) => tool.name === 'write_plan')!;
+    await tool.execute('write', {}, undefined, undefined, f.host.context);
+
+    expect(parsePlanStatus(lastPlanStatus(f.setStatus))).toMatchObject({ title: 'Approved Plan' });
+    // The panel answers from the pointer, so a status without one is a group
+    // whose tab 404s.
+    const pointer = new PlanPointerService({ env: { HOME: f.home } }).read('plan-server-session-test');
+    expect(pointer).toMatchObject({ title: 'Approved Plan' });
+
+    f.setStatus.mockClear();
+    await f.restart();
+    expect(parsePlanStatus(lastPlanStatus(f.setStatus))).toMatchObject({ title: 'Approved Plan' });
   });
   it('saves a plan that opens with prose before its first heading', async () => {
     const f = fixture();

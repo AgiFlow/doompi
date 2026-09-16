@@ -9,6 +9,7 @@ import type { Model, Api, Usage } from '@earendil-works/pi-ai';
 import {
   getAgentDir,
   ModelRuntime,
+  loadProjectContextFiles,
   parseArgs,
   resolveCliModel,
   resolveModelScopeWithDiagnostics,
@@ -437,6 +438,37 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   let toolGuidance: readonly ToolPromptEntry[] = [];
   const initialSystemPrompt = [parsed.systemPrompt, ...(parsed.appendSystemPrompt ?? [])].filter(Boolean).join('\n\n');
   /**
+   * AGENTS.md and friends, in Pi's own framing.
+   *
+   * The server had none of this: its prompt began at the --system-prompt flag, so a
+   * repository's own instructions reached a terminal session and never a cockpit one.
+   * Mirrors @earendil-works/pi-coding-agent@0.85.1 dist/core/system-prompt.js:21-27
+   * (the customPrompt branch, which is the shape this host matches). `buildSystemPrompt`
+   * is not exported and the package exports map has no wildcard, so the four literals
+   * below are copied; re-diff them against that file on upgrade.
+   *
+   * Not trust-gated, deliberately: TRUST_REQUIRING_PROJECT_CONFIG_RESOURCES in Pi's
+   * trust-manager covers settings.json, extensions, skills, prompts, themes, SYSTEM.md
+   * and APPEND_SYSTEM.md, all of which execute or replace instructions. AGENTS.md is
+   * advisory prose and Pi appends it unconditionally; gating it here would be a
+   * divergence from Pi rather than parity with it.
+   *
+   * Resolved once: cwd is fixed for the host's lifetime, and composeSystemPrompt runs
+   * on every generation.
+   */
+  const projectContextBlock = (() => {
+    const files = loadProjectContextFiles({ cwd: options.cwd, agentDir });
+    if (files.length === 0) return '';
+    const instructions = files
+      .map(
+        ({ path: filePath, content }) =>
+          `<project_instructions path="${filePath}">\n${content}\n</project_instructions>\n`,
+      )
+      .join('\n');
+    return `<project_context>\n\nProject-specific instructions and guidelines:\n\n${instructions}\n</project_context>`;
+  })();
+  const workingDirectoryLine = `Current working directory: ${options.cwd.replace(/\\/g, '/')}`;
+  /**
    * Everything the prompt is made of before a package has had a say.
    *
    * Shared with the runtime callback below rather than copied. Assembling it is
@@ -450,7 +482,16 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     // panel charged for an <available_skills> block the model never received. It
     // returns '' for an empty list and leads with a blank line of its own.
     const skills = formatSkillsForSystemPrompt(mapped.advertised).trim();
-    return [initialSystemPrompt, formatToolPrompt(toolGuidance), skills, ...mapped.context]
+    // Pi's order for the same sections: operator prompt, project context, tools,
+    // skills, package context, then the working directory last.
+    return [
+      initialSystemPrompt,
+      projectContextBlock,
+      formatToolPrompt(toolGuidance),
+      skills,
+      ...mapped.context,
+      workingDirectoryLine,
+    ]
       .filter(Boolean)
       .join('\n\n');
   };

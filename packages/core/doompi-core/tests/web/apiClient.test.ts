@@ -11,6 +11,7 @@ const ROUTES = defineApiRoutes({
   save: { method: 'PUT', path: '/content', response: apiResponse<{ hash: string }>() },
   remove: { method: 'DELETE', path: '/content', query: ['path'] },
   logStream: { method: 'GET', path: '/log/stream', stream: true },
+  named: { method: 'PUT', path: '/prompts/:name' },
   file: { method: 'GET', path: '/file', query: ['path'], host: true },
 });
 
@@ -201,5 +202,22 @@ describe('cancellation', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.status).toBe(0);
+  });
+});
+
+describe('path parameters through the client', () => {
+  it('substitutes a named segment on the URL it reports', () => {
+    const api = clientWith(() => Promise.resolve(new Response(null, { status: 204 })));
+    expect(api.session('s-1').named.url({ params: { name: 'a b' } })).toBe(
+      '/api/workspaces/ws-1/sessions/s-1/plugins/file-edits/prompts/a%20b',
+    );
+  });
+
+  it('substitutes it on the URL it actually calls, which is a separate path through the code', async () => {
+    const transport = vi.fn<ApiTransport>(() => Promise.resolve(new Response(null, { status: 204 })));
+    await clientWith(transport)
+      .session('s-1')
+      .named({ params: { name: 'review' }, body: { text: 'x' } });
+    expect(transport.mock.calls[0]?.[0]).toBe('/api/workspaces/ws-1/sessions/s-1/plugins/file-edits/prompts/review');
   });
 });
