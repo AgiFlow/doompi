@@ -77,6 +77,24 @@ than an inline child transcript. A shutdown requests suspension and writes resto
 session can list suspended work and explicitly restore it. Reopening does not automatically restart
 children, and Team does not promise that every run continues after its parent exits.
 
+## Agent identity
+
+Every spawned agent is given a generated identity of the form `{name}-{role}-{number}`, for example
+`alan-reviewer-3`. The role comes from the agent name with its package prefix dropped, and the number
+counts every agent in the session, so no two agents share an identity. An agent defined inline, with
+no agent file on disk, is shown as `bea-developer-2 (inline)`.
+
+The identity is the intercom member id, not a label beside one, so a peer can address exactly what it
+is shown:
+
+```text
+intercom({ action: "send", to: "alan-reviewer-3", message: "..." })
+subagent({ action: "status", id: "alan-reviewer-3" })
+```
+
+Run ids keep working everywhere, and they win when a name and an id collide. A restored run keeps the
+identity its peers already know rather than being renamed. Identities are unique within one root
+session and are not reused when a run ends.
 The root session scopes run results, transcripts, control inboxes, membership, intercom, and
 suspended records. State is stored in private, per-user temporary directories with per-session
 subdirectories. Suspended records are recoverable only while those temporary files remain. Launch

@@ -14,6 +14,7 @@ import { decodeGoalStateEntries } from '../../models/stateCodec';
 import { createGoal, goalSummary, isContradictoryCompletionSummary, transitionGoal } from '../../models/stateMachine';
 import { readGoalSkill } from '../../services/packageResources';
 import { parseGoalCommand, validateObjective } from '../../services/parser';
+import { buildGoalSystemPrompt } from '../../services/prompts';
 import {
   goalToolNamesForState,
   validateBlockedInput,
@@ -300,7 +301,11 @@ export function createGoalServer(host: DoomHeadlessHostService): Omit<DoomServer
         handle(event) {
           if (!goal || goal.status !== 'active') return undefined;
           const prompt = typeof event.systemPrompt === 'string' ? event.systemPrompt : '';
-          return { systemPrompt: `${prompt}\n\n[GOAL ACTIVE]\nGoal ID: ${goal.id}\n${goalSummary(goal)}`.trim() };
+          // The same builder the Pi facet uses. It is what fences the objective in
+          // XML-escaped <goal_objective> and tells the model to read it as task data
+          // rather than instructions; goalSummary interpolates goal.text raw, so the
+          // server used to hand user-authored text to the model as system authority.
+          return { systemPrompt: `${prompt}\n\n${buildGoalSystemPrompt(goal)}`.trim() };
         },
       },
     ],

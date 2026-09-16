@@ -120,6 +120,24 @@ describe('the subagent card result view', () => {
     });
   });
 
+  // The label stays the run id because that is what a reader copies back into
+  // a status call; the identity leads the detail so the row still says who it is.
+  it('leads the fleet detail with the identity and marks an inline run', () => {
+    const view = subagentResultView({
+      runs: [
+        { runId: 'run-1', identity: 'alan-reviewer-1', agent: 'doompi-reviewer', status: 'running' },
+        { runId: 'run-2', identity: 'bea-developer-2', inline: true, agent: 'doompi-developer', status: 'running' },
+        { runId: 'run-3', agent: 'legacy-run-without-identity', status: 'running' },
+      ],
+    });
+
+    expect(view?.rows.map((row) => [row.label, row.detail])).toEqual([
+      ['run-1', 'alan-reviewer-1 · doompi-reviewer'],
+      ['run-2', 'bea-developer-2 (inline) · doompi-developer'],
+      ['run-3', 'legacy-run-without-identity'],
+    ]);
+  });
+
   it('tones the fleet rows by run state, under either key', () => {
     const view = subagentResultView({
       runs: [
