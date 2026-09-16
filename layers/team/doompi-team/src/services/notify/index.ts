@@ -55,6 +55,7 @@
  * - Calling `batcher.push()` for anything whose status is not `'completed'`
  */
 
+import { formatAgentIdentity } from '../agentIdentity';
 import {
   type CompletionBatchConfig,
   type CompletionBatcher,
@@ -75,6 +76,9 @@ const GROUPED_SUCCESS_ACTION =
 /** What a completion actually renders as, independent of the raw result shape. */
 export interface CompletionNotifyDetails {
   agent: string;
+  /** Generated addressable identity, absent for a run that predates identities. */
+  identity?: string;
+  inline?: boolean;
   /**
    * The run this completion belongs to.
    *
@@ -121,10 +125,15 @@ function formatSessionLine(details: CompletionNotifyDetails): string | undefined
   return details.sessionLabel ? `${details.sessionLabel}: ${details.sessionValue}` : details.sessionValue;
 }
 
+/** Who finished, preferring the generated identity and falling back to the bare agent name. */
+function completionLabel(details: CompletionNotifyDetails): string {
+  return formatAgentIdentity(details.identity, details.inline) ?? details.agent;
+}
+
 export function formatSingleCompletion(details: CompletionNotifyDetails): string {
   const sessionLine = formatSessionLine(details);
   return [
-    `Background task ${details.status}: **${details.agent}**${details.taskInfo ?? ''}`,
+    `Background task ${details.status}: **${completionLabel(details)}**${details.taskInfo ?? ''}`,
     `run id: ${details.runId}`,
     '',
     details.resultPreview.trim() ? details.resultPreview : EMPTY_OUTPUT,
@@ -140,14 +149,14 @@ export function formatSingleCompletion(details: CompletionNotifyDetails): string
 }
 
 export function formatGroupedCompletion(details: CompletionNotifyDetails[]): string {
-  const header = `Background tasks completed (${details.length}): ${details.map((d) => `**${d.agent}**${d.taskInfo ?? ''}`).join(', ')}`;
+  const header = `Background tasks completed (${details.length}): ${details.map((d) => `**${completionLabel(d)}**${d.taskInfo ?? ''}`).join(', ')}`;
   const blocks: string[] = [header, ''];
   for (let index = 0; index < details.length; index++) {
     const detail = details[index];
     if (!detail) continue;
     const sessionLine = formatSessionLine(detail);
     const hasPreview = detail.resultPreview.trim().length > 0;
-    blocks.push(`${index + 1}. ${detail.agent}${detail.taskInfo ?? ''} - run id: ${detail.runId}`);
+    blocks.push(`${index + 1}. ${completionLabel(detail)}${detail.taskInfo ?? ''} - run id: ${detail.runId}`);
     blocks.push(hasPreview ? detail.resultPreview : EMPTY_OUTPUT);
     if (detail.handoffPath) blocks.push(`Parallel handoff: ${detail.handoffPath}`);
     if (sessionLine) blocks.push(sessionLine);
@@ -173,10 +182,10 @@ export function formatCompletionHeadline(details: CompletionNotifyDetails[]): st
   const first = details[0];
   if (!first) return 'Background task finished';
   if (details.length === 1) {
-    return `Background task ${first.status}: ${first.agent}${first.taskInfo ?? ''} (${first.runId})`;
+    return `Background task ${first.status}: ${completionLabel(first)}${first.taskInfo ?? ''} (${first.runId})`;
   }
   return `Background tasks finished (${details.length}): ${details
-    .map((detail) => `${detail.agent}${detail.taskInfo ?? ''}`)
+    .map((detail) => `${completionLabel(detail)}${detail.taskInfo ?? ''}`)
     .join(', ')}`;
 }
 /** Narrow an opaque `RunResultFile` field to a string, the same defensive read used throughout. */
@@ -198,6 +207,8 @@ function completionGroupKey(result: RunResultFile): string {
 /** Turn a raw, opaque result record into what `formatSingleCompletion`/`formatGroupedCompletion` render. */
 export function buildCompletionDetails(result: RunResultFile): CompletionNotifyDetails {
   const agent = asString(result.agent) ?? UNKNOWN_VALUE;
+  const identity = asString(result.identity);
+  const inline = result.inline === true;
   const summary = asString(result.summary) ?? '';
   const success = typeof result.success === 'boolean' ? result.success : undefined;
   const state = asString(result.state);
@@ -228,6 +239,7 @@ export function buildCompletionDetails(result: RunResultFile): CompletionNotifyD
 
   return {
     agent,
+    ...(identity ? { identity, inline } : {}),
     // `RunResultFile` guarantees `runId` (see `resultWatcher.ts`), so there is
     // no honest fallback to invent here - an empty string would be a run id the
     // model could not use, dressed up as one it could.

@@ -1,7 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { BUILD_TARGET_PLATFORMS, GENERATED_DIR, GENERATED_ENTRY_NAMES } from '../../constants/layout';
+import {
+  BUILD_TARGET_PLATFORMS,
+  GENERATED_DIR,
+  GENERATED_ENTRY_FILENAMES,
+  GENERATED_ENTRY_NAMES,
+} from '../../constants/layout';
 import type { ExtensionGraph, ExtensionNotice } from '../../types/extensionGraph';
 import { renderCliEntry, renderServerEntry, renderWebEntry } from '../renderEntry';
 import { resolveTarget } from '../resolveTarget';
@@ -28,11 +33,7 @@ const RENDERERS: Readonly<Record<BuildTarget, typeof renderCliEntry>> = {
 };
 
 /** The generated entry keeps its historical filename so no consumer has to change. */
-const ENTRY_FILENAME: Readonly<Record<BuildTarget, string>> = {
-  cli: GENERATED_ENTRY_NAMES[0] as string,
-  server: GENERATED_ENTRY_NAMES[1] as string,
-  web: GENERATED_ENTRY_NAMES[2] as string,
-};
+const ENTRY_FILENAME: Readonly<Record<BuildTarget, string>> = GENERATED_ENTRY_FILENAMES;
 
 const ENTRY_EXTENSION: Readonly<Record<BuildTarget, string>> = { cli: 'ts', server: 'ts', web: 'ts' };
 

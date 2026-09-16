@@ -1,4 +1,37 @@
-export { bindSessionApiWorkspace, sessionApiPath } from '../web/services/apiRoutes';
+export {
+  bindSessionApiWorkspace,
+  globalApiPath,
+  sessionApiAddress,
+  sessionApiPath,
+  workspaceApiPath,
+} from '../web/services/apiRoutes';
+export {
+  apiQueryString,
+  pluginApiBase,
+  pluginApiUrl,
+  scopeApiRoot,
+  SETTINGS_BASE_PATH,
+  type ApiQuery,
+  type ApiScopeAddress,
+} from '../web/services/apiPaths';
+export {
+  apiResponse,
+  createApiClient,
+  defineApiRoutes,
+  type ApiCallInit,
+  type ApiClient,
+  type ApiClientOptions,
+  type ApiMethod,
+  type ApiResponseOf,
+  type ApiResult,
+  type ApiRouteMethod,
+  type ApiRoutes,
+  type ApiRouteSpec,
+  type ApiScopeClient,
+  type ApiScopeName,
+  type ApiStreamMethod,
+  type ApiTransport,
+} from '../web/services/apiClient';
 export {
   defineActivityGroup,
   defineChannelFile,

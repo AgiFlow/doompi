@@ -10,8 +10,18 @@ import type { NativeRunProjectionSink } from '../nativeRunProjection';
 import type { CompletionNotifierContract } from '../notify';
 import type { SessionScope } from '../sessionPaths';
 
+/** Team-owned run identity, carried beside the shared child request rather than inside it. */
+export interface NativeRunIdentity {
+  readonly identity: string;
+  readonly inline: boolean;
+}
+
 export interface NativeRunCoordinatorContract {
-  start(sessionId: string, request: DoomChildSessionRequest): Promise<DoomChildSessionHandle>;
+  start(
+    sessionId: string,
+    request: DoomChildSessionRequest,
+    identity?: NativeRunIdentity,
+  ): Promise<DoomChildSessionHandle>;
   get(sessionId: string, runId: string): DoomChildSessionHandle | undefined;
   status(sessionId: string, runId: string): NativeAsyncJobProjection | undefined;
   steer(sessionId: string, runId: string, message: string, signal?: AbortSignal): Promise<void>;
@@ -23,6 +33,7 @@ interface NativeRunEntry {
   readonly sessionId: string;
   readonly scope: SessionScope;
   readonly request: DoomChildSessionRequest;
+  readonly identity?: NativeRunIdentity;
   readonly handle: DoomChildSessionHandle;
   unsubscribe?: () => void;
   startedAt?: number;
@@ -49,7 +60,11 @@ export class NativeRunCoordinator implements NativeRunCoordinatorContract {
     private readonly projection?: NativeRunProjectionSink,
   ) {}
 
-  async start(sessionId: string, request: DoomChildSessionRequest): Promise<DoomChildSessionHandle> {
+  async start(
+    sessionId: string,
+    request: DoomChildSessionRequest,
+    identity?: NativeRunIdentity,
+  ): Promise<DoomChildSessionHandle> {
     if (this.closed) throw new Error('The native Team run coordinator is closed.');
     if (!sessionId.trim()) throw new Error('Native child runs require a session identity.');
     const service = this.childSessions?.get();
@@ -63,6 +78,7 @@ export class NativeRunCoordinator implements NativeRunCoordinatorContract {
       sessionId,
       scope: request.scope,
       request,
+      ...(identity ? { identity } : {}),
       handle,
       terminal: false,
     };
@@ -123,6 +139,9 @@ export class NativeRunCoordinator implements NativeRunCoordinatorContract {
     const projection: NativeAsyncJobProjection = {
       runId: event.runId,
       agent: entry.request.agent,
+      // Carried on the projection, not merged in by the tracker, because
+      // `upsertNative` replaces the record wholesale on every event.
+      ...(entry.identity ? { identity: entry.identity.identity, inline: entry.identity.inline } : {}),
       task: entry.request.task,
       cwd: entry.request.cwd,
       runtime: 'pi',
@@ -143,6 +162,9 @@ export class NativeRunCoordinator implements NativeRunCoordinatorContract {
     const result = {
       runId: entry.request.runId,
       agent: entry.request.agent,
+      // The completion message is the only thing the model sees when a run
+      // ends, so it names the agent the same way every other surface does.
+      ...(entry.identity ? { identity: entry.identity.identity, inline: entry.identity.inline } : {}),
       task: entry.request.task,
       cwd: entry.request.cwd,
       runtime: 'pi',

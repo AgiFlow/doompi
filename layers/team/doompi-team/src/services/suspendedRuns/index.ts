@@ -27,6 +27,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import type { InlineAgent } from '../../schemas/subagentTool';
+import { formatAgentIdentity } from '../agentIdentity';
 import { writeAtomicJson, writeAtomicJsonAsync } from '../atomicJson';
 import { type SessionScope, scopeSuspendedDir } from '../sessionPaths';
 import { parseVersioned } from '../versioned';
@@ -38,6 +39,10 @@ export interface SuspendedRun {
   version: typeof SUSPENDED_RUN_VERSION;
   runId: string;
   agent: string;
+  /** Generated addressable identity, reclaimed by a restore instead of re-minted. */
+  identity?: string;
+  /** True when this run came from a one-shot inline agent definition. */
+  inline?: boolean;
   runtime: string;
   task: string;
   cwd: string;
@@ -164,12 +169,18 @@ export async function isSuspendedRunResumableAsync(run: SuspendedRun): Promise<b
   }
 }
 
+/** The identity prefix for a suspended line, empty for a record written before identities existed. */
+function suspendedLabel(run: SuspendedRun): string {
+  const label = formatAgentIdentity(run.identity, run.inline);
+  return label ? `${label}, ` : '';
+}
+
 /** One line per suspended run, for the report `session_start` prints. */
 export function formatSuspendedRuns(runs: SuspendedRun[]): string {
   if (runs.length === 0) return '';
   const lines = runs.map((run) => {
     const continues = isSuspendedRunResumable(run) ? 'resumable' : 'not resumable';
-    return `- ${run.runId} (${run.agent}, ${run.runtime}, ${continues}): ${run.task.split('\n')[0]}`;
+    return `- ${run.runId} (${suspendedLabel(run)}${run.agent}, ${run.runtime}, ${continues}): ${run.task.split('\n')[0]}`;
   });
   const noun = runs.length === 1 ? 'subagent' : 'subagents';
   return [
@@ -185,7 +196,7 @@ export async function formatSuspendedRunsAsync(runs: SuspendedRun[]): Promise<st
   const resumable = await Promise.all(runs.map((run) => isSuspendedRunResumableAsync(run)));
   const lines = runs.map((run, index) => {
     const continues = resumable[index] ? 'resumable' : 'not resumable';
-    return `- ${run.runId} (${run.agent}, ${run.runtime}, ${continues}): ${run.task.split('\n')[0]}`;
+    return `- ${run.runId} (${suspendedLabel(run)}${run.agent}, ${run.runtime}, ${continues}): ${run.task.split('\n')[0]}`;
   });
   const noun = runs.length === 1 ? 'subagent' : 'subagents';
   return [

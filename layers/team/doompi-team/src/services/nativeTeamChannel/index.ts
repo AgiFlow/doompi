@@ -62,6 +62,7 @@ export interface TeamMemberContext extends TeamRootContext {
   token: string;
   role: TeamMemberRole;
   agent?: string;
+  inline?: boolean;
   runId?: string;
   childIndex?: number;
   parentMemberId?: string;
@@ -72,6 +73,8 @@ export interface NativeTeamMemberSnapshot {
   name: string;
   role: TeamMemberRole;
   agent?: string;
+  /** True when this run came from a one-shot inline agent definition. */
+  inline?: boolean;
   runId?: string;
   task?: TeamTaskMetadata;
 }
@@ -167,7 +170,17 @@ export function normalizeTeamMemberName(raw: string): string {
   return normalized || FALLBACK_MEMBER_NAME;
 }
 
+/**
+ * The member id, which is also the address a peer sends to.
+ *
+ * A generated identity (`alan-reviewer-3`) already survives
+ * `normalizeTeamMemberName` unchanged and is unique per session, so it is used
+ * verbatim. The older `<agent>-<runId prefix>` shape remains the fallback for a
+ * run whose identity could not be claimed, so a spawn never fails for want of
+ * a name.
+ */
 function directMemberName(input: NativeTeamChildIntercomInput): string {
+  if (input.identity?.trim()) return guardReservedName(normalizeTeamMemberName(input.identity), false);
   const base = guardReservedName(normalizeTeamMemberName(input.agent), false);
   const suffix = normalizeTeamMemberName(input.runId).slice(0, 8);
   const room = MAX_MEMBER_NAME_LENGTH - suffix.length - FANOUT_SUFFIX_SEPARATOR.length;
@@ -276,6 +289,7 @@ function publicMember(context: TeamMemberContext): NativeTeamMemberSnapshot {
     name: context.memberId,
     role: context.role,
     ...(context.agent ? { agent: context.agent } : {}),
+    ...(context.inline ? { inline: true } : {}),
     ...(context.runId ? { runId: context.runId } : {}),
     ...(context.task ? { task: context.task } : {}),
   };
@@ -287,7 +301,7 @@ function formatDirectMessage(
   requestId: string,
   message: string,
 ): string {
-  return `${kind === 'ask' ? 'Question' : 'Message'} from ${from.memberId}${from.agent ? ` (${from.agent})` : ''}.\n\n${message}${kind === 'ask' ? `\n\nReply with ${NATIVE_TEAM_TOOL_NAME}({ action: "reply", requestId: "${requestId}", message: "..." }).` : ''}`;
+  return `${kind === 'ask' ? 'Question' : 'Message'} from ${from.memberId}${from.inline ? ' (inline)' : ''}${from.agent ? ` [${from.agent}]` : ''}.\n\n${message}${kind === 'ask' ? `\n\nReply with ${NATIVE_TEAM_TOOL_NAME}({ action: "reply", requestId: "${requestId}", message: "..." }).` : ''}`;
 }
 
 interface DirectMember {
@@ -308,6 +322,9 @@ interface DirectAsk {
 export interface NativeTeamChildIntercomInput {
   readonly rootSessionId: string;
   readonly agent: string;
+  /** Generated addressable identity. Absent only when its claim could not be written. */
+  readonly identity?: string;
+  readonly inline?: boolean;
   readonly runId: string;
   readonly childIndex?: number;
   readonly task?: TeamTaskMetadata;
@@ -343,6 +360,7 @@ class NativeTeamDirectChannel {
       token: newToken(),
       role: 'subagent',
       agent: input.agent,
+      ...(input.inline ? { inline: true } : {}),
       runId: input.runId,
       ...(input.childIndex === undefined ? {} : { childIndex: input.childIndex }),
       ...(input.task === undefined ? {} : { task: validateTask(input.task) }),
@@ -434,7 +452,9 @@ class NativeTeamDirectChannel {
           {
             type: 'text',
             text: snapshots.length
-              ? snapshots.map((entry) => `- ${entry.name}: ${entry.agent ?? entry.name}`).join('\n')
+              ? snapshots
+                  .map((entry) => `- ${entry.name}${entry.inline ? ' (inline)' : ''}: ${entry.agent ?? entry.name}`)
+                  .join('\n')
               : 'No active members.',
           },
         ],

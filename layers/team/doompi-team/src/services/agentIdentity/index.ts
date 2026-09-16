@@ -62,22 +62,134 @@ const MAX_CLAIM_ATTEMPTS = 4096;
  * distinct. There is therefore no exhaustion case to handle.
  */
 export const AGENT_NAMES: readonly string[] = Object.freeze([
-  'alan', 'bea', 'cyrus', 'dara', 'elin', 'faris', 'gita', 'hugo',
-  'ines', 'jonas', 'kira', 'liam', 'mira', 'nadia', 'omar', 'petra',
-  'quinn', 'rosa', 'said', 'tessa', 'uma', 'viktor', 'wren', 'xenia',
-  'yusuf', 'zara', 'anika', 'bruno', 'clara', 'dmitri', 'esme', 'felix',
-  'greta', 'hana', 'idris', 'juno', 'kasper', 'lena', 'mateo', 'nora',
-  'oskar', 'pilar', 'rafiq', 'sonia', 'tomas', 'ulla', 'vera', 'wade',
-  'yara', 'zane', 'amara', 'bodhi', 'celia', 'darian', 'edda', 'fiona',
-  'gunnar', 'helia', 'ivan', 'jasmin', 'kaito', 'lucia', 'milan', 'nilsa',
-  'otto', 'paloma', 'rhea', 'stellan', 'tariq', 'ursula', 'vidal', 'wilma',
-  'yannis', 'zoya', 'adele', 'basim', 'cato', 'delia', 'emil', 'freya',
-  'gabor', 'hilda', 'ismael', 'janna', 'kuno', 'leif', 'maren', 'niall',
-  'odette', 'pavel', 'rania', 'sixten', 'thea', 'urban', 'vesna', 'wolf',
-  'yestin', 'zelda', 'agnes', 'boris', 'cosima', 'dario', 'elias', 'fatima',
-  'gilles', 'hedda', 'ilan', 'jorja', 'kemal', 'linnea', 'matias', 'noor',
-  'olen', 'petros', 'rilla', 'soren', 'tova', 'ugo', 'valdis', 'wanda',
-  'yosef', 'zinnia', 'arlo', 'birta', 'ciaran', 'dagny', 'eero', 'fabia',
+  'alan',
+  'bea',
+  'cyrus',
+  'dara',
+  'elin',
+  'faris',
+  'gita',
+  'hugo',
+  'ines',
+  'jonas',
+  'kira',
+  'liam',
+  'mira',
+  'nadia',
+  'omar',
+  'petra',
+  'quinn',
+  'rosa',
+  'said',
+  'tessa',
+  'uma',
+  'viktor',
+  'wren',
+  'xenia',
+  'yusuf',
+  'zara',
+  'anika',
+  'bruno',
+  'clara',
+  'dmitri',
+  'esme',
+  'felix',
+  'greta',
+  'hana',
+  'idris',
+  'juno',
+  'kasper',
+  'lena',
+  'mateo',
+  'nora',
+  'oskar',
+  'pilar',
+  'rafiq',
+  'sonia',
+  'tomas',
+  'ulla',
+  'vera',
+  'wade',
+  'yara',
+  'zane',
+  'amara',
+  'bodhi',
+  'celia',
+  'darian',
+  'edda',
+  'fiona',
+  'gunnar',
+  'helia',
+  'ivan',
+  'jasmin',
+  'kaito',
+  'lucia',
+  'milan',
+  'nilsa',
+  'otto',
+  'paloma',
+  'rhea',
+  'stellan',
+  'tariq',
+  'ursula',
+  'vidal',
+  'wilma',
+  'yannis',
+  'zoya',
+  'adele',
+  'basim',
+  'cato',
+  'delia',
+  'emil',
+  'freya',
+  'gabor',
+  'hilda',
+  'ismael',
+  'janna',
+  'kuno',
+  'leif',
+  'maren',
+  'niall',
+  'odette',
+  'pavel',
+  'rania',
+  'sixten',
+  'thea',
+  'urban',
+  'vesna',
+  'wolf',
+  'yestin',
+  'zelda',
+  'agnes',
+  'boris',
+  'cosima',
+  'dario',
+  'elias',
+  'fatima',
+  'gilles',
+  'hedda',
+  'ilan',
+  'jorja',
+  'kemal',
+  'linnea',
+  'matias',
+  'noor',
+  'olen',
+  'petros',
+  'rilla',
+  'soren',
+  'tova',
+  'ugo',
+  'valdis',
+  'wanda',
+  'yosef',
+  'zinnia',
+  'arlo',
+  'birta',
+  'ciaran',
+  'dagny',
+  'eero',
+  'fabia',
 ]);
 
 /** One claimed identity, written before the run it names is spawned. */
@@ -120,7 +232,10 @@ export function agentIdentitiesDir(scope: SessionScope): string {
  * every agent a package ships, so it is the part that carries no information.
  */
 export function roleFromAgent(agent: string): string {
-  const segments = agent.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const segments = agent
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
   const role = (segments.at(-1) ?? '').slice(0, MAX_ROLE_LENGTH);
   return role || FALLBACK_ROLE;
 }
@@ -132,16 +247,18 @@ export function composeIdentity(role: string, sequence: number): string {
 
 /** The pre-identity member id, kept as the degraded shape when a claim cannot be written. */
 function fallbackIdentity(input: AgentIdentityInput): string {
-  const base = input.agent.toLowerCase().replace(UNSAFE_IDENTITY_CHARS, '-').replace(/^-+|-+$/g, '');
+  const base = input.agent
+    .toLowerCase()
+    .replace(UNSAFE_IDENTITY_CHARS, '-')
+    .replace(/^-+|-+$/g, '');
   return `${base || FALLBACK_ROLE}-${input.runId.slice(0, 8)}`;
 }
 
 function readClaim(file: string): AgentIdentityClaim | undefined {
   try {
-    const parsed = parseVersioned<AgentIdentityClaim>(
-      JSON.parse(fs.readFileSync(file, 'utf-8')),
-      [IDENTITY_RECORD_VERSION],
-    );
+    const parsed = parseVersioned<AgentIdentityClaim>(JSON.parse(fs.readFileSync(file, 'utf-8')), [
+      IDENTITY_RECORD_VERSION,
+    ]);
     return parsed.ok ? parsed.value : undefined;
   } catch {
     return undefined;
@@ -162,21 +279,38 @@ function toIdentity(claim: AgentIdentityClaim, persisted: boolean): AgentIdentit
 /**
  * Claim the next free identity in this session.
  *
- * Re-claiming for the same run id returns the existing identity rather than
- * consuming another number, which keeps an operation-journal replay idempotent
- * without the journal needing to know identities exist.
+ * A run id that already holds a claim gets it back rather than a second one.
+ * That lookup has to happen before allocation, not as a side effect of
+ * colliding during it: allocation starts past the existing claims, so it would
+ * never meet the run's own file and would quietly mint a duplicate identity
+ * for a replayed operation.
  */
 export function claimAgentIdentity(scope: SessionScope, input: AgentIdentityInput): AgentIdentity {
   const role = roleFromAgent(input.agent);
   const directory = agentIdentitiesDir(scope);
-  let sequence = 1;
+  const degraded: AgentIdentity = {
+    identity: fallbackIdentity(input),
+    name: '',
+    role,
+    number: 0,
+    inline: input.inline,
+    persisted: false,
+  };
+
+  let entries: string[];
   try {
     fs.mkdirSync(directory, { recursive: true });
-    sequence = fs.readdirSync(directory).length + 1;
+    entries = fs.readdirSync(directory);
   } catch {
-    return { identity: fallbackIdentity(input), name: '', role, number: 0, inline: input.inline, persisted: false };
+    return degraded;
   }
 
+  for (const entry of entries) {
+    const existing = readClaim(path.join(directory, entry));
+    if (existing?.runId === input.runId) return toIdentity(existing, true);
+  }
+
+  let sequence = entries.length + 1;
   for (let attempt = 0; attempt < MAX_CLAIM_ATTEMPTS; attempt += 1, sequence += 1) {
     const identity = composeIdentity(role, sequence);
     const file = path.join(directory, `${identity}.json`);
@@ -195,15 +329,14 @@ export function claimAgentIdentity(scope: SessionScope, input: AgentIdentityInpu
       fs.writeFileSync(file, `${JSON.stringify(claim)}\n`, { flag: 'wx', mode: 0o600 });
       return toIdentity(claim, true);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-        return { identity: fallbackIdentity(input), name: '', role, number: 0, inline: input.inline, persisted: false };
-      }
+      // Anything but a taken number is a real filesystem problem, and a run
+      // must not fail because it could not be given a pretty name.
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') return degraded;
       const existing = readClaim(file);
-      // Our own claim, seen again through a replayed operation.
       if (existing?.runId === input.runId) return toIdentity(existing, true);
     }
   }
-  return { identity: fallbackIdentity(input), name: '', role, number: 0, inline: input.inline, persisted: false };
+  return degraded;
 }
 
 /**

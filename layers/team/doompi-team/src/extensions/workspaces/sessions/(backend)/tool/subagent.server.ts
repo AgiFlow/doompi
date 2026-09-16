@@ -118,8 +118,10 @@ function subagentTool(
             }),
           );
           // An agent whose resolved default context is `fork` needs a parent
-          // branch here too, not only on the delegation path.
-          const parentForkSource = await execution.session.forkSource?.();
+          // branch here too, not only on the delegation path. Accessed
+          // defensively: a host that cannot offer a branch must degrade to a
+          // fresh child, never fail the launch.
+          const parentForkSource = await execution.session?.forkSource?.();
           const plan = await runtime.spawnPlanner.spawn(
             {
               tasks: params.requests.map((request) => ({
@@ -143,7 +145,14 @@ function subagentTool(
             },
             loadConfig().config,
           );
-          for (const outcome of plan.outcomes) if (outcome.runId) jobs.track(outcome.runId);
+          for (const outcome of plan.outcomes) {
+            if (outcome.runId) {
+              jobs.track(
+                outcome.runId,
+                outcome.identity ? { identity: outcome.identity, inline: outcome.inline ?? false } : undefined,
+              );
+            }
+          }
           return result(formatSpawnPlan(plan), plan);
         }
         if (params.action === SUBAGENT_ACTIONS.status) {
@@ -190,6 +199,7 @@ function subagentTool(
               cwd: suspended.cwd,
               ...(suspended.model ? { model: suspended.model } : {}),
               sessionFile: suspended.sessionFile,
+              ...(suspended.identity ? { identity: suspended.identity } : {}),
             },
             cwd: suspended.cwd,
             agentScope: 'both',

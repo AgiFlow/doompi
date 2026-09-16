@@ -7,6 +7,7 @@ import type { SubagentRun } from '../../../../../../types/webSubagents';
 import { agentThreadTab } from '../../_components/AgentThreadPanel';
 import { subagentsTab } from '../../_components/SubagentsPanel';
 import { openCatalog } from '../../_lib/catalogStore';
+import { agentRunLabel } from '../../_lib/format';
 import { formatRunDuration } from '../../_lib/format';
 import { activityRuns, isTerminalRun, subagents } from '../../_lib/subagentsStore';
 
@@ -90,7 +91,7 @@ export function AgentsActivitySection({ sessionId, openTransientTab }: WebPlugin
             <span
               className={`min-w-0 flex-1 truncate text-xs font-bold ${isTerminalRun(run) ? 'text-doom-dim' : 'text-doom-hi'}`}
             >
-              {run.agent}
+              {agentRunLabel(run)}
             </span>
             <span className="shrink-0 text-2xs text-doom-faint">
               {elapsed(run, now)}

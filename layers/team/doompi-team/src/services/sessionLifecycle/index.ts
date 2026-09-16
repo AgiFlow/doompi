@@ -23,6 +23,11 @@ function suspendedRecord(job: TrackedAsyncJob, reason: string, suspendedAt: numb
   return {
     runId: job.runId,
     agent: job.agent ?? 'unknown',
+    // Copied explicitly. This function is the only producer of a suspended
+    // record, so a field declared on SuspendedRun but not restated here is
+    // dead on arrival, which is what already happened to inlineAgent and model.
+    ...(job.identity === undefined ? {} : { identity: job.identity }),
+    ...(job.inline === undefined ? {} : { inline: job.inline }),
     runtime: job.runtime ?? (job.native ? 'pi' : 'external'),
     task: job.task ?? '',
     cwd: job.cwd ?? '',

@@ -35,6 +35,7 @@ import {
   wrapTextWithAnsi,
 } from '@earendil-works/pi-tui';
 
+import { formatAgentIdentity } from '../../../../../../services/agentIdentity';
 import type { AsyncRunStatus } from '../../../../../../services/asyncExecution';
 import type { TrackedAsyncJobsContract, TrackedAsyncJob } from '../../../../../../services/asyncJobTracker';
 import { formatDuration, formatModelThinking, formatTokens } from '../../../../../../services/displayFormat';
@@ -179,7 +180,10 @@ export function collectFleetSnapshot(tracker: TrackedAsyncJobsContract): FleetSn
   const items = tracker.list().map((job): FleetItem => ({
     key: job.runId,
     runId: job.runId,
-    agent: job.agent ?? job.runId.slice(0, 8),
+    // The generated identity is what the roster shows, because a fan-out of
+    // one agent otherwise renders as N identical rows. `agent` stays raw in
+    // `job`, which is what the detail pane and every lookup still read.
+    agent: formatAgentIdentity(job.identity, job.inline) ?? job.agent ?? job.runId.slice(0, 8),
     state: job.status ?? 'unknown',
     updatedAt: job.updatedAt ?? job.startedAt ?? 0,
     startedAt: job.startedAt,

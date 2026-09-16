@@ -66,8 +66,8 @@ import {
 import type { AgentConfig, AgentScope, AgentDiscoveryContract } from '../../types/agent';
 import { PI_RUNTIME_NAME } from '../../types/environment';
 import { type AdmissionGateContract, type AdmissionTicket, DEFAULT_ADMISSION_TIMEOUT_MS } from '../admissionGate';
-import { adoptAgentIdentity, type AgentIdentity, claimAgentIdentity, roleFromAgent } from '../agentIdentity';
 import { resolveActiveTeamModelSpecs, resolveActiveTeamPackageConfig } from '../agentDiscovery';
+import { adoptAgentIdentity, type AgentIdentity, claimAgentIdentity, roleFromAgent } from '../agentIdentity';
 import { canonicalizeDiscoveryCwd } from '../agentProjectRoot';
 import { buildSkillInjection, type SkillDiscoveryContract } from '../agentSkills';
 import type {
@@ -121,12 +121,7 @@ function readableSessionFile(sessionFile: string | undefined): sessionFile is st
  * session-format problem. The reason is carried to the throw site so the error
  * names the condition that actually fired.
  */
-export type ForkCaptureFailure =
-  | 'no-leaf'
-  | 'no-header'
-  | 'unsupported-version'
-  | 'branch-mismatch'
-  | 'no-session-id';
+export type ForkCaptureFailure = 'no-leaf' | 'no-header' | 'unsupported-version' | 'branch-mismatch' | 'no-session-id';
 
 export type ForkCaptureResult =
   | { readonly ok: true; readonly source: SessionForkSource }
@@ -837,7 +832,6 @@ export class SpawnPlanner implements SpawnPlannerContract {
           runId,
           childIndex,
           task: { id: runId, subject: task },
-        });
         });
         let child: Awaited<ReturnType<NativeRunCoordinatorContract['start']>>;
         try {

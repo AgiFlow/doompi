@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 
+import { DOOM_DELEGATION_SERVICE, type DoomDelegationService } from '@agimon-ai/doompi-core/delegation';
 import {
   DOOM_HEADLESS_HOST_SERVICE,
   type DoomHeadlessActivity,
@@ -8,7 +9,6 @@ import {
   type DoomHeadlessTool,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
-import { DOOM_DELEGATION_SERVICE, type DoomDelegationService } from '@agimon-ai/doompi-core/delegation';
 import type { DoomApi } from '@agimon-ai/doompi-core/package-api';
 import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import type { Context } from '@deepseek-ai/cordis';

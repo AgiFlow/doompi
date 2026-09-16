@@ -36,6 +36,23 @@ vi.mock('@agimon-ai/mcp-proxy', async (importOriginal) => ({
 
 vi.mock('open', () => ({ default: openExternalUrl }));
 
+// Reauthorizing clears the credential through the OS keyring, and a keyring that
+// refuses the delete is raised rather than absorbed (see keyringTokenStore).
+// A machine with no secret service — CI, a container — would therefore fail the
+// command here. That refusal has its own unit test; these are about the command
+// wiring, so keep the native module out of them.
+vi.mock('@napi-rs/keyring', () => ({
+  AsyncEntry: class {
+    async getPassword(): Promise<string | undefined> {
+      return undefined;
+    }
+    async setPassword(): Promise<void> {}
+    async deletePassword(): Promise<boolean> {
+      return true;
+    }
+  },
+}));
+
 /** Working bus for the Cordis host's one intentional discovery boundary. */
 class TestBus implements EventBusLike {
   private readonly handlers = new Map<string, Set<(data: unknown) => void>>();

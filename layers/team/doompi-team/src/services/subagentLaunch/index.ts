@@ -105,7 +105,12 @@ export interface SlashParallelLaunchInput {
 
 function trackLaunchedRuns(tracker: TrackedAsyncJobsContract, outcomes: SpawnPlanChildOutcome[]): void {
   for (const outcome of outcomes) {
-    if (outcome.runId) tracker.track(outcome.runId);
+    if (outcome.runId) {
+      tracker.track(
+        outcome.runId,
+        outcome.identity ? { identity: outcome.identity, inline: outcome.inline ?? false } : undefined,
+      );
+    }
   }
 }
 

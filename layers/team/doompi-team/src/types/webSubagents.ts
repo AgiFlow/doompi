@@ -14,6 +14,15 @@ export type SubagentRunState = 'queued' | 'running' | 'done' | 'failed' | 'stopp
 export interface SubagentRun {
   runId: string;
   agent: string;
+  /**
+   * Generated addressable identity, for example `alan-reviewer-3`.
+   *
+   * Additive and optional: a run projected before identities existed, and any
+   * run whose claim could not be written, still arrives without one.
+   */
+  identity?: string;
+  /** True when this run came from a one-shot inline agent definition. */
+  inline?: boolean;
   state: SubagentRunState;
   rawState: string;
   /** The delegation prompt the main agent gave this run. */

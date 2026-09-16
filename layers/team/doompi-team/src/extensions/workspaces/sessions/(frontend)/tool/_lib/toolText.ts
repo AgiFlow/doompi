@@ -174,7 +174,18 @@ function fleetView(value: unknown): SubagentResultView {
     return {
       key: asString(job.runId) || `run-${index}`,
       label: asString(job.runId),
-      detail: preview(parts([job.agent, job.currentTool, job.activityState, job.attentionReason, job.error])),
+      // The run id stays the label because it is the key a reader copies; the
+      // identity leads the detail so the row still says who this is.
+      detail: preview(
+        parts([
+          job.identity ? (job.inline ? `${asString(job.identity)} (inline)` : job.identity) : undefined,
+          job.agent,
+          job.currentTool,
+          job.activityState,
+          job.attentionReason,
+          job.error,
+        ]),
+      ),
       state,
       tone: stateTone(state),
     };

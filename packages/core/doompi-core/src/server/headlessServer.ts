@@ -14,6 +14,22 @@ import type { SavedSession } from '../services/sqliteSessionHistory';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
 import { createHeadlessProtocol } from './headlessProtocol';
 
+/**
+ * The canonical public shape of a package API request, as dispatch reads it.
+ *
+ * Groups: workspace id, session id, plugin base path, and the remainder handed
+ * to the package. `settings` is the host's own API and sits beside `plugins`
+ * rather than under it.
+ *
+ * Exported so the browser's URL construction can be pinned against it. The two
+ * are written independently, in halves of this package that may not import each
+ * other, and a disagreement between them is not a 404 from the route: the
+ * service worker answers an unrecognised path out of the signed bundle cache,
+ * so the symptom appears nowhere near the cause.
+ */
+export const DOOM_PACKAGE_API_PATH_PATTERN =
+  /^\/api(?:\/workspaces\/([^/]+)(?:\/sessions\/([^/]+))?)?\/(?:plugins\/([^/]+)|settings)(?:\/(.*))?$/u;
+
 const HEALTH_ROLE = 'hub';
 const PROTOCOL_VERSION = 1;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
@@ -484,10 +500,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       json(response, 200, { ok: true });
       return;
     }
-    const pluginMatch =
-      /^\/api(?:\/workspaces\/([^/]+)(?:\/sessions\/([^/]+))?)?\/(?:plugins\/([^/]+)|settings)(?:\/(.*))?$/u.exec(
-        url.pathname,
-      );
+    const pluginMatch = DOOM_PACKAGE_API_PATH_PATTERN.exec(url.pathname);
     if (pluginMatch !== null && request.method !== 'CONNECT') {
       const workspaceId = pluginMatch[1] === undefined ? undefined : decodeURIComponent(pluginMatch[1]);
       const sessionId = pluginMatch[2] === undefined ? undefined : decodeURIComponent(pluginMatch[2]);

@@ -4,6 +4,7 @@ import { useStore } from '@tanstack/react-store';
 import { type FormEvent, useEffect, useState } from 'react';
 
 import type { SubagentRun } from '../../../../../types/webSubagents';
+import { agentRunLabel } from '../_lib/format';
 import { isTerminalRun, requestRunSteer, subagents } from '../_lib/subagentsStore';
 import { elapsedRun, RUN_BADGE, RunControl } from './RunControl';
 
@@ -16,7 +17,7 @@ export function agentThreadTab(run: SubagentRun): TransientTab {
   const runId = run.runId;
   return {
     id: `${TAB_ID_PREFIX}${runId}`,
-    label: run.agent,
+    label: agentRunLabel(run),
     panel: (props: WebPluginSlotProps) => <AgentThreadPanel {...props} runId={runId} />,
   };
 }
@@ -62,7 +63,7 @@ export function AgentThreadPanel({
         {run ? (
           <>
             <span data-testid="agent-thread-agent" className="shrink-0 truncate text-sm font-bold text-doom-hi">
-              {run.agent}
+              {agentRunLabel(run)}
             </span>
             <StatusBadge tone={RUN_BADGE[run.state].tone} data-testid="agent-thread-state">
               {RUN_BADGE[run.state].label}

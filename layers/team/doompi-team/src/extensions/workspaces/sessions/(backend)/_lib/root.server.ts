@@ -53,6 +53,8 @@ function presentTrackedRun(run: TrackedAsyncJob): SessionRunProjection | undefin
   return {
     runId: run.runId,
     agent: run.agent,
+    ...(run.identity === undefined ? {} : { identity: run.identity }),
+    ...(run.inline === undefined ? {} : { inline: run.inline }),
     state: runState(run.status),
     rawState: run.status,
     task: run.task ?? '',
@@ -71,6 +73,8 @@ function presentNativeRun(run: NativeAsyncJobProjection): SessionRunProjection {
   return {
     runId: run.runId,
     agent: run.agent,
+    ...(run.identity === undefined ? {} : { identity: run.identity }),
+    ...(run.inline === undefined ? {} : { inline: run.inline }),
     state: runState(run.status),
     rawState: run.status,
     task: run.task,
@@ -208,7 +212,7 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
           // Read fresh per request, exactly as the Pi facet does at root.cli.ts.
           // Omitting this is what made every headless `context: 'fork'`
           // delegation report that the parent had no capturable branch.
-          captureForkSource: () => execution.session.forkSource?.(),
+          captureForkSource: () => execution.session?.forkSource?.(),
         }),
       );
       const backgroundWork = createBackgroundWorkService(providerContext);

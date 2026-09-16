@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AsyncJobTracker } from '../../src/services/asyncJobTracker';
+import { AsyncJobTracker, resolveTrackedRunId } from '../../src/services/asyncJobTracker';
 import type { ExternalRunProjection } from '../../src/services/externalProcessIpc';
 import { createSessionScope } from '../../src/services/sessionPaths';
 import { TEST_SESSION_SCOPE } from '../support/sessionScope';
@@ -41,6 +41,54 @@ describe('AsyncJobTracker event-fed state', () => {
     expect(second.get('run-1')).toBeUndefined();
   });
 
+  // Both upsert paths rebuild the record instead of merging into it, so an
+  // identity set at track time is exactly the kind of field they drop. It would
+  // fail silently and only from the second event onward.
+  it('keeps a tracked identity across an external status update', () => {
+    const tracker = new AsyncJobTracker();
+    const jobs = tracker.forSession(scopeA.rootSessionId, scopeA);
+    jobs.track('run-1', { identity: 'alan-worker-1', inline: true });
+
+    tracker.upsertExternal(scopeA.rootSessionId, scopeA, projection('run-1', 'running'));
+
+    expect(jobs.get('run-1')).toMatchObject({ identity: 'alan-worker-1', inline: true, status: 'running' });
+  });
+
+  it('keeps the identity a native projection carries across its own updates', () => {
+    const tracker = new AsyncJobTracker();
+    const jobs = tracker.forSession(scopeA.rootSessionId, scopeA);
+    const native = (state: string) => ({
+      runId: 'run-2',
+      agent: 'worker',
+      identity: 'bea-worker-2',
+      inline: false,
+      task: 'task',
+      cwd: '/repo',
+      runtime: 'pi',
+      status: state,
+      startedAt: 1,
+      updatedAt: state === 'running' ? 3 : 2,
+    });
+
+    tracker.upsertNative(scopeA.rootSessionId, scopeA, native('queued'));
+    tracker.upsertNative(scopeA.rootSessionId, scopeA, native('running'));
+
+    expect(jobs.get('run-2')).toMatchObject({ identity: 'bea-worker-2', status: 'running' });
+  });
+
+  it('resolves a run by its identity, but never ahead of a real run id', () => {
+    const tracker = new AsyncJobTracker();
+    const jobs = tracker.forSession(scopeA.rootSessionId, scopeA);
+    jobs.track('run-1', { identity: 'alan-worker-1', inline: false });
+    jobs.track('alan-worker-1', { identity: 'cyrus-worker-3', inline: false });
+
+    // 'alan-worker-1' is both an identity of one run and the run id of another.
+    // The run id has to win, or addressing becomes ambiguous the moment a
+    // generated name collides with an id.
+    expect(resolveTrackedRunId(jobs, 'alan-worker-1')).toBe('alan-worker-1');
+    expect(resolveTrackedRunId(jobs, 'cyrus-worker-3')).toBe('alan-worker-1');
+    expect(resolveTrackedRunId(jobs, 'run-1')).toBe('run-1');
+  });
   it('notifies subscribers when status events add and update a run', () => {
     const tracker = new AsyncJobTracker();
     const listener = vi.fn();

@@ -44,8 +44,18 @@ export const ROOT_FILE_NAME = 'root';
  */
 export const GENERATED_DIR = 'generated';
 
-/** Generated entry basenames. Never scanned, never hand-edited. */
-export const GENERATED_ENTRY_NAMES: readonly string[] = ['pi', 'server', 'web'];
+/**
+ * The generated entry each build target writes, keyed by the target it serves.
+ *
+ * Keyed rather than positional. The basenames are historical and two of the
+ * three do not match their target's name, so an array has to be read by index,
+ * and adding a fourth generated file silently rotates which host each entry
+ * belongs to.
+ */
+export const GENERATED_ENTRY_FILENAMES = { cli: 'pi', server: 'server', web: 'web' } as const;
+
+/** Every generated basename. Never scanned, never hand-edited. Order carries no meaning. */
+export const GENERATED_ENTRY_NAMES: readonly string[] = Object.values(GENERATED_ENTRY_FILENAMES);
 
 /**
  * Platform suffixes, scoped to their side. A target may not reuse one of these words.

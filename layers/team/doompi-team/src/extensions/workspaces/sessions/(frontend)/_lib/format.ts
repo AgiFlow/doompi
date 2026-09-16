@@ -19,3 +19,17 @@ export function abbreviateCwd(cwd: string): string {
   if (!match) return cwd;
   return `~${cwd.slice(match[0].length)}`;
 }
+
+/**
+ * What to call a run on screen.
+ *
+ * Prefers the generated identity, because a fan-out of one agent otherwise
+ * renders as N rows reading the same word. Falls back to the agent name for a
+ * run projected before identities existed. Duplicated rather than imported
+ * from `services/agentIdentity`, which reaches for `node:fs` and so cannot be
+ * pulled into the browser bundle; that module owns minting, this owns display.
+ */
+export function agentRunLabel(run: { agent: string; identity?: string; inline?: boolean }): string {
+  const base = run.identity ?? run.agent;
+  return run.inline ? `${base} (inline)` : base;
+}

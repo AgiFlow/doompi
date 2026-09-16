@@ -315,7 +315,10 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
 
       entry.runId = outcome.runId;
       const jobs = deps.tracker.forSession(session.sessionId, session.sessionScope);
-      jobs.track(outcome.runId);
+      jobs.track(
+        outcome.runId,
+        outcome.identity ? { identity: outcome.identity, inline: outcome.inline ?? false } : undefined,
+      );
       // A cancel that landed while the spawn was in flight already settled this
       // entry; the run exists now, so it has to be stopped rather than tracked.
       if (entry.settled) {

@@ -12,6 +12,7 @@ import {
   type SubagentToolParams,
 } from '../../schemas/subagentTool';
 import type { AgentConfig, AgentScope, AgentDiscoveryContract } from '../../types/agent';
+import { formatAgentIdentity } from '../agentIdentity';
 import { agentHasWriteTools } from '../agentMemory';
 import { type AsyncJobTrackerContract, resolveTrackedRunId } from '../asyncJobTracker';
 import { loadConfig } from '../config';
@@ -183,7 +184,12 @@ export class SubagentToolService implements SubagentToolContract {
     this.management.bindSessionScope(scope);
     const jobs = this.tracker.forSession(ctx.sessionManager.getSessionId(), scope);
     for (const outcome of result.outcomes) {
-      if (outcome.runId) jobs.track(outcome.runId);
+      if (outcome.runId) {
+        jobs.track(
+          outcome.runId,
+          outcome.identity ? { identity: outcome.identity, inline: outcome.inline ?? false } : undefined,
+        );
+      }
     }
     return result;
   }
@@ -260,10 +266,11 @@ export class SubagentToolService implements SubagentToolContract {
     );
     const started = result.outcomes.filter((outcome) => outcome.runId);
     const failed = result.outcomes.filter((outcome) => !outcome.runId);
-    const outcomeLines = result.outcomes.map(
-      (outcome) =>
-        `- ${outcome.agent}: ${outcome.runId ? outcome.runId : `failed: ${outcome.error ?? 'unknown error'}`}${outcome.warning ? `\n  Warning: ${outcome.warning}` : ''}`,
-    );
+    const outcomeLines = result.outcomes.map((outcome) => {
+      const label = formatAgentIdentity(outcome.identity, outcome.inline) ?? outcome.agent;
+      const result = outcome.runId ? outcome.runId : `failed: ${outcome.error ?? 'unknown error'}`;
+      return `- ${label}: ${result}${outcome.warning ? `\n  Warning: ${outcome.warning}` : ''}`;
+    });
     if (started.length === 0 && failed.length > 0) {
       throw new DoomTeamExpectedError(
         'runtime_unavailable',
@@ -433,6 +440,9 @@ export class SubagentToolService implements SubagentToolContract {
                 cwd: record.cwd,
                 ...(record.model ? { model: record.model } : {}),
                 sessionFile: record.sessionFile,
+                // Carried in so the restored run keeps the identity peers
+                // already know, instead of minting a second one.
+                ...(record.identity ? { identity: record.identity } : {}),
               },
               cwd: record.cwd,
               agentScope: 'both',
@@ -456,7 +466,8 @@ export class SubagentToolService implements SubagentToolContract {
           );
         }
         clearSuspendedRun(scope, params.id);
-        return textResult(`Restored '${params.id}' as '${outcome.runId}', continuing its transcript.`, {
+        const restoredAs = formatAgentIdentity(outcome.identity, outcome.inline) ?? outcome.runId;
+        return textResult(`Restored '${params.id}' as '${restoredAs}' (${outcome.runId}), continuing its transcript.`, {
           restore: { ...outcome, restoredFrom: params.id },
         });
       }

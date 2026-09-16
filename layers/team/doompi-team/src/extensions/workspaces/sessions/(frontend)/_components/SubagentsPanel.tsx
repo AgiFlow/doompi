@@ -25,7 +25,7 @@ import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useState } from 'r
 
 import type { SubagentRun } from '../../../../../types/webSubagents';
 import { catalog, closeCatalog, closeLaunch, loadCatalog, openCatalog, openLaunch } from '../_lib/catalogStore';
-import { abbreviateCwd } from '../_lib/format';
+import { abbreviateCwd, agentRunLabel } from '../_lib/format';
 import { RUN_ACTIONS_SLOT } from '../_lib/runActionsSlot';
 import {
   clearAutoOpen,
@@ -198,7 +198,7 @@ function RunCard({
         >
           <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
             <span data-testid="run-agent" className="truncate text-sm font-bold text-doom-hi">
-              {run.agent}
+              {agentRunLabel(run)}
             </span>
             <span className="min-w-0 flex-1" />
             <span className="shrink-0 text-2xs text-doom-faint">{elapsedRun(run, now)}</span>
@@ -300,7 +300,7 @@ function RunDetailSheet({
     >
       <SheetContent data-testid="run-sheet" aria-describedby={undefined}>
         <SheetHeader closeLabel="close the run detail">
-          <SheetTitle data-testid="sheet-agent">{run.agent}</SheetTitle>
+          <SheetTitle data-testid="sheet-agent">{agentRunLabel(run)}</SheetTitle>
           <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
           <span className="min-w-0 flex-1" />
           <span className="text-xs text-doom-faint">{elapsedRun(run, now)}</span>

@@ -123,7 +123,10 @@ export function createTeamSessionApi(runtime: TeamExtensionRuntime, execution: D
     );
     const outcome = plan.outcomes[0];
     if (!outcome?.runId) throw new Error(outcome?.error ?? 'The agent did not start.');
-    jobs.track(outcome.runId);
+    jobs.track(
+      outcome.runId,
+      outcome.identity ? { identity: outcome.identity, inline: outcome.inline ?? false } : undefined,
+    );
     return { runId: outcome.runId };
   };
 
