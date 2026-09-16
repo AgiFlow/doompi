@@ -7,7 +7,7 @@ import {
   voiceMediaPageRuntime,
   voiceRealtimeBrowserControls,
 } from '../../_lib/voiceMediaWakeStore';
-import { voiceMicrophoneConstraints } from '../../_lib/voiceMicrophoneStore';
+import { closeVoiceMicrophoneQuestion, voiceMicrophoneConstraints } from '../../_lib/voiceMicrophoneStore';
 import { BrowserVoiceMediaDevice } from '../_lib/browserMediaDevice';
 import { browserVoiceMediaClientId } from '../_lib/browserMediaIdentity';
 import { BrowserRealtimeSession } from '../_lib/browserRealtimeSession';
@@ -45,6 +45,8 @@ class PageVoiceMediaRuntime {
   public close(): void {
     if (this.closed) return;
     this.closed = true;
+    // An open device question would otherwise outlive the capture that asked it.
+    closeVoiceMicrophoneQuestion();
     window.removeEventListener('pagehide', this.closeOnPageHide);
     this.unsubscribe();
     this.client?.endRealtime();

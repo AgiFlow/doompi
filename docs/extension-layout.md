@@ -170,14 +170,14 @@ The older cockpit arrays (`overlays`, `railSections`, `contextSections`, `select
 
 ```text
 src/extensions/                                  GLOBAL
-  (backend)/api/providers/route.ts               /api/plugins/<id>/providers
+  (backend)/api/billing/route.ts                 /api/plugins/billing
   (backend)/channel/presence.ts                  hub-lifecycle channel
   (frontend)/setting/account.tsx                 global settings page
   (frontend)/fill/AccountBadge.top-bar.tsx       global UI region
   (frontend)/store/account.ts                    defineGlobalStore
 
   workspaces/                                    WORKSPACE
-    (backend)/api/repos/route.ts                 /api/workspaces/{w}/plugins/<id>/repos
+    (backend)/api/billing/repos/route.ts         /api/workspaces/{w}/plugins/billing/repos
     (frontend)/setting/plan.tsx                  workspace settings page
     (frontend)/store/repos.ts                    defineWorkspaceStore
 
@@ -196,12 +196,26 @@ src/extensions/                                  GLOBAL
 
 Three, not four. SSE is not its own mechanism.
 
-**HTTP, and SSE with it.** A backend `api/` tree follows the familiar folder path and `route.ts` leaf convention. The leaf default-exports one `defineRoute(...)` declaration. Request parsing, handlers, lifecycle, and public symbols belong in `src/services`, shared contracts, or a private colocated module.
+**HTTP, and SSE with it.** A backend `api/` tree follows the familiar folder path and `route.ts` leaf convention. The first folder below `api/` is the mount's base path, and the folders below that are the route. The leaf default-exports one `defineRoute(...)` declaration. Request parsing, handlers, lifecycle, and public symbols belong in `src/services`, shared contracts, or a private colocated module.
+
+The base path is a folder rather than a constant because it used to be a constant, restated in the contract and again in every URL the browser built, and the copies drifted. Two packages still mount a base path their folder does not name.
+
+**The frontend consumes a generated client.** A package declaring its routes as plain data in `src/types/apiRoutes.ts` gets `generated/client.ts`, into which the build injects the base path and the scopes the tree mounts at. A `(frontend)` file calls `api.session(sessionId).detail({ query })` and never spells a URL.
+
+```ts
+// src/types/apiRoutes.ts — no scope and no base path: the build reads those from the tree.
+export default defineApiRoutes({
+  detail: { method: 'GET', path: '/detail', query: ['path'], response: apiResponse<DetailView>() },
+  logStream: { method: 'GET', path: '/log/stream', stream: true },
+});
+```
+
+A `stream: true` route gets a URL and no call method: its consumer is the browser's own `EventSource`, and a sealed remote session refuses event streams outright.
 
 ```text
-(backend)/api/current/route.ts
-(backend)/api/runners/[runId]/log/route.ts
-(backend)/api/runners/[runId]/log/stream/route.ts
+(backend)/api/runner/current/route.ts                    /plugins/runner/current
+(backend)/api/runner/runners/[runId]/log/route.ts        /plugins/runner/runners/{runId}/log
+(backend)/api/runner/runners/[runId]/log/stream/route.ts /plugins/runner/runners/{runId}/log/stream
 ```
 
 An event stream is the same route returning `text/event-stream`, declared in the contract with an events schema map.

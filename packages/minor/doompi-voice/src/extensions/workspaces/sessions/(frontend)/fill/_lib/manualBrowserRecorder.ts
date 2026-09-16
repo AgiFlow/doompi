@@ -1,4 +1,7 @@
-import type { VoiceMicrophoneConstraints } from '../../../../../../types/clientMedia';
+import {
+  CLIENT_DEFAULT_MICROPHONE,
+  type VoiceMicrophoneConstraints,
+} from '../../../../../../types/clientMedia';
 import {
   MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,
   MANUAL_TRANSCRIPTION_MAX_DURATION_MS,
@@ -138,7 +141,7 @@ function watchBrowserSilence(stream: ManualMediaStream, onSilence: (speechDetect
   };
 }
 
-function browserDependencies(constraints: VoiceMicrophoneConstraints): ManualRecorderDependencies {
+function browserDependencies(): ManualRecorderDependencies {
   const browser = globalThis as unknown as BrowserMediaGlobals;
   const Recorder = browser.MediaRecorder;
   const mediaDevices = browser.navigator?.mediaDevices;
@@ -146,7 +149,7 @@ function browserDependencies(constraints: VoiceMicrophoneConstraints): ManualRec
     throw new Error('This browser cannot record microphone audio.');
   }
   return {
-    getUserMedia: async () => await mediaDevices.getUserMedia(constraints),
+    getUserMedia: async () => await mediaDevices.getUserMedia(CLIENT_DEFAULT_MICROPHONE),
     createRecorder: (stream, options) => new Recorder(stream, options),
     isTypeSupported: (type) => Recorder.isTypeSupported(type),
     setTimer: (callback, delay) => setTimeout(callback, delay),
@@ -159,9 +162,8 @@ function browserDependencies(constraints: VoiceMicrophoneConstraints): ManualRec
 /** Owns one standalone browser recording. It has no connection to autonomous voice capture. */
 export async function startManualBrowserRecording(
   dependencies?: ManualRecorderDependencies,
-  constraints: VoiceMicrophoneConstraints = { audio: true, video: false },
 ): Promise<ManualBrowserRecording> {
-  dependencies ??= browserDependencies(constraints);
+  dependencies ??= browserDependencies();
   const mimeType = MEDIA_TYPES.find((type) => dependencies.isTypeSupported(type));
   const stream = await dependencies.getUserMedia();
   let recorder: ManualMediaRecorder;

@@ -231,6 +231,7 @@ describe('headless startup', () => {
     });
     let resourceText = 'Fixture context';
     let resourceFailure = false;
+    const resourceNotices = vi.fn();
     const facet: LoadedServerFacet = {
       retained: true,
       initiallyEligible: true,
@@ -371,6 +372,7 @@ describe('headless startup', () => {
         repoRoot: root,
         sessionId: 'startup-test',
         sessionName: 'Test',
+        onNotice: resourceNotices,
         agentArgs: ['--session-dir', root],
         environment: admittedEnvironment,
         candidates: [minor.declaration, facet.declaration, control.declaration, profile.declaration],
@@ -550,12 +552,18 @@ describe('headless startup', () => {
         'Updated context\n\n[PERSONA] You are operating as the person described below (source: agents/writer).\n\n# Writer\n\nStartup context\nFirst patch\nSecond patch',
       );
       resourceFailure = true;
-      await session.runtime.prompt('Resource failure').catch(() => undefined);
-      expect(streamSimple).toHaveBeenCalledTimes(3);
-      expect(session.canDispatch()).toBe(false);
+      await session.runtime.prompt('Resource failure');
+      // A resource that cannot be read is reported and skipped, not fatal. Before,
+      // the throw reached the systemPrompt callback and denied every later request.
+      expect(streamSimple).toHaveBeenCalledTimes(4);
+      expect(session.canDispatch()).toBe(true);
+      const failedPrompt = streamSimple.mock.calls[3]?.[1].systemPrompt as string;
+      expect(failedPrompt).not.toContain('Updated context');
+      expect(failedPrompt).toContain('Startup context');
+      expect(resourceNotices).toHaveBeenCalledWith(expect.stringContaining('Could not read headless resource'));
       resourceFailure = false;
       await session.runtime.prompt('Resource recovered');
-      expect(streamSimple).toHaveBeenCalledTimes(4);
+      expect(streamSimple).toHaveBeenCalledTimes(5);
       expect(session.canDispatch()).toBe(true);
       expect(session.runtime.harness).toBe(harness);
       expect(installed).toHaveBeenCalledOnce();

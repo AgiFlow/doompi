@@ -9,7 +9,7 @@ import type {
   VoiceMediaPlaybackOutcome,
   VoiceMediaPlaybackResult,
 } from '../../../../../../types/clientMedia';
-import { VOICE_MEDIA_SAMPLE_RATE } from '../../../../../../types/clientMedia';
+import { CLIENT_DEFAULT_MICROPHONE, VOICE_MEDIA_SAMPLE_RATE } from '../../../../../../types/clientMedia';
 import browserCaptureWorkletUrl from './browserCaptureWorklet.js?url';
 import { BrowserNarrationEchoDiscriminator } from './browserNarrationEchoDiscriminator';
 import { BrowserSpeechPresenceDetector, type SpeechWorker } from './browserSpeechPresenceDetector';
@@ -282,10 +282,8 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
   private captureDeviceId: string | undefined;
   public constructor(
     private readonly rebindProtocolSupported = false,
-    private readonly microphoneConstraints: () => Promise<VoiceMicrophoneConstraints> = async () => ({
-      audio: true,
-      video: false,
-    }),
+    private readonly microphoneConstraints: () => Promise<VoiceMicrophoneConstraints> = async () =>
+      CLIENT_DEFAULT_MICROPHONE,
   ) {}
 
   /** Arms browser media while a real tap is still carrying mobile user activation. */
@@ -340,7 +338,7 @@ export class BrowserVoiceMediaDevice implements VoiceMediaDevice {
     const generation = this.captureGeneration;
     const constraints = await this.microphoneConstraints();
     if (generation !== this.captureGeneration) throw new Error('Microphone capture was cancelled.');
-    const deviceId = typeof constraints.audio === 'object' ? constraints.audio.deviceId.exact : undefined;
+    const deviceId = constraints.audio.deviceId?.exact;
     if (this.stream && this.captureDeviceId !== deviceId) {
       for (const track of this.stream.getTracks()) track.stop();
       this.stream = undefined;

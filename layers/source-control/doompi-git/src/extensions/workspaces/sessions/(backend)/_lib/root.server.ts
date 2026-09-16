@@ -1,12 +1,10 @@
-import { readFile } from 'node:fs/promises';
-
 import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
 import {
   type DoomHeadlessResource,
   type DoomHeadlessTool,
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
-import type { DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import { readPackageResource, type DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
 
 import { RunWorktreeToolSchema, type RunWorktreeToolParams } from '../../../../../schemas/runWorktreeTool';
 import { createWorktreeGit } from '../../../../../services/gitCli';
@@ -18,16 +16,6 @@ import {
 } from '../../../../../services/runWorktree';
 import { createWorktreeMessageInbox } from '../../../../../services/worktreeEvents';
 import { createWorktreeOperations } from '../../../../../services/worktreeOperations';
-
-const PACKAGE_ROOT = new URL('../../../../../../', import.meta.url);
-
-async function readPackageResource(name: string): Promise<string> {
-  try {
-    return await readFile(new URL(name, PACKAGE_ROOT), 'utf8');
-  } catch {
-    return `(resource unavailable: ${name})`;
-  }
-}
 
 function progressResult(action: RunWorktreeToolParams['action'], label: string): DoomHeadlessToolResult {
   return { content: [{ type: 'text', text: label }], details: { action } };
@@ -46,13 +34,20 @@ export function createGitSession({ host: serverHost }: DoomServerPluginContext) 
     messageInbox,
   });
   const resources: DoomHeadlessResource[] = [
-    { name: 'doompi-git', kind: 'context', read: () => readPackageResource('llms.txt') },
+    {
+      // The package index is Help-catalog material, not standing instruction, so it
+      // only enters the prompt while Help mode is active. Matches the Pi facet,
+      // which has always routed this through the Help service.
+      when: { state: { 'minor-mode': 'help' }, attribution: { kind: 'minor', mode: 'help' } },
+      name: 'doompi-git',
+      kind: 'context',
+      read: () => readPackageResource(import.meta.url, 'llms.txt'),
+    },
     {
       name: 'doompi-use-git',
       kind: 'skill',
-      read: () => readPackageResource('src/prompts/doompi-use-git/SKILL.md'),
+      read: () => readPackageResource(import.meta.url, 'src/prompts/doompi-use-git/SKILL.md'),
     },
-    { name: 'doompi-git-readme', kind: 'context', read: () => readPackageResource('README.md') },
   ];
 
   const tool: DoomHeadlessTool<typeof RunWorktreeToolSchema> = {

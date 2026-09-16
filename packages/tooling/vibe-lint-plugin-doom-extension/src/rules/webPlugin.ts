@@ -25,6 +25,14 @@ const PACKAGE_MANIFEST_NAME = 'package.json';
 export const WEB_ROOT = 'src/web';
 /** The routing root the browser half is scanned from. */
 const EXTENSIONS_ROOT = 'src/extensions';
+/**
+ * The build's typed API client, the one generated module browser code may read.
+ *
+ * It is the reason a plugin no longer writes its own URLs, so a page must be
+ * able to reach it. The rest of `generated/` stays out: those are host entries,
+ * and a browser file importing the server one would pull Node into the bundle.
+ */
+const GENERATED_API_CLIENT = 'generated/client';
 /** The remaining raw hub sender is migrated after the Author pilot. */
 const LEGACY_HUB_SENDERS = new Set(['@agimon-ai/doompi-git']);
 const ROUTED_WEB_TSCONFIG = 'tsconfig.web.json';
@@ -317,7 +325,7 @@ function webImports(configRoot: string): { typeFiles: Set<string>; packages: Set
 
 export const webPluginImportAllowlist: RuleDefinition = {
   preflight: true,
-  rule: 'A web plugin imports only react, the TanStack store packages, the web contract, the shared components, its own browser-bound routed files, and its package src/types and src/constants',
+  rule: 'A web plugin imports only react, the TanStack store packages, the web contract, the shared components, its own browser-bound routed files, the generated API client, and its package src/types and src/constants',
   rationale:
     "The cockpit's bundler compiles a plugin's browser-bound routed files into the host bundle, so whatever they import ships to the browser: a node builtin or a server framework breaks the build or leaks into the page, and another plugin's module couples two packages that must stay installable apart. The core boundary rule only sees relative paths, so bare specifiers are checked here.",
   check(filePath, configRoot) {
@@ -337,6 +345,7 @@ export const webPluginImportAllowlist: RuleDefinition = {
             isBrowserFile(target) ||
             isWebPath(target) ||
             isTypesPath(target) ||
+            target === GENERATED_API_CLIENT ||
             target === 'src/constants' ||
             target.startsWith('src/constants/')
           )
@@ -348,7 +357,7 @@ export const webPluginImportAllowlist: RuleDefinition = {
       }
     }
     if (offenders.size === 0) return null;
-    return `Web plugin code may import only react, @tanstack/store, @tanstack/react-store, ${WEB_CONTRACTS_ENTRY}, ${COMPONENTS_PACKAGE}, its own browser-bound routed files and src/types/** or src/constants/**; found: ${[...offenders].join(', ')}.`;
+    return `Web plugin code may import only react, @tanstack/store, @tanstack/react-store, ${WEB_CONTRACTS_ENTRY}, ${COMPONENTS_PACKAGE}, its own browser-bound routed files, ${GENERATED_API_CLIENT} and src/types/** or src/constants/**; found: ${[...offenders].join(', ')}.`;
   },
 };
 
@@ -546,5 +555,68 @@ export const webPluginEntry: RuleDefinition = {
       if (forwarded && exportsWebPlugin(forwarded)) return null;
     }
     return `The doompiWeb client entry must export ${WEB_PLUGIN_EXPORT} built with ${DEFINE_WEB_PLUGIN}(...) imported from ${WEB_CONTRACTS_ENTRY}, directly or through one re-export; the host registry imports { ${WEB_PLUGIN_EXPORT} } from it.`;
+  },
+};
+
+/**
+ * Keeps a hand-built API URL from reappearing once a package has a client.
+ *
+ * Every one of these strings used to be written out, and they rotted quietly:
+ * matchers kept naming `/api/plugins/<base>/...` long after the real route
+ * moved under a workspace prefix, so they matched nothing and the fixture
+ * beside them answered instead. The generated client builds the URL, and a
+ * literal here means someone went around it.
+ *
+ * `fetch` is the same failure with a worse consequence: a plugin calling the
+ * global directly sends plaintext to the relay a remote session tunnels
+ * through, where every sibling goes through the sealed transport.
+ */
+export const webPluginNoHandBuiltApiUrl: RuleDefinition = {
+  preflight: true,
+  rule: 'Browser code reaches its API through the generated client rather than a hand-built /api/ string or the global fetch',
+  rationale:
+    'A URL written by hand agrees with the route only until one of them moves, and nothing reports the disagreement: an unmatched path is answered by the service worker out of the signed bundle cache, and a stale test matcher simply stops firing. The global fetch additionally bypasses the sealed transport, which is what protects a remote session from its own relay. Applies only once a package declares src/types/apiRoutes.ts, so it arrives with the client rather than ahead of it.',
+  check(filePath, configRoot) {
+    const manifest = readManifest(configRoot);
+    if (!manifest?.doompiWeb || !fs.existsSync(filePath)) return null;
+    // Only a package that declares a route table has a client to use instead.
+    // The rest still hand-build their URLs, and telling them off for it before
+    // the alternative exists would be noise they cannot act on.
+    if (!fs.existsSync(path.join(configRoot, 'src/types/apiRoutes.ts'))) return null;
+    const relative = projectPath(filePath, configRoot);
+    if (relative === null || !isBrowserFile(relative)) return null;
+
+    const source = fs.readFileSync(filePath, 'utf8');
+    const offenders: string[] = [];
+    if (/(['"`])\/api\//u.test(source)) offenders.push("a hand-built '/api/...' URL");
+    if (/(?<![.\w])fetch\s*\(/u.test(source) && !/\.fetch\s*\(/u.test(source)) {
+      offenders.push('a call to the global fetch');
+    }
+    if (offenders.length === 0) return null;
+    return `${offenders.join(' and ')}: build the URL with the generated client in generated/client.ts, which carries the sealed transport.`;
+  },
+};
+
+/**
+ * Makes the per-package wiring step impossible to forget.
+ *
+ * The generated client is only type-checked if the browser tsconfig includes
+ * it. Miss that line and nothing complains here; the failure lands on whoever
+ * next runs the browser typecheck, as a module that cannot be found.
+ */
+export const webPluginGeneratedClientWiring: RuleDefinition = {
+  preflight: true,
+  rule: 'A package whose tree mounts an api/<base-path>/ folder includes generated/client.ts in its browser tsconfig',
+  rationale:
+    'The generated client is authored code as far as the browser typecheck is concerned, and an include list that omits it silently drops it from the project. The omission surfaces far from the package that caused it.',
+  check(filePath, configRoot) {
+    if (path.basename(filePath) !== 'tsconfig.web.json' || !fs.existsSync(filePath)) return null;
+    const apiRoot = path.join(configRoot, EXTENSIONS_ROOT);
+    if (!fs.existsSync(apiRoot)) return null;
+    if (!fs.existsSync(path.join(configRoot, 'src/types/apiRoutes.ts'))) return null;
+
+    const source = fs.readFileSync(filePath, 'utf8');
+    if (source.includes(`${GENERATED_API_CLIENT}.ts`)) return null;
+    return `Add "${GENERATED_API_CLIENT}.ts" to include, beside generated/web.ts, so the generated client is type-checked.`;
   },
 };

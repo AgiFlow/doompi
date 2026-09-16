@@ -54,8 +54,30 @@ export const GENERATED_DIR = 'generated';
  */
 export const GENERATED_ENTRY_FILENAMES = { cli: 'pi', server: 'server', web: 'web' } as const;
 
+/**
+ * The generated typed client, which is not a build target.
+ *
+ * Nothing bundles it as an entry: a `(frontend)` file imports it and the
+ * cockpit's browser build pulls it in from there. It is listed among the
+ * managed names so that a package which drops its route table has the stale
+ * client deleted rather than left behind.
+ */
+export const GENERATED_CLIENT_NAME = 'client';
+
+/**
+ * The route table a package authors, and the switch that asks for a client.
+ *
+ * Its presence is what opts a package in, the way `src/exports/apiContracts.ts`
+ * is what asks for a contracts entry. It lives under `src/types` because that
+ * is one of the two source roots a browser bundle may read.
+ */
+export const API_ROUTES_MODULE = 'src/types/apiRoutes.ts';
+
 /** Every generated basename. Never scanned, never hand-edited. Order carries no meaning. */
-export const GENERATED_ENTRY_NAMES: readonly string[] = Object.values(GENERATED_ENTRY_FILENAMES);
+export const GENERATED_ENTRY_NAMES: readonly string[] = [
+  ...Object.values(GENERATED_ENTRY_FILENAMES),
+  GENERATED_CLIENT_NAME,
+];
 
 /**
  * Platform suffixes, scoped to their side. A target may not reuse one of these words.

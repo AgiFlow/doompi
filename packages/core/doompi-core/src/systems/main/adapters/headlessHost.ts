@@ -563,9 +563,14 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       try {
         value = await resource.value.read(context);
       } catch (error) {
-        throw new Error(`Could not read headless resource '${resource.source}/${resource.value.name}'`, {
-          cause: error,
-        });
+        // Report and skip, never rethrow. This runs on every prompt build, and a
+        // throw here reaches the systemPrompt callback, sets promptPreparationFailed
+        // and denies every model request for the rest of the session. One package
+        // missing one shipped file must not take the session down with it.
+        this.options.onError?.(
+          new Error(`Could not read headless resource '${resource.source}/${resource.value.name}'`, { cause: error }),
+        );
+        continue;
       }
       result.push({
         source: resource.source,

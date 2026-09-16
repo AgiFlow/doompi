@@ -1,4 +1,7 @@
-import type { VoiceMicrophoneConstraints } from '../../../../../../types/clientMedia';
+import {
+  CLIENT_DEFAULT_MICROPHONE,
+  type VoiceMicrophoneConstraints,
+} from '../../../../../../types/clientMedia';
 import {
   REALTIME_LIMITS,
   type BrowserRealtimeOptions,
@@ -110,10 +113,8 @@ export class BrowserRealtimeSession {
 
   public constructor(
     private readonly options: BrowserRealtimeOptions,
-    private readonly microphoneConstraints: () => Promise<VoiceMicrophoneConstraints> = async () => ({
-      audio: true,
-      video: false,
-    }),
+    private readonly microphoneConstraints: () => Promise<VoiceMicrophoneConstraints> = async () =>
+      CLIENT_DEFAULT_MICROPHONE,
   ) {}
 
   public async start(): Promise<void> {

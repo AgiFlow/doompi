@@ -50,8 +50,10 @@ import { pluginCompositionWiring } from './pluginWiring.js';
 import { doomPromptShape } from './prompts.js';
 import {
   webPluginEntry,
+  webPluginGeneratedClientWiring,
   webPluginImportAllowlist,
   webPluginManifest,
+  webPluginNoHandBuiltApiUrl,
   webPluginNoModuleState,
   webPluginProtocolLayout,
   webPluginTypedCalls,
@@ -102,8 +104,10 @@ export const rules: Record<string, RuleDefinition> = {
   'provider-owned-policy': providerOwnedPolicy,
   'package-api-manifest': packageApiManifest,
   'web-plugin-entry': webPluginEntry,
+  'web-plugin-generated-client-wiring': webPluginGeneratedClientWiring,
   'web-plugin-import-allowlist': webPluginImportAllowlist,
   'web-plugin-manifest': webPluginManifest,
+  'web-plugin-no-hand-built-api-url': webPluginNoHandBuiltApiUrl,
   'web-plugin-no-module-state': webPluginNoModuleState,
   'web-plugin-protocol-layout': webPluginProtocolLayout,
   'web-plugin-typed-calls': webPluginTypedCalls,

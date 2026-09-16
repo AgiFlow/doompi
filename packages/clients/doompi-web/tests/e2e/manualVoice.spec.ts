@@ -2,19 +2,6 @@ import { expect, test } from '../support/cockpit';
 
 test.use({ assets: 'synced' });
 
-test.beforeEach(async ({ page }) => {
-  await page.route('**/api/plugins/voice/clients/**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        deviceId: 'physical-mic',
-        inputs: [{ deviceId: 'physical-mic', groupId: 'built-in', label: 'Built-in microphone' }],
-      }),
-    });
-  });
-});
-
 test('records once and appends the returned transcript without invoking autonomous voice', async ({
   page,
   cockpit,

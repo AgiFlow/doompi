@@ -14,6 +14,11 @@ import {
 import { VoiceActivitySection } from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection';
 import { VoiceComposerAction } from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceComposerAction';
 import { browserVoiceMediaClientId } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserMediaIdentity';
+import {
+  microphoneOptions,
+  VoiceMicrophoneDialog,
+} from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceMicrophoneDialog';
+import { voiceMicrophone } from '../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMicrophoneStore';
 import { VoiceToolMessage } from '../src/extensions/workspaces/sessions/(frontend)/tool/_components/VoiceToolMessage';
 import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership';
 
@@ -22,6 +27,7 @@ afterEach(() => {
   voiceMediaBrowserState.reset();
   voiceRealtimeBrowserControls.reset();
   voiceMediaWakes.reset();
+  voiceMicrophone.reset();
 });
 
 describe('browser voice media', () => {
@@ -46,6 +52,7 @@ describe('browser voice media', () => {
           'channel/voice-media-wake.web.ts',
           'channel/voice-ownership.web.ts',
           'fill/Voice.composer-actions.web.tsx',
+          'fill/Voice.overlay.web.tsx',
           'leader/toggle.web.ts',
           'lifecycle/start.web.ts',
         ].map((file) =>
@@ -59,6 +66,7 @@ describe('browser voice media', () => {
     expect(source).toContain('startVoiceMediaRuntime');
     expect(source).not.toContain('voice-media-runtime');
     expect(source).toContain("id: 'voice'");
+    expect(source).toContain("slot: 'overlay'");
     expect(source).not.toContain("id: 'voice.capture'");
     expect(source).not.toContain("command: 'voice'");
     expect(source).toContain("id: 'voice.toggle'");
@@ -241,6 +249,10 @@ describe('browser voice media', () => {
     expect(source).toContain('recorder?.dispose()');
     expect(source).not.toContain('sendSessionFrame');
     expect(source).not.toContain('/minor voice-auto deactivate');
+    // The composer no longer knows a device exists; it records on whatever the client is on.
+    expect(source).not.toContain('voice-microphone-picker');
+    expect(source).not.toContain('voiceMicrophoneStore');
+    expect(source).not.toContain('startManualBrowserRecording');
   });
 
   it('renders the manual record button as unavailable throughout autonomous capture', () => {
@@ -263,8 +275,42 @@ describe('browser voice media', () => {
     const manual = renderPlugin(VoiceComposerAction, slotPropsFixture({ statuses: {} }).props);
     expect(manual.html).toContain('aria-label="start voice recording"');
     expect(manual.html).not.toContain('disabled=""');
+    expect(manual.html).not.toContain('Voice microphone');
   });
 
+  // Radix portals dialog content out of the render tree, so `html` is empty either way.
+  // These assert the component mounts in both states; the option labels are checked below.
+  it('mounts the microphone dialog whether or not a capture is waiting', () => {
+    const closed = renderPlugin(VoiceMicrophoneDialog, slotPropsFixture({}).props);
+    expect(closed.error).toBeUndefined();
+
+    voiceMicrophone.update(() => ({
+      inputs: [
+        { deviceId: 'built-in', groupId: 'internal', label: 'MacBook microphone' },
+        { deviceId: 'usb', groupId: 'external', label: 'USB microphone' },
+      ],
+      choice: () => undefined,
+    }));
+    expect(renderPlugin(VoiceMicrophoneDialog, slotPropsFixture({}).props).error).toBeUndefined();
+  });
+
+  it('keeps two identically named inputs distinguishable', () => {
+    expect(
+      microphoneOptions([
+        { deviceId: 'built-in', label: 'MacBook microphone' },
+        { deviceId: 'usb', label: 'USB microphone' },
+      ]),
+    ).toEqual(['MacBook microphone', 'USB microphone']);
+
+    expect(
+      microphoneOptions([
+        { deviceId: 'aaaaaa11', label: 'USB microphone' },
+        { deviceId: 'bbbbbb22', label: 'USB microphone' },
+      ]),
+    ).toEqual(['USB microphone · aaaaaa', 'USB microphone · bbbbbb']);
+
+    expect(microphoneOptions([{ deviceId: 'x', label: '' }])).toEqual(['Microphone']);
+  });
   it('does not expose the session-backed manual recording control in the browser activity dock', async () => {
     const source = await readFile(
       new URL(

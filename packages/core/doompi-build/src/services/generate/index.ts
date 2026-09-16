@@ -2,12 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  API_ROUTES_MODULE,
   BUILD_TARGET_PLATFORMS,
+  GENERATED_CLIENT_NAME,
   GENERATED_DIR,
   GENERATED_ENTRY_FILENAMES,
   GENERATED_ENTRY_NAMES,
 } from '../../constants/layout';
 import type { ExtensionGraph, ExtensionNotice } from '../../types/extensionGraph';
+import { renderApiClient } from '../renderClient';
 import { renderCliEntry, renderServerEntry, renderWebEntry } from '../renderEntry';
 import { resolveTarget } from '../resolveTarget';
 import type { BuildTarget } from '../resolveTarget/type';
@@ -76,6 +79,21 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
     const render = RENDERERS[target];
     const source = render(resolution, { packageName, pluginId, root: graph.root, entryDir: GENERATED_DIR });
     files.set(`${GENERATED_DIR}/${ENTRY_FILENAME[target]}.${ENTRY_EXTENSION[target]}`, source);
+  }
+
+  // Not a fourth build target: no host loads it as an entry, and adding one to
+  // the target loop would mean a resolution pass and a contribution field for
+  // something that is only ever imported by a routed frontend file.
+  const hasRouteTable = fs.existsSync(path.join(options.packageDir, API_ROUTES_MODULE));
+  const client = hasRouteTable
+    ? renderApiClient(graph, { packageName, pluginId, root: graph.root, entryDir: GENERATED_DIR })
+    : undefined;
+  if (client !== undefined) files.set(`${GENERATED_DIR}/${GENERATED_CLIENT_NAME}.ts`, client);
+  if (hasRouteTable && client === undefined) {
+    notices.push({
+      path: API_ROUTES_MODULE,
+      message: 'declares API routes, but no (backend)/api/<base-path>/ folder says where they are mounted',
+    });
   }
 
   const managed = GENERATED_ENTRY_NAMES.map((name) => `${GENERATED_DIR}/${name}.ts`);

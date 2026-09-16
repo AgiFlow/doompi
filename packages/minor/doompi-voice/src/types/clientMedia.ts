@@ -199,15 +199,28 @@ export function voiceMediaClientUrl(sessionId: string, route: string, params: Re
   return `${sessionApiPath(sessionId)}/plugins/${VOICE_MEDIA_API_BASE_PATH}${route}?${search.toString()}`;
 }
 
+/** What one capture opens. No `deviceId` means the input the browser is already on. */
 export interface VoiceMicrophoneConstraints {
-  audio:
-    | boolean
-    | {
-        deviceId: { exact: string };
-        channelCount: number;
-        echoCancellation: boolean;
-        noiseSuppression: boolean;
-        autoGainControl: boolean;
-      };
+  audio: {
+    deviceId?: { exact: string };
+    channelCount: number;
+    echoCancellation: boolean;
+    noiseSuppression: boolean;
+    autoGainControl: boolean;
+  };
   video: false;
+}
+
+/** The input the browser is already on, with the processing every capture path expects. */
+export const CLIENT_DEFAULT_MICROPHONE: VoiceMicrophoneConstraints = {
+  audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  video: false,
+};
+
+/** The same processing, pinned to one input. */
+export function exactMicrophone(deviceId: string): VoiceMicrophoneConstraints {
+  return {
+    ...CLIENT_DEFAULT_MICROPHONE,
+    audio: { ...CLIENT_DEFAULT_MICROPHONE.audio, deviceId: { exact: deviceId } },
+  };
 }

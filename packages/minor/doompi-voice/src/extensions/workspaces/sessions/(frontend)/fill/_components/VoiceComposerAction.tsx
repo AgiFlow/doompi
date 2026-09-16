@@ -1,57 +1,25 @@
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
-import {
-  AlertIcon,
-  Button,
-  LoaderIcon,
-  MicIcon,
-  StopIcon,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@agimon-ai/doompi-web-components';
+import { AlertIcon, Button, LoaderIcon, MicIcon, StopIcon } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 
 import { activeVoiceSession } from '../../_lib/voiceMediaWakeStore';
-import {
-  voiceMicrophoneConstraints,
-  watchVoiceMicrophones,
-  discoverVoiceMicrophones,
-  refreshVoiceMicrophones,
-  selectVoiceMicrophone,
-  voiceMicrophone,
-} from '../../_lib/voiceMicrophoneStore';
-import { startManualBrowserRecording } from '../_lib/manualBrowserRecorder';
 import { ManualComposerRecorder, type ManualComposerRecorderState } from '../_lib/manualComposerRecorder';
-import { transcribeManualRecording } from '../_lib/manualTranscriptionClient';
 import { voiceActivityView } from '../_lib/voiceActivityView';
 
 const MANUAL_UNAVAILABLE_LABEL = 'manual voice is unavailable while autonomous voice is active';
 
 /** Voice control in the composer action slot on desktop and mobile. */
 export function VoiceComposerAction({ sessionId, appendComposerDraft, statuses }: WebPluginSlotProps) {
-  const microphone = useStore(voiceMicrophone.store, (state) => state);
-  const [deviceError, setDeviceError] = useState<string>();
-  const reportDeviceError = (error: unknown): void =>
-    setDeviceError(error instanceof Error ? error.message : String(error));
   const ownedSession = useStore(activeVoiceSession.store, (state) => state);
   const view = voiceActivityView(statuses['doom-voice']);
   // The recorder publishes into state rather than being read during render, so the
   // button re-renders from the phase it last announced.
   const [manualState, setManualState] = useState<ManualComposerRecorderState>({ phase: 'idle' });
   const manualRecorder = useRef<ManualComposerRecorder | undefined>(undefined);
-  manualRecorder.current ??= new ManualComposerRecorder(
-    appendComposerDraft,
-    () => {
-      setManualState(manualRecorder.current?.snapshot() ?? { phase: 'idle' });
-    },
-    {
-      start: async () => startManualBrowserRecording(undefined, await voiceMicrophoneConstraints()),
-      transcribe: (audio, id, duration, signal) => transcribeManualRecording(audio, id, duration, undefined, signal),
-    },
-  );
+  manualRecorder.current ??= new ManualComposerRecorder(appendComposerDraft, () => {
+    setManualState(manualRecorder.current?.snapshot() ?? { phase: 'idle' });
+  });
   const manualPhase = manualState.phase;
   const manualError = manualState.error;
   const autonomous = view.mode === 'auto' || ownedSession !== null;
@@ -68,13 +36,6 @@ export function VoiceComposerAction({ sessionId, appendComposerDraft, statuses }
   useEffect(() => {
     manualRecorder.current?.reset();
   }, [sessionId, autonomous]);
-
-  useEffect(() => {
-    const changed = (): void => {
-      void refreshVoiceMicrophones().catch(reportDeviceError);
-    };
-    return watchVoiceMicrophones(changed);
-  }, []);
 
   const act = (): void => {
     if (!autonomous) void manualRecorder.current?.toggle(sessionId);
@@ -118,45 +79,9 @@ export function VoiceComposerAction({ sessionId, appendComposerDraft, statuses }
           <MicIcon className="h-3.5 w-3.5" />
         )}
       </Button>
-      {microphone.inputs.length > 0 ? (
-        <Select
-          value={microphone.deviceId ?? ''}
-          disabled={autonomous || manualPhase !== 'idle' || microphone.busy}
-          onValueChange={(value) => {
-            setDeviceError(undefined);
-            void selectVoiceMicrophone(value).catch(reportDeviceError);
-          }}
-        >
-          <SelectTrigger
-            aria-label="Voice microphone"
-            data-testid="voice-microphone-picker"
-            className="max-w-36 text-xs"
-          >
-            <SelectValue placeholder="Choose microphone" />
-          </SelectTrigger>
-          <SelectContent>
-            {microphone.inputs.map((input) => (
-              <SelectItem key={input.deviceId} value={input.deviceId}>
-                {input.label || 'Microphone'}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : (
-        <Button
-          variant="outline"
-          disabled={autonomous || manualPhase !== 'idle' || microphone.busy}
-          onClick={() => {
-            setDeviceError(undefined);
-            void discoverVoiceMicrophones().catch(reportDeviceError);
-          }}
-        >
-          Microphone
-        </Button>
-      )}
-      {(manualError || deviceError || microphone.error) && (
+      {manualError && (
         <span role="alert" className="max-w-64 text-xs text-doom-yellow">
-          {manualError || deviceError || microphone.error}
+          {manualError}
         </span>
       )}
     </div>

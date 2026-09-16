@@ -1,3 +1,10 @@
+export {
+  createRpcStub,
+  type RpcStub,
+  type RpcStubCall,
+  type RpcStubReply,
+  type RpcStubRequest,
+} from '../web/services/testing/rpcStub';
 export { type ChannelDelivery, driveChannel } from '../web/services/testing/channels';
 export { renderPlugin, type RenderedPlugin } from '../web/services/testing';
 export {
