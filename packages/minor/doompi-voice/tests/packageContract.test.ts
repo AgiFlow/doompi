@@ -35,6 +35,9 @@ const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 const manifestPath = path.join(packageDirectory, 'package.json');
+/** The browser half is colocated with the routed file that renders it, so the model and the manual recorder sit beside their surfaces. */
+const sessionFrontend = 'src/extensions/workspaces/sessions/(frontend)';
+const sileroModelDirectory = `${sessionFrontend}/lifecycle/_lib/models`;
 const piPackage = '@earendil-works/pi-coding-agent';
 const expectedConfigurationFiles = [
   'package.json',
@@ -194,21 +197,21 @@ describe('doom voice package boundary', () => {
   it('bundles the pinned Silero model and ships its upstream attribution', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.files).not.toContain('src/web');
+    expect(manifest.files).not.toContain('src/extensions');
     expect(manifest.files).toContain('dist');
     expect(manifest.files).toEqual(
-      expect.arrayContaining(['src/web/models/SILERO-LICENSE', 'src/web/models/README.md']),
+      expect.arrayContaining([`${sileroModelDirectory}/SILERO-LICENSE`, `${sileroModelDirectory}/README.md`]),
     );
-    await expectFile('src/web/models/silero_vad_v6.2.1.onnx');
-    await expectFile('src/web/models/SILERO-LICENSE');
-    await expectFile('src/web/models/README.md');
+    await expectFile(`${sileroModelDirectory}/silero_vad_v6.2.1.onnx`);
+    await expectFile(`${sileroModelDirectory}/SILERO-LICENSE`);
+    await expectFile(`${sileroModelDirectory}/README.md`);
   });
 
   it('keeps standalone manual browser modules outside autonomous voice boundaries', async () => {
     const manualFiles = [
-      'src/web/api/manualBrowserRecorder.ts',
-      'src/web/api/manualComposerRecorder.ts',
-      'src/web/api/manualTranscriptionClient.ts',
+      `${sessionFrontend}/fill/_lib/manualBrowserRecorder.ts`,
+      `${sessionFrontend}/fill/_lib/manualComposerRecorder.ts`,
+      `${sessionFrontend}/fill/_lib/manualTranscriptionClient.ts`,
     ];
     const forbidden =
       /CaptureSession|VoiceMediaClient|VoiceWorkerPipeline|voiceMediaWakeStore|voiceOwnership|sessionVoiceOwnership|playback/u;

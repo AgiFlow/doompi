@@ -6,8 +6,8 @@ import type { LogSlice } from './logReader';
 /**
  * The runner log API, shared by this package's session-scoped routes and its
  * cockpit plugin. The two halves run in different processes, so the wire
- * vocabulary is declared here: `src/web` may reach `src/types` and nothing else on
- * the server side.
+ * vocabulary is declared here: the browser half may reach `src/types` and
+ * nothing else on the server side.
  *
  * The routes are mounted inside one session's own server, so they name a runner
  * and never a session or a path. The page addresses a session through the hub's

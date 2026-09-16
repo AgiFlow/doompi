@@ -9,8 +9,12 @@ const webPlugin = {
   ...scopedWebPlugin.workspace,
   ...scopedWebPlugin.session,
 };
-import { PlanActivitySection } from '../../src/web/components/PlanActivitySection';
-import { PLAN_TAB_ID, PlanPanel, planTab } from '../../src/web/components/PlanPanel';
+import { PlanActivitySection } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/PlanActivitySection';
+import {
+  PLAN_TAB_ID,
+  PlanPanel,
+  planTab,
+} from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/PlanPanel';
 
 /**
  * The two surfaces this package adds to the cockpit, mounted.

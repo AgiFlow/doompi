@@ -4,7 +4,7 @@ import {
   requestMessagePromptDraft,
   requestPromptDialogOpen,
   subscribePromptDialogRequest,
-} from '../../src/web/lib/messagePromptDraft';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/messagePromptDraft';
 
 describe('prompt dialog requests', () => {
   it('copies user message text into an editable unnamed draft', () => {

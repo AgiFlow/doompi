@@ -4,8 +4,8 @@ beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BrowserVoiceMediaTransport } from '../src/web/stores/clientMediaTransport';
-import { voiceMediaWakes } from '../src/web/stores/voiceMediaWakeStore';
+import { BrowserVoiceMediaTransport } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/clientMediaTransport';
+import { voiceMediaWakes } from '../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMediaWakeStore';
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({
   sealedTransport: {

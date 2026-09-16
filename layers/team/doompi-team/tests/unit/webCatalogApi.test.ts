@@ -4,7 +4,7 @@ beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { launchAgent } from '../../src/web/api/catalog';
+import { launchAgent } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/catalog';
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({
   sealedTransport: { fetch: vi.fn() },

@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
-import { authorCaptureContext, createAuthorCapturePacket } from '../../src/web/stores/authorCapture';
-import { authorProfilesForDocument } from '../../src/web/stores/authorProfiles';
-import { recordAuthorCaptureStatus, recordAuthorComposerSubmission } from '../../src/web/stores/authorRequestLifecycle';
+import {
+  authorCaptureContext,
+  createAuthorCapturePacket,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCapture';
+import { authorProfilesForDocument } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorProfiles';
+import type { AuthorRegionDraft } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
 import {
   addAuthorRegion,
   authorDocument,
@@ -15,7 +17,11 @@ import {
   putAuthorRequest,
   reviseAuthorDocument,
   updateAuthorRequest,
-} from '../../src/web/stores/authorWorkspaceStore';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
+import {
+  recordAuthorCaptureStatus,
+  recordAuthorComposerSubmission,
+} from '../../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/authorRequestLifecycle';
 
 afterEach(() => authorWorkspace.reset());
 

@@ -21,7 +21,7 @@ import type {
 } from '../src/types/realtime';
 import { REALTIME_ROUTES } from '../src/types/realtime';
 import { VOICE_OWNERSHIP_ROUTES } from '../src/types/voiceOwnership';
-import { VoiceMediaClient, type RealtimeBrowserSessionFactory } from '../src/web/api/voiceMediaClient';
+import { VoiceMediaClient, type RealtimeBrowserSessionFactory } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/voiceMediaClient';
 import { createTestVoiceMediaApi as createVoiceMediaApi } from './support';
 
 const clock: IClock = {

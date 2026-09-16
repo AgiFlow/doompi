@@ -2,7 +2,7 @@ import { renderPlugin, toolMessagePropsFixture } from '@agimon-ai/doompi-core/we
 import { describe, expect, it } from 'vitest';
 
 import { webPlugin as scopedWebPlugin } from '../../generated/web';
-import { PlanToolMessage } from '../../src/web/components/PlanToolMessage';
+import { PlanToolMessage } from '../../src/extensions/workspaces/sessions/(frontend)/tool/_components/PlanToolMessage';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

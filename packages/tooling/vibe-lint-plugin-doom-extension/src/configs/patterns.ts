@@ -54,11 +54,6 @@ export const patterns: Record<string, PatternDefinition> = {
       'Executable composition entrypoints declared in package.json bin. Assemble services directly without importing public export wrappers or extension entries.',
     includes: ['src/bin/**/*.ts'],
   },
-  'doom-web-plugin-entry': {
-    description:
-      'The direct browser entry is src/extensions/web.ts and exports webPlugin through defineWebPlugin. Declare global/session contributions from src/web modules; publish the source entry through doompiWeb.client and keep it out of the node build. No exports wrapper. Browser imports remain limited to the approved web dependencies, own web modules, types, and constants. Components act through their typed props.',
-    includes: ['src/extensions/web.ts'],
-  },
   'doom-web-plugin-store': {
     description:
       "Per-session plugin state: one `defineSessionStore<T>(empty)` per topic, where T is the whole record for a session (the hub's last payload plus this page's own ephemeral state such as dismissed ids or the open run). The channel is `store.channel({ channel, parse, reduce })`: parse gates the wire, reduce folds one payload and reconciles the ephemeral fields; drop and reset belong to the helper. Actions are plain functions calling `store.update`, and one that sends takes a `SessionFrameSender` first. No top-level let.",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { author, authorChannel } from '../../src/web/stores/authorStore';
+import { author, authorChannel } from '../../src/extensions/workspaces/sessions/(frontend)/channel/_lib/authorStore';
 
 const session = (sessionId: string | null) => author.select(author.store.state, sessionId);
 

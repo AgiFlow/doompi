@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { workflowCallSummary, workflowResultLines } from '../src/web/lib/workflowToolRender';
+import {
+  workflowCallSummary,
+  workflowResultLines,
+} from '../src/extensions/workspaces/sessions/(frontend)/tool/_lib/workflowToolRender';
 
 const text = (value: string) => ({ content: [{ type: 'text', text: value }], details: undefined });
 const json = (value: unknown) => text(JSON.stringify(value));

@@ -2,8 +2,12 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { AuthorRequestLog } from '../../src/web/components/AuthorRequestLog';
-import type { AuthorNativeAnchor, AuthorRegionDraft, AuthorRequestRecord } from '../../src/web/lib/authorViewportTypes';
+import type {
+  AuthorNativeAnchor,
+  AuthorRegionDraft,
+  AuthorRequestRecord,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
+import { AuthorRequestLog } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorRequestLog';
 const rect = { x: 0, y: 0, width: 1, height: 1 };
 const region: AuthorRegionDraft = {
   id: 'r',

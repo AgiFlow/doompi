@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
+import {
+  workflowActivityRows,
+  workflowRunIdentity,
+} from '../src/extensions/workspaces/sessions/(frontend)/_lib/workflowActivity';
+import {
+  focusRun,
+  workflowRunsChannel,
+  workflows,
+} from '../src/extensions/workspaces/sessions/(frontend)/_lib/workflowsStore';
 import type { WorkflowRunView } from '../src/types/webWorkflows';
-import { workflowActivityRows, workflowRunIdentity } from '../src/web/lib/workflowActivity';
-import { focusRun, workflowRunsChannel, workflows } from '../src/web/stores/workflowsStore';
 
 const NOW = Date.parse('2026-08-24T12:00:00.000Z');
 

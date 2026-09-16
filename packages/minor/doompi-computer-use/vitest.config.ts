@@ -22,7 +22,7 @@ export default defineConfig({
         '**/coverage/**',
         // Static-markup tests prove these components mount, but cannot exercise
         // browser click handlers or effects. Those belong to cockpit E2E tests.
-        'src/web/**/*.tsx',
+        'src/extensions/**/_components/**/*.tsx',
       ],
       reportOnFailure: false,
       enabled: true,

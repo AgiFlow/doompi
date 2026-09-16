@@ -7,12 +7,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { VOICE_MEDIA_ACTIVITY_ECHO_SPEECH_MS_HEADER, type VoiceMediaClientEvent } from '../src/types/clientMedia';
 import { REALTIME_ROUTES } from '../src/types/realtime';
-import { BrowserVoiceMediaTransport } from '../src/web/stores/clientMediaTransport';
+import { BrowserVoiceMediaTransport } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/clientMediaTransport';
 import {
   parseVoiceMediaWakePayload,
   voiceMediaWakeChannel,
   voiceMediaWakes,
-} from '../src/web/stores/voiceMediaWakeStore';
+} from '../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMediaWakeStore';
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({
   sealedTransport: {

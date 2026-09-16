@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { computerUse, computerUseChannel } from '../../src/web/stores/computerUseStore';
+import {
+  computerUse,
+  computerUseChannel,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/computerUseStore';
 
 const payload = (sessionId: string, phase: 'inactive' | 'active') => ({
   state: { sessionId, revision: 1, wake: 1, phase },

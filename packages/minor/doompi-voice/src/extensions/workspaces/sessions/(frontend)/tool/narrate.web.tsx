@@ -1,7 +1,7 @@
 import { defineToolRenderer } from '@agimon-ai/doompi-core/web';
 
-import { VoiceToolMessage } from '../../../../../web/components/VoiceToolMessage';
-import { VOICE_NARRATE_TOOL } from '../../../../../web/lib/voiceToolRender';
+import { VoiceToolMessage } from './_components/VoiceToolMessage';
+import { VOICE_NARRATE_TOOL } from './_lib/voiceToolRender';
 
 export default defineToolRenderer({
   tools: [VOICE_NARRATE_TOOL],

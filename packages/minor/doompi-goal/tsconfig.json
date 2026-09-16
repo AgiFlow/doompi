@@ -28,7 +28,6 @@
     "dist",
     "coverage",
     "tests/web",
-    "src/web",
     "src/extensions/**/(frontend)/**/*",
     "generated/web.ts"
   ]

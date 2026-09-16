@@ -1,8 +1,8 @@
 import { defineLeaderBinding } from '@agimon-ai/doompi-core/web';
 
-import { subagentsTab } from '../../../../../web/components/SubagentsPanel';
-import { AGENTS_GROUP } from '../../../../../web/lib/leaderGroups';
-import { openCatalog } from '../../../../../web/stores/catalogStore';
+import { subagentsTab } from '../_components/SubagentsPanel';
+import { openCatalog } from '../_lib/catalogStore';
+import { AGENTS_GROUP } from './_lib/leaderGroups';
 
 /** SPC a l: pick an agent and launch it. The filename is the binding's local name. */
 export default defineLeaderBinding({

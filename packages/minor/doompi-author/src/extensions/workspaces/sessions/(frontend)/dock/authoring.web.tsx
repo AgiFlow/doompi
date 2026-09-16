@@ -1,7 +1,7 @@
 import { defineDockFace } from '@agimon-ai/doompi-core/web';
 
-import { AuthorPanel } from '../../../../../web/components/AuthorPanel';
-import { authorWorkspace } from '../../../../../web/stores/authorWorkspaceStore';
+import { authorWorkspace } from '../_lib/authorWorkspaceStore';
+import { AuthorPanel } from './_components/AuthorPanel';
 
 export default defineDockFace({
   id: 'authoring',

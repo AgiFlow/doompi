@@ -8,15 +8,18 @@ import {
   AuthorDocumentPanel,
   authorFileTab,
   displayedAuthorRegions,
-} from '../../src/web/components/AuthorDocumentPanel';
-import { AuthorRequestLog } from '../../src/web/components/AuthorRequestLog';
-import { OpenAuthoringFileToolCard, openAuthoringFileTab } from '../../src/web/components/OpenAuthoringFileToolCard';
-import type { AuthorRequestRecord } from '../../src/web/lib/authorViewportTypes';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
+import type { AuthorRequestRecord } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
 import {
   focusAuthorDocument,
   releaseAuthorDocumentFocus,
   dropAuthorSession,
-} from '../../src/web/stores/authorWorkspaceStore';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
+import { AuthorRequestLog } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorRequestLog';
+import {
+  OpenAuthoringFileToolCard,
+  openAuthoringFileTab,
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/_components/OpenAuthoringFileToolCard';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

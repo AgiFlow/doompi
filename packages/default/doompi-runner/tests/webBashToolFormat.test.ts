@@ -10,7 +10,7 @@ import {
   formatResultSummary,
   formatSize,
   truncateMiddle,
-} from '../src/web/lib/bashToolFormat';
+} from '../src/extensions/workspaces/sessions/(frontend)/tool/_lib/bashToolFormat';
 
 describe('the bash web call summary', () => {
   it('collapses scripts, abbreviates home paths, and keeps both ends of a long pipeline', () => {

@@ -1,8 +1,8 @@
 /**
  * The metrics API, shared by this package's hub-scoped route and its cockpit
  * plugin. The two halves run in different processes, so the wire vocabulary is
- * declared here: `src/web` may reach `src/types` and nothing else on the node
- * side.
+ * declared here: the `(frontend)` half may reach `src/types` and nothing else
+ * on the node side.
  *
  * The shapes are narrower than log-sink-mcp's own report, which carries filter
  * echoes, span counts and token distributions the page never draws.

@@ -7,7 +7,7 @@ import {
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { webPlugin as scopedWebPlugin } from '../../generated/web';
-import { workflows } from '../../src/web/stores/workflowsStore';
+import { workflows } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/workflowsStore';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

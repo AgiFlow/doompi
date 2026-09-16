@@ -12,7 +12,7 @@ import {
   followScreen,
   sendKeys,
   takeControl,
-} from '../../src/web/api/terminalApi';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/terminalApi';
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fetch: vi.fn() } }));
 

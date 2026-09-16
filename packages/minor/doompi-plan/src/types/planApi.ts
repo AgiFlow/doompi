@@ -30,7 +30,21 @@ export const PLAN_STATUS_KEY = 'doom-plan-document';
 export const PLAN_REVIEW_TITLE = 'Plan complete. What would you like to do?';
 export const EXIT_PLAN_MODE_CHOICE = 'Exit plan mode and start implementation';
 export const CONTINUE_PLANNING_CHOICE = 'Continue planning';
-export const PLAN_REVIEW_OPTIONS = [EXIT_PLAN_MODE_CHOICE, CONTINUE_PLANNING_CHOICE] as const;
+export const EXIT_PLAN_DECISION = 'exit';
+export const CONTINUE_PLAN_DECISION = 'continue';
+
+/**
+ * The label the reader sees paired with the decision the tool acts on. A headless
+ * client answers with `value`, so a facet never has to recognise the wording; Pi's
+ * own `ui.select` carries labels only, so its half maps the label back itself.
+ */
+export const PLAN_REVIEW_CHOICES = [
+  { label: EXIT_PLAN_MODE_CHOICE, value: EXIT_PLAN_DECISION },
+  { label: CONTINUE_PLANNING_CHOICE, value: CONTINUE_PLAN_DECISION },
+] as const;
+
+/** The same options as bare labels, which is all Pi's select and the composer prompt need. */
+export const PLAN_REVIEW_OPTIONS = PLAN_REVIEW_CHOICES.map((choice) => choice.label);
 
 /** Between the plan's title and the stamp that marks a rewrite. */
 const STATUS_SEPARATOR = ' · ';

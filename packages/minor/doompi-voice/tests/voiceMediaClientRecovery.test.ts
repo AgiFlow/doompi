@@ -13,7 +13,7 @@ import type {
   VoiceMediaPlaybackResult,
   VoiceMediaTransport,
 } from '../src/types/clientMedia';
-import { VoiceMediaClient } from '../src/web/api/voiceMediaClient';
+import { VoiceMediaClient } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/voiceMediaClient';
 
 const capabilities: VoiceMediaCapabilities = {
   capture: true,

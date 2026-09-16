@@ -14,9 +14,9 @@ import {
   startManualBrowserRecording,
   type ManualBrowserRecording,
   type ManualBrowserRecordingResult,
-} from '../src/web/api/manualBrowserRecorder';
-import { ManualComposerRecorder } from '../src/web/api/manualComposerRecorder';
-import { transcribeManualRecording } from '../src/web/api/manualTranscriptionClient';
+} from '../src/extensions/workspaces/sessions/(frontend)/fill/_lib/manualBrowserRecorder';
+import { ManualComposerRecorder } from '../src/extensions/workspaces/sessions/(frontend)/fill/_lib/manualComposerRecorder';
+import { transcribeManualRecording } from '../src/extensions/workspaces/sessions/(frontend)/fill/_lib/manualTranscriptionClient';
 
 function recorderFixture() {
   const stopTrack = vi.fn();

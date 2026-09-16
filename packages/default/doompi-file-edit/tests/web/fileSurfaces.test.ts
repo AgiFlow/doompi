@@ -4,13 +4,19 @@ beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { CommentDraft } from '../../src/extensions/workspaces/sessions/(frontend)/_components/CommentDraft';
+import { DeleteFileDialog } from '../../src/extensions/workspaces/sessions/(frontend)/_components/DeleteFileDialog';
+import { DiffView } from '../../src/extensions/workspaces/sessions/(frontend)/_components/DiffView';
+import { FilePanel } from '../../src/extensions/workspaces/sessions/(frontend)/_components/FilePanel';
+import {
+  addComment,
+  files,
+  filesChannel,
+  storeDetail,
+  storeError,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/filesStore';
+import { FilesActivitySection } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/FilesActivitySection';
 import type { FileEditsDetailView, FileEditsDiffHunk } from '../../src/types/fileEditsApi';
-import { CommentDraft } from '../../src/web/components/CommentDraft';
-import { DeleteFileDialog } from '../../src/web/components/DeleteFileDialog';
-import { DiffView } from '../../src/web/components/DiffView';
-import { FilePanel } from '../../src/web/components/FilePanel';
-import { FilesActivitySection } from '../../src/web/components/FilesActivitySection';
-import { addComment, files, filesChannel, storeDetail, storeError } from '../../src/web/stores/filesStore';
 
 /**
  * Every surface this plugin puts on the page, rendered once.

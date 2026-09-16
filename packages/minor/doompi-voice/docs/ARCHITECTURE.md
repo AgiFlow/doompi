@@ -19,7 +19,7 @@ The experimental live path is a focused TypeScript port, not a Codex app-server 
 - `adapters/realtime/realtimeHost.ts`: typed realtime signaling through the server-owned Voice host service.
 - `adapters/pi/{liveVoiceController,voiceModeController}.ts`: explicit mode selection, bounded polling, context updates and main-agent requests.
 - `adapters/pi/{realtimeContext,realtimeDelivery}.ts`: bounded visible-branch projection and deduplicated user-text delivery.
-- `web/api/{voiceMediaClient,browserRealtimeSession}.ts`: browser WebRTC capture/playback beneath page-global ownership, separate from legacy PCM.
+- `extensions/workspaces/sessions/(frontend)/lifecycle/_lib/{voiceMediaClient,browserRealtimeSession}.ts`: browser WebRTC capture/playback beneath page-global ownership, separate from legacy PCM.
 
 `voice.ts` composes half-duplex (`legacy` configuration value) and realtime companion controllers.
 only on explicit activation. Local ASR readiness does not gate live mode. Login is a separate

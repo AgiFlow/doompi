@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { BrowserSpeechPresenceDetector } from '../src/web/lib/browserSpeechPresenceDetector';
+import { BrowserSpeechPresenceDetector } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserSpeechPresenceDetector';
 
 class FakeWorker {
   public onmessage: ((event: { data: unknown }) => void) | null = null;

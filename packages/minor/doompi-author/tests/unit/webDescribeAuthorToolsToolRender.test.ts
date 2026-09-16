@@ -4,7 +4,7 @@ import {
   describeAuthorToolsCallSummary,
   describeAuthorToolsResultLines,
   describeAuthorToolsToolName,
-} from '../../src/web/lib/describeAuthorToolsToolRender';
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/describeAuthorToolsToolRender';
 
 describe('the describe_author_tools tool view', () => {
   it('names the tool the package registers', () => {

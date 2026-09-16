@@ -1,14 +1,10 @@
 import type { WebPluginDefinition } from '@agimon-ai/doompi-core/web';
 
-import { WorkflowsActivitySection } from '../../../../../web/components/WorkflowsActivitySection';
-import { workflowsTab } from '../../../../../web/components/WorkflowsPanel';
-import { WorkflowToolMessage } from '../../../../../web/components/WorkflowToolMessage';
-import {
-  openCatalog,
-  openWorkflowCatalogForContext,
-  workflowCatalogChannel,
-} from '../../../../../web/stores/catalogStore';
-import { workflowRunsChannel, workflows } from '../../../../../web/stores/workflowsStore';
+import { workflowsTab } from '../_components/WorkflowsPanel';
+import { WorkflowsActivitySection } from '../fill/_components/WorkflowsActivitySection';
+import { WorkflowToolMessage } from '../tool/_components/WorkflowToolMessage';
+import { openCatalog, openWorkflowCatalogForContext, workflowCatalogChannel } from './catalogStore';
+import { workflowRunsChannel, workflows } from './workflowsStore';
 const WORKFLOWS_GROUP = { key: 'w', label: 'workflows', detail: 'multi-step agent runs' };
 const workflowActivitySource = {
   subscribe(listener: () => void) {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BrowserRealtimeSession } from '../src/web/api/browserRealtimeSession';
+import { BrowserRealtimeSession } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserRealtimeSession';
 
 class FakeTrack {
   public readonly kind = 'audio';

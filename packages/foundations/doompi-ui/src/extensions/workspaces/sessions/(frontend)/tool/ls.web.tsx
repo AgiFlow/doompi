@@ -1,5 +1,5 @@
 import { defineToolRenderer } from '@agimon-ai/doompi-core/web';
 
-import { LsToolMessage } from '../../../../../web/components/LsToolMessage';
+import { LsToolMessage } from './_components/LsToolMessage';
 
 export default defineToolRenderer({ message: LsToolMessage });

@@ -79,7 +79,9 @@ import {
   type PlanningFlavor,
 } from '../../services/prompts';
 import {
+  CONTINUE_PLAN_DECISION,
   CONTINUE_PLANNING_CHOICE,
+  EXIT_PLAN_DECISION,
   EXIT_PLAN_MODE_CHOICE,
   formatPlanStatus,
   PLAN_REVIEW_OPTIONS,
@@ -133,8 +135,14 @@ const DEBUG_EVIDENCE_MAX_TEXT_BYTES = 4 * 1024;
 const DEBUG_EVIDENCE_MAX_ITEMS = 32;
 const DEBUG_DIAGNOSTIC_TOOLS = new Set<string>();
 export const WRITE_PLAN_TIMEOUT_MS = 5_000;
-const EXIT_PLAN_DECISION = 'exit';
-const CONTINUE_PLAN_DECISION = 'continue';
+
+/**
+ * What complete_plan tells the model once the reader has answered. Exported because the
+ * server facet runs its own copy of this tool and must not word the outcome differently.
+ */
+export const PLAN_EXIT_APPROVED_TEXT =
+  'The user approved exiting plan mode. Full tool access is restored. Begin implementing the approved plan.';
+export const PLAN_CONTINUE_TEXT = 'The user chose to continue planning. Remain read-only and refine the plan.';
 const PLAN_REVIEW_PROMPT = [
   PLAN_REVIEW_TITLE,
   `  1. ${EXIT_PLAN_MODE_CHOICE}`,
@@ -1329,7 +1337,7 @@ export function createPlanModeRuntime(
           {
             type: 'text' as const,
             text: exited
-              ? 'The user approved exiting plan mode. Full tool access is restored. Begin implementing the approved plan.'
+              ? PLAN_EXIT_APPROVED_TEXT
               : 'The previous model could not be restored. Plan mode remains read-only.',
           },
         ],
@@ -1339,9 +1347,7 @@ export function createPlanModeRuntime(
 
     planReadyForReview = false;
     return {
-      content: [
-        { type: 'text' as const, text: 'The user chose to continue planning. Remain read-only and refine the plan.' },
-      ],
+      content: [{ type: 'text' as const, text: PLAN_CONTINUE_TEXT }],
       details: { exited: false },
     };
   }

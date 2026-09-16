@@ -51,7 +51,6 @@ import { doomPromptShape } from './prompts.js';
 import {
   webPluginEntry,
   webPluginImportAllowlist,
-  webPluginLayerBoundary,
   webPluginManifest,
   webPluginNoModuleState,
   webPluginProtocolLayout,
@@ -104,7 +103,6 @@ export const rules: Record<string, RuleDefinition> = {
   'package-api-manifest': packageApiManifest,
   'web-plugin-entry': webPluginEntry,
   'web-plugin-import-allowlist': webPluginImportAllowlist,
-  'web-plugin-layer-boundary': webPluginLayerBoundary,
   'web-plugin-manifest': webPluginManifest,
   'web-plugin-no-module-state': webPluginNoModuleState,
   'web-plugin-protocol-layout': webPluginProtocolLayout,

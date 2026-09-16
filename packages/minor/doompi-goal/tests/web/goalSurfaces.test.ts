@@ -3,15 +3,15 @@ import { describe, expect, it } from 'vitest';
 
 import { webPlugin as scopedWebPlugin } from '../../generated/web';
 import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../src/types/goalView';
-import { EditGoalDialog } from '../../src/web/components/EditGoalDialog';
-import { GoalActivitySection } from '../../src/web/components/GoalActivitySection';
+import { EditGoalDialog } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/EditGoalDialog';
+import { GoalActivitySection } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/GoalActivitySection';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,
   ...scopedWebPlugin.workspace,
   ...scopedWebPlugin.session,
 };
-import { RemoveGoalDialog } from '../../src/web/components/RemoveGoalDialog';
+import { RemoveGoalDialog } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/RemoveGoalDialog';
 
 /**
  * The surface this package adds to the cockpit, mounted.

@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  WORKFLOW_LAUNCH_VERB,
+  workflowLaunchLine,
+} from '../src/extensions/workspaces/sessions/(frontend)/_lib/launchLine';
+import {
   isLaunchParseFailure,
   parseWorkflowLaunchCommand,
   resolveWorkflowEntry,
   validateWorkflowLaunch,
   workflowLaunchCommand,
 } from '../src/services/workflowLaunchCommand';
-import { WORKFLOW_LAUNCH_VERB, workflowLaunchLine } from '../src/web/lib/launchLine';
 
 describe('parseWorkflowLaunchCommand', () => {
   it('reads the workflow, the runner, the inputs and the prompt', () => {

@@ -1,7 +1,7 @@
 import { defineActivityGroup } from '@agimon-ai/doompi-core/web';
 
-import { runnersTab } from '../../../../../web/components/RunnersPanel';
-import { runnerActivitySource } from '../../../../../web/stores/runnersStore';
+import { runnersTab } from '../_components/RunnersPanel';
+import { runnerActivitySource } from '../_lib/runnersStore';
 export default defineActivityGroup({
   keys: 'r l',
   statusKey: 'doom-runner-runners',

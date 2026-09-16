@@ -20,7 +20,9 @@ vi.mock('@agimon-ai/doompi-minor-mode', async (original) => ({
   },
 }));
 
+import { PLAN_CONTINUE_TEXT, PLAN_EXIT_APPROVED_TEXT } from '../src/services/planMode';
 import { createPlanServerSession } from '../src/services/planServerSession';
+import { CONTINUE_PLANNING_CHOICE, EXIT_PLAN_MODE_CHOICE, PLAN_REVIEW_TITLE } from '../src/types/planApi';
 
 function fixture() {
   let settings: DoomHeadlessModelSettings = { model: { provider: 'test', id: 'chat' }, thinkingLevel: 'medium' };
@@ -29,12 +31,14 @@ function fixture() {
   const setModelSettings = vi.fn(async (next: Partial<DoomHeadlessModelSettings>) => {
     settings = { ...settings, ...next };
   });
+  const request = vi.fn(async (): Promise<unknown> => undefined);
   const host = {
     context: {
       repoRoot: '/repo',
       cwd: '/repo/subdir',
       environment: { HOME: '/test-home' },
       selection,
+      client: { request },
       session: {
         readModelSettings: async () => settings,
         setModelSettings,
@@ -66,7 +70,7 @@ function fixture() {
     const hook = plugin.hooks?.find((hook) => hook.event === 'session_start');
     await hook?.handle({}, host.context);
   };
-  return { host, plugin, entries, mount, restart, settings: () => settings, setModelSettings, selection };
+  return { host, plugin, entries, mount, restart, request, settings: () => settings, setModelSettings, selection };
 }
 
 beforeEach(() => {
@@ -207,6 +211,69 @@ describe('server planning evidence', () => {
   });
 });
 
+// The headless client answers with the option's `value`. This facet used to send the label as the
+// value too, then compare it to 'exit'/'continue', so every review the reader answered failed.
+describe('server plan review', () => {
+  const review = async (f: ReturnType<typeof fixture>) => {
+    await f.mount()('activate', { flavor: 'normal' });
+    const tool = f.plugin().tools.find((tool) => tool.name === 'complete_plan')!;
+    return tool.execute('review', {}, undefined, undefined, f.host.context);
+  };
+
+  it('asks with the decision on each option, not just the label the reader reads', async () => {
+    const f = fixture();
+    await review(f);
+    expect(f.request).toHaveBeenCalledWith(
+      {
+        kind: 'select',
+        title: PLAN_REVIEW_TITLE,
+        options: [
+          { label: EXIT_PLAN_MODE_CHOICE, value: 'exit' },
+          { label: CONTINUE_PLANNING_CHOICE, value: 'continue' },
+        ],
+      },
+      undefined,
+    );
+  });
+
+  it('exits plan mode when the reader picks the exit option', async () => {
+    const f = fixture();
+    f.request.mockResolvedValueOnce('exit');
+    const result = await review(f);
+    expect(result.isError).not.toBe(true);
+    expect(result.details).toEqual({ exited: true });
+    expect(result.content).toEqual([{ type: 'text', text: PLAN_EXIT_APPROVED_TEXT }]);
+    expect(f.entries.find((entry) => entry.customType === 'plan-review')?.data).toEqual({ decision: 'exit' });
+    expect(f.selection.state['minor-mode']).toEqual([]);
+  });
+
+  it('stays in plan mode when the reader keeps planning', async () => {
+    const f = fixture();
+    f.request.mockResolvedValueOnce('continue');
+    const result = await review(f);
+    expect(result.isError).not.toBe(true);
+    expect(result.details).toEqual({ exited: false });
+    expect(result.content).toEqual([{ type: 'text', text: PLAN_CONTINUE_TEXT }]);
+    expect(f.entries.find((entry) => entry.customType === 'plan-review')?.data).toEqual({ decision: 'continue' });
+    expect(f.selection.state['minor-mode']).toEqual(['plan']);
+  });
+
+  it('treats a dismissed prompt as staying in plan mode rather than as approval', async () => {
+    const f = fixture();
+    f.request.mockResolvedValueOnce(undefined);
+    const result = await review(f);
+    expect(result.isError).not.toBe(true);
+    expect(result.details).toEqual({ exited: false });
+    expect(f.selection.state['minor-mode']).toEqual(['plan']);
+  });
+
+  it('offers no decision parameter, so the agent cannot approve its own plan', () => {
+    const tool = fixture()
+      .plugin()
+      .tools.find((tool) => tool.name === 'complete_plan')!;
+    expect(tool.parameters).toEqual({ type: 'object', properties: {}, additionalProperties: false });
+  });
+});
 /** Activate a flavor, then rebuild the plugin through the restore path a real session uses. */
 async function activated(f: ReturnType<typeof fixture>, flavor: string) {
   await f.mount()('activate', { flavor });

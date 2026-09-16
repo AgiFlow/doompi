@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import {
+  launchProblems,
+  RUNNER_SHELL_REQUEST,
+  runnerLaunchLine,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/launchLine';
 import { parseRunnersCommand } from '../../src/services/runnersCommand';
-import { launchProblems, RUNNER_SHELL_REQUEST, runnerLaunchLine } from '../../src/web/lib/launchLine';
 
 /**
  * The cockpit writes the launch line and the session parses it, in different

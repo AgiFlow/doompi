@@ -1,4 +1,4 @@
 import { defineChannelFile } from '@agimon-ai/doompi-core/web';
 
-import { filesChannel } from '../../../../../web/stores/filesStore';
+import { filesChannel } from '../_lib/filesStore';
 export default defineChannelFile(filesChannel);

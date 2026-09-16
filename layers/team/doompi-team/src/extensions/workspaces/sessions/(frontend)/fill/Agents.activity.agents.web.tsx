@@ -1,6 +1,6 @@
 import { defineFill } from '@agimon-ai/doompi-core/web';
 
-import { AgentsActivitySection } from '../../../../../web/components/AgentsActivitySection';
+import { AgentsActivitySection } from './_components/AgentsActivitySection';
 
 /**
  * Renders inside the `agents` activity group rather than after the groups.

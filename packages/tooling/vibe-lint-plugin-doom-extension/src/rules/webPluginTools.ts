@@ -295,9 +295,10 @@ function toolDefinitions(configRoot: string): { tools: ToolDefinition[]; ignored
 
 /** The tool names web/** claims in `tools: [...]` entries, and whether any renderer carries `matches`. */
 function webClaims(configRoot: string): { claimed: Set<string>; hasMatcher: boolean } {
-  // Three places a renderer can live while packages migrate: the legacy
-  // src/web tree, a hand-written src/extensions/web.ts, and a routed
-  // package's colocated (frontend) files plus its generated entry.
+  // Three places a renderer can live: the retired src/web tree, which
+  // walkSources simply reports empty once it is gone, a hand-written
+  // src/extensions/web.ts, and a routed package's colocated (frontend) files
+  // plus its generated entry.
   const sources = [
     ...walkSources(path.join(configRoot, WEB_ROOT)),
     ...walkSources(path.join(configRoot, 'src/extensions')),
@@ -388,6 +389,6 @@ export const webPluginToolRenderers: RuleDefinition = {
     if (missing.length === 0) return null;
     const notChecked =
       unresolvable.length > 0 ? ` Not checked (name imported from a package): ${unresolvable.join(', ')}.` : '';
-    return `no browser item renders: ${missing.join(', ')}. List each name in a toolRenderers entry of the doompiWeb client entry (tools: [...], or a const array in src/web/**), give a runtime-named tool a renderer with matches(...), or mark it '// web-plugin-tool-renderers: ignore <name>' beside its definition.${notChecked}`;
+    return `no browser item renders: ${missing.join(', ')}. List each name in a toolRenderers entry of the doompiWeb client entry (tools: [...], or a const array beside it), give a runtime-named tool a renderer with matches(...), or mark it '// web-plugin-tool-renderers: ignore <name>' beside its definition.${notChecked}`;
   },
 };

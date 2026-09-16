@@ -1,5 +1,5 @@
 import { defineChannelFile } from '@agimon-ai/doompi-core/web';
 
-import { authorChannel } from '../../../../../web/stores/authorStore';
+import { authorChannel } from './_lib/authorStore';
 
 export default defineChannelFile({ ...authorChannel });

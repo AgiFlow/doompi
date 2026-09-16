@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
 import {
   attachAuthorCapture,
   imageCaptureProvider,
   multiRegionCaptureProvider,
   AUTHOR_CAPTURE_MAX_BYTES,
   AUTHOR_REGION_COLORS,
-} from '../../src/web/stores/authorCapture';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCapture';
+import type { AuthorRegionDraft } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
 
 function canvasFixture(blobs: (Blob | null)[] = [new Blob(['png'])]) {
   const context = {

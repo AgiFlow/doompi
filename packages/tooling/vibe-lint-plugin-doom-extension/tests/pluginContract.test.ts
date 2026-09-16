@@ -50,7 +50,6 @@ const EXPECTED_RULE_IDS = [
   'thin-pi-adapter',
   'web-plugin-entry',
   'web-plugin-import-allowlist',
-  'web-plugin-layer-boundary',
   'web-plugin-manifest',
   'web-plugin-no-module-state',
   'web-plugin-protocol-layout',
@@ -99,7 +98,7 @@ describe('Doom extension plugin contract', () => {
       'doom-clean-architecture-boundary',
       'doom-constants',
       'routed-file-contract',
-      'web-plugin-layer-boundary',
+      'web-plugin-import-allowlist',
     ]) {
       expect(recommended.rules[ruleId], ruleId).toBe('error');
     }
@@ -148,23 +147,15 @@ describe('Doom extension plugin contract', () => {
 
   it('applies the browser boundary before the broader extension composition boundary', () => {
     const boundaries = recommended.boundaries ?? [];
-    const browser = boundaries.findIndex((boundary) => boundary.name === 'web-plugin-entry');
+    const browser = boundaries.findIndex((boundary) => boundary.name === 'web-plugin-routed');
     const extensions = boundaries.findIndex((boundary) => boundary.name === 'extensions');
     expect(browser).toBeGreaterThanOrEqual(0);
     expect(browser).toBeLessThan(extensions);
-    expect(boundaries[browser]).toEqual({
-      name: 'web-plugin-entry',
-      pattern: 'src/extensions/web.ts',
-      allowedImports: [
-        'src/web/**',
-        'src/types',
-        'src/types/**',
-        'src/constants',
-        'src/constants/**',
-        'src/extensions/**',
-      ],
-    });
-    expect(doomExtensionPlugin.patterns?.['doom-web-plugin-entry']?.includes).toEqual(['src/extensions/web.ts']);
+    expect(boundaries[browser]?.pattern).toBe('src/extensions/**/(frontend)/**');
+    // The hand-written src/extensions/web.ts entry is retired: a routed package
+    // builds generated/web.ts instead, so nothing targets that literal path.
+    expect(boundaries.some((boundary) => boundary.pattern === 'src/extensions/web.ts')).toBe(false);
+    expect(doomExtensionPlugin.patterns?.['doom-web-plugin-entry']).toBeUndefined();
     expect(doomExtensionPlugin.patterns?.['doom-web-plugin-store']?.includes).toEqual(['src/web/stores/**/*.ts']);
   });
 
@@ -185,12 +176,7 @@ describe('Doom extension plugin contract', () => {
       pattern: 'tests/**',
       allowedImports: ['src/**', 'tests/**', 'generated/**'],
     });
-    for (const id of [
-      'doom-web-plugin-entry',
-      'doom-web-plugin-store',
-      'doom-web-plugin-components',
-      'doom-web-plugin-lib',
-    ]) {
+    for (const id of ['doom-web-plugin-store', 'doom-web-plugin-components', 'doom-web-plugin-lib']) {
       expect(doomExtensionPlugin.patterns?.[id]?.includes.length, id).toBeGreaterThan(0);
     }
   });

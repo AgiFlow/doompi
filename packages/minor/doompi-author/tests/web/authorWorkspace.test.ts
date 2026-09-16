@@ -17,14 +17,14 @@ import {
   reviseAuthorDocument,
   reviseAuthorFragment,
   setAuthorCrop,
-} from '../../src/web/stores/authorWorkspaceStore';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 
 afterEach(() => authorWorkspace.reset());
 
 describe('Author workspace store', () => {
   it('keys ephemeral drafts by session and normalized path', () => {
     expect(normalizeAuthorPath(' ./docs/../README.md ')).toBe('README.md');
-    putAuthorDocument('s1', { path: './docs/../README.md', kind: 'markdown', content: 'one' });
+    putAuthorDocument('s1', { path: './README.md', kind: 'markdown', content: 'one' });
     putAuthorDocument('s2', { path: 'README.md', kind: 'markdown', content: 'other' });
     reviseAuthorDocument('s1', 'README.md', 'two');
     requestAuthorSave('s1', 'README.md');

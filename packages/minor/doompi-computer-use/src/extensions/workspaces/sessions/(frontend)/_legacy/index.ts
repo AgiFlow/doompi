@@ -5,14 +5,14 @@ import {
   COMPUTER_USE_MODE_STATUS_KEY,
   COMPUTER_USE_STATUS_KEY,
 } from '../../../../../types/computerUseApi';
-import { ComputerActionToolCard } from '../../../../../web/components/ComputerActionToolCard';
-import { ComputerExecToolCard } from '../../../../../web/components/ComputerExecToolCard';
-import { ComputerStateToolCard } from '../../../../../web/components/ComputerStateToolCard';
-import { ComputerUsePanel } from '../../../../../web/components/ComputerUsePanel';
-import { computerActionToolName } from '../../../../../web/lib/computerActionToolRender';
-import { computerExecToolName } from '../../../../../web/lib/computerExecToolRender';
-import { computerStateToolName } from '../../../../../web/lib/computerStateToolRender';
-import { computerUseChannel } from '../../../../../web/stores/computerUseStore';
+import { computerUseChannel } from '../_lib/computerUseStore';
+import { ComputerUsePanel } from '../fill/_components/ComputerUsePanel';
+import { ComputerActionToolCard } from '../tool/_components/ComputerActionToolCard';
+import { ComputerExecToolCard } from '../tool/_components/ComputerExecToolCard';
+import { ComputerStateToolCard } from '../tool/_components/ComputerStateToolCard';
+import { computerActionToolName } from '../tool/_lib/computerActionToolRender';
+import { computerExecToolName } from '../tool/_lib/computerExecToolRender';
+import { computerStateToolName } from '../tool/_lib/computerStateToolRender';
 
 export default {
   minorModes: [

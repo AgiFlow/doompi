@@ -2,8 +2,8 @@ import { renderPlugin } from '@agimon-ai/doompi-core/web/testing';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { PromptsDialog } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/PromptsDialog';
 import type { SavedPromptView } from '../../src/types/webPrompts';
-import { PromptsDialog } from '../../src/web/components/PromptsDialog';
 
 const captured = vi.hoisted(() => ({
   buttons: [] as Array<Record<string, unknown>>,
@@ -18,7 +18,7 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fetch: vi.fn() } }));
-vi.mock('../../src/web/api/promptsApi', () => ({
+vi.mock('../../src/extensions/workspaces/sessions/(frontend)/fill/_lib/promptsApi', () => ({
   deleteSavedPrompt: api.remove,
   saveSavedPrompt: api.save,
 }));

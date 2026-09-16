@@ -2,13 +2,20 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { isValidElement, type ReactNode, type ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { focusAuthorViewport } from '../../src/web/api/authorBrowserBridge';
-import { loadAuthorDocument, saveAuthorDocument } from '../../src/web/api/authorFiles';
-import { AuthorDocumentPanel, authorFileLinks, authorFileTab } from '../../src/web/components/AuthorDocumentPanel';
-import { AuthorMediaView } from '../../src/web/components/AuthorMediaView';
-import { AuthorStructuredView } from '../../src/web/components/AuthorStructuredView';
-import { AuthorTextView } from '../../src/web/components/AuthorTextView';
-import * as workspace from '../../src/web/stores/authorWorkspaceStore';
+import {
+  AuthorDocumentPanel,
+  authorFileLinks,
+  authorFileTab,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
+import { AuthorMediaView } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorMediaView';
+import { AuthorStructuredView } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorStructuredView';
+import { AuthorTextView } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorTextView';
+import { focusAuthorViewport } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorBrowserBridge';
+import {
+  loadAuthorDocument,
+  saveAuthorDocument,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorFiles';
+import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 const hooks = vi.hoisted(() => ({
   values: [] as unknown[],
   setters: [] as ReturnType<typeof vi.fn>[],
@@ -28,8 +35,13 @@ vi.mock('react', async (importOriginal) => ({
 vi.mock('@tanstack/react-store', () => ({
   useStore: (store: { state: unknown }, select: (state: unknown) => unknown) => select(store.state),
 }));
-vi.mock('../../src/web/api/authorFiles', () => ({ loadAuthorDocument: vi.fn(), saveAuthorDocument: vi.fn() }));
-vi.mock('../../src/web/api/authorBrowserBridge', () => ({ focusAuthorViewport: vi.fn(async () => vi.fn()) }));
+vi.mock('../../src/extensions/workspaces/sessions/(frontend)/_lib/authorFiles', () => ({
+  loadAuthorDocument: vi.fn(),
+  saveAuthorDocument: vi.fn(),
+}));
+vi.mock('../../src/extensions/workspaces/sessions/(frontend)/_lib/authorBrowserBridge', () => ({
+  focusAuthorViewport: vi.fn(async () => vi.fn()),
+}));
 type Props = {
   children?: ReactNode;
   'data-testid'?: string;
@@ -205,7 +217,7 @@ describe('Author document lifecycle', () => {
     expect(authorFileLinks.resolve('s', 'missing')).toBeUndefined();
     expect(authorFileLinks.resolve('s', 'dir/doc.md:2:4')?.label).toBe('doc.md');
     expect(authorFileLinks.openPath!(null, 'doc')).toBeUndefined();
-    expect(authorFileLinks.openPath!('s', './')).toBeUndefined();
+    expect(authorFileLinks.openPath!('s', './.')).toBeUndefined();
     expect(authorFileLinks.openPath!('s', 'new.md')?.label).toBe('new.md');
     const panel = authorFileTab('dir/doc.md').panel as (props: WebPluginSlotProps) => ReactNode;
     expect(panel({ sessionId: 's' } as WebPluginSlotProps)).toBeTruthy();

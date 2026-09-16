@@ -5,7 +5,7 @@ import {
   physicalDefaultInput,
   voiceMicrophone,
   voiceMicrophoneConstraints,
-} from '../src/web/stores/voiceMicrophoneStore';
+} from '../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMicrophoneStore';
 
 const physical = { deviceId: 'physical', groupId: 'built-in', label: 'MacBook microphone' };
 afterEach(() => {

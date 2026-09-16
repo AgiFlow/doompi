@@ -8,8 +8,8 @@ import {
   editableStructuredFragments,
   loadAuthorDocument,
   saveAuthorDocument,
-} from '../../src/web/api/authorFiles';
-import type { AuthorDocumentInput } from '../../src/web/lib/authorViewportTypes';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorFiles';
+import type { AuthorDocumentInput } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
 
 const sha = 'a'.repeat(64);
 const document: AuthorDocumentInput = { path: 'a.csv', kind: 'csv', structuredFormat: 'csv', sourceSha256: sha };

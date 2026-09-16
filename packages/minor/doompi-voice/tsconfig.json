@@ -29,7 +29,6 @@
     "dist",
     "coverage",
     "tests/browserMediaDeviceRecovery.test.ts",
-    "src/web",
     "src/extensions/**/(frontend)/**/*",
     "generated/web.ts"
   ]

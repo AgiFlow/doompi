@@ -17,8 +17,19 @@ import {
   type PlanningFlavor,
   readPlanSkill,
 } from '../../services/prompts';
-import { PLAN_REVIEW_OPTIONS, PLAN_REVIEW_TITLE } from '../../types/planApi';
-import { parseDebugEvidencePacket, planTitleSlug, visiblePlanForToolCall } from '../planMode';
+import {
+  CONTINUE_PLAN_DECISION,
+  EXIT_PLAN_DECISION,
+  PLAN_REVIEW_CHOICES,
+  PLAN_REVIEW_TITLE,
+} from '../../types/planApi';
+import {
+  parseDebugEvidencePacket,
+  PLAN_CONTINUE_TEXT,
+  PLAN_EXIT_APPROVED_TEXT,
+  planTitleSlug,
+  visiblePlanForToolCall,
+} from '../planMode';
 
 const RECORD_DEBUG_EVIDENCE_TOOL = 'record_debug_evidence';
 const RUN_FABLE_PLAN_TOOL = 'run_fable_plan';
@@ -356,33 +367,33 @@ export function createPlanServerSession(
         when: { state: { 'minor-mode': PLAN_MODE_ID }, attribution: { kind: 'minor', mode: PLAN_MODE_ID } },
         name: COMPLETE_PLAN_TOOL,
         label: 'Complete Plan',
-        description: 'Ask for explicit exit-or-continue approval for the saved implementation plan.',
-        parameters: {
-          type: 'object',
-          properties: { decision: { type: 'string', enum: ['exit', 'continue'] } },
-          additionalProperties: false,
-        },
+        description: 'Ask the user for explicit exit-or-continue approval for the saved implementation plan.',
+        // No decision parameter: this facet has no narrated review to answer, so a model-supplied
+        // decision would be the agent approving its own plan instead of the reader approving it.
+        parameters: { type: 'object', properties: {}, additionalProperties: false },
         executionMode: 'serial',
-        async execute(_toolCallId, parameters, signal) {
+        async execute(_toolCallId, _parameters, signal) {
           try {
-            const raw = (parameters as { decision?: unknown }).decision;
-            const decision =
-              raw === 'exit' || raw === 'continue'
-                ? raw
-                : String(
-                    await host.context.client.request(
-                      {
-                        kind: 'select',
-                        title: PLAN_REVIEW_TITLE,
-                        options: PLAN_REVIEW_OPTIONS.map((option) => ({ label: option, value: option })),
-                      },
-                      signal,
-                    ),
-                  );
-            if (decision !== 'exit' && decision !== 'continue') throw new Error('Choose exit or continue.');
-            await host.context.session.appendCustomEntry('plan-review', { decision });
-            await selectPlan(decision === 'continue');
-            return output({ decision, exited: decision === 'exit' });
+            // The client answers with the option's `value`, so the decision travels with the
+            // question instead of the facet having to recognise the label it rendered.
+            const decision = await host.context.client.request(
+              {
+                kind: 'select',
+                title: PLAN_REVIEW_TITLE,
+                options: PLAN_REVIEW_CHOICES.map((choice) => ({ ...choice })),
+              },
+              signal,
+            );
+            // A dismissed or aborted prompt answers with nothing, and that is not approval.
+            const exited = decision === EXIT_PLAN_DECISION;
+            await host.context.session.appendCustomEntry('plan-review', {
+              decision: exited ? EXIT_PLAN_DECISION : CONTINUE_PLAN_DECISION,
+            });
+            await selectPlan(!exited);
+            return {
+              content: [{ type: 'text', text: exited ? PLAN_EXIT_APPROVED_TEXT : PLAN_CONTINUE_TEXT }],
+              details: { exited },
+            };
           } catch (error) {
             return output(error instanceof Error ? error.message : String(error), true);
           }

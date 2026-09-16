@@ -1,7 +1,7 @@
 import { defineActivityGroup } from '@agimon-ai/doompi-core/web';
 
-import { subagentsTab } from '../../../../../web/components/SubagentsPanel';
-import { activityRuns, isTerminalRun, subagents } from '../../../../../web/stores/subagentsStore';
+import { subagentsTab } from '../_components/SubagentsPanel';
+import { activityRuns, isTerminalRun, subagents } from '../_lib/subagentsStore';
 
 /**
  * The dock group this package owns. The filename is the group name, which is

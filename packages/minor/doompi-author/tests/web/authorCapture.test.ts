@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
 import {
   AUTHOR_PACKET_MAX_BYTES,
   attachAuthorCapture,
   authorCaptureContext,
   createAuthorCapturePacket,
   type AuthorCaptureProvider,
-} from '../../src/web/stores/authorCapture';
-import type { AuthorWorkspaceDocument } from '../../src/web/stores/authorWorkspaceStore';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCapture';
+import type { AuthorRegionDraft } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
+import type { AuthorWorkspaceDocument } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 
 const document: AuthorWorkspaceDocument = {
   path: 'notes.md',

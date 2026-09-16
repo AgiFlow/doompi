@@ -5,7 +5,10 @@ import { driveChannel, renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { webPlugin as scopedWebPlugin } from '../../generated/web';
-import { computerUse, computerUseChannel } from '../../src/web/stores/computerUseStore';
+import {
+  computerUse,
+  computerUseChannel,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/computerUseStore';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,

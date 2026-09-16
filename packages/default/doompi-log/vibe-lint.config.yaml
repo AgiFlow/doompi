@@ -16,7 +16,7 @@ overrides:
   # point of definition breaks the render, so the export-shape rules are off
   # here. Every other rule, theming included, still applies to stories.
   - files:
-      - src/web/components/*.stories.tsx
+      - src/extensions/**/*.stories.tsx
     rules:
       no-default-export: off
       direct-export-only: off

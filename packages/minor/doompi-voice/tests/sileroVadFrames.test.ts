@@ -5,7 +5,7 @@ import {
   SILERO_FRAME_SAMPLES,
   SILERO_STATE_SAMPLES,
   SileroVadFrames,
-} from '../src/web/lib/sileroVadFrames';
+} from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/sileroVadFrames';
 
 function pcm(samples: readonly number[]): Uint8Array {
   const bytes = new Uint8Array(samples.length * 2);

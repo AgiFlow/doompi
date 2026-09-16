@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { parseGoalCommand } from '../../src/services/parser';
 import { MAX_OBJECTIVE_LENGTH } from '../../src/types/goal';
-import { budgetHintOf, CLEAR_GOAL_COMMAND, editGoalCommand, normalizeObjective } from '../../src/web/lib/goalCommands';
+import { budgetHintOf, CLEAR_GOAL_COMMAND, editGoalCommand, normalizeObjective } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_lib/goalCommands';
 
 /**
  * What the cockpit's edit form sends.

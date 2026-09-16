@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { BrowserNarrationEchoDiscriminator } from '../src/web/lib/browserNarrationEchoDiscriminator';
+import { BrowserNarrationEchoDiscriminator } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserNarrationEchoDiscriminator';
 
 const SAMPLE_RATE = 16_000;
 const CHUNK_SAMPLES = 1_600;

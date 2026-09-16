@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { FileEditsDetailView } from '../../src/types/fileEditsApi';
-import type { FilesPayload } from '../../src/web/stores/filesStore';
+import type { FilesPayload } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/filesStore';
 import {
   addComment,
   clearComments,
@@ -11,7 +10,8 @@ import {
   removeComment,
   storeDetail,
   storeError,
-} from '../../src/web/stores/filesStore';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/filesStore';
+import type { FileEditsDetailView } from '../../src/types/fileEditsApi';
 
 const item = (relPath: string, count = 1) => ({
   path: `/repo/${relPath}`,

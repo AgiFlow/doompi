@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { abbreviateCwd, formatRunDuration } from '../../src/web/lib/format';
+import { abbreviateCwd, formatRunDuration } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/format';
 
 describe('the run duration the cockpit prints', () => {
   it('collapses anything under a minute rather than printing seconds', () => {

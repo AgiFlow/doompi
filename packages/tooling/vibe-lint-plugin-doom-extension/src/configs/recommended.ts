@@ -44,7 +44,6 @@ const rules: Record<string, Severity> = {
   'no-direct-tool-activation': 'error',
   'web-plugin-entry': 'error',
   'web-plugin-import-allowlist': 'error',
-  'web-plugin-layer-boundary': 'error',
   'package-api-manifest': 'error',
   'web-plugin-manifest': 'error',
   'web-plugin-no-module-state': 'error',
@@ -90,23 +89,10 @@ const boundaries: BoundaryConfig[] = [
     pattern: 'src/services/**',
     allowedImports: layer('constants', 'models', 'schemas', 'services', 'types'),
   },
-  // Browser entries retain the browser-only policy before general composition.
   {
-    name: 'web-plugin-entry',
-    pattern: 'src/extensions/web.ts',
-    allowedImports: [
-      'src/web/**',
-      'src/types',
-      'src/types/**',
-      'src/constants',
-      'src/constants/**',
-      'src/extensions/**',
-    ],
-  },
-  {
-    // The browser half of a folder-routed package. Same policy as the entry
-    // above, matched by position rather than by one literal path, so a
-    // (frontend) group anywhere in the tree is held to it.
+    // The browser half of a folder-routed package, kept to the browser-only
+    // policy before general composition. Matched by position rather than by a
+    // literal path, so a (frontend) group anywhere in the tree is held to it.
     name: 'web-plugin-routed',
     pattern: 'src/extensions/**/(frontend)/**',
     allowedImports: [

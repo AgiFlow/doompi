@@ -1,17 +1,17 @@
 import { isValidElement, type ReactNode, type ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AuthorRegionDrafts } from '../../src/web/components/AuthorRegionDrafts';
-import { AuthorStructuredView } from '../../src/web/components/AuthorStructuredView';
-import { AuthorToolPalette } from '../../src/web/components/AuthorToolPalette';
+import { AuthorStructuredView } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorStructuredView';
 import {
   authorGrid,
   resolveAuthorGridCell,
   resolveAuthorGridNativeAnchor,
   updateAuthorGridGeometry,
-} from '../../src/web/lib/authorGrid';
-import type { AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
-import * as workspace from '../../src/web/stores/authorWorkspaceStore';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorGrid';
+import type { AuthorRegionDraft } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
+import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
+import { AuthorRegionDrafts } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorRegionDrafts';
+import { AuthorToolPalette } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorToolPalette';
 
 const hooks = vi.hoisted(() => ({
   values: [] as unknown[],

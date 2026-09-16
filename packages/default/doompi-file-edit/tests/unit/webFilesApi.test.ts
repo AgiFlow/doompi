@@ -3,7 +3,12 @@ import { beforeEach as beforeEachApiRoutes } from 'vitest';
 beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { deleteFile, fetchFileDetail, saveFileContent, sessionFileUrl } from '../../src/web/api/filesApi';
+import {
+  deleteFile,
+  fetchFileDetail,
+  saveFileContent,
+  sessionFileUrl,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/filesApi';
 
 const SESSION = 's1';
 const FILE = 'src/app.ts';
