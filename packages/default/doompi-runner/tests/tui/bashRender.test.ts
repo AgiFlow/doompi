@@ -12,7 +12,7 @@ import {
   renderBashCall,
   renderBashResult,
   truncateMiddle,
-} from '../../src/tui/bashRender';
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/bashRender.cli';
 
 /** Themes only decorate, so an identity theme keeps assertions about text. */
 const theme = {

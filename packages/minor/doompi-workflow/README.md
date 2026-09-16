@@ -117,17 +117,20 @@ Maintained by [Agimon](https://agimon.ai/about).
 
 ## Web cockpit plugin
 
-The `src/web` directory is this package's DoomPi web cockpit plugin: the workflows panel the dock's
-workflows group opens in a temporary tab, its store, and its `workflow_runs` session channel,
-compiled into the cockpit bundle by `doompi-web`'s build.
+The `.web` routed files under `src/extensions/workspaces/sessions/(frontend)` are this package's
+DoomPi web cockpit plugin: the workflows panel the dock's workflows group opens in a temporary tab,
+its store, and its `workflow_runs` session channel, compiled into the cockpit bundle by
+`doompi-web`'s build. Each surface keeps its components in a colocated `_components` folder and its
+stores and helpers in `_lib`.
 The hub-side data source ships behind the `./web-hub` subpath and reads the workflow registry
 (run.json plus progress.ndjson) exactly as the engine writes it. Both halves are declared by the
 `doompiWeb` block in package.json.
 
 ## License
 
-MIT, except the `src/web` directory, which is source available under the DoomPi Web License (see
-`src/web/LICENSE`): free to use, including commercially, but not to redistribute.
+MIT, except this package's browser half (the `.web` routed files under `src/extensions` and the
+`_components` and `_lib` modules colocated with one), which is source available under the DoomPi
+Web License (see `LICENSE.web`): free to use, including commercially, but not to redistribute.
 
 Workflow's host entries live in `src/extensions/pi.ts`, `server.ts`, and `web.ts`.
 `src/exports` exposes reusable package APIs. Controllers declare server APIs and

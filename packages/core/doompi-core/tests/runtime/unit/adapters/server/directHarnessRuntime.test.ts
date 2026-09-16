@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { LaneBusy } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import {
   JsonlSessionRepo,
@@ -926,6 +927,61 @@ describe('direct AgentHarness runtime', () => {
         }),
       ).rejects.toThrow('cannot register providers on the supplied Models registry');
     } finally {
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+
+  // A streaming behaviour describes how to deliver into a turn that is already running. It must
+  // still wake an idle lane, otherwise a headless caller can only talk to an agent that is busy.
+  it('wakes an idle lane, steers a busy one, and steers through an admission race for a streamed prompt', async () => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'admit-streaming-behaviour' }, BACKGROUND_CONTEXT);
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model });
+    const inspectExecution = vi.spyOn(runtime.lane, 'inspectExecution');
+    const accept = vi.spyOn(runtime.lane, 'accept');
+    const drive = vi.spyOn(runtime.lane, 'drive');
+    const steer = vi.spyOn(runtime.lane, 'steer');
+    const busy = () =>
+      new LaneBusy({ lane: 'main', operationId: 'op-live', operationKind: 'run', message: 'lane is busy' });
+    try {
+      steer.mockResolvedValue({ ok: true, value: { entryId: 'queued' } } as never);
+      drive.mockResolvedValue({ ok: true, value: { kind: 'completed' } } as never);
+
+      inspectExecution.mockResolvedValueOnce({ current: null } as never);
+      accept.mockResolvedValueOnce({ ok: true, value: { operationId: 'op-1', kind: 'run', startedAt: 1 } } as never);
+      const idle = await runtime.submitPrompt('wake up', undefined, 'steer');
+      await expect(idle.settled).resolves.toBeUndefined();
+      expect(accept).toHaveBeenCalledExactlyOnceWith({ kind: 'prompt', prompt: 'wake up' }, expect.anything());
+      expect(drive).toHaveBeenCalledOnce();
+      expect(steer).not.toHaveBeenCalled();
+
+      inspectExecution.mockResolvedValueOnce({ current: { operationId: 'op-1' } } as never);
+      const running = await runtime.submitPrompt('mid turn', undefined, 'steer');
+      await expect(running.settled).resolves.toBeUndefined();
+      expect(steer).toHaveBeenNthCalledWith(1, 'mid turn', undefined, expect.anything());
+      expect(accept).toHaveBeenCalledOnce();
+      expect(drive).toHaveBeenCalledOnce();
+
+      // A turn can start between the execution read and the admission, so a LaneBusy admission is
+      // steered into that turn instead of failing the caller.
+      inspectExecution.mockResolvedValueOnce({ current: null } as never);
+      accept.mockResolvedValueOnce({ ok: false, error: busy() } as never);
+      const raced = await runtime.submitPrompt('raced', undefined, 'steer');
+      await expect(raced.settled).resolves.toBeUndefined();
+      expect(steer).toHaveBeenNthCalledWith(2, 'raced', undefined, expect.anything());
+      expect(drive).toHaveBeenCalledOnce();
+
+      // Without a streaming behaviour there is nowhere to put the text, so the busy lane still fails.
+      inspectExecution.mockResolvedValueOnce({ current: null } as never);
+      accept.mockResolvedValueOnce({ ok: false, error: busy() } as never);
+      await expect(runtime.submitPrompt('plain')).rejects.toThrow('lane is busy');
+      expect(steer).toHaveBeenCalledTimes(2);
+    } finally {
+      inspectExecution.mockRestore();
+      accept.mockRestore();
+      drive.mockRestore();
+      steer.mockRestore();
+      await runtime.dispose();
       await repository.close(BACKGROUND_CONTEXT);
     }
   });

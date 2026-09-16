@@ -1,0 +1,11 @@
+import { defineTab } from '@agimon-ai/doompi-core/web';
+
+import { {{ topic | pascalCase }}Panel } from '../_components/{{ topic | pascalCase }}Panel';
+import { use{{ topic | pascalCase }}Badge } from '../_lib/{{ topic | camelCase }}Store';
+
+export default defineTab({
+  id: '{{ pluginId }}',
+  label: '{{ pluginId }}',
+  panel: {{ topic | pascalCase }}Panel,
+  useBadge: use{{ topic | pascalCase }}Badge,
+});

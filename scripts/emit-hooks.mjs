@@ -23,7 +23,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 
 // yaml is a transitive dependency here rather than a root devDependency, so it
 // is resolved through a package that declares it directly.
-const { parse } = createRequire(path.join(REPO_ROOT, 'packages/core/doompi/package.json'))('yaml');
+const { parse } = createRequire(path.join(REPO_ROOT, 'packages/cli/doompi/package.json'))('yaml');
 const REGISTRY_PATH = path.join(REPO_ROOT, '.doom', 'hooks.yaml');
 const CLAUDE_SETTINGS_PATH = path.join(REPO_ROOT, '.claude', 'settings.json');
 

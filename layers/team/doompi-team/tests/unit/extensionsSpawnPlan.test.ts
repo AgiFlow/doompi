@@ -299,7 +299,17 @@ describe('SpawnPlanner', () => {
       expect(child.calls).toHaveLength(1);
       expect(child.calls[0]).toMatchObject({ agent: 'worker', task: 'do the thing' });
       expect(result.outcomes).toEqual([
-        { agent: 'worker', task: 'do the thing', childIndex: 0, runId: child.calls[0]!.runId },
+        {
+          agent: 'worker',
+          // The sequence number counts every agent in the session scope, which
+          // the whole suite shares, so the format is the contract here and the
+          // exact number is not. agentIdentity.test.ts owns the counter itself.
+          identity: expect.stringMatching(/^[a-z]+-worker-\d+$/),
+          inline: false,
+          task: 'do the thing',
+          childIndex: 0,
+          runId: child.calls[0]!.runId,
+        },
       ]);
       expect(spawner.calls).toEqual([]);
       expect(skills.calls).toEqual([]);
@@ -794,7 +804,16 @@ describe('SpawnPlanner', () => {
 
       const result = await planner.spawn(baseRequest({ single: { agent: 'worker', task: 'x' } }), config);
 
-      expect(result.outcomes).toEqual([{ agent: 'worker', task: 'x', childIndex: 0, error: 'spawn exploded' }]);
+      expect(result.outcomes).toEqual([
+        {
+          agent: 'worker',
+          identity: expect.stringMatching(/^[a-z]+-worker-\d+$/),
+          inline: false,
+          task: 'x',
+          childIndex: 0,
+          error: 'spawn exploded',
+        },
+      ]);
     });
   });
 
@@ -1329,18 +1348,21 @@ describe('persisted session forks', () => {
     const parentSessionFile = parent.getSessionFile()!;
     const before = fs.readFileSync(parentSessionFile);
 
-    const toolSource = captureSessionForkSource(parent, 'tool');
-    const settledSource = captureSessionForkSource(parent, 'settled');
+    const toolCapture = captureSessionForkSource(parent, 'tool');
+    const settledCapture = captureSessionForkSource(parent, 'settled');
+    if (!toolCapture.ok || !settledCapture.ok) throw new Error('Expected both captures to succeed.');
+    const toolSource = toolCapture.source;
+    const settledSource = settledCapture.source;
     expect(toolSource).toMatchObject({ sessionFile: parentSessionFile, leafId: userId });
-    expect(toolSource?.terminalSource).toMatchObject({
+    expect(toolSource.terminalSource).toMatchObject({
       kind: 'terminal-pi-fork',
       sourceSessionId: parent.getSessionId(),
       sourceLeafId: userId,
     });
-    expect(toolSource?.terminalSource.snapshotJsonl).toContain(userId);
-    expect(toolSource?.terminalSource.snapshotJsonl).not.toContain(assistantId);
+    expect(toolSource.terminalSource.snapshotJsonl).toContain(userId);
+    expect(toolSource.terminalSource.snapshotJsonl).not.toContain(assistantId);
     expect(settledSource).toMatchObject({ sessionFile: parentSessionFile, leafId: assistantId });
-    expect(settledSource?.terminalSource.snapshotJsonl).toContain(assistantId);
+    expect(settledSource.terminalSource.snapshotJsonl).toContain(assistantId);
     expect(fs.readFileSync(parentSessionFile)).toEqual(before);
   });
 });

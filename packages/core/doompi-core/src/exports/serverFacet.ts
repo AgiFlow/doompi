@@ -51,3 +51,5 @@ export type {
 } from '../schemas/pluginContributions';
 
 export { defineServerPlugin } from '../extensions/serverPlugin';
+
+export { packageResourcePath, readPackageResource } from '../services/packageResource';

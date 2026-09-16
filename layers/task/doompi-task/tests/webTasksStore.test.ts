@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { WebTask } from '../src/types/webTasks';
+import taskActivityGroup from '../src/extensions/workspaces/sessions/(frontend)/activity-group/tasks.web';
 import {
   requestTaskEdit,
   requestTaskMessage,
@@ -10,7 +10,8 @@ import {
   taskMessageInstruction,
   tasks,
   tasksChannel,
-} from '../src/web/stores/tasksStore';
+} from '../src/extensions/workspaces/sessions/(frontend)/channel/_lib/tasksStore';
+import type { WebTask } from '../src/types/webTasks';
 
 describe('task cockpit store', () => {
   it('parses task payloads and rejects invalid envelopes', () => {
@@ -69,5 +70,39 @@ describe('task cockpit store', () => {
     expect(frames[1]?.frame.message).toBe(taskMessageInstruction(4, 'doompi-developer', 'use the API'));
     expect(frames[1]?.frame.message).toContain('doompi-developer');
     expect(frames[2]?.frame.message).toContain('repair every dependency');
+  });
+
+  it('marks the activity group active only while a delegated run is out', () => {
+    tasks.reset();
+    const publish = (list: WebTask[]): void => {
+      tasksChannel.apply('s1', { rev: 1, tasks: list });
+    };
+    const isActive = (): boolean => taskActivityGroup.activeSource!.isActive('s1');
+
+    publish([{ id: 1, subject: 'Waiting on the agent', status: 'in_progress', blockedBy: [] }]);
+    expect(isActive()).toBe(false);
+
+    publish([
+      {
+        id: 1,
+        subject: 'Delegated',
+        status: 'in_progress',
+        blockedBy: [],
+        delegation: { agent: 'doompi-developer', state: 'running' },
+      },
+    ]);
+    expect(isActive()).toBe(true);
+
+    publish([
+      {
+        id: 1,
+        subject: 'Delegated',
+        status: 'completed',
+        blockedBy: [],
+        delegation: { agent: 'doompi-developer', state: 'completed' },
+      },
+    ]);
+    expect(isActive()).toBe(false);
+    tasks.reset();
   });
 });

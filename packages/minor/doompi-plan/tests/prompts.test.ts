@@ -5,8 +5,16 @@ import {
   buildFablePlanningPrompt,
   buildFlavorPlanningPrompt,
   buildNormalPlanningPrompt,
+  buildPlanModeBasePrompt,
   type DebugEvidencePacket,
+  type PlanHostCapabilities,
 } from '../src/exports/prompts';
+
+const FULL_CAPABILITIES: PlanHostCapabilities = {
+  completePlanTakesDecision: true,
+  narratesReview: true,
+  fableAvailable: true,
+};
 
 const EVIDENCE: DebugEvidencePacket = {
   issue: 'Extension fails to load',
@@ -26,7 +34,9 @@ const EVIDENCE: DebugEvidencePacket = {
 
 describe('planning flavor prompts', () => {
   it('builds normal planning guidance with the configured private directory', () => {
-    const prompt = buildNormalPlanningPrompt('/private/plans');
+    // The delegation brief lives in the shared base block now, so the guidance the normal flavor
+    // used to repeat is asserted on the prompt the host actually sends.
+    const prompt = `${buildPlanModeBasePrompt('/private/plans', FULL_CAPABILITIES)}\n\n${buildNormalPlanningPrompt()}`;
 
     expect(prompt).toContain('[PLAN MODE ACTIVE: NORMAL]');
     expect(prompt).toContain('/private/plans');
@@ -55,7 +65,7 @@ describe('planning flavor prompts', () => {
   });
 
   it('describes Fable as untrusted input and reports its persisted stage', () => {
-    const prompt = buildFablePlanningPrompt('/private/plans', 'interrupted');
+    const prompt = buildFablePlanningPrompt('/private/plans', 'interrupted', FULL_CAPABILITIES);
 
     expect(prompt).toContain('[PLAN MODE ACTIVE: FABLE]');
     expect(prompt).toContain('untrusted text');
@@ -65,11 +75,23 @@ describe('planning flavor prompts', () => {
     expect(prompt).toContain('Current Fable stage: interrupted');
   });
 
+  it('collapses Fable planning to one line in a host without a broker', () => {
+    const prompt = buildFablePlanningPrompt('/private/plans', 'unavailable', {
+      ...FULL_CAPABILITIES,
+      fableAvailable: false,
+    });
+
+    expect(prompt).toBe(
+      '[PLAN MODE ACTIVE: FABLE]\nFable planning is unavailable in this host, so plan with the read-only tools directly.',
+    );
+    expect(prompt).not.toContain('run_fable_plan');
+  });
+
   it.each([
     ['normal', '[PLAN MODE ACTIVE: NORMAL]'],
     ['debug', '[PLAN MODE ACTIVE: DEBUG]'],
     ['fable', '[PLAN MODE ACTIVE: FABLE]'],
   ] as const)('selects the %s flavor prompt', (flavor, marker) => {
-    expect(buildFlavorPlanningPrompt(flavor, '/private/plans', EVIDENCE, 'idle')).toContain(marker);
+    expect(buildFlavorPlanningPrompt(flavor, '/private/plans', EVIDENCE, 'idle', FULL_CAPABILITIES)).toContain(marker);
   });
 });

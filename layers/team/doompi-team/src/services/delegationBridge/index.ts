@@ -45,10 +45,12 @@ import type { ManagementActionsContract } from '../managementActions';
 import type { AvailableModelInfo, ParentModel } from '../modelFallback';
 import type { PollSchedulerContract } from '../pollScheduler';
 import type { SessionScope } from '../sessionPaths';
-import type { SpawnPlannerContract, SessionForkSource } from '../spawnPlan';
+import { forkRequestFields, type ParentForkCapture, type SpawnPlannerContract } from '../spawnPlan';
 import type { SubagentWaiterContract } from '../subagentWait';
 
 const DEFAULT_DELEGATION_TIMEOUT_MS = 20 * 60 * 1000;
+const DELEGATION_TIMEOUT_WARNING_MAX_LEAD_MS = 2 * 60 * 1000;
+const DELEGATION_TIMEOUT_WARNING_FRACTION = 0.1;
 const DELEGATION_PROGRESS_INTERVAL_MS = 250;
 const SETTLED_DELEGATION_WINDOW = 256;
 
@@ -86,7 +88,7 @@ export interface DelegationSessionContext {
    * transcript until the session's first assistant message, so a value captured
    * when the session binds is empty for a new session and stale after a resume.
    */
-  captureForkSource?: () => SessionForkSource | undefined;
+  captureForkSource?: () => Promise<ParentForkCapture> | ParentForkCapture;
 }
 
 export interface DelegationBridgeDeps {
@@ -148,6 +150,13 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
     const runId = entry.runId;
     if (!runId) return;
 
+    const timeoutMs = request.timeoutMs ?? DEFAULT_DELEGATION_TIMEOUT_MS;
+    const warningLeadMs = Math.min(
+      DELEGATION_TIMEOUT_WARNING_MAX_LEAD_MS,
+      Math.max(1, Math.floor(timeoutMs * DELEGATION_TIMEOUT_WARNING_FRACTION)),
+    );
+    const warningAt = (entry.runtimeStartedAt ?? Date.now()) + timeoutMs - warningLeadMs;
+    let timeoutWarningSent = false;
     let lastProgress = '';
     entry.disposeProgress = deps.scheduler.register({
       id: `delegation:${entry.requestId}`,
@@ -155,10 +164,23 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
       run: () => {
         const job = jobs.get(runId);
         if (!job) return false;
+        let worked = false;
+        if (!timeoutWarningSent && Date.now() >= warningAt) {
+          timeoutWarningSent = true;
+          const secondsRemaining = Math.max(1, Math.ceil(warningLeadMs / 1000));
+          const secondsLabel = `${secondsRemaining} second${secondsRemaining === 1 ? '' : 's'}`;
+          void deps.management
+            .steer(
+              runId,
+              `This delegation will time out in about ${secondsLabel}. Stop exploring now, complete the highest-value remaining work, and return a concise result before the deadline. If you cannot finish, return verified findings and blockers immediately.`,
+            )
+            .catch(() => undefined);
+          worked = true;
+        }
         const progressKey = [job.status, job.updatedAt, job.error, job.tokens, job.currentTool, job.toolCount]
           .map((value) => String(value))
           .join(':');
-        if (progressKey === lastProgress) return false;
+        if (progressKey === lastProgress) return worked;
         lastProgress = progressKey;
         ctx.emit(DOOM_DELEGATION_UPDATED_EVENT, {
           requestId: entry.requestId,
@@ -176,7 +198,6 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
     });
     deps.scheduler.wake();
 
-    const timeoutMs = request.timeoutMs ?? DEFAULT_DELEGATION_TIMEOUT_MS;
     const wait = await deps.waiter.wait({
       target: { id: runId },
       sessionId,
@@ -257,7 +278,7 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
     ctx.emit(DOOM_DELEGATION_ACCEPTED_EVENT, { requestId: request.requestId });
 
     try {
-      const forkSource = session.captureForkSource?.();
+      const forkSource = await session.captureForkSource?.();
       const result = await deps.planner.spawn(
         {
           single: {
@@ -271,13 +292,7 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
           agentScope: 'both',
           sessionScope: session.sessionScope,
           parentSessionId: session.sessionId,
-          ...(forkSource
-            ? {
-                parentForkSource: forkSource.terminalSource,
-                ...(forkSource.sessionFile ? { parentSessionFile: forkSource.sessionFile } : {}),
-                parentLeafId: forkSource.leafId,
-              }
-            : {}),
+          ...forkRequestFields(forkSource),
           availableModels: session.availableModels,
           ...(session.parentModel ? { parentModel: session.parentModel } : {}),
         },
@@ -300,7 +315,10 @@ export function createDelegationBridge(deps: DelegationBridgeDeps): DelegationBr
 
       entry.runId = outcome.runId;
       const jobs = deps.tracker.forSession(session.sessionId, session.sessionScope);
-      jobs.track(outcome.runId);
+      jobs.track(
+        outcome.runId,
+        outcome.identity ? { identity: outcome.identity, inline: outcome.inline ?? false } : undefined,
+      );
       // A cancel that landed while the spawn was in flight already settled this
       // entry; the run exists now, so it has to be stopped rather than tracked.
       if (entry.settled) {

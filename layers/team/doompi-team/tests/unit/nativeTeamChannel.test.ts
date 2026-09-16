@@ -1,4 +1,5 @@
 import type { DoomChildSessionRuntime } from '@agimon-ai/doompi-core/child';
+import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 import { describe, expect, it } from 'vitest';
 
 import { NativeTeamChannelService } from '../../src/services/nativeTeamChannel';
@@ -9,11 +10,13 @@ interface FakeTool {
 
 function makePi() {
   const tools = new Map<string, FakeTool>();
-  const sendMessageCalls: Array<{ message: { content: string; details?: Record<string, unknown> } }> = [];
+  const sendMessageCalls: Array<{
+    message: { content: string; customType?: string; details?: Record<string, unknown> };
+  }> = [];
   const pi = {
     getAllTools: () => [...tools.keys()].map((name) => ({ name })),
     registerTool: (tool: FakeTool & { name: string }) => tools.set(tool.name, tool),
-    sendMessage: (message: { content: string; details?: Record<string, unknown> }) =>
+    sendMessage: (message: { content: string; customType?: string; details?: Record<string, unknown> }) =>
       sendMessageCalls.push({ message }),
     sendUserMessage: () => undefined,
     on: () => undefined,
@@ -34,6 +37,13 @@ function childRuntime(steer: (message: string) => Promise<void>): DoomChildSessi
   };
 }
 
+/** The rendered text of a tool result, whose content union also carries image parts. */
+function textOf(result: AgentToolResult<Record<string, unknown>>): string {
+  return result.content
+    .filter((part): part is Extract<typeof part, { type: 'text' }> => part.type === 'text')
+    .map((part) => part.text)
+    .join('\n');
+}
 describe('direct in-process native Team channel', () => {
   it('routes members and messages directly between the parent and native child', async () => {
     const service = new NativeTeamChannelService();
@@ -59,13 +69,97 @@ describe('direct in-process native Team channel', () => {
 
     await childTool!.execute('send-to-main', { action: 'send', to: 'main', message: 'done' });
     expect(mainPi.sendMessageCalls).toEqual([
-      expect.objectContaining({ message: expect.objectContaining({ content: expect.stringContaining('done') }) }),
+      expect.objectContaining({
+        message: expect.objectContaining({
+          content: expect.stringContaining('done'),
+          customType: 'intercom_message',
+          details: expect.objectContaining({
+            kind: 'send',
+            from: expect.objectContaining({ agent: 'worker' }),
+            message: 'done',
+          }),
+        }),
+      }),
     ]);
 
     intercom?.dispose?.();
     main.dispose();
   });
 
+  // The whole point of a generated identity is that what a peer is shown is
+  // what a peer can address. If the member id and the displayed name ever
+  // diverge, the model copies the label into `to:` and gets recipient_not_found.
+  it('uses the generated identity as the member id and accepts it as an address', async () => {
+    const service = new NativeTeamChannelService();
+    const mainPi = makePi();
+    const main = service.createRuntime(mainPi as never);
+    const root = main.bindMainSession('identity-routing');
+    const received: string[] = [];
+    const intercom = service.createNativeChildIntercom({
+      rootSessionId: root.rootSessionId,
+      agent: 'doompi-reviewer',
+      identity: 'alan-reviewer-1',
+      runId: 'run-identity-1',
+    });
+    intercom?.bindRuntime(childRuntime(async (message) => void received.push(message)));
+
+    const members = await main.execute('members-op', { action: 'members' });
+    const listed = (members.details as { members: Array<{ name: string; inline?: boolean }> }).members;
+    expect(listed).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'alan-reviewer-1' })]));
+    expect(textOf(members)).toContain('- alan-reviewer-1: doompi-reviewer');
+
+    await main.execute('send-by-identity', { action: 'send', to: 'alan-reviewer-1', message: 'by identity' });
+    expect(received).toEqual([expect.stringContaining('by identity')]);
+
+    intercom?.dispose?.();
+    main.dispose();
+  });
+
+  it('marks an inline child in the roster, which its agent name cannot say', async () => {
+    const service = new NativeTeamChannelService();
+    const mainPi = makePi();
+    const main = service.createRuntime(mainPi as never);
+    const root = main.bindMainSession('identity-inline');
+    const received: string[] = [];
+    const intercom = service.createNativeChildIntercom({
+      rootSessionId: root.rootSessionId,
+      agent: 'doompi-developer',
+      identity: 'bea-developer-2',
+      inline: true,
+      runId: 'run-identity-2',
+    });
+    const childTool = intercom?.bindRuntime(childRuntime(async (message) => void received.push(message)));
+
+    const members = await main.execute('members-op', { action: 'members' });
+    expect(textOf(members)).toContain('- bea-developer-2 (inline): doompi-developer');
+
+    // The sender line the recipient reads carries the same marker.
+    await childTool!.execute('send-to-main', { action: 'send', to: 'main', message: 'hello' });
+    expect(mainPi.sendMessageCalls[0]?.message.content).toContain('bea-developer-2 (inline)');
+
+    intercom?.dispose?.();
+    main.dispose();
+  });
+
+  it('falls back to the run-id shape when no identity could be claimed', async () => {
+    const service = new NativeTeamChannelService();
+    const mainPi = makePi();
+    const main = service.createRuntime(mainPi as never);
+    const root = main.bindMainSession('identity-fallback');
+    const intercom = service.createNativeChildIntercom({
+      rootSessionId: root.rootSessionId,
+      agent: 'worker',
+      runId: 'abcdef1234567890',
+    });
+    intercom?.bindRuntime(childRuntime(async () => undefined));
+
+    const members = await main.execute('members-op', { action: 'members' });
+    const listed = (members.details as { members: Array<{ name: string }> }).members;
+    expect(listed).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'worker-abcdef12' })]));
+
+    intercom?.dispose?.();
+    main.dispose();
+  });
   it('supports direct ask, pending, and reply without filesystem polling', async () => {
     const service = new NativeTeamChannelService();
     const main = service.createRuntime(makePi() as never);

@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import * as ort from 'onnxruntime-web/wasm';
 import { describe, expect, it } from 'vitest';
 
-import { SILERO_STATE_SAMPLES, SileroVadFrames } from '../src/web/lib/sileroVadFrames';
+import {
+  SILERO_STATE_SAMPLES,
+  SileroVadFrames,
+} from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/sileroVadFrames';
 
 function readScaledFixture(): Uint8Array {
   const wav = fs.readFileSync(new URL('./fixtures/silero-speech.wav', import.meta.url));
@@ -34,7 +37,12 @@ describe('browser Silero pinned-model golden PCM', () => {
   it('detects the repository speech fixture and rejects equal-length silence', async () => {
     ort.env.wasm.numThreads = 1;
     ort.env.wasm.proxy = false;
-    const model = fs.readFileSync(new URL('../src/web/models/silero_vad_v6.2.1.onnx', import.meta.url));
+    const model = fs.readFileSync(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/models/silero_vad_v6.2.1.onnx',
+        import.meta.url,
+      ),
+    );
     const session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'] });
     const detector = new SileroVadFrames(async (input, state) => {
       const result = await session.run({

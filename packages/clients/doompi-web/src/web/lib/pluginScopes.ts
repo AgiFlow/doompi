@@ -10,6 +10,9 @@ export function pluginsAtScope(plugins: readonly WebPluginDefinition[], scope: W
 
 function contributionKey(value: unknown): string | undefined {
   if (value === null || typeof value !== 'object') return undefined;
+  if ('slot' in value && typeof value.slot === 'string' && 'id' in value && typeof value.id === 'string') {
+    return `${value.slot}\0${value.id}`;
+  }
   if ('id' in value && typeof value.id === 'string') return value.id;
   if ('name' in value && typeof value.name === 'string') return value.name;
   if ('frameType' in value && typeof value.frameType === 'string') return value.frameType;

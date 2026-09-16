@@ -131,7 +131,7 @@ With a healthy recorder and local model:
 
 - microphone activity SHOULD update at least 8 times per second;
 - endpointing MUST occur `utteranceIdleMs` after the last accepted voiced frame;
-- ASR MUST have a configurable `transcriptionTimeoutMs` deadline from 1,000 to 120,000 ms, defaulting to 15,000 ms;
+- ASR MUST have a configurable `transcriptionTimeoutMs` deadline from 1,000 to 120,000 ms, defaulting to 120,000 ms;
 - after the endpoint delay, target-machine endpoint-to-delivery p95 SHOULD be below 2.5 seconds once the local ASR model is warm.
 
 Latency measurements MUST separate endpoint waiting, recorder drain, WAV creation, ASR, transcript policy, delivery, and next-capture startup.
@@ -414,7 +414,7 @@ Browser autonomous capture ownership MUST be page-global, not scoped to the focu
 
 - `src/services/playbackGate.ts`
 - `src/services/narrationBargeIn.ts`
-- `src/web/lib/browserNarrationEchoDiscriminator.ts`
+- `src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserNarrationEchoDiscriminator.ts`
 
 Responsibilities:
 
@@ -515,7 +515,7 @@ Start phrases remain optional leading control phrases during ordinary active lis
 **Modules:**
 
 - `src/services/commandCorrection.ts`
-- `src/controllers/voiceCommandContext.ts`
+- `src/services/voiceCommandContext/index.ts`
 
 Responsibilities:
 
@@ -554,8 +554,8 @@ Impact on result: prevents lost prompts, duplicate prompts, and orphan spools.
 - `src/services/narration.ts`
 - `src/services/narrationPlayback.ts`
 - `src/services/fallbackNarration.ts`
-- `src/controllers/narrationTool.ts`
-- `src/controllers/voice.ts`
+- `src/services/narrationTool/index.ts`
+- `src/services/voice/index.ts`
 
 Responsibilities:
 

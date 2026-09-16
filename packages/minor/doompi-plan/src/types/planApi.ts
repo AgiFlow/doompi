@@ -1,10 +1,11 @@
-import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 /**
  * The wire vocabulary this package's API shares with whatever calls it.
  *
  * It lives under src/types because that is the one server root a browser
- * bundle may read: the cockpit plugin builds its URLs from these and the
- * routes answer them, so neither half can drift from the other.
+ * bundle may read: the routes answer with these shapes and the cockpit plugin
+ * reads them, so neither half can drift from the other. The paths themselves
+ * are not here; they are declared once in `./apiRoutes`, which the Hono app
+ * and the generated client both read.
  *
  * Two routes, and neither takes a path. A session has one current plan, so
  * `current` answers it and `content` takes the manual save back; the file they
@@ -15,9 +16,6 @@ import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 
 /** Where a host mounts this package's API; the segment after /api/plugins/. */
 export const API_BASE_PATH = 'plans';
-
-/** Query parameter the cockpit hub reads to pick which session server to proxy to. */
-export const SESSION_QUERY_PARAM = 'session';
 
 /**
  * Footer status key the session publishes once a plan exists, which is what
@@ -30,7 +28,21 @@ export const PLAN_STATUS_KEY = 'doom-plan-document';
 export const PLAN_REVIEW_TITLE = 'Plan complete. What would you like to do?';
 export const EXIT_PLAN_MODE_CHOICE = 'Exit plan mode and start implementation';
 export const CONTINUE_PLANNING_CHOICE = 'Continue planning';
-export const PLAN_REVIEW_OPTIONS = [EXIT_PLAN_MODE_CHOICE, CONTINUE_PLANNING_CHOICE] as const;
+export const EXIT_PLAN_DECISION = 'exit';
+export const CONTINUE_PLAN_DECISION = 'continue';
+
+/**
+ * The label the reader sees paired with the decision the tool acts on. A headless
+ * client answers with `value`, so a facet never has to recognise the wording; Pi's
+ * own `ui.select` carries labels only, so its half maps the label back itself.
+ */
+export const PLAN_REVIEW_CHOICES = [
+  { label: EXIT_PLAN_MODE_CHOICE, value: EXIT_PLAN_DECISION },
+  { label: CONTINUE_PLANNING_CHOICE, value: CONTINUE_PLAN_DECISION },
+] as const;
+
+/** The same options as bare labels, which is all Pi's select and the composer prompt need. */
+export const PLAN_REVIEW_OPTIONS = PLAN_REVIEW_CHOICES.map((choice) => choice.label);
 
 /** Between the plan's title and the stamp that marks a rewrite. */
 const STATUS_SEPARATOR = ' · ';
@@ -62,31 +74,6 @@ export function parsePlanStatus(raw: string | undefined): PlanStatusView | undef
   const cut = text.lastIndexOf(STATUS_SEPARATOR);
   if (cut === -1) return { title: text, stamp: '' };
   return { title: text.slice(0, cut).trim(), stamp: text.slice(cut + STATUS_SEPARATOR.length).trim() };
-}
-
-/** The current plan, relative to the API's own mount. */
-export function currentPath(): string {
-  return '/current';
-}
-
-/** The manual save, relative to the API's own mount. */
-export function contentPath(): string {
-  return '/content';
-}
-
-/**
- * The absolute URL a page fetches, through the hub. The whole query is built
- * here, session parameter included, so a caller never appends a second '?'.
- */
-export function currentUrl(sessionId: string): string {
-  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${currentPath()}?${search.toString()}`;
-}
-
-/** The absolute URL a page puts a manual save to. */
-export function contentUrl(sessionId: string): string {
-  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
 }
 
 /**

@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises';
 
 import { resolvePromptsDirectory } from '../promptStore';
 import { parsePromptDocument } from '../savedPromptDocument';
-const PACKAGE_ROOT = new URL('../../../', import.meta.url);
 
 export async function savedPrompts(): Promise<readonly { name: string; text: string; description: string }[]> {
   const directory = resolvePromptsDirectory();
@@ -19,13 +18,5 @@ export async function savedPrompts(): Promise<readonly { name: string; text: str
     return prompts;
   } catch {
     return [];
-  }
-}
-
-export async function readPromptSkill(): Promise<string> {
-  try {
-    return await readFile(new URL('src/prompts/doompi-use-prompt/SKILL.md', PACKAGE_ROOT), 'utf8');
-  } catch {
-    return '(resource unavailable)';
   }
 }

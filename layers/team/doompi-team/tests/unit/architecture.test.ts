@@ -23,12 +23,13 @@ function readConfig(): VibeLintConfig {
 describe('import boundaries', () => {
   const config = readConfig();
 
-  it('uses the repository-owned canonical boundary preset and declares no boundaries of its own', () => {
+  // The preset's cli-routed-presentation boundary now covers the terminal half
+  // of the session routes, so the local copies of it are gone. A package
+  // boundary outranks a preset one, so re-declaring one here would silently
+  // shadow the shared policy.
+  it('uses the repository-owned boundary preset without local overrides', () => {
     expect(config.extends).toContain('doom-extension/recommended');
-    // src/web hosts the cockpit plugin, a root outside the src vocabulary; the
-    // doom-extension preset carries its boundary (web-plugin) and the tests
-    // boundary that reaches it, so a package-local block would only drift.
-    expect(config.boundaries).toBeUndefined();
+    expect(config.boundaries ?? []).toEqual([]);
   });
 
   it('enforces deterministic boundary findings as errors', () => {

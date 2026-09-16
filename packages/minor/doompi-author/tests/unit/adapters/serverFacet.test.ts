@@ -5,9 +5,9 @@ import { createDoomServerHost } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { api } from '../../../src/controllers/authorApi';
-import authorServerFacetDefault, { authorServerFacet } from '../../../src/extensions/server';
-import { readAuthorPrompt } from '../../../src/services/authorPrompt';
+import authorServerFacetDefault, { facet as authorServerFacet } from '../../../generated/server';
+import { api } from '../../../src/extensions/workspaces/sessions/(backend)/api/author/_lib/authorApi';
+import authorPromptResource from '../../../src/extensions/workspaces/sessions/(backend)/resource/doompi-use-author.server';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 
@@ -30,10 +30,8 @@ function hostContext(scope: DoomServerHostService['scope']) {
     mounted: () => registered.map((candidate) => candidate.basePath),
     mountedChannels: () => [],
   };
-  const context = {
-    get: (name: string) => (name === DOOM_SERVER_HOST_SERVICE ? host : undefined),
-    effect: () => undefined,
-  } as unknown as Context;
+  const context = new Context();
+  context.provide(DOOM_SERVER_HOST_SERVICE, host);
   return { context, registered, state };
 }
 
@@ -144,12 +142,10 @@ describe('authorServerFacet', () => {
 });
 
 describe('Author prompt resource', () => {
-  it('reads the published prompt from source and nested compiled module locations', async () => {
-    const source = new URL('../../../src/extensions/server.ts', import.meta.url);
-    const compiled = new URL('../../../dist/packages/minor/doompi-author/src/extensions/server.mjs', import.meta.url);
-    const expected = await readAuthorPrompt(source);
-
-    expect(expected).toContain('name: doompi-use-author');
-    await expect(readAuthorPrompt(compiled)).resolves.toBe(expected);
+  // Source and compiled resolution is the shared reader's contract, covered by
+  // doompi-core's packageResource test. What is local is that this package ships
+  // the file the resource names.
+  it('reads the published prompt', async () => {
+    await expect(authorPromptResource.read()).resolves.toContain('name: doompi-use-author');
   });
 });

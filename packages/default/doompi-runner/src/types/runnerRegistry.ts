@@ -76,10 +76,10 @@ export interface IRunnerRegistry {
   markPromoted(id: string): Promise<RunnerRecord | undefined>;
   complete(id: string, outcome: CompleteRunnerInput, sessionId?: string): Promise<RunnerRecord | undefined>;
   /** Removes the active process entry while retaining run metadata. */
-  release(id: string): Promise<void>;
+  release(id: string, sessionId?: string): Promise<void>;
   /** Marks entries whose process is gone as lost. Returns their ids. */
   pruneDead(): Promise<string[]>;
-  /** Notifies in-process consumers after the registry changes. */
-  subscribe(listener: () => void): () => void;
+  /** Notifies in-process consumers after this session's registry changes. */
+  subscribe(listener: () => void, sessionId: string): () => void;
   close(): void;
 }

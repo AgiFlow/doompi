@@ -1,7 +1,7 @@
 import type { LogMetricsReport } from '@agimon-ai/log-sink-mcp';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createLogHubApi } from '../src/controllers/hubApi';
+import { createLogHubApi } from '../src/services/hubApi';
 import type { IssuesSource } from '../src/types/issuesSource';
 import type { MetricsSource } from '../src/types/metricsSource';
 import type { IssuesView, MetricsReport, MetricsUnavailable } from '../src/types/webMetrics';

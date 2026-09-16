@@ -41,11 +41,14 @@ vi.mock('../src/services/mcpRuntime', () => ({
   },
 }));
 
-import { mcpServerFacet as mcpHeadlessFacet } from '../src/extensions/server';
+import { facet as mcpHeadlessFacet } from '../generated/server';
 
 function contextFor(host: DoomHeadlessHostService): Context {
   const context = new Context();
-  context.provide(DOOM_SERVER_HOST_SERVICE, { scope: 'session' });
+  context.provide(DOOM_SERVER_HOST_SERVICE, {
+    scope: 'session',
+    registerApi: () => ({ dispose() {} }),
+  });
   context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
   return context;
 }
@@ -77,6 +80,7 @@ describe('MCP headless facet', () => {
       return { dispose };
     };
     const host = {
+      registerApi: () => register(),
       registerResource: (resource: DoomHeadlessResource) => {
         resources.push(resource);
         return register();
@@ -95,14 +99,15 @@ describe('MCP headless facet', () => {
       },
     } as unknown as DoomHeadlessHostService;
     const close = await mcpHeadlessFacet.apply(contextFor(host));
-    const resource = resources[0];
     const activity = activities[0];
     const command = commands[0];
     const tool = tools[0];
-    if (!resource || !activity || !command || !tool) throw new Error('MCP headless registrations were not created');
+    if (!activity || !command || !tool) throw new Error('MCP headless registrations were not created');
+    // The config is served on demand by the command, never as a prompt section: it
+    // carried local filesystem paths and diagnostics the model cannot act on.
+    expect(resources).toEqual([]);
 
     const testExecution = execution();
-    expect(await resource.read(testExecution)).toContain('"enabled": true');
     await command.execute('', testExecution);
     expect(testExecution.client.notify).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'DoomPi MCP', level: 'info' }),
@@ -190,28 +195,37 @@ describe('MCP headless facet', () => {
   });
 
   it('reads each session MCP configuration from its admitted environment', async () => {
-    const resources: DoomHeadlessResource[] = [];
+    const commands: DoomHeadlessCommand[] = [];
     const register = () => ({ dispose: vi.fn() });
     const host = {
-      registerResource: (resource: DoomHeadlessResource) => {
-        resources.push(resource);
-        return register();
-      },
+      registerApi: () => register(),
+      registerResource: vi.fn(() => register()),
       registerActivity: vi.fn(() => register()),
-      registerCommand: vi.fn(() => register()),
+      registerCommand: vi.fn((command: DoomHeadlessCommand) => {
+        commands.push(command);
+        return register();
+      }),
       registerTool: vi.fn(() => register()),
     } as unknown as DoomHeadlessHostService;
     const close = await mcpHeadlessFacet.apply(contextFor(host));
-    const resource = resources[0];
-    if (!resource) throw new Error('MCP config resource was not registered');
+    const command = commands[0];
+    if (!command) throw new Error('MCP config command was not registered');
 
     const first = execution(sessionConfigEnvironment({ repoRoot: '/first-repo', stagingDirectory: '/tmp/first-mcp' }));
     const second = execution(
       sessionConfigEnvironment({ repoRoot: '/second-repo', stagingDirectory: '/tmp/second-mcp' }),
     );
 
-    expect(JSON.parse(await resource.read(first))).toMatchObject({ repoRoot: '/first-repo' });
-    expect(JSON.parse(await resource.read(second))).toMatchObject({ repoRoot: '/second-repo' });
+    // Per-session isolation is unchanged; it is now observed through the on-demand
+    // command rather than a prompt resource.
+    await command.execute('', first);
+    await command.execute('', second);
+    expect(JSON.parse((first.client.notify as ReturnType<typeof vi.fn>).mock.calls[0]![0].body)).toMatchObject({
+      repoRoot: '/first-repo',
+    });
+    expect(JSON.parse((second.client.notify as ReturnType<typeof vi.fn>).mock.calls[0]![0].body)).toMatchObject({
+      repoRoot: '/second-repo',
+    });
     await close?.();
   });
 });

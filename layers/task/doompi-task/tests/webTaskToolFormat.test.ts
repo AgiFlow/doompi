@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { taskCallView, taskDetailsView, taskResultView, taskRow, type TaskView } from '../src/web/lib/taskToolFormat';
+import {
+  taskCallView,
+  taskDetailsView,
+  taskResultView,
+  taskRow,
+  type TaskView,
+} from '../src/extensions/workspaces/sessions/(frontend)/tool/_lib/taskToolFormat';
 
 const task = (id: number, status: TaskView['status'], extra: Partial<TaskView> = {}): TaskView => ({
   id,

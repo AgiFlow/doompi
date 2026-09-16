@@ -49,13 +49,13 @@ const platformFixtures: PlatformFixture[] = ['rmux', 'rtk'].flatMap((tool) =>
 
 async function readManifest(fixture: PlatformFixture): Promise<RmuxPackageManifest> {
   return JSON.parse(
-    await readFile(path.join(repositoryDirectory, 'packages', 'default', fixture.directory, 'package.json'), 'utf8'),
+    await readFile(path.join(repositoryDirectory, 'packages', 'utils', fixture.directory, 'package.json'), 'utf8'),
   ) as RmuxPackageManifest;
 }
 
 describe('runner platform package contract', () => {
   it.each(platformFixtures)('selects and packages the matching $os-$cpu runtime', async (fixture) => {
-    const packageRoot = path.join(repositoryDirectory, 'packages', 'default', fixture.directory);
+    const packageRoot = path.join(repositoryDirectory, 'packages', 'utils', fixture.directory);
     const manifest = await readManifest(fixture);
 
     expect(manifest.name).toBe(fixture.name);

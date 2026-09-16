@@ -5,7 +5,7 @@ import {
   computerStateCallSummary,
   computerStateResultLines,
   computerStateToolName,
-} from '../../src/web/lib/computerStateToolRender';
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/computerStateToolRender';
 
 describe('the computer_state tool view', () => {
   it('names the tool the package registers', () => {

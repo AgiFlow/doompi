@@ -8,7 +8,7 @@ import type { DoomServerBundleEntry } from '../../../exports/serverFacet';
 import type { PackageAttribution } from '../../../services/contextProjection';
 import type { ContextSkillInventory, ContextToolSource } from '../../../services/contextProjection';
 
-export type ResolvedHeadlessResource = Pick<DoomHeadlessResource, 'name' | 'kind'> & {
+export type ResolvedHeadlessResource = Pick<DoomHeadlessResource, 'name' | 'kind' | 'description' | 'path'> & {
   source: string;
   text: string;
 };

@@ -5,7 +5,7 @@ import {
   computerActionCallSummary,
   computerActionResultLines,
   computerActionToolName,
-} from '../../src/web/lib/computerActionToolRender';
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/computerActionToolRender';
 
 describe('the computer_action tool view', () => {
   it('names the tool the package registers', () => {

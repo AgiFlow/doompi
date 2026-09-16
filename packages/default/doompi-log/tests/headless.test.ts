@@ -22,7 +22,7 @@ afterEach(async () => {
 
 describe('doom-log headless entry', () => {
   it('loads and registers when the optional UI provider is unavailable', async () => {
-    const { default: register } = await import('../src/extensions/pi');
+    const { default: register } = await import('../generated/pi');
     const pi = {
       on: vi.fn(),
       registerCommand: vi.fn(),

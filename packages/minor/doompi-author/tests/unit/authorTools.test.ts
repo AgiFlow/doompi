@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AuthorCatalog } from '../../src/services/authorCatalog/type';
-import { createAuthorTools } from '../../src/tools/authorTools';
+import { createAuthorTools } from '../../src/services/authorTools';
 
 function fixture() {
   const catalog: AuthorCatalog = {

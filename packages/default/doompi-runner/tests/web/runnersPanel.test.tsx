@@ -1,19 +1,22 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
-import { LaunchRunnerDialog } from '../../src/web/components/LaunchRunnerDialog';
-import { RunnersActivitySection } from '../../src/web/components/RunnersActivitySection';
-import { RunnerShellPanel, runnerShellTab } from '../../src/web/components/RunnerShellPanel';
-import { RunnersPanel } from '../../src/web/components/RunnersPanel';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
+import { LaunchRunnerDialog } from '../../src/extensions/workspaces/sessions/(frontend)/_components/LaunchRunnerDialog';
+import {
+  RunnerShellPanel,
+  runnerShellTab,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_components/RunnerShellPanel';
+import { RunnersPanel } from '../../src/extensions/workspaces/sessions/(frontend)/_components/RunnersPanel';
+import { RunnersActivitySection } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/RunnersActivitySection';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,
   ...scopedWebPlugin.workspace,
   ...scopedWebPlugin.session,
 };
+import { runnerRunsChannel, runners } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/runnersStore';
 import type { RunnerRunView } from '../../src/types/webRunners';
-import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore';
 
 const run = (id: string, state: 'running' | 'completed'): RunnerRunView =>
   ({
@@ -41,10 +44,11 @@ describe('the runners group tab', () => {
     expect(group?.transientTab?.().id).toBe('runner-runs');
   });
 
-  it('keeps the section under the same name, so the dock still renders it inside the group', () => {
+  it('keeps the fill under the same name, so the dock still renders it inside the group', () => {
     const group = webPlugin.activityGroups?.find((entry) => entry.name === 'runners');
+    const fill = webPlugin.fills?.find((entry) => entry.slot === 'activity.runners');
 
-    expect(webPlugin.activitySections?.map((section) => section.id)).toContain(group?.name);
+    expect(fill?.id).toBe(group?.name);
   });
 });
 

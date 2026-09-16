@@ -2,8 +2,8 @@ import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai
 import type { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
-import { api } from '../../../src/controllers/planApi';
-import { planServerFacet } from '../../../src/extensions/server';
+import { facet as planServerFacet } from '../../../generated/server';
+import { api } from '../../../src/services/planApi';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 

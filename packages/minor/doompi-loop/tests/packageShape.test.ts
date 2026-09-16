@@ -100,18 +100,21 @@ describe('doom-loop package boundary', () => {
       scopes: ['session'],
       pluginId: 'loop',
       channels: [],
-      client: './src/extensions/web.ts',
+      client: './dist/extensions/web.mjs',
     });
   });
 
   it('declares only closed ESM, CJS, and declaration targets for public entries', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
-    const publicEntries = Object.entries(exportsMap).filter(([subpath]) => subpath !== './package.json');
+    const publicEntries = Object.entries(exportsMap).filter(
+      ([subpath]) => subpath !== './package.json' && subpath !== './extensions/web',
+    );
 
     expect(publicEntries.length).toBeGreaterThan(0);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(Object.keys(exportsMap)).toContain('./extensions/pi');
+    expect(exportsMap['./extensions/web']).toEqual({ import: './dist/extensions/web.mjs' });
 
     for (const [subpath, target] of publicEntries) {
       expect(conditionPaths(target, 'import'), subpath).toHaveLength(1);
@@ -130,8 +133,8 @@ describe('doom-loop package boundary', () => {
     expect(files).not.toContain('tests');
     expect(files).toContain('src/prompts');
     expect(files).toContain('src/types/loopView.ts');
-    expect(files).toContain('src/web');
-    expect(files).toContain('src/extensions/web.ts');
+    expect(files).not.toContain('src/web');
+    expect(files).not.toContain('generated/web.ts');
     expect(files).toContain('README.md');
     expect(files).toContain('package.json');
     for (const resource of files) {

@@ -21,7 +21,7 @@ interface TaskContextSnapshot {
   };
 }
 
-function activeTaskSnapshots(tasks: readonly Task[]): TaskContextSnapshot[] {
+export function activeTaskSnapshots(tasks: readonly Task[]): TaskContextSnapshot[] {
   return tasks
     .filter((task) => task.status === 'pending' || task.status === 'in_progress' || task.status === 'failed')
     .map((task) => ({
@@ -43,7 +43,7 @@ function activeTaskSnapshots(tasks: readonly Task[]): TaskContextSnapshot[] {
     }));
 }
 
-function formatTaskSnapshots(tasks: readonly TaskContextSnapshot[]): string {
+export function formatTaskSnapshots(tasks: readonly TaskContextSnapshot[]): string {
   if (tasks.length === 0) return '(no active tasks)';
   return tasks
     .map((task) => {

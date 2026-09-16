@@ -26,4 +26,5 @@ export {
   type DoomHubChannelHarness,
   type DoomHubChannelHarnessOptions,
 } from '../services/hubChannelHarness';
+export { assertContractSurface, type ApiSurfaceOptions } from '../services/apiSurfaceAssert';
 export { mountPackageApi, type MountedPackageApi, type MountPackageApiOptions } from '../services/packageApiHarness';

@@ -18,7 +18,7 @@ export default defineConfig({
         'node_modules/',
         'dist/',
         'tests/',
-        'src/controllers/fileEditRuntime.ts',
+        'src/services/fileEditRuntime.ts',
         '**/*.d.ts',
         '**/*.config.*',
         '**/coverage/**',
@@ -29,7 +29,7 @@ export default defineConfig({
         // Playwright suite's, the same split doompi-web-components makes for
         // its portal-rendered primitives. The plain modules beside them,
         // stores and render helpers, stay counted.
-        'src/web/**/*.tsx',
+        'src/extensions/**/_components/**/*.tsx',
       ],
       reportOnFailure: false,
       enabled: true,
@@ -42,7 +42,7 @@ export default defineConfig({
     alias: [
       {
         find: '@agimon-ai/doompi-ui/doom-overlay',
-        replacement: source('../../core/doompi-ui/src/exports/doomOverlay.ts'),
+        replacement: source('../../foundations/doompi-ui/src/exports/doomOverlay.ts'),
       },
       {
         find: '@agimon-ai/doompi-core/child-process',
@@ -50,15 +50,15 @@ export default defineConfig({
       },
       {
         find: /^@agimon-ai\/doompi-config\/(.*)$/,
-        replacement: `${source('../../core/doompi-config/src/exports/')}$1.ts`,
+        replacement: `${source('../../foundations/doompi-config/src/exports/')}$1.ts`,
       },
       {
         find: '@agimon-ai/doompi-config',
-        replacement: source('../../core/doompi-config/src/exports'),
+        replacement: source('../../foundations/doompi-config/src/exports'),
       },
       {
         find: /^@agimon-ai\/doompi-ui\/(.*)$/,
-        replacement: `${source('../../core/doompi-ui/src/exports/')}$1.ts`,
+        replacement: `${source('../../foundations/doompi-ui/src/exports/')}$1.ts`,
       },
     ],
   },

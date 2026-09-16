@@ -1,20 +1,21 @@
 import type { DoomApiCaller } from '@agimon-ai/doompi-core/package-api';
-import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 
 export const API_BASE_PATH = 'computer-use';
 export const computerUseChannelType = 'computer_use_state';
 export const COMPUTER_USE_MODE_ID = 'computer-use';
 export const COMPUTER_USE_STATUS_KEY = 'doom-computer-use';
 export const COMPUTER_USE_MODE_STATUS_KEY = 'doom-computer-use-mode';
-export const SESSION_QUERY_PARAM = 'session';
 export const COMPUTER_USE_MAX_DURATION_MS = 1_800 * 1_000;
 export const COMPUTER_USE_DEFAULT_DURATION_MS = 300 * 1_000;
 export const COMPUTER_USE_CONFIRMATION_WINDOW_MS = 2 * 60 * 1_000;
 
-export function activationUrl(sessionId: string): string {
-  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}/activate?${SESSION_QUERY_PARAM}=${encodeURIComponent(sessionId)}`;
-}
-
+/**
+ * Every path this API answers on, below its mount.
+ *
+ * The typed route table in `./apiRoutes` is built from this, the dispatcher
+ * reads that table, and the hub channel addresses the broker with these same
+ * strings, so a route cannot move on one side alone.
+ */
 export const COMPUTER_USE_ROUTES = {
   activate: '/activate',
   agentState: '/agent/state',

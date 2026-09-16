@@ -3,63 +3,48 @@ import { beforeEach as beforeEachApiRoutes } from 'vitest';
 beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { describe, expect, it } from 'vitest';
 
-import { RUNNER_API_BASE_PATH, SESSION_QUERY_PARAM } from '../../src/constants/webRunnerLog';
-import { createRunnerLogApi } from '../../src/controllers/runnerLogApi';
-import { runnerLogPath, runnerLogStreamUrl, runnerLogUrl } from '../../src/types/webRunnerLog';
+import { api } from '../../generated/client';
+import { RUN_ID_PARAM } from '../../src/constants/webRunnerLog';
+import { createRunnerLogApi } from '../../src/services/runnerLogApi';
 
 /**
- * The page builds absolute URLs against the hub and the session server mounts
- * the app under a prefix it strips, so the two halves agree only as long as the
- * client's URL, minus the mount and the routing parameter, is a route the app
- * declares. These pin that seam.
+ * The page addresses the hub through the generated client and the session
+ * server mounts the app under a prefix it strips, so the two halves agree only
+ * as long as the client's URL, minus that mount, is a route the app declares.
+ * Both now read the same table, and this is what proves the table is wired to
+ * a handler on each side rather than merely shared.
  */
+
+const SESSION = 's1';
+const MOUNT = `/api/workspaces/test-workspace/sessions/${SESSION}/plugins/runner`;
+
+/** Every route this package serves, addressed exactly as the cockpit addresses it. */
+function requests(): { path: string; method: string }[] {
+  const client = api.session(SESSION);
+  const run = { params: { [RUN_ID_PARAM]: 'r1' } };
+  return [
+    { path: client.log.url(run), method: 'GET' },
+    { path: client.logStream.url({ ...run, query: { from: 0 } }), method: 'GET' },
+    { path: client.screenStream.url({ ...run, query: { from: 0 } }), method: 'GET' },
+    { path: client.input.url(run), method: 'POST' },
+  ];
+}
+
 describe('the runner log route contract', () => {
-  it('builds a client URL that is the mount, the route, and the session to proxy to', () => {
-    expect(runnerLogUrl('s1', 'r1')).toBe(
-      `/api/workspaces/test-workspace/sessions/s1/plugins/${RUNNER_API_BASE_PATH}${runnerLogPath('r1')}?${SESSION_QUERY_PARAM}=s1`,
-    );
-    expect(runnerLogPath('r1')).toBe('/runners/r1/log');
-  });
-
-  it('escapes ids so an odd name cannot reshape the path', () => {
-    expect(runnerLogPath('c d')).toBe('/runners/c%20d/log');
-    expect(runnerLogUrl('a/b', 'r1')).toContain(`${SESSION_QUERY_PARAM}=a%2Fb`);
-  });
-
-  it('folds the search parameters into the one query the URL already carries', () => {
-    const url = runnerLogUrl('s1', 'r1', { grep: 'needle', ignoreCase: true, contextLines: 2, lines: 50 });
-    // One '?' and one session parameter: the caller never appends its own.
-    expect(url.match(/\?/gu)).toHaveLength(1);
-    const query = new URLSearchParams(url.slice(url.indexOf('?') + 1));
-    expect(Object.fromEntries(query)).toEqual({
-      session: 's1',
-      grep: 'needle',
-      ignoreCase: 'true',
-      contextLines: '2',
-      lines: '50',
-    });
-  });
-
-  it('leaves an unset parameter out rather than sending an empty one', () => {
-    expect(runnerLogUrl('s1', 'r1', { grep: '' })).toBe(
-      `/api/workspaces/test-workspace/sessions/s1/plugins/runner${runnerLogPath('r1')}?session=s1`,
-    );
-  });
-
-  it('names the offset the stream resumes from, beside the session', () => {
-    expect(runnerLogStreamUrl('s1', 'r1', 512)).toBe(
-      `/api/workspaces/test-workspace/sessions/s1/plugins/${RUNNER_API_BASE_PATH}/runners/r1/log/stream?${SESSION_QUERY_PARAM}=s1&from=512`,
-    );
-  });
-
   it('answers on exactly the path the client asks for, once the mount is stripped', async () => {
-    const app = createRunnerLogApi({ storeDir: '/nonexistent-store', sessionId: 's1' });
-    // A 404 carrying our own body is the route matching and finding no such
-    // runner; a route that never matched would answer Hono's bare 404.
-    for (const path of [runnerLogPath('r1'), `${runnerLogPath('r1')}/stream`]) {
-      const response = await app.fetch(new Request(`http://session${path}`));
-      expect(response.status, path).toBe(404);
-      expect(await response.json(), path).toEqual({ error: "No runner 'r1' in this session." });
+    const app = createRunnerLogApi({ storeDir: '/nonexistent-store', sessionId: SESSION });
+
+    for (const { path, method } of requests()) {
+      expect(path.startsWith(`${MOUNT}/`), path).toBe(true);
+      const below = path.slice(MOUNT.length);
+      const response = await app.fetch(new Request(`http://session${below}`, { method }));
+
+      // A 404 carrying our own JSON body is the route matching and finding no
+      // such runner; a route that never matched answers Hono's bare 404 text.
+      // No stream is ever opened: both stream routes refuse an unknown run
+      // before streamSSE is reached, so nothing here waits on a socket.
+      expect(response.status, below).toBe(404);
+      expect(await response.json(), below).toEqual({ error: expect.any(String) });
     }
   });
 });

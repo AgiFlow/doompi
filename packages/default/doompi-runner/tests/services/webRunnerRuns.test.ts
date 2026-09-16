@@ -72,12 +72,12 @@ describe('web runner runs', () => {
     expect(toRunnerRunView(record({})).exit).toBeUndefined();
   });
 
-  it('lists running first (newest start first), then recent exits, dropping stale ones', () => {
+  it('lists foreground and promoted running commands first, then recent exits, dropping stale ones', () => {
     const recent = new Date(NOW - FINISHED_RUNNER_RETENTION_MS / 2).toISOString();
     const stale = new Date(NOW - FINISHED_RUNNER_RETENTION_MS - 1).toISOString();
     const runs = presentRunnerRuns(
       [
-        record({ id: 'old-run', startedAt: '2026-08-24T10:00:00.000Z' }),
+        record({ id: 'old-run', promoted: false, startedAt: '2026-08-24T10:00:00.000Z' }),
         record({
           id: 'stale',
           state: 'completed',

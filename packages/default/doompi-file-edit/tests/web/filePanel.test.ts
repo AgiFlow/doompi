@@ -4,9 +4,9 @@ beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { FilePanel } from '../../src/extensions/workspaces/sessions/(frontend)/_components/FilePanel';
+import { files, storeDetail } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/filesStore';
 import type { FileEditsDetailView } from '../../src/types/fileEditsApi';
-import { FilePanel } from '../../src/web/components/FilePanel';
-import { files, storeDetail } from '../../src/web/stores/filesStore';
 
 /**
  * The file tab, rendered.

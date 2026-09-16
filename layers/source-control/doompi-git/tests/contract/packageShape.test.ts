@@ -62,16 +62,10 @@ describe('doompi-git package contract', () => {
     expect(manifest.type).toBe('module');
     expect(manifest.publishConfig).toEqual({ access: 'public' });
     expect(manifest.files).toEqual(
-      expect.arrayContaining([
-        'dist',
-        'src/prompts',
-        'src/web',
-        'src/extensions/web.ts',
-        'llms.txt',
-        'README.md',
-        'package.json',
-      ]),
+      expect.arrayContaining(['dist', 'src/prompts', 'llms.txt', 'README.md', 'package.json']),
     );
+    expect(manifest.files).not.toContain('src/web');
+    expect(manifest.files).not.toContain('src/extensions/web.ts');
     const keywords = manifest.keywords ?? [];
     expect(keywords).toEqual(
       expect.arrayContaining([
@@ -92,10 +86,14 @@ describe('doompi-git package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    // './extensions/server' is the facet the hub and session host install;
-    // 'src/web' and the web client entry ship as source because the cockpit
-    // bundles the browser half itself.
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual([
+      '.',
+      './api-contracts',
+      './extensions/pi',
+      './extensions/server',
+      './extensions/web',
+      './package.json',
+    ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     expect(conditions(exportsMap['.'])).toEqual(['types', 'import', 'require']);
     expect(conditions(exportsMap['./extensions/pi'])).toEqual(['types', 'import', 'require']);
@@ -103,9 +101,9 @@ describe('doompi-git package contract', () => {
     expect(manifest.pi?.extensions).toEqual(['./dist/extensions/pi.mjs']);
     expect(manifest.doompiServer).toEqual({
       contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
-      entry: './src/extensions/server.ts',
+      entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['session', 'global', 'workspace'],
+      scopes: ['global', 'workspace', 'session'],
     });
   });
 

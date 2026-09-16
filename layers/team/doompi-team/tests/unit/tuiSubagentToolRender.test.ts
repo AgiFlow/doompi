@@ -2,7 +2,10 @@ import type { Theme } from '@earendil-works/pi-coding-agent';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { describe, expect, it } from 'vitest';
 
-import { renderSubagentCall, renderSubagentResult } from '../../src/tui/subagentToolRender';
+import {
+  renderSubagentCall,
+  renderSubagentResult,
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/subagent.cli';
 
 function plainTheme(): Theme {
   const identity = (text: string): string => text;

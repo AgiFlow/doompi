@@ -2,9 +2,9 @@ import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testi
 import type { ComponentProps, ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { runnerRunsChannel, runners } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/runnersStore';
+import { BashToolMessage } from '../../src/extensions/workspaces/sessions/(frontend)/tool/_components/BashToolMessage';
 import type { RunnerRunView } from '../../src/types/webRunners';
-import { BashToolMessage } from '../../src/web/components/BashToolMessage';
-import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore';
 
 vi.mock('@agimon-ai/doompi-web-components', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agimon-ai/doompi-web-components')>();

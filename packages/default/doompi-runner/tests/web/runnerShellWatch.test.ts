@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { RunnerShellPanel } from '../../src/extensions/workspaces/sessions/(frontend)/_components/RunnerShellPanel';
+import { runnerRunsChannel, runners } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/runnersStore';
+import { decodeChunk, watchRunnerScreen } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/screenApi';
 import type { RunnerRunView } from '../../src/types/webRunners';
-import { decodeChunk, watchRunnerScreen } from '../../src/web/api/screenApi';
-import { RunnerShellPanel } from '../../src/web/components/RunnerShellPanel';
-import { runnerRunsChannel, runners } from '../../src/web/stores/runnersStore';
 
 const setEnded = vi.fn();
 const setLost = vi.fn();
@@ -37,7 +37,7 @@ vi.mock('@tanstack/react-store', () => ({
   useStore: (store: { state: unknown }, selector: (state: unknown) => unknown) => selector(store.state),
 }));
 
-vi.mock('../../src/web/api/screenApi', () => ({
+vi.mock('../../src/extensions/workspaces/sessions/(frontend)/_lib/screenApi', () => ({
   decodeChunk: vi.fn(() => new Uint8Array([65])),
   sendRunnerInput: vi.fn(),
   watchRunnerScreen: vi.fn(),

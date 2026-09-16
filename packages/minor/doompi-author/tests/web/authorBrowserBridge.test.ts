@@ -1,14 +1,14 @@
 import type { ModelContext, ModelContextTool, WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { AuthorBrowserMessage, AuthorHubMessage } from '../../src/types/webAuthor';
 import {
   applyAuthorHubMessage,
   authorBridgeView,
   dropAuthorViewportSession,
   focusAuthorViewport,
   startAuthorBrowserBridge,
-} from '../../src/web/api/authorBrowserBridge';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorBrowserBridge';
+import type { AuthorBrowserMessage, AuthorHubMessage } from '../../src/types/webAuthor';
 
 const releases: Array<() => void> = [];
 

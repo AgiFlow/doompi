@@ -120,7 +120,7 @@ export async function startHeadless(options: HeadlessProcessOptions): Promise<He
   const { directory, file } = writeTokenFile(token);
   const child = spawn(process.execPath, headlessArguments({ entry, port, tokenFile: file }), {
     env: options.environment,
-    stdio: ['ignore', 'inherit', 'inherit'],
+    stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
   });
 
   const discard = (): void => fs.rmSync(directory, { force: true, recursive: true });

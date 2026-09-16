@@ -345,13 +345,19 @@ const mounts = { global: {} }; export const selected = mounts.global;`,
     expect(noLiveGlobalRegistry.check?.(nodeGlobal, root, boundaryContext())).toContain('process-global registry');
 
     // The cockpit plugin's browser half is not process-global state: globalThis
-    // in a page is the window, and in a worker the worker scope. It sat outside
-    // src/ before the move to src/web and stays out of scope after it.
+    // in a page is the window, and in a worker the worker scope.
     const browserGlobal = write(
-      'src/web/recorder.ts',
+      'src/extensions/sessions/(frontend)/tab/_lib/recorder.ts',
       `const key = Symbol.for('doom/live');\nconst root = globalThis as Record<PropertyKey, unknown>;\nroot[key] = new globalThis.AudioContext();`,
     );
     expect(noLiveGlobalRegistry.check?.(browserGlobal, root, boundaryContext())).toBeNull();
+    // Delete with the folder: src/web is the browser half still waiting to move
+    // into the routed tree.
+    const legacyBrowserGlobal = write(
+      'src/web/api/recorder.ts',
+      `const key = Symbol.for('doom/live');\nconst root = globalThis as Record<PropertyKey, unknown>;\nroot[key] = new globalThis.AudioContext();`,
+    );
+    expect(noLiveGlobalRegistry.check?.(legacyBrowserGlobal, root, boundaryContext())).toBeNull();
     writeManifest({ name: '@agimon-ai/doompi-voice' });
     const voiceReloadHandoff = write(
       'src/services/voiceReloadHandoff/index.ts',

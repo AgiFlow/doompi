@@ -7,7 +7,7 @@ import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
 import { rgPath } from '@vscode/ripgrep';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { createHashlineGrepTool } from '../src/tools/piGrep';
+import { createHashlineGrepTool } from '../src/extensions/workspaces/sessions/(backend)/tool/_lib/grepTool';
 
 interface CapturedTool {
   readonly name: string;
@@ -54,9 +54,11 @@ function text(result: AgentToolResult<unknown>): string {
 }
 
 describe('hashline grep execution', () => {
-  it('registers only grep with a self-rendered shell', () => {
+  it('builds the tool under the name it claims', () => {
+    // Only the name and the search live here. The three render fields moved to
+    // the frontend sibling, and toolOverrides.test.ts asserts the merged
+    // registration that actually reaches Pi.
     expect(tool?.name).toBe('grep');
-    expect(tool?.renderShell).toBe('self');
   });
 
   it('delegates search semantics to Pi and tags matches and context lines', async () => {

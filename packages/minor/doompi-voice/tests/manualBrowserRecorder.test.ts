@@ -1,22 +1,27 @@
 import { bindSessionApiWorkspace } from '@agimon-ai/doompi-core/web';
 import { beforeEach as beforeEachApiRoutes } from 'vitest';
 beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
+import { sealedTransport } from '@agimon-ai/doompi-web-security/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@agimon-ai/doompi-web-security/browser', () => ({
+  sealedTransport: { active: vi.fn(() => false), fetch: vi.fn() },
+}));
+
+import {
+  ManualRecordingSilenceGate,
+  startManualBrowserRecording,
+  type ManualBrowserRecording,
+  type ManualBrowserRecordingResult,
+} from '../src/extensions/workspaces/sessions/(frontend)/fill/_lib/manualBrowserRecorder';
+import { ManualComposerRecorder } from '../src/extensions/workspaces/sessions/(frontend)/fill/_lib/manualComposerRecorder';
+import { transcribeManualRecording } from '../src/extensions/workspaces/sessions/(frontend)/fill/_lib/manualTranscriptionClient';
 import {
   MANUAL_TRANSCRIPTION_DURATION_HEADER,
   MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES,
   MANUAL_TRANSCRIPTION_MAX_DURATION_MS,
   MANUAL_TRANSCRIPTION_ROUTE,
 } from '../src/types/manualTranscription';
-import {
-  ManualRecordingSilenceGate,
-  startManualBrowserRecording,
-  type ManualBrowserRecording,
-  type ManualBrowserRecordingResult,
-} from '../src/web/api/manualBrowserRecorder';
-import { ManualComposerRecorder } from '../src/web/api/manualComposerRecorder';
-import { transcribeManualRecording } from '../src/web/api/manualTranscriptionClient';
 
 function recorderFixture() {
   const stopTrack = vi.fn();
@@ -355,62 +360,63 @@ describe('manual browser recording', () => {
 });
 
 describe('manual transcription client', () => {
-  it('posts the complete Blob once through the supplied sealed request and returns its transcript', async () => {
+  const request = vi.mocked(sealedTransport.fetch);
+
+  afterEach(() => vi.mocked(sealedTransport.fetch).mockReset());
+
+  it('posts the complete Blob once through the declared route and returns its transcript', async () => {
     const audio = new Blob(['voice'], { type: 'audio/webm' });
-    const request = vi.fn(async () => Response.json({ transcript: 'dictated text' }));
+    request.mockResolvedValue(Response.json({ transcript: 'dictated text' }));
     const controller = new AbortController();
 
-    await expect(transcribeManualRecording(audio, 'session-1', 125, request, controller.signal)).resolves.toBe(
-      'dictated text',
-    );
+    await expect(transcribeManualRecording(audio, 'session-1', 125, controller.signal)).resolves.toBe('dictated text');
 
     expect(request).toHaveBeenCalledOnce();
     expect(request).toHaveBeenCalledWith(
-      `/api/workspaces/test-workspace/sessions/session-1/plugins/voice-media${MANUAL_TRANSCRIPTION_ROUTE}?session=session-1`,
+      `/api/workspaces/test-workspace/sessions/session-1/plugins/voice-media${MANUAL_TRANSCRIPTION_ROUTE}`,
       {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'content-type': 'audio/webm',
           [MANUAL_TRANSCRIPTION_DURATION_HEADER]: '125',
         },
         body: audio,
-        signal: controller.signal,
       },
     );
   });
 
   it('rejects oversized audio and malformed or failed responses', async () => {
-    const request = vi.fn(async () => Response.json({ transcript: 'unused' }));
+    request.mockResolvedValue(Response.json({ transcript: 'unused' }));
     const oversized = new Blob([new Uint8Array(MANUAL_TRANSCRIPTION_MAX_AUDIO_BYTES + 1)], { type: 'audio/webm' });
 
-    await expect(transcribeManualRecording(oversized, 'session-1', 125, request)).rejects.toThrow('exceeds the 4 MiB');
+    await expect(transcribeManualRecording(oversized, 'session-1', 125)).rejects.toThrow('exceeds the 4 MiB');
     expect(request).not.toHaveBeenCalled();
-    await expect(transcribeManualRecording(new Blob(), 'session-1', 0, request)).rejects.toThrow('empty');
+    await expect(transcribeManualRecording(new Blob(), 'session-1', 0)).rejects.toThrow('empty');
     await expect(
-      transcribeManualRecording(new Blob(['voice'], { type: 'audio/webm' }), 'session-1', 300_001, request),
+      transcribeManualRecording(new Blob(['voice'], { type: 'audio/webm' }), 'session-1', 300_001),
     ).rejects.toThrow('duration');
     expect(request).not.toHaveBeenCalled();
+
+    request.mockResolvedValue(Response.json({ error: 'transcriber unavailable' }, { status: 503 }));
     await expect(
-      transcribeManualRecording(new Blob(['voice'], { type: 'audio/mp4' }), 'session-1', 125, async () =>
-        Response.json({ error: 'transcriber unavailable' }, { status: 503 }),
-      ),
+      transcribeManualRecording(new Blob(['voice'], { type: 'audio/mp4' }), 'session-1', 125),
     ).rejects.toThrow('transcriber unavailable');
+
+    request.mockResolvedValue(Response.json({ nope: true }));
     await expect(
-      transcribeManualRecording(new Blob(['voice'], { type: 'audio/webm' }), 'session-1', 125, async () =>
-        Response.json({ nope: true }),
-      ),
+      transcribeManualRecording(new Blob(['voice'], { type: 'audio/webm' }), 'session-1', 125),
     ).rejects.toThrow('invalid response');
   });
 
   it('uses status errors when a failed response has no usable JSON body', async () => {
     const audio = new Blob(['voice'], { type: 'audio/webm' });
 
-    await expect(
-      transcribeManualRecording(audio, 'session-1', 125, async () => new Response('not json', { status: 502 })),
-    ).rejects.toThrow('status 502');
-    await expect(
-      transcribeManualRecording(audio, 'session-1', 125, async () => Response.json({ transcript: 42 })),
-    ).rejects.toThrow('invalid response');
+    request.mockResolvedValue(new Response('not json', { status: 502 }));
+    await expect(transcribeManualRecording(audio, 'session-1', 125)).rejects.toThrow('status 502');
+
+    request.mockResolvedValue(Response.json({ transcript: 42 }));
+    await expect(transcribeManualRecording(audio, 'session-1', 125)).rejects.toThrow('invalid response');
   });
 });
 

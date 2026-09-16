@@ -3,7 +3,7 @@ import { createDoomToolSurface } from '@agimon-ai/doompi-core/tool-surface';
 import type { ExtensionAPI, ExtensionContext, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createGoalRuntime } from '../../src/controllers/runtimeActivation';
+import { createGoalRuntime } from '../../src/services/runtimeActivation';
 import type { GoalHistoryPort } from '../../src/types/history';
 
 interface HandlerRecord {

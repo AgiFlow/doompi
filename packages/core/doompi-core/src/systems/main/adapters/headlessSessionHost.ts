@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import type { Context as CordisContext } from '@deepseek-ai/cordis';
+import { formatSkillsForSystemPrompt } from '@earendil-works/pi-agent-core';
 import type { AgentHarnessResources, AgentHarnessTool, AgentMessage, HookMap } from '@earendil-works/pi-agent-core';
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
 import { value } from '@earendil-works/pi-agent-core/harness/session';
@@ -8,6 +9,7 @@ import type { Model, Api, Usage } from '@earendil-works/pi-ai';
 import {
   getAgentDir,
   ModelRuntime,
+  loadProjectContextFiles,
   parseArgs,
   resolveCliModel,
   resolveModelScopeWithDiagnostics,
@@ -246,20 +248,32 @@ async function resolveModel(
 function mapResources(resources: readonly ResolvedHeadlessResource[]): {
   harness: AgentHarnessResources;
   context: string[];
+  advertised: NonNullable<AgentHarnessResources['skills']>;
 } {
   const skills: NonNullable<AgentHarnessResources['skills']> = [];
+  const advertised: NonNullable<AgentHarnessResources['skills']> = [];
   const promptTemplates: NonNullable<AgentHarnessResources['promptTemplates']> = [];
   const context: string[] = [];
   for (const resource of resources) {
     if (resource.kind === 'skill') {
-      skills.push(headlessHarnessSkill(resource));
+      const skill = headlessHarnessSkill(resource);
+      skills.push(skill);
+      // Advertised only with a path the agent can open. Without one the prompt would
+      // point at a doom-headless:// URI no tool resolves, so such a skill stays
+      // explicitly invocable and silent, exactly as it was before.
+      if (resource.path !== undefined) advertised.push(skill);
     } else if (resource.kind === 'prompt') {
       promptTemplates.push({ name: resource.name, content: resource.text });
     } else {
+      // Deliberately unwrapped. A generic "this is data, not instructions" fence here
+      // would also wrap doompi/profile-config, which carries the operator's persona
+      // and *is* authoritative instruction, and demoting it would be worse than the
+      // anonymity it fixes. A resource whose body is untrusted owns its own boundary,
+      // the way doompi-goal fences a user objective in escaped <goal_objective>.
       context.push(resource.text);
     }
   }
-  return { harness: { skills, promptTemplates }, context };
+  return { harness: { skills, promptTemplates }, context, advertised };
 }
 
 function toolAdapter(
@@ -424,16 +438,63 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   let toolGuidance: readonly ToolPromptEntry[] = [];
   const initialSystemPrompt = [parsed.systemPrompt, ...(parsed.appendSystemPrompt ?? [])].filter(Boolean).join('\n\n');
   /**
+   * AGENTS.md and friends, in Pi's own framing.
+   *
+   * The server had none of this: its prompt began at the --system-prompt flag, so a
+   * repository's own instructions reached a terminal session and never a cockpit one.
+   * Mirrors @earendil-works/pi-coding-agent@0.85.1 dist/core/system-prompt.js:21-27
+   * (the customPrompt branch, which is the shape this host matches). `buildSystemPrompt`
+   * is not exported and the package exports map has no wildcard, so the four literals
+   * below are copied; re-diff them against that file on upgrade.
+   *
+   * Not trust-gated, deliberately: TRUST_REQUIRING_PROJECT_CONFIG_RESOURCES in Pi's
+   * trust-manager covers settings.json, extensions, skills, prompts, themes, SYSTEM.md
+   * and APPEND_SYSTEM.md, all of which execute or replace instructions. AGENTS.md is
+   * advisory prose and Pi appends it unconditionally; gating it here would be a
+   * divergence from Pi rather than parity with it.
+   *
+   * Resolved once: cwd is fixed for the host's lifetime, and composeSystemPrompt runs
+   * on every generation.
+   */
+  const projectContextBlock = (() => {
+    const files = loadProjectContextFiles({ cwd: options.cwd, agentDir });
+    if (files.length === 0) return '';
+    const instructions = files
+      .map(
+        ({ path: filePath, content }) =>
+          `<project_instructions path="${filePath}">\n${content}\n</project_instructions>\n`,
+      )
+      .join('\n');
+    return `<project_context>\n\nProject-specific instructions and guidelines:\n\n${instructions}\n</project_context>`;
+  })();
+  const workingDirectoryLine = `Current working directory: ${options.cwd.replace(/\\/g, '/')}`;
+  /**
    * Everything the prompt is made of before a package has had a say.
    *
    * Shared with the runtime callback below rather than copied. Assembling it is
    * pure; the hook pass that follows it there is not, which is why the context
    * panel is shown this rather than a prompt built for the panel's sake.
    */
-  const composeSystemPrompt = (resources: readonly ResolvedHeadlessResource[]): string =>
-    [initialSystemPrompt, formatToolPrompt(toolGuidance), ...mapResources(resources).context]
+  const composeSystemPrompt = (resources: readonly ResolvedHeadlessResource[]): string => {
+    const mapped = mapResources(resources);
+    // formatSkillsForSystemPrompt is the same renderer headlessHost already uses to
+    // bill these skills to the context panel. Until now nothing emitted it, so the
+    // panel charged for an <available_skills> block the model never received. It
+    // returns '' for an empty list and leads with a blank line of its own.
+    const skills = formatSkillsForSystemPrompt(mapped.advertised).trim();
+    // Pi's order for the same sections: operator prompt, project context, tools,
+    // skills, package context, then the working directory last.
+    return [
+      initialSystemPrompt,
+      projectContextBlock,
+      formatToolPrompt(toolGuidance),
+      skills,
+      ...mapped.context,
+      workingDirectoryLine,
+    ]
       .filter(Boolean)
       .join('\n\n');
+  };
   /** The last prompt a turn actually built, once one has. */
   let builtSystemPrompt: string | undefined;
   /**
@@ -483,7 +544,9 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
           systemPrompt = patch.systemPrompt;
         }
       }
-      return { messages, systemPrompt };
+      // Pi extensions transform last, the same precedence the tool surface gives facets:
+      // a facet name wins over a Pi name, so a Pi contribution is the outer layer.
+      return { messages: await (piHost?.transformContext(messages) ?? messages), systemPrompt };
     },
     beforeTool: async (event) => {
       if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
@@ -583,7 +646,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         );
         return { decline: true };
       }
-      return undefined;
+      return piHost?.beforeCompaction(event);
     },
     systemPrompt: async () => {
       try {
@@ -751,9 +814,10 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
             ? runtime.followUp(text)
             : runtime.prompt(text),
       async admitPrompt(text, delivery) {
-        if (delivery === 'steer') return runtime.steer(text);
+        // followUp stays enqueue-only: voiceServer/index.ts:120 asks for 'followUp' while the agent
+        // is idle whenever a capture is queued, and waking a turn there would be unrequested.
         if (delivery === 'followUp') return runtime.followUp(text);
-        const submission = await runtime.submitPrompt(text);
+        const submission = await runtime.submitPrompt(text, undefined, delivery === 'steer' ? 'steer' : undefined);
         void submission.settled.catch((error: unknown) =>
           client!.client.notify({ body: error instanceof Error ? error.message : String(error), level: 'error' }),
         );
@@ -799,8 +863,11 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
 
   const applyToolSurface = async (tools: readonly HeadlessTool[]): Promise<void> => {
     const facetTools = tools.map((tool) => toolAdapter(tool, () => headlessHost!.context, reportedToolErrors));
-    // Facet tools win a name collision: they are the reconciled, mode-aware set.
-    const facetNames = new Set(facetTools.map((tool) => tool.name));
+    // Facet tools win a name collision, including when the collision is with a
+    // name the facet surface declared and then gated out. The reconciled set
+    // owns the name either way, so a Pi extension tool never fills a slot a
+    // mode-aware facet deliberately left empty.
+    const facetNames = headlessHost?.declaredToolNames ?? new Set(facetTools.map((tool) => tool.name));
     const piTools = (piHost?.tools ?? []).filter((tool) => !facetNames.has(tool.name));
     toolGuidance = [
       ...(piHost?.toolGuidance ?? []).filter((entry) => !facetNames.has(entry.name)),

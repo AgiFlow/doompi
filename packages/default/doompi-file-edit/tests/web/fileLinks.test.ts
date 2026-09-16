@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { fileLinks } from '../../src/web/components/fileLinks';
-import { files, filesChannel } from '../../src/web/stores/filesStore';
+import { files, filesChannel } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/filesStore';
+import { fileLinks } from '../../src/extensions/workspaces/sessions/(frontend)/file-links/_lib/fileLinks';
 
 /**
  * What a message may link to.

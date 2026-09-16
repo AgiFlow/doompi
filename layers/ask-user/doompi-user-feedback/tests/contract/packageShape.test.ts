@@ -43,7 +43,14 @@ describe('doompi-user-feedback package contract', () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
 
-    expect(Object.keys(exportsMap)).toEqual(['.', './extensions/pi', './extensions/server', './package.json']);
+    expect(Object.keys(exportsMap)).toEqual([
+      '.',
+      './api-contracts',
+      './extensions/pi',
+      './extensions/server',
+      './extensions/web',
+      './package.json',
+    ]);
     expect(Object.keys(exportsMap)).not.toContain('./*');
     for (const subpath of ['.', './extensions/pi', './extensions/server']) {
       expect(conditions(exportsMap[subpath])).toEqual(['types', 'import', 'require']);
@@ -52,9 +59,9 @@ describe('doompi-user-feedback package contract', () => {
     expect(await readFile(path.join(packageDirectory, 'src/exports/index.ts'), 'utf8')).not.toContain(
       'registerUserFeedbackExtension',
     );
-    expect(await readFile(path.join(packageDirectory, 'src/extensions/pi.ts'), 'utf8')).not.toMatch(
-      /Symbol\.for|installed-hosts|WeakSet/u,
-    );
+    expect(
+      await readFile(path.join(packageDirectory, 'src/extensions/workspaces/sessions/(backend)/root.cli.ts'), 'utf8'),
+    ).not.toMatch(/Symbol\.for|installed-hosts|WeakSet/u);
   });
 
   it('has no Juicesharp dependency and pins the Pi boundary', async () => {

@@ -9,18 +9,15 @@ import path from 'node:path';
 import { mountPackageApi } from '@agimon-ai/doompi-core/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createPlanApi, api, MAX_PLAN_BYTES } from '../../src/controllers/planApi';
+import { api as client } from '../../generated/client';
+import { createPlanApi, api, MAX_PLAN_BYTES } from '../../src/services/planApi';
+import routes from '../../src/types/apiRoutes';
 import {
   API_BASE_PATH,
-  contentPath,
-  contentUrl,
-  currentPath,
-  currentUrl,
   formatPlanStatus,
   parsePlanStatus,
   type PlanDetailView,
   type PlanPointerRecord,
-  SESSION_QUERY_PARAM,
 } from '../../src/types/planApi';
 import type { PlanPointerPort } from '../../src/types/planPointer';
 
@@ -64,7 +61,7 @@ function hashOf(content: string): string {
 
 async function save(app: ReturnType<typeof createPlanApi>, body: unknown): Promise<Response> {
   return await app.fetch(
-    new Request(`http://host${contentPath()}`, {
+    new Request(`http://host${routes.save.path}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: typeof body === 'string' ? body : JSON.stringify(body),
@@ -81,7 +78,7 @@ describe('reading the session plan', () => {
     const file = planFile('# A plan\n\nstep one\n');
     const app = createPlanApi({ sessionId: 's1', pointers: pointing(recordFor(file)) });
 
-    const response = await app.fetch(new Request(`http://host${currentPath()}`));
+    const response = await app.fetch(new Request(`http://host${routes.current.path}`));
 
     expect(response.status).toBe(200);
     const detail = (await response.json()) as PlanDetailView;
@@ -98,7 +95,7 @@ describe('reading the session plan', () => {
   it('reports no plan for a session that has written none', async () => {
     const app = createPlanApi({ sessionId: 's1', pointers: pointing(undefined) });
 
-    expect((await app.fetch(new Request(`http://host${currentPath()}`))).status).toBe(404);
+    expect((await app.fetch(new Request(`http://host${routes.current.path}`))).status).toBe(404);
   });
 
   it('reports a plan whose file has gone rather than answering an empty one', async () => {
@@ -106,7 +103,7 @@ describe('reading the session plan', () => {
     fs.rmSync(file);
     const app = createPlanApi({ sessionId: 's1', pointers: pointing(recordFor(file)) });
 
-    const detail = (await (await app.fetch(new Request(`http://host${currentPath()}`))).json()) as PlanDetailView;
+    const detail = (await (await app.fetch(new Request(`http://host${routes.current.path}`))).json()) as PlanDetailView;
 
     expect(detail.unavailable).toBe(true);
     expect(detail.reason).toContain('no longer exists');
@@ -116,7 +113,7 @@ describe('reading the session plan', () => {
     const file = planFile('#'.repeat(MAX_PLAN_BYTES + 1));
     const app = createPlanApi({ sessionId: 's1', pointers: pointing(recordFor(file)) });
 
-    const detail = (await (await app.fetch(new Request(`http://host${currentPath()}`))).json()) as PlanDetailView;
+    const detail = (await (await app.fetch(new Request(`http://host${routes.current.path}`))).json()) as PlanDetailView;
 
     expect(detail).toMatchObject({ unavailable: true, content: '' });
   });
@@ -125,7 +122,7 @@ describe('reading the session plan', () => {
     const file = planFile('# A plan\n');
 
     const response = await createPlanApi({ pointers: pointing(recordFor(file)) }).fetch(
-      new Request(`http://host${currentPath()}`),
+      new Request(`http://host${routes.current.path}`),
     );
 
     expect(response.status).toBe(404);
@@ -233,19 +230,18 @@ describe('the plan status line', () => {
 });
 
 /**
- * The client builds absolute URLs and the host mounts the app under a prefix it
- * strips, so the two agree only as long as the URL, minus the mount and the
- * query, is a route the app declares.
+ * The generated client builds absolute URLs and the host mounts the app under a
+ * prefix it strips, so the two agree only as long as the URL, minus the mount,
+ * is a route the app declares.
  */
 describe('the plans API as a host mounts it', () => {
-  it('builds one query carrying the session the hub should proxy to', () => {
-    expect(currentUrl('s1')).toBe(
-      `/api/workspaces/test-workspace/sessions/s1/plugins/${API_BASE_PATH}${currentPath()}?${SESSION_QUERY_PARAM}=s1`,
-    );
-    expect(contentUrl('s1')).toBe(
-      `/api/workspaces/test-workspace/sessions/s1/plugins/${API_BASE_PATH}${contentPath()}?${SESSION_QUERY_PARAM}=s1`,
-    );
-    expect(currentUrl('s1').match(/\?/gu)).toHaveLength(1);
+  it('addresses the session mount, with no query either side ever read', () => {
+    const MOUNT = '/api/workspaces/test-workspace/sessions/s1';
+
+    expect(client.session('s1').current.url()).toBe(`${MOUNT}/plugins/${API_BASE_PATH}/current`);
+    expect(client.session('s1').save.url()).toBe(`${MOUNT}/plugins/${API_BASE_PATH}/content`);
+    expect(client.session('s1').save.spec.method).toBe('PUT');
+    expect(client.session('s1').current.url()).not.toContain('?');
   });
 
   it('answers on the full path, and refuses one outside its mount', async () => {
@@ -254,7 +250,7 @@ describe('the plans API as a host mounts it', () => {
     expect(mounted.mountPath).toBe(`/api/plugins/${API_BASE_PATH}`);
     // No pointer exists for this made-up session, so the route is reached and
     // answers 404 from its own logic rather than from the mount missing it.
-    expect((await mounted.fetch(`/api/plugins/${API_BASE_PATH}${currentPath()}`)).status).toBe(404);
+    expect((await mounted.fetch(`/api/plugins/${API_BASE_PATH}${routes.current.path}`)).status).toBe(404);
     expect((await mounted.fetch('/api/plugins/elsewhere/current')).status).toBe(404);
     mounted.close();
   });

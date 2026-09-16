@@ -57,7 +57,7 @@ import {
   helpMinorModeState,
   registerHelpModeIntegration,
   registerHelpUiIntegration,
-} from '../../../src/controllers/helpMode';
+} from '../../../src/services/helpMode';
 
 const catalog = {} as MinorModeCatalogService;
 

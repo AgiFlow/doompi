@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { mountPackageApi } from '@agimon-ai/doompi-core/testing';
 import { describe, expect, it, vi } from 'vitest';
 
-import { api } from '../src/controllers/voiceSessionApi';
+import { api } from '../src/services/voiceSessionApi';
 import { MANUAL_TRANSCRIPTION_DURATION_HEADER, MANUAL_TRANSCRIPTION_ROUTE } from '../src/types/manualTranscription';
 
 interface PackageManifest {
@@ -35,6 +35,9 @@ const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 
 const packageDirectory = fileURLToPath(new URL('..', import.meta.url));
 const manifestPath = path.join(packageDirectory, 'package.json');
+/** The browser half is colocated with the routed file that renders it, so the model and the manual recorder sit beside their surfaces. */
+const sessionFrontend = 'src/extensions/workspaces/sessions/(frontend)';
+const sileroModelDirectory = `${sessionFrontend}/lifecycle/_lib/models`;
 const piPackage = '@earendil-works/pi-coding-agent';
 const expectedConfigurationFiles = [
   'package.json',
@@ -102,7 +105,7 @@ describe('doom voice package boundary', () => {
       require: './dist/extensions/server.cjs',
     });
     expect(manifest.doompiServer).toEqual({
-      entry: './src/extensions/server.ts',
+      entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
       scopes: ['global', 'workspace', 'session'],
       contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
@@ -136,7 +139,9 @@ describe('doom voice package boundary', () => {
   it('declares ESM, CJS, and declaration targets for every public entry', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
-    const publicEntries = Object.entries(exportsMap).filter(([subpath]) => subpath !== './package.json');
+    const publicEntries = Object.entries(exportsMap).filter(
+      ([subpath]) => subpath !== './package.json' && subpath !== './extensions/web',
+    );
 
     expect(publicEntries.length).toBeGreaterThan(0);
     expect(exportsMap['./voice-tools']).toEqual({
@@ -150,6 +155,7 @@ describe('doom voice package boundary', () => {
       require: './dist/voiceReloadHandoff.cjs',
     });
     expect(Object.keys(exportsMap)).not.toContain('./*');
+    expect(exportsMap['./extensions/web']).toEqual({ import: './dist/extensions/web.mjs' });
 
     for (const [subpath, target] of publicEntries) {
       expect(conditionPaths(target, 'import'), subpath).toHaveLength(1);
@@ -188,20 +194,24 @@ describe('doom voice package boundary', () => {
     }
   });
 
-  it('ships the pinned Silero model and upstream license as package resources', async () => {
+  it('bundles the pinned Silero model and ships its upstream attribution', async () => {
     const manifest = await readManifest();
 
-    expect(manifest.files).toContain('src/web');
-    await expectFile('src/web/models/silero_vad_v6.2.1.onnx');
-    await expectFile('src/web/models/SILERO-LICENSE');
-    await expectFile('src/web/models/README.md');
+    expect(manifest.files).not.toContain('src/extensions');
+    expect(manifest.files).toContain('dist');
+    expect(manifest.files).toEqual(
+      expect.arrayContaining([`${sileroModelDirectory}/SILERO-LICENSE`, `${sileroModelDirectory}/README.md`]),
+    );
+    await expectFile(`${sileroModelDirectory}/silero_vad_v6.2.1.onnx`);
+    await expectFile(`${sileroModelDirectory}/SILERO-LICENSE`);
+    await expectFile(`${sileroModelDirectory}/README.md`);
   });
 
   it('keeps standalone manual browser modules outside autonomous voice boundaries', async () => {
     const manualFiles = [
-      'src/web/api/manualBrowserRecorder.ts',
-      'src/web/api/manualComposerRecorder.ts',
-      'src/web/api/manualTranscriptionClient.ts',
+      `${sessionFrontend}/fill/_lib/manualBrowserRecorder.ts`,
+      `${sessionFrontend}/fill/_lib/manualComposerRecorder.ts`,
+      `${sessionFrontend}/fill/_lib/manualTranscriptionClient.ts`,
     ];
     const forbidden =
       /CaptureSession|VoiceMediaClient|VoiceWorkerPipeline|voiceMediaWakeStore|voiceOwnership|sessionVoiceOwnership|playback/u;
@@ -209,7 +219,7 @@ describe('doom voice package boundary', () => {
       expect(await readFile(path.join(packageDirectory, file), 'utf8'), file).not.toMatch(forbidden);
     }
 
-    const webEntry = await readFile(path.join(packageDirectory, 'src/extensions/web.ts'), 'utf8');
+    const webEntry = await readFile(path.join(packageDirectory, 'generated/web.ts'), 'utf8');
     expect(webEntry).not.toContain("id: 'voice.capture'");
     expect(webEntry).not.toContain("command: 'voice'");
   });

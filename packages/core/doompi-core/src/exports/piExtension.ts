@@ -1,8 +1,19 @@
-export { definePiExtension, type DefinedPiExtension, type PiExtensionDefinition } from '../extensions/piExtension';
+export {
+  defineCliToolRenderer,
+  defineMessageRenderer,
+  definePiExtension,
+  definePiToolRenderer,
+  piToolContributions,
+  withPiRenderers,
+  type DefinedPiExtension,
+  type PiExtensionDefinition,
+} from '../extensions/piExtension';
 export type {
   PiPluginContext,
   PiPluginContributions,
   PiEventHandlers,
+  PiToolRendererFile,
+  PiToolRenderers,
   PiToolRestriction,
   PiToolContribution,
   PiToolCollection,

@@ -39,12 +39,12 @@ export default defineConfig({
       },
       {
         find: /^@agimon-ai\/doompi-config\/(.*)$/,
-        replacement: `${source('../../core/doompi-config/src/exports/')}$1.ts`,
+        replacement: `${source('../../foundations/doompi-config/src/exports/')}$1.ts`,
       },
-      { find: '@agimon-ai/doompi-config', replacement: source('../../core/doompi-config/src/exports/index.ts') },
+      { find: '@agimon-ai/doompi-config', replacement: source('../../foundations/doompi-config/src/exports/index.ts') },
       {
         find: /^@agimon-ai\/doompi-ui\/(.*)$/,
-        replacement: `${source('../../core/doompi-ui/src/exports/')}$1.ts`,
+        replacement: `${source('../../foundations/doompi-ui/src/exports/')}$1.ts`,
       },
       {
         find: '@agimon-ai/doompi-core/cordis-host',

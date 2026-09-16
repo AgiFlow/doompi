@@ -1,79 +1,16 @@
-import { sessionApiPath } from '@agimon-ai/doompi-core/web';
-
-import { RUNNER_API_BASE_PATH, SESSION_QUERY_PARAM } from '../constants/webRunnerLog';
 import type { LogSlice } from './logReader';
 
 /**
  * The runner log API, shared by this package's session-scoped routes and its
  * cockpit plugin. The two halves run in different processes, so the wire
- * vocabulary is declared here: `src/web` may reach `src/types` and nothing else on
- * the server side.
+ * vocabulary is declared here: the browser half may reach `src/types` and
+ * nothing else on the server side.
  *
- * The routes are mounted inside one session's own server, so they name a runner
- * and never a session or a path. The page addresses a session through the hub's
- * proxy parameter; the file a run writes to is read from its metadata record by
- * the server alone.
+ * Where the routes live is not here. That is `src/types/apiRoutes`, which both
+ * halves read, and the generated client turns into the URLs the page addresses.
+ * The file a run writes to is still read from its metadata record by the server
+ * alone.
  */
-
-/** Where this package's API is mounted; the segment after /api/plugins/. */
-
-/** Query parameter the hub reads to pick which session server to proxy to. */
-
-/** One runner's log, relative to the API's own mount. */
-export function runnerLogPath(runId: string): string {
-  return `/runners/${encodeURIComponent(runId)}/log`;
-}
-
-/**
- * The absolute URL a page fetches for one runner's log, through the hub's proxy.
- *
- * The whole query is built here, session parameter included, so a caller never
- * has to know that the URL already carries one and never appends a second '?'.
- */
-export function runnerLogUrl(sessionId: string, runId: string, params: RunnerLogQueryParams = {}): string {
-  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  if (params.lines !== undefined) search.set(RUNNER_LOG_PARAMS.lines, String(params.lines));
-  if (params.grep !== undefined && params.grep !== '') search.set(RUNNER_LOG_PARAMS.grep, params.grep);
-  if (params.ignoreCase === true) search.set(RUNNER_LOG_PARAMS.ignoreCase, 'true');
-  if (params.contextLines !== undefined) search.set(RUNNER_LOG_PARAMS.contextLines, String(params.contextLines));
-  return `${sessionApiPath(sessionId)}/plugins/${RUNNER_API_BASE_PATH}${runnerLogPath(runId)}?${search.toString()}`;
-}
-
-/**
- * The absolute URL a page opens an EventSource on to follow one runner's log.
- *
- * `from` is the byte offset the page has already read, which the slice response
- * reports as `fileSize`. Passing it closes the gap between reading the tail and
- * opening the stream, so a line written in between is neither lost nor shown twice.
- */
-export function runnerLogStreamUrl(sessionId: string, runId: string, from: number): string {
-  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [RUNNER_LOG_PARAMS.from]: String(from) });
-  return `${sessionApiPath(sessionId)}/plugins/${RUNNER_API_BASE_PATH}${runnerLogPath(runId)}/stream?${search.toString()}`;
-}
-
-/** One runner's attached screen, relative to the API's own mount. */
-export function runnerScreenPath(runId: string): string {
-  return `/runners/${encodeURIComponent(runId)}/screen`;
-}
-
-/**
- * The URL a page opens an EventSource on to attach to an interactive runner.
- *
- * This is not the log. The log is scrubbed of cursor movement before it is
- * written, which is what makes it worth grepping and useless to a terminal.
- * The runner's sink keeps the unscrubbed bytes beside it, and this streams
- * those, so a real terminal emulator on the page can render them.
- */
-export function runnerScreenStreamUrl(sessionId: string, runId: string, from = 0): string {
-  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [RUNNER_LOG_PARAMS.from]: String(from) });
-  return `${sessionApiPath(sessionId)}/plugins/${RUNNER_API_BASE_PATH}${runnerScreenPath(runId)}/stream?${search.toString()}`;
-}
-
-/** The URL a page POSTs keystrokes to, for a runner that is waiting on input. */
-export function runnerInputUrl(sessionId: string, runId: string): string {
-  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `${sessionApiPath(sessionId)}/plugins/${RUNNER_API_BASE_PATH}${runnerScreenPath(runId)}/input?${search.toString()}`;
-}
 
 /**
  * One chunk of an attached pane's output.

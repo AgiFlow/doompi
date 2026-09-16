@@ -2,8 +2,8 @@ import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai
 import type { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
-import { api } from '../../../src/controllers/computerUseApi';
-import { computerUseServerFacet } from '../../../src/extensions/server';
+import { facet as computerUseServerFacet } from '../../../generated/server';
+import { api } from '../../../src/services/computerUseApi';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
 type MountedChannel = Parameters<DoomServerHostService['registerChannel']>[0];

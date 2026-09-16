@@ -25,15 +25,20 @@ describe('createSession', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(respond(201, { workspace: { id: 'test-workspace', root: '/workspace/x' } }))
-      .mockResolvedValueOnce(respond(201, { sessionId: 'fresh' }));
+      .mockResolvedValueOnce(respond(201, { sessionId: 'fresh' }))
+      .mockResolvedValueOnce(respond(200, { id: 'fresh' }));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(createSession({ cwd: '/workspace/x', name: 'x' })).resolves.toEqual({ sessionId: 'fresh' });
+    await expect(createSession({ cwd: '/workspace/x', name: 'x' })).resolves.toEqual({
+      sessionId: 'fresh',
+      session: { id: 'fresh' },
+    });
     expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: 'x' }),
     });
+    expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/test-workspace/sessions/fresh', undefined);
   });
 
   it('relays the hub error message', async () => {

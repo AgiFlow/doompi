@@ -40,7 +40,7 @@ vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
   },
 }));
 
-const { fileEditExtension } = await import('../src/extensions/pi');
+const { extension: fileEditExtension } = await import('../generated/pi');
 
 interface TestPi {
   pi: ExtensionAPI;

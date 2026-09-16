@@ -29,6 +29,7 @@ import {
   type ThinkingLevel,
 } from '../exports/sessionProtocol';
 import { createAcpSessionUpdateProjection } from '../services/acpSessionUpdates';
+import { contextTokensOf, contextUsageOf, latestAssistantUsage } from '../services/contextUsage';
 import { createRpcTranscript, type RpcTranscript } from '../services/rpcTranscript';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
 import { createSessionPresentation } from '../services/sessionPresentation';
@@ -56,19 +57,14 @@ async function sessionStats(runtime: DirectHarnessRuntime, sessionId: string): P
     { type: 'message', order: 'newestFirst', limit: 100 },
     BACKGROUND_CONTEXT,
   );
-  const latestAssistant = recent.find((entry) => entry.type === 'message' && entry.message.role === 'assistant');
-  const latestUsage =
-    latestAssistant?.type === 'message' && latestAssistant.message.role === 'assistant'
-      ? latestAssistant.message.usage
-      : undefined;
-  const contextTokens =
-    latestUsage === undefined ? null : latestUsage.input + latestUsage.cacheRead + latestUsage.cacheWrite;
+  // `newestFirst` already reverses the branch, so the first assistant entry is the newest one.
+  const contextTokens = contextTokensOf(latestAssistantUsage([...recent].reverse()));
   const selected =
     typeof state.model === 'object' && state.model !== null
       ? (state.model as { provider?: unknown; id?: unknown })
       : undefined;
   const model = models.find((candidate) => candidate.provider === selected?.provider && candidate.id === selected?.id);
-  const contextWindow = model?.contextWindow;
+  const contextUsage = contextUsageOf(contextTokens, model?.contextWindow);
   const sessionFile = typeof state.sessionFile === 'string' ? state.sessionFile : undefined;
   return {
     sessionId,
@@ -82,15 +78,7 @@ async function sessionStats(runtime: DirectHarnessRuntime, sessionId: string): P
       total: stored.usage.totalTokens,
     },
     cost: stored.usage.cost.total,
-    ...(contextWindow === undefined
-      ? {}
-      : {
-          contextUsage: {
-            tokens: contextTokens,
-            contextWindow,
-            percent: contextTokens === null ? null : Math.round((contextTokens / contextWindow) * 100),
-          },
-        }),
+    ...(contextUsage === undefined ? {} : { contextUsage }),
   };
 }
 

@@ -4,8 +4,11 @@ beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { driveChannel, renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
-import { computerUse, computerUseChannel } from '../../src/web/stores/computerUseStore';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
+import {
+  computerUse,
+  computerUseChannel,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/computerUseStore';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,
@@ -15,8 +18,7 @@ const webPlugin = {
 
 afterEach(() => computerUse.reset());
 
-const render = () =>
-  renderPlugin(webPlugin.activitySections![0]!.component, slotPropsFixture({ sessionId: 's1' }).props);
+const render = () => renderPlugin(webPlugin.fills![0]!.component!, slotPropsFixture({ sessionId: 's1' }).props);
 
 describe('computer-use panel', () => {
   it('renders target activation controls for an inactive session', () => {
@@ -78,11 +80,11 @@ describe('computer-use panel', () => {
     expect(webPlugin.activityGroups).toEqual([
       expect.objectContaining({ name: 'computer-use', statusKey: 'doom-computer-use', hideWhenEmpty: true }),
     ]);
-    expect(webPlugin.activitySections?.[0]?.component).toBeDefined();
+    expect(webPlugin.fills?.[0]?.component).toBeDefined();
     expect(webPlugin.toolRenderers?.flatMap((renderer) => renderer.tools ?? [])).toEqual([
-      'computer_state',
       'computer_action',
       'computer_exec',
+      'computer_state',
     ]);
   });
 });

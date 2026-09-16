@@ -16,7 +16,7 @@ const port = Number.parseInt(process.argv[process.argv.indexOf('--web') + 1], 10
 const token = fs.readFileSync(tokenFile, 'utf8');
 createServer((request, response) => {
   response.writeHead(200, { 'content-type': 'application/json' });
-  response.end(JSON.stringify({ token }));
+  response.end(JSON.stringify({ connected: process.connected, token }));
 }).listen(port, '127.0.0.1');
 `;
 
@@ -60,7 +60,7 @@ describe('startHeadless', () => {
 
     expect(headless).toBeDefined();
     const answer = await fetch(`http://127.0.0.1:${String(port)}/api/anything`);
-    expect(await answer.json()).toEqual({ token: headless?.token });
+    expect(await answer.json()).toEqual({ connected: true, token: headless?.token });
     expect(notices).toContain(`headless server on http://127.0.0.1:${String(port)}`);
 
     await headless?.close();
@@ -86,7 +86,7 @@ describe('startHeadless', () => {
     try {
       expect(headless?.url).not.toBe(`http://127.0.0.1:${String(port)}`);
       const answer = await fetch(`${headless!.url}/api/anything`);
-      expect(await answer.json()).toEqual({ token: headless?.token });
+      expect(await answer.json()).toEqual({ connected: true, token: headless?.token });
     } finally {
       await headless?.close();
     }

@@ -614,7 +614,10 @@ export function resetWebPlugins(): void {
 /** Installs or atomically replaces one session's independently synchronized plugin definitions. */
 export function installSessionWebPlugins(sessionId: string, plugins: readonly WebPluginDefinition[]): void {
   const previous = sessionStates.get(sessionId);
-  sessionPlugins.set(sessionId, plugins);
+  sessionPlugins.set(
+    sessionId,
+    plugins.flatMap((plugin) => (plugin.session === undefined ? [plugin] : pluginsAtScope([plugin], 'session'))),
+  );
   const state = rebuildSession(sessionId);
   for (const [type, channel] of previous?.channels.entries() ?? [])
     if (state.channels.get(type) !== channel) channel.drop(sessionId);

@@ -1,3 +1,4 @@
+import { isBrowserFile } from '@agimon-ai/doompi-build/browser-file';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
 
@@ -17,9 +18,15 @@ const OPTION_HINT = 'OptionRow';
 
 const IGNORE_MARKER = /prefer-shared-primitive:\s*ignore/;
 
-/** Browser source: the cockpit's client tree or a plugin's src/web tree. */
+/**
+ * Browser source: the cockpit's client tree, a plugin's src/web tree, or an
+ * extension's colocated browser code. The last arm asks the build's own
+ * predicate, so the rule follows a component when it moves next to the routed
+ * file that renders it and still stands down on the terminal half of the same
+ * `(frontend)` side, where a raw element is a pi-tui element and not a DOM one.
+ */
 function isBrowserSource(relativePath: string): boolean {
-  return relativePath.startsWith('src/web/');
+  return relativePath.startsWith('src/web/') || isBrowserFile(relativePath);
 }
 
 function isTest(relativePath: string): boolean {

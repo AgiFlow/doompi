@@ -55,6 +55,7 @@
  * - Calling `batcher.push()` for anything whose status is not `'completed'`
  */
 
+import { formatAgentIdentity } from '../agentIdentity';
 import {
   type CompletionBatchConfig,
   type CompletionBatcher,
@@ -75,6 +76,9 @@ const GROUPED_SUCCESS_ACTION =
 /** What a completion actually renders as, independent of the raw result shape. */
 export interface CompletionNotifyDetails {
   agent: string;
+  /** Generated addressable identity, absent for a run that predates identities. */
+  identity?: string;
+  inline?: boolean;
   /**
    * The run this completion belongs to.
    *
@@ -121,10 +125,15 @@ function formatSessionLine(details: CompletionNotifyDetails): string | undefined
   return details.sessionLabel ? `${details.sessionLabel}: ${details.sessionValue}` : details.sessionValue;
 }
 
+/** Who finished, preferring the generated identity and falling back to the bare agent name. */
+function completionLabel(details: CompletionNotifyDetails): string {
+  return formatAgentIdentity(details.identity, details.inline) ?? details.agent;
+}
+
 export function formatSingleCompletion(details: CompletionNotifyDetails): string {
   const sessionLine = formatSessionLine(details);
   return [
-    `Background task ${details.status}: **${details.agent}**${details.taskInfo ?? ''}`,
+    `Background task ${details.status}: **${completionLabel(details)}**${details.taskInfo ?? ''}`,
     `run id: ${details.runId}`,
     '',
     details.resultPreview.trim() ? details.resultPreview : EMPTY_OUTPUT,
@@ -140,14 +149,14 @@ export function formatSingleCompletion(details: CompletionNotifyDetails): string
 }
 
 export function formatGroupedCompletion(details: CompletionNotifyDetails[]): string {
-  const header = `Background tasks completed (${details.length}): ${details.map((d) => `**${d.agent}**${d.taskInfo ?? ''}`).join(', ')}`;
+  const header = `Background tasks completed (${details.length}): ${details.map((d) => `**${completionLabel(d)}**${d.taskInfo ?? ''}`).join(', ')}`;
   const blocks: string[] = [header, ''];
   for (let index = 0; index < details.length; index++) {
     const detail = details[index];
     if (!detail) continue;
     const sessionLine = formatSessionLine(detail);
     const hasPreview = detail.resultPreview.trim().length > 0;
-    blocks.push(`${index + 1}. ${detail.agent}${detail.taskInfo ?? ''} - run id: ${detail.runId}`);
+    blocks.push(`${index + 1}. ${completionLabel(detail)}${detail.taskInfo ?? ''} - run id: ${detail.runId}`);
     blocks.push(hasPreview ? detail.resultPreview : EMPTY_OUTPUT);
     if (detail.handoffPath) blocks.push(`Parallel handoff: ${detail.handoffPath}`);
     if (sessionLine) blocks.push(sessionLine);
@@ -158,6 +167,27 @@ export function formatGroupedCompletion(details: CompletionNotifyDetails[]): str
   return blocks.join('\n').trimEnd();
 }
 
+/**
+ * A single line naming what finished, for an operator-facing notification.
+ *
+ * Separate from `formatSingleCompletion` because the two have different
+ * readers. That one is written for the model and embeds the run's full result
+ * preview; this one goes to `DoomHeadlessClient.notify`, which collapses every
+ * newline to a space and truncates at 4096 characters
+ * (`packages/core/doompi-core/src/schemas/notification.ts`), and on the web
+ * additionally drives a browser notification. Feeding the model-facing text to
+ * that channel is what turns a completion into a wall of run-on prose.
+ */
+export function formatCompletionHeadline(details: CompletionNotifyDetails[]): string {
+  const first = details[0];
+  if (!first) return 'Background task finished';
+  if (details.length === 1) {
+    return `Background task ${first.status}: ${completionLabel(first)}${first.taskInfo ?? ''} (${first.runId})`;
+  }
+  return `Background tasks finished (${details.length}): ${details
+    .map((detail) => `${completionLabel(detail)}${detail.taskInfo ?? ''}`)
+    .join(', ')}`;
+}
 /** Narrow an opaque `RunResultFile` field to a string, the same defensive read used throughout. */
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
@@ -177,6 +207,8 @@ function completionGroupKey(result: RunResultFile): string {
 /** Turn a raw, opaque result record into what `formatSingleCompletion`/`formatGroupedCompletion` render. */
 export function buildCompletionDetails(result: RunResultFile): CompletionNotifyDetails {
   const agent = asString(result.agent) ?? UNKNOWN_VALUE;
+  const identity = asString(result.identity);
+  const inline = result.inline === true;
   const summary = asString(result.summary) ?? '';
   const success = typeof result.success === 'boolean' ? result.success : undefined;
   const state = asString(result.state);
@@ -207,6 +239,7 @@ export function buildCompletionDetails(result: RunResultFile): CompletionNotifyD
 
   return {
     agent,
+    ...(identity ? { identity, inline } : {}),
     // `RunResultFile` guarantees `runId` (see `resultWatcher.ts`), so there is
     // no honest fallback to invent here - an empty string would be a run id the
     // model could not use, dressed up as one it could.
@@ -231,12 +264,18 @@ interface PendingCompletion {
  * calls. Structural rather than `ExtensionAPI` itself so the runs domain does
  * not take a dependency on the host type for a single call, and so a test can
  * supply a recorder without constructing a whole extension API.
+ *
+ * `sendMessage` may return a promise. The Pi host renders synchronously and
+ * returns `void`; a headless host has to reach the session over async calls
+ * (`session.appendCustomEntry`, `session.admitPrompt`), and the notifier must
+ * be able to tell a settled delivery from a started one - see `sendMessage`
+ * below for why that distinction decides whether a completion can be lost.
  */
 export interface CompletionNotifyHost {
   sendMessage(
     message: { customType: string; content: string; display: boolean; details?: CompletionNotifyDetails[] },
     options?: { triggerTurn?: boolean; deliverAs?: 'steer' },
-  ): void;
+  ): void | Promise<void>;
 }
 
 export type CompletionNotifierContract = {
@@ -253,11 +292,11 @@ export type CompletionNotifierContract = {
 };
 
 /**
- * The custom-message type the parent renders completions under. Cross-process
- * significant in the same way the nested-event tokens are: the child-side
- * prompt runtime strips messages of this type out of a child's inherited
- * history (`stripParentOnlySubagentMessages`), so the two sides must agree on
- * the literal.
+ * The custom-message type the parent renders completions under. The literal is
+ * shared by the producer here and the TUI renderer registered for it
+ * (`(frontend)/message/_lib/subagent-notify.cli.ts`, which draws through
+ * `completionNotice.ts`), and by the headless facet, which persists the same
+ * type as a session entry so a cockpit transcript records what was delivered.
  */
 export const SUBAGENT_NOTIFY_MESSAGE_TYPE = 'subagent-notify';
 
@@ -283,25 +322,33 @@ export class CompletionNotifier implements CompletionNotifierContract {
   /**
    * Deliver a formatted completion message. Inert until `attachHost` supplies
    * a host (see the module header for why non-delivery is reported honestly
-   * rather than optimistically). Not `async`: `emit()` below does not await it
-   * either way - see its doc comment for why.
+   * rather than optimistically).
    *
-   * A throw from the host is caught and reported as non-delivery rather than
-   * propagated: `emit()` is a batcher callback running on a timer with no
-   * caller to catch for it, and a failed render must leave `ResultWatcher`'s
-   * claim in place for a retry, which is exactly what `false` does.
+   * Returns `boolean` for a host that delivered synchronously and a promise
+   * for one that did not. Resolving optimistically would be a silent data
+   * loss: consumers call `acknowledgeHandoff` on `true`
+   * (`services/teamRuntime/index.ts`, `services/nativeRunCoordinator/index.ts`),
+   * which drops `ResultWatcher`'s claim, so a completion reported as delivered
+   * and then rejected is gone for good. A rejection therefore maps to `false`,
+   * exactly as a synchronous throw always has, and the claim survives for a
+   * retry.
    */
   protected sendMessage(
     content: string,
     options: { triggerTurn: boolean; details: CompletionNotifyDetails[] },
-  ): boolean {
+  ): boolean | Promise<boolean> {
     if (!this.host) return false;
     try {
-      this.host.sendMessage(
+      const pending = this.host.sendMessage(
         { customType: SUBAGENT_NOTIFY_MESSAGE_TYPE, content, display: true, details: options.details },
         { triggerTurn: options.triggerTurn, deliverAs: 'steer' },
       );
-      return true;
+      return pending === undefined
+        ? true
+        : pending.then(
+            () => true,
+            () => false,
+          );
     } catch {
       return false;
     }
@@ -353,11 +400,11 @@ export class CompletionNotifier implements CompletionNotifierContract {
   /**
    * The batcher's `emit` callback: format the group (single vs. grouped
    * rendering, `formatSingleCompletion`/`formatGroupedCompletion`) and hand
-   * it to `sendMessage`. Deliberately not `async` and does not await
-   * `sendMessage`: `createCompletionBatcher`'s `emit` option is a synchronous
-   * callback (see its own contract), and every item's promise still resolves
-   * correctly here regardless, since `sendMessage`'s result is available
-   * synchronously to whichever implementation is active.
+   * it to `sendMessage`. Deliberately not `async`: `createCompletionBatcher`'s
+   * `emit` option is a synchronous callback (see its own contract). When the
+   * host delivers asynchronously the items resolve once that settles, which
+   * `deliver()`'s contract already allows - see the module header on a claim
+   * legitimately staying in flight.
    */
   private emit(items: PendingCompletion[]): void {
     if (items.length === 0) return;
@@ -367,6 +414,12 @@ export class CompletionNotifier implements CompletionNotifierContract {
       triggerTurn: items.some((item) => item.triggerTurn),
       details,
     });
-    for (const item of items) item.resolve(delivered);
+    if (typeof delivered === 'boolean') {
+      for (const item of items) item.resolve(delivered);
+      return;
+    }
+    void delivered.then((settled) => {
+      for (const item of items) item.resolve(settled);
+    });
   }
 }

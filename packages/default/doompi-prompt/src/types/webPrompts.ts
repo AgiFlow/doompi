@@ -1,41 +1,19 @@
-import { sessionApiPath } from '@agimon-ai/doompi-core/web';
-
-import { PROMPTS_PATH } from '../constants/webPrompts';
 /**
  * The vocabulary this package's HTTP API and its cockpit plugin share.
  *
  * DESIGN PATTERNS:
  * - Wire JSON only, no node types, so the browser bundle can carry this module.
- * - Route paths and URL building live here, so a page never assembles a URL of
- *   its own and the two halves cannot drift.
- * - Saved prompts are machine-wide, so no route names a session.
+ * - Paths live in src/types/apiRoutes and URLs are built by the generated
+ *   client, so a page never assembles one and the two halves cannot drift.
+ *   This file used to build them, spelling the mount twice more than the
+ *   constant that already held it and choosing the scope from a nullable
+ *   session id.
+ * - Saved prompts are machine-wide, so no route names a session; a session id
+ *   only selects which copy of the hub answers.
  *
  * AVOID:
  * - Importing anything from src/services or src/adapters here.
  */
-
-/** Where a host mounts this package's API; the segment after /api/plugins/. */
-
-/** The collection, relative to the API's own mount. */
-
-/** One saved prompt, relative to the API's own mount. */
-export function promptPath(name: string): string {
-  return `${PROMPTS_PATH}/${encodeURIComponent(name)}`;
-}
-
-function apiRoot(sessionId?: string | null): string {
-  return sessionId == null ? '/api/plugins/prompts' : `${sessionApiPath(sessionId)}/plugins/prompts`;
-}
-
-/** The absolute URL a page fetches for the collection. */
-export function promptsUrl(sessionId?: string | null): string {
-  return `${apiRoot(sessionId)}${PROMPTS_PATH}`;
-}
-
-/** The absolute URL a page fetches for one saved prompt. */
-export function promptUrl(name: string, sessionId?: string | null): string {
-  return `${apiRoot(sessionId)}${promptPath(name)}`;
-}
 
 /** One saved prompt, as the cockpit shows it. */
 export interface SavedPromptView {

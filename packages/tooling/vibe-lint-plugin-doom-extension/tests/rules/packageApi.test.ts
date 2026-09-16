@@ -138,7 +138,9 @@ describe('Doom package API rules', () => {
         },
       });
       const violation = packageApiManifest.check?.(manifest, root) ?? '';
-      expect(violation).toContain('doompiServer.entry must be ./src/extensions/server.ts');
+      expect(violation).toContain(
+        'doompiServer.entry must be one of ./src/extensions/server.ts or ./generated/server.ts',
+      );
       expect(violation).toContain('Remove legacy package export ./extensions/headless');
 
       fs.rmSync(path.join(root, 'src'), { recursive: true, force: true });
@@ -218,7 +220,7 @@ describe('Doom package API rules', () => {
         exports: { './extensions/server': './dist/extensions/server.mjs' },
       });
       expect(packageApiManifest.check?.(manifest, root)).toContain(
-        'doompiServer.entry must be ./src/extensions/server.ts',
+        'doompiServer.entry must be one of ./src/extensions/server.ts or ./generated/server.ts',
       );
     });
 

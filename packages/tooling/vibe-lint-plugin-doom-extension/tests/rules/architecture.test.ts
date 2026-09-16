@@ -127,50 +127,41 @@ describe('Doom deterministic architecture rules', () => {
   });
 
   it('enforces the canonical inward layer direction', () => {
-    const command = write('src/controllers/run.ts', "import { nodeRun } from '../extensions/pi';");
+    const model = write('src/models/run.ts', "import { run } from '../services/run';");
     const adapter = write('src/extensions/pi.ts', "import { run } from '../services/run';");
 
-    expect(doomLayerBoundary.check?.(command, root, boundaryContext())).toContain('forbidden dependencies');
+    expect(doomLayerBoundary.check?.(model, root, boundaryContext())).toContain('forbidden dependencies');
     expect(doomLayerBoundary.check?.(adapter, root, boundaryContext())).toBeNull();
   });
 
-  // src/web is the cockpit plugin's browser half. It is a canonical root so the
-  // folder rules accept it and src/exports may publish its entry, and its only
-  // inward dependency is the wire-JSON view types both halves share.
-  it('accepts src/web as a canonical root and holds it to types and its own siblings', () => {
+  // src/web is retired. Browser code colocates with the routed file that renders
+  // it, so web is no longer a canonical root and the folder rule reports it.
+  it('rejects src/web as a canonical root', () => {
     write('package.json', JSON.stringify({ name: '@scope/package' }));
     const panel = write('src/web/DemoPanel.tsx', "import type { D } from '../types/webDemo.ts';");
-    // A panel composes its siblings. Every other root may import itself, and web
-    // is no different: without this a multi-file plugin fails the moment it moves
-    // under src, which a single-file fixture never shows.
-    const entry = write(
-      'src/web/index.ts',
-      ["import { DemoPanel } from './DemoPanel.tsx';", "import { fold } from './demoRender.ts';"].join('\n'),
-    );
-    const reaching = write('src/web/bad.ts', "import { run } from '../services/run.ts';");
-    const client = write('src/exports/webClient.ts', "export { webPlugin } from '../web/index.ts';");
 
-    expect(doomFolderLayout.check?.(panel, root, boundaryContext())).toBeNull();
-    expect(doomLayerBoundary.check?.(panel, root, boundaryContext())).toBeNull();
-    expect(doomLayerBoundary.check?.(entry, root, boundaryContext())).toBeNull();
-    expect(doomLayerBoundary.check?.(reaching, root, boundaryContext())).toContain('forbidden dependencies');
-    expect(doomLayerBoundary.check?.(client, root, boundaryContext())).toBeNull();
+    const report = doomFolderLayout.check?.(panel, root, boundaryContext());
+    expect(report).toContain('Unknown root "web"');
+    expect(report).toContain('(frontend)/_components');
   });
-  it('accepts the composed controller, model, tool, and service roots', () => {
+  it('accepts composed canonical roots and rejects legacy controller and tool roots', () => {
     write('package.json', JSON.stringify({ name: '@scope/package' }));
     const model = write('src/models/session.ts', 'export const session = {};');
     const service = write(
       'src/services/session/index.ts',
       "import { createHash } from 'node:crypto'; export const digest = () => createHash('sha256');",
     );
-    const controller = write(
-      'src/controllers/session.ts',
-      "import { digest } from '../services/session'; import { session } from '../models/session'; export { digest, session };",
+    const tui = write(
+      'src/tui/session.ts',
+      "import { session } from '../models/session'; export const render = () => session;",
     );
-    const tool = write('src/tools/session.ts', "import { digest } from '../services/session'; export { digest };");
-    for (const file of [model, service, controller, tool]) {
+    for (const file of [model, service, tui]) {
       expect(doomFolderLayout.check?.(file, root, boundaryContext())).toBeNull();
       expect(doomLayerBoundary.check?.(file, root, boundaryContext())).toBeNull();
+    }
+    for (const legacyRoot of ['controllers', 'tools']) {
+      const legacy = write(`src/${legacyRoot}/session.ts`, 'export const legacy = true;');
+      expect(doomFolderLayout.check?.(legacy, root, boundaryContext())).toContain('Legacy root');
     }
     expect(serviceBoundary.check?.(service, root, boundaryContext())).toBeNull();
   });
@@ -981,6 +972,36 @@ describe('Doom deterministic architecture rules', () => {
   });
 
   describe('Cordis required-service injection', () => {
+    it('accepts an inline Cordis service owned by a routed root', () => {
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
+      write(
+        'src/extensions/workspaces/sessions/(backend)/root.ts',
+        `import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
+         import { DOOM_DELEGATION_SERVICE } from '@agimon-ai/doompi-core/delegation';
+         export default defineRoot(() => ({ value: {}, services: [(cordis) => { cordis.provide(DOOM_DELEGATION_SERVICE, bridge); }] }));`,
+      );
+      expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
+    });
+
+    it('accepts a provider reached from a routed backend escape hatch', () => {
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
+      write(
+        'src/extensions/workspaces/sessions/(backend)/extra.cli.ts',
+        `import { mount } from '../../../../controllers/runtime';
+         export default (({ context }) => mount(context));`,
+      );
+      write(
+        'src/controllers/runtime.ts',
+        `import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
+         export const mount = (context: { provide(service: unknown, value: unknown): void }) => {
+           context.provide(DOOM_HELP_SERVICE, {});
+           return {};
+         };`,
+      );
+
+      expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
+    });
+
     it('accepts a stable Pi wrapper created and cleared by its owning injected callback', () => {
       const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-hook' }));
       write(
@@ -1192,6 +1213,23 @@ describe('Doom deterministic architecture rules', () => {
       expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toContain(
         'DOOM_NARRATION_SERVICE is provided outside a mounted plugin or injection-owned context',
       );
+    });
+
+    it('recognizes a Cordis plugin returned in a backend scope root services field', () => {
+      const manifest = write('package.json', JSON.stringify({ name: '@agimon-ai/doompi-example' }));
+      write(
+        'src/extensions/workspaces/sessions/(backend)/root.server.ts',
+        [
+          "import { defineRoot } from '@agimon-ai/doompi-core/extension-file';",
+          "import { DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';",
+          'const root = defineRoot(() => {',
+          '  const provider = (ctx) => ctx.provide(DOOM_HELP_SERVICE, service);',
+          '  return { value: {}, services: [provider] };',
+          '});',
+          'export default root;',
+        ].join('\n'),
+      );
+      expect(cordisServiceInjection.check?.(manifest, root, boundaryContext())).toBeNull();
     });
 
     it('does not mistake eager clears or escaped nested closures for provider-loss cleanup', () => {
@@ -1454,6 +1492,10 @@ describe('Doom deterministic architecture rules', () => {
       expect(packageLayerOrder.check?.(manifest, root, boundaryContext())).toBeNull();
     });
 
+    it('treats the extension build preset as a contracts-tier build dependency', () => {
+      const manifest = manifestFor('@agimon-ai/doompi-config', { '@agimon-ai/doompi-build': 'workspace:*' });
+      expect(packageLayerOrder.check?.(manifest, root, boundaryContext())).toBeNull();
+    });
     it('rejects the platform tier depending on an extension', () => {
       const manifest = manifestFor('@agimon-ai/doompi-config', { '@agimon-ai/doompi-voice': 'workspace:*' });
       expect(packageLayerOrder.check?.(manifest, root, boundaryContext())).toContain(

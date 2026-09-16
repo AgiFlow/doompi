@@ -6,13 +6,13 @@ import {
   type AgentCatalogOptions,
   agentResourceSummary,
   openAgentCatalog,
-} from '../../src/tui/agentCatalog';
+} from '../../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/agent-catalog.cli';
 import type {
   AgentCatalogEntry,
   AgentResourceProjection,
   ProjectedResource,
   ResourceTabProjection,
-} from '../../src/tui/agentResourceProjection';
+} from '../../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/agentResourceProjection';
 import type { AgentConfig } from '../../src/types/agent';
 
 const KEY_ENTER = '\r';

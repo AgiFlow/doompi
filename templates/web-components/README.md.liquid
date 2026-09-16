@@ -57,9 +57,10 @@ more line(s)" hint that expands), and `MessageLines` (toned lines a pure view he
 is what keeps host and plugin items alike, and the shell carries the `tool-status` and
 `tool-expand` test ids every card inherits.
 
-## Using it from a plugin's `src/web` client
+## Using it from a plugin's frontend routes
 
-A web plugin's client code may import `react`, the `@tanstack` store packages,
+A web plugin's client code lives under `src/extensions/**/(frontend)`, in the routed `.web.tsx`
+files and the private `_components` and `_lib` folders beside them. It may import `react`, the `@tanstack` store packages,
 `@agimon-ai/doompi-core/web`, and this package. Declare it as a `workspace:*` dependency and
 import the same way the host does; the cockpit bundler dedupes it so one copy renders everywhere.
 Do not import `radix-ui` or `class-variance-authority` directly from plugin code: the doom-web

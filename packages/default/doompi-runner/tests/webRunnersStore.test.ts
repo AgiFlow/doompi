@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { isFollowingLive, logViewLines, tailLineNumbers } from '../src/web/lib/format';
-import { requestRunnerStop, runnerActivitySource, runnerRunsChannel, runners } from '../src/web/stores/runnersStore';
+import {
+  isFollowingLive,
+  logViewLines,
+  tailLineNumbers,
+} from '../src/extensions/workspaces/sessions/(frontend)/_lib/format';
+import {
+  requestRunnerStop,
+  runnerActivitySource,
+  runnerRunsChannel,
+  runners,
+} from '../src/extensions/workspaces/sessions/(frontend)/_lib/runnersStore';
 
 const run = (id: string, state: 'running' | 'completed') => ({ id, name: id, command: 'sleep 60', state });
 const session = (sessionId: string | null) => runners.select(runners.store.state, sessionId);

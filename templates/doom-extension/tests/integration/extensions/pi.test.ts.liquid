@@ -3,7 +3,7 @@ import { connectDoomCordisHost } from '@agimon-ai/doompi-core/cordis-host';
 import { createDoomHelpService, DOOM_HELP_SERVICE } from '@agimon-ai/doompi-core/help';
 import { describe, expect, it, vi } from 'vitest';
 import { COMMAND_NAME } from '../../../src/constants/{{ commandName | camelCase }}';
-import { activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension } from '../../../src/extensions/pi';
+import { extension } from '../../../generated/pi';
 import type { {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService } from '../../../src/services/extensionService/type';
 
 /**
@@ -16,7 +16,7 @@ import type { {{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionSe
  */
 describe('the standard Pi entry contract', () => {
   for (const scenario of standardExtensionScenarios({
-    factory: activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension,
+    factory: extension,
     commands: [COMMAND_NAME],
   })) {
     it(scenario.name, () => scenario.run());
@@ -31,7 +31,7 @@ describe('{{ packageName | kebabCase }} Pi extension', () => {
     };
 
     await host.cordis();
-    await activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension(host.pi, { service });
+    await extension(host.pi, { service });
     await host.runCommand(COMMAND_NAME);
 
     expect(service.execute).toHaveBeenCalledOnce();
@@ -47,7 +47,7 @@ describe('{{ packageName | kebabCase }} Pi extension', () => {
     };
 
     await host.cordis();
-    await activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension(host.pi, { service });
+    await extension(host.pi, { service });
     await host.runCommand(COMMAND_NAME);
 
     expect(host.notifications).toEqual([]);
@@ -57,7 +57,7 @@ describe('{{ packageName | kebabCase }} Pi extension', () => {
   it('follows optional Help provider replacement and withdraws its contribution on shutdown', async () => {
     const host = createPiTestHost();
     await host.cordis();
-    await activate{{ packageName | replace: "doompi-", "" | pascalCase }}Extension(host.pi);
+    await extension(host.pi);
     const connection = await connectDoomCordisHost(host.pi, '{{ packageName | kebabCase }}-help-test');
     const firstService = createDoomHelpService('{{ packageName | kebabCase }}-help-first');
     const firstFiber = connection.root.plugin((context) => context.provide(DOOM_HELP_SERVICE, firstService));

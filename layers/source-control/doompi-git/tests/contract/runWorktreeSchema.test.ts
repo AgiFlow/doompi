@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
+import { createRunWorktreeTool } from '../../src/extensions/workspaces/sessions/(backend)/tool/_lib/runWorktree.cli';
 import {
   RunWorktreeParams,
   RunWorktreeToolSchema,
   WORKTREE_ACTION_FIELDS,
   WORKTREE_ACTIONS,
 } from '../../src/schemas/runWorktreeTool';
-import { createRunWorktreeTool } from '../../src/tools/runWorktree';
 
 /**
  * How Pi's Anthropic Messages adapter rebuilds a tool's input schema:

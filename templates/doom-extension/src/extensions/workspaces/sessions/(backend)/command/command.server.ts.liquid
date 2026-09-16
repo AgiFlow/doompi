@@ -1,0 +1,22 @@
+import { defineCommand } from '@agimon-ai/doompi-core/extension-file';
+
+import { COMMAND_DESCRIPTION } from '../../../../../constants/{{ commandName | camelCase }}';
+import { Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService } from '../../../../../services/extensionService';
+
+/**
+ * `/{{ commandName }}` on the headless host.
+ *
+ * The filename is the command name, so nothing repeats it. A factory rather
+ * than a literal because the service is constructed per mount; a command with
+ * no per-mount state can export the object directly instead.
+ */
+export default defineCommand(() => {
+  const service = new Default{{ packageName | replace: "doompi-", "" | pascalCase }}ExtensionService();
+  return {
+    description: COMMAND_DESCRIPTION,
+    async execute(_args, execution) {
+      const { message, level } = await service.execute();
+      await execution.notify({ body: message, level });
+    },
+  };
+});

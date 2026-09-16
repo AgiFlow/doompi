@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createVoiceMediaApi } from '../src/controllers/clientMediaApi';
+import { createVoiceMediaApi } from '../src/services/clientMediaApi';
 import { RealtimeMediaBroker } from '../src/services/realtimeMediaBroker';
 import { VOICE_MEDIA_PROTOCOL_VERSION, VOICE_MEDIA_ROUTES } from '../src/types/clientMedia';
 import { REALTIME_ROUTES as routes } from '../src/types/realtime';

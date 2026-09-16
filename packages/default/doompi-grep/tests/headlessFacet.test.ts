@@ -14,7 +14,7 @@ import { Context } from '@deepseek-ai/cordis';
 import { rgPath } from '@vscode/ripgrep';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { grepServerFacet } from '../src/extensions/server';
+import { facet } from '../generated/server';
 
 const originalPath = process.env.PATH;
 let directory: string;
@@ -50,7 +50,7 @@ describe('grep server facet', () => {
       return { dispose };
     });
     const host = { registerTool } as unknown as DoomHeadlessHostService;
-    const cleanup = await grepServerFacet.apply(contextFor(host));
+    const cleanup = await facet.apply(contextFor(host));
 
     expect(registerTool).toHaveBeenCalledOnce();
     expect(tool?.name).toBe('grep');
@@ -79,7 +79,7 @@ describe('grep server facet', () => {
       tool = registered;
       return { dispose };
     });
-    const cleanup = await grepServerFacet.apply(contextFor({ registerTool } as unknown as DoomHeadlessHostService));
+    const cleanup = await facet.apply(contextFor({ registerTool } as unknown as DoomHeadlessHostService));
     if (!tool) throw new Error('Grep headless tool was not registered');
 
     await writeFile(join(directory, 'sample.txt'), 'present\n');
@@ -104,7 +104,7 @@ describe('grep server facet', () => {
       tool = registered;
       return { dispose };
     });
-    const cleanup = await grepServerFacet.apply(contextFor({ registerTool } as unknown as DoomHeadlessHostService));
+    const cleanup = await facet.apply(contextFor({ registerTool } as unknown as DoomHeadlessHostService));
     if (!tool) throw new Error('Grep headless tool was not registered');
 
     await writeFile(join(directory, 'sample.txt'), 'needle one\nother\nneedle two\n');

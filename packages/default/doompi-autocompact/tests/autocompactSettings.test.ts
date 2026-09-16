@@ -1,18 +1,17 @@
 import { DOOM_PLANNING_THINKING_LEVELS, parseAutocompactModeConfig } from '@agimon-ai/doompi-config';
 import { describe, expect, it } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../src/extensions/web';
+import { autocompactSettingsSection } from '../src/extensions/(frontend)/_lib/autocompactSettings';
+import globalSettings from '../src/extensions/(frontend)/setting/autocompact.web';
+import workspaceSettings from '../src/extensions/workspaces/(frontend)/setting/autocompact.web';
 import {
   AUTOCOMPACT_CONFIG_SECTION_ID,
   AUTOCOMPACT_SETTING_SHAPES,
   AUTOCOMPACT_THINKING_LEVELS,
 } from '../src/types/autocompactSettings';
-import { autocompactSettingsSection } from '../src/web/lib/autocompactSettings';
 const webPlugin = {
-  id: scopedWebPlugin.id,
-  ...scopedWebPlugin.global,
-  ...scopedWebPlugin.workspace,
-  ...scopedWebPlugin.session,
+  id: 'autocompact',
+  settingsSections: [globalSettings, workspaceSettings],
 };
 
 /** The value a settings field of this shape would send, in the string form the page writes. */
@@ -51,7 +50,7 @@ describe('autocompact settings', () => {
 
   it('contributes one settings page and nothing else to the cockpit', () => {
     expect(webPlugin.id).toBe('autocompact');
-    expect(webPlugin.settingsSections).toEqual([autocompactSettingsSection]);
+    expect(webPlugin.settingsSections).toEqual([autocompactSettingsSection, autocompactSettingsSection]);
 
     const byId = new Map(autocompactSettingsSection.fields.map((field) => [field.id, field]));
     expect(byId.get('model')).toMatchObject({ kind: 'select', optionsFrom: 'models' });

@@ -14,6 +14,22 @@ import type { SavedSession } from '../services/sqliteSessionHistory';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
 import { createHeadlessProtocol } from './headlessProtocol';
 
+/**
+ * The canonical public shape of a package API request, as dispatch reads it.
+ *
+ * Groups: workspace id, session id, plugin base path, and the remainder handed
+ * to the package. `settings` is the host's own API and sits beside `plugins`
+ * rather than under it.
+ *
+ * Exported so the browser's URL construction can be pinned against it. The two
+ * are written independently, in halves of this package that may not import each
+ * other, and a disagreement between them is not a 404 from the route: the
+ * service worker answers an unrecognised path out of the signed bundle cache,
+ * so the symptom appears nowhere near the cause.
+ */
+export const DOOM_PACKAGE_API_PATH_PATTERN =
+  /^\/api(?:\/workspaces\/([^/]+)(?:\/sessions\/([^/]+))?)?\/(?:plugins\/([^/]+)|settings)(?:\/(.*))?$/u;
+
 const HEALTH_ROLE = 'hub';
 const PROTOCOL_VERSION = 1;
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
@@ -49,6 +65,7 @@ export interface HeadlessServerOptions {
   resumeSession?: (session: HeadlessHubSession, targetSessionId: string) => Promise<string>;
   /** Recorded sessions this server has not reopened, surfaced so a client can ask for one. */
   dormantSessions?: () => readonly OpenSessionRecord[];
+  removeDormantSession?: (record: OpenSessionRecord) => void | Promise<void>;
   reviveSession?: (record: OpenSessionRecord) => Promise<void>;
 }
 
@@ -373,6 +390,28 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       });
       return;
     }
+    // Verified browser bundles can remain active across a server upgrade. Keep
+    // their former create route working while they refresh to workspace routes.
+    if (url.pathname === '/api/sessions' && request.method === 'POST') {
+      const body = parseJson(await readBody(request));
+      if (
+        !body ||
+        typeof body !== 'object' ||
+        !('cwd' in body) ||
+        typeof body.cwd !== 'string' ||
+        !body.cwd.trim() ||
+        ('name' in body && typeof body.name !== 'string')
+      ) {
+        json(response, 400, { error: 'A session needs a working directory and an optional name.' });
+        return;
+      }
+      const created = await options.headlessHub.sessionService.create({
+        cwd: body.cwd,
+        name: 'name' in body ? String(body.name) : path.basename(body.cwd),
+      });
+      json(response, 201, { sessionId: created.sessionId });
+      return;
+    }
     const workspaceSessions = /^\/api\/workspaces\/([^/]+)\/sessions$/u.exec(url.pathname);
     if (workspaceSessions) {
       const workspaceId = decodeURIComponent(workspaceSessions[1]);
@@ -461,10 +500,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       json(response, 200, { ok: true });
       return;
     }
-    const pluginMatch =
-      /^\/api(?:\/workspaces\/([^/]+)(?:\/sessions\/([^/]+))?)?\/(?:plugins\/([^/]+)|settings)(?:\/(.*))?$/u.exec(
-        url.pathname,
-      );
+    const pluginMatch = DOOM_PACKAGE_API_PATH_PATTERN.exec(url.pathname);
     if (pluginMatch !== null && request.method !== 'CONNECT') {
       const workspaceId = pluginMatch[1] === undefined ? undefined : decodeURIComponent(pluginMatch[1]);
       const sessionId = pluginMatch[2] === undefined ? undefined : decodeURIComponent(pluginMatch[2]);
@@ -567,6 +603,14 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       return;
     }
     if (session === undefined || session.workspaceId !== workspaceId) {
+      const record = dormant().find(
+        (candidate) => candidate.sessionId === sessionId && candidate.workspaceId === workspaceId,
+      );
+      if (request.method === 'DELETE' && record !== undefined && options.removeDormantSession !== undefined) {
+        await options.removeDormantSession(record);
+        json(response, 200, { ok: true });
+        return;
+      }
       json(response, 404, { error: 'Session not found.' });
       return;
     }

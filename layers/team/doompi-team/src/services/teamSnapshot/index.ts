@@ -17,6 +17,7 @@ export function formatTeamContextSnapshot(snapshot: TeamSnapshot | undefined): s
       const details = [
         `role: ${member.role}`,
         member.agent ? `agent: ${member.agent}` : undefined,
+        member.inline ? 'inline' : undefined,
         member.runId ? `run: ${member.runId}` : undefined,
         member.task ? `task ${member.task.id}: ${member.task.subject}` : undefined,
       ].filter((value): value is string => Boolean(value));

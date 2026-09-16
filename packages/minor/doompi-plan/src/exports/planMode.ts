@@ -1,1 +1,1 @@
-export * from '../controllers/planMode';
+export * from '../services/planMode';

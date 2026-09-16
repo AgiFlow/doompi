@@ -19,7 +19,7 @@ The experimental live path is a focused TypeScript port, not a Codex app-server 
 - `adapters/realtime/realtimeHost.ts`: typed realtime signaling through the server-owned Voice host service.
 - `adapters/pi/{liveVoiceController,voiceModeController}.ts`: explicit mode selection, bounded polling, context updates and main-agent requests.
 - `adapters/pi/{realtimeContext,realtimeDelivery}.ts`: bounded visible-branch projection and deduplicated user-text delivery.
-- `web/api/{voiceMediaClient,browserRealtimeSession}.ts`: browser WebRTC capture/playback beneath page-global ownership, separate from legacy PCM.
+- `extensions/workspaces/sessions/(frontend)/lifecycle/_lib/{voiceMediaClient,browserRealtimeSession}.ts`: browser WebRTC capture/playback beneath page-global ownership, separate from legacy PCM.
 
 `voice.ts` composes half-duplex (`legacy` configuration value) and realtime companion controllers.
 only on explicit activation. Local ASR readiness does not gate live mode. Login is a separate
@@ -152,6 +152,7 @@ lifecycle machine below.
 
 In the browser, `VoiceMediaRuntime.tsx` stores one media runtime in a page-global plugin store. Session routes may remount their plugin compositions, but those route disposers do not reset server-selected ownership or disconnect the media client. The runtime follows ownership changes reactively and closes its microphone, device, and lease on the browser `pagehide` teardown event. Ownership removal also releases those resources. This keeps capture alive when cockpit focus moves away from and back to the owning session.
 
+Capture resolves its input through the page-global microphone store. Fewer than two detected inputs means the input the browser is already on; several inputs with no matching saved answer opens the cockpit overlay dialog once, and the answer is kept in that browser's local storage until the set of inputs changes. The answer only ever narrows the device: the audio processing the echo discriminator depends on is pinned either way.
 ---
 
 ## 2. One autonomous turn

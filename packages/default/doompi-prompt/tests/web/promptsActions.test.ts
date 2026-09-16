@@ -9,7 +9,7 @@ import {
   EMPTY_DRAFT,
   type PromptsMutationApi,
   renamedFrom,
-} from '../../src/web/lib/promptsActions';
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/promptsActions';
 
 function api(overrides: Partial<PromptsMutationApi> = {}): PromptsMutationApi {
   return {

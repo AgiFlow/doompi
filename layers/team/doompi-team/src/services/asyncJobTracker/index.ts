@@ -10,6 +10,10 @@ type ExternalResult = Record<string, unknown>;
 export interface TrackedAsyncJob {
   runId: string;
   agent?: string;
+  /** Generated addressable identity, for example `alan-reviewer-3`. */
+  identity?: string;
+  /** True when this run came from a one-shot inline agent definition. */
+  inline?: boolean;
   status: string | undefined;
   startedAt?: number;
   updatedAt?: number;
@@ -32,6 +36,8 @@ export interface TrackedAsyncJob {
 export interface NativeAsyncJobProjection {
   runId: string;
   agent: string;
+  identity?: string;
+  inline?: boolean;
   task: string;
   cwd: string;
   runtime: string;
@@ -45,7 +51,7 @@ export interface NativeAsyncJobProjection {
 }
 
 export type TrackedAsyncJobsContract = {
-  track(runId: string): void;
+  track(runId: string, identity?: { identity: string; inline: boolean }): void;
   untrack(runId: string): void;
   list(): TrackedAsyncJob[];
   get(runId: string): TrackedAsyncJob | undefined;
@@ -57,15 +63,26 @@ export type AsyncJobTrackerContract = {
   stop(): void;
 };
 
+/**
+ * Resolve a caller-supplied id to a tracked run id.
+ *
+ * Order matters. An exact run id wins, then a unique run-id prefix, and only
+ * then a generated identity. A name is checked last so that a friendly name
+ * which happens to look like a hex prefix can never shadow a real run.
+ */
 export function resolveTrackedRunId(jobs: TrackedAsyncJobsContract, id: string): string {
-  const matches = jobs
-    .list()
-    .map((job) => job.runId)
-    .filter((runId) => runId === id || runId.startsWith(id));
+  const runs = jobs.list();
+  const matches = runs.map((job) => job.runId).filter((runId) => runId === id || runId.startsWith(id));
   const exact = matches.find((runId) => runId === id);
   if (exact) return exact;
   if (matches.length === 1) return matches[0]!;
-  if (matches.length === 0) throw new Error(`No current-session run found for '${id}'.`);
+  if (matches.length === 0) {
+    const wanted = id.trim().toLowerCase();
+    const named = runs.filter((job) => job.identity?.toLowerCase() === wanted);
+    if (named.length === 1) return named[0]!.runId;
+    if (named.length > 1) throw new Error(`Multiple current-session runs are named '${id}'.`);
+    throw new Error(`No current-session run found for '${id}'.`);
+  }
   throw new Error(`Multiple current-session runs match '${id}'. Use a longer id.`);
 }
 
@@ -131,7 +148,7 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
     if (!sessionId.trim()) throw new Error('Pi session identity is required to track subagent runs.');
     this.session(sessionId, scope);
     return {
-      track: (runId) => this.trackInSession(sessionId, runId),
+      track: (runId, identity) => this.trackInSession(sessionId, runId, identity),
       untrack: (runId) => this.untrackInSession(sessionId, runId),
       list: () => this.listInSession(sessionId),
       get: (runId) => this.getInSession(sessionId, runId),
@@ -142,7 +159,15 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
   upsertNative(sessionId: string, scope: SessionScope, projection: NativeAsyncJobProjection): void {
     const session = this.session(sessionId, scope);
     const previous = session.jobs.get(projection.runId);
-    const next: TrackedAsyncJob = { ...projection, native: true };
+    // `projection` replaces the record wholesale, so anything the tracker knows
+    // and the projection does not carry has to be restated here or it is lost
+    // on the first child event.
+    const next: TrackedAsyncJob = {
+      ...projection,
+      ...((projection.identity ?? previous?.identity) ? { identity: projection.identity ?? previous?.identity } : {}),
+      ...((projection.inline ?? previous?.inline) ? { inline: projection.inline ?? previous?.inline } : {}),
+      native: true,
+    };
     this.install(sessionId, session, next, previous);
   }
 
@@ -157,6 +182,10 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
     const next: TrackedAsyncJob = {
       runId: projection.runId,
       agent: projection.agent,
+      // An external runner writes status.json and has never heard of the
+      // identity, so it can only come from what the parent already tracked.
+      ...(previous?.identity === undefined ? {} : { identity: previous.identity }),
+      ...(previous?.inline === undefined ? {} : { inline: previous.inline }),
       task: projection.task,
       cwd: projection.cwd,
       runtime: projection.runtime,
@@ -258,11 +287,15 @@ export class AsyncJobTracker implements AsyncJobTrackerContract {
     };
   }
 
-  private trackInSession(sessionId: string, runId: string): void {
+  private trackInSession(sessionId: string, runId: string, identity?: { identity: string; inline: boolean }): void {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error(`Session '${sessionId}' must be bound to an explicit scope before tracking runs.`);
     if (!session.jobs.has(runId)) {
-      session.jobs.set(runId, { runId, status: undefined });
+      session.jobs.set(runId, {
+        runId,
+        status: undefined,
+        ...(identity ? { identity: identity.identity, inline: identity.inline } : {}),
+      });
       this.invalidate(sessionId);
     }
   }

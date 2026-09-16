@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { voiceActivityView } from '../src/web/lib/voiceActivityView';
+import { voiceActivityView } from '../src/extensions/workspaces/sessions/(frontend)/fill/_lib/voiceActivityView';
 
 describe('reading the voice status line', () => {
   it('says nothing is listening when the session reports nothing', () => {

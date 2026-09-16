@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { Context } from '@deepseek-ai/cordis';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { defineServerPlugin } from '../../../src/extensions/serverPlugin';
@@ -109,6 +110,26 @@ describe('installServerFacets', () => {
       host.dispose();
     }
   });
+  it('ignores an absent generated resource contribution', async () => {
+    const host = hostFor();
+    const registerResource = vi.fn(() => ({ dispose: vi.fn() }));
+    const context = new Context();
+    context.provide(DOOM_SERVER_HOST_SERVICE, host);
+    context.provide(DOOM_HEADLESS_HOST_SERVICE, { registerResource } as unknown as DoomHeadlessHostService);
+    const facet = defineServerPlugin({
+      name: 'optional-resource',
+      session: { resources: [undefined] as never },
+    });
+
+    try {
+      const dispose = await facet.apply(context);
+      expect(registerResource).not.toHaveBeenCalled();
+      await dispose?.();
+    } finally {
+      host.dispose();
+    }
+  });
+
   it('leaves the mount table complete once it resolves', async () => {
     const host = hostFor();
 

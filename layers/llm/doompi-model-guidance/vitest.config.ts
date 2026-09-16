@@ -6,7 +6,9 @@ import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 const threshold = process.env.THRESHOLD ? Number.parseInt(process.env.THRESHOLD, 10) : 80;
-const doomConfigExports = fileURLToPath(new URL('../../../packages/core/doompi-config/src/exports/', import.meta.url));
+const doomConfigExports = fileURLToPath(
+  new URL('../../../packages/foundations/doompi-config/src/exports/', import.meta.url),
+);
 const doomExtensionContractsExports = fileURLToPath(
   new URL('../../../packages/core/doompi-core/src/exports/', import.meta.url),
 );
@@ -39,7 +41,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text'],
-      exclude: ['node_modules/', 'dist/', 'tests/', '**/*.d.ts', '**/*.config.*', '**/coverage/**'],
+      exclude: ['node_modules/', 'dist/', 'generated/**', 'tests/', '**/*.d.ts', '**/*.config.*', '**/coverage/**'],
       reportOnFailure: false,
       enabled: true,
       skipFull: true,

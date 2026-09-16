@@ -38,10 +38,10 @@ import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext, Theme } f
 import { visibleWidth } from '@earendil-works/pi-tui';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { extension as workflowExtension } from '../../generated/pi';
 import { WORKFLOW_PI_TOOL_NAMES } from '../../src/constants/workflow';
-import { workflowExtension } from '../../src/extensions/pi';
 import type { WorkflowPiToolDependencies } from '../../src/services/workflowExecution';
-import { createWorkflowTools } from '../../src/tools/workflowTools';
+import { createWorkflowTools } from '../../src/services/workflowTools';
 import {
   compatibleRunners,
   panelHint,

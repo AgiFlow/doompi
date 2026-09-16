@@ -27,7 +27,7 @@
 
 ## Boundaries
 
-- Runtime foundations live under `packages/core/*`, default distribution features under `packages/default/*`, optional modes under `packages/minor/*`, standalone client processes under `packages/clients/*`, selectable extensions under `layers/<layer>/*`, and repository-owned development tools under `packages/tooling/*`.
+- The distribution host lives under `packages/cli/*`, shared contracts and libraries under `packages/core/*`, fixed extension packages under `packages/foundations/*`, default distribution features under `packages/default/*`, optional modes under `packages/minor/*`, standalone client processes under `packages/clients/*`, shared utilities and prebuilt native payloads under `packages/utils/*`, selectable extensions under `layers/<layer>/*`, and repository-owned development tools under `packages/tooling/*`.
 - Keep Doom-to-Doom dependencies as `workspace:*`.
 - Use published npm versions for `@agimon-ai/vibe-lint`, MCP, and foundation packages. The repository-owned rule plugins under `packages/tooling/` (`@agimon-ai/vibe-lint-plugin-doom-extension`, `@agimon-ai/vibe-lint-plugin-doom-web`) are the tooling exception and are consumed with `workspace:*`.
 - Preserve package exports, Pi entries, resources, runtime ordering, and RMUX LFS payloads.

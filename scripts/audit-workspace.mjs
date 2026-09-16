@@ -7,10 +7,13 @@ import { TARGETS } from './fetch-runner-binaries.mjs';
 
 const root = process.cwd();
 const packageGroups = [
+  path.join(root, 'packages', 'cli'),
   path.join(root, 'packages', 'core'),
+  path.join(root, 'packages', 'foundations'),
   path.join(root, 'packages', 'default'),
   path.join(root, 'packages', 'minor'),
   path.join(root, 'packages', 'clients'),
+  path.join(root, 'packages', 'utils'),
   path.join(root, 'layers'),
 ];
 const dependencySections = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
@@ -80,22 +83,37 @@ const packageDirectories = packageGroups
   .sort();
 const manifests = packageDirectories.map((directory) => readJson(path.join(directory, 'package.json')));
 const ownedNames = new Set(manifests.map(({ name }) => name));
+// The group a package sits in decides which edges it may take part in. `core`
+// is the shared library set and the CLI host, `foundation` is the fixed
+// extension and payload set every composition gets, and anything else is a
+// feature a repository chooses.
+const kindByGroup = {
+  cli: 'core',
+  core: 'core',
+  foundations: 'foundation',
+  utils: 'foundation',
+  clients: 'client',
+};
+
+function packageKind(directory) {
+  for (const [group, kind] of Object.entries(kindByGroup)) {
+    if (directory.startsWith(path.join(root, 'packages', group) + path.sep)) return kind;
+  }
+  return 'selectable';
+}
+
 const packageRecords = packageDirectories.map((directory, index) => ({
   directory,
   manifest: manifests[index],
-  kind: directory.startsWith(path.join(root, 'packages', 'core') + path.sep)
-    ? 'core'
-    : directory.startsWith(path.join(root, 'packages', 'clients') + path.sep)
-      ? 'client'
-      : 'selectable',
+  kind: packageKind(directory),
 }));
 const packageByName = new Map(packageRecords.map((record) => [record.manifest.name, record]));
 const toolingManifest = readJson(path.join(toolingPackageDirectory, 'package.json'));
 const workspacePackageNames = new Set([...ownedNames, toolingPackageName, ...additionalToolingPackageNames]);
 
-if (packageDirectories.length !== 50 || ownedNames.size !== 50) {
+if (packageDirectories.length !== 51 || ownedNames.size !== 51) {
   fail(
-    `Expected exactly 50 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
+    `Expected exactly 51 DoomPi packages, found ${packageDirectories.length} directories and ${ownedNames.size} names`,
   );
 }
 if (toolingManifest.name !== toolingPackageName || toolingManifest.private === true) {
@@ -162,8 +180,12 @@ function selectableDependencyAllowed(owner, target) {
   return owner === '@agimon-ai/doompi-runner' && runnerNativePackages.has(target);
 }
 
+// Foundation packages under packages/utils are shared utilities and prebuilt
+// native payloads. They are never selected on their own, so any package may
+// depend on one without making itself indispensable.
 function assertDispensableEdge(ownerRecord, targetRecord, source) {
   if (ownerRecord.manifest.name === targetRecord.manifest.name || targetRecord.kind === 'core') return;
+  if (targetRecord.kind === 'foundation') return;
   if (ownerRecord.kind === 'client' && targetRecord.kind === 'client') return;
   if (selectableDependencyAllowed(ownerRecord.manifest.name, targetRecord.manifest.name)) return;
   if (ownerRecord.kind === 'core') {
@@ -307,5 +329,5 @@ if (rmuxPayloadCount !== 12) fail(`Expected 12 RMUX vendor files, found ${rmuxPa
 if (rtkPayloadCount !== 4) fail(`Expected 4 RTK vendor files, found ${rtkPayloadCount}`);
 
 console.log(
-  'Workspace audit passed: 49 publishable runtime packages, 1 private standalone client, 4 tooling packages, dispensable feature closure, registry-only externals, 12 materialized RMUX payloads, and 4 materialized RTK payloads.',
+  'Workspace audit passed: 50 publishable runtime packages, 1 private standalone client, 4 tooling packages, dispensable feature closure, registry-only externals, 12 materialized RMUX payloads, and 4 materialized RTK payloads.',
 );

@@ -8,6 +8,22 @@ import { PCM_BYTES_PER_SAMPLE, PCM_FRAME_BYTES, PCM_SAMPLE_RATE } from '../pcm';
 
 const SHERPA_ONNX_PACKAGE = 'sherpa-onnx-node';
 const SILERO_MODEL_FILE = 'silero_vad_v6.2.1.onnx';
+/**
+ * The one copy of the model, colocated with the browser capture device that
+ * also loads it. Node reads the same file from disk, so the segments are
+ * spelled out rather than resolved through the browser import.
+ */
+const SILERO_MODEL_SEGMENTS = [
+  'src',
+  'extensions',
+  'workspaces',
+  'sessions',
+  '(frontend)',
+  'lifecycle',
+  '_lib',
+  'models',
+  SILERO_MODEL_FILE,
+];
 const SILERO_THRESHOLD = 0.5;
 const SILERO_WINDOW_SAMPLES = 512;
 const SILERO_WINDOW_BYTES = SILERO_WINDOW_SAMPLES * PCM_BYTES_PER_SAMPLE;
@@ -56,7 +72,7 @@ function loadSherpaOnnx(): SherpaOnnxModule {
 export function findSileroVadModelPath(importFileUrl: string | URL): string {
   let directory = path.dirname(fileURLToPath(importFileUrl));
   while (true) {
-    const candidate = path.join(directory, 'src', 'web', 'models', SILERO_MODEL_FILE);
+    const candidate = path.join(directory, ...SILERO_MODEL_SEGMENTS);
     if (fs.existsSync(candidate)) return candidate;
     const parent = path.dirname(directory);
     if (parent === directory) break;

@@ -4,11 +4,14 @@ import process from 'node:process';
 
 const root = process.cwd();
 const packageDirectories = [
+  ...directoriesIn(path.join(root, 'packages', 'cli')),
   ...directoriesIn(path.join(root, 'packages', 'core')),
+  ...directoriesIn(path.join(root, 'packages', 'foundations')),
   ...directoriesIn(path.join(root, 'packages', 'default')),
   ...directoriesIn(path.join(root, 'packages', 'minor')),
   ...directoriesIn(path.join(root, 'packages', 'clients')),
   ...directoriesIn(path.join(root, 'packages', 'tooling')),
+  ...directoriesIn(path.join(root, 'packages', 'utils')),
   ...directoriesIn(path.join(root, 'layers')).flatMap(directoriesIn),
 ].filter((directory) => fs.existsSync(path.join(directory, 'package.json')));
 

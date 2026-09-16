@@ -2,19 +2,6 @@ import { expect, test } from '../support/cockpit';
 
 test.use({ assets: 'synced' });
 
-test.beforeEach(async ({ page }) => {
-  await page.route('**/api/plugins/voice/clients/**', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        deviceId: 'physical-mic',
-        inputs: [{ deviceId: 'physical-mic', groupId: 'built-in', label: 'Built-in microphone' }],
-      }),
-    });
-  });
-});
-
 test('records once and appends the returned transcript without invoking autonomous voice', async ({
   page,
   cockpit,
@@ -104,7 +91,8 @@ test('records once and appends the returned transcript without invoking autonomo
   await expect(voice).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(voice).toBeVisible();
-
+  // The button records on the client's own input; nothing has to be chosen first.
+  await expect(page.getByTestId('voice-microphone-picker')).toHaveCount(0);
   await page.getByTestId('composer-input').fill('existing draft');
   await voice.click();
   await expect(voice).toHaveAttribute('data-voice-mode', 'manual');
@@ -116,7 +104,7 @@ test('records once and appends the returned transcript without invoking autonomo
     method: 'POST',
     contentType: 'audio/webm;codecs=opus',
   });
-  expect(mediaRequests[0]?.url).toContain('/sessions/s1/plugins/voice-media/manual/transcribe?session=s1');
+  expect(mediaRequests[0]?.url).toContain('/sessions/s1/plugins/voice-media/manual/transcribe');
   expect(Number(mediaRequests[0]?.duration)).toBeGreaterThanOrEqual(0);
   expect(mediaRequests[0]?.bodyLength).toBeGreaterThan(0);
   expect(

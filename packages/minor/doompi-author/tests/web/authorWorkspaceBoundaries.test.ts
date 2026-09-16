@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AuthorRegionDraft, AuthorRequestRecord } from '../../src/web/lib/authorViewportTypes';
-import * as workspace from '../../src/web/stores/authorWorkspaceStore';
+import type {
+  AuthorRegionDraft,
+  AuthorRequestRecord,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
+import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 const session = 'workspace-boundaries';
 const region: AuthorRegionDraft = {
   id: 'r',
@@ -35,7 +38,7 @@ afterEach(() => {
 
 describe('Author workspace boundary and retention contracts', () => {
   it('validates empty paths, stale candidates, comments, duplicate regions and ownership', () => {
-    expect(() => workspace.putAuthorDocument(session, { path: './', kind: 'text' })).toThrow('empty');
+    expect(() => workspace.putAuthorDocument(session, { path: './.', kind: 'text' })).toThrow('empty');
     expect(workspace.authorDocument(null, 'a.md')).toBeUndefined();
     expect(workspace.authorSessionWorkspace(null).regions).toEqual([]);
     expect(() => workspace.commitAuthorRegion(session, 'Edit')).toThrow('Select');

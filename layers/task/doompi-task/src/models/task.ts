@@ -185,8 +185,14 @@ export interface TaskDetails {
   assignment?: AssignmentSummary;
 }
 
-/** A delegation is "live" while the owning run may still produce a response. */
-export function isDelegationActive(task: Task): boolean {
+/**
+ * A delegation is "live" while the owning run may still produce a response.
+ *
+ * Takes the delegation shape rather than `Task` so the cockpit's `WebTask`,
+ * which carries the state as a plain string, answers the question the same way
+ * the store does.
+ */
+export function isDelegationActive(task: { delegation?: { state?: string } }): boolean {
   const state = task.delegation?.state;
   return state === 'requested' || state === 'running';
 }

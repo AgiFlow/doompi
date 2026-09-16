@@ -1,6 +1,10 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import type { DoomHeadlessHostService, DoomHeadlessModelSettings } from '@agimon-ai/doompi-core/headless';
 import type { MinorModeOwner } from '@agimon-ai/doompi-minor-mode';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ config: vi.fn(), owners: vi.fn(), writeFile: vi.fn(), mkdir: vi.fn() }));
 vi.mock('node:fs/promises', async (original) => ({
@@ -20,8 +24,23 @@ vi.mock('@agimon-ai/doompi-minor-mode', async (original) => ({
   },
 }));
 
-import { createPlanServerSession } from '../src/controllers/planServerSession';
+import { PLAN_CONTINUE_TEXT, PLAN_EXIT_APPROVED_TEXT } from '../src/services/planMode';
+import { PlanPointerService } from '../src/services/planPointer';
+import { createPlanServerSession } from '../src/services/planServerSession';
+import {
+  CONTINUE_PLANNING_CHOICE,
+  EXIT_PLAN_MODE_CHOICE,
+  parsePlanStatus,
+  PLAN_REVIEW_TITLE,
+  PLAN_STATUS_KEY,
+} from '../src/types/planApi';
 
+/** The last activity-dock line the facet published, read back through the dock's parser. */
+function lastPlanStatus(setStatus: ReturnType<typeof vi.fn>): string | undefined {
+  const calls = setStatus.mock.calls.filter(([key]) => key === PLAN_STATUS_KEY);
+  if (calls.length === 0) throw new Error(`The facet never published ${PLAN_STATUS_KEY}`);
+  return calls[calls.length - 1]?.[1] as string | undefined;
+}
 function fixture() {
   let settings: DoomHeadlessModelSettings = { model: { provider: 'test', id: 'chat' }, thinkingLevel: 'medium' };
   const entries: Record<string, unknown>[] = [];
@@ -29,12 +48,20 @@ function fixture() {
   const setModelSettings = vi.fn(async (next: Partial<DoomHeadlessModelSettings>) => {
     settings = { ...settings, ...next };
   });
+  const request = vi.fn(async (): Promise<unknown> => undefined);
+  const setStatus = vi.fn();
+  // A real directory: the pointer is written with node:fs, and the restart case
+  // is only meaningful if it can be read back.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-plan-server-'));
+  homes.push(home);
   const host = {
     context: {
       repoRoot: '/repo',
       cwd: '/repo/subdir',
-      environment: { HOME: '/test-home' },
+      environment: { HOME: home },
+      sessionId: 'plan-server-session-test',
       selection,
+      client: { request, setStatus },
       session: {
         readModelSettings: async () => settings,
         setModelSettings,
@@ -66,11 +93,29 @@ function fixture() {
     const hook = plugin.hooks?.find((hook) => hook.event === 'session_start');
     await hook?.handle({}, host.context);
   };
-  return { host, plugin, entries, mount, restart, settings: () => settings, setModelSettings, selection };
+  return {
+    host,
+    plugin,
+    entries,
+    mount,
+    restart,
+    request,
+    setStatus,
+    home,
+    settings: () => settings,
+    setModelSettings,
+    selection,
+  };
 }
+
+const homes: string[] = [];
 
 beforeEach(() => {
   mocks.config.mockReturnValue({ modes: { planning: { main: { model: 'test/planner', thinking: 'max' } } } });
+});
+
+afterEach(() => {
+  while (homes.length > 0) fs.rmSync(homes.pop()!, { recursive: true, force: true });
 });
 
 describe('server planning model settings', () => {
@@ -78,7 +123,7 @@ describe('server planning model settings', () => {
     const f = fixture();
     const activate = f.mount();
     await activate('activate', { flavor: 'normal' });
-    expect(mocks.config).toHaveBeenCalledWith('/repo', '/test-home');
+    expect(mocks.config).toHaveBeenCalledWith('/repo', f.home);
     expect(f.settings()).toEqual({ model: { provider: 'test', id: 'planner' }, thinkingLevel: 'max' });
     await activate('activate', { flavor: 'debug' });
     expect(f.setModelSettings).toHaveBeenCalledTimes(1);
@@ -130,6 +175,35 @@ describe('server planning evidence', () => {
       '# Approved Plan\n\n1. Verify settings.\n',
       expect.objectContaining({ flag: 'wx' }),
     );
+  });
+
+  it('announces the written plan to the activity dock, and again after a restart', async () => {
+    // A cockpit drives this facet and never the Pi runtime, so this is the only
+    // code that can put a plan in the dock or leave its panel a pointer to read.
+    const f = fixture();
+    f.selection.state['minor-mode'] = ['plan'];
+    f.entries.push({
+      type: 'message',
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: '# Approved Plan\n\n1. Verify settings.' },
+          { type: 'toolCall', id: 'write', name: 'write_plan', arguments: {} },
+        ],
+      },
+    });
+    const tool = f.plugin().tools.find((tool) => tool.name === 'write_plan')!;
+    await tool.execute('write', {}, undefined, undefined, f.host.context);
+
+    expect(parsePlanStatus(lastPlanStatus(f.setStatus))).toMatchObject({ title: 'Approved Plan' });
+    // The panel answers from the pointer, so a status without one is a group
+    // whose tab 404s.
+    const pointer = new PlanPointerService({ env: { HOME: f.home } }).read('plan-server-session-test');
+    expect(pointer).toMatchObject({ title: 'Approved Plan' });
+
+    f.setStatus.mockClear();
+    await f.restart();
+    expect(parsePlanStatus(lastPlanStatus(f.setStatus))).toMatchObject({ title: 'Approved Plan' });
   });
   it('saves a plan that opens with prose before its first heading', async () => {
     const f = fixture();
@@ -207,6 +281,69 @@ describe('server planning evidence', () => {
   });
 });
 
+// The headless client answers with the option's `value`. This facet used to send the label as the
+// value too, then compare it to 'exit'/'continue', so every review the reader answered failed.
+describe('server plan review', () => {
+  const review = async (f: ReturnType<typeof fixture>) => {
+    await f.mount()('activate', { flavor: 'normal' });
+    const tool = f.plugin().tools.find((tool) => tool.name === 'complete_plan')!;
+    return tool.execute('review', {}, undefined, undefined, f.host.context);
+  };
+
+  it('asks with the decision on each option, not just the label the reader reads', async () => {
+    const f = fixture();
+    await review(f);
+    expect(f.request).toHaveBeenCalledWith(
+      {
+        kind: 'select',
+        title: PLAN_REVIEW_TITLE,
+        options: [
+          { label: EXIT_PLAN_MODE_CHOICE, value: 'exit' },
+          { label: CONTINUE_PLANNING_CHOICE, value: 'continue' },
+        ],
+      },
+      undefined,
+    );
+  });
+
+  it('exits plan mode when the reader picks the exit option', async () => {
+    const f = fixture();
+    f.request.mockResolvedValueOnce('exit');
+    const result = await review(f);
+    expect(result.isError).not.toBe(true);
+    expect(result.details).toEqual({ exited: true });
+    expect(result.content).toEqual([{ type: 'text', text: PLAN_EXIT_APPROVED_TEXT }]);
+    expect(f.entries.find((entry) => entry.customType === 'plan-review')?.data).toEqual({ decision: 'exit' });
+    expect(f.selection.state['minor-mode']).toEqual([]);
+  });
+
+  it('stays in plan mode when the reader keeps planning', async () => {
+    const f = fixture();
+    f.request.mockResolvedValueOnce('continue');
+    const result = await review(f);
+    expect(result.isError).not.toBe(true);
+    expect(result.details).toEqual({ exited: false });
+    expect(result.content).toEqual([{ type: 'text', text: PLAN_CONTINUE_TEXT }]);
+    expect(f.entries.find((entry) => entry.customType === 'plan-review')?.data).toEqual({ decision: 'continue' });
+    expect(f.selection.state['minor-mode']).toEqual(['plan']);
+  });
+
+  it('treats a dismissed prompt as staying in plan mode rather than as approval', async () => {
+    const f = fixture();
+    f.request.mockResolvedValueOnce(undefined);
+    const result = await review(f);
+    expect(result.isError).not.toBe(true);
+    expect(result.details).toEqual({ exited: false });
+    expect(f.selection.state['minor-mode']).toEqual(['plan']);
+  });
+
+  it('offers no decision parameter, so the agent cannot approve its own plan', () => {
+    const tool = fixture()
+      .plugin()
+      .tools.find((tool) => tool.name === 'complete_plan')!;
+    expect(tool.parameters).toEqual({ type: 'object', properties: {}, additionalProperties: false });
+  });
+});
 /** Activate a flavor, then rebuild the plugin through the restore path a real session uses. */
 async function activated(f: ReturnType<typeof fixture>, flavor: string) {
   await f.mount()('activate', { flavor });
@@ -269,7 +406,10 @@ describe('server planning system prompt', () => {
     const prompt = await promptFor(f, plugin);
 
     expect(prompt).toContain('[PLAN MODE ACTIVE: FABLE]');
-    expect(prompt).toContain('Current Fable stage: unavailable');
+    // This host declares no Fable broker, so the brief says so outright instead of describing a
+    // run_fable_plan handoff the stub tool would refuse.
+    expect(prompt).toContain('Fable planning is unavailable in this host');
+    expect(prompt).not.toContain('call run_fable_plan');
   });
 
   it('keeps the flavor across a restart instead of silently planning as normal', async () => {

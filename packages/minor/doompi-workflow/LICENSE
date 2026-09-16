@@ -1,7 +1,9 @@
 Portions of this software are licensed as follows:
 
-* All content under the "web/" directory is licensed under the DoomPi Web
-  License defined in "web/LICENSE": free to use, not to redistribute.
+* The browser half of this package, meaning every ".web" routed file under
+  "src/extensions" and the "_components" and "_lib" modules colocated with
+  one, is licensed under the DoomPi Web License defined in "LICENSE.web":
+  free to use, not to redistribute.
 * All other content is licensed under the MIT license below.
 
 MIT License

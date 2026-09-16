@@ -1,3 +1,4 @@
+import { isBrowserFile } from '@agimon-ai/doompi-build/browser-file';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
 
@@ -23,10 +24,17 @@ function declaresColors(relativePath: string): boolean {
   );
 }
 
-/** Browser source: the cockpit's client tree, a plugin's src/web tree, or a component library's src. */
+/**
+ * Browser source: the cockpit's client tree, a plugin's src/web tree, a
+ * component library's src, or an extension's colocated browser code. The last
+ * arm asks the build's own predicate, so the rule follows a component when it
+ * moves next to the routed file that renders it and still stands down on the
+ * terminal half of the same `(frontend)` side.
+ */
 function isBrowserSource(relativePath: string): boolean {
   if (relativePath.startsWith('src/web/')) return true;
-  return relativePath.startsWith('src/components/') || relativePath.startsWith('src/lib/');
+  if (relativePath.startsWith('src/components/') || relativePath.startsWith('src/lib/')) return true;
+  return isBrowserFile(relativePath);
 }
 
 export const noRawThemeColor: RuleDefinition = {

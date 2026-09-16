@@ -61,9 +61,10 @@ import type { AvailableModelInfo, ParentModel } from '../modelFallback';
 import type { PollSchedulerContract } from '../pollScheduler';
 import type { SessionScope } from '../sessionPaths';
 import type {
-  SessionForkSource,
+  ForkCaptureFailure,
   SpawnPlannerContract,
   SpawnPlanChildOutcome,
+  SpawnPlanRequest,
   SpawnPlanResult,
   SpawnPlanTaskInput,
 } from '../spawnPlan';
@@ -77,7 +78,8 @@ export interface SlashSingleLaunchInput {
   model?: string;
   context?: 'fresh' | 'fork';
   parentSessionId?: string;
-  parentForkSource?: SessionForkSource['terminalSource'];
+  parentForkSource?: SpawnPlanRequest['parentForkSource'];
+  parentForkFailure?: ForkCaptureFailure | 'no-capture-installed';
   currentDepth?: number;
   availableModels?: AvailableModelInfo[];
   parentModel?: ParentModel;
@@ -92,7 +94,8 @@ export interface SlashParallelLaunchInput {
   sessionScope: SessionScope;
   concurrency?: number;
   parentSessionId?: string;
-  parentForkSource?: SessionForkSource['terminalSource'];
+  parentForkSource?: SpawnPlanRequest['parentForkSource'];
+  parentForkFailure?: ForkCaptureFailure | 'no-capture-installed';
   currentDepth?: number;
   availableModels?: AvailableModelInfo[];
   parentModel?: ParentModel;
@@ -102,7 +105,12 @@ export interface SlashParallelLaunchInput {
 
 function trackLaunchedRuns(tracker: TrackedAsyncJobsContract, outcomes: SpawnPlanChildOutcome[]): void {
   for (const outcome of outcomes) {
-    if (outcome.runId) tracker.track(outcome.runId);
+    if (outcome.runId) {
+      tracker.track(
+        outcome.runId,
+        outcome.identity ? { identity: outcome.identity, inline: outcome.inline ?? false } : undefined,
+      );
+    }
   }
 }
 
@@ -126,6 +134,7 @@ export async function launchSingleSubagent(
       sessionScope: input.sessionScope,
       ...(input.parentSessionId ? { parentSessionId: input.parentSessionId } : {}),
       ...(input.parentForkSource ? { parentForkSource: input.parentForkSource } : {}),
+      ...(input.parentForkFailure ? { parentForkFailure: input.parentForkFailure } : {}),
       ...(input.currentDepth !== undefined ? { currentDepth: input.currentDepth } : {}),
       ...(input.availableModels !== undefined ? { availableModels: input.availableModels } : {}),
       ...(input.parentModel ? { parentModel: input.parentModel } : {}),
@@ -153,6 +162,7 @@ export async function launchParallelSubagents(
       sessionScope: input.sessionScope,
       ...(input.concurrency !== undefined ? { concurrency: input.concurrency } : {}),
       ...(input.parentForkSource ? { parentForkSource: input.parentForkSource } : {}),
+      ...(input.parentForkFailure ? { parentForkFailure: input.parentForkFailure } : {}),
       ...(input.currentDepth !== undefined ? { currentDepth: input.currentDepth } : {}),
       ...(input.availableModels !== undefined ? { availableModels: input.availableModels } : {}),
       ...(input.parentModel ? { parentModel: input.parentModel } : {}),

@@ -281,6 +281,10 @@ export function Composer() {
             },
           ];
         })
+        // Sort before truncating. The server answers in registration order, so an
+        // unsorted slice drops an arbitrary tail once a workspace has more than
+        // MAX_COMPLETION_ITEMS matches, which looks exactly like a missing skill.
+        .sort((left, right) => left.label.localeCompare(right.label))
         .slice(0, MAX_COMPLETION_ITEMS);
       setCompletion(
         items.length > 0

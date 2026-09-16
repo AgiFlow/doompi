@@ -67,6 +67,7 @@ import type { AgentConfig, AgentScope, AgentDiscoveryContract } from '../../type
 import { PI_RUNTIME_NAME } from '../../types/environment';
 import { type AdmissionGateContract, type AdmissionTicket, DEFAULT_ADMISSION_TIMEOUT_MS } from '../admissionGate';
 import { resolveActiveTeamModelSpecs, resolveActiveTeamPackageConfig } from '../agentDiscovery';
+import { adoptAgentIdentity, type AgentIdentity, claimAgentIdentity, roleFromAgent } from '../agentIdentity';
 import { canonicalizeDiscoveryCwd } from '../agentProjectRoot';
 import { buildSkillInjection, type SkillDiscoveryContract } from '../agentSkills';
 import type {
@@ -111,23 +112,77 @@ function readableSessionFile(sessionFile: string | undefined): sessionFile is st
   }
 }
 
+/**
+ * Why a capture reports a reason instead of a bare `undefined`.
+ *
+ * Five distinct conditions used to collapse into one `undefined`, and the
+ * caller then asserted a cause it had never tested. That is how a missing
+ * `captureForkSource` on the headless facet spent a long time looking like a
+ * session-format problem. The reason is carried to the throw site so the error
+ * names the condition that actually fired.
+ */
+export type ForkCaptureFailure = 'no-leaf' | 'no-header' | 'unsupported-version' | 'branch-mismatch' | 'no-session-id';
+
+export type ForkCaptureResult =
+  | { readonly ok: true; readonly source: SessionForkSource }
+  | { readonly ok: false; readonly reason: ForkCaptureFailure };
+
+/** Either host's capture output, plus the absent case when no capture is installed. */
+export type ParentForkCapture = ForkCaptureResult | DoomChildSessionV4ForkSource | undefined;
+
+const FORK_FAILURE_TEXT: Record<ForkCaptureFailure | 'no-capture-installed', string> = {
+  'no-capture-installed': 'this host installed no fork-source capture',
+  'no-leaf': 'the parent session has no entry to branch from',
+  'no-header': 'the parent session has no readable header',
+  'unsupported-version': 'the parent session format cannot be forked',
+  'branch-mismatch': 'the parent branch did not resolve to its own leaf',
+  'no-session-id': 'the parent session has no identity',
+};
+
+export function describeForkFailure(reason: ForkCaptureFailure | 'no-capture-installed' | undefined): string {
+  return reason ? FORK_FAILURE_TEXT[reason] : 'the parent session has no capturable branch';
+}
+
+/**
+ * Map a captured parent branch onto the spawn request's fork fields.
+ *
+ * `parentSessionFile` and `parentLeafId` describe a terminal Pi capture only. A
+ * v4 source already carries its own file and branch, so flattening it into
+ * those fields would describe it in the wrong vocabulary and lose the branch.
+ */
+export function forkRequestFields(
+  captured: ParentForkCapture,
+): Pick<SpawnPlanRequest, 'parentForkSource' | 'parentSessionFile' | 'parentLeafId' | 'parentForkFailure'> {
+  if (!captured) return { parentForkFailure: 'no-capture-installed' };
+  if ('kind' in captured) return { parentForkSource: captured };
+  if (!captured.ok) return { parentForkFailure: captured.reason };
+  const { source } = captured;
+  return {
+    parentForkSource: source.terminalSource,
+    ...(source.sessionFile ? { parentSessionFile: source.sessionFile } : {}),
+    parentLeafId: source.leafId,
+  };
+}
+
 /** Capture an immutable parent branch while excluding an assistant turn whose tool is still executing. */
 export function captureSessionForkSource(
   manager: SessionForkSourceManager,
   mode: SessionForkCaptureMode,
-): SessionForkSource | undefined {
+): ForkCaptureResult {
   const leaf = manager.getLeafEntry();
   const leafId =
     mode === 'tool' && leaf?.type === 'message' && leaf.message.role === 'assistant'
       ? leaf.parentId
       : (leaf?.id ?? manager.getLeafId());
   const header = manager.getHeader();
-  if (!leafId || header?.type !== 'session' || header.version !== 3) return undefined;
+  if (!leafId) return { ok: false, reason: 'no-leaf' };
+  if (header?.type !== 'session') return { ok: false, reason: 'no-header' };
+  if (header.version !== 3) return { ok: false, reason: 'unsupported-version' };
 
   const branch = manager.getBranch(leafId);
-  if (branch.at(-1)?.id !== leafId) return undefined;
+  if (branch.at(-1)?.id !== leafId) return { ok: false, reason: 'branch-mismatch' };
   const sourceSessionId = manager.getSessionId();
-  if (!sourceSessionId.trim()) return undefined;
+  if (!sourceSessionId.trim()) return { ok: false, reason: 'no-session-id' };
   const terminalSource: DoomChildSessionTerminalPiForkSource = Object.freeze({
     kind: 'terminal-pi-fork',
     sourceSessionId,
@@ -136,9 +191,12 @@ export function captureSessionForkSource(
   });
   const sessionFile = manager.getSessionFile();
   return {
-    leafId,
-    terminalSource,
-    ...(readableSessionFile(sessionFile) ? { sessionFile } : {}),
+    ok: true,
+    source: {
+      leafId,
+      terminalSource,
+      ...(readableSessionFile(sessionFile) ? { sessionFile } : {}),
+    },
   };
 }
 
@@ -152,6 +210,8 @@ export interface SpawnPlanTaskInput {
   context?: typeof CONTEXT_FRESH | typeof CONTEXT_FORK;
   /** An existing child transcript to continue instead of starting fresh. */
   sessionFile?: string;
+  /** An identity inherited by a restore. Absent for a fresh run, which mints one. */
+  identity?: string;
 }
 
 type ExecutableAgentConfig = Pick<
@@ -201,6 +261,8 @@ export interface SpawnPlanRequest {
   parentSessionId?: string;
   /** Immutable parent branch used by native fork children. */
   parentForkSource?: DoomChildSessionTerminalPiForkSource | DoomChildSessionV4ForkSource;
+  /** Why no parent branch was captured, so a refused fork can name its cause. */
+  parentForkFailure?: ForkCaptureFailure | 'no-capture-installed';
   /** External-runtime parent source fields. */
   parentSessionFile?: string;
   parentLeafId?: string;
@@ -224,6 +286,7 @@ interface SpawnOneChildInput {
   runId: string;
   operationId?: string;
   agentConfig: ExecutableAgentConfig;
+  identity: AgentIdentity;
   excludeTools?: string[];
   teamPackageModels?: string[];
   capabilityCeiling?: ResolvedSubagentCapabilityCeiling;
@@ -254,6 +317,10 @@ export interface SpawnPlanChildOutcome {
   /** This spawn's position among its siblings. Always 0 for SINGLE mode. */
   childIndex: number;
   runId?: string;
+  /** The generated addressable identity, for example `alan-reviewer-3`. */
+  identity?: string;
+  /** True when this run came from a one-shot inline agent definition. */
+  inline?: boolean;
   pid?: number;
   error?: string;
   warning?: string;
@@ -620,6 +687,7 @@ export class SpawnPlanner implements SpawnPlannerContract {
       runId,
       operationId,
       agentConfig,
+      identity,
       capabilityCeiling,
       excludeTools,
       teamPackageModels,
@@ -658,6 +726,8 @@ export class SpawnPlanner implements SpawnPlannerContract {
     if (modelSelection.primaryModel && availableModels !== undefined && !modelSelection.model) {
       return {
         agent: agentConfig.name,
+        identity: identity.identity,
+        inline: identity.inline,
         task,
         childIndex,
         error: `No authenticated model is available for '${agentConfig.name}'. Checked: ${[
@@ -679,6 +749,8 @@ export class SpawnPlanner implements SpawnPlannerContract {
     } catch (error) {
       return {
         agent: agentConfig.name,
+        identity: identity.identity,
+        inline: identity.inline,
         task,
         childIndex,
         error: error instanceof Error ? error.message : String(error),
@@ -755,42 +827,52 @@ export class SpawnPlanner implements SpawnPlannerContract {
         const intercom = this.teamChannel?.createNativeChildIntercom({
           rootSessionId: scope.rootSessionId,
           agent: agentConfig.name,
+          identity: identity.identity,
+          inline: identity.inline,
           runId,
           childIndex,
           task: { id: runId, subject: task },
         });
         let child: Awaited<ReturnType<NativeRunCoordinatorContract['start']>>;
         try {
-          child = await this.nativeRuns.start(parentSessionId ?? scope.rootSessionId, {
-            runId,
-            parentSessionId: parentSessionId ?? scope.rootSessionId,
-            scope,
-            source,
-            agent: agentConfig.name,
-            task,
-            cwd,
-            ...(modelSelection.model ? { model: modelSelection.model } : {}),
-            ...(typeof agentConfig.thinking === 'string' ? { thinking: agentConfig.thinking } : {}),
-            ...(skillProjection.systemPrompt ? { systemPrompt: skillProjection.systemPrompt } : {}),
-            systemPromptMode: agentConfig.systemPromptMode,
-            ...(agentConfig.extensions ? { extensions: agentConfig.extensions } : {}),
-            ...(agentConfig.subagentOnlyExtensions
-              ? { subagentOnlyExtensions: agentConfig.subagentOnlyExtensions }
-              : {}),
-            ...(agentConfig.tools ? { tools: agentConfig.tools } : {}),
-            ...(excludeTools ? { excludeTools } : {}),
-            ...(agentConfig.skills ? { skills: agentConfig.skills } : {}),
-            ...(agentConfig.mcpDirectTools ? { mcpDirectTools: agentConfig.mcpDirectTools } : {}),
-            ...(capabilityCeiling ? { capabilityCeiling } : {}),
-            ...(intercom ? { intercom } : {}),
-            environment,
-          });
+          child = await this.nativeRuns.start(
+            parentSessionId ?? scope.rootSessionId,
+            {
+              runId,
+              parentSessionId: parentSessionId ?? scope.rootSessionId,
+              scope,
+              source,
+              agent: agentConfig.name,
+              task,
+              cwd,
+              ...(modelSelection.model ? { model: modelSelection.model } : {}),
+              ...(typeof agentConfig.thinking === 'string' ? { thinking: agentConfig.thinking } : {}),
+              ...(skillProjection.systemPrompt ? { systemPrompt: skillProjection.systemPrompt } : {}),
+              systemPromptMode: agentConfig.systemPromptMode,
+              ...(agentConfig.extensions ? { extensions: agentConfig.extensions } : {}),
+              ...(agentConfig.subagentOnlyExtensions
+                ? { subagentOnlyExtensions: agentConfig.subagentOnlyExtensions }
+                : {}),
+              ...(agentConfig.tools ? { tools: agentConfig.tools } : {}),
+              ...(excludeTools ? { excludeTools } : {}),
+              ...(agentConfig.skills ? { skills: agentConfig.skills } : {}),
+              ...(agentConfig.mcpDirectTools ? { mcpDirectTools: agentConfig.mcpDirectTools } : {}),
+              ...(capabilityCeiling ? { capabilityCeiling } : {}),
+              ...(intercom ? { intercom } : {}),
+              environment,
+            },
+            // Carried beside the core child request rather than inside it, so a
+            // Team-only concept does not widen the shared child contract.
+            { identity: identity.identity, inline: identity.inline },
+          );
         } catch (error) {
           intercom?.dispose?.();
           throw error;
         }
         return {
           agent: agentConfig.name,
+          identity: identity.identity,
+          inline: identity.inline,
           task,
           childIndex,
           runId: child.runId,
@@ -800,6 +882,8 @@ export class SpawnPlanner implements SpawnPlannerContract {
       const result: AsyncSubagentSpawnResult = await this.spawner.spawn(spawnInput);
       return {
         agent: agentConfig.name,
+        identity: identity.identity,
+        inline: identity.inline,
         task,
         childIndex,
         runId: result.runId,
@@ -809,6 +893,8 @@ export class SpawnPlanner implements SpawnPlannerContract {
     } catch (error) {
       return {
         agent: agentConfig.name,
+        identity: identity.identity,
+        inline: identity.inline,
         task,
         childIndex,
         error: error instanceof Error ? error.message : String(error),
@@ -901,7 +987,7 @@ export class SpawnPlanner implements SpawnPlannerContract {
         if (!request.parentForkSource) {
           throw new DoomTeamExpectedError(
             ERROR_CODE_UNSUPPORTED_CONTEXT,
-            `Fork context is unavailable for '${taskInput.agent}': the parent Pi session has no capturable branch.`,
+            `Fork context is unavailable for '${taskInput.agent}': ${describeForkFailure(request.parentForkFailure)}.`,
             false,
             'Use an active Pi session with a completed parent turn or explicitly request a fresh run.',
           );
@@ -918,6 +1004,29 @@ export class SpawnPlanner implements SpawnPlannerContract {
       );
     }
     const runIds = request.preallocatedRunIds ?? tasks.map(() => this.generateRunId());
+    // Minted here because this is the one funnel every spawn path reaches, and
+    // because the inline flag and the resolved agent name are both in hand. A
+    // restore carries its identity in, and repoints the existing claim rather
+    // than burning a second number on the same logical agent.
+    const identities = tasks.map((taskInput, index) => {
+      const inline = taskInput.inlineAgent !== undefined;
+      if (!taskInput.identity) {
+        return claimAgentIdentity(request.sessionScope, {
+          agent: resolvedAgents[index]!.name,
+          inline,
+          runId: runIds[index]!,
+        });
+      }
+      adoptAgentIdentity(request.sessionScope, taskInput.identity, runIds[index]!);
+      return {
+        identity: taskInput.identity,
+        name: '',
+        role: roleFromAgent(resolvedAgents[index]!.name),
+        number: 0,
+        inline,
+        persisted: true,
+      };
+    });
     const runtimes = resolveRuntimeTable(config.runtimes);
     for (const [index, taskInput] of tasks.entries()) {
       const agent = resolvedAgents[index]!;
@@ -991,6 +1100,7 @@ export class SpawnPlanner implements SpawnPlannerContract {
           runId: runIds[childIndex]!,
           operationId: request.operationId,
           agentConfig: resolvedAgents[childIndex]!,
+          identity: identities[childIndex]!,
           excludeTools: teamPackageExcludeTools,
           teamPackageModels,
           capabilityCeiling,
@@ -1025,6 +1135,8 @@ export class SpawnPlanner implements SpawnPlannerContract {
         ? outcome.value
         : {
             agent: resolvedAgents[index]!.name,
+            identity: identities[index]!.identity,
+            inline: identities[index]!.inline,
             task: tasks[index]!.task ?? '',
             childIndex: index,
             error: outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason),

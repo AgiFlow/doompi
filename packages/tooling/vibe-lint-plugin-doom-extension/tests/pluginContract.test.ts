@@ -20,8 +20,11 @@ const EXPECTED_RULE_IDS = [
   'doom-layer-boundary',
   'doom-package-shape',
   'doom-prompt-shape',
+  'doom-resource-kind',
   'doom-server-facet-shape',
+  'extension-side-boundary',
   'flat-service-layout',
+  'legacy-source-root',
   'neutral-extension-contracts',
   'no-ambient-host-access',
   'no-direct-tool-activation',
@@ -41,13 +44,16 @@ const EXPECTED_RULE_IDS = [
   'prefer-cordis-container',
   'provider-owned-policy',
   'public-export-boundary',
+  'routed-file-contract',
+  'routed-file-position',
   'schema-placement',
   'service-boundary',
   'thin-pi-adapter',
   'web-plugin-entry',
+  'web-plugin-generated-client-wiring',
   'web-plugin-import-allowlist',
-  'web-plugin-layer-boundary',
   'web-plugin-manifest',
+  'web-plugin-no-hand-built-api-url',
   'web-plugin-no-module-state',
   'web-plugin-protocol-layout',
   'web-plugin-tool-renderers',
@@ -94,7 +100,8 @@ describe('Doom extension plugin contract', () => {
       'prefer-cordis-container',
       'doom-clean-architecture-boundary',
       'doom-constants',
-      'web-plugin-layer-boundary',
+      'routed-file-contract',
+      'web-plugin-import-allowlist',
     ]) {
       expect(recommended.rules[ruleId], ruleId).toBe('error');
     }
@@ -108,14 +115,14 @@ describe('Doom extension plugin contract', () => {
 
   it('publishes only canonical architecture guidance and boundaries', () => {
     const patterns = doomExtensionPlugin.patterns ?? {};
-    for (const obsolete of ['adapters', 'commands', 'container', 'providers']) {
+    for (const obsolete of ['adapters', 'commands', 'container', 'controllers', 'providers', 'tools']) {
       expect(patterns[`doom-${obsolete}`]).toBeUndefined();
       expect(recommended.boundaries?.some((boundary) => boundary.name === obsolete)).toBe(false);
       for (const boundary of recommended.boundaries ?? []) {
         expect(boundary.allowedImports ?? []).not.toContain(`src/${obsolete}/**`);
       }
     }
-    for (const root of ['extensions', 'controllers', 'services', 'models', 'tools', 'constants', 'schemas', 'types']) {
+    for (const root of ['extensions', 'services', 'models', 'constants', 'schemas', 'types']) {
       expect(patterns[`doom-${root}`]?.includes).toContain(`src/${root}/**/*.ts`);
     }
     expect(patterns['doom-exports']?.includes).toEqual(['src/exports/*.ts']);
@@ -128,7 +135,7 @@ describe('Doom extension plugin contract', () => {
     for (const root of ['extensions', 'bin', 'web', 'exports']) {
       expect(exported).not.toContain(`src/${root}/**`);
     }
-    for (const root of ['constants', 'controllers', 'models', 'schemas', 'services', 'tools', 'tui', 'types']) {
+    for (const root of ['constants', 'models', 'schemas', 'services', 'tui', 'types']) {
       expect(exported).toContain(`src/${root}/**`);
     }
     const extensions = boundaries.find((boundary) => boundary.name === 'extensions')?.allowedImports ?? [];
@@ -138,53 +145,65 @@ describe('Doom extension plugin contract', () => {
     expect(bin).not.toContain('src/extensions/**');
     expect(bin).not.toContain('src/exports/**');
     const exceptions = recommended.overrides?.flatMap((override) => override.files) ?? [];
-    expect(exceptions).toEqual([
-      'src/extensions/pi.ts',
-      'src/extensions/server.ts',
-      'tsdown.config.ts',
-      'vitest.config.ts',
-    ]);
+    expect(exceptions).toEqual(['src/extensions/**', 'tsdown.config.ts', 'vitest.config.ts']);
   });
 
   it('applies the browser boundary before the broader extension composition boundary', () => {
     const boundaries = recommended.boundaries ?? [];
-    const browser = boundaries.findIndex((boundary) => boundary.name === 'web-plugin-entry');
+    const browser = boundaries.findIndex((boundary) => boundary.name === 'web-plugin-routed');
     const extensions = boundaries.findIndex((boundary) => boundary.name === 'extensions');
     expect(browser).toBeGreaterThanOrEqual(0);
     expect(browser).toBeLessThan(extensions);
-    expect(boundaries[browser]).toEqual({
-      name: 'web-plugin-entry',
-      pattern: 'src/extensions/web.ts',
-      allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
-    });
-    expect(doomExtensionPlugin.patterns?.['doom-web-plugin-entry']?.includes).toEqual(['src/extensions/web.ts']);
-    expect(doomExtensionPlugin.patterns?.['doom-web-plugin-store']?.includes).toEqual(['src/web/stores/**/*.ts']);
+    expect(boundaries[browser]?.pattern).toBe('src/extensions/**/(frontend)/**');
+    // The hand-written src/extensions/web.ts entry is retired: a routed package
+    // builds generated/web.ts instead, so nothing targets that literal path.
+    expect(boundaries.some((boundary) => boundary.pattern === 'src/extensions/web.ts')).toBe(false);
+    expect(doomExtensionPlugin.patterns?.['doom-web-plugin-entry']).toBeUndefined();
+    expect(doomExtensionPlugin.patterns?.['doom-web-plugin-store']?.includes).toEqual([
+      'src/extensions/**/_lib/**/*Store.ts',
+    ]);
+  });
+
+  it('holds terminal routed files to composition before the browser allowlist', () => {
+    const boundaries = recommended.boundaries ?? [];
+    const terminal = boundaries.findIndex((boundary) => boundary.name === 'cli-routed-presentation');
+    const browser = boundaries.findIndex((boundary) => boundary.name === 'web-plugin-routed');
+    expect(terminal).toBeGreaterThanOrEqual(0);
+    expect(terminal).toBeLessThan(browser);
+    expect(boundaries[terminal]?.pattern).toBe(
+      'src/extensions/**/(frontend)/{**/*.cli.{ts,tsx},overlay/**,message/**}',
+    );
+    const allowed = boundaries[terminal]?.allowedImports ?? [];
+    for (const root of ['constants', 'models', 'schemas', 'services', 'types']) {
+      expect(allowed).toContain(`src/${root}`);
+      expect(allowed).toContain(`src/${root}/**`);
+    }
+    expect(allowed).toContain('src/extensions/**/(frontend)/**');
+    // The browser half stays on the narrower policy it had.
+    expect(boundaries[browser]?.allowedImports).not.toContain('src/services/**');
   });
 
   it('provides a warning-only migration preset', () => {
     expect(migration.rules).toEqual(Object.fromEntries(EXPECTED_RULE_IDS.map((ruleId) => [ruleId, 'warn'])));
   });
 
-  it('publishes the web plugin boundary and lets tests reach it', () => {
-    expect(recommended.boundaries).toContainEqual({
-      name: 'web-plugin',
-      pattern: 'src/web/**',
-      allowedImports: ['src/web/**', 'src/types', 'src/types/**', 'src/constants', 'src/constants/**'],
-    });
+  it('retires the src/web boundary and keeps the browser patterns on colocated folders', () => {
+    expect(recommended.boundaries?.some((boundary) => boundary.name === 'web-plugin')).toBe(false);
+    expect(recommended.boundaries?.some((boundary) => boundary.pattern === 'src/web/**')).toBe(false);
     // tests reach the browser half through the src/** entry, so no separate
     // web entry is needed here any more.
     expect(recommended.boundaries).toContainEqual({
       name: 'tests',
       pattern: 'tests/**',
-      allowedImports: ['src/**', 'tests/**'],
+      allowedImports: ['src/**', 'tests/**', 'generated/**'],
     });
-    for (const id of [
-      'doom-web-plugin-entry',
-      'doom-web-plugin-store',
-      'doom-web-plugin-components',
-      'doom-web-plugin-lib',
-    ]) {
-      expect(doomExtensionPlugin.patterns?.[id]?.includes.length, id).toBeGreaterThan(0);
+    for (const id of ['doom-web-plugin-store', 'doom-web-plugin-components', 'doom-web-plugin-lib']) {
+      const includes = doomExtensionPlugin.patterns?.[id]?.includes ?? [];
+      expect(includes.length, id).toBeGreaterThan(0);
+      expect(
+        includes.every((include) => include.startsWith('src/extensions/')),
+        id,
+      ).toBe(true);
     }
   });
 

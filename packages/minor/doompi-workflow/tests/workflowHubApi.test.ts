@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { WorkflowRegistryService, WorkflowRunRecord } from '@agimon-ai/workflow-mcp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createWorkflowHubApi } from '../src/controllers/workflowHubApi';
+import { createWorkflowHubApi } from '../src/services/workflowHubApi';
 import type {
   WorkflowArtifactContentResponse,
   WorkflowArtifactsResponse,

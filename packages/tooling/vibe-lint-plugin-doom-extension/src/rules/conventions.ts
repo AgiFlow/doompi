@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+import { isBrowserFile } from '@agimon-ai/doompi-build/browser-file';
 import type { RuleDefinition } from '@agimon-ai/vibe-lint';
 import ts from 'typescript';
 
@@ -125,9 +126,9 @@ function isDoomProductionSource(filePath: string, configRoot: string): boolean {
   // only. These rules police Pi events, the same-runner protocol runtime, and
   // process-global registries, none of which exist in a page: globalThis there
   // is the window or a worker scope. web-plugin-import-allowlist already blocks
-  // every specifier they guard. Before the move to src/web this code sat
-  // outside src/ and was out of scope for the same reason.
-  if (relativePath.startsWith('src/web/')) return false;
+  // every specifier they guard. src/web is the part of that half still waiting
+  // to move into the routed tree; the literal goes when the folder does.
+  if (isBrowserFile(relativePath) || relativePath.startsWith('src/web/')) return false;
   const manifest = readManifest(path.join(configRoot, PACKAGE_MANIFEST_NAME));
   // Unit-rule fixtures historically omit a package manifest. Installed rules
   // are scoped by the Doom preset, while an explicit non-Doom manifest opts out.

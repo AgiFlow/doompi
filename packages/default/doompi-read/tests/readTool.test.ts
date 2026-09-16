@@ -7,12 +7,13 @@ import { computeFileTag } from '@agimon-ai/doompi-hashline/files';
 import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { assertNotAborted, createTaggedReadResult, isImageRead, createHashlineReadTool } from '../src/tools/piRead';
+import { createHashlineReadTool } from '../src/extensions/workspaces/sessions/(backend)/tool/_lib/readTool';
+import readRenderer from '../src/extensions/workspaces/sessions/(frontend)/tool/read.cli';
+import { assertNotAborted, createTaggedReadResult, isImageRead } from '../src/services/readTool';
 
 interface CapturedTool {
   readonly name: string;
   readonly parameters: unknown;
-  readonly renderShell?: string;
   execute(
     id: string,
     params: Record<string, unknown>,
@@ -20,11 +21,6 @@ interface CapturedTool {
     onUpdate: undefined,
     context: unknown,
   ): Promise<AgentToolResult<unknown>>;
-  renderCall?(
-    args: Record<string, unknown>,
-    theme: { fg(color: string, value: string): string; bold(value: string): string },
-    context: Record<string, unknown>,
-  ): { render(width: number): string[] };
 }
 
 let directory = '';
@@ -63,12 +59,20 @@ function text(result: AgentToolResult<unknown>): string {
 describe('hashline read tool', () => {
   it('registers only read with Doom-owned rendering', () => {
     expect(tool?.name).toBe('read');
-    expect(tool?.renderShell).toBe('self');
     expect(tool?.parameters).toBeDefined();
-    expect(tool?.renderCall?.({ path: 'a.ts' }, theme, {}).render(80).join('\n')).toContain('READ  a.ts');
-    expect(tool?.renderCall?.({ path: 'a.ts', offset: 4, limit: 8 }, theme, {}).render(80).join('\n')).toContain(
-      'from 4 · 8 lines',
-    );
+    expect(readRenderer.renderShell).toBe('self');
+    expect(
+      readRenderer
+        .renderCall?.({ path: 'a.ts' }, theme as never, {} as never)
+        .render(80)
+        .join('\n'),
+    ).toContain('READ  a.ts');
+    expect(
+      readRenderer
+        .renderCall?.({ path: 'a.ts', offset: 4, limit: 8 }, theme as never, {} as never)
+        .render(80)
+        .join('\n'),
+    ).toContain('from 4 · 8 lines');
   });
 
   it('reads exact-byte tagged text with a final empty anchor and continuation hint', async () => {

@@ -3,11 +3,6 @@ import { readFile } from 'node:fs/promises';
 import { renderPlugin, slotPropsFixture, toolMessagePropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership';
-import { VoiceActivitySection } from '../src/web/components/VoiceActivitySection';
-import { VoiceComposerAction } from '../src/web/components/VoiceComposerAction';
-import { VoiceToolMessage } from '../src/web/components/VoiceToolMessage';
-import { browserVoiceMediaClientId } from '../src/web/lib/browserMediaIdentity';
 import {
   activeVoiceSession,
   voiceMediaBrowserState,
@@ -15,21 +10,32 @@ import {
   voiceMediaWakes,
   voiceOwnershipChannel,
   waitForVoiceMediaWake,
-} from '../src/web/stores/voiceMediaWakeStore';
+} from '../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMediaWakeStore';
+import { voiceMicrophone } from '../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMicrophoneStore';
+import { VoiceActivitySection } from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection';
+import { VoiceComposerAction } from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceComposerAction';
+import {
+  microphoneOptions,
+  VoiceMicrophoneDialog,
+} from '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceMicrophoneDialog';
+import { browserVoiceMediaClientId } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserMediaIdentity';
+import { VoiceToolMessage } from '../src/extensions/workspaces/sessions/(frontend)/tool/_components/VoiceToolMessage';
+import { VOICE_OWNERSHIP_PROTOCOL_VERSION } from '../src/types/voiceOwnership';
 
 afterEach(() => {
   activeVoiceSession.reset();
   voiceMediaBrowserState.reset();
   voiceRealtimeBrowserControls.reset();
   voiceMediaWakes.reset();
+  voiceMicrophone.reset();
 });
 
 describe('browser voice media', () => {
   it('reuses page voice state across independently evaluated session compositions', async () => {
     vi.resetModules();
-    const first = await import('../src/web/stores/voiceMediaWakeStore');
+    const first = await import('../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMediaWakeStore');
     vi.resetModules();
-    const second = await import('../src/web/stores/voiceMediaWakeStore');
+    const second = await import('../src/extensions/workspaces/sessions/(frontend)/_lib/voiceMediaWakeStore');
 
     expect(second.activeVoiceSession).toBe(first.activeVoiceSession);
     expect(second.voiceMediaBrowserState).toBe(first.voiceMediaBrowserState);
@@ -40,31 +46,55 @@ describe('browser voice media', () => {
     first.voiceMediaWakes.reset();
   });
   it('publishes both controls and page-lifetime media channels', async () => {
-    const source = await readFile(new URL('../src/extensions/web.ts', import.meta.url), 'utf8');
+    const source = (
+      await Promise.all(
+        [
+          'channel/voice-media-wake.web.ts',
+          'channel/voice-ownership.web.ts',
+          'fill/Voice.composer-actions.web.tsx',
+          'fill/Voice.overlay.web.tsx',
+          'leader/toggle.web.ts',
+          'lifecycle/start.web.ts',
+        ].map((file) =>
+          readFile(new URL(`../src/extensions/workspaces/sessions/(frontend)/${file}`, import.meta.url), 'utf8'),
+        ),
+      )
+    ).join('\n');
 
-    expect(source).toContain('channels: [voiceMediaWakeChannel, voiceOwnershipChannel]');
-    expect(source).toContain('start: startVoiceMediaRuntime');
+    expect(source).toContain('voiceMediaWakeChannel');
+    expect(source).toContain('voiceOwnershipChannel');
+    expect(source).toContain('startVoiceMediaRuntime');
     expect(source).not.toContain('voice-media-runtime');
-    expect(source).toContain("composerActions: [{ id: 'voice', component: VoiceComposerAction }]");
+    expect(source).toContain("id: 'voice'");
+    expect(source).toContain("slot: 'overlay'");
     expect(source).not.toContain("id: 'voice.capture'");
     expect(source).not.toContain("command: 'voice'");
     expect(source).toContain("id: 'voice.toggle'");
     expect(source).toContain("command: 'minor voice-auto'");
     const runtimeSource = await readFile(
-      new URL('../src/web/components/VoiceMediaRuntime.tsx', import.meta.url),
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_components/VoiceMediaRuntime.tsx',
+        import.meta.url,
+      ),
       'utf8',
     );
     expect(runtimeSource).toContain('this.device.armUserGesture()');
   });
 
   it('does not classify autonomous voice capture as background work', async () => {
-    const source = await readFile(new URL('../src/extensions/web.ts', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL('../src/extensions/workspaces/sessions/(frontend)/activity-group/voice.web.ts', import.meta.url),
+      'utf8',
+    );
 
     expect(source).toContain('marksBackgroundWork: false');
   });
 
   it('presents narration as readable conversational output', async () => {
-    const source = await readFile(new URL('../src/extensions/web.ts', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL('../src/extensions/workspaces/sessions/(frontend)/tool/narrate.web.tsx', import.meta.url),
+      'utf8',
+    );
     const rendered = renderPlugin(
       VoiceToolMessage,
       toolMessagePropsFixture({
@@ -135,7 +165,7 @@ describe('browser voice media', () => {
   });
 
   it('keeps process-local manual recording out of the browser minor-mode picker', async () => {
-    const source = await readFile(new URL('../src/controllers/voice.ts', import.meta.url), 'utf8');
+    const source = await readFile(new URL('../src/services/voice/index.ts', import.meta.url), 'utf8');
     const start = source.indexOf("label: 'Manual voice'");
     const manualAction = source.slice(start, source.indexOf("id: 'deactivate'", start));
 
@@ -177,23 +207,38 @@ describe('browser voice media', () => {
   });
 
   it('identifies a sealed remote controller when it claims the session media lease', async () => {
-    const source = await readFile(new URL('../src/web/stores/clientMediaTransport.ts', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/clientMediaTransport.ts',
+        import.meta.url,
+      ),
+      'utf8',
+    );
 
     expect(source).toContain("const controlLocation = sealedTransport.active() ? 'remote' : 'local'");
     expect(source).toContain('this.controlLocation = controlLocation');
   });
 
   it('keeps the iOS Web Audio capture graph live without audible microphone feedback', async () => {
-    const source = await readFile(new URL('../src/web/api/browserMediaDevice.ts', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL('../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserMediaDevice.ts', import.meta.url),
+      'utf8',
+    );
 
-    expect(source).toContain("import browserCaptureWorkletUrl from '../lib/browserCaptureWorklet.js?url'");
+    expect(source).toContain("import browserCaptureWorkletUrl from './browserCaptureWorklet.js?url'");
     expect(source).toContain('audioWorklet.addModule(browserCaptureWorkletUrl)');
     expect(source).toContain('const SILENT_OUTPUT_GAIN = 1e-8');
     expect(source).toContain('muted.gain.value = SILENT_OUTPUT_GAIN');
   });
 
   it('fills the composer action with manual recording and blocks it during autonomous voice', async () => {
-    const source = await readFile(new URL('../src/web/components/VoiceComposerAction.tsx', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceComposerAction.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
 
     expect(source).toContain('data-testid="composer-voice-action"');
     expect(source).not.toContain('data-testid="composer-voice-error"');
@@ -204,6 +249,10 @@ describe('browser voice media', () => {
     expect(source).toContain('recorder?.dispose()');
     expect(source).not.toContain('sendSessionFrame');
     expect(source).not.toContain('/minor voice-auto deactivate');
+    // The composer no longer knows a device exists; it records on whatever the client is on.
+    expect(source).not.toContain('voice-microphone-picker');
+    expect(source).not.toContain('voiceMicrophoneStore');
+    expect(source).not.toContain('startManualBrowserRecording');
   });
 
   it('renders the manual record button as unavailable throughout autonomous capture', () => {
@@ -226,10 +275,50 @@ describe('browser voice media', () => {
     const manual = renderPlugin(VoiceComposerAction, slotPropsFixture({ statuses: {} }).props);
     expect(manual.html).toContain('aria-label="start voice recording"');
     expect(manual.html).not.toContain('disabled=""');
+    expect(manual.html).not.toContain('Voice microphone');
   });
 
+  // Radix portals dialog content out of the render tree, so `html` is empty either way.
+  // These assert the component mounts in both states; the option labels are checked below.
+  it('mounts the microphone dialog whether or not a capture is waiting', () => {
+    const closed = renderPlugin(VoiceMicrophoneDialog, slotPropsFixture({}).props);
+    expect(closed.error).toBeUndefined();
+
+    voiceMicrophone.update(() => ({
+      inputs: [
+        { deviceId: 'built-in', groupId: 'internal', label: 'MacBook microphone' },
+        { deviceId: 'usb', groupId: 'external', label: 'USB microphone' },
+      ],
+      choice: () => undefined,
+    }));
+    expect(renderPlugin(VoiceMicrophoneDialog, slotPropsFixture({}).props).error).toBeUndefined();
+  });
+
+  it('keeps two identically named inputs distinguishable', () => {
+    expect(
+      microphoneOptions([
+        { deviceId: 'built-in', label: 'MacBook microphone' },
+        { deviceId: 'usb', label: 'USB microphone' },
+      ]),
+    ).toEqual(['MacBook microphone', 'USB microphone']);
+
+    expect(
+      microphoneOptions([
+        { deviceId: 'aaaaaa11', label: 'USB microphone' },
+        { deviceId: 'bbbbbb22', label: 'USB microphone' },
+      ]),
+    ).toEqual(['USB microphone · aaaaaa', 'USB microphone · bbbbbb']);
+
+    expect(microphoneOptions([{ deviceId: 'x', label: '' }])).toEqual(['Microphone']);
+  });
   it('does not expose the session-backed manual recording control in the browser activity dock', async () => {
-    const source = await readFile(new URL('../src/web/components/VoiceActivitySection.tsx', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
 
     expect(source).not.toContain("sendCommand('/voice')");
     expect(source).not.toContain('voice-recording-stop');
@@ -257,7 +346,13 @@ describe('browser voice media', () => {
     );
     expect(manual.html).not.toContain('voice-autonomous-microphone-toggle');
 
-    const source = await readFile(new URL('../src/web/components/VoiceActivitySection.tsx', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/fill/_components/VoiceActivitySection.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
     expect(source).toContain("`/voice-auto ${view.microphoneMuted ? 'unmute' : 'mute'}`");
   });
 
@@ -303,7 +398,13 @@ describe('browser voice media', () => {
   });
 
   it('keeps browser media page-global while route-scoped plugin runtimes remount', async () => {
-    const source = await readFile(new URL('../src/web/components/VoiceMediaRuntime.tsx', import.meta.url), 'utf8');
+    const source = await readFile(
+      new URL(
+        '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_components/VoiceMediaRuntime.tsx',
+        import.meta.url,
+      ),
+      'utf8',
+    );
 
     expect(source).toContain('activeVoiceSession.store.subscribe');
     expect(source).toContain('voiceMediaPageRuntime.store.state');

@@ -1,17 +1,17 @@
 import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testing';
 import { describe, expect, it } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
+import { EditGoalDialog } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/EditGoalDialog';
+import { GoalActivitySection } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/GoalActivitySection';
 import { formatGoalStatusView, GOAL_VIEW_STATUS_KEY } from '../../src/types/goalView';
-import { EditGoalDialog } from '../../src/web/components/EditGoalDialog';
-import { GoalActivitySection } from '../../src/web/components/GoalActivitySection';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,
   ...scopedWebPlugin.workspace,
   ...scopedWebPlugin.session,
 };
-import { RemoveGoalDialog } from '../../src/web/components/RemoveGoalDialog';
+import { RemoveGoalDialog } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/RemoveGoalDialog';
 
 /**
  * The surface this package adds to the cockpit, mounted.
@@ -40,11 +40,16 @@ describe('the goal group in the activity dock', () => {
     expect(rendered.html).not.toContain('data-testid="activity-goal"');
   });
 
-  it('says so when the session has set no goal', () => {
-    const rendered = renderPlugin(GoalActivitySection, slotPropsFixture().props);
+  it('reports an unreadable status rather than claiming no goal is set', () => {
+    // A session with no goal publishes nothing, the group declares hideWhenEmpty,
+    // and the dock drops the frame before this component mounts. So the only way
+    // to reach the fallback is a status that arrived and would not parse.
+    const fixture = slotPropsFixture({ statuses: { [GOAL_VIEW_STATUS_KEY]: 'active 12.4k/100k' } });
+
+    const rendered = renderPlugin(GoalActivitySection, fixture.props);
 
     expect(rendered.error).toBeUndefined();
-    expect(rendered.includes('no goal set yet')).toBe(true);
+    expect(rendered.includes('goal status unavailable')).toBe(true);
     expect(rendered.html).not.toContain('data-testid="activity-goal-menu"');
   });
 
@@ -95,11 +100,11 @@ describe('the goal dialogs', () => {
 });
 
 describe('the plugin declaration', () => {
-  it('gives the group a section of the same name, which is what puts it inside it', () => {
+  it('fills the activity slot matching the group name', () => {
     const group = webPlugin.activityGroups?.[0];
 
     expect(group).toMatchObject({ name: 'goal', keys: 'g e', statusKey: GOAL_VIEW_STATUS_KEY });
-    expect(webPlugin.activitySections?.map((section) => section.id)).toEqual([group?.name]);
+    expect(webPlugin.fills?.map((fill) => fill.slot)).toEqual([`activity.${group?.name}`]);
   });
 
   it('keeps durable goal context out of the background-work state', () => {

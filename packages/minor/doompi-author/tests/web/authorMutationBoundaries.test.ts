@@ -1,10 +1,21 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { authorGrid, registerAuthorGridResolver, updateAuthorGridGeometry } from '../../src/web/lib/authorGrid';
-import type { AuthorDocumentInput, AuthorNativeAnchor, AuthorRegionDraft } from '../../src/web/lib/authorViewportTypes';
-import { authorGridTools } from '../../src/web/stores/authorGridTools';
-import { AUTHOR_TEXT_PROFILE, authorProfilesForDocument } from '../../src/web/stores/authorProfiles';
-import * as workspace from '../../src/web/stores/authorWorkspaceStore';
+import {
+  authorGrid,
+  registerAuthorGridResolver,
+  updateAuthorGridGeometry,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorGrid';
+import { authorGridTools } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorGridTools';
+import {
+  AUTHOR_TEXT_PROFILE,
+  authorProfilesForDocument,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorProfiles';
+import type {
+  AuthorDocumentInput,
+  AuthorNativeAnchor,
+  AuthorRegionDraft,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
+import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 const signal = new AbortController().signal;
 const region: AuthorRegionDraft = {
   id: 'r',

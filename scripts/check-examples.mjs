@@ -122,7 +122,7 @@ function validateMarketplace(relativePath) {
 }
 
 async function validateDomains() {
-  const domainsModule = path.join(root, 'packages', 'core', 'doompi-config', 'dist', 'domains.mjs');
+  const domainsModule = path.join(root, 'packages', 'foundations', 'doompi-config', 'dist', 'domains.mjs');
   if (!fs.existsSync(domainsModule)) {
     fail('Built DoomPi domain loader is unavailable. Run pnpm build before checking examples.');
   }
@@ -139,7 +139,7 @@ async function validateDomains() {
 }
 
 async function validateMajorMode() {
-  const majorModesModule = path.join(root, 'packages', 'core', 'doompi-config', 'dist', 'majorModes.mjs');
+  const majorModesModule = path.join(root, 'packages', 'foundations', 'doompi-config', 'dist', 'majorModes.mjs');
   if (!fs.existsSync(majorModesModule)) {
     fail('Built DoomPi major mode loader is unavailable. Run pnpm build before checking examples.');
   }
@@ -235,7 +235,7 @@ function validateWorkflows() {
 }
 
 function validateDoomPiExplain() {
-  const cliPath = path.join(root, 'packages', 'core', 'doompi', 'dist', 'bin', 'cli.mjs');
+  const cliPath = path.join(root, 'packages', 'cli', 'doompi', 'dist', 'bin', 'cli.mjs');
   if (!fs.existsSync(cliPath)) fail('Built DoomPi CLI is unavailable. Run pnpm build before checking examples.');
   const isolatedHome = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-examples-check-'));
   try {

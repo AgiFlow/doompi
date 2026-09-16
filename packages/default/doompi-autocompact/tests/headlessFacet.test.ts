@@ -13,7 +13,7 @@ import { DOOM_SERVER_HOST_SERVICE } from '@agimon-ai/doompi-core/server-facet';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { autocompactServerFacet as autocompactHeadlessFacet } from '../src/extensions/server';
+import { facet as autocompactHeadlessFacet } from '../generated/server';
 
 function contextFor(host: DoomHeadlessHostService): Context {
   const context = new Context();
@@ -35,7 +35,7 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-async function fixture(cwd = root) {
+async function registeredResources(): Promise<DoomHeadlessResource[]> {
   const resources: DoomHeadlessResource[] = [];
   const host = {
     registerResource: (resource: DoomHeadlessResource) => {
@@ -46,26 +46,7 @@ async function fixture(cwd = root) {
     registerActivity: () => ({ dispose: vi.fn() }),
   } as unknown as DoomHeadlessHostService;
   await autocompactHeadlessFacet.apply(contextFor(host));
-  const resource = resources.find(({ name }) => name === 'doompi/autocompact-config');
-  if (!resource) throw new Error('Autocompact resource was not registered');
-  const execution: DoomHeadlessExecutionContext = {
-    cwd,
-    repoRoot: root,
-    sessionId: 'autocompact-test',
-    environment: {},
-    selection: { majorMode: 'development', activeLayers: [], domains: [], state: {} },
-    client: { notify: vi.fn(), request: vi.fn(), setStatus: vi.fn() },
-    session: {
-      entries: () => [],
-      appendCustomEntry: vi.fn(),
-      prompt: vi.fn(),
-      abort: vi.fn(),
-      compact: vi.fn(),
-      activity: vi.fn(async () => ({ hasPendingMessages: false, isIdle: true })),
-    },
-    shutdown: vi.fn(),
-  };
-  return () => resource.read(execution);
+  return resources;
 }
 
 function config(enabled: boolean): void {
@@ -76,33 +57,18 @@ function config(enabled: boolean): void {
 }
 
 describe('autocompact headless configuration projection', () => {
-  it('projects only validated owned settings and re-reads changes without exposing raw configuration', async () => {
+  /**
+   * The projection used to be a `kind:'context'` resource, so the package's own
+   * thresholds were pasted into every system prompt. The model cannot act on its
+   * own compaction thresholds, and a config projection beside a secret-bearing
+   * config file is a leak surface worth not having at all. Asserting the resource
+   * is absent is now the stronger form of the old "without exposing raw
+   * configuration" test: nothing is exposed because nothing is contributed.
+   */
+  it('contributes no configuration to the system prompt', async () => {
     config(false);
-    const read = await fixture();
-    const first = await read();
-    expect(first).not.toContain(SECRET);
-    expect(first).not.toContain('private-planning-model');
-    expect(JSON.parse(first)).toEqual({ enabled: false, thresholds: { pass1: 0.4 } });
-    config(true);
-    expect(JSON.parse(await read())).toEqual({ enabled: true, thresholds: { pass1: 0.4 } });
-  });
-
-  it('uses the admitted repository rather than a different working directory', async () => {
-    config(false);
-    expect(JSON.parse(await (await fixture(path.join(root, 'nested-working-directory')))())).toEqual({
-      enabled: false,
-      thresholds: { pass1: 0.4 },
-    });
-  });
-
-  it('returns empty settings when absent and rejects malformed settings without a raw fallback', async () => {
-    const read = await fixture();
-    expect(JSON.parse(await read())).toEqual({});
-    fs.writeFileSync(
-      path.join(root, '.doom/config.yaml'),
-      'modes:\n  autocompact:\n    thresholds:\n      pass1: invalid\n',
-    );
-    await expect(Promise.resolve().then(read)).rejects.toThrow();
+    expect(await registeredResources()).toEqual([]);
+    expect(fs.readFileSync(path.join(root, '.doom/config.yaml'), 'utf8')).toContain(SECRET);
   });
 
   it.each([

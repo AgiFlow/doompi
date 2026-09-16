@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ToolDefinition } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it, vi } from 'vitest';
 
-import { activateDoomPiEditExtension } from '../src/extensions/pi';
+import { extension } from '../generated/pi';
 
 async function installWith(service: ReturnType<typeof createDoomToolOverridesService>): Promise<{
   readonly names: readonly string[];
@@ -17,7 +17,7 @@ async function installWith(service: ReturnType<typeof createDoomToolOverridesSer
     on: vi.fn(),
     registerTool: vi.fn((tool: ToolDefinition) => names.push(tool.name)),
   } as unknown as ExtensionAPI;
-  const feature = root.plugin((context) => activateDoomPiEditExtension.install(context, pi));
+  const feature = root.plugin((context) => extension.install(context, pi));
   await feature.await();
   return {
     names,

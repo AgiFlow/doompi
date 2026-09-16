@@ -55,10 +55,16 @@ vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
     dispose: async () => undefined,
   }),
 }));
-vi.mock('../src/controllers/tasksCommand', () => ({
+vi.mock('../src/extensions/workspaces/sessions/(backend)/command/tasks.cli', () => ({
   createTasksCommand: vi.fn(() => ['tasks', { handler: async () => undefined }]),
+  default: vi.fn(() => ['tasks', { handler: async () => undefined }]),
 }));
-vi.mock('../src/tools/task', () => ({
+vi.mock('../src/extensions/workspaces/sessions/(backend)/tool/task.cli', () => ({
+  default: vi.fn(() => ({
+    name: 'task',
+    parameters: { type: 'object', properties: {} },
+    execute: async () => ({ content: [] }),
+  })),
   createTaskTool: vi.fn(() => ({
     name: 'task',
     parameters: { type: 'object', properties: {} },
@@ -99,7 +105,8 @@ vi.mock('../src/services/taskStore', () => ({
     readAsync = runtimeMocks.readStore;
   },
 }));
-vi.mock('../src/tui/taskOverlay', () => ({
+vi.mock('../src/extensions/workspaces/sessions/(frontend)/overlay/_lib/taskOverlay', () => ({
+  registerTaskCollapseShortcut: vi.fn(),
   TaskOverlay: class {
     constructor() {
       runtimeMocks.createOverlay();
@@ -136,7 +143,7 @@ vi.mock('../src/services/logSinkTelemetry', () => ({
   }),
 }));
 
-const { taskExtension } = await import('../src/extensions/pi');
+const { extension: taskExtension } = await import('../generated/pi');
 
 interface TestPi {
   pi: ExtensionAPI;

@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DOOM_DELEGATION_ACCEPTED_EVENT,
@@ -18,7 +18,20 @@ interface StoredEvent {
 
 const roots: Context[] = [];
 
+/**
+ * Wait until `request()` has registered its poll subscription.
+ *
+ * The bridge awaits the parent fork capture before spawning, so how many
+ * microtask ticks that takes is an implementation detail. Counting ticks made
+ * these tests fail the moment the capture became asynchronous; waiting for the
+ * observable state does not.
+ */
+async function settleUntil(ready: () => unknown): Promise<void> {
+  for (let tick = 0; tick < 50 && !ready(); tick += 1) await Promise.resolve();
+}
+
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.allSettled(roots.splice(0).map((root) => root.fiber.dispose()));
 });
 
@@ -103,7 +116,7 @@ describe('createDelegationBridge live metrics', () => {
       cwd: '/repo',
     };
     const pending = service.request(request);
-    await Promise.resolve();
+    await settleUntil(() => schedulerSubscription);
     expect(events[0]).toEqual({
       name: DOOM_DELEGATION_ACCEPTED_EVENT,
       payload: { requestId: 'request-1' },
@@ -143,6 +156,86 @@ describe('createDelegationBridge live metrics', () => {
     ]);
     const result = events.find((event) => event.name === DOOM_DELEGATION_FINISHED_EVENT)?.payload;
     expect(result).not.toHaveProperty('tokens');
+  });
+
+  it('steers a slow delegation once shortly before its timeout', async () => {
+    let now = 1_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    let resolveWait: ((value: { reason: 'completed'; elapsedMs: number; runs: [] }) => void) | undefined;
+    let schedulerSubscription: { run: () => boolean } | undefined;
+    const steer = vi.fn().mockResolvedValue({
+      requestId: 'steer-1',
+      index: 0,
+      state: 'delivered',
+      message: 'delivered',
+    });
+    const job = { runId: 'run-1', status: 'running', startedAt: now, updatedAt: now };
+    const jobs = {
+      track: () => {},
+      get: () => job,
+      list: () => [job],
+      untrack: () => {},
+      reset: () => {},
+    } as unknown as TrackedAsyncJobsContract;
+    const deps: DelegationBridgeDeps = {
+      planner: {
+        spawn: async () => ({ outcomes: [{ runId: 'run-1', agent: 'worker', task: 'work', childIndex: 0, pid: 1 }] }),
+      } as never,
+      management: {
+        steer,
+        stop: () => {},
+        status: () => ({ status: { state: 'completed', startedAt: 1_000, endedAt: 2_000, summary: 'done' } }),
+      } as never,
+      waiter: {
+        wait: () =>
+          new Promise((resolve) => {
+            resolveWait = resolve as typeof resolveWait;
+          }),
+      } as never,
+      scheduler: {
+        register: (subscription: { run: () => boolean }) => {
+          schedulerSubscription = subscription;
+          return () => {};
+        },
+        wake: () => {
+          schedulerSubscription?.run();
+        },
+      } as never,
+      tracker: { forSession: () => jobs } as never,
+      loadConfig: () => ({}) as never,
+    };
+    const bridge = createDelegationBridge(deps);
+    const ctx = new Context();
+    roots.push(ctx);
+    const service = bridge.createService(ctx, {
+      sessionId: 'session-1',
+      sessionScope: TEST_SESSION_SCOPE,
+      availableModels: [],
+    });
+
+    const pending = service.request({
+      requestId: 'request-1',
+      taskId: 'task-1',
+      agent: 'worker',
+      prompt: 'work',
+      cwd: '/repo',
+    });
+    await settleUntil(() => schedulerSubscription);
+    expect(steer).not.toHaveBeenCalled();
+
+    now = 1_081_000;
+    schedulerSubscription?.run();
+    schedulerSubscription?.run();
+    await Promise.resolve();
+
+    expect(steer).toHaveBeenCalledOnce();
+    expect(steer).toHaveBeenCalledWith(
+      'run-1',
+      expect.stringMatching(/time out in about 120 seconds.*return verified findings and blockers immediately/i),
+    );
+
+    resolveWait?.({ reason: 'completed', elapsedMs: 1_200_000, runs: [] });
+    await pending;
   });
 });
 
@@ -191,13 +284,16 @@ describe('createDelegationBridge fork source', () => {
     const ctx = new Context();
     roots.push(ctx);
     let current = {
-      sessionFile: '/tmp/parent.jsonl',
-      leafId: 'leaf-1',
-      terminalSource: {
-        kind: 'terminal-pi-fork' as const,
-        sourceSessionId: 'session-1',
-        sourceLeafId: 'leaf-1',
-        snapshotJsonl: '{}\n',
+      ok: true as const,
+      source: {
+        sessionFile: '/tmp/parent.jsonl',
+        leafId: 'leaf-1',
+        terminalSource: {
+          kind: 'terminal-pi-fork' as const,
+          sourceSessionId: 'session-1',
+          sourceLeafId: 'leaf-1',
+          snapshotJsonl: '{}\n',
+        },
       },
     };
     const service = bridge.createService(ctx, {
@@ -209,13 +305,16 @@ describe('createDelegationBridge fork source', () => {
 
     await service.request(forkRequest('request-1'));
     current = {
-      sessionFile: '/tmp/parent.jsonl',
-      leafId: 'leaf-2',
-      terminalSource: {
-        kind: 'terminal-pi-fork',
-        sourceSessionId: 'session-1',
-        sourceLeafId: 'leaf-2',
-        snapshotJsonl: '{}\n',
+      ok: true as const,
+      source: {
+        sessionFile: '/tmp/parent.jsonl',
+        leafId: 'leaf-2',
+        terminalSource: {
+          kind: 'terminal-pi-fork' as const,
+          sourceSessionId: 'session-1',
+          sourceLeafId: 'leaf-2',
+          snapshotJsonl: '{}\n',
+        },
       },
     };
     await service.request(forkRequest('request-2'));
@@ -232,7 +331,7 @@ describe('createDelegationBridge fork source', () => {
       sessionId: 'session-1',
       sessionScope: TEST_SESSION_SCOPE,
       availableModels: [],
-      captureForkSource: () => undefined,
+      captureForkSource: () => ({ ok: false as const, reason: 'no-leaf' as const }),
     });
 
     await service.request(forkRequest('request-1'));

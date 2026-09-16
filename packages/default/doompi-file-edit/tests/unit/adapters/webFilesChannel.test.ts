@@ -5,8 +5,8 @@ import path from 'node:path';
 import type { DoomHubChannelHost } from '@agimon-ai/doompi-core/hub-channel';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createFilesChannel, readSessionFiles } from '../../../src/controllers/webFilesChannel';
 import { FileEditPaths } from '../../../src/services/fileEditPaths';
+import { createFilesChannel, readSessionFiles } from '../../../src/services/webFilesChannel';
 
 let root: string;
 let timelinePath: string;

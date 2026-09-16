@@ -5,6 +5,7 @@ import {
   AgentHarness,
   HarnessFault,
   type AgentHarnessTool,
+  type AgentMessage,
   type AgentLane,
   type HarnessEvent,
 } from '@earendil-works/pi-agent-core';
@@ -886,7 +887,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   };
 
   const admitPrompt = async (
-    text: string,
+    text: string | AgentMessage,
     images?: ImageContent[],
     streamingBehavior?: 'steer' | 'followUp',
   ): Promise<{ settled: Promise<void> }> => {
@@ -899,17 +900,24 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
       if (!queued.ok) resultError(queued);
       return { settled: Promise.resolve() };
     }
-    const admission = await writable(() =>
-      lane.accept(
-        {
-          kind: 'prompt',
-          prompt: text,
-          ...(images === undefined ? {} : { images }),
-        },
-        context,
-      ),
-    );
-    if (!admission.ok) resultError(admission);
+    // `images` belongs to the text form of the request only: a composed message already
+    // carries its own content, so the two shapes are separate members of the union.
+    const request =
+      typeof text === 'string'
+        ? ({ kind: 'prompt', prompt: text, ...(images === undefined ? {} : { images }) } as const)
+        : ({ kind: 'prompt', prompt: text } as const);
+    const admission = await writable(() => lane.accept(request, context));
+    if (!admission.ok) {
+      // A turn can begin between the inspectExecution read above and this accept. The lane then
+      // reports LaneBusy, and a caller that named a streaming behaviour wants delivery into the
+      // live turn rather than a failure, so it is steered in.
+      if (streamingBehavior !== undefined && admission.error._tag === 'LaneBusy') {
+        const queued = await writable(() => lane.steer(text, images, context));
+        if (!queued.ok) resultError(queued);
+        return { settled: Promise.resolve() };
+      }
+      resultError(admission);
+    }
     return { settled: drive(admission.value.operationId) };
   };
 
@@ -934,6 +942,10 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   };
   const appendCustomEntry = async (customType: string, data?: unknown): Promise<string> =>
     writable(() => lane.appendCustomEntry(customType, data as never, context));
+  const appendMessage = async (message: AgentMessage): Promise<string> =>
+    writable(() => lane.appendMessage(message, context));
+  const setLabel = async (targetId: string, label: string | undefined): Promise<void> =>
+    writable(() => harness.setLabel(targetId, label, context));
   const recordUsage = async (
     usage: Usage,
     options?: { entryId?: string; details?: import('@earendil-works/pi-agent-core').JsonValue },
@@ -945,22 +957,28 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   const submitPrompt = async (
     text: string,
     images?: ImageContent[],
+    streamingBehavior?: 'steer' | 'followUp',
   ): Promise<{ settled: Promise<void>; handledCommand?: boolean }> => {
     if (await options.dispatchCommand?.(text)) {
       return { settled: Promise.resolve(), handledCommand: true };
     }
-    return admitPrompt(text, images);
+    return admitPrompt(text, images, streamingBehavior);
   };
   const prompt = async (text: string, images?: ImageContent[]): Promise<void> => {
     const submission = await submitPrompt(text, images);
     await submission.settled;
   };
-  const steer = async (text: string, images?: ImageContent[]): Promise<void> => {
-    const result = await writable(() => lane.steer(text, images, context));
+  const admitMessage = (message: AgentMessage): Promise<{ settled: Promise<void> }> => admitPrompt(message);
+  const steer = async (message: string | AgentMessage, images?: ImageContent[]): Promise<void> => {
+    const result = await writable(() => lane.steer(message, images, context));
     if (!result.ok) resultError(result);
   };
-  const followUp = async (text: string, images?: ImageContent[]): Promise<void> => {
-    const result = await writable(() => lane.followUp(text, images, context));
+  const followUp = async (message: string | AgentMessage, images?: ImageContent[]): Promise<void> => {
+    const result = await writable(() => lane.followUp(message, images, context));
+    if (!result.ok) resultError(result);
+  };
+  const nextRun = async (message: string | AgentMessage, images?: ImageContent[]): Promise<void> => {
+    const result = await writable(() => lane.nextRun(message, images, context));
     if (!result.ok) resultError(result);
   };
   const abort = async (): Promise<void> => {
@@ -1112,11 +1130,15 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     replaceResources,
     readResources,
     appendCustomEntry,
+    appendMessage,
+    setLabel,
     recordUsage,
     submitPrompt,
     prompt,
+    admitMessage,
     steer,
     followUp,
+    nextRun,
     abort,
     compact,
     resume,

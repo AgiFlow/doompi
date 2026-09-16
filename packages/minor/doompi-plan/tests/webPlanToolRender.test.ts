@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { PLAN_TOOL_NAMES, planCallSummary, planResultLines } from '../src/web/lib/planToolRender';
+import {
+  PLAN_TOOL_NAMES,
+  planCallSummary,
+  planResultLines,
+} from '../src/extensions/workspaces/sessions/(frontend)/tool/_lib/planToolRender';
 
 const text = (value: string, details?: unknown) => ({ content: [{ type: 'text', text: value }], details });
 const done = { expanded: false, isError: false, isPartial: false };

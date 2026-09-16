@@ -7,8 +7,8 @@ import zlib from 'node:zlib';
 import type { AgentToolResult } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { createHashlineReadTool } from '../src/extensions/workspaces/sessions/(backend)/tool/_lib/readTool';
 import { applyImageLimits } from '../src/services/piReadImage';
-import { createHashlineReadTool } from '../src/tools/piRead';
 
 interface CapturedTool {
   execute(

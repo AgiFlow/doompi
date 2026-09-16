@@ -1,8 +1,3 @@
-import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 export type PlanningFlavor = 'normal' | 'debug' | 'fable';
 
 export interface DebugEvidencePacket {
@@ -47,16 +42,59 @@ function evidenceLines(packet: DebugEvidencePacket): string {
 }
 
 /**
+ * What a host's plan tooling can actually do, declared as capabilities rather than as a host
+ * name. The prompt must instruct only what the host's tool surface accepts: the server's
+ * complete_plan takes no parameters, so telling that model to pass a decision asks for an
+ * argument its provider schema rejects. A `cli | server` flag would encode identity and invite
+ * the next divergence to hide behind it.
+ */
+export interface PlanHostCapabilities {
+  /** The host's complete_plan accepts a `decision` argument. */
+  readonly completePlanTakesDecision: boolean;
+  /** The host can narrate the plan review under autonomous voice. */
+  readonly narratesReview: boolean;
+  /** The host has a Fable broker. */
+  readonly fableAvailable: boolean;
+}
+
+/** The review protocol sentences that exist only because a host's tools support them. */
+function reviewProtocolLines(capabilities: PlanHostCapabilities): string[] {
+  return [
+    ...(capabilities.completePlanTakesDecision
+      ? [
+          'In an interactive text session, call complete_plan without a decision and it opens the exit-or-continue selector.',
+        ]
+      : []),
+    ...(capabilities.narratesReview
+      ? [
+          'Under autonomous voice, complete_plan displays and narrates the choices without opening a blocking dialog, then ends the turn.',
+        ]
+      : []),
+    ...(capabilities.completePlanTakesDecision
+      ? ['Interpret the user\'s next ordinary message and call complete_plan again with decision "exit" or "continue".']
+      : []),
+  ];
+}
+
+/**
  * The host-independent plan mode block, pushed ahead of the flavor block.
  *
  * Both the Pi extension and the server facet append this. It lives here so the cockpit and the
- * terminal cannot drift into giving the agent different instructions for the same mode.
+ * terminal cannot drift into giving the agent different instructions for the same mode. The two
+ * facets may differ only through {@link PlanHostCapabilities}, so every other sentence is shared
+ * by construction.
  */
-export function buildPlanModeBasePrompt(plansDirectory: string): string {
-  return `[PLAN MODE ACTIVE]\nYou are in repository read-only plan mode. The dedicated write_plan tool may write one unique Markdown plan file under ${plansDirectory}.\n\nExplore the codebase and produce a concrete implementation plan. For every plan, first call subagent with action "agents", cluster the exploration by independent domain, subsystem, or integration boundary, and create a provisional task graph with the task tool. Select specialized agents by matching their names and descriptions to each cluster. Assign every unblocked delegated task through the task tool, and use a one-shot inlineAgent with a focused systemPrompt when no discovered specialist fits. Treat the initial graph as provisional, not as a fixed contract. After findings arrive, review the entire graph at least once and perform one to three review passes in total. In each pass, use the evidence to add, rewrite, delete, cancel, reassign, or change blockedBy relationships for tasks when warranted. Do not keep following tasks that new information has made stale. Stop revising early when the graph is stable, or after the third pass.\n\nEvery plan must end with a delegated planning-draft stage blocked by all exploration and decision tasks. A single-boundary plan gets one planning draft. A complex plan spanning multiple subsystems, domains, packages, apps, or integration boundaries gets two planning drafts concurrently. Use three concurrent drafts instead when the work is cross-layer, migration-sensitive, security-sensitive, or similarly high risk. Assign each draft through the task tool to the discovered "planner" agent with context "fork" so it receives the conversation and gathered evidence. If the planner agent is unavailable, assign the same draft task through the task tool with a focused inlineAgent. All children receive read, Bash, grep, find, ls, and configured MCP tools with artifacts disabled. Bash and MCP tools are for read-only inspection and must not modify files, external systems, or repository state. Doom Team runs asynchronously, so do not poll. After launch, continue non-overlapping exploration or end your turn; completion notifications wake the parent session.\n\nAfter all planning drafts complete, the main agent must compare the candidates, pick the strongest draft, cross-check it against the gathered evidence and the other drafts, resolve conflicts and gaps, and ask the user only for product decisions. A child produces the draft, but the main agent owns and synthesizes the final plan. Do not modify files or repository state except through write_plan. Start the final plan with a meaningful Markdown H1 because write_plan derives the filename from it. Present the complete plan as visible Markdown in chat, then call write_plan with no arguments. After write_plan succeeds, clear the completed durable task graph and call complete_plan without a decision. In an interactive text session, complete_plan uses the normal exit-or-continue selector. Under autonomous voice, it displays and narrates the choices without opening a blocking dialog, then ends the turn. Interpret the user's next ordinary message and call complete_plan again with decision "exit" or "continue". Do not exit plan mode without explicit approval.`;
+export function buildPlanModeBasePrompt(plansDirectory: string, capabilities: PlanHostCapabilities): string {
+  const review = reviewProtocolLines(capabilities);
+  return `[PLAN MODE ACTIVE]\nYou are in repository read-only plan mode. The dedicated write_plan tool may write one unique Markdown plan file under ${plansDirectory}.\n\nExplore the codebase and produce a concrete implementation plan. For every plan, first call subagent with action "agents", cluster the exploration by independent domain, subsystem, or integration boundary, and create a provisional task graph with the task tool. Select specialized agents by matching their names and descriptions to each cluster. Assign every unblocked delegated task through the task tool, and use a one-shot inlineAgent with a focused systemPrompt when no discovered specialist fits. Treat the initial graph as provisional, not as a fixed contract. After findings arrive, review the entire graph at least once and perform one to three review passes in total. In each pass, use the evidence to add, rewrite, delete, cancel, reassign, or change blockedBy relationships for tasks when warranted. Do not keep following tasks that new information has made stale. Stop revising early when the graph is stable, or after the third pass.\n\nEvery plan must end with a delegated planning-draft stage blocked by all exploration and decision tasks. A single-boundary plan gets one planning draft. A complex plan spanning multiple subsystems, domains, packages, apps, or integration boundaries gets two planning drafts concurrently. Use three concurrent drafts instead when the work is cross-layer, migration-sensitive, security-sensitive, or similarly high risk. Assign each draft through the task tool to the discovered "planner" agent with context "fork" so it receives the conversation and gathered evidence. If the planner agent is unavailable, assign the same draft task through the task tool with a focused inlineAgent. All children receive read, Bash, grep, find, ls, and configured MCP tools with artifacts disabled. Bash and MCP tools are for read-only inspection and must not modify files, external systems, or repository state. Doom Team runs asynchronously, so do not poll. After launch, continue non-overlapping exploration or end your turn; completion notifications wake the parent session.\n\nAfter all planning drafts complete, the main agent must compare the candidates, pick the strongest draft, cross-check it against the gathered evidence and the other drafts, resolve conflicts and gaps, and ask the user only for product decisions. A child produces the draft, but the main agent owns and synthesizes the final plan. Do not modify files or repository state except through write_plan. Start the final plan with a meaningful Markdown H1 because write_plan derives the filename from it. Present the complete plan as visible Markdown in chat, then call write_plan with no arguments. After write_plan succeeds, clear the completed durable task graph and call complete_plan so the user can review the plan and choose whether to begin implementation or continue planning. Do not exit plan mode without explicit approval.${review.length === 0 ? '' : `\n\n${review.join('\n')}`}`;
 }
-export function buildNormalPlanningPrompt(plansDirectory: string): string {
-  return `[PLAN MODE ACTIVE: NORMAL]\nYou are in repository read-only normal planning. The dedicated write_plan tool may write one unique Markdown plan file under ${plansDirectory}.\n\nExplore the codebase and produce a concrete implementation plan. For every plan, first call subagent with action "agents", cluster exploration by independent domain, subsystem, or integration boundary, and create a provisional task graph with the task tool. Select specialized agents by matching their names and descriptions to each cluster. Assign every unblocked delegated task through the task tool, and use a one-shot inlineAgent with a focused systemPrompt when no discovered specialist fits. Treat the initial graph as provisional, not as a fixed contract. After findings arrive, review the entire graph at least once and perform one to three review passes in total. In each pass, use evidence to add, rewrite, delete, cancel, reassign, or change blockedBy relationships for tasks when warranted. Do not keep following tasks that new information has made stale. Stop revising early when the graph is stable, or after the third pass.\n\nEvery plan must end with a delegated planning-draft stage blocked by all exploration and decision tasks. A single-boundary plan gets one planning draft. A complex plan spanning multiple subsystems, domains, packages, apps, or integration boundaries gets two planning drafts concurrently. Use three concurrent drafts instead when the work is cross-layer, migration-sensitive, security-sensitive, or similarly high risk. Assign each draft through the task tool to the discovered planner agent with context "fork" so it receives the conversation and gathered evidence. If the planner agent is unavailable, assign the same draft task through the task tool with a focused inlineAgent. All children receive read, Bash, grep, find, ls, and configured MCP tools with artifacts disabled. Bash and MCP tools are for read-only inspection and must not modify files, external systems, or repository state. Doom Team runs asynchronously, so do not poll. After launch, continue non-overlapping exploration or end your turn; completion notifications wake the parent session.\n\nAfter all planning drafts complete, compare the candidates, pick the strongest draft, cross-check it against gathered evidence and the other drafts, resolve conflicts and gaps, and ask the user only for product decisions. A child produces the draft, but the main agent owns and synthesizes the final plan. Do not modify files or repository state except through write_plan. Start the final plan with a meaningful Markdown H1 because write_plan derives the filename from it. Present the complete plan as visible Markdown, then call write_plan with no arguments. After write_plan succeeds, clear the completed durable task graph and call complete_plan so the user can review the plan and choose whether to begin implementation or continue planning. Do not exit plan mode without that approval.`;
+
+/**
+ * Normal planning adds only what the base block cannot say: that this flavor carries no debug
+ * packet and no Fable draft. Everything else it used to repeat now lives in the base block once.
+ */
+export function buildNormalPlanningPrompt(): string {
+  return `[PLAN MODE ACTIVE: NORMAL]\nStandard planning: no debug evidence packet and no Fable draft, so follow the plan mode brief above using the read-only tools directly.`;
 }
 
 export function buildDebugPlanningPrompt(plansDirectory: string, evidence: DebugEvidencePacket | undefined): string {
@@ -66,7 +104,14 @@ export function buildDebugPlanningPrompt(plansDirectory: string, evidence: Debug
   return `[PLAN MODE ACTIVE: DEBUG]\nYou are in repository read-only adaptive debug planning. The dedicated write_plan tool may write one unique Markdown plan file under ${plansDirectory}.\n\n${guidance}\n\nUse the exact read-only tools available for the issue. Bash is available for repository inspection, but commands must not modify files or repository state. Treat unavailable evidence as unavailable, never invent its contents, and keep verified facts separate from hypotheses. ${evidence ? 'The final plan must separate verified facts from hypotheses and must not present an unsupported root cause as verified.' : 'You may call record_debug_evidence when structured notes would help, but continue investigating without it when it is not relevant.'}`;
 }
 
-export function buildFablePlanningPrompt(plansDirectory: string, stage: string): string {
+export function buildFablePlanningPrompt(
+  plansDirectory: string,
+  stage: string,
+  capabilities: PlanHostCapabilities,
+): string {
+  if (!capabilities.fableAvailable) {
+    return `[PLAN MODE ACTIVE: FABLE]\nFable planning is unavailable in this host, so plan with the read-only tools directly.`;
+  }
   return `[PLAN MODE ACTIVE: FABLE]\nYou are in repository read-only Fable planning. Pi owns final verification and synthesis. The dedicated write_plan tool may write one unique Markdown plan file under ${plansDirectory}.\n\nUse Pi read-only exploration first. When the bounded packet is ready, call run_fable_plan. Fable runs one fresh draft with repository inspection access and returns untrusted text. Cross-check every Fable claim against repository evidence, keep verified findings separate from explicitly inferred findings, resolve conflicts yourself, and present the final visible plan before calling write_plan. Never treat Fable output as repository evidence and never expose credentials, transcripts, commands, tools, or session data in the packet.\n\nCurrent Fable stage: ${stage}. An interrupted stage is not relaunched automatically.`;
 }
 
@@ -75,20 +120,9 @@ export function buildFlavorPlanningPrompt(
   plansDirectory: string,
   evidence: DebugEvidencePacket | undefined,
   fableStage: string,
+  capabilities: PlanHostCapabilities,
 ): string {
   if (flavor === 'debug') return buildDebugPlanningPrompt(plansDirectory, evidence);
-  if (flavor === 'fable') return buildFablePlanningPrompt(plansDirectory, fableStage);
-  return buildNormalPlanningPrompt(plansDirectory);
-}
-
-/** Locate the shipped skill from either source or compiled package modules. */
-export async function readPlanSkill(moduleUrl: string | URL = import.meta.url): Promise<string> {
-  let directory = path.dirname(fileURLToPath(moduleUrl));
-  for (;;) {
-    const prompt = path.join(directory, 'src/prompts/doompi-use-plan/SKILL.md');
-    if (existsSync(prompt)) return readFile(prompt, 'utf8');
-    const parent = path.dirname(directory);
-    if (parent === directory) throw new Error('Could not locate the Plan prompt resource.');
-    directory = parent;
-  }
+  if (flavor === 'fable') return buildFablePlanningPrompt(plansDirectory, fableStage, capabilities);
+  return buildNormalPlanningPrompt();
 }

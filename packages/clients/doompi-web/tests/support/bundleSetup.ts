@@ -32,7 +32,7 @@ export default async function globalSetup(): Promise<() => void> {
   const homeDir = path.join(testRoot, 'home');
   const agentDir = path.join(homeDir, '.pi', 'agent');
   const workspaceRoot = fileURLToPath(new URL('../../../../../', import.meta.url));
-  const cli = path.join(workspaceRoot, 'packages', 'core', 'doompi', 'dist', 'bin', 'cli.mjs');
+  const cli = path.join(workspaceRoot, 'packages', 'cli', 'doompi', 'dist', 'bin', 'cli.mjs');
   fs.mkdirSync(agentDir, { recursive: true });
   const syncEnv: NodeJS.ProcessEnv = {
     ...process.env,
@@ -54,8 +54,10 @@ export default async function globalSetup(): Promise<() => void> {
   const globalRoot = globalDoomConfigDirectory(homeDir);
   const packages = pluginPackageRoots();
   const packageLines = [
+    // Fixed host packages live under packages/foundations and the host activates
+    // them itself, so listing one here is rejected as a feature selection.
     ...packages
-      .filter((entry) => !entry.root.includes(`${path.sep}packages${path.sep}core${path.sep}`))
+      .filter((entry) => !entry.root.includes(`${path.sep}packages${path.sep}foundations${path.sep}`))
       .map((entry) => entry.root),
     crashRoot,
   ]

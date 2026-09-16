@@ -29,7 +29,7 @@ export {
   OpenAiWhisperAdapter,
   TranscriberRegistry,
   WhisperCppAdapter,
-} from '../controllers/voice';
+} from '../services/voiceController';
 export type {
   VoiceLeaderContributionHandle,
   VoiceFooterContributionHandle,
@@ -38,7 +38,7 @@ export type {
   VoiceNarrationServiceBinding,
   VoiceTurnFallbackRuntime,
   VoiceExtensionOptions,
-} from '../controllers/voice';
+} from '../services/voiceController';
 export {
   compactVoiceCommandContext,
   phoneticKey,

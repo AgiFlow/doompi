@@ -1,5 +1,3 @@
-import { sessionApiPath } from '@agimon-ai/doompi-core/web';
-
 import type { FileEditOrigin, FileEditTool } from './domain';
 
 /**
@@ -9,62 +7,20 @@ import type { FileEditOrigin, FileEditTool } from './domain';
  * bundle may read: the cockpit plugin builds its URLs from these and the
  * routes answer them, so neither half can drift from the other.
  *
- * Three routes. Opening a changed file wants its whole history at once, so
- * `detail` answers in one round trip rather than making the page stitch three
- * reads together; `content` takes the manual save back; `preview` reads a file
- * the session never changed, which has no history to answer with.
+ * Routes live in `./apiRoutes`, which the contract, the Hono app and the
+ * generated client all read. This file holds the shapes that travel over them.
+ *
+ * Opening a changed file wants its whole history at once, so `detail` answers
+ * in one round trip rather than making the page stitch three reads together;
+ * `content` takes the manual save back; `preview` reads a file the session
+ * never changed, which has no history to answer with.
  */
 
 /** Where a host mounts this package's API; the segment after /api/plugins/. */
 export const API_BASE_PATH = 'file-edits';
 
-/** Query parameter the cockpit hub reads to pick which session server to proxy to. */
-export const SESSION_QUERY_PARAM = 'session';
-
 /** Query parameter naming the file a request is about. */
 export const PATH_QUERY_PARAM = 'path';
-
-/** One file's whole detail, relative to the API's own mount. */
-export function detailPath(): string {
-  return '/detail';
-}
-
-/** The manual save, and the deletion, relative to the API's own mount. */
-export function contentPath(): string {
-  return '/content';
-}
-
-/** One unchanged file, read only, relative to the API's own mount. */
-export function previewPath(): string {
-  return '/preview';
-}
-
-/**
- * The absolute URL a page fetches, through the hub. The whole query is built
- * here, session parameter included, so a caller never appends a second '?'.
- */
-export function detailUrl(sessionId: string, filePath: string): string {
-  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [PATH_QUERY_PARAM]: filePath });
-  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${detailPath()}?${search.toString()}`;
-}
-
-/** The absolute URL a page puts a manual save to. */
-export function contentUrl(sessionId: string): string {
-  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId });
-  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
-}
-
-/** The absolute URL a page reads an unchanged file through. */
-export function previewUrl(sessionId: string, filePath: string): string {
-  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [PATH_QUERY_PARAM]: filePath });
-  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${previewPath()}?${search.toString()}`;
-}
-
-/** The absolute URL a page deletes a file through; the path rides the query, not a body. */
-export function deleteUrl(sessionId: string, filePath: string): string {
-  const search = new URLSearchParams({ [SESSION_QUERY_PARAM]: sessionId, [PATH_QUERY_PARAM]: filePath });
-  return `${sessionApiPath(sessionId)}/plugins/${API_BASE_PATH}${contentPath()}?${search.toString()}`;
-}
 
 /**
  * One line of a diff. The number is the new file's for context and additions

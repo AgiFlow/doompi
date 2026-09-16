@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  BrowserSpeechPresenceDetector,
+  type SpeechWorker,
+} from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserSpeechPresenceDetector';
+import { VoiceMediaClient } from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/voiceMediaClient';
 import type { SpeechPresenceDetector, SpeechPresenceWindow } from '../src/types/clientCaptureActivity';
 import type {
   VoiceMediaCapabilities,
@@ -13,7 +18,6 @@ import type {
   VoiceMediaPlaybackResult,
   VoiceMediaTransport,
 } from '../src/types/clientMedia';
-import { VoiceMediaClient } from '../src/web/api/voiceMediaClient';
 
 const capabilities: VoiceMediaCapabilities = {
   capture: true,
@@ -43,6 +47,26 @@ async function eventually(assertion: () => void): Promise<void> {
     }
   }
   assertion();
+}
+
+class FakeSpeechWorker implements SpeechWorker {
+  public onmessage: ((event: { data: unknown }) => void) | null = null;
+  public onerror: ((event: { message?: string }) => void) | null = null;
+  public readonly messages: unknown[] = [];
+  public terminated = false;
+
+  public postMessage(message: unknown): void {
+    this.messages.push(message);
+  }
+
+  public terminate(): void {
+    this.terminated = true;
+  }
+
+  public reply(index: number, result?: unknown): void {
+    const id = (this.messages[index] as { id: number }).id;
+    this.onmessage?.({ data: { id, result } });
+  }
 }
 
 class FakeDetector implements SpeechPresenceDetector {
@@ -329,6 +353,79 @@ describe('voice media client browser recovery', () => {
     device.callbacks[1]!(new Uint8Array([3, 3]));
     await eventually(() => expect(transport.audioSends).toHaveLength(2));
     expect(transport.audioSends[1]?.pcm).toEqual(new Uint8Array([3, 3]));
+    await client.stop();
+  });
+
+  it('acknowledges capture stop when trailing speech detection stalls', async () => {
+    vi.useFakeTimers();
+    const worker = new FakeSpeechWorker();
+    const transport = new FakeTransport();
+    const device = new FakeDevice();
+    const detector = new BrowserSpeechPresenceDetector(
+      worker,
+      () => {
+        device.capabilities.captureActivity = false;
+        device.capabilities.autonomousOrchestration = false;
+      },
+      25,
+    );
+    const initialized = detector.initialize('/silero.onnx');
+    await Promise.resolve();
+    worker.reply(0, true);
+    await initialized;
+    device.detectors.push(detector);
+    const client = new VoiceMediaClient('client', 'connection', transport, device);
+    client.start();
+    await eventually(() => expect(device.callbacks).toHaveLength(1));
+
+    device.callbacks[0]!(new Uint8Array([1, 1]));
+    await eventually(() => expect(worker.messages).toHaveLength(2));
+    worker.reply(1, []);
+    await eventually(() => expect(transport.audioSends).toHaveLength(1));
+
+    device.callbacks[0]!(new Uint8Array([2, 2]));
+    await eventually(() => expect(worker.messages).toHaveLength(3));
+    await vi.advanceTimersByTimeAsync(25);
+    await eventually(() => expect(transport.audioSends).toHaveLength(2));
+    expect(transport.captureStopped).not.toHaveBeenCalled();
+    expect(transport.capabilityRefreshes).toHaveLength(0);
+
+    await eventually(() => expect(transport.longPolls).toHaveLength(1));
+    transport.longPolls[0]!.resolve({ sequence: 2, type: 'capture-stop', captureId: 'capture-1' });
+    await eventually(() => expect(transport.captureStopped).toHaveBeenCalledOnce());
+
+    expect(transport.audioSends.map(({ pcm }) => [...pcm])).toEqual([
+      [1, 1],
+      [2, 2],
+    ]);
+    expect(transport.captureStopped).toHaveBeenCalledWith('client', 'connection:1', 'capture-1');
+    expect(transport.capabilityRefreshes).toEqual([
+      {
+        connectionId: 'connection:1',
+        capabilities: { ...capabilities, captureActivity: false, autonomousOrchestration: false },
+      },
+    ]);
+    expect(device.close).not.toHaveBeenCalled();
+    expect(worker.terminated).toBe(true);
+
+    await eventually(() => expect(transport.longPolls).toHaveLength(2));
+    transport.longPolls[1]!.resolve({
+      sequence: 3,
+      type: 'capture-start',
+      captureId: 'capture-2',
+      sampleRate: 16_000,
+      channels: 1,
+      bitsPerSample: 16,
+      configuration: { mode: 'autonomous', activityControl: 'host' },
+    });
+    await eventually(() => expect(device.callbacks).toHaveLength(2));
+    device.callbacks[1]!(new Uint8Array([3, 3]));
+    await eventually(() => expect(transport.audioSends).toHaveLength(3));
+    await eventually(() => expect(transport.longPolls).toHaveLength(3));
+    transport.longPolls[2]!.resolve({ sequence: 4, type: 'capture-stop', captureId: 'capture-2' });
+    await eventually(() => expect(transport.captureStopped).toHaveBeenCalledTimes(2));
+    expect(transport.captureStopped).toHaveBeenLastCalledWith('client', 'connection:1', 'capture-2');
+
     await client.stop();
   });
 

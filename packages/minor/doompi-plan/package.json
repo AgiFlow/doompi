@@ -27,16 +27,13 @@
   },
   "files": [
     "dist",
-    "src/web",
-    "src/extensions/web.ts",
     "llms.txt",
     "src/prompts",
     "src/types/planApi.ts",
     "src/types/planSettings.ts",
     "README.md",
     "LICENSE",
-    "package.json",
-    "!src/web/**/*.stories.tsx"
+    "package.json"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
@@ -62,6 +59,9 @@
       "types": "./dist/extensions/server.d.mts",
       "import": "./dist/extensions/server.mjs",
       "require": "./dist/extensions/server.cjs"
+    },
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
     },
     "./fable-flow": {
       "types": "./dist/fable-flow.d.mts",
@@ -97,7 +97,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest --run",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p src/web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
     "lint": "oxlint . && oxfmt . --check",
     "fixcode": "oxlint . --fix && oxfmt ."
   },
@@ -113,6 +113,7 @@
     "typebox": "1.3.30"
   },
   "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
     "@earendil-works/pi-coding-agent": "0.85.1",
     "@tanstack/react-store": "0.11.1",
     "@tanstack/store": "0.11.1",
@@ -132,7 +133,7 @@
     "node": ">=22.19.0"
   },
   "doompiServer": {
-    "entry": "./src/extensions/server.ts",
+    "entry": "./generated/server.ts",
     "dist": "./dist/extensions/server.mjs",
     "scopes": [
       "session"
@@ -145,7 +146,7 @@
   "doompiWeb": {
     "pluginId": "plan",
     "channels": [],
-    "client": "./src/extensions/web.ts",
+    "client": "./dist/extensions/web.mjs",
     "scopes": [
       "global",
       "workspace",

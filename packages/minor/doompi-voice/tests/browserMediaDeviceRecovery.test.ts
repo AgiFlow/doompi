@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { BrowserVoiceMediaDevice, Pcm16Resampler } from '../src/web/api/browserMediaDevice';
+import {
+  BrowserVoiceMediaDevice,
+  Pcm16Resampler,
+} from '../src/extensions/workspaces/sessions/(frontend)/lifecycle/_lib/browserMediaDevice';
 class FakeNode {
   public connect(): void {}
   public disconnect(): void {}
@@ -427,6 +430,11 @@ describe('browser media device recovery guards', () => {
     expect(track.stop).not.toHaveBeenCalled();
     const second = await device.startCapture(() => undefined);
     expect(getUserMedia).toHaveBeenCalledOnce();
+    // An unpinned capture must still ask for the processing the echo discriminator expects.
+    expect(getUserMedia).toHaveBeenCalledWith({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false,
+    });
     await second.stop();
     expect(track.stop).not.toHaveBeenCalled();
 

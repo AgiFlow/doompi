@@ -3,7 +3,10 @@ import { beforeEach as beforeEachApiRoutes } from 'vitest';
 beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { loadAuthorDocument, saveAuthorDocument } from '../../src/web/api/authorFiles';
+import {
+  loadAuthorDocument,
+  saveAuthorDocument,
+} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorFiles';
 
 const SOURCE_SHA = 'a'.repeat(64);
 const SAVED_SHA = 'b'.repeat(64);

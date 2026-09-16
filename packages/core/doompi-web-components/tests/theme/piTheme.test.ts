@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_THEME, themeFromPiTheme } from '../../src/exports/theme';
 
-const TUI_THEME = fileURLToPath(new URL('../../../doompi-ui/themes/doom-pi-dark.json', import.meta.url));
+const TUI_THEME = fileURLToPath(new URL('../../../../foundations/doompi-ui/themes/doom-pi-dark.json', import.meta.url));
 
 describe('themeFromPiTheme', () => {
   it('turns the TUI theme DoomPi ships into the web palette the cockpit already uses', () => {

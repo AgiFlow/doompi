@@ -26,8 +26,8 @@ tmp/
 # Runner native payloads. Fetched from upstream releases by
 # scripts/fetch-runner-binaries.mjs and verified against pinned checksums,
 # rather than stored here. See CONTRIBUTING.md.
-packages/default/doompi-runner-rmux-*/vendor/
-packages/default/doompi-runner-rtk-*/vendor/
+packages/utils/doompi-runner-rmux-*/vendor/
+packages/utils/doompi-runner-rtk-*/vendor/
 # The cockpit dev loop's generated plugin registry (packages/clients/doompi-web/vite.config.ts).
 packages/clients/doompi-web/.dev/
 # Scratch Vite builds written into a project by the style-system screenshot

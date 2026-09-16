@@ -1,7 +1,7 @@
 import type { DoomDirectEventBus, DoomHubChannelHost, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
 import { describe, expect, it } from 'vitest';
 
-import { createSubagentsChannel } from '../../src/controllers/webSubagentsChannel';
+import { createSubagentsChannel } from '../../src/extensions/(backend)/channel/_lib/subagent-runs';
 import type { SubagentRun } from '../../src/types/webSubagents';
 
 interface FakeHost extends DoomHubChannelHost {

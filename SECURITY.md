@@ -50,6 +50,6 @@ Out of scope:
 ## Bundled binaries
 
 The Runner ships prebuilt third-party binaries under
-`packages/default/doompi-runner-{rmux,rtk}-*/vendor/`. Their provenance and capabilities are
+`packages/utils/doompi-runner-{rmux,rtk}-*/vendor/`. Their provenance and capabilities are
 documented in [Trust and data boundaries](docs/trust-and-data-boundaries.md). Report issues in those
 binaries upstream, and let us know so we can pin a fixed version.

@@ -3,8 +3,8 @@ import { beforeEach as beforeEachApiRoutes } from 'vitest';
 beforeEachApiRoutes(() => bindSessionApiWorkspace(() => 'test-workspace'));
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { loadAuthorMedia } from '../../src/web/api/authorMedia';
-import { AuthorMediaPreview } from '../../src/web/components/AuthorMediaPreview';
+import { AuthorMediaPreview } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorMediaPreview';
+import { loadAuthorMedia } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorMedia';
 
 const hooks = vi.hoisted(() => ({
   value: undefined as undefined | { source: string; url?: string; error?: string },
@@ -18,7 +18,7 @@ vi.mock('react', async (original) => ({
     hooks.cleanup = effect();
   },
 }));
-vi.mock('../../src/web/api/authorMedia', () => ({ loadAuthorMedia: vi.fn() }));
+vi.mock('../../src/extensions/workspaces/sessions/(frontend)/_lib/authorMedia', () => ({ loadAuthorMedia: vi.fn() }));
 afterEach(() => {
   hooks.cleanup?.();
   hooks.cleanup = undefined;

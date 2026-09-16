@@ -138,10 +138,10 @@ importers:
         version: link:../../../packages/core/doompi-core
       '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-minor-mode
+        version: link:../../../packages/foundations/doompi-minor-mode
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-ui
+        version: link:../../../packages/foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-components
@@ -152,6 +152,9 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-build
       '@agimon-ai/doompi-voice':
         specifier: workspace:*
         version: link:../../../packages/minor/doompi-voice
@@ -196,7 +199,7 @@ importers:
     dependencies:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-config
+        version: link:../../../packages/foundations/doompi-config
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-core
@@ -204,6 +207,9 @@ importers:
         specifier: 4.0.2
         version: 4.0.2
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -232,6 +238,9 @@ importers:
         specifier: 4.0.2
         version: 4.0.2
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-build
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
@@ -275,6 +284,9 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-build
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
@@ -316,10 +328,10 @@ importers:
         version: link:../../../packages/core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-telemetry
+        version: link:../../../packages/foundations/doompi-telemetry
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-ui
+        version: link:../../../packages/foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-components
@@ -330,6 +342,9 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -371,19 +386,19 @@ importers:
     dependencies:
       '@agimon-ai/doompi-cache':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-cache
+        version: link:../../../packages/foundations/doompi-cache
       '@agimon-ai/doompi-config':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-config
+        version: link:../../../packages/foundations/doompi-config
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-telemetry
+        version: link:../../../packages/foundations/doompi-telemetry
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../../packages/core/doompi-ui
+        version: link:../../../packages/foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-components
@@ -400,6 +415,9 @@ importers:
         specifier: 2.9.0
         version: 2.9.0
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-agent-core':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -440,193 +458,47 @@ importers:
         specifier: 5.0.0
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/clients/doompi-desktop:
-    dependencies:
-      '@agimon-ai/doompi-config':
-        specifier: workspace:*
-        version: link:../../core/doompi-config
-    devDependencies:
-      '@agimon-ai/doompi':
-        specifier: workspace:*
-        version: link:../../core/doompi
-      '@agimon-ai/doompi-web':
-        specifier: workspace:*
-        version: link:../doompi-web
-      '@playwright/test':
-        specifier: 1.63.0
-        version: 1.63.0
-      '@types/node':
-        specifier: 26.5.1
-        version: 26.5.1
-      electron:
-        specifier: 44.3.0
-        version: 44.3.0(supports-color@7.2.0)
-      npm:
-        specifier: 11.16.0
-        version: 11.16.0
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vite:
-        specifier: 8.2.2
-        version: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/clients/doompi-web:
-    dependencies:
-      '@agimon-ai/doompi':
-        specifier: workspace:*
-        version: link:../../core/doompi
-      '@agimon-ai/doompi-core':
-        specifier: workspace:*
-        version: link:../../core/doompi-core
-      '@agimon-ai/doompi-web-components':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-components
-      '@agimon-ai/doompi-web-security':
-        specifier: workspace:*
-        version: link:../../core/doompi-web-security
-      '@codemirror/state':
-        specifier: 6.7.4
-        version: 6.7.4
-      '@codemirror/view':
-        specifier: 6.43.11
-        version: 6.43.11
-      '@earendil-works/chord':
-        specifier: 0.85.1
-        version: 0.85.1
-      '@earendil-works/pi-client':
-        specifier: 0.85.1
-        version: 0.85.1
-      '@simplewebauthn/browser':
-        specifier: ^14.0.0
-        version: 14.0.0
-      '@tailwindcss/vite':
-        specifier: 4.3.3
-        version: 4.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-      '@tanstack/react-router':
-        specifier: 1.170.35
-        version: 1.170.35(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@tanstack/react-store':
-        specifier: 0.11.1
-        version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@tanstack/react-virtual':
-        specifier: 3.14.11
-        version: 3.14.11(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@tanstack/store':
-        specifier: 0.11.1
-        version: 0.11.1
-      '@vitejs/plugin-react':
-        specifier: 6.1.1
-        version: 6.1.1(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-      '@zxing/browser':
-        specifier: ^0.2.1
-        version: 0.2.1(@zxing/library@0.23.0)
-      qrcode-generator:
-        specifier: ^2.0.4
-        version: 2.0.4
-      react:
-        specifier: 19.3.0
-        version: 19.3.0
-      react-dom:
-        specifier: 19.3.0
-        version: 19.3.0(react@19.3.0)
-      tailwindcss:
-        specifier: 4.3.3
-        version: 4.3.3
-      vite:
-        specifier: 8.2.2
-        version: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
-      ws:
-        specifier: 8.21.3
-        version: 8.21.3
-    devDependencies:
-      '@agimon-ai/doompi-config':
-        specifier: workspace:*
-        version: link:../../core/doompi-config
-      '@agimon-ai/vibe-lint-plugin-doom-web':
-        specifier: workspace:*
-        version: link:../../tooling/vibe-lint-plugin-doom-web
-      '@earendil-works/pi-protocol':
-        specifier: 0.85.1
-        version: 0.85.1
-      '@playwright/test':
-        specifier: 1.63.0
-        version: 1.63.0
-      '@types/node':
-        specifier: 26.5.1
-        version: 26.5.1
-      '@types/react':
-        specifier: 19.3.0
-        version: 19.3.0
-      '@types/react-dom':
-        specifier: 19.3.0
-        version: 19.3.0(@types/react@19.3.0)
-      '@types/ws':
-        specifier: 8.18.1
-        version: 8.18.1
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      ajv:
-        specifier: 8.20.0
-        version: 8.20.0
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/core/doompi:
+  packages/cli/doompi:
     dependencies:
       '@agimon-ai/doompi-autostop':
         specifier: workspace:*
-        version: link:../doompi-autostop
+        version: link:../../foundations/doompi-autostop
       '@agimon-ai/doompi-cache':
         specifier: workspace:*
-        version: link:../doompi-cache
+        version: link:../../foundations/doompi-cache
       '@agimon-ai/doompi-config':
         specifier: workspace:*
-        version: link:../doompi-config
+        version: link:../../foundations/doompi-config
       '@agimon-ai/doompi-core':
         specifier: workspace:*
-        version: link:../doompi-core
+        version: link:../../core/doompi-core
       '@agimon-ai/doompi-domain':
         specifier: workspace:*
-        version: link:../doompi-domain
+        version: link:../../foundations/doompi-domain
       '@agimon-ai/doompi-major-mode':
         specifier: workspace:*
-        version: link:../doompi-major-mode
+        version: link:../../foundations/doompi-major-mode
       '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
-        version: link:../doompi-minor-mode
+        version: link:../../foundations/doompi-minor-mode
       '@agimon-ai/doompi-notification':
         specifier: workspace:*
-        version: link:../doompi-notification
+        version: link:../../foundations/doompi-notification
       '@agimon-ai/doompi-profile':
         specifier: workspace:*
-        version: link:../doompi-profile
+        version: link:../../foundations/doompi-profile
       '@agimon-ai/doompi-skill':
         specifier: workspace:*
-        version: link:../doompi-skill
+        version: link:../../foundations/doompi-skill
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
-        version: link:../doompi-telemetry
+        version: link:../../foundations/doompi-telemetry
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../doompi-ui
+        version: link:../../foundations/doompi-ui
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
-        version: link:../doompi-web-security
+        version: link:../../core/doompi-web-security
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -731,67 +603,142 @@ importers:
         specifier: 5.0.0
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/core/doompi-autostop:
-    dependencies:
-      '@agimon-ai/doompi-core':
-        specifier: workspace:*
-        version: link:../doompi-core
-      '@deepseek-ai/cordis':
-        specifier: 4.0.2
-        version: 4.0.2
-    devDependencies:
-      '@agimon-ai/vibe-lint-plugin-doom-extension':
-        specifier: workspace:*
-        version: link:../../tooling/vibe-lint-plugin-doom-extension
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
-      '@types/node':
-        specifier: 26.5.1
-        version: 26.5.1
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/core/doompi-cache:
+  packages/clients/doompi-desktop:
     dependencies:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
-        version: link:../doompi-config
-      '@agimon-ai/doompi-core':
-        specifier: workspace:*
-        version: link:../doompi-core
-      '@agimon-ai/doompi-minor-mode':
-        specifier: workspace:*
-        version: link:../doompi-minor-mode
-      '@deepseek-ai/cordis':
-        specifier: 4.0.2
-        version: 4.0.2
-      pi-cache-optimizer:
-        specifier: 2.8.7
-        version: 2.8.7(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))
+        version: link:../../foundations/doompi-config
     devDependencies:
-      '@agimon-ai/vibe-lint-plugin-doom-extension':
+      '@agimon-ai/doompi':
         specifier: workspace:*
-        version: link:../../tooling/vibe-lint-plugin-doom-extension
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: link:../../cli/doompi
+      '@agimon-ai/doompi-web':
+        specifier: workspace:*
+        version: link:../doompi-web
+      '@playwright/test':
+        specifier: 1.63.0
+        version: 1.63.0
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
+      electron:
+        specifier: 44.3.0
+        version: 44.3.0(supports-color@7.2.0)
+      npm:
+        specifier: 11.16.0
+        version: 11.16.0
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vite:
+        specifier: 8.2.2
+        version: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/clients/doompi-web:
+    dependencies:
+      '@agimon-ai/doompi':
+        specifier: workspace:*
+        version: link:../../cli/doompi
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
+      '@agimon-ai/doompi-web-security':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-security
+      '@codemirror/state':
+        specifier: 6.7.4
+        version: 6.7.4
+      '@codemirror/view':
+        specifier: 6.43.11
+        version: 6.43.11
+      '@earendil-works/chord':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@earendil-works/pi-client':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@simplewebauthn/browser':
+        specifier: ^14.0.0
+        version: 14.0.0
+      '@tailwindcss/vite':
+        specifier: 4.3.3
+        version: 4.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+      '@tanstack/react-router':
+        specifier: 1.170.35
+        version: 1.170.35(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@tanstack/react-virtual':
+        specifier: 3.14.11
+        version: 3.14.11(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
+      '@vitejs/plugin-react':
+        specifier: 6.1.1
+        version: 6.1.1(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+      '@zxing/browser':
+        specifier: ^0.2.1
+        version: 0.2.1(@zxing/library@0.23.0)
+      qrcode-generator:
+        specifier: ^2.0.4
+        version: 2.0.4
+      react:
+        specifier: 19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
+      tailwindcss:
+        specifier: 4.3.3
+        version: 4.3.3
+      vite:
+        specifier: 8.2.2
+        version: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+      ws:
+        specifier: 8.21.3
+        version: 8.21.3
+    devDependencies:
+      '@agimon-ai/doompi-config':
+        specifier: workspace:*
+        version: link:../../foundations/doompi-config
+      '@agimon-ai/vibe-lint-plugin-doom-web':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-web
+      '@earendil-works/pi-protocol':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@playwright/test':
+        specifier: 1.63.0
+        version: 1.63.0
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: 19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
       '@vitest/coverage-v8':
         specifier: 5.0.0
         version: 5.0.0(vitest@5.0.0)
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
       tsdown:
         specifier: 0.23.0
         version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
@@ -802,27 +749,8 @@ importers:
         specifier: 5.0.0
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/core/doompi-config:
-    dependencies:
-      '@agimon-ai/doompi-core':
-        specifier: workspace:*
-        version: link:../doompi-core
-      '@agimon-ai/doompi-telemetry':
-        specifier: workspace:*
-        version: link:../doompi-telemetry
-      '@deepseek-ai/cordis':
-        specifier: 4.0.2
-        version: 4.0.2
-      typebox:
-        specifier: 1.3.30
-        version: 1.3.30
-      yaml:
-        specifier: 2.9.0
-        version: 2.9.0
+  packages/core/doompi-build:
     devDependencies:
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -843,7 +771,7 @@ importers:
     dependencies:
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
-        version: link:../doompi-telemetry
+        version: link:../../foundations/doompi-telemetry
       '@agimon-ai/doompi-web-security':
         specifier: workspace:*
         version: link:../doompi-web-security
@@ -938,389 +866,6 @@ importers:
       '@types/ws':
         specifier: 8.18.1
         version: 8.18.1
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      react:
-        specifier: 19.3.0
-        version: 19.3.0
-      react-dom:
-        specifier: 19.3.0
-        version: 19.3.0(react@19.3.0)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/core/doompi-domain:
-    dependencies:
-      '@agimon-ai/doompi-config':
-        specifier: workspace:*
-        version: link:../doompi-config
-      '@agimon-ai/doompi-core':
-        specifier: workspace:*
-        version: link:../doompi-core
-      '@agimon-ai/doompi-minor-mode':
-        specifier: workspace:*
-        version: link:../doompi-minor-mode
-      '@agimon-ai/doompi-telemetry':
-        specifier: workspace:*
-        version: link:../doompi-telemetry
-      '@agimon-ai/doompi-ui':
-        specifier: workspace:*
-        version: link:../doompi-ui
-      '@deepseek-ai/cordis':
-        specifier: 4.0.2
-        version: 4.0.2
-      typebox:
-        specifier: 1.3.30
-        version: 1.3.30
-      yaml:
-        specifier: 2.9.0
-        version: 2.9.0
-    devDependencies:
-      '@agimon-ai/doompi-voice':
-        specifier: workspace:*
-        version: link:../../minor/doompi-voice
-      '@agimon-ai/vibe-lint-plugin-doom-extension':
-        specifier: workspace:*
-        version: link:../../tooling/vibe-lint-plugin-doom-extension
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
-      '@earendil-works/pi-tui':
-        specifier: 0.85.1
-        version: 0.85.1
-      '@types/node':
-        specifier: 26.5.1
-        version: 26.5.1
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/core/doompi-hashline:
-    devDependencies:
-      '@types/node':
-        specifier: 26.5.1
-        version: 26.5.1
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/core/doompi-major-mode:
-    dependencies:
-      '@agimon-ai/doompi-config':
-        specifier: workspace:*
-        version: link:../doompi-config
-      '@agimon-ai/doompi-core':
-        specifier: workspace:*
-        version: link:../doompi-core
-      '@agimon-ai/doompi-minor-mode':
-        specifier: workspace:*
-        version: link:../doompi-minor-mode
-      '@agimon-ai/doompi-telemetry':
-        specifier: workspace:*
-        version: link:../doompi-telemetry
-      '@agimon-ai/doompi-ui':
-        specifier: workspace:*
-        version: link:../doompi-ui
-      '@deepseek-ai/cordis':
-        specifier: 4.0.2
-        version: 4.0.2
-      typebox:
-        specifier: 1.3.30
-        version: 1.3.30
-    devDependencies:
-      '@agimon-ai/doompi-voice':
-        specifier: workspace:*
-        version: link:../../minor/doompi-voice
-      '@agimon-ai/vibe-lint-plugin-doom-extension':
-        specifier: workspace:*
-        version: link:../../tooling/vibe-lint-plugin-doom-extension
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
-      '@earendil-works/pi-tui':
-        specifier: 0.85.1
-        version: 0.85.1
-      '@types/node':
-        specifier: 26.5.1
-        version: 26.5.1
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/core/doompi-minor-mode:
-    dependencies:
-      '@agimon-ai/doompi-core':
-        specifier: workspace:*
-        version: link:../doompi-core
-      '@agimon-ai/doompi-telemetry':
-        specifier: workspace:*
-        version: link:../doompi-telemetry
-      '@deepseek-ai/cordis':
-        specifier: 4.0.2
-        version: 4.0.2
-      typebox:
-        specifier: 1.3.30
-        version: 1.3.30
-    devDependencies:
-      '@agimon-ai/vibe-lint-plugin-doom-extension':
-        specifier: workspace:*
-        version: link:../../tooling/vibe-lint-plugin-doom-extension
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
-      '@earendil-works/pi-tui':
-        specifier: 0.85.1
-        version: 0.85.1
-      '@types/node':
-        specifier: 26.5.1
-        version: 26.5.1
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/core/doompi-notification:
-    dependencies:
-      '@agimon-ai/doompi-core':
-        specifier: workspace:*
-        version: link:../doompi-core
-      '@deepseek-ai/cordis':
-        specifier: 4.0.2
-        version: 4.0.2
-    devDependencies:
-      '@agimon-ai/vibe-lint-plugin-doom-extension':
-        specifier: workspace:*
-        version: link:../../tooling/vibe-lint-plugin-doom-extension
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
-      '@types/node':
-        specifier: 26.5.1
-        version: 26.5.1
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/core/doompi-profile:
-    dependencies:
-      '@agimon-ai/doompi-config':
-        specifier: workspace:*
-        version: link:../doompi-config
-      '@agimon-ai/doompi-core':
-        specifier: workspace:*
-        version: link:../doompi-core
-      '@agimon-ai/doompi-minor-mode':
-        specifier: workspace:*
-        version: link:../doompi-minor-mode
-      '@agimon-ai/doompi-telemetry':
-        specifier: workspace:*
-        version: link:../doompi-telemetry
-      '@agimon-ai/doompi-ui':
-        specifier: workspace:*
-        version: link:../doompi-ui
-      '@deepseek-ai/cordis':
-        specifier: 4.0.2
-        version: 4.0.2
-      typebox:
-        specifier: 1.3.30
-        version: 1.3.30
-    devDependencies:
-      '@agimon-ai/doompi-voice':
-        specifier: workspace:*
-        version: link:../../minor/doompi-voice
-      '@agimon-ai/vibe-lint-plugin-doom-extension':
-        specifier: workspace:*
-        version: link:../../tooling/vibe-lint-plugin-doom-extension
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
-      '@earendil-works/pi-tui':
-        specifier: 0.85.1
-        version: 0.85.1
-      '@types/node':
-        specifier: 26.5.1
-        version: 26.5.1
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/core/doompi-skill:
-    dependencies:
-      '@agimon-ai/doompi-config':
-        specifier: workspace:*
-        version: link:../doompi-config
-      '@agimon-ai/doompi-core':
-        specifier: workspace:*
-        version: link:../doompi-core
-      '@agimon-ai/doompi-domain':
-        specifier: workspace:*
-        version: link:../doompi-domain
-      '@agimon-ai/doompi-telemetry':
-        specifier: workspace:*
-        version: link:../doompi-telemetry
-      '@agimon-ai/doompi-ui':
-        specifier: workspace:*
-        version: link:../doompi-ui
-      '@deepseek-ai/cordis':
-        specifier: 4.0.2
-        version: 4.0.2
-      gpt-tokenizer:
-        specifier: 4.0.0
-        version: 4.0.0
-    devDependencies:
-      '@agimon-ai/vibe-lint-plugin-doom-extension':
-        specifier: workspace:*
-        version: link:../../tooling/vibe-lint-plugin-doom-extension
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
-      '@earendil-works/pi-tui':
-        specifier: 0.85.1
-        version: 0.85.1
-      '@types/node':
-        specifier: 26.5.1
-        version: 26.5.1
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/core/doompi-telemetry:
-    dependencies:
-      '@agimon-ai/log-sink-mcp':
-        specifier: 0.29.25
-        version: 0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)
-      '@opentelemetry/api':
-        specifier: 1.9.1
-        version: 1.9.1
-    devDependencies:
-      '@types/node':
-        specifier: 26.5.1
-        version: 26.5.1
-      '@vitest/coverage-v8':
-        specifier: 5.0.0
-        version: 5.0.0(vitest@5.0.0)
-      tsdown:
-        specifier: 0.23.0
-        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
-      typescript:
-        specifier: 7.0.2
-        version: 7.0.2
-      vitest:
-        specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-
-  packages/core/doompi-ui:
-    dependencies:
-      '@agimon-ai/doompi-core':
-        specifier: workspace:*
-        version: link:../doompi-core
-      '@agimon-ai/doompi-hashline':
-        specifier: workspace:*
-        version: link:../doompi-hashline
-      '@agimon-ai/doompi-minor-mode':
-        specifier: workspace:*
-        version: link:../doompi-minor-mode
-      '@agimon-ai/doompi-telemetry':
-        specifier: workspace:*
-        version: link:../doompi-telemetry
-      '@deepseek-ai/cordis':
-        specifier: 4.0.2
-        version: 4.0.2
-      yaml:
-        specifier: 2.9.0
-        version: 2.9.0
-    devDependencies:
-      '@agimon-ai/doompi-web-components':
-        specifier: workspace:*
-        version: link:../doompi-web-components
-      '@earendil-works/pi-coding-agent':
-        specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
-      '@earendil-works/pi-tui':
-        specifier: 0.85.1
-        version: 0.85.1
-      '@tanstack/react-store':
-        specifier: 0.11.1
-        version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      '@tanstack/store':
-        specifier: 0.11.1
-        version: 0.11.1
-      '@types/node':
-        specifier: 26.5.1
-        version: 26.5.1
-      '@types/react':
-        specifier: 19.3.0
-        version: 19.3.0
       '@vitest/coverage-v8':
         specifier: 5.0.0
         version: 5.0.0(vitest@5.0.0)
@@ -1471,13 +1016,13 @@ importers:
     dependencies:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
-        version: link:../../core/doompi-config
+        version: link:../../foundations/doompi-config
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
-        version: link:../../core/doompi-telemetry
+        version: link:../../foundations/doompi-telemetry
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1485,6 +1030,9 @@ importers:
         specifier: 10.2.6
         version: 10.2.6
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -1508,10 +1056,10 @@ importers:
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-hashline':
         specifier: workspace:*
-        version: link:../../core/doompi-hashline
+        version: link:../../utils/doompi-hashline
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../core/doompi-ui
+        version: link:../../foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -1522,6 +1070,9 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -1563,16 +1114,16 @@ importers:
     dependencies:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
-        version: link:../../core/doompi-config
+        version: link:../../foundations/doompi-config
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
-        version: link:../../core/doompi-telemetry
+        version: link:../../foundations/doompi-telemetry
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../core/doompi-ui
+        version: link:../../foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -1595,6 +1146,9 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -1645,10 +1199,10 @@ importers:
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-hashline':
         specifier: workspace:*
-        version: link:../../core/doompi-hashline
+        version: link:../../utils/doompi-hashline
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../core/doompi-ui
+        version: link:../../foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -1659,6 +1213,9 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -1703,13 +1260,13 @@ importers:
     dependencies:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
-        version: link:../../core/doompi-config
+        version: link:../../foundations/doompi-config
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
-        version: link:../../core/doompi-telemetry
+        version: link:../../foundations/doompi-telemetry
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1717,6 +1274,9 @@ importers:
         specifier: 2.9.0
         version: 2.9.0
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:../../tooling/vibe-lint-plugin-doom-extension
@@ -1746,7 +1306,7 @@ importers:
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
-        version: link:../../core/doompi-telemetry
+        version: link:../../foundations/doompi-telemetry
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -1754,8 +1314,8 @@ importers:
         specifier: workspace:*
         version: link:../../core/doompi-web-security
       '@agimon-ai/log-sink-mcp':
-        specifier: 0.29.25
-        version: 0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)
+        specifier: 0.29.26
+        version: 0.29.26(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1766,9 +1326,12 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../core/doompi-ui
+        version: link:../../foundations/doompi-ui
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -1810,16 +1373,19 @@ importers:
     dependencies:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
-        version: link:../../core/doompi-config
+        version: link:../../foundations/doompi-config
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../core/doompi-ui
+        version: link:../../foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
+      '@agimon-ai/doompi-web-security':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-security
       '@agimon-ai/mcp-proxy':
         specifier: 0.31.25
         version: 0.31.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)
@@ -1842,6 +1408,9 @@ importers:
         specifier: 2.9.0
         version: 2.9.0
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -1886,7 +1455,7 @@ importers:
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../core/doompi-ui
+        version: link:../../foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -1903,6 +1472,9 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:../../tooling/vibe-lint-plugin-doom-extension
@@ -1944,16 +1516,16 @@ importers:
     dependencies:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
-        version: link:../../core/doompi-config
+        version: link:../../foundations/doompi-config
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-hashline':
         specifier: workspace:*
-        version: link:../../core/doompi-hashline
+        version: link:../../utils/doompi-hashline
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../core/doompi-ui
+        version: link:../../foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -1964,6 +1536,9 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -2008,10 +1583,10 @@ importers:
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
-        version: link:../../core/doompi-telemetry
+        version: link:../../foundations/doompi-telemetry
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../core/doompi-ui
+        version: link:../../foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -2037,6 +1612,9 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -2076,44 +1654,531 @@ importers:
     optionalDependencies:
       '@agimon-ai/doompi-runner-rmux-darwin-arm64':
         specifier: workspace:*
-        version: link:../doompi-runner-rmux-darwin-arm64
+        version: link:../../utils/doompi-runner-rmux-darwin-arm64
       '@agimon-ai/doompi-runner-rmux-darwin-x64':
         specifier: workspace:*
-        version: link:../doompi-runner-rmux-darwin-x64
+        version: link:../../utils/doompi-runner-rmux-darwin-x64
       '@agimon-ai/doompi-runner-rmux-linux-arm64':
         specifier: workspace:*
-        version: link:../doompi-runner-rmux-linux-arm64
+        version: link:../../utils/doompi-runner-rmux-linux-arm64
       '@agimon-ai/doompi-runner-rmux-linux-x64':
         specifier: workspace:*
-        version: link:../doompi-runner-rmux-linux-x64
+        version: link:../../utils/doompi-runner-rmux-linux-x64
       '@agimon-ai/doompi-runner-rtk-darwin-arm64':
         specifier: workspace:*
-        version: link:../doompi-runner-rtk-darwin-arm64
+        version: link:../../utils/doompi-runner-rtk-darwin-arm64
       '@agimon-ai/doompi-runner-rtk-darwin-x64':
         specifier: workspace:*
-        version: link:../doompi-runner-rtk-darwin-x64
+        version: link:../../utils/doompi-runner-rtk-darwin-x64
       '@agimon-ai/doompi-runner-rtk-linux-arm64':
         specifier: workspace:*
-        version: link:../doompi-runner-rtk-linux-arm64
+        version: link:../../utils/doompi-runner-rtk-linux-arm64
       '@agimon-ai/doompi-runner-rtk-linux-x64':
         specifier: workspace:*
-        version: link:../doompi-runner-rtk-linux-x64
+        version: link:../../utils/doompi-runner-rtk-linux-x64
 
-  packages/default/doompi-runner-rmux-darwin-arm64: {}
+  packages/foundations/doompi-autostop:
+    dependencies:
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../../core/doompi-core
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+    devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/default/doompi-runner-rmux-darwin-x64: {}
+  packages/foundations/doompi-cache:
+    dependencies:
+      '@agimon-ai/doompi-config':
+        specifier: workspace:*
+        version: link:../doompi-config
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../doompi-minor-mode
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+      pi-cache-optimizer:
+        specifier: 2.8.7
+        version: 2.8.7(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))
+    devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/default/doompi-runner-rmux-linux-arm64: {}
+  packages/foundations/doompi-config:
+    dependencies:
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-telemetry':
+        specifier: workspace:*
+        version: link:../doompi-telemetry
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+      typebox:
+        specifier: 1.3.30
+        version: 1.3.30
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/default/doompi-runner-rmux-linux-x64: {}
+  packages/foundations/doompi-domain:
+    dependencies:
+      '@agimon-ai/doompi-config':
+        specifier: workspace:*
+        version: link:../doompi-config
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../doompi-minor-mode
+      '@agimon-ai/doompi-telemetry':
+        specifier: workspace:*
+        version: link:../doompi-telemetry
+      '@agimon-ai/doompi-ui':
+        specifier: workspace:*
+        version: link:../doompi-ui
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+      typebox:
+        specifier: 1.3.30
+        version: 1.3.30
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
+      '@agimon-ai/doompi-voice':
+        specifier: workspace:*
+        version: link:../../minor/doompi-voice
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-tui':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/default/doompi-runner-rtk-darwin-arm64: {}
+  packages/foundations/doompi-major-mode:
+    dependencies:
+      '@agimon-ai/doompi-config':
+        specifier: workspace:*
+        version: link:../doompi-config
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../doompi-minor-mode
+      '@agimon-ai/doompi-telemetry':
+        specifier: workspace:*
+        version: link:../doompi-telemetry
+      '@agimon-ai/doompi-ui':
+        specifier: workspace:*
+        version: link:../doompi-ui
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+      typebox:
+        specifier: 1.3.30
+        version: 1.3.30
+    devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
+      '@agimon-ai/doompi-voice':
+        specifier: workspace:*
+        version: link:../../minor/doompi-voice
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-tui':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/default/doompi-runner-rtk-darwin-x64: {}
+  packages/foundations/doompi-minor-mode:
+    dependencies:
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-telemetry':
+        specifier: workspace:*
+        version: link:../doompi-telemetry
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+      typebox:
+        specifier: 1.3.30
+        version: 1.3.30
+    devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-tui':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/default/doompi-runner-rtk-linux-arm64: {}
+  packages/foundations/doompi-notification:
+    dependencies:
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../../core/doompi-core
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+    devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
-  packages/default/doompi-runner-rtk-linux-x64: {}
+  packages/foundations/doompi-profile:
+    dependencies:
+      '@agimon-ai/doompi-config':
+        specifier: workspace:*
+        version: link:../doompi-config
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../doompi-minor-mode
+      '@agimon-ai/doompi-telemetry':
+        specifier: workspace:*
+        version: link:../doompi-telemetry
+      '@agimon-ai/doompi-ui':
+        specifier: workspace:*
+        version: link:../doompi-ui
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+      typebox:
+        specifier: 1.3.30
+        version: 1.3.30
+    devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
+      '@agimon-ai/doompi-voice':
+        specifier: workspace:*
+        version: link:../../minor/doompi-voice
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-tui':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/foundations/doompi-skill:
+    dependencies:
+      '@agimon-ai/doompi-config':
+        specifier: workspace:*
+        version: link:../doompi-config
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-domain':
+        specifier: workspace:*
+        version: link:../doompi-domain
+      '@agimon-ai/doompi-telemetry':
+        specifier: workspace:*
+        version: link:../doompi-telemetry
+      '@agimon-ai/doompi-ui':
+        specifier: workspace:*
+        version: link:../doompi-ui
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+      gpt-tokenizer:
+        specifier: 4.0.0
+        version: 4.0.0
+    devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-tui':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/foundations/doompi-telemetry:
+    dependencies:
+      '@agimon-ai/log-sink-mcp':
+        specifier: 0.29.25
+        version: 0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)
+      '@opentelemetry/api':
+        specifier: 1.9.1
+        version: 1.9.1
+    devDependencies:
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/foundations/doompi-ui:
+    dependencies:
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../../core/doompi-core
+      '@agimon-ai/doompi-hashline':
+        specifier: workspace:*
+        version: link:../../utils/doompi-hashline
+      '@agimon-ai/doompi-minor-mode':
+        specifier: workspace:*
+        version: link:../doompi-minor-mode
+      '@agimon-ai/doompi-telemetry':
+        specifier: workspace:*
+        version: link:../doompi-telemetry
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+      yaml:
+        specifier: 2.9.0
+        version: 2.9.0
+    devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
+      '@agimon-ai/doompi-web-components':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-components
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-tui':
+        specifier: 0.85.1
+        version: 0.85.1
+      '@tanstack/react-store':
+        specifier: 0.11.1
+        version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@types/react':
+        specifier: 19.3.0
+        version: 19.3.0
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      react:
+        specifier: 19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/minor/doompi-author:
     dependencies:
@@ -2122,7 +2187,7 @@ importers:
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
-        version: link:../../core/doompi-minor-mode
+        version: link:../../foundations/doompi-minor-mode
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -2151,6 +2216,9 @@ importers:
         specifier: 3.3.1
         version: 3.3.1
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:../../tooling/vibe-lint-plugin-doom-extension
@@ -2201,16 +2269,19 @@ importers:
     dependencies:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
-        version: link:../../core/doompi-config
+        version: link:../../foundations/doompi-config
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
-        version: link:../../core/doompi-minor-mode
+        version: link:../../foundations/doompi-minor-mode
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
+      '@agimon-ai/doompi-web-security':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-security
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -2218,6 +2289,9 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:../../tooling/vibe-lint-plugin-doom-extension
@@ -2262,10 +2336,10 @@ importers:
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
-        version: link:../../core/doompi-minor-mode
+        version: link:../../foundations/doompi-minor-mode
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../core/doompi-ui
+        version: link:../../foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -2273,6 +2347,9 @@ importers:
         specifier: 4.0.2
         version: 4.0.2
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -2320,11 +2397,14 @@ importers:
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
-        version: link:../../core/doompi-minor-mode
+        version: link:../../foundations/doompi-minor-mode
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@agimon-ai/vibe-lint-plugin-doom-extension':
         specifier: workspace:*
         version: link:../../tooling/vibe-lint-plugin-doom-extension
@@ -2354,10 +2434,10 @@ importers:
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
-        version: link:../../core/doompi-minor-mode
+        version: link:../../foundations/doompi-minor-mode
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../core/doompi-ui
+        version: link:../../foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -2365,6 +2445,9 @@ importers:
         specifier: 4.0.2
         version: 4.0.2
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -2403,16 +2486,16 @@ importers:
     dependencies:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
-        version: link:../../core/doompi-config
+        version: link:../../foundations/doompi-config
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
-        version: link:../../core/doompi-minor-mode
+        version: link:../../foundations/doompi-minor-mode
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
-        version: link:../../core/doompi-telemetry
+        version: link:../../foundations/doompi-telemetry
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -2429,6 +2512,9 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -2467,19 +2553,19 @@ importers:
     dependencies:
       '@agimon-ai/doompi-config':
         specifier: workspace:*
-        version: link:../../core/doompi-config
+        version: link:../../foundations/doompi-config
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
-        version: link:../../core/doompi-minor-mode
+        version: link:../../foundations/doompi-minor-mode
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
-        version: link:../../core/doompi-telemetry
+        version: link:../../foundations/doompi-telemetry
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../core/doompi-ui
+        version: link:../../foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -2502,6 +2588,9 @@ importers:
         specifier: 5.32.6
         version: 5.32.6
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -2543,13 +2632,13 @@ importers:
         version: link:../../core/doompi-core
       '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
-        version: link:../../core/doompi-minor-mode
+        version: link:../../foundations/doompi-minor-mode
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
-        version: link:../../core/doompi-telemetry
+        version: link:../../foundations/doompi-telemetry
       '@agimon-ai/doompi-ui':
         specifier: workspace:*
-        version: link:../../core/doompi-ui
+        version: link:../../foundations/doompi-ui
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
@@ -2575,6 +2664,9 @@ importers:
         specifier: 4.6.2
         version: 4.6.2
     devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
         version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
@@ -2661,6 +2753,9 @@ importers:
 
   packages/tooling/vibe-lint-plugin-doom-extension:
     dependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -2683,6 +2778,9 @@ importers:
 
   packages/tooling/vibe-lint-plugin-doom-web:
     dependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -2702,6 +2800,40 @@ importers:
       vitest:
         specifier: 5.0.0
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/utils/doompi-hashline:
+    devDependencies:
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
+  packages/utils/doompi-runner-rmux-darwin-arm64: {}
+
+  packages/utils/doompi-runner-rmux-darwin-x64: {}
+
+  packages/utils/doompi-runner-rmux-linux-arm64: {}
+
+  packages/utils/doompi-runner-rmux-linux-x64: {}
+
+  packages/utils/doompi-runner-rtk-darwin-arm64: {}
+
+  packages/utils/doompi-runner-rtk-darwin-x64: {}
+
+  packages/utils/doompi-runner-rtk-linux-arm64: {}
+
+  packages/utils/doompi-runner-rtk-linux-x64: {}
 
 packages:
 
@@ -2734,8 +2866,20 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
+  '@agimon-ai/foundation-port-registry@0.29.26':
+    resolution: {integrity: sha512-j847t/83vPpZhEPKRyLJcOTtdhbWf5ooNSCDJzlg1N8Ty7AxTU3qjj6HxWm3K33ysQGrD2oQbF8snaWoq7kljg==}
+    hasBin: true
+    peerDependencies:
+      zod: ^4.4.3
+
   '@agimon-ai/foundation-process-registry@0.29.25':
     resolution: {integrity: sha512-ZSeykN7vYkJ9CG15sCwq8GovJXx5zaIQIJ/vGB089Vxw28nLKKX95Jd7VHIkOMGFIBY96XwUzGKyix+53IsPlQ==}
+    hasBin: true
+    peerDependencies:
+      zod: ^4.4.3
+
+  '@agimon-ai/foundation-process-registry@0.29.26':
+    resolution: {integrity: sha512-K/NfIFqu665cVsMOXeqX+vTJfjR9MrDliU0hiql48T4UmeUxM+oFZTo7Dtv5SYh9FJVxCbK8RiZvoElFY/LXIg==}
     hasBin: true
     peerDependencies:
       zod: ^4.4.3
@@ -2745,8 +2889,23 @@ packages:
     peerDependencies:
       zod: ^4.4.3
 
+  '@agimon-ai/foundation-validator@0.26.26':
+    resolution: {integrity: sha512-iRduBb/1C1B+tg6eEaBbo7KWSkLVrmBvITENJYh8ZjtyhnS+YKVKD0D7G/IFonk/+25arng++gl6qw8GAhp5ZA==}
+    peerDependencies:
+      zod: ^4.4.3
+
   '@agimon-ai/log-sink-mcp@0.29.25':
     resolution: {integrity: sha512-usWTFEtmbc6pFtF/uKYs3oFEt0rnlMi04a7e1Yq/bonpe6nfs4Bc8cxq6e93XlOmRc+4BZylF4Ju0Z8cfA0n4g==}
+    hasBin: true
+    peerDependencies:
+      '@earendil-works/pi-coding-agent': '*'
+      zod: ^4.4.3
+    peerDependenciesMeta:
+      '@earendil-works/pi-coding-agent':
+        optional: true
+
+  '@agimon-ai/log-sink-mcp@0.29.26':
+    resolution: {integrity: sha512-QLaA5wRQRMYFsS6imCpJYkQr8tgjJublnj0MyUlMcyeWDT3ieVlhL+4eC7s2qtu5Lp3wLhkLcJE9HCkEYvKttQ==}
     hasBin: true
     peerDependencies:
       '@earendil-works/pi-coding-agent': '*'
@@ -10968,6 +11127,11 @@ snapshots:
       '@tursodatabase/database': 0.7.2
       zod: 4.6.2
 
+  '@agimon-ai/foundation-port-registry@0.29.26(zod@4.6.2)':
+    dependencies:
+      '@tursodatabase/database': 0.7.2
+      zod: 4.6.2
+
   '@agimon-ai/foundation-process-registry@0.29.25(zod@4.4.3)':
     dependencies:
       '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.4.3)
@@ -10980,11 +11144,21 @@ snapshots:
       '@tursodatabase/database': 0.7.2
       zod: 4.6.2
 
+  '@agimon-ai/foundation-process-registry@0.29.26(zod@4.6.2)':
+    dependencies:
+      '@agimon-ai/foundation-port-registry': 0.29.26(zod@4.6.2)
+      '@tursodatabase/database': 0.7.2
+      zod: 4.6.2
+
   '@agimon-ai/foundation-validator@0.26.25(zod@4.4.3)':
     dependencies:
       zod: 4.4.3
 
   '@agimon-ai/foundation-validator@0.26.25(zod@4.6.2)':
+    dependencies:
+      zod: 4.6.2
+
+  '@agimon-ai/foundation-validator@0.26.26(zod@4.6.2)':
     dependencies:
       zod: 4.6.2
 
@@ -11119,6 +11293,69 @@ snapshots:
       '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.6.2)
       '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.6.2)
       '@agimon-ai/foundation-validator': 0.26.25(zod@4.6.2)
+      '@hono/node-server': 2.0.10(hono@4.12.34)
+      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.6.2)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.2)
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/api-logs': 0.219.0
+      '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/exporter-trace-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-transformer': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.8.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-logs': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-node': 2.8.0(@opentelemetry/api@1.9.1)
+      chalk: 5.6.2
+      commander: 14.0.3
+      drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
+      hono: 4.12.34
+      hono-rate-limiter: 0.5.3(hono@4.12.34)
+      inversify: 8.1.0(reflect-metadata@0.2.2)
+      reflect-metadata: 0.2.2
+      ruvector-onnx-embeddings-wasm: 0.1.2
+      sqlite-vec: 0.1.9
+      ulidx: 2.4.1
+      yaml: 2.8.3
+      zod: 4.6.2
+    optionalDependencies:
+      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@cfworker/json-schema'
+      - '@cloudflare/workers-types'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@neondatabase/serverless'
+      - '@op-engineering/op-sqlite'
+      - '@planetscale/database'
+      - '@prisma/client'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/sql.js'
+      - '@upstash/redis'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - better-sqlite3
+      - bun-types
+      - expo-sqlite
+      - gel
+      - knex
+      - kysely
+      - mysql2
+      - pg
+      - postgres
+      - prisma
+      - sql.js
+      - sqlite3
+      - supports-color
+      - unstorage
+
+  '@agimon-ai/log-sink-mcp@0.29.26(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)':
+    dependencies:
+      '@agimon-ai/foundation-port-registry': 0.29.26(zod@4.6.2)
+      '@agimon-ai/foundation-process-registry': 0.29.26(zod@4.6.2)
+      '@agimon-ai/foundation-validator': 0.26.26(zod@4.6.2)
       '@hono/node-server': 2.0.10(hono@4.12.34)
       '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.6.2)
       '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.2)

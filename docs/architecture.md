@@ -52,14 +52,17 @@ The server bundle records the built server facet for each selected package, its 
 
 ## Configuration and package boundaries
 
-| Location             | Responsibility                                                                                      |
-| -------------------- | --------------------------------------------------------------------------------------------------- |
-| `packages/core/*`    | Runtime foundations, shared contracts, the DoomPi distribution host, and kernel/server composition. |
-| `packages/default/*` | Default distribution features selected through configuration.                                       |
-| `packages/minor/*`   | Optional modes selected through configuration.                                                      |
-| `packages/clients/*` | Standalone presentation clients, currently the web presentation server and desktop shell.           |
-| `layers/<layer>/*`   | Selectable higher-level extensions.                                                                 |
-| `packages/tooling/*` | Repository-owned development tools that are not part of the runtime package graph.                  |
+| Location                 | Responsibility                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| `packages/cli/*`         | The published DoomPi distribution host: CLI, interactive host, and headless server runtime. |
+| `packages/core/*`        | Shared contracts and libraries with no extension entry points of their own.                 |
+| `packages/foundations/*` | Fixed extension packages every composition activates, never selected on their own.          |
+| `packages/default/*`     | Default distribution features selected through configuration.                               |
+| `packages/minor/*`       | Optional modes selected through configuration.                                              |
+| `packages/clients/*`     | Standalone presentation clients, currently the web presentation server and desktop shell.   |
+| `packages/utils/*`       | Shared utilities and prebuilt native payloads that are never selected on their own.         |
+| `layers/<layer>/*`       | Selectable higher-level extensions.                                                         |
+| `packages/tooling/*`     | Repository-owned development tools that are not part of the runtime package graph.          |
 
 The published `@agimon-ai/doompi` package owns the CLI, interactive host, headless server runtime, and their fixed core dependency set. There is no standalone server package under `packages/clients`; the server entry is built and published by `@agimon-ai/doompi`. Selectable packages remain outside that private dependency closure. This keeps the distribution hosts stable while allowing a repository to choose its features.
 
@@ -79,11 +82,35 @@ owning package links its prompts from `llms.txt` and registers their descriptors
 through the shared Help service. Package-root `skills/**` remains available for
 skills that Pi discovers and executes directly.
 
+### Resource kinds and what they cost
+
+A `DoomHeadlessResource` declares a `kind`, and the choice decides what the model
+is billed for on every turn.
+
+| kind      | cost                                     | what reaches the model                                                        | use for                                              |
+| --------- | ---------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `context` | eager, full text, **every prompt build** | the text verbatim                                                             | small live session state that exists nowhere on disk |
+| `skill`   | ~40 tokens                               | name, description and path; the agent reads the file when it matches the task | every file the package ships                         |
+| `prompt`  | none until invoked                       | nothing                                                                       | `/`-invoked templates                                |
+
+The rule in one line: **if it is a file the package ships, it is a `skill`.** A
+README registered as `context` costs its full length on every single turn, and
+`read()` re-runs from disk each time.
+
+A `context` resource that must carry a shipped file anyway, such as a Help catalog
+index, needs a `when` clause so it stays out of the default prompt. The
+`doom-resource-kind` lint rule enforces both halves.
+
+Resolve shipped files with `packageResourcePath` / `readPackageResource` from
+`@agimon-ai/doompi-core/server-facet`. They anchor on the nearest ancestor
+`package.json`, which is the only sentinel correct from `src/` and `dist/` alike;
+a hand-counted `new URL('../../..', import.meta.url)` resolves into `dist/` at
+runtime and silently substitutes placeholder prose into the system prompt.
 Selectable packages resolve from the consumer repository through normal `node_modules` lookup or Pi's project-local `.pi/npm` store. Fixed host entries may fall back to the root package dependency closure. When a required bare package is missing, DoomPi asks Pi to resolve `npm:<package-name>` and reuses the installed result. Optional packages and local paths are not installed automatically.
 
 ### Cockpit plugin source
 
-A package's browser plugin keeps `src/extensions/web.ts` as its composition entry and groups implementation by responsibility: `lib/` for pure calculations, `api/` for browser transports, `stores/` for reactive state and channel reducers, `hooks/` for React subscriptions and effects, and `components/` for rendering. Imports point inward in that order. Shared wire contracts stay in `src/types/`, while server controllers stay outside the browser tree. Omit empty folders and keep state-specific types beside the store that owns them.
+A package's browser plugin is generated from named routes under `src/extensions/**/(frontend)`. Tabs, channels, settings, fills, actions, stores, lifecycle hooks, and other presentation surfaces each directly default-export one typed `define*` declaration. Browser implementation lives in private `_components` or `_lib` folders beside its route, and a `_folder` higher up the `(frontend)` tree when several routes share it. There is no `src/web` root in an extension package. Shared wire contracts stay in `src/types`. Browser code never imports backend routes.
 
 ## Runtime ownership
 
@@ -184,13 +211,15 @@ Data crossing a child boundary uses explicit request, projection, and intercom c
 
 ## Contributor contract
 
-A standard feature declares one or more direct entries: `definePiExtension` for interactive Pi, `defineServerPlugin` for headless server scopes, and `defineWebPlugin` for presentation. A package advertises its built server facet and explicit `global`, `workspace`, or `session` scopes through `package.json` `doompiServer`. Packages with public typed methods also publish their generated API-contract entry there.
+A standard feature declares contributions through the routed tree described in [Extension layout](extension-layout.md). `root.cli.ts` and `root.server.ts` construct scope-owned state, services, startup work, and lifecycle. Named route files own individual tools, commands, hooks, APIs, channels, methods, providers, resources, shortcuts, and frontend contributions. The build generates `definePiExtension`, `defineServerPlugin`, and `defineWebPlugin` host entries outside `src`.
 
-Pi and server helpers own Cordis initialization, registration, readiness, rollback, and disposal. Server facets must use the object plugin form so their dependencies and completion belong to one observable fiber. Typed per-scope factories may be async. Optional `onStart`, `onStop`, and `onDispose` hooks cover external work and final resources.
+Every scanned route directly default-exports exactly one typed `define*` declaration. It has no named exports or freeform implementation. `extra.*`, `src/tools`, `src/controllers`, and pseudo-surfaces such as `hook-optional` or `resource-catalog` are forbidden. Non-default cardinality is declared through `defineRoutedContribution(..., { cardinality: 'optional' | 'many' | 'collection' })` on the standard surface.
 
-Headless tools, commands, resources, hooks, restrictions, and activities register through the session host and are activated by the kernel. Dynamic Pi catalogs continue to use typed `snapshot()` and `subscribe(listener)` collections. Importing a public contract must not activate its provider.
+Pi and server helpers own Cordis initialization, registration, readiness, rollback, and disposal. Roots may be asynchronous when they must resolve discovery before routes read root-owned values. Optional `onStart`, `onStop`, and `onDispose` hooks cover external work and final resources. See [Extension lifecycles](lifecycles.md) for mount stages and failure policy.
 
-Reusable public APIs live in flat `src/exports` forwarding files. Tsdown builds those, direct extension entries, server facets, and API-contract entries separately. Services own logic and IO, models own mutable state, controllers own request handling, and tools consume services or models. Shared schemas, types, and constants remain in their named folders. Do not add adapters, containers, commands, or providers roots.
+Headless tools, commands, resources, hooks, restrictions, and activities register through the session host and are activated by the kernel. Dynamic Pi catalogs use typed `snapshot()` and `subscribe(listener)` collections without being converted to static arrays. Importing a public contract must not activate its provider.
+
+Reusable public APIs live in flat `src/exports` forwarding files. Services own host-neutral logic and IO, models own mutable state, and private route modules own surface-specific implementation. Shared schemas, types, and constants remain in their named folders.
 
 The DoomPi package bootstrap is interactive host infrastructure. It claims a synchronized load before awaiting and stays inert outside a synchronized repository. Headless startup instead enters through the server builder and admits only validated synchronized server bundles.
 
@@ -214,19 +243,19 @@ The following system invariants apply across packages:
 
 | Responsibility             | Entry points                                                                                              |
 | -------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Canonical composition      | [`extensionAssembler.ts`](../packages/core/doompi/src/builders/cli/extensionAssembler/index.ts)           |
-| Interactive launcher       | [`launchPlan.ts`](../packages/core/doompi/src/builders/cli/launchPlan/index.ts)                           |
-| Interactive runtime bundle | [`runtimeBundle.ts`](../packages/core/doompi/src/builders/cli/runtimeBundle/index.ts)                     |
-| Synchronized state         | [`syncState.ts`](../packages/core/doompi/src/composition/syncState/index.ts)                              |
-| Artifact validation        | [`bootstrapLocator.ts`](../packages/core/doompi/src/builders/cli/bootstrapLocator/index.ts)               |
-| Package bootstrap          | [`pi.ts`](../packages/core/doompi/src/extensions/pi.ts)                                                   |
-| Server runtime             | [`runtime.ts`](../packages/core/doompi/src/builders/server/runtime.ts)                                    |
-| Server bundle build        | [`server/index.ts`](../packages/core/doompi/src/builders/server/index.ts)                                 |
+| Canonical composition      | [`extensionAssembler.ts`](../packages/cli/doompi/src/builders/cli/extensionAssembler/index.ts)            |
+| Interactive launcher       | [`launchPlan.ts`](../packages/cli/doompi/src/builders/cli/launchPlan/index.ts)                            |
+| Interactive runtime bundle | [`runtimeBundle.ts`](../packages/cli/doompi/src/builders/cli/runtimeBundle/index.ts)                      |
+| Synchronized state         | [`syncState.ts`](../packages/cli/doompi/src/composition/syncState/index.ts)                               |
+| Artifact validation        | [`bootstrapLocator.ts`](../packages/cli/doompi/src/builders/cli/bootstrapLocator/index.ts)                |
+| Package bootstrap          | [`pi.ts`](../packages/cli/doompi/src/extensions/pi.ts)                                                    |
+| Server runtime             | [`runtime.ts`](../packages/cli/doompi/src/builders/server/runtime.ts)                                     |
+| Server bundle build        | [`server/index.ts`](../packages/cli/doompi/src/builders/server/index.ts)                                  |
 | Server facet lifecycle     | [`serverFacetLoader.ts`](../packages/core/doompi-core/src/server/serverFacetLoader.ts)                    |
 | Headless session host      | [`headlessSessionHost.ts`](../packages/core/doompi-core/src/systems/main/adapters/headlessSessionHost.ts) |
 | Headless kernel            | [`kernel/index.ts`](../packages/core/doompi-core/src/services/kernel/index.ts)                            |
 | Client-neutral protocol    | [`headlessServer.ts`](../packages/core/doompi-core/src/server/headlessServer.ts)                          |
 | Package API hosting        | [`packageApiServer.ts`](../packages/core/doompi-core/src/server/packageApiServer.ts)                      |
 | Transition classification  | [`transitionClassifier.ts`](../packages/core/doompi-core/src/services/transitionClassifier/index.ts)      |
-| Pi transition entry        | [`transitionCoordinator.ts`](../packages/core/doompi/src/extensions/transitionCoordinator.ts)             |
+| Pi transition entry        | [`transitionCoordinator.ts`](../packages/cli/doompi/src/extensions/transitionCoordinator.ts)              |
 | Cordis host lifecycle      | [`cordisHost.ts`](../packages/core/doompi-core/src/pi/cordisHost.ts)                                      |

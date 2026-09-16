@@ -4,13 +4,13 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { sessionVoiceOwnership } from '../src/services/sessionVoiceOwnership';
 import {
   TRANSFER_VOICE_TOOL_NAME,
   createTransferVoiceToolLifecycle,
   transferVoiceToolRestriction,
   transferVoiceToolVisible,
-} from '../src/controllers/transferVoiceTool';
-import { sessionVoiceOwnership } from '../src/services/sessionVoiceOwnership';
+} from '../src/services/transferVoiceTool';
 import { VOICE_OWNERSHIP_PROTOCOL_VERSION, type VoiceOwnershipCommand } from '../src/types/voiceOwnership';
 
 function surfaceFixture() {

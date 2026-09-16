@@ -41,10 +41,13 @@ follows automatically.
 
 DoomPi is a monorepo with deliberate package boundaries:
 
-- Runtime foundations live under `packages/core/*`.
+- The distribution host lives under `packages/cli/*`.
+- Shared contracts and libraries live under `packages/core/*`.
+- Fixed extension packages live under `packages/foundations/*`.
 - Default distribution features live under `packages/default/*`.
 - Optional modes live under `packages/minor/*`.
 - Standalone client-facing processes live under `packages/clients/*`.
+- Shared utilities and prebuilt native payloads live under `packages/utils/*`.
 - Selectable extensions live under `layers/<layer>/*`.
 - Repository-owned development tools live under `packages/tooling/*`.
 

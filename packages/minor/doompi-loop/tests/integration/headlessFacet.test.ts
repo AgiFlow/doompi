@@ -19,7 +19,8 @@ import type { DoomHeadlessMinorMode } from '@agimon-ai/doompi-minor-mode';
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it, vi } from 'vitest';
 
-import { loopServerFacet } from '../../src/extensions/server';
+import { facet as loopServerFacet } from '../../generated/server';
+import { LOOP_VIEW_STATUS_KEY, parseLoopStatusView } from '../../src/types/loopView';
 
 async function fixture(autoStart = false) {
   let stopStartedActivity: (() => void | Promise<void>) | undefined;
@@ -175,7 +176,38 @@ describe('loop headless facet', () => {
     await stopActivity();
     await test.close?.();
   });
+
+  it('publishes the instance list the activity dock reads, and a launcher row before loop mode is on', async () => {
+    // A cockpit drives this facet and never the Pi runtime, so this is the only
+    // thing that can fill the dock's loops group.
+    const test = await fixture();
+    const start = test.commands.find(({ name }) => name === 'loop');
+    const startHook = test.hooks.find(({ event }) => event === 'session_start') as
+      | DoomHeadlessHook<'session_start'>
+      | undefined;
+    if (!start || !startHook) throw new Error('Loop command or session_start hook was not registered');
+
+    // Ungated: the group is a way in, so it exists before loop mode is selected.
+    expect(startHook.when).toBeUndefined();
+    await startHook.handle({}, test.execution);
+    expect(lastLoopView(test.execution.client)).toBeUndefined();
+
+    const stopActivity = await test.activity.start(test.execution);
+    await start.execute('', test.execution);
+    expect(parseLoopStatusView(lastLoopView(test.execution.client))).toHaveLength(1);
+
+    await stopActivity();
+    expect(lastLoopView(test.execution.client)).toBeUndefined();
+    await test.close?.();
+  });
 });
+
+/** The last instance list this facet published for the activity dock. */
+function lastLoopView(client: DoomHeadlessExecutionContext['client']): string | undefined {
+  const calls = vi.mocked(client.setStatus).mock.calls.filter(([key]) => key === LOOP_VIEW_STATUS_KEY);
+  if (calls.length === 0) throw new Error(`The facet never published ${LOOP_VIEW_STATUS_KEY}`);
+  return calls[calls.length - 1]?.[1];
+}
 
 async function mountFacet(
   facet: DoomServerFacet,

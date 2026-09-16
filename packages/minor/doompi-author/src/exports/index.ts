@@ -1,4 +1,4 @@
-export { createAuthorTools } from '../tools/authorTools';
+export { createAuthorTools } from '../services/authorTools';
 export {
   DescribeAuthorToolsInputSchema,
   parseDescribeAuthorToolsInput,
@@ -17,7 +17,7 @@ export type { AuthorBridgeState, AuthorBridgeStateOptions } from '../models/auth
 export { authorMinorMode } from '../models/authorMode';
 export { createAuthorCatalogMonitor, authorToolRestriction } from '../services/authorCatalog/monitor';
 export type { AuthorCatalogMonitor, AuthorModeMonitorClock } from '../services/authorCatalog/monitor';
-export { createAuthorCommand } from '../controllers/doomAuthorCommand';
+export { createAuthorCommand } from '../services/authorCommand';
 export * from '../services/structuredDocuments';
 export { AUTHOR_MODE_ID } from '../types/author';
 export type * from '../types/author';

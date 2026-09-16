@@ -56,13 +56,21 @@ function sameSelection(left: DoomHeadlessSelection, right: DoomHeadlessSelection
   );
 }
 
-/** Maps one typed headless resource to the exact skill shape installed in AgentHarness. */
+/**
+ * Maps one typed headless resource to the exact skill shape installed in AgentHarness.
+ *
+ * Prefers the resource's own `description` and `path`. The fallbacks below are what
+ * every skill used to get, and they are only good enough for explicit invocation,
+ * which matches on name: `doom-headless://` is not a path any tool can open, and
+ * "Headless skill from <source>" gives the model nothing to select on. A skill is
+ * only advertised in the prompt once it carries a real path.
+ */
 export function headlessHarnessSkill(resource: ResolvedHeadlessResource) {
   return {
     name: resource.name,
-    description: `Headless skill from ${resource.source}`,
+    description: resource.description ?? `Headless skill from ${resource.source}`,
     content: resource.text,
-    filePath: `doom-headless://${resource.source}/${resource.name}`,
+    filePath: resource.path ?? `doom-headless://${resource.source}/${resource.name}`,
   };
 }
 
@@ -195,6 +203,19 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
     return this.resolvedResources;
   }
 
+  /**
+   * Every tool name this composition's eligible owners declare, including the
+   * ones a condition or a restriction currently gates out.
+   *
+   * `appliedTools` answers what runs now. A merge that places another surface's
+   * tools beside these needs what is spoken for, so a name a facet deliberately
+   * withheld is not handed to an unreconciled surface instead. Owner
+   * eligibility stays the outer gate: a package the selection excluded declares
+   * nothing here.
+   */
+  get declaredToolNames(): ReadonlySet<string> {
+    return new Set(this.kernel.activeValues<Owned<DoomHeadlessTool>>('tools').map((entry) => entry.value.name));
+  }
   getContextInventory(
     selection: DoomHeadlessSelection = this.applied,
     countTokens?: CountTokens,
@@ -550,14 +571,21 @@ export class HeadlessHost extends Service<DoomHeadlessHostService> implements Do
       try {
         value = await resource.value.read(context);
       } catch (error) {
-        throw new Error(`Could not read headless resource '${resource.source}/${resource.value.name}'`, {
-          cause: error,
-        });
+        // Report and skip, never rethrow. This runs on every prompt build, and a
+        // throw here reaches the systemPrompt callback, sets promptPreparationFailed
+        // and denies every model request for the rest of the session. One package
+        // missing one shipped file must not take the session down with it.
+        this.options.onError?.(
+          new Error(`Could not read headless resource '${resource.source}/${resource.value.name}'`, { cause: error }),
+        );
+        continue;
       }
       result.push({
         source: resource.source,
         name: resource.value.name,
         kind: resource.value.kind,
+        ...(resource.value.description === undefined ? {} : { description: resource.value.description }),
+        ...(resource.value.path === undefined ? {} : { path: resource.value.path }),
         text: value,
       });
     }

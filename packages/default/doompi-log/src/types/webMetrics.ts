@@ -1,8 +1,8 @@
 /**
  * The metrics API, shared by this package's hub-scoped route and its cockpit
  * plugin. The two halves run in different processes, so the wire vocabulary is
- * declared here: `src/web` may reach `src/types` and nothing else on the node
- * side.
+ * declared here: the `(frontend)` half may reach `src/types` and nothing else
+ * on the node side.
  *
  * The shapes are narrower than log-sink-mcp's own report, which carries filter
  * echoes, span counts and token distributions the page never draws.
@@ -14,7 +14,14 @@
  * carry an invocation count with no error field.
  */
 
-/** The segment this package's API is mounted under, below /api/plugin. */
+/**
+ * The segment this package's API is mounted under.
+ *
+ * Read by the hub's `DoomApi`, which still declares its own base path. The
+ * browser does not read it: the generated client is handed the same segment by
+ * the build, off the `api/log/` folder that creates the mount, so no URL is
+ * spelled twice.
+ */
 export const LOG_API_BASE_PATH = 'log';
 
 /**
@@ -90,7 +97,7 @@ export interface MetricsTool {
 }
 
 /** Which transport answered, so the page can say where its numbers came from. */
-export type MetricsTransport = 'http' | 'cli';
+export type MetricsTransport = 'http' | 'worker';
 
 export interface MetricsTotals {
   /**
@@ -225,21 +232,3 @@ export const ISSUE_SAMPLE_LIMIT = 50;
 
 /** How many tool rows the report ranks, so a failing tool has a denominator. */
 export const METRICS_TOOL_LIMIT = 15;
-
-/** The absolute URL the page reads the issue detail from. */
-export function issuesUrl(focus?: string): string {
-  const search = new URLSearchParams();
-  if (focus !== undefined && focus !== '') search.set(METRICS_QUERY_PARAMS.focus, focus);
-  const query = search.toString();
-  return `/api/plugins/${LOG_API_BASE_PATH}/issues${query === '' ? '' : `?${query}`}`;
-}
-
-/** The absolute URL the page reads one report from; `focus` narrows it to one group. */
-export function metricsUrl(dimension: MetricsDimension, period: MetricsPeriod, focus?: string): string {
-  const search = new URLSearchParams({
-    [METRICS_QUERY_PARAMS.dimension]: dimension,
-    [METRICS_QUERY_PARAMS.period]: period,
-  });
-  if (focus !== undefined && focus !== '') search.set(METRICS_QUERY_PARAMS.focus, focus);
-  return `/api/plugins/${LOG_API_BASE_PATH}/metrics?${search.toString()}`;
-}

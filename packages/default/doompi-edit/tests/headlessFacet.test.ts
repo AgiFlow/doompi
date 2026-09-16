@@ -14,7 +14,7 @@ import { computeFileTag } from '@agimon-ai/doompi-hashline/files';
 import { Context } from '@deepseek-ai/cordis';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { editServerFacet } from '../src/extensions/server';
+import { facet } from '../generated/server';
 
 let directory: string;
 
@@ -46,7 +46,7 @@ describe('edit server facet', () => {
       return { dispose };
     });
     const host = { registerTool } as unknown as DoomHeadlessHostService;
-    const cleanup = await editServerFacet.apply(contextFor(host));
+    const cleanup = await facet.apply(contextFor(host));
 
     expect(registerTool).toHaveBeenCalledOnce();
     expect(tool?.name).toBe('edit');

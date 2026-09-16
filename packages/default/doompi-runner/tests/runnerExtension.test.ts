@@ -9,8 +9,8 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { extension as runnerExtension } from '../generated/pi';
 import type { BashToolDependencies } from '../src/exports/bashTool';
-import { runnerExtension } from '../src/extensions/pi';
 import type { RunnerCompactionDependencies } from '../src/services/compaction';
 import type { RunnerSpaceOptions } from '../src/tui/runnerSpace';
 import type { BashRunResult } from '../src/types/bashRunService';
@@ -65,7 +65,7 @@ vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
 vi.mock('../src/services/runnerDependencies', () => ({
   createRunnerDependencies: () => extensionMocks.container(),
 }));
-vi.mock('../src/tools/bashTool', () => ({
+vi.mock('../src/services/bashTool', () => ({
   createBashTool: extensionMocks.createBashTool,
 }));
 vi.mock('../src/services/compaction', async (importOriginal) => ({
@@ -123,13 +123,16 @@ async function createHarness(options: { activate?: boolean } = {}) {
   const notify = vi.fn();
   let commandHandler: PiCommandHandler = async () => undefined;
   let registryListener: (() => void) | undefined;
+  const registryUnsubscribes: ReturnType<typeof vi.fn>[] = [];
   let activeRecords: RunnerRecord[] = [runningRecord];
   let persistedRecord: RunnerRecord | undefined = runningRecord;
   const sweepHistoryAsync = vi.fn(async () => ({ removed: [], errors: [] }));
   const registry = {
-    subscribe: vi.fn((listener: () => void) => {
+    subscribe: vi.fn((listener: () => void, _sessionId: string) => {
       registryListener = listener;
-      return vi.fn();
+      const unsubscribe = vi.fn();
+      registryUnsubscribes.push(unsubscribe);
+      return unsubscribe;
     }),
     list: vi.fn(async () => activeRecords),
     listAcrossRepositories: vi.fn(async () => []),
@@ -211,6 +214,7 @@ async function createHarness(options: { activate?: boolean } = {}) {
     },
     command: () => commandHandler,
     registryListener: () => registryListener?.(),
+    registryUnsubscribes,
     bashDependencies: () => extensionMocks.createBashTool.mock.calls.at(-1)?.[0] as BashToolDependencies,
     compactionDependencies: () =>
       extensionMocks.registerCompaction.mock.calls.at(-1)?.[1] as RunnerCompactionDependencies,
@@ -711,7 +715,7 @@ describe('runnerExtension refresh', () => {
     const firstStart = harness.handlers.get('session_start')?.({}, harness.context);
     expect(firstStart).toBeUndefined();
     await flushPromises();
-
+    expect(harness.registry.subscribe).toHaveBeenLastCalledWith(expect.any(Function), 'session-a');
     const nextSetStatus = vi.fn();
     const nextContext = {
       ...harness.context,
@@ -720,8 +724,10 @@ describe('runnerExtension refresh', () => {
     };
     const nextStart = harness.handlers.get('session_start')?.({}, nextContext);
     expect(nextStart).toBeUndefined();
+    expect(harness.registryUnsubscribes[0]).toHaveBeenCalledOnce();
     resolveHistory?.([runningRecord]);
     await expect(harness.bashDependencies().getSessionId()).resolves.toBe('session-b');
+    expect(harness.registry.subscribe).toHaveBeenLastCalledWith(expect.any(Function), 'session-b');
 
     expect(harness.paths.setSessionId).toHaveBeenLastCalledWith('session-b');
     expect(harness.lifeline.arm).toHaveBeenLastCalledWith('session-b');

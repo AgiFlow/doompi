@@ -13,7 +13,7 @@ describe('owned HTTP package authoring', () => {
   it('uses server facets without doompiApi manifest declarations', () => {
     const repositoryRoot = new URL('../../../../../', import.meta.url);
     const packages = [
-      'packages/core/doompi',
+      'packages/cli/doompi',
       ...['file-edit', 'log', 'mcp', 'prompt', 'runner'].map((name) => `packages/default/doompi-${name}`),
       ...['author', 'computer-use', 'plan', 'voice', 'workflow'].map((name) => `packages/minor/doompi-${name}`),
       'layers/source-control/doompi-git',
@@ -23,7 +23,7 @@ describe('owned HTTP package authoring', () => {
       const manifest = JSON.parse(fs.readFileSync(new URL(`${directory}/package.json`, repositoryRoot), 'utf8'));
       expect(manifest.doompiApi, directory).toBeUndefined();
       expect(manifest.doompiServer, directory).toMatchObject({
-        entry: './src/extensions/server.ts',
+        entry: directory === 'packages/cli/doompi' ? './src/extensions/server.ts' : './generated/server.ts',
         dist: './dist/extensions/server.mjs',
       });
     }

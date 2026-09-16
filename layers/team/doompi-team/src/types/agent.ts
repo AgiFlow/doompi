@@ -30,6 +30,13 @@ export type AgentSource = 'plugin' | 'user' | 'project';
 /** Whether a child starts from a clean context or forks the parent's. */
 export type AgentDefaultContext = 'fresh' | 'fork';
 
+/** One subagent launch asked for from the catalog. */
+export interface AgentLaunchRequest {
+  agent: string;
+  task: string;
+  context: AgentDefaultContext;
+}
+
 export type AgentMemoryScope = 'project' | 'user';
 
 export interface AgentMemoryConfig {
@@ -206,6 +213,31 @@ export interface AgentDiscoveryResult {
  * the completion path must be able to ask on every keystroke without paying for
  * a directory walk, and management actions must be able to invalidate.
  */
+export interface ProjectedResource {
+  name: string;
+  detail?: string;
+}
+
+export interface ResourceTabProjection {
+  effective: readonly ProjectedResource[];
+  removed: readonly ProjectedResource[];
+  unresolved: readonly ProjectedResource[];
+}
+
+export interface AgentResourceProjection {
+  tools: ResourceTabProjection;
+  skills: ResourceTabProjection;
+  extensions: ResourceTabProjection;
+  notice: string;
+  configuredOnly: boolean;
+  error?: string;
+}
+
+export interface AgentCatalogEntry {
+  agent: AgentConfig;
+  resources: AgentResourceProjection;
+}
+
 export type AgentDiscoveryContract = {
   /** Agents visible from `cwd` for the given scope, cached. */
   discover(cwd: string, scope: AgentScope): AgentDiscoveryResult;

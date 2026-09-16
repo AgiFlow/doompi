@@ -4,9 +4,29 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createPlanModeRuntime = vi.hoisted(() => vi.fn());
-vi.mock('../src/controllers/planMode', () => ({ createPlanModeRuntime }));
+vi.mock('../src/services/planMode', () => ({ createPlanModeRuntime }));
 
-const { activatePlanExtension } = await import('../src/extensions/pi');
+const { extension: activatePlanExtension } = await import('../generated/pi');
+
+function runtime(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const handler = vi.fn();
+  return {
+    tools: ['record_debug_evidence', 'run_fable_plan', 'write_plan', 'complete_plan'].map((name) => ({
+      name,
+      label: name,
+      description: name,
+      parameters: { type: 'object' },
+      execute: vi.fn(),
+    })),
+    events: {
+      before_agent_start: handler,
+      context: handler,
+      session_start: handler,
+      tool_call: handler,
+    },
+    ...overrides,
+  };
+}
 
 function createPi(): { pi: ExtensionAPI; shutdown: () => Promise<void> } {
   const handlers = new Map<string, () => Promise<void>>();
@@ -40,7 +60,7 @@ function createPi(): { pi: ExtensionAPI; shutdown: () => Promise<void> } {
 describe('standard Plan composition', () => {
   beforeEach(() => {
     createPlanModeRuntime.mockReset();
-    createPlanModeRuntime.mockReturnValue({ tools: [], events: {} });
+    createPlanModeRuntime.mockReturnValue(runtime());
   });
 
   it('installs the complete Plan factory and awaits its package-local lifecycle', async () => {
@@ -56,14 +76,16 @@ describe('standard Plan composition', () => {
   it('cleans partial initialization before rejecting the factory', async () => {
     const cleanup = vi.fn(async () => undefined);
     const failure = new Error('install failed');
-    createPlanModeRuntime.mockImplementationOnce(() => ({
-      services: [
-        (cordis: Context) => {
-          cordis.effect(() => cleanup, 'test-partial-plan-runtime');
-          throw failure;
-        },
-      ],
-    }));
+    createPlanModeRuntime.mockImplementationOnce(() =>
+      runtime({
+        services: [
+          (cordis: Context) => {
+            cordis.effect(() => cleanup, 'test-partial-plan-runtime');
+            throw failure;
+          },
+        ],
+      }),
+    );
     const { pi } = createPi();
 
     await expect(activatePlanExtension(pi)).rejects.toBe(failure);
@@ -73,7 +95,7 @@ describe('standard Plan composition', () => {
 
   it('memoizes repeated session shutdown disposal', async () => {
     const cleanup = vi.fn(async () => undefined);
-    createPlanModeRuntime.mockImplementationOnce(() => ({ onStop: cleanup }));
+    createPlanModeRuntime.mockImplementationOnce(() => runtime({ onStop: cleanup }));
     const { pi, shutdown } = createPi();
     await activatePlanExtension(pi);
 

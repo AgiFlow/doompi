@@ -81,8 +81,13 @@ async function processStartedAt(pid: number): Promise<string | undefined> {
   }
 }
 
+type ListenerRegistration = Readonly<{ key: string; listener: () => void }>;
+
+// Facet replacement can leave an in-flight tool and its publisher on different registry instances.
+const listenersBySession = new Map<string, Set<() => void>>();
+
 export class RunnerRegistry implements IRunnerRegistry {
-  private readonly listeners = new Set<() => void>();
+  private readonly subscriptions = new Set<ListenerRegistration>();
 
   constructor(
     private readonly paths: IRunnerPaths,
@@ -140,7 +145,7 @@ export class RunnerRegistry implements IRunnerRegistry {
       hostPid: process.pid,
     };
     this.writeRecord(record);
-    this.notify();
+    this.notify(record.sessionId);
     return record;
   }
 
@@ -208,14 +213,14 @@ export class RunnerRegistry implements IRunnerRegistry {
     if (!record) return undefined;
     const promoted = { ...record, promoted: true };
     this.writeRecord(promoted);
-    this.notify();
+    this.notify(promoted.sessionId);
     return promoted;
   }
 
   async complete(id: string, outcome: CompleteRunnerInput, sessionId?: string): Promise<RunnerRecord | undefined> {
     const persisted = await this.get(id, sessionId);
     if (persisted?.state === 'completed') {
-      await this.release(id);
+      await this.release(id, persisted.sessionId);
       return persisted;
     }
     const active = await this.list();
@@ -225,7 +230,7 @@ export class RunnerRegistry implements IRunnerRegistry {
     if (!record) {
       const belongsToAnotherSession =
         sessionId !== undefined && active.some((candidate) => candidate.id === id && candidate.sessionId !== sessionId);
-      if (!belongsToAnotherSession) await this.release(id);
+      if (!belongsToAnotherSession) await this.release(id, sessionId);
       return undefined;
     }
     const completed: RunnerRecord = {
@@ -234,11 +239,13 @@ export class RunnerRegistry implements IRunnerRegistry {
       exit: { ...outcome, finishedAt: new Date().toISOString() },
     };
     this.writeRecord(completed);
-    await this.release(id);
+    await this.release(id, completed.sessionId);
     return completed;
   }
 
-  async release(id: string): Promise<void> {
+  async release(id: string, sessionId?: string): Promise<void> {
+    const activeSessionId = sessionId ?? (await this.list()).find((record) => record.id === id)?.sessionId;
+    const ownedSessionId = activeSessionId ?? (await this.get(id))?.sessionId;
     const response = await this.registry.releaseProcess({
       repositoryPath: this.repositoryPath(),
       serviceName: `${SERVICE_PREFIX}${id}`,
@@ -250,7 +257,7 @@ export class RunnerRegistry implements IRunnerRegistry {
     if (!response.success && !response.error?.includes('No matching process entry')) {
       throw new Error(response.error ?? `Failed to release runner ${id}`);
     }
-    this.notify();
+    if (ownedSessionId !== undefined) this.notify(ownedSessionId);
   }
 
   async pruneDead(): Promise<string[]> {
@@ -261,18 +268,40 @@ export class RunnerRegistry implements IRunnerRegistry {
     return dead.map((record) => record.id);
   }
 
-  subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+  subscribe(listener: () => void, sessionId: string): () => void {
+    const subscribed = (): void => listener();
+    const registration = { key: this.subscriptionKey(sessionId), listener: subscribed };
+    const listeners = listenersBySession.get(registration.key) ?? new Set<() => void>();
+    listeners.add(subscribed);
+    listenersBySession.set(registration.key, listeners);
+    this.subscriptions.add(registration);
+    return () => this.removeSubscription(registration);
   }
 
   close(): void {
-    this.listeners.clear();
+    for (const registration of this.subscriptions) this.removeSubscription(registration);
     this.registry.close();
   }
 
-  private notify(): void {
-    for (const listener of this.listeners) listener();
+  private notify(sessionId: string): void {
+    for (const listener of listenersBySession.get(this.subscriptionKey(sessionId)) ?? []) {
+      try {
+        listener();
+      } catch (error) {
+        process.emitWarning(`Runner registry listener failed: ${String(error)}`);
+      }
+    }
+  }
+
+  private removeSubscription(registration: ListenerRegistration): void {
+    const listeners = listenersBySession.get(registration.key);
+    listeners?.delete(registration.listener);
+    if (listeners?.size === 0) listenersBySession.delete(registration.key);
+    this.subscriptions.delete(registration);
+  }
+
+  private subscriptionKey(sessionId: string): string {
+    return JSON.stringify([path.resolve(this.paths.stateDirectory(sessionId)), sessionId]);
   }
 
   private repositoryPath(): string {

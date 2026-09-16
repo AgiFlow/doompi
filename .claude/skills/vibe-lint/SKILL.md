@@ -35,39 +35,43 @@ reproducible, needs no provider, and is what the hooks and CI use.
 
 ## The canonical package layout
 
-`src/exports/` is the only executable public surface: pure re-exports, one file per
-`package.json` exports subpath, mirroring the subpath tree. There is no
-`src/index.ts` and no `src/extensions/`.
+`src/exports/` is the executable public surface: pure re-exports, one file per
+`package.json` export subpath. `src/extensions/` is the host composition surface.
+Every scanned route directly default-exports one typed `define*` declaration and
+contains no named exports or freeform implementation. Shared implementation lives
+in `src/services` or shared contracts; implementation used by one surface lives in
+a private `_folder` beside its route, `_components` for components and `_lib` for
+everything else. The build never scans a `_folder`, at any depth, so nothing in
+one is a contribution. There is no `src/web` root in an extension package:
+browser code colocates the same way.
 
 `src/prompts/<prompt-name>/SKILL.md` is the package-owned Help resource surface.
-It is not an executable layer. Every prompt directory is kebab-case, is linked
-from `llms.txt`, and ships through the exact `src/prompts` files allowlist entry.
-Package-root `skills/**` may still hold runtime-discovered Pi skills.
+Every prompt directory is kebab-case, is linked from `llms.txt`, and ships through
+the exact `src/prompts` files allowlist entry. Package-root `skills/**` may still
+hold runtime-discovered Pi skills.
 
 Dependencies point inward. A layer may import only from itself and the layers
 below it:
 
-| layer        | may import                                                        |
-| ------------ | ----------------------------------------------------------------- |
-| `types/`     | `types`                                                           |
-| `schemas/`   | `schemas`, `types`                                                |
-| `services/`  | `services`, `schemas`, `types` — no `node:*`, no Pi, no container |
-| `adapters/`  | `adapters`, `services`, `schemas`, `types`                        |
-| `commands/`  | `commands`, `services`, `schemas`, `types`                        |
-| `tui/`       | `tui`, `services`, `schemas`, `types`                             |
-| `container/` | everything above                                                  |
-| `exports/`   | everything above                                                  |
+| layer        | may import                                                                |
+| ------------ | ------------------------------------------------------------------------- |
+| `types/`     | `types`                                                                   |
+| `schemas/`   | `schemas`, `types`                                                        |
+| `services/`  | `services`, `schemas`, `types` — no `node:*`, no Pi, no container         |
+| `adapters/`  | `adapters`, `services`, `schemas`, `types`                                |
+| `commands/`  | `commands`, `services`, `schemas`, `types`                                |
+| `tui/`       | `tui`, `services`, `schemas`, `types`. Published terminal primitives only |
+| `container/` | everything above                                                          |
+| `exports/`   | everything above                                                          |
 
-`src/adapters/pi/**` is the composition root and is exempt: it wires commands
-and TUI to the host.
+`src/extensions/**/root.cli.ts` and `root.server.ts` construct scoped shared
+state, services, startup work, and lifecycle. Named routes own each tool, command,
+hook, API, channel, method, provider, resource, shortcut, and frontend contribution.
+Non-default cardinality uses `defineRoutedContribution(..., { cardinality })` on
+the standard surface. Never create `*-optional`, `*-catalog`, `tool-collection`,
+`extra.*`, `src/tools`, or `src/controllers` paths.
 
-`bin/` and `extensions/` are transitional. Never introduce `agents`, `api`,
-`common`, `components`, `config`, `delegation`, `entries`, `helpers`,
-`interfaces`, `misc`, `protocol`, `runs`, `shared`, `slash`, `store`, `tool`,
-`utils`, or `workflow` as a `src/` root — `doom-folder-layout` rejects them.
-
-Reference implementation: `packages/default/doompi-mcp/` and
-`packages/core/doompi-config/`.
+Reference implementation: `layers/team/doompi-team/src/extensions/`.
 
 ## Where the rules live
 
@@ -94,11 +98,10 @@ repository config, including its `llm.providers`.
 
 ## Migration state
 
-Packages still on the pre-`src/exports` layout extend `doom-extension/migration`,
-which reports the structural rules as warnings. They are being moved one at a
-time; a package graduates by switching to `doom-extension/recommended`. A
-`vibe-lint/coverage` warning means the file sits in a root the canonical
-vocabulary does not cover — it is a migration to-do, not a config gap.
+The canonical routed layout is required. Legacy `extra.*`, `src/tools`, and
+`src/controllers` paths are deterministic errors. A `vibe-lint/coverage` warning
+means the file sits in a root the canonical vocabulary does not cover. Fix the
+layout or rule source instead of adding package-local allowances.
 
 ## Automatic checks
 

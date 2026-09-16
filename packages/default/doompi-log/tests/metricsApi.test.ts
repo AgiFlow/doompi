@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { sealedFetch } = vi.hoisted(() => ({ sealedFetch: vi.fn() }));
 vi.mock('@agimon-ai/doompi-web-security/browser', () => ({ sealedTransport: { fetch: sealedFetch } }));
 
-const { fetchIssues, fetchMetrics } = await import('../src/web/api/metricsApi');
+const { fetchIssues, fetchMetrics } = await import('../src/extensions/(frontend)/setting/_lib/metricsApi');
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -68,9 +68,13 @@ describe('the metrics browser client', () => {
 
   it('treats an aborted request as the caller replacing it, not as a failure', async () => {
     sealedFetch.mockRejectedValue(new DOMException('aborted', 'AbortError'));
+    const controller = new AbortController();
+    controller.abort();
 
-    // An empty message so the panel leaves whatever the next request renders.
-    expect(await fetchMetrics('model', 'week')).toEqual({ error: '' });
+    // The client reports a dead transport and an abort identically, as status
+    // 0 with no response, so the signal is what tells them apart. An empty
+    // message so the panel leaves whatever the next request renders.
+    expect(await fetchMetrics('model', 'week', undefined, controller.signal)).toEqual({ error: '' });
   });
 
   it('surfaces the route error message on a non-ok answer', async () => {
@@ -135,8 +139,10 @@ describe('the issues browser client', () => {
     sealedFetch.mockRejectedValueOnce(new TypeError('down'));
     expect(await fetchIssues()).toEqual({ error: 'The cockpit hub is unreachable.' });
 
+    const controller = new AbortController();
+    controller.abort();
     sealedFetch.mockRejectedValueOnce(new DOMException('aborted', 'AbortError'));
-    expect(await fetchIssues()).toEqual({ error: '' });
+    expect(await fetchIssues(undefined, controller.signal)).toEqual({ error: '' });
   });
 
   it('surfaces a route error and a non-JSON failure status', async () => {

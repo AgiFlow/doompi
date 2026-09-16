@@ -1,8 +1,8 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="packages/core/doompi/assets/logo.png">
-    <source media="(prefers-color-scheme: light)" srcset="packages/core/doompi/assets/logo-light.png">
-    <img alt="DoomPi" src="packages/core/doompi/assets/logo-light.png" width="440">
+    <source media="(prefers-color-scheme: dark)" srcset="packages/cli/doompi/assets/logo.png">
+    <source media="(prefers-color-scheme: light)" srcset="packages/cli/doompi/assets/logo-light.png">
+    <img alt="DoomPi" src="packages/cli/doompi/assets/logo-light.png" width="440">
   </picture>
 </p>
 
@@ -20,7 +20,7 @@ curated Neovim setup than to a single plugin. It is tailored for people whose ag
 skills and tools. It turns extensions, skills, MCP servers, and system prompts into config instead
 of background noise.
 
-![DoomPi terminal interface showing tasks, Plan mode, and the Leader menu](packages/core/doompi/assets/doompi-tui.png)
+![DoomPi terminal interface showing tasks, Plan mode, and the Leader menu](packages/cli/doompi/assets/doompi-tui.png)
 
 Plugin systems often rely on model-driven discovery to decide what context to load. Codex, for
 example, selects plugins from their descriptions and then loads their skills, but relevant skills
@@ -47,6 +47,8 @@ not. Use it as-is, build your own config on top, or raid it for parts.
 | [Observability](docs/observability.md)                         | Session metrics, local log storage, trace lookup, and telemetry controls           |
 | [CLI reference](docs/cli-reference.md)                         | Commands, options, exact effects, and direct package use                           |
 | [Architecture](docs/architecture.md)                           | Package composition, lifecycle ownership, transitions, and isolation               |
+| [Extension lifecycles](docs/lifecycles.md)                     | Mount stages, rollback, host differences, scopes, composition, and failure policy  |
+| [Extension layout](docs/extension-layout.md)                   | Folder-based authoring: scopes, sides, surfaces, filename grammar, and transports  |
 | [Development](docs/development.md)                             | Workspace commands and maintainer release flow                                     |
 | [Contributing](CONTRIBUTING.md)                                | Local setup, repository boundaries, checks, commits, and pull requests             |
 

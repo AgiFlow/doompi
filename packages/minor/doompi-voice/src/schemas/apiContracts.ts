@@ -137,8 +137,6 @@ const pcm = (path: string, method: 'GET' | 'POST', query: string[]): DoomHttpCon
     result.responses['200'] = { description: 'PCM bytes.', contentType: 'application/vnd.doompi.pcm-s16le', schema: S };
   return result;
 };
-const Inputs = Type.Array(Type.Object({ deviceId: S, groupId: S, label: S }), { maxItems: 100 });
-const Settings = Type.Object({ inputs: Inputs, deviceId: Type.Union([S, Type.Null()]) });
 export const apiContracts = defineApiContract({
   version: 1,
   protocols: { 'voice-media': '6', 'voice-ownership': '2' },
@@ -296,57 +294,25 @@ export const apiContracts = defineApiContract({
       body: { required: true, contentType: 'audio/webm', contentTypes: ['audio/webm', 'audio/mp4'], schema: S },
       responses: { ...Errors, '200': { description: 'Transcript.', schema: Type.Object({ transcript: S }) } },
     },
-    ...(['global'] as const).flatMap((scope): DoomHttpContract[] => [
-      {
-        id: 'voice.readiness',
-        scope,
-        basePath: 'voice',
-        path: '/readiness',
-        method: 'GET',
-        authentication: 'owner',
-        description: 'Read configured voice readiness.',
-        responses: jsonApiResponses(
-          Type.Object({
-            configured: B,
-            transcription: B,
-            error: O(S),
-            engine: O(S),
-            mode: O(S),
-            correctionModel: O(S),
-          }),
-        ),
-      },
-      ...(['GET', 'PUT', 'DELETE'] as const).map((method): DoomHttpContract => ({
-        id: `voice.settings.${method}`,
-        scope,
-        basePath: 'voice',
-        path: '/clients/{clientId}',
-        method,
-        authentication: 'owner',
-        description: 'Read, select or clear the client microphone.',
-        ...(method === 'PUT'
-          ? {
-              body: {
-                required: true,
-                contentType: 'application/json',
-                schema: Type.Object({ deviceId: Type.Union([S, Type.Null()]) }),
-              },
-            }
-          : {}),
-        responses: jsonApiResponses(Settings),
-      })),
-      {
-        id: 'voice.inputs',
-        scope,
-        basePath: 'voice',
-        path: '/clients/{clientId}/inputs',
-        method: 'PUT',
-        authentication: 'owner',
-        description: 'Register enumerated microphones before selecting one.',
-        body: { required: true, contentType: 'application/json', schema: Type.Object({ inputs: Inputs }) },
-        responses: jsonApiResponses(Settings),
-      },
-    ]),
+    {
+      id: 'voice.readiness',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/readiness',
+      method: 'GET',
+      authentication: 'owner',
+      description: 'Read configured voice readiness.',
+      responses: jsonApiResponses(
+        Type.Object({
+          configured: B,
+          transcription: B,
+          error: O(S),
+          engine: O(S),
+          mode: O(S),
+          correctionModel: O(S),
+        }),
+      ),
+    },
   ],
   sockets: [
     {

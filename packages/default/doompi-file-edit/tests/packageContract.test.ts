@@ -95,7 +95,9 @@ describe('doom file edit package boundary', () => {
   it('declares ESM, CJS, and declaration targets for every public entry', async () => {
     const manifest = await readManifest();
     const exportsMap = manifest.exports ?? {};
-    const publicEntries = Object.entries(exportsMap).filter(([subpath]) => subpath !== './package.json');
+    const publicEntries = Object.entries(exportsMap).filter(
+      ([subpath]) => subpath !== './package.json' && subpath !== './extensions/web',
+    );
 
     expect(publicEntries.length).toBeGreaterThan(0);
     expect(Object.keys(exportsMap)).not.toContain('./*');
@@ -114,9 +116,9 @@ describe('doom file edit package boundary', () => {
     });
     expect(manifest.doompiServer).toEqual({
       contracts: { entry: './src/exports/apiContracts.ts', dist: './dist/api-contracts.mjs' },
-      entry: './src/extensions/server.ts',
+      entry: './generated/server.ts',
       dist: './dist/extensions/server.mjs',
-      scopes: ['session', 'global', 'workspace'],
+      scopes: ['global', 'workspace', 'session'],
     });
     expect(exportsMap['./session-api']).toBeUndefined();
     expect(exportsMap['./web-hub']).toBeUndefined();

@@ -25,7 +25,7 @@ export default defineConfig({
         // only buys assertions that pad it. Their behaviour is the cockpit's
         // Playwright suite's. The plain modules beside them, the command
         // builders and render helpers, stay counted.
-        'src/web/**/*.tsx',
+        'src/extensions/**/_components/**/*.tsx',
       ],
       reportOnFailure: false,
       enabled: true,

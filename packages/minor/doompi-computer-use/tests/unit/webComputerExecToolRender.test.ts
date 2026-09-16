@@ -4,7 +4,7 @@ import {
   computerExecCallSummary,
   computerExecResultLines,
   computerExecToolName,
-} from '../../src/web/lib/computerExecToolRender';
+} from '../../src/extensions/workspaces/sessions/(frontend)/tool/_lib/computerExecToolRender';
 
 describe('the computer_exec tool view', () => {
   it('names and summarises the registered tool', () => {

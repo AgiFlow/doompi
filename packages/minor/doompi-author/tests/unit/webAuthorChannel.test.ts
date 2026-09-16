@@ -1,9 +1,9 @@
 import type { DoomHubChannelHost } from '@agimon-ai/doompi-core/hub-channel';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAuthorBridgeApi } from '../../src/controllers/authorBridgeApi';
-import { createAuthorChannel } from '../../src/controllers/webAuthorChannel';
+import { createAuthorBridgeApi } from '../../src/extensions/workspaces/sessions/(backend)/api/author/_lib/authorBridgeApi';
 import { createAuthorBridgeState } from '../../src/models/authorBridgeState';
+import { createAuthorChannel } from '../../src/services/webAuthorChannel';
 
 const scope = { sessionId: 'session', cwd: '/repo' };
 

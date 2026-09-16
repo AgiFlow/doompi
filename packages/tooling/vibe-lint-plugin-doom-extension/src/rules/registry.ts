@@ -37,16 +37,24 @@ import {
   providerOwnedPolicy,
   thinPiAdapter,
 } from './conventions.js';
+import {
+  doomExtensionSideBoundary,
+  doomLegacySourceRoot,
+  doomRoutedFileContract,
+  doomRoutedFilePosition,
+} from './extensionLayout.js';
 import { neutralExtensionContracts } from './neutralContracts.js';
 import { packageApiManifest } from './packageApi.js';
 import { piExtensionDefaultFactory } from './piExtensionContract.js';
 import { pluginCompositionWiring } from './pluginWiring.js';
 import { doomPromptShape } from './prompts.js';
+import { doomResourceKind } from './resourceKind.js';
 import {
   webPluginEntry,
+  webPluginGeneratedClientWiring,
   webPluginImportAllowlist,
-  webPluginLayerBoundary,
   webPluginManifest,
+  webPluginNoHandBuiltApiUrl,
   webPluginNoModuleState,
   webPluginProtocolLayout,
   webPluginTypedCalls,
@@ -55,6 +63,10 @@ import { webPluginToolRenderers } from './webPluginTools.js';
 
 export const rules: Record<string, RuleDefinition> = {
   'composition-layout': compositionLayout,
+  'routed-file-position': doomRoutedFilePosition,
+  'routed-file-contract': doomRoutedFileContract,
+  'extension-side-boundary': doomExtensionSideBoundary,
+  'legacy-source-root': doomLegacySourceRoot,
   'plugin-composition-wiring': pluginCompositionWiring,
   'doom-constants': doomConstants,
   'neutral-extension-contracts': neutralExtensionContracts,
@@ -82,6 +94,7 @@ export const rules: Record<string, RuleDefinition> = {
   'schema-placement': schemaPlacement,
   'doom-package-shape': doomPackageShape,
   'doom-prompt-shape': doomPromptShape,
+  'doom-resource-kind': doomResourceKind,
   'pi-peer-version': piPeerVersion,
   'prefer-cordis-container': preferCordisContainer,
   'pi-extension-default-factory': piExtensionDefaultFactory,
@@ -93,9 +106,10 @@ export const rules: Record<string, RuleDefinition> = {
   'provider-owned-policy': providerOwnedPolicy,
   'package-api-manifest': packageApiManifest,
   'web-plugin-entry': webPluginEntry,
+  'web-plugin-generated-client-wiring': webPluginGeneratedClientWiring,
   'web-plugin-import-allowlist': webPluginImportAllowlist,
-  'web-plugin-layer-boundary': webPluginLayerBoundary,
   'web-plugin-manifest': webPluginManifest,
+  'web-plugin-no-hand-built-api-url': webPluginNoHandBuiltApiUrl,
   'web-plugin-no-module-state': webPluginNoModuleState,
   'web-plugin-protocol-layout': webPluginProtocolLayout,
   'web-plugin-typed-calls': webPluginTypedCalls,

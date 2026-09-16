@@ -17,11 +17,12 @@
  * COMPOSITION, NOT REIMPLEMENTATION:
  * `status.json` has one writer (`CoalescedStatusWriter`) and several
  * legitimate readers; this module is not a new one. It reads run state
- * exclusively through `AsyncJobTracker`, which already owns the poll-and-cache
- * loop against `status.json` (`PollScheduler`-driven, per its own header).
- * `wait()` never touches `node:fs` and registers no `PollScheduler`
- * subscription of its own - see "WHY A PRIVATE POLL LOOP" below for why it
- * still owns a short-lived timer despite that.
+ * exclusively through `AsyncJobTracker`, which is a push-updated in-memory
+ * cache: `ExternalProcessIpc` events and `NativeRunCoordinator` write into it
+ * (see `services/teamRuntime`), and it owns no poll loop and no `PollScheduler`
+ * subscription. `wait()` never touches `node:fs` and registers no
+ * `PollScheduler` subscription of its own - see "WHY A PRIVATE POLL LOOP"
+ * below for why it still owns a short-lived timer despite that.
  *
  * TARGET SHAPE - `{ id } | { ids } | { all: true }`:
  * One run, several, or every run `AsyncJobTracker` currently has tracked

@@ -12,7 +12,7 @@ vi.mock('@agimon-ai/doompi-core/runtime-cordis-host', () => ({
   connectDoomCordisHost: hostMocks.connect,
 }));
 
-const { activateDoomPiEditExtension } = await import('../src/extensions/pi');
+const { extension } = await import('../generated/pi');
 
 function createPi(): {
   readonly pi: ExtensionAPI;
@@ -46,7 +46,7 @@ beforeEach(() => {
 describe('standard doompi-edit extension lifecycle', () => {
   it('acquires one host lease, mounts one root fiber, and releases both once on repeated shutdown', async () => {
     const fixture = createPi();
-    await activateDoomPiEditExtension(fixture.pi);
+    await extension(fixture.pi);
 
     expect(hostMocks.connect).toHaveBeenCalledOnce();
     expect(hostMocks.connect).toHaveBeenCalledWith(fixture.pi, '@agimon-ai/doompi-edit');

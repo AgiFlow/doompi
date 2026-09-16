@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  isMetricsDimension,
-  isMetricsPeriod,
-  isMetricsUnavailable,
-  issuesUrl,
-  METRICS_DIMENSIONS,
-  metricsUrl,
-} from '../src/types/webMetrics';
+import { isMetricsDimension, isMetricsPeriod, isMetricsUnavailable, METRICS_DIMENSIONS } from '../src/types/webMetrics';
 
 /**
  * The vocabulary both halves share. These guards are the gate the route uses
@@ -29,17 +22,8 @@ describe('the metrics wire vocabulary', () => {
     expect(isMetricsPeriod('decade')).toBe(false);
   });
 
-  it('builds a metrics url, adding focus only when there is one', () => {
-    expect(metricsUrl('model', 'week')).toBe('/api/plugins/log/metrics?dimension=model&period=week');
-    expect(metricsUrl('model', 'week', '')).toBe('/api/plugins/log/metrics?dimension=model&period=week');
-    expect(metricsUrl('model', 'week', 'a b')).toContain('focus=a+b');
-  });
-
-  it('builds an issues url with no query when unfocused', () => {
-    expect(issuesUrl()).toBe('/api/plugins/log/issues');
-    expect(issuesUrl('')).toBe('/api/plugins/log/issues');
-    expect(issuesUrl('id_abc')).toBe('/api/plugins/log/issues?focus=id_abc');
-  });
+  // The URLs this vocabulary used to build now come from the generated client,
+  // and are pinned as literals in tests/unit/urlParity.test.ts.
 
   it('tells an unavailable body from a report', () => {
     expect(isMetricsUnavailable({ unavailable: 'no-sink', detail: '' })).toBe(true);

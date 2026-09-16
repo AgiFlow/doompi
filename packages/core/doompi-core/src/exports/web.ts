@@ -1,7 +1,82 @@
-export { bindSessionApiWorkspace, sessionApiPath } from '../web/services/apiRoutes';
-export { defineSessionChannel, defineSlot, defineWebPlugin } from '../extensions/webPlugin';
+export {
+  bindSessionApiWorkspace,
+  globalApiPath,
+  sessionApiAddress,
+  sessionApiPath,
+  workspaceApiPath,
+} from '../web/services/apiRoutes';
+export {
+  apiQueryString,
+  pluginApiBase,
+  pluginApiUrl,
+  applyPathParams,
+  scopeApiRoot,
+  SETTINGS_BASE_PATH,
+  type ApiParams,
+  type ApiQuery,
+  type ApiScopeAddress,
+} from '../web/services/apiPaths';
+export {
+  apiResponse,
+  createApiClient,
+  defineApiRoutes,
+  type ApiCallInit,
+  type ApiClient,
+  type ApiClientOptions,
+  type ApiMethod,
+  type ApiResponseOf,
+  type ApiResult,
+  type ApiRouteMethod,
+  type ApiRoutes,
+  type ApiRouteSpec,
+  type ApiScopeClient,
+  type ApiScopeName,
+  type ApiStreamMethod,
+  type ApiTransport,
+} from '../web/services/apiClient';
+export {
+  defineActivityGroup,
+  defineChannelFile,
+  defineContextAction,
+  defineDockFace,
+  defineFileLinks,
+  defineFill,
+  defineLeaderBinding,
+  defineMinorModeFile,
+  definePaletteCommand,
+  defineRepositorySettingsPanel,
+  defineSelectionAxis,
+  defineSessionChannel,
+  defineSettingsPanel,
+  defineSettingsSection,
+  defineSlot,
+  defineSlotFile,
+  defineTab,
+  defineToolRenderer,
+  defineUserMessageAction,
+  defineWebLifecycle,
+  defineWebPlugin,
+} from '../extensions/webPlugin';
+export type {
+  ActivityGroupFile,
+  ChannelFile,
+  ContextActionFile,
+  DockFaceFile,
+  FillFile,
+  LeaderBindingFile,
+  MinorModeFile,
+  PaletteCommandFile,
+  SelectionAxisFile,
+  SettingsPanelFile,
+  SettingsSectionFile,
+  SlotFile,
+  TabFile,
+  ToolRendererFile,
+  UserMessageActionFile,
+} from '../web/types/extensionFile';
 export { defineGlobalStore } from '../web/models/globalStore';
 export { defineSessionStore } from '../web/models/sessionStore';
+export { defineWorkspaceStore } from '../web/models/workspaceStore';
 export {
   HUB_ADVERTISEMENT_VERSION,
   hubAdvertisementPath,
@@ -78,6 +153,8 @@ export type {
   WebPluginDefinition,
   WebPluginRuntime,
   WebPluginSlotProps,
+  WorkspaceRecords,
+  WorkspaceStore,
 } from '../web/types/webPlugin';
 
 export {

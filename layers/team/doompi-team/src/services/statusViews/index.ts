@@ -21,6 +21,7 @@
  * Accepting and ignoring an index would create a false affordance.
  */
 
+import { formatAgentIdentity } from '../agentIdentity';
 import type { AsyncRunStatus } from '../asyncExecution';
 import type { TrackedAsyncJob } from '../asyncJobTracker';
 import { formatDuration } from '../displayFormat';
@@ -51,7 +52,11 @@ export function formatFleetView(
 
   const lines = [`${jobs.length} active run${jobs.length === 1 ? '' : 's'}:`];
   for (const job of jobs) {
-    const parts = [`- ${job.runId}`, job.status ?? 'starting', age(job, now)];
+    // The run id stays the leading token: it is what `{ action: "status", id }`
+    // resolves against, and the identity is offered as the friendlier alias.
+    const parts = [`- ${job.runId}`];
+    if (job.identity) parts.push(formatAgentIdentity(job.identity, job.inline)!);
+    parts.push(job.status ?? 'starting', age(job, now));
     if (job.activityState) parts.push(job.activityState);
     if (job.attentionReason) parts.push(job.attentionReason);
     if (job.error) parts.push(`error: ${job.error}`);
@@ -63,7 +68,8 @@ export function formatFleetView(
       const recovery = isSuspendedRunResumable(run)
         ? `restore with { action: "restore", id: "${run.runId}" }`
         : 'not resumable; submit a new explicit run';
-      lines.push(`- ${run.runId} (${run.agent}, ${run.runtime}): ${recovery}`);
+      const label = formatAgentIdentity(run.identity, run.inline);
+      lines.push(`- ${run.runId} (${label ? `${label}, ` : ''}${run.agent}, ${run.runtime}): ${recovery}`);
     }
   }
   if (jobs.length > 0) {

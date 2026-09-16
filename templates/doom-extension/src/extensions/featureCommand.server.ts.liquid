@@ -1,0 +1,15 @@
+import { defineCommand } from '@agimon-ai/doompi-core/extension-file';
+
+import { {{ commandName | snakeCase | upper }}_COMMAND_DESCRIPTION } from '../../../../../constants/{{ commandName | camelCase }}';
+
+/**
+ * `/{{ commandName }}` on the headless host: {{ commandDescription }}.
+ *
+ * The filename supplies the name, so only the description repeats here.
+ */
+export default defineCommand({
+  description: {{ commandName | snakeCase | upper }}_COMMAND_DESCRIPTION,
+  async execute(_args, execution) {
+    await execution.notify({ body: '{{ commandDescription }}', level: 'info' });
+  },
+});

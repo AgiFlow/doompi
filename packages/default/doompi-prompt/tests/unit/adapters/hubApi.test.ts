@@ -4,13 +4,22 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { api, createPromptHubApi } from '../../../src/controllers/promptsApi';
+import { NAME_PARAM } from '../../../src/constants/promptsApi';
+import { api, createPromptHubApi } from '../../../src/services/promptsApi';
+import routes from '../../../src/types/apiRoutes';
 import type { SavedPrompt, SavedPromptStore } from '../../../src/types/prompt';
-import { promptsUrl, promptUrl } from '../../../src/types/webPrompts';
 
-/** The hub mounts the app under /api/plugins/prompts and strips that prefix. */
+/**
+ * What the app itself sees: the hub mounts it under /api/plugins/prompts and
+ * strips that prefix, so these are the route table's own paths.
+ */
 function mounted(path: string): string {
-  return `http://hub${path.replace('/api/plugins/prompts', '')}`;
+  return `http://hub${path}`;
+}
+
+/** One prompt's path, with the table's `:name` parameter filled in. */
+function promptPath(name: string): string {
+  return routes.save.path.replace(`/:${NAME_PARAM}`, `/${encodeURIComponent(name)}`);
 }
 
 function memoryStore(initial: SavedPrompt[] = []): SavedPromptStore & { entries: SavedPrompt[] } {
@@ -35,7 +44,7 @@ function memoryStore(initial: SavedPrompt[] = []): SavedPromptStore & { entries:
 }
 
 function putRequest(name: string, body: unknown): Request {
-  return new Request(mounted(promptUrl(name)), {
+  return new Request(mounted(promptPath(name)), {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: typeof body === 'string' ? body : JSON.stringify(body),
@@ -46,7 +55,7 @@ describe('the prompt hub API', () => {
   it('lists saved prompts', async () => {
     const app = createPromptHubApi({ store: memoryStore([{ name: 'review', description: 'Review', text: 'Review' }]) });
 
-    const response = await app.fetch(new Request(mounted(promptsUrl())));
+    const response = await app.fetch(new Request(mounted(routes.list.path)));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -60,7 +69,7 @@ describe('the prompt hub API', () => {
       throw new Error('permission denied');
     };
 
-    const response = await createPromptHubApi({ store }).fetch(new Request(mounted(promptsUrl())));
+    const response = await createPromptHubApi({ store }).fetch(new Request(mounted(routes.list.path)));
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: 'permission denied' });
@@ -128,7 +137,7 @@ describe('the prompt hub API', () => {
     const store = memoryStore([{ name: 'review', description: 'r', text: 'r' }]);
 
     const response = await createPromptHubApi({ store }).fetch(
-      new Request(mounted(promptUrl('review')), { method: 'DELETE' }),
+      new Request(mounted(promptPath('review')), { method: 'DELETE' }),
     );
 
     expect(response.status).toBe(200);
@@ -137,7 +146,7 @@ describe('the prompt hub API', () => {
 
   it('answers 404 for a prompt that is not there', async () => {
     const response = await createPromptHubApi({ store: memoryStore() }).fetch(
-      new Request(mounted(promptUrl('missing')), { method: 'DELETE' }),
+      new Request(mounted(promptPath('missing')), { method: 'DELETE' }),
     );
 
     expect(response.status).toBe(404);
@@ -145,7 +154,7 @@ describe('the prompt hub API', () => {
 
   it('refuses to delete an invalid name', async () => {
     const response = await createPromptHubApi({ store: memoryStore() }).fetch(
-      new Request(mounted(promptUrl('../escape')), { method: 'DELETE' }),
+      new Request(mounted(promptPath('../escape')), { method: 'DELETE' }),
     );
 
     expect(response.status).toBe(400);
@@ -158,7 +167,7 @@ describe('the prompt hub API', () => {
     };
 
     const response = await createPromptHubApi({ store }).fetch(
-      new Request(mounted(promptUrl('review')), { method: 'DELETE' }),
+      new Request(mounted(promptPath('review')), { method: 'DELETE' }),
     );
 
     expect(response.status).toBe(500);
@@ -184,7 +193,7 @@ describe('the exported hub contract', () => {
 
     expect(api.basePath).toBe('prompts');
     const handler = api.start({} as never);
-    const response = await handler.fetch(new Request(mounted(promptsUrl())));
+    const response = await handler.fetch(new Request(mounted(routes.list.path)));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ prompts: [] });

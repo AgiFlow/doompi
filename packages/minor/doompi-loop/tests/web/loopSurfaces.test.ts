@@ -2,9 +2,9 @@ import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testi
 import { createElement } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { webPlugin as scopedWebPlugin } from '../../src/extensions/web';
+import { webPlugin as scopedWebPlugin } from '../../generated/web';
+import { LoopActivityItems } from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/LoopsActivitySection';
 import { LOOP_VIEW_STATUS_KEY } from '../../src/types/loopView';
-import { LoopActivityItems } from '../../src/web/components/LoopsActivitySection';
 const webPlugin = {
   id: scopedWebPlugin.id,
   ...scopedWebPlugin.global,
@@ -18,8 +18,8 @@ const payload = JSON.stringify([
   { instanceId: 'stopping-loop', label: 'Stopping loop', detail: 'every 90s', state: 'stopping' },
 ]);
 
-const loopsActivitySection = webPlugin.activitySections?.[0]?.component;
-if (!loopsActivitySection) throw new Error('Expected the Loop activity section.');
+const loopsActivityFill = webPlugin.fills?.find(({ slot }) => slot === 'activity.loops')?.component;
+if (!loopsActivityFill) throw new Error('Expected the Loop activity fill.');
 
 describe('Loop web surfaces', () => {
   it('declares the Loop mode, idle activity group, slots, and command bindings', () => {
@@ -29,12 +29,16 @@ describe('Loop web surfaces', () => {
     expect(webPlugin.activityGroups).toEqual([
       expect.objectContaining({ name: 'loops', keys: 'l l', statusKey: LOOP_VIEW_STATUS_KEY, order: 40 }),
     ]);
-    expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive('s1')).toBe(false);
-    expect(webPlugin.activityGroups?.[0]?.activeSource?.isActive(null)).toBe(false);
-    expect(webPlugin.activitySections?.map(({ id }) => id)).toEqual(['loops']);
-    expect(webPlugin.slots?.map(({ slot }) => slot)).toEqual(['loop.registration', 'loop.items']);
-    expect(webPlugin.fills?.map(({ slot, id }) => ({ slot, id }))).toEqual([{ slot: 'loop.items', id: 'instances' }]);
-    expect(webPlugin.leaderBindings?.map(({ id }) => id)).toEqual(['loop.start', 'loop.list']);
+    // No activeSource: the group's visibility is the status the server facet
+    // publishes, so a running loop marks background work instead of a
+    // placeholder source hard-wiring it to false.
+    expect(webPlugin.activityGroups?.[0]?.activeSource).toBeUndefined();
+    expect(webPlugin.slots?.map(({ slot }) => slot)).toEqual(['loop.items', 'loop.registration']);
+    expect(webPlugin.fills?.map(({ slot, id }) => ({ slot, id }))).toEqual([
+      { slot: 'loop.items', id: 'instances' },
+      { slot: 'activity.loops', id: 'loops' },
+    ]);
+    expect(webPlugin.leaderBindings?.map(({ id }) => id)).toEqual(['loop.list', 'loop.start']);
   });
 
   it('renders semantic rows, lifecycle labels, and full detail text', () => {
@@ -67,9 +71,9 @@ describe('Loop web surfaces', () => {
     expect(html).toContain('loop status unavailable');
   });
 
-  it('keeps the idle activity section and both launcher surfaces available', () => {
+  it('keeps the idle activity fill and both launcher surfaces available', () => {
     const rendered = renderPlugin(
-      loopsActivitySection,
+      loopsActivityFill,
       slotPropsFixture({
         slotContent: {
           'loop.registration': createElement('span', { 'data-testid': 'loop-extension-slot' }, 'Agiflow loop'),
@@ -82,7 +86,7 @@ describe('Loop web surfaces', () => {
     expect(rendered.html).toContain('Agiflow loop');
 
     const withoutSession = renderPlugin(
-      loopsActivitySection,
+      loopsActivityFill,
       slotPropsFixture({ sessionId: null, statuses: { [LOOP_VIEW_STATUS_KEY]: payload } }).props,
     );
     expect(withoutSession.error).toBeUndefined();

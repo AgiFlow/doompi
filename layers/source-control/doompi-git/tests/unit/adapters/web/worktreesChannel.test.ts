@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { DoomDirectEventBus, DoomHubChannelHost, DoomHubChannelSource } from '@agimon-ai/doompi-core/hub-channel';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createWorktreesChannel } from '../../../../src/controllers/worktreesChannel';
+import { createWorktreesChannel } from '../../../../src/extensions/(backend)/channel/_lib/git-worktrees.server';
 import { DoomGitExpectedError } from '../../../../src/services/errors';
 import { registryFile } from '../../../../src/services/paths';
 import { GIT_WORKTREE_LIFECYCLE_EVENT } from '../../../../src/services/worktreeEvents';

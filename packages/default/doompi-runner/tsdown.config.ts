@@ -1,56 +1,22 @@
+import { doompiExtension } from '@agimon-ai/doompi-build/tsdown';
 import { defineConfig } from 'tsdown';
 
-export default defineConfig({
+const routed = doompiExtension({
+  packageDir: process.cwd(),
   entry: {
-    'api-contracts': 'src/exports/apiContracts.ts',
-    index: 'src/exports/index.ts',
-    'ansi-scrub': 'src/exports/ansiScrub.ts',
-    'bash-render': 'src/exports/bashRender.ts',
-    'bash-run-service': 'src/exports/bashRunService.ts',
-    'bash-schema': 'src/exports/bashSchema.ts',
-    'bash-tool': 'src/exports/bashTool.ts',
-    'cli-app': 'src/exports/cliApp.ts',
-    clock: 'src/exports/clock.ts',
-    compaction: 'src/exports/compaction.ts',
-    config: 'src/exports/config.ts',
-    launcher: 'src/exports/launcher.ts',
-    lifeline: 'src/exports/lifeline.ts',
-    'log-file': 'src/exports/logFile.ts',
-    'log-reader': 'src/exports/logReader.ts',
-    'process-control': 'src/exports/processControl.ts',
-    'pty-host': 'src/exports/ptyHost.ts',
-    'pty-spawner': 'src/exports/ptySpawner.ts',
-    reconcile: 'src/exports/reconcile.ts',
-    'response-envelope': 'src/exports/responseEnvelope.ts',
-    'rmux-backend': 'src/exports/rmuxBackend.ts',
-    'rtk-processor': 'src/exports/rtkProcessor.ts',
-    'runner-dependencies': 'src/exports/runnerDependencies.ts',
-    'runner-format': 'src/exports/runnerFormat.ts',
-    'runner-namer': 'src/exports/runnerNamer.ts',
-    'runner-paths': 'src/exports/runnerPaths.ts',
-    'runner-registry': 'src/exports/runnerRegistry.ts',
-    'runner-space': 'src/exports/runnerSpace.ts',
-    session: 'src/exports/session.ts',
-    spawner: 'src/exports/spawner.ts',
-    types: 'src/exports/types.ts',
-    'extensions/pi': 'src/extensions/pi.ts',
-    'extensions/server': 'src/extensions/server.ts',
-    // Executables keep their own entries: a facade would re-export the module
-    // instead of running it, and the shebang has to survive to dist.
     'bin/cli': 'src/bin/cli.ts',
     'bin/logSink': 'src/bin/logSink.ts',
     'bin/runnerHost': 'src/bin/runnerHost.ts',
+    'services/lifeline/client': 'src/services/lifeline/client.ts',
+    'services/runnerSupervisor/index': 'src/services/runnerSupervisor/index.ts',
   },
-  clean: true,
-  dts: { incremental: true, parallel: false, eager: true },
-  exports: false,
-  format: ['esm', 'cjs'],
-  minify: {
-    compress: true,
-    mangle: { toplevel: true },
-    codegen: { removeWhitespace: true },
-  },
-  platform: 'node',
-  sourcemap: true,
-  unbundle: true,
 });
+if (!Array.isArray(routed)) throw new Error('Runner requires its web bundle.');
+
+export default defineConfig([
+  {
+    ...routed[0],
+    exports: { exclude: ['services/lifeline/client', 'services/runnerSupervisor/index'] },
+  },
+  routed[1],
+]);

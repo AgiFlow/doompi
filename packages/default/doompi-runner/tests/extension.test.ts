@@ -70,7 +70,7 @@ describe('runner reconciliation', () => {
     });
 
     expect(list).not.toHaveBeenCalled();
-    expect(release).toHaveBeenCalledWith(active.id);
+    expect(release).toHaveBeenCalledWith(active.id, active.sessionId);
     expect(result).toEqual({ reclaimed: [active.id], errors: [] });
   });
 
@@ -277,7 +277,7 @@ describe('legacy runner cleanup', () => {
       } as never,
     });
 
-    expect(release).toHaveBeenCalledWith(legacy.id);
+    expect(release).toHaveBeenCalledWith(legacy.id, legacy.sessionId);
     expect(result).toEqual({ reclaimed: [legacy.id], errors: [], removed: '/repo/.git/doom-runner' });
   });
 

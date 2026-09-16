@@ -1,0 +1,244 @@
+{
+  "name": "@agimon-ai/doompi-ui",
+  "version": "0.0.1-alpha.72",
+  "description": "Leader-key menus, themes, and TUI components for DoomPi and Pi extensions.",
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "developer-tools",
+    "doompi",
+    "leader-key",
+    "pi-extension",
+    "pi-package",
+    "pi-tui",
+    "terminal-ui",
+    "tui"
+  ],
+  "homepage": "https://agimon.ai",
+  "bugs": {
+    "url": "https://github.com/AgiFlow/doompi/issues"
+  },
+  "license": "MIT",
+  "author": "Vuong Ngo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgiFlow/doompi.git",
+    "directory": "packages/foundations/doompi-ui"
+  },
+  "files": [
+    "dist",
+    "themes"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.mts",
+  "jsnext:main": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./config": {
+      "types": "./dist/config.d.mts",
+      "import": "./dist/config.mjs",
+      "require": "./dist/config.cjs"
+    },
+    "./config-overlay": {
+      "types": "./dist/config-overlay.d.mts",
+      "import": "./dist/config-overlay.mjs",
+      "require": "./dist/config-overlay.cjs"
+    },
+    "./doom-editor": {
+      "types": "./dist/doom-editor.d.mts",
+      "import": "./dist/doom-editor.mjs",
+      "require": "./dist/doom-editor.cjs"
+    },
+    "./doom-footer": {
+      "types": "./dist/doom-footer.d.mts",
+      "import": "./dist/doom-footer.mjs",
+      "require": "./dist/doom-footer.cjs"
+    },
+    "./doom-header": {
+      "types": "./dist/doom-header.d.mts",
+      "import": "./dist/doom-header.mjs",
+      "require": "./dist/doom-header.cjs"
+    },
+    "./doom-overlay": {
+      "types": "./dist/doom-overlay.d.mts",
+      "import": "./dist/doom-overlay.mjs",
+      "require": "./dist/doom-overlay.cjs"
+    },
+    "./extensionName": {
+      "types": "./dist/extensionName.d.mts",
+      "import": "./dist/extensionName.mjs",
+      "require": "./dist/extensionName.cjs"
+    },
+    "./extensions/pi": {
+      "types": "./dist/extensions/pi.d.mts",
+      "import": "./dist/extensions/pi.mjs",
+      "require": "./dist/extensions/pi.cjs"
+    },
+    "./extensions/server": {
+      "types": "./dist/extensions/server.d.mts",
+      "import": "./dist/extensions/server.mjs",
+      "require": "./dist/extensions/server.cjs"
+    },
+    "./extensions/web": {
+      "import": "./dist/extensions/web.mjs"
+    },
+    "./footer": {
+      "types": "./dist/footer.d.mts",
+      "import": "./dist/footer.mjs",
+      "require": "./dist/footer.cjs"
+    },
+    "./harnessMetadata": {
+      "types": "./dist/harnessMetadata.d.mts",
+      "import": "./dist/harnessMetadata.mjs",
+      "require": "./dist/harnessMetadata.cjs"
+    },
+    "./hashlineRendering": {
+      "types": "./dist/hashlineRendering.d.mts",
+      "import": "./dist/hashlineRendering.mjs",
+      "require": "./dist/hashlineRendering.cjs"
+    },
+    "./leader": {
+      "types": "./dist/leader.d.mts",
+      "import": "./dist/leader.mjs",
+      "require": "./dist/leader.cjs"
+    },
+    "./leader-hints": {
+      "types": "./dist/leader-hints.d.mts",
+      "import": "./dist/leader-hints.mjs",
+      "require": "./dist/leader-hints.cjs"
+    },
+    "./leaderRegistry": {
+      "types": "./dist/leaderRegistry.d.mts",
+      "import": "./dist/leaderRegistry.mjs",
+      "require": "./dist/leaderRegistry.cjs"
+    },
+    "./logSinkTelemetry": {
+      "types": "./dist/logSinkTelemetry.d.mts",
+      "import": "./dist/logSinkTelemetry.mjs",
+      "require": "./dist/logSinkTelemetry.cjs"
+    },
+    "./matrix-picker": {
+      "types": "./dist/matrix-picker.d.mts",
+      "import": "./dist/matrix-picker.mjs",
+      "require": "./dist/matrix-picker.cjs"
+    },
+    "./rendering": {
+      "types": "./dist/rendering.d.mts",
+      "import": "./dist/rendering.mjs",
+      "require": "./dist/rendering.cjs"
+    },
+    "./skills": {
+      "types": "./dist/skills.d.mts",
+      "import": "./dist/skills.mjs",
+      "require": "./dist/skills.cjs"
+    },
+    "./theme": {
+      "types": "./dist/theme.d.mts",
+      "import": "./dist/theme.mjs",
+      "require": "./dist/theme.cjs"
+    },
+    "./themes/doom-pi-dark.json": "./themes/doom-pi-dark.json",
+    "./toolChrome": {
+      "types": "./dist/toolChrome.d.mts",
+      "import": "./dist/toolChrome.mjs",
+      "require": "./dist/toolChrome.cjs"
+    },
+    "./toolInventory": {
+      "types": "./dist/toolInventory.d.mts",
+      "import": "./dist/toolInventory.mjs",
+      "require": "./dist/toolInventory.cjs"
+    },
+    "./tools-overlay": {
+      "types": "./dist/tools-overlay.d.mts",
+      "import": "./dist/tools-overlay.mjs",
+      "require": "./dist/tools-overlay.cjs"
+    },
+    "./uiState": {
+      "types": "./dist/uiState.d.mts",
+      "import": "./dist/uiState.mjs",
+      "require": "./dist/uiState.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest --run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
+    "lint": "oxlint . && oxfmt . --check",
+    "fixcode": "oxlint . --fix && oxfmt ."
+  },
+  "dependencies": {
+    "@agimon-ai/doompi-core": "workspace:*",
+    "@agimon-ai/doompi-hashline": "workspace:*",
+    "@agimon-ai/doompi-minor-mode": "workspace:*",
+    "@agimon-ai/doompi-telemetry": "workspace:*",
+    "@deepseek-ai/cordis": "4.0.2",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@agimon-ai/doompi-build": "workspace:*",
+    "@agimon-ai/doompi-core": "workspace:*",
+    "@agimon-ai/doompi-web-components": "workspace:*",
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@earendil-works/pi-tui": "0.85.1",
+    "@tanstack/react-store": "0.11.1",
+    "@tanstack/store": "0.11.1",
+    "@types/node": "26.5.1",
+    "@types/react": "19.3.0",
+    "@vitest/coverage-v8": "5.0.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tsdown": "0.23.0",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  },
+  "peerDependencies": {
+    "@agimon-ai/doompi-core": "workspace:*",
+    "@agimon-ai/doompi-web-components": "workspace:*",
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@earendil-works/pi-tui": "0.85.1"
+  },
+  "peerDependenciesMeta": {
+    "@agimon-ai/doompi-web-components": {
+      "optional": true
+    },
+    "@agimon-ai/doompi-core": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "doompiServer": {
+    "entry": "./generated/server.ts",
+    "dist": "./dist/extensions/server.mjs",
+    "scopes": [
+      "session"
+    ],
+    "contracts": {
+      "entry": "./src/exports/apiContracts.ts",
+      "dist": "./dist/api-contracts.mjs"
+    }
+  },
+  "doompiWeb": {
+    "pluginId": "builtin-tools",
+    "channels": [],
+    "client": "./dist/extensions/web.mjs",
+    "scopes": [
+      "session"
+    ]
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extensions/pi.mjs"
+    ]
+  }
+}

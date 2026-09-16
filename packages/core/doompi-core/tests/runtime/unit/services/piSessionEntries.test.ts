@@ -1,4 +1,4 @@
-import type { Entry } from '@earendil-works/pi-agent-core';
+import type { AgentMessage, Entry } from '@earendil-works/pi-agent-core';
 import type { CustomEntry, SessionEntry, SessionMessageEntry } from '@earendil-works/pi-coding-agent';
 import { CURRENT_SESSION_VERSION } from '@earendil-works/pi-coding-agent';
 import { describe, expect, it } from 'vitest';
@@ -40,6 +40,53 @@ describe('harness to Pi session entry conversion', () => {
     expect(converted?.timestamp).toBe('2023-11-14T22:13:20.123Z');
   });
 
+  it('derives a compaction boundary from the first retained message', () => {
+    const assistantMessage: Extract<AgentMessage, { role: 'assistant' }> = {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'kept' }],
+      api: 'anthropic-messages',
+      provider: 'anthropic',
+      model: 'claude',
+      usage: {
+        input: 1,
+        output: 1,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 2,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: 'stop',
+      timestamp: CREATED_AT + 1,
+    };
+    const assistant: Extract<Entry, { type: 'message' }> = {
+      type: 'message',
+      id: 'entry-3',
+      parentId: messageEntry.id,
+      seq: 3,
+      timestamp: CREATED_AT + 1,
+      message: assistantMessage,
+    };
+    const compaction: Entry = {
+      type: 'compaction',
+      id: 'entry-4',
+      parentId: assistant.id,
+      seq: 4,
+      timestamp: CREATED_AT + 2,
+      summary: 'older context',
+      retainedTail: [assistant.message],
+      tokensBefore: 100,
+      fromHook: false,
+    };
+
+    const files = toPiFileEntries({ id: 'session-1', cwd: '/repo', createdAt: CREATED_AT }, [
+      messageEntry,
+      assistant,
+      compaction,
+    ]);
+
+    expect(files[3]).toMatchObject({ type: 'compaction', firstKeptEntryId: 'entry-3' });
+    expect(files[3]).not.toMatchObject({ firstKeptEntryId: 'entry-4' });
+  });
   it('skips a harness entry type it cannot map instead of throwing', () => {
     const unknownEntry = {
       type: 'future_harness_type',

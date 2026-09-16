@@ -61,7 +61,11 @@ export function defineServerPlugin(plugin: DoomServerPluginDefinition): DoomServ
             const unsubscribe = restriction.subscribe?.(refresh);
             if (unsubscribe) lifecycle.own(unsubscribe);
           }
-          for (const resource of session.resources ?? []) own(agent.registerResource(resource));
+          for (const resource of session.resources ?? []) {
+            // Generated optional and many-valued contributions can leave an undefined
+            // member when a package has no resource for the current runtime.
+            if (resource !== undefined) own(agent.registerResource(resource));
+          }
           for (const tool of session.tools ?? []) {
             if ('kind' in tool) {
               own(

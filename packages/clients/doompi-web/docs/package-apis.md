@@ -12,7 +12,7 @@ Package APIs are server facets from a synchronized DoomPi composition. DoomPi We
 
 Scope comes from the path. Query parameters cannot select another mount. A session must belong to the workspace named in its path. Unknown workspaces, sessions, or package APIs return `404`, with no parent-scope fallback. Retired flat session routes and singular plugin routes have no compatibility aliases.
 
-The global WebSocket carries the aggregate routed hub protocol. Workspace and session sockets restrict session attachments and package calls to their addressed scope. See the [protocol guide](../../../core/doompi/docs/server/ipc.md).
+The global WebSocket carries the aggregate routed hub protocol. Workspace and session sockets restrict session attachments and package calls to their addressed scope. See the [protocol guide](../../../cli/doompi/docs/server/ipc.md).
 
 ## Synchronized compositions
 
@@ -20,7 +20,7 @@ The global WebSocket carries the aggregate routed hub protocol. Workspace and se
 
 Hosts filter scope and mode/layer ownership before importing facets. Global and workspace defaults are independent; session composition follows its own selection. A missing or stale generation requires synchronization. A request never silently selects another repository or generation.
 
-See [Web bundling and serving](bundle.md) for generation publication and [contract export](../../../core/doompi/docs/server/api-export.md) for OpenAPI and AsyncAPI.
+See [Web bundling and serving](bundle.md) for generation publication and [contract export](../../../cli/doompi/docs/server/api-export.md) for OpenAPI and AsyncAPI.
 
 ## Declare an API
 

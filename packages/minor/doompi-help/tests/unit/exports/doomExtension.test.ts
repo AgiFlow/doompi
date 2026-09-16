@@ -33,7 +33,7 @@ vi.mock('../../../src/services/helpRuntime', () => ({
   },
 }));
 
-vi.mock('../../../src/controllers/helpMode', () => ({
+vi.mock('../../../src/services/helpMode', () => ({
   registerHelpModeIntegration: (...argumentsValue: unknown[]) => mocks.modeRegister(...argumentsValue),
   registerHelpUiIntegration: (...argumentsValue: unknown[]) => {
     mocks.uiRegister(...argumentsValue);
@@ -41,8 +41,8 @@ vi.mock('../../../src/controllers/helpMode', () => ({
   },
 }));
 
-import { helpExtension } from '../../../src/extensions/pi';
-import piExtension from '../../../src/extensions/pi';
+import { extension as helpExtension } from '../../../generated/pi';
+import piExtension from '../../../generated/pi';
 
 type LifecycleHandler = (...argumentsValue: unknown[]) => unknown;
 

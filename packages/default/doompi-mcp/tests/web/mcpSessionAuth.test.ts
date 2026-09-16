@@ -2,11 +2,14 @@ import { renderPlugin, slotPropsFixture } from '@agimon-ai/doompi-core/web/testi
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  McpSessionAuthSection,
+  requestMcpSessionAuthorization,
+} from '../../src/extensions/workspaces/sessions/(frontend)/fill/_components/McpSessionAuthSection';
+import {
   formatMcpSessionAuthStatus,
   MCP_SESSION_AUTH_STATUS_KEY,
   parseMcpSessionAuthStatus,
 } from '../../src/types/webMcp';
-import { McpSessionAuthSection, requestMcpSessionAuthorization } from '../../src/web/components/McpSessionAuthSection';
 
 describe('MCP live-session authorization status', () => {
   it('serializes connected completion and safe authorization URLs without diagnostics', () => {

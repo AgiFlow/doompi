@@ -13,6 +13,7 @@ import { Context } from '@deepseek-ai/cordis';
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { extension as activateTeamExtension } from '../../generated/pi';
 import {
   DOOM_DELEGATION_FINISHED_EVENT,
   DOOM_DELEGATION_STARTED_EVENT,
@@ -20,7 +21,6 @@ import {
   readDoomDelegationService,
 } from '../../src/exports/delegationApi';
 import { readDoomSubagentPolicyService } from '../../src/exports/subagentPolicy';
-import { activateTeamExtension } from '../../src/extensions/pi';
 import { createSessionScope } from '../../src/services/sessionPaths';
 import * as runtimeModule from '../../src/services/teamRuntime';
 import type { TeamExtensionRuntime } from '../../src/services/teamRuntime';
@@ -255,6 +255,8 @@ describe('Team standard runtime', () => {
 
     expect(host.tools).toContain('subagent');
     expect(host.tools).not.toContain('subagent_wait');
+    expect(host.toolDefinitions.get('subagent')?.renderCall).toBeTypeOf('function');
+    expect(host.toolDefinitions.get('subagent')?.renderResult).toBeTypeOf('function');
   });
 
   it('registers exactly the two Doom Team model-facing tools', async () => {
@@ -285,13 +287,14 @@ describe('Team standard runtime', () => {
     expect(host.commands.length).toBeGreaterThan(1);
   });
 
-  it('registers the completion renderer, so a finished run renders as more than raw markdown', async () => {
+  it('registers the Team message renderers instead of leaving custom messages in Pi fallback chrome', async () => {
     resetRuntimeState();
     const host = fakePi();
 
     await activateTeamForTest(host.pi);
 
     expect(host.renderers).toContain('subagent-notify');
+    expect(host.renderers).toContain('intercom_message');
   });
 
   /**

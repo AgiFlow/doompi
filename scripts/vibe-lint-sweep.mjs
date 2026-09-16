@@ -6,11 +6,14 @@ import process from 'node:process';
 
 const root = process.cwd();
 const packageRoots = [
+  'packages/cli',
   'packages/core',
+  'packages/foundations',
   'packages/default',
   'packages/minor',
   'packages/clients',
   'packages/tooling',
+  'packages/utils',
   'layers',
 ];
 const packagePatterns = ['**/*.ts', '**/*.tsx', '**/*.cts', '**/*.mts', '**/package.json'];

@@ -18,8 +18,7 @@ let previousRegistryPath: string | undefined;
 const EMPTY_ENVIRONMENT = Object.freeze({});
 const open: RunnerRegistry[] = [];
 
-function pathsFor(repositoryPath: string): IRunnerPaths {
-  const stateDirectory = path.join(directory, 'runs');
+function pathsFor(repositoryPath: string, stateDirectory = path.join(directory, 'runs')): IRunnerPaths {
   return {
     repositoryPath: () => repositoryPath,
     setSessionId: () => undefined,
@@ -45,8 +44,9 @@ function registryFor(
   alive: ReadonlySet<number> = new Set([1, 2, 3]),
   port: ProcessRegistryPort = createDefaultProcessRegistry(),
   environment: Readonly<Record<string, string | undefined>> = EMPTY_ENVIRONMENT,
+  stateDirectory?: string,
 ): RunnerRegistry {
-  const registry = new RunnerRegistry(pathsFor(repositoryPath), controlWith(alive), port, environment);
+  const registry = new RunnerRegistry(pathsFor(repositoryPath, stateDirectory), controlWith(alive), port, environment);
   open.push(registry);
   return registry;
 }
@@ -170,19 +170,76 @@ describe('RunnerRegistry', () => {
     expect(emitWarning).toHaveBeenCalledOnce();
   });
 
-  it('notifies subscribers when runners are registered and released', async () => {
+  it('notifies subscribers when runners are registered, promoted, and completed', async () => {
     const registry = registryFor('/repo/main');
     let changes = 0;
     const unsubscribe = registry.subscribe(() => {
       changes += 1;
-    });
+    }, 'session-a');
 
     await registry.register(inputFor('api', 1));
-    await registry.release('api');
+    await registry.markPromoted('api');
+    await registry.complete('api', { reason: 'completed', code: 0, signal: null }, 'session-a');
     unsubscribe();
     await registry.register(inputFor('web', 2));
 
-    expect(changes).toBe(2);
+    expect(changes).toBe(3);
+  });
+
+  it('notifies another registry instance for the same session and durable store', async () => {
+    const publisherRegistry = registryFor('/repo/main');
+    const toolRegistry = registryFor('/repo/main');
+    const changed = vi.fn();
+    const unsubscribe = publisherRegistry.subscribe(changed, 'session-a');
+
+    await toolRegistry.register(inputFor('api', 1));
+
+    expect(changed).toHaveBeenCalledOnce();
+    expect(await publisherRegistry.listAll('session-a')).toMatchObject([{ id: 'api', state: 'running' }]);
+    unsubscribe();
+  });
+
+  it('does not notify another session sharing the durable directory', async () => {
+    const publisherRegistry = registryFor('/repo/main');
+    const toolRegistry = registryFor('/repo/main');
+    const changed = vi.fn();
+    publisherRegistry.subscribe(changed, 'session-b');
+
+    await toolRegistry.register(inputFor('api', 1, 'session-a'));
+
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it('does not notify the same session in a different durable store', async () => {
+    const publisherRegistry = registryFor(
+      '/repo/main',
+      new Set([1, 2, 3]),
+      createDefaultProcessRegistry(),
+      EMPTY_ENVIRONMENT,
+      path.join(directory, 'other-runs'),
+    );
+    const toolRegistry = registryFor('/repo/main');
+    const changed = vi.fn();
+    publisherRegistry.subscribe(changed, 'session-a');
+
+    await toolRegistry.register(inputFor('api', 1));
+
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it('isolates listener failures and preserves other subscribers', async () => {
+    const registry = registryFor('/repo/main');
+    const changed = vi.fn();
+    const emitWarning = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined);
+    registry.subscribe(() => {
+      throw new Error('listener failed');
+    }, 'session-a');
+    registry.subscribe(changed, 'session-a');
+
+    await expect(registry.register(inputFor('api', 1))).resolves.toMatchObject({ id: 'api' });
+
+    expect(changed).toHaveBeenCalledOnce();
+    expect(emitWarning).toHaveBeenCalledWith('Runner registry listener failed: Error: listener failed');
   });
 
   it('never returns a runner belonging to a sibling worktree', async () => {

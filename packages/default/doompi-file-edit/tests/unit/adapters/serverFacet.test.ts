@@ -2,8 +2,7 @@ import { DOOM_SERVER_HOST_SERVICE, type DoomServerHostService } from '@agimon-ai
 import { Context } from '@deepseek-ai/cordis';
 import { describe, expect, it } from 'vitest';
 
-import { api } from '../../../src/controllers/fileEditsApi';
-import { fileEditsServerFacet } from '../../../src/extensions/server';
+import { facet as fileEditsServerFacet } from '../../../generated/server';
 import { filesChannelType } from '../../../src/types/webFiles';
 
 type MountedApi = Parameters<DoomServerHostService['registerApi']>[0];
@@ -33,7 +32,7 @@ function hostContext(scope: DoomServerHostService['scope']) {
   };
   const context = new Context();
   context.provide(DOOM_SERVER_HOST_SERVICE, host);
-  return { context, registered, channels, state };
+  return { context, registered, channels, state, mountedApis: () => host.mounted() };
 }
 
 describe('fileEditsServerFacet', () => {
@@ -41,17 +40,20 @@ describe('fileEditsServerFacet', () => {
     expect(fileEditsServerFacet.inject).toEqual([DOOM_SERVER_HOST_SERVICE]);
   });
 
-  it('registers the exact file-edits API in session scope', async () => {
+  it('mounts the file-edits API and channel in session scope', async () => {
     const harness = hostContext('session');
     expect(typeof (await fileEditsServerFacet.apply(harness.context))).toBe('function');
-    expect(harness.registered).toEqual([api]);
-    expect(harness.channels).toEqual([]);
+    // This assertion used to read `toEqual([])`, and it was correct: the API
+    // was declared, contracted and unit-tested, and mounted nowhere.
+    expect(harness.mountedApis()).toEqual(['file-edits']);
+    expect(harness.channels).toHaveLength(1);
+    expect(harness.channels[0]?.frameType).toBe(filesChannelType);
   });
 
-  it('registers the file-edits channel in hub scope', async () => {
+  it('registers the file-edits channel in hub scope, but mounts no session API there', async () => {
     const harness = hostContext('global');
     expect(typeof (await fileEditsServerFacet.apply(harness.context))).toBe('function');
-    expect(harness.registered).toEqual([]);
+    expect(harness.mountedApis()).toEqual([]);
     expect(harness.channels).toHaveLength(1);
     expect(harness.channels[0]?.frameType).toBe(filesChannelType);
   });
@@ -61,7 +63,8 @@ describe('fileEditsServerFacet', () => {
     await (
       await fileEditsServerFacet.apply(session.context)
     )?.();
-    expect(session.state.disposed).toBe(1);
+    // Two now: the channel, and the API this package spent its life not mounting.
+    expect(session.state.disposed).toBe(2);
 
     const hub = hostContext('global');
     await (

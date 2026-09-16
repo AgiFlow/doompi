@@ -7,7 +7,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   webPluginEntry,
   webPluginImportAllowlist,
-  webPluginLayerBoundary,
   webPluginManifest,
   webPluginNoModuleState,
   webPluginProtocolLayout,
@@ -17,6 +16,12 @@ import {
 const CORE_PACKAGE = '@agimon-ai/doompi-core';
 const CONTRACTS = '@agimon-ai/doompi-core/web';
 const COMPONENTS = '@agimon-ai/doompi-web-components';
+/** The routed browser half: a (frontend) side group under a scope. */
+const FRONTEND = 'src/extensions/sessions/(frontend)';
+/** From a file directly under a FRONTEND surface back to src/. */
+const TO_SRC = '../../../..';
+/** From a file in a surface's private folder back to src/. */
+const TO_SRC_FROM_PRIVATE = '../../../../..';
 
 describe('Doom web plugin rules', () => {
   let root: string;
@@ -46,21 +51,30 @@ describe('Doom web plugin rules', () => {
     it('rejects raw package frames and accepts scoped typed calls', () => {
       writeManifest({ name: '@agimon-ai/doompi-demo', doompiWeb: { pluginId: 'demo' } });
       const raw = write(
-        'src/web/api/raw.ts',
+        `${FRONTEND}/api/_lib/raw.ts`,
         'export const send = (runtime: any) => runtime.sendHubFrame({ type: "demo" });',
       );
       expect(webPluginTypedCalls.check?.(raw, root)).toContain('runtime.invokeServerMethod');
       const typed = write(
-        'src/web/api/typed.ts',
+        `${FRONTEND}/api/_lib/typed.ts`,
         'export const send = (runtime: any) => runtime.invokeServerMethod({ mount: { scope: "global" }, service: "demo", method: "send", input: {} });',
       );
       expect(webPluginTypedCalls.check?.(typed, root)).toBeNull();
     });
 
+    it('leaves the terminal half of the same side alone', () => {
+      writeManifest({ name: '@agimon-ai/doompi-demo', doompiWeb: { pluginId: 'demo' } });
+      const overlay = write(
+        `${FRONTEND}/overlay/_lib/raw.ts`,
+        'export const send = (runtime: any) => runtime.sendHubFrame({ type: "demo" });',
+      );
+      expect(webPluginTypedCalls.check?.(overlay, root)).toBeNull();
+    });
+
     it('keeps only the explicit Git migration exception', () => {
       writeManifest({ name: '@agimon-ai/doompi-git', doompiWeb: { pluginId: 'git' } });
       const raw = write(
-        'src/web/api/raw.ts',
+        `${FRONTEND}/api/_lib/raw.ts`,
         'export const send = (runtime: any) => runtime.sendHubFrame({ type: "git" });',
       );
       expect(webPluginTypedCalls.check?.(raw, root)).toBeNull();
@@ -70,102 +84,94 @@ describe('Doom web plugin rules', () => {
   describe('web-plugin-protocol-layout', () => {
     it('rejects private transport files and misplaced method definitions', () => {
       writeManifest({ name: '@agimon-ai/doompi-demo', doompiWeb: { pluginId: 'demo' } });
-      const socket = write('src/web/api/DemoSocket.ts', 'export const connect = () => undefined;');
+      const socket = write(`${FRONTEND}/api/_lib/DemoSocket.ts`, 'export const connect = () => undefined;');
       const transport = write('src/adapters/transport/local.ts', 'export const send = () => undefined;');
-      const misplaced = write('src/web/api/demoMethod.ts', 'export const method = defineDoomPluginMethod({});');
+      const misplaced = write(
+        `${FRONTEND}/api/_lib/demoMethod.ts`,
+        'export const method = defineDoomPluginMethod({});',
+      );
       expect(webPluginProtocolLayout.check?.(socket, root)).toContain('private protocol or transport');
       expect(webPluginProtocolLayout.check?.(transport, root)).toContain('private protocol or transport');
       expect(webPluginProtocolLayout.check?.(misplaced, root)).toContain('outside src/schemas');
       const schema = write('src/schemas/demoMethod.ts', 'export const method = defineDoomPluginMethod({});');
       expect(webPluginProtocolLayout.check?.(schema, root)).toBeNull();
       const caller = write(
-        'src/web/api/demo.ts',
+        `${FRONTEND}/api/_lib/demo.ts`,
         'export const call = (runtime: any) => runtime.invokeServerMethod({});',
       );
       expect(webPluginProtocolLayout.check?.(caller, root)).toBeNull();
+    });
+
+    it('reads the socket name through the platform suffix', () => {
+      writeManifest({ name: '@agimon-ai/doompi-demo', doompiWeb: { pluginId: 'demo' } });
+      const suffixed = write(`${FRONTEND}/channel/demoSocket.web.ts`, 'export default { connect: () => undefined };');
+      expect(webPluginProtocolLayout.check?.(suffixed, root)).toContain('private protocol or transport');
     });
   });
 
   describe('web-plugin-import-allowlist', () => {
     it('accepts the allowed bare and relative imports', () => {
       write('src/types/webDemo.ts', 'export type Demo = { id: string };');
-      write('src/web/demoStore.ts', 'export const x = 1;');
+      write(`${FRONTEND}/tab/_lib/demoStore.ts`, 'export const x = 1;');
       const filePath = write(
-        'src/web/index.tsx',
+        `${FRONTEND}/tab/demo.web.tsx`,
         [
           `import { defineWebPlugin } from '${CONTRACTS}';`,
           `import { Button } from '${COMPONENTS}';`,
           "import { useStore } from '@tanstack/react-store';",
           "import { Store } from '@tanstack/store';",
           "import { useState } from 'react';",
-          "import type { Demo } from '../types/webDemo.ts';",
-          "import { x } from './demoStore.ts';",
+          `import type { Demo } from '${TO_SRC}/types/webDemo.ts';`,
+          "import { x } from './_lib/demoStore.ts';",
           'export const webPlugin = defineWebPlugin({ id: "demo" });',
         ].join('\n'),
       );
       expect(webPluginImportAllowlist.check?.(filePath, root)).toBeNull();
     });
 
-    it('rejects node builtins, other packages, and relative imports outside web and src/types', () => {
+    it('rejects node builtins, other packages, and relative imports outside the browser half and src/types', () => {
       const filePath = write(
-        'src/web/index.ts',
+        `${FRONTEND}/tab/demo.web.ts`,
         [
           "import fs from 'node:fs';",
           "import { Hono } from 'hono';",
           "import type { Thing } from '@agimon-ai/doompi-ui';",
-          "import { helper } from '../src/services/helper.ts';",
-          "import { fine } from '../types/fine.ts';",
+          `import { helper } from '${TO_SRC}/services/helper.ts';`,
+          `import { fine } from '${TO_SRC}/types/fine.ts';`,
         ].join('\n'),
       );
       const result = webPluginImportAllowlist.check?.(filePath, root);
       expect(result).toContain('node:fs');
       expect(result).toContain('hono');
       expect(result).toContain('@agimon-ai/doompi-ui');
-      expect(result).toContain('../src/services/helper.ts');
+      expect(result).toContain(`${TO_SRC}/services/helper.ts`);
       expect(result).not.toContain('fine');
     });
 
-    it('ignores files outside web/', () => {
-      const filePath = write('src/services/x.ts', "import fs from 'node:fs';");
+    // Delete with the folder: a routed browser file may still reach the src/web
+    // modules it has not absorbed yet.
+    it('still allows a routed browser file to reach src/web', () => {
+      write('src/web/components/DemoPanel.tsx', 'export const DemoPanel = () => null;');
+      const filePath = write(
+        `${FRONTEND}/fill/Demo.activity.demo.web.tsx`,
+        `import { DemoPanel } from '${TO_SRC}/web/components/DemoPanel';`,
+      );
       expect(webPluginImportAllowlist.check?.(filePath, root)).toBeNull();
     });
-  });
 
-  describe('web-plugin-layer-boundary', () => {
-    it('accepts the canonical folders and inward imports', () => {
-      write('src/web/lib/format.ts', 'export const format = String;');
-      write(
-        'src/web/stores/itemsStore.ts',
-        "import { format } from '../lib/format.ts'; export const item = format(1);",
-      );
-      const component = write(
-        'src/web/components/ItemsPanel.tsx',
-        "import { item } from '../stores/itemsStore.ts'; export const ItemsPanel = () => <p>{item}</p>;",
-      );
-      expect(webPluginLayerBoundary.check?.(component, root)).toBeNull();
-      expect(webPluginLayerBoundary.check?.(write('src/web/index.ts', entry), root)).toBeNull();
-      expect(webPluginLayerBoundary.check?.(path.join(root, 'src/web/DeletedPanel.tsx'), root)).toBeNull();
-    });
-
-    it('rejects flat files, unknown folders, and outward imports', () => {
-      const flat = write('src/web/ItemsPanel.tsx', 'export const ItemsPanel = () => null;');
-      expect(webPluginLayerBoundary.check?.(flat, root)).toContain('Only src/web/index.ts');
-
-      const unknown = write('src/web/utils/format.ts', 'export const format = String;');
-      expect(webPluginLayerBoundary.check?.(unknown, root)).toContain("Unknown web plugin folder 'utils'");
-
-      write('src/web/components/ItemsPanel.tsx', 'export const ItemsPanel = () => null;');
-      const store = write(
-        'src/web/stores/itemsStore.ts',
-        "import { ItemsPanel } from '../components/ItemsPanel.tsx'; export const item = ItemsPanel;",
-      );
-      expect(webPluginLayerBoundary.check?.(store, root)).toContain('src/web/stores may not import src/web/components');
+    it('ignores files outside the browser half', () => {
+      expect(
+        webPluginImportAllowlist.check?.(write('src/services/x.ts', "import fs from 'node:fs';"), root),
+      ).toBeNull();
+      const terminal = write(`${FRONTEND}/overlay/demo.cli.tsx`, "import fs from 'node:fs';");
+      expect(webPluginImportAllowlist.check?.(terminal, root)).toBeNull();
     });
   });
+
   describe('web-plugin-no-module-state', () => {
     it('flags top-level let and var and accepts const stores and function-local let', () => {
       const flagged = write(
-        'src/web/demoStore.ts',
+        `${FRONTEND}/tab/_lib/demoStore.ts`,
         'let runtime: unknown;\nexport var cache = {};\nexport const store = new Map();\nfunction f() { let local = 1; return local; }\n',
       );
       const result = webPluginNoModuleState.check?.(flagged, root);
@@ -173,7 +179,7 @@ describe('Doom web plugin rules', () => {
       expect(result).toContain('defineSessionStore');
 
       const fine = write(
-        'src/web/fineStore.ts',
+        `${FRONTEND}/tab/_lib/fineStore.ts`,
         'export const store = new Map();\nfunction f() { let local = 1; return local; }\n',
       );
       expect(webPluginNoModuleState.check?.(fine, root)).toBeNull();
@@ -184,13 +190,13 @@ describe('Doom web plugin rules', () => {
   describe('web-plugin-manifest', () => {
     it('is silent without a doompiWeb block and on other files', () => {
       expect(webPluginManifest.check?.(writeManifest({ name: 'p' }), root)).toBeNull();
-      expect(webPluginManifest.check?.(write('src/web/index.ts', entry), root)).toBeNull();
+      expect(webPluginManifest.check?.(write(`${FRONTEND}/tab/demo.web.ts`, entry), root)).toBeNull();
     });
 
     it('reports every manifest problem at once', () => {
       write(
-        'src/web/index.ts',
-        `import { Button } from '${COMPONENTS}';\nimport type { D } from '../types/webDemo.ts';`,
+        `${FRONTEND}/tab/demo.web.tsx`,
+        `import { Button } from '${COMPONENTS}';\nimport type { D } from '${TO_SRC}/types/webDemo.ts';`,
       );
       write('src/types/webDemo.ts', 'export type D = 1;');
       const manifest = writeManifest({
@@ -200,17 +206,16 @@ describe('Doom web plugin rules', () => {
         doompiWeb: {
           pluginId: 'Bad Case',
           registrationOrder: -1,
-          client: './src/web/index.ts',
+          client: './src/exports/webClient.ts',
           hub: { entry: './src/exports/webHub.ts' },
         },
       });
       const result = webPluginManifest.check?.(manifest, root);
       expect(result).toContain("pluginId 'Bad Case' must be kebab-case");
       expect(result).toContain('registrationOrder must be a non-negative integer');
-      expect(result).toContain('client must be ./src/extensions/web.ts');
-      expect(result).toContain('has no src/web/tsconfig.json');
+      expect(result).toContain('client must be one of ./src/extensions/web.ts or ./dist/extensions/web.mjs');
       expect(result).toContain('must not declare doompiWeb.hub');
-      expect(result).toContain("web/ imports 'src/types/webDemo.ts', which is not in the files allowlist");
+      expect(result).toContain("the browser half imports 'src/types/webDemo.ts', which is not in the files allowlist");
       expect(result).toContain(`${CORE_PACKAGE} must be a dependency`);
       expect(result).toContain(`${COMPONENTS} must be a dependency`);
     });
@@ -218,21 +223,19 @@ describe('Doom web plugin rules', () => {
     it('reports a missing client entry', () => {
       const manifest = writeManifest({
         name: 'p',
-        files: ['src/web'],
+        files: ['src/extensions/web.ts'],
         dependencies: { [CORE_PACKAGE]: 'workspace:*' },
-        doompiWeb: { pluginId: 'demo', client: './src/web/index.ts' },
+        doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
       });
-      expect(webPluginManifest.check?.(manifest, root)).toContain('client must be ./src/extensions/web.ts');
+      expect(webPluginManifest.check?.(manifest, root)).toContain("client './src/extensions/web.ts' does not exist");
     });
 
     it('accepts a complete browser-only manifest with canonical client entries', () => {
-      write('src/web/index.ts', `import type { D } from '../types/webDemo.ts';\n${entry}`);
-      write('src/web/tsconfig.json', '{}');
       write('src/types/webDemo.ts', 'export type D = 1;');
-      write('src/extensions/web.ts', "export { webPlugin } from '../web/index';");
+      write('src/extensions/web.ts', `import type { D } from '../types/webDemo.ts';\n${entry}`);
       const manifest = writeManifest({
         name: 'p',
-        files: ['dist', 'src/web', 'src/extensions/web.ts', 'src/types/webDemo.ts'],
+        files: ['dist', 'src/extensions/web.ts', 'src/types/webDemo.ts'],
         dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: [
           { pluginId: 'demo', client: './src/extensions/web.ts' },
@@ -259,43 +262,76 @@ describe('Doom web plugin rules', () => {
     });
 
     it('resolves worker query imports and their relative assets while respecting exclusions', () => {
-      write('src/extensions/web.ts', "import worker from '../web/worker.ts?worker&url';\n" + entry);
-      write('src/web/tsconfig.json', '{}');
-      write('src/web/worker.ts', "import data from './assets/model.bin?url'; import '../types/cycle';");
-      write('src/web/assets/model.bin', 'model');
-      write('src/types/cycle.ts', "export type Cycle = {}; import '../web/worker';");
+      write(
+        'src/extensions/web.ts',
+        `import worker from './sessions/(frontend)/tab/_lib/worker.ts?worker&url';\n${entry}`,
+      );
+      write(
+        `${FRONTEND}/tab/_lib/worker.ts`,
+        `import data from './assets/model.bin?url'; import '${TO_SRC_FROM_PRIVATE}/types/cycle';`,
+      );
+      write(`${FRONTEND}/tab/_lib/assets/model.bin`, 'model');
+      write(
+        'src/types/cycle.ts',
+        `export type Cycle = {}; import '../extensions/sessions/(frontend)/tab/_lib/worker';`,
+      );
       const metadata = {
         name: 'p',
         dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
       };
-      const files = ['src/extensions/web.ts', 'src/web/**', 'src/types'];
+      const files = ['src/extensions/**', 'src/types'];
       expect(webPluginManifest.check?.(writeManifest({ ...metadata, files }), root)).toBeNull();
-      const missingAsset = writeManifest({ ...metadata, files: [...files, '!src/web/assets/**'] });
+      const missingAsset = writeManifest({ ...metadata, files: [...files, `!${FRONTEND}/**/assets/**`] });
       expect(webPluginManifest.check?.(missingAsset, root)).toContain(
-        "browser entry imports 'src/web/assets/model.bin'",
+        `browser entry imports '${FRONTEND}/tab/_lib/assets/model.bin'`,
       );
     });
 
     it('accepts a direct browser extension entry', () => {
-      write('src/web/tsconfig.json', '{}');
       write('src/extensions/web.ts', entry);
       const manifest = writeManifest({
         name: 'p',
-        files: ['dist', 'src/web', 'src/extensions/web.ts'],
+        files: ['dist', 'src/extensions/web.ts'],
         dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
       });
       expect(webPluginManifest.check?.(manifest, root)).toBeNull();
     });
 
-    it('accepts optional browser peers backed by dev dependencies', () => {
-      write('src/web/index.ts', `import { Button } from '${COMPONENTS}';\n${entry}`);
-      write('src/web/tsconfig.json', '{}');
-      write('src/extensions/web.ts', "export { webPlugin } from '../web/index';");
+    it('accepts a routed browser bundle before build output exists', () => {
+      write(
+        `${FRONTEND}/tab/demo.web.ts`,
+        `import type { Demo } from '${TO_SRC}/types/demo'; export type View = Demo;`,
+      );
+      write('src/types/demo.ts', 'export type Demo = string;');
+      write('tsconfig.web.json', '{}');
       const manifest = writeManifest({
         name: 'p',
-        files: ['dist', 'src/web', 'src/extensions/web.ts'],
+        files: ['dist'],
+        dependencies: { [CORE_PACKAGE]: 'workspace:*' },
+        doompiWeb: { pluginId: 'demo', client: './dist/extensions/web.mjs' },
+      });
+      expect(webPluginManifest.check?.(manifest, root)).toBeNull();
+    });
+
+    it('requires the routed browser tsconfig at the package root', () => {
+      write(`${FRONTEND}/tab/demo.web.ts`, entry);
+      const manifest = writeManifest({
+        name: 'p',
+        files: ['dist'],
+        dependencies: { [CORE_PACKAGE]: 'workspace:*' },
+        doompiWeb: { pluginId: 'demo', client: './dist/extensions/web.mjs' },
+      });
+      expect(webPluginManifest.check?.(manifest, root)).toContain('has no tsconfig.web.json');
+    });
+
+    it('accepts optional browser peers backed by dev dependencies', () => {
+      write(`${FRONTEND}/tab/demo.web.tsx`, `import { Button } from '${COMPONENTS}';\n${entry}`);
+      write('src/extensions/web.ts', "export { webPlugin } from './sessions/(frontend)/tab/demo.web';");
+      const manifest = writeManifest({
+        name: 'p',
+        files: ['dist', 'src/extensions'],
         devDependencies: { [CORE_PACKAGE]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
         peerDependencies: { [CORE_PACKAGE]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
         peerDependenciesMeta: {
@@ -309,12 +345,11 @@ describe('Doom web plugin rules', () => {
     });
 
     it('rejects browser peers without optional metadata or local dev support', () => {
-      write('src/web/index.ts', `import { Button } from '${COMPONENTS}';\n${entry}`);
-      write('src/web/tsconfig.json', '{}');
-      write('src/extensions/web.ts', "export { webPlugin } from '../web/index';");
+      write(`${FRONTEND}/tab/demo.web.tsx`, `import { Button } from '${COMPONENTS}';\n${entry}`);
+      write('src/extensions/web.ts', "export { webPlugin } from './sessions/(frontend)/tab/demo.web';");
       const baseManifest = {
         name: 'p',
-        files: ['dist', 'src/web', 'src/extensions/web.ts'],
+        files: ['dist', 'src/extensions'],
         peerDependencies: { [CORE_PACKAGE]: 'workspace:*', [COMPONENTS]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
       };
@@ -342,56 +377,59 @@ describe('Doom web plugin rules', () => {
 
   describe('web-plugin-entry', () => {
     it('requires the client entry to export webPlugin from defineWebPlugin', () => {
-      writeManifest({ name: 'p', doompiWeb: { pluginId: 'demo', client: './src/web/index.ts' } });
-      expect(webPluginEntry.check?.(write('src/web/index.ts', entry), root)).toBeNull();
+      writeManifest({ name: 'p', doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' } });
+      expect(webPluginEntry.check?.(write('src/extensions/web.ts', entry), root)).toBeNull();
 
-      const handRolled = write('src/web/index.ts', "export const webPlugin = { id: 'demo' };");
+      const handRolled = write('src/extensions/web.ts', "export const webPlugin = { id: 'demo' };");
       expect(webPluginEntry.check?.(handRolled, root)).toContain('must export webPlugin built with defineWebPlugin');
 
       const wrongName = write(
-        'src/web/index.ts',
+        'src/extensions/web.ts',
         `import { defineWebPlugin } from '${CONTRACTS}';\nexport const plugin = defineWebPlugin({ id: 'demo' });`,
       );
       expect(webPluginEntry.check?.(wrongName, root)).toContain('must export webPlugin');
     });
 
-    it('ignores other web files and packages without a manifest block', () => {
-      writeManifest({ name: 'p', doompiWeb: { pluginId: 'demo', client: './src/web/index.ts' } });
-      expect(webPluginEntry.check?.(write('src/web/demoStore.ts', 'export const x = 1;'), root)).toBeNull();
+    it('ignores other browser files and packages without a manifest block', () => {
+      writeManifest({ name: 'p', doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' } });
+      const helper = write(`${FRONTEND}/tab/_lib/demoStore.ts`, 'export const x = 1;');
+      expect(webPluginEntry.check?.(helper, root)).toBeNull();
       writeManifest({ name: 'p' });
-      expect(webPluginEntry.check?.(write('src/web/index.ts', 'export const x = 1;'), root)).toBeNull();
+      expect(webPluginEntry.check?.(write('src/extensions/web.ts', 'export const x = 1;'), root)).toBeNull();
     });
   });
 
-  // The client entry lives outside the browser component root.
+  // The client entry lives outside the browser surfaces it composes.
   describe('a client entry published from src/extensions', () => {
-    it('accepts a manifest whose client is the direct src/extensions entry', () => {
-      write('src/web/index.ts', `import type { D } from '../types/webDemo.ts';\n${entry}`);
-      write('src/web/tsconfig.json', '{}');
+    it('checks the routed browser half against the files allowlist', () => {
+      write(
+        `${FRONTEND}/tab/demo.web.tsx`,
+        `import type { D } from '${TO_SRC}/types/webDemo.ts';\nexport const View = 1;`,
+      );
       write('src/types/webDemo.ts', 'export type D = 1;');
-      write('src/extensions/web.ts', "export { webPlugin } from '../web/index';");
-      const manifest = writeManifest({
+      write('src/extensions/web.ts', entry);
+      const metadata = {
         name: 'p',
-        files: ['dist', 'src/web', 'src/extensions/web.ts', 'src/types/webDemo.ts'],
         dependencies: { [CORE_PACKAGE]: 'workspace:*' },
-        doompiWeb: {
-          pluginId: 'demo',
-          client: './src/extensions/web.ts',
-        },
-      });
-      expect(webPluginManifest.check?.(manifest, root)).toBeNull();
+        doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
+      };
+      const files = ['dist', 'src/extensions/web.ts'];
+      expect(webPluginManifest.check?.(writeManifest({ ...metadata, files }), root)).toContain(
+        "the browser half imports 'src/types/webDemo.ts'",
+      );
+      const published = writeManifest({ ...metadata, files: [...files, 'src/types/webDemo.ts'] });
+      expect(webPluginManifest.check?.(published, root)).toBeNull();
     });
 
-    it('reports a missing src/web tsconfig even when the client sits in src/extensions', () => {
-      write('src/web/index.ts', entry);
-      write('src/extensions/web.ts', "export { webPlugin } from '../web/index';");
+    it('demands no browser tsconfig for a source client entry', () => {
+      write('src/extensions/web.ts', entry);
       const manifest = writeManifest({
         name: 'p',
-        files: ['dist', 'src/web', 'src/extensions/web.ts'],
+        files: ['dist', 'src/extensions/web.ts'],
         dependencies: { [CORE_PACKAGE]: 'workspace:*' },
         doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' },
       });
-      expect(webPluginManifest.check?.(manifest, root)).toContain('has no src/web/tsconfig.json');
+      expect(webPluginManifest.check?.(manifest, root)).toBeNull();
     });
 
     it('rejects the removed nested browser entry in the manifest', () => {
@@ -399,24 +437,22 @@ describe('Doom web plugin rules', () => {
         name: 'p',
         doompiWeb: { pluginId: 'demo', client: './src/exports/extensions/web.ts' },
       });
-      expect(webPluginManifest.check?.(manifest, root)).toContain('client must be ./src/extensions/web.ts');
+      expect(webPluginManifest.check?.(manifest, root)).toContain(
+        'client must be one of ./src/extensions/web.ts or ./dist/extensions/web.mjs',
+      );
     });
 
     it('follows one re-export hop to validate the client entry', () => {
       writeManifest({ name: 'p', doompiWeb: { pluginId: 'demo', client: './src/extensions/web.ts' } });
-      write('src/web/index.ts', entry);
-      const forwarding = write('src/extensions/web.ts', "export { webPlugin } from '../web/index';");
+      write(`${FRONTEND}/tab/demo.web.ts`, entry);
+      const forwarding = write(
+        'src/extensions/web.ts',
+        "export { webPlugin } from './sessions/(frontend)/tab/demo.web';",
+      );
       expect(webPluginEntry.check?.(forwarding, root)).toBeNull();
 
-      write('src/web/index.ts', "export const webPlugin = { id: 'demo' };");
+      write(`${FRONTEND}/tab/demo.web.ts`, "export const webPlugin = { id: 'demo' };");
       expect(webPluginEntry.check?.(forwarding, root)).toContain('must export webPlugin');
-    });
-
-    it('validates a client entry declared directly in src/web', () => {
-      writeManifest({ name: 'p', doompiWeb: { pluginId: 'demo', client: './src/web/index.ts' } });
-      expect(webPluginEntry.check?.(write('src/web/index.ts', entry), root)).toBeNull();
-      const handRolled = write('src/web/index.ts', "export const webPlugin = { id: 'demo' };");
-      expect(webPluginEntry.check?.(handRolled, root)).toContain('must export webPlugin');
     });
   });
 });

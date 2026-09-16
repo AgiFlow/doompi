@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { workflowRunsChannel, workflows } from '../src/web/stores/workflowsStore';
+import { workflowRunsChannel, workflows } from '../src/extensions/workspaces/sessions/(frontend)/_lib/workflowsStore';
 
 describe('the workflows web store channel', () => {
   it('keeps each session workflow set separately and drops one with its session', () => {
