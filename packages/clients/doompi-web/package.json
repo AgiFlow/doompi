@@ -70,7 +70,7 @@
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/react-router": "1.170.35",
     "@tanstack/react-store": "0.11.1",
-    "@tanstack/react-virtual": "3.14.11",
+    "@tanstack/react-virtual": "3.14.12",
     "@tanstack/store": "0.11.1",
     "@vitejs/plugin-react": "6.1.1",
     "@zxing/browser": "^0.2.1",

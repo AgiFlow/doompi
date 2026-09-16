@@ -69,10 +69,10 @@ importers:
         version: link:packages/clients/doompi-web
       '@agimon-ai/style-system':
         specifier: 0.1.3
-        version: 0.1.3(@types/node@26.5.1)(@types/react@19.3.0)(esbuild@0.28.1)(jiti@2.7.0)(supports-color@7.2.0)(yaml@2.9.0)(zod@4.6.2)
+        version: 0.1.3(@types/node@26.5.1)(@types/react@19.3.0)(esbuild@0.28.1)(jiti@2.7.0)(supports-color@7.2.0)(yaml@2.9.1)(zod@4.6.4)
       '@agimon-ai/vibe-lint':
         specifier: 0.0.1-alpha.35
-        version: 0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)
+        version: 0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)
       '@agimon-ai/vibe-lint-plugin-doom-cli':
         specifier: workspace:*
         version: link:packages/tooling/vibe-lint-plugin-doom-cli
@@ -87,7 +87,7 @@ importers:
         version: link:packages/tooling/vibe-lint-plugin-doom-web
       '@agimon-ai/workflow-mcp':
         specifier: 0.23.26
-        version: 0.23.26(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)
+        version: 0.23.26(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)
       '@commitlint/cli':
         specifier: 21.2.2
         version: 21.2.2(@types/node@26.5.1)(conventional-commits-parser@7.1.2)(typescript@7.0.2)
@@ -126,10 +126,10 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
       zod:
-        specifier: 4.6.2
-        version: 4.6.2
+        specifier: 4.6.4
+        version: 4.6.4
 
   layers/ask-user/doompi-user-feedback:
     dependencies:
@@ -160,7 +160,7 @@ importers:
         version: link:../../../packages/minor/doompi-voice
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -193,7 +193,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   layers/llm/doompi-model-guidance:
     dependencies:
@@ -212,7 +212,7 @@ importers:
         version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -227,7 +227,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   layers/sandbox/doompi-sandbox:
     dependencies:
@@ -246,7 +246,7 @@ importers:
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -261,7 +261,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   layers/source-control/doompi-git:
     dependencies:
@@ -292,10 +292,10 @@ importers:
         version: link:../../../packages/tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-agent-core':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -319,7 +319,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   layers/task/doompi-task:
     dependencies:
@@ -347,7 +347,7 @@ importers:
         version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -380,7 +380,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   layers/team/doompi-team:
     dependencies:
@@ -412,21 +412,21 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
       yaml:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: 2.9.1
+        version: 2.9.1
     devDependencies:
       '@agimon-ai/doompi-build':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-build
       '@earendil-works/pi-agent-core':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-ai':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -456,7 +456,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/cli/doompi:
     dependencies:
@@ -507,31 +507,31 @@ importers:
         version: 0.85.1
       '@earendil-works/pi-agent-core':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-protocol':
         specifier: 0.85.1
         version: 0.85.1
       '@earendil-works/pi-server':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-session-backend-sqlite-node':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.7)
       '@simplewebauthn/server':
-        specifier: ^14.0.1
-        version: 14.0.1
+        specifier: ^14.0.2
+        version: 14.0.2
       '@tailwindcss/vite':
         specifier: 4.3.3
-        version: 4.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 4.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
       '@vitejs/plugin-react':
         specifier: 6.1.1
-        version: 6.1.1(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 6.1.1(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
       cross-spawn:
         specifier: 7.0.6
         version: 7.0.6
@@ -558,13 +558,13 @@ importers:
         version: 1.3.30
       vite:
         specifier: 8.2.2
-        version: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+        version: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
       ws:
         specifier: 8.21.3
         version: 8.21.3
       yaml:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: 2.9.1
+        version: 2.9.1
     devDependencies:
       '@agimon-ai/doompi-runner':
         specifier: workspace:*
@@ -574,7 +574,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-cli
       '@earendil-works/pi-ai':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-client':
         specifier: 0.85.1
         version: 0.85.1
@@ -601,7 +601,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/clients/doompi-desktop:
     dependencies:
@@ -635,10 +635,10 @@ importers:
         version: 7.0.2
       vite:
         specifier: 8.2.2
-        version: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+        version: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/clients/doompi-web:
     dependencies:
@@ -671,7 +671,7 @@ importers:
         version: 14.0.0
       '@tailwindcss/vite':
         specifier: 4.3.3
-        version: 4.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 4.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
       '@tanstack/react-router':
         specifier: 1.170.35
         version: 1.170.35(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -679,14 +679,14 @@ importers:
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@tanstack/react-virtual':
-        specifier: 3.14.11
-        version: 3.14.11(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        specifier: 3.14.12
+        version: 3.14.12(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@tanstack/store':
         specifier: 0.11.1
         version: 0.11.1
       '@vitejs/plugin-react':
         specifier: 6.1.1
-        version: 6.1.1(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 6.1.1(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
       '@zxing/browser':
         specifier: ^0.2.1
         version: 0.2.1(@zxing/library@0.23.0)
@@ -704,7 +704,7 @@ importers:
         version: 4.3.3
       vite:
         specifier: 8.2.2
-        version: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+        version: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
       ws:
         specifier: 8.21.3
         version: 8.21.3
@@ -747,7 +747,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/core/doompi-build:
     devDependencies:
@@ -765,7 +765,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/core/doompi-core:
     dependencies:
@@ -783,28 +783,28 @@ importers:
         version: 0.85.1
       '@earendil-works/pi-agent-core':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-ai':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-protocol':
         specifier: 0.85.1
         version: 0.85.1
       '@earendil-works/pi-server':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-session-backend-sqlite-node':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.7)
       '@simplewebauthn/server':
-        specifier: ^14.0.1
-        version: 14.0.1
+        specifier: ^14.0.2
+        version: 14.0.2
       cross-spawn:
         specifier: 7.0.6
         version: 7.0.6
@@ -830,8 +830,8 @@ importers:
         specifier: 8.21.3
         version: 8.21.3
       yaml:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: 2.9.1
+        version: 2.9.1
     devDependencies:
       '@agimon-ai/vibe-lint-plugin-doom-core':
         specifier: workspace:*
@@ -883,7 +883,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/core/doompi-web-components:
     dependencies:
@@ -939,8 +939,8 @@ importers:
         specifier: 2.1.1
         version: 2.1.1
       lucide-react:
-        specifier: 1.44.0
-        version: 1.44.0(react@19.3.0)
+        specifier: 1.45.0
+        version: 1.45.0(react@19.3.0)
       mermaid:
         specifier: 11.17.2
         version: 11.17.2
@@ -957,8 +957,8 @@ importers:
         specifier: 4.0.1
         version: 4.0.1(supports-color@7.2.0)
       tailwind-merge:
-        specifier: 3.6.0
-        version: 3.6.0
+        specifier: 3.7.0
+        version: 3.7.0
     devDependencies:
       '@agimon-ai/doompi-core':
         specifier: workspace:*
@@ -992,7 +992,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/core/doompi-web-security:
     devDependencies:
@@ -1010,7 +1010,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/default/doompi-autocompact:
     dependencies:
@@ -1035,7 +1035,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -1047,7 +1047,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/default/doompi-edit:
     dependencies:
@@ -1075,7 +1075,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -1108,7 +1108,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/default/doompi-file-edit:
     dependencies:
@@ -1151,7 +1151,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -1190,7 +1190,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/default/doompi-grep:
     dependencies:
@@ -1218,7 +1218,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -1254,7 +1254,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/default/doompi-hook:
     dependencies:
@@ -1271,8 +1271,8 @@ importers:
         specifier: 4.0.2
         version: 4.0.2
       yaml:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: 2.9.1
+        version: 2.9.1
     devDependencies:
       '@agimon-ai/doompi-build':
         specifier: workspace:*
@@ -1282,7 +1282,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -1297,7 +1297,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/default/doompi-log:
     dependencies:
@@ -1315,7 +1315,7 @@ importers:
         version: link:../../core/doompi-web-security
       '@agimon-ai/log-sink-mcp':
         specifier: 0.29.26
-        version: 0.29.26(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)
+        version: 0.29.26(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1334,7 +1334,7 @@ importers:
         version: link:../../foundations/doompi-ui
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -1367,7 +1367,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/default/doompi-mcp:
     dependencies:
@@ -1388,32 +1388,32 @@ importers:
         version: link:../../core/doompi-web-security
       '@agimon-ai/mcp-proxy':
         specifier: 0.31.25
-        version: 0.31.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)
+        version: 0.31.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
       '@modelcontextprotocol/sdk':
         specifier: 1.30.0
-        version: 1.30.0(supports-color@7.2.0)(zod@4.6.2)
+        version: 1.30.0(supports-color@7.2.0)(zod@4.6.4)
       '@napi-rs/keyring':
         specifier: 2.0.0
         version: 2.0.0
       open:
-        specifier: 11.0.2
-        version: 11.0.2
+        specifier: 11.0.3
+        version: 11.0.3
       typebox:
         specifier: 1.3.30
         version: 1.3.30
       yaml:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: 2.9.1
+        version: 2.9.1
     devDependencies:
       '@agimon-ai/doompi-build':
         specifier: workspace:*
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -1446,7 +1446,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/default/doompi-prompt:
     dependencies:
@@ -1480,7 +1480,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -1510,7 +1510,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/default/doompi-read:
     dependencies:
@@ -1541,7 +1541,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -1574,7 +1574,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/default/doompi-runner:
     dependencies:
@@ -1595,7 +1595,7 @@ importers:
         version: link:../../core/doompi-web-security
       '@agimon-ai/foundation-process-registry':
         specifier: 0.29.25
-        version: 0.29.25(zod@4.6.2)
+        version: 0.29.25(zod@4.6.4)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
@@ -1617,7 +1617,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -1650,7 +1650,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
     optionalDependencies:
       '@agimon-ai/doompi-runner-rmux-darwin-arm64':
         specifier: workspace:*
@@ -1694,7 +1694,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -1709,7 +1709,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/foundations/doompi-cache:
     dependencies:
@@ -1726,8 +1726,8 @@ importers:
         specifier: 4.0.2
         version: 4.0.2
       pi-cache-optimizer:
-        specifier: 2.8.7
-        version: 2.8.7(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))
+        specifier: 2.8.10
+        version: 2.8.10(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))
     devDependencies:
       '@agimon-ai/doompi-build':
         specifier: workspace:*
@@ -1737,7 +1737,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -1752,7 +1752,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/foundations/doompi-config:
     dependencies:
@@ -1769,15 +1769,15 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
       yaml:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: 2.9.1
+        version: 2.9.1
     devDependencies:
       '@agimon-ai/doompi-build':
         specifier: workspace:*
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -1792,7 +1792,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/foundations/doompi-domain:
     dependencies:
@@ -1818,8 +1818,8 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
       yaml:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: 2.9.1
+        version: 2.9.1
     devDependencies:
       '@agimon-ai/doompi-build':
         specifier: workspace:*
@@ -1832,7 +1832,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -1850,7 +1850,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/foundations/doompi-major-mode:
     dependencies:
@@ -1887,7 +1887,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -1905,7 +1905,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/foundations/doompi-minor-mode:
     dependencies:
@@ -1930,7 +1930,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -1948,7 +1948,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/foundations/doompi-notification:
     dependencies:
@@ -1967,7 +1967,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -1982,7 +1982,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/foundations/doompi-profile:
     dependencies:
@@ -2019,7 +2019,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -2037,7 +2037,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/foundations/doompi-skill:
     dependencies:
@@ -2071,7 +2071,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -2089,13 +2089,13 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/foundations/doompi-telemetry:
     dependencies:
       '@agimon-ai/log-sink-mcp':
         specifier: 0.29.25
-        version: 0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)
+        version: 0.29.25(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)
       '@opentelemetry/api':
         specifier: 1.9.1
         version: 1.9.1
@@ -2114,7 +2114,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/foundations/doompi-ui:
     dependencies:
@@ -2134,8 +2134,8 @@ importers:
         specifier: 4.0.2
         version: 4.0.2
       yaml:
-        specifier: 2.9.0
-        version: 2.9.0
+        specifier: 2.9.1
+        version: 2.9.1
     devDependencies:
       '@agimon-ai/doompi-build':
         specifier: workspace:*
@@ -2145,7 +2145,7 @@ importers:
         version: link:../../core/doompi-web-components
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -2178,7 +2178,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/minor/doompi-author:
     dependencies:
@@ -2224,7 +2224,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2263,7 +2263,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/minor/doompi-computer-use:
     dependencies:
@@ -2297,7 +2297,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2327,7 +2327,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/minor/doompi-goal:
     dependencies:
@@ -2352,7 +2352,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -2388,7 +2388,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/minor/doompi-help:
     dependencies:
@@ -2410,7 +2410,7 @@ importers:
         version: link:../../tooling/vibe-lint-plugin-doom-extension
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -2425,7 +2425,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/minor/doompi-loop:
     dependencies:
@@ -2450,7 +2450,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -2480,7 +2480,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/minor/doompi-plan:
     dependencies:
@@ -2517,7 +2517,7 @@ importers:
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2547,7 +2547,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/minor/doompi-voice:
     dependencies:
@@ -2585,15 +2585,15 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
       xstate:
-        specifier: 5.32.6
-        version: 5.32.6
+        specifier: 5.33.0
+        version: 5.33.0
     devDependencies:
       '@agimon-ai/doompi-build':
         specifier: workspace:*
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@tanstack/react-store':
         specifier: 0.11.1
         version: 0.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -2623,7 +2623,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/minor/doompi-workflow:
     dependencies:
@@ -2647,13 +2647,13 @@ importers:
         version: link:../../core/doompi-web-security
       '@agimon-ai/workflow-mcp':
         specifier: 0.23.26
-        version: 0.23.26(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)
+        version: 0.23.26(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)
       '@deepseek-ai/cordis':
         specifier: 4.0.2
         version: 4.0.2
       '@modelcontextprotocol/sdk':
         specifier: 1.30.0
-        version: 1.30.0(supports-color@7.2.0)(zod@4.6.2)
+        version: 1.30.0(supports-color@7.2.0)(zod@4.6.4)
       hono:
         specifier: 4.13.7
         version: 4.13.7
@@ -2661,15 +2661,15 @@ importers:
         specifier: 1.3.30
         version: 1.3.30
       zod:
-        specifier: 4.6.2
-        version: 4.6.2
+        specifier: 4.6.4
+        version: 4.6.4
     devDependencies:
       '@agimon-ai/doompi-build':
         specifier: workspace:*
         version: link:../../core/doompi-build
       '@earendil-works/pi-coding-agent':
         specifier: 0.85.1
-        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
@@ -2705,7 +2705,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/tooling/vibe-lint-plugin-doom-cli:
     dependencies:
@@ -2715,7 +2715,7 @@ importers:
     devDependencies:
       '@agimon-ai/vibe-lint':
         specifier: 0.0.1-alpha.35
-        version: 0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3))(supports-color@7.2.0)
+        version: 0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -2727,7 +2727,7 @@ importers:
         version: 0.23.0(oxc-resolver@11.24.2)(typescript@6.0.3)
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/tooling/vibe-lint-plugin-doom-core:
     dependencies:
@@ -2737,7 +2737,7 @@ importers:
     devDependencies:
       '@agimon-ai/vibe-lint':
         specifier: 0.0.1-alpha.35
-        version: 0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)
+        version: 0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -2749,7 +2749,7 @@ importers:
         version: 0.23.0(oxc-resolver@11.24.2)(typescript@6.0.3)
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/tooling/vibe-lint-plugin-doom-extension:
     dependencies:
@@ -2762,7 +2762,7 @@ importers:
     devDependencies:
       '@agimon-ai/vibe-lint':
         specifier: 0.0.1-alpha.35
-        version: 0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)
+        version: 0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -2774,7 +2774,7 @@ importers:
         version: 0.23.0(oxc-resolver@11.24.2)(typescript@6.0.3)
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/tooling/vibe-lint-plugin-doom-web:
     dependencies:
@@ -2787,7 +2787,7 @@ importers:
     devDependencies:
       '@agimon-ai/vibe-lint':
         specifier: 0.0.1-alpha.35
-        version: 0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)
+        version: 0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)
       '@types/node':
         specifier: 26.5.1
         version: 26.5.1
@@ -2799,7 +2799,7 @@ importers:
         version: 0.23.0(oxc-resolver@11.24.2)(typescript@6.0.3)
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/utils/doompi-hashline:
     devDependencies:
@@ -2817,7 +2817,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 5.0.0
-        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   packages/utils/doompi-runner-rmux-darwin-arm64: {}
 
@@ -6339,8 +6339,8 @@ packages:
   '@simplewebauthn/browser@14.0.0':
     resolution: {integrity: sha512-1odWVqeEBTl7lJ9zMKLEsmTlnyrDO5iRcTvfMKKk1WThUnp/i8JJdffdj2icP+tty159s4PgwE3BiMoEW9NFow==}
 
-  '@simplewebauthn/server@14.0.1':
-    resolution: {integrity: sha512-kjWgcm9NdSv+Tobo4Swxd1WnEawsBogpYFMjg9pKsVLPN3FdCmR6BipkL+DcPDgmQ7UKbbBZqRqn3E3YaA7NBw==}
+  '@simplewebauthn/server@14.0.2':
+    resolution: {integrity: sha512-g+m/xv9/8FRWsDY22CwsTYRzt3WwS9fJrR3P7eY3Ti01FXH5FQ36Xn55v6D+5tb6VajlqOj4hywP/Vxsb6a3Sg==}
     engines: {node: '>=20.0.0'}
 
   '@sindresorhus/merge-streams@4.0.0':
@@ -6581,8 +6581,8 @@ packages:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
-  '@tanstack/react-virtual@3.14.11':
-    resolution: {integrity: sha512-SStWf8bYdTgAquYqG4Pi2+d1XimQKoCIJ94H3jsm0D6UA0yqffvWuvUzrrQ4idewFWq8BSPpahnmLVosJIAs6g==}
+  '@tanstack/react-virtual@3.14.12':
+    resolution: {integrity: sha512-EOJkBss/FRqzFrCpX8M96lIh+ZMc0jPt0LILhxWQ3tOHQ3XdVvuE0jceS2yZXpDtayNfpjeg2EnuYPm90CxIlA==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -6594,8 +6594,8 @@ packages:
   '@tanstack/store@0.11.1':
     resolution: {integrity: sha512-mzTOBhypOuDJAy/D8n2MfUZ1HFkXnmSETviRyhqEC8LUE7/IZQExOTxMANj3KjTofYTkFNpBY67qaVrT41YccA==}
 
-  '@tanstack/virtual-core@3.17.9':
-    resolution: {integrity: sha512-M8Bzy7CCMvUjRiuoHVH9mRjyUVczRs8v8RcUEphLFGc445ZP4KQ15Y1sLqhQqJi/HgGJrxfCHnEnIX0x9mVrBg==}
+  '@tanstack/virtual-core@3.17.10':
+    resolution: {integrity: sha512-eMorKWIi2nekElu+8DgSMJR4iR+sTDeh+W8VjKiMH79yUfEDJ3W9aL/96/wwbxNjyV6EfN39HKszSxjd90zAqQ==}
 
   '@testing-library/dom@10.4.1':
     resolution: {integrity: sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg==}
@@ -9190,8 +9190,8 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
-  lucide-react@1.44.0:
-    resolution: {integrity: sha512-2egNApH4hX4j/qdCgRublh88+9u3mEhz9iSlW5ckm4kaQEqZbXbMr0l5u5JZLy8nmWRx2dbHGQkEDYz6C9aCgw==}
+  lucide-react@1.45.0:
+    resolution: {integrity: sha512-yH1ubCAduho9UR7oJhRXIQXogksRILBiTuZC4/bQIGeB9JOkxMlSuEHyyZpo1Z3S0yWJO2KTSUZbjiNvVxeOUw==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
@@ -9616,8 +9616,8 @@ packages:
     resolution: {integrity: sha512-YgBpdJHPyQ2UE5x+hlSXcnejzAvD0b22U2OuAP+8OnlJT+PjWPxtgmGqKKc+RgTM63U9gN0YzrYc71R2WT/hTA==}
     engines: {node: '>=18'}
 
-  open@11.0.2:
-    resolution: {integrity: sha512-RWqF+pBSkqecEvCKOn8QYhaNdRMJDZRIrlS/7rTDdLHaPcfXGCZ/h8zb413NfvdeAV0MR7T1yJcA34/q+CSm1Q==}
+  open@11.0.3:
+    resolution: {integrity: sha512-b3souUgU0VaAvMmzA4+9cRgrOgMdE0vc9H9VhQ0FYnjjcyZ8R/f9DiwMU9V8rl+vjf05On9UJhbgb06fsTs87Q==}
     engines: {node: '>=20'}
 
   openai@6.40.0:
@@ -9748,8 +9748,8 @@ packages:
   pend@1.2.0:
     resolution: {integrity: sha512-F3asv42UuXchdzt+xXqfW1OGlVBe+mxa2mqI0pg5yAHZPvFmY3Y6drSf/GQ1A86WgWEN9Kzh/WrgKa6iGcHXLg==}
 
-  pi-cache-optimizer@2.8.7:
-    resolution: {integrity: sha512-p73CgW2fJG0yqLvM/3aZPlKczgvtPaAe1ZgBNFKGnw0YaxL7/6YUjaYBEsmimYAncpgTk2iRN6ftJYj7xz4f+g==}
+  pi-cache-optimizer@2.8.10:
+    resolution: {integrity: sha512-u+Da+NDQROJuP0T1KTGLkrFRaPF0pcUCuI6KA5G2gGO/a3Z+IfoNxDF9+EmVAQ1vcu/kuQCBzvqb5QekhwAAzg==}
     peerDependencies:
       '@earendil-works/pi-coding-agent': '>=0.82.0'
 
@@ -10484,8 +10484,8 @@ packages:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
 
-  tailwind-merge@3.6.0:
-    resolution: {integrity: sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w==}
+  tailwind-merge@3.7.0:
+    resolution: {integrity: sha512-XPPUyAc+cvspz3lHTcR/QgPfW2A0lv/xQNIjX3HGhLR+Nq2lHaLq5MtTesHn8GUr3W3DguT2KT5x3NVgRtYwmA==}
 
   tailwindcss@4.3.3:
     resolution: {integrity: sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==}
@@ -10962,8 +10962,8 @@ packages:
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
-  xstate@5.32.6:
-    resolution: {integrity: sha512-WfA8WNrh6r9osuGwVm+aIPM4jmMW2LKHV1Yv9thYpOtL4HVF/kobh95K/O8v2jDCpDmP2EoY+6uvuqHXCZ6ZLw==}
+  xstate@5.33.0:
+    resolution: {integrity: sha512-C58ZnDXlP5WNiiGVMxHTlKpUBtC46HN+H4o2po9Lvglt2pmPzqaqunXRmrvU4NIDvMbjVvaqqL4pGbgFSiYhgw==}
 
   y18n@5.0.8:
     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
@@ -10983,6 +10983,11 @@ packages:
 
   yaml@2.9.0:
     resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
+  yaml@2.9.1:
+    resolution: {integrity: sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==}
     engines: {node: '>= 14.6'}
     hasBin: true
 
@@ -11033,8 +11038,8 @@ packages:
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
-  zod@4.6.2:
-    resolution: {integrity: sha512-lh5RCAGFa1Cm2hjtNwLQhSs/AsqdWnTQaBER9fEwN/88pSh7KOtJavtBx/0VlkN/uFd61SwYmljLMDAsHlvzBQ==}
+  zod@4.6.4:
+    resolution: {integrity: sha512-AXSD6hvGdvRjajG/l1cC+d6IrhH+sjmPKtYeQdJIK8MFJl3LyClzS+o/YsVC+zQZPupAaeH5skwwm8YqYH7BqA==}
 
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
@@ -11111,9 +11116,9 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
-  '@agimon-ai/foundation-exec@0.26.25(zod@4.6.2)':
+  '@agimon-ai/foundation-exec@0.26.25(zod@4.6.4)':
     dependencies:
-      '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.6.2)
+      '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.6.4)
     transitivePeerDependencies:
       - zod
 
@@ -11122,15 +11127,15 @@ snapshots:
       '@tursodatabase/database': 0.7.2
       zod: 4.4.3
 
-  '@agimon-ai/foundation-port-registry@0.29.25(zod@4.6.2)':
+  '@agimon-ai/foundation-port-registry@0.29.25(zod@4.6.4)':
     dependencies:
       '@tursodatabase/database': 0.7.2
-      zod: 4.6.2
+      zod: 4.6.4
 
-  '@agimon-ai/foundation-port-registry@0.29.26(zod@4.6.2)':
+  '@agimon-ai/foundation-port-registry@0.29.26(zod@4.6.4)':
     dependencies:
       '@tursodatabase/database': 0.7.2
-      zod: 4.6.2
+      zod: 4.6.4
 
   '@agimon-ai/foundation-process-registry@0.29.25(zod@4.4.3)':
     dependencies:
@@ -11138,31 +11143,94 @@ snapshots:
       '@tursodatabase/database': 0.7.2
       zod: 4.4.3
 
-  '@agimon-ai/foundation-process-registry@0.29.25(zod@4.6.2)':
+  '@agimon-ai/foundation-process-registry@0.29.25(zod@4.6.4)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.6.2)
+      '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.6.4)
       '@tursodatabase/database': 0.7.2
-      zod: 4.6.2
+      zod: 4.6.4
 
-  '@agimon-ai/foundation-process-registry@0.29.26(zod@4.6.2)':
+  '@agimon-ai/foundation-process-registry@0.29.26(zod@4.6.4)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.26(zod@4.6.2)
+      '@agimon-ai/foundation-port-registry': 0.29.26(zod@4.6.4)
       '@tursodatabase/database': 0.7.2
-      zod: 4.6.2
+      zod: 4.6.4
 
   '@agimon-ai/foundation-validator@0.26.25(zod@4.4.3)':
     dependencies:
       zod: 4.4.3
 
-  '@agimon-ai/foundation-validator@0.26.25(zod@4.6.2)':
+  '@agimon-ai/foundation-validator@0.26.25(zod@4.6.4)':
     dependencies:
-      zod: 4.6.2
+      zod: 4.6.4
 
-  '@agimon-ai/foundation-validator@0.26.26(zod@4.6.2)':
+  '@agimon-ai/foundation-validator@0.26.26(zod@4.6.4)':
     dependencies:
-      zod: 4.6.2
+      zod: 4.6.4
 
-  '@agimon-ai/log-sink-mcp@0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3))(supports-color@7.2.0)(zod@4.4.3)':
+  '@agimon-ai/log-sink-mcp@0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)':
+    dependencies:
+      '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.6.4)
+      '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.6.4)
+      '@agimon-ai/foundation-validator': 0.26.25(zod@4.6.4)
+      '@hono/node-server': 2.0.10(hono@4.12.34)
+      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.6.4)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.4)
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/api-logs': 0.219.0
+      '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/exporter-trace-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/otlp-transformer': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/resources': 2.8.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-logs': 0.219.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/sdk-trace-node': 2.8.0(@opentelemetry/api@1.9.1)
+      chalk: 5.6.2
+      commander: 14.0.3
+      drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
+      hono: 4.12.34
+      hono-rate-limiter: 0.5.3(hono@4.12.34)
+      inversify: 8.1.0(reflect-metadata@0.2.2)
+      reflect-metadata: 0.2.2
+      ruvector-onnx-embeddings-wasm: 0.1.2
+      sqlite-vec: 0.1.9
+      ulidx: 2.4.1
+      yaml: 2.8.3
+      zod: 4.6.4
+    optionalDependencies:
+      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@cfworker/json-schema'
+      - '@cloudflare/workers-types'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@neondatabase/serverless'
+      - '@op-engineering/op-sqlite'
+      - '@planetscale/database'
+      - '@prisma/client'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/sql.js'
+      - '@upstash/redis'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - better-sqlite3
+      - bun-types
+      - expo-sqlite
+      - gel
+      - knex
+      - kysely
+      - mysql2
+      - pg
+      - postgres
+      - prisma
+      - sql.js
+      - sqlite3
+      - supports-color
+      - unstorage
+
+  '@agimon-ai/log-sink-mcp@0.29.25(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.4.3)':
     dependencies:
       '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.4.3)
       '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.4.3)
@@ -11191,7 +11259,7 @@ snapshots:
       yaml: 2.8.3
       zod: 4.4.3
     optionalDependencies:
-      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3)
+      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cfworker/json-schema'
@@ -11225,14 +11293,14 @@ snapshots:
       - supports-color
       - unstorage
 
-  '@agimon-ai/log-sink-mcp@0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.4.3)':
+  '@agimon-ai/log-sink-mcp@0.29.25(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.4.3)
-      '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.4.3)
-      '@agimon-ai/foundation-validator': 0.26.25(zod@4.4.3)
+      '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.6.4)
+      '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.6.4)
+      '@agimon-ai/foundation-validator': 0.26.25(zod@4.6.4)
       '@hono/node-server': 2.0.10(hono@4.12.34)
-      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.4.3)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.4.3)
+      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.6.4)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.4)
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/api-logs': 0.219.0
       '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
@@ -11252,9 +11320,9 @@ snapshots:
       sqlite-vec: 0.1.9
       ulidx: 2.4.1
       yaml: 2.8.3
-      zod: 4.4.3
+      zod: 4.6.4
     optionalDependencies:
-      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cfworker/json-schema'
@@ -11288,14 +11356,14 @@ snapshots:
       - supports-color
       - unstorage
 
-  '@agimon-ai/log-sink-mcp@0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)':
+  '@agimon-ai/log-sink-mcp@0.29.26(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.6.2)
-      '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.6.2)
-      '@agimon-ai/foundation-validator': 0.26.25(zod@4.6.2)
+      '@agimon-ai/foundation-port-registry': 0.29.26(zod@4.6.4)
+      '@agimon-ai/foundation-process-registry': 0.29.26(zod@4.6.4)
+      '@agimon-ai/foundation-validator': 0.26.26(zod@4.6.4)
       '@hono/node-server': 2.0.10(hono@4.12.34)
-      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.6.2)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.2)
+      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.6.4)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.4)
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/api-logs': 0.219.0
       '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
@@ -11315,9 +11383,9 @@ snapshots:
       sqlite-vec: 0.1.9
       ulidx: 2.4.1
       yaml: 2.8.3
-      zod: 4.6.2
+      zod: 4.6.4
     optionalDependencies:
-      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cfworker/json-schema'
@@ -11351,84 +11419,21 @@ snapshots:
       - supports-color
       - unstorage
 
-  '@agimon-ai/log-sink-mcp@0.29.26(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)':
+  '@agimon-ai/mcp-proxy@0.31.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)':
     dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.26(zod@4.6.2)
-      '@agimon-ai/foundation-process-registry': 0.29.26(zod@4.6.2)
-      '@agimon-ai/foundation-validator': 0.26.26(zod@4.6.2)
+      '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.6.4)
+      '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.6.4)
+      '@agimon-ai/foundation-validator': 0.26.25(zod@4.6.4)
+      '@agimon-ai/log-sink-mcp': 0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)
       '@hono/node-server': 2.0.10(hono@4.12.34)
-      '@hono/zod-validator': 0.7.6(hono@4.12.34)(zod@4.6.2)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.2)
-      '@opentelemetry/api': 1.9.1
-      '@opentelemetry/api-logs': 0.219.0
-      '@opentelemetry/exporter-logs-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/exporter-trace-otlp-http': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/otlp-transformer': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/resources': 2.8.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/sdk-logs': 0.219.0(@opentelemetry/api@1.9.1)
-      '@opentelemetry/sdk-trace-node': 2.8.0(@opentelemetry/api@1.9.1)
-      chalk: 5.6.2
-      commander: 14.0.3
-      drizzle-orm: 0.45.2(@opentelemetry/api@1.9.1)
-      hono: 4.12.34
-      hono-rate-limiter: 0.5.3(hono@4.12.34)
-      inversify: 8.1.0(reflect-metadata@0.2.2)
-      reflect-metadata: 0.2.2
-      ruvector-onnx-embeddings-wasm: 0.1.2
-      sqlite-vec: 0.1.9
-      ulidx: 2.4.1
-      yaml: 2.8.3
-      zod: 4.6.2
-    optionalDependencies:
-      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
-    transitivePeerDependencies:
-      - '@aws-sdk/client-rds-data'
-      - '@cfworker/json-schema'
-      - '@cloudflare/workers-types'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@libsql/client-wasm'
-      - '@neondatabase/serverless'
-      - '@op-engineering/op-sqlite'
-      - '@planetscale/database'
-      - '@prisma/client'
-      - '@tidbcloud/serverless'
-      - '@types/better-sqlite3'
-      - '@types/pg'
-      - '@types/sql.js'
-      - '@upstash/redis'
-      - '@vercel/postgres'
-      - '@xata.io/client'
-      - better-sqlite3
-      - bun-types
-      - expo-sqlite
-      - gel
-      - knex
-      - kysely
-      - mysql2
-      - pg
-      - postgres
-      - prisma
-      - sql.js
-      - sqlite3
-      - supports-color
-      - unstorage
-
-  '@agimon-ai/mcp-proxy@0.31.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)':
-    dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.6.2)
-      '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.6.2)
-      '@agimon-ai/foundation-validator': 0.26.25(zod@4.6.2)
-      '@agimon-ai/log-sink-mcp': 0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)
-      '@hono/node-server': 2.0.10(hono@4.12.34)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.2)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.4)
       chalk: 5.6.2
       commander: 14.0.3
       gray-matter: 4.0.3
       hono: 4.12.34
       js-yaml: 4.3.2
       liquidjs: 10.29.0
-      zod: 4.6.2
+      zod: 4.6.4
     transitivePeerDependencies:
       - '@aws-sdk/client-rds-data'
       - '@cfworker/json-schema'
@@ -11475,12 +11480,12 @@ snapshots:
   '@agimon-ai/rmux-linux-x64@0.9.2':
     optional: true
 
-  '@agimon-ai/style-system@0.1.3(@types/node@26.5.1)(@types/react@19.3.0)(esbuild@0.28.1)(jiti@2.7.0)(supports-color@7.2.0)(yaml@2.9.0)(zod@4.6.2)':
+  '@agimon-ai/style-system@0.1.3(@types/node@26.5.1)(@types/react@19.3.0)(esbuild@0.28.1)(jiti@2.7.0)(supports-color@7.2.0)(yaml@2.9.1)(zod@4.6.4)':
     dependencies:
-      '@agimon-ai/foundation-exec': 0.26.25(zod@4.6.2)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.2)
-      '@tailwindcss/vite': 4.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-      '@vitejs/plugin-react': 6.0.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+      '@agimon-ai/foundation-exec': 0.26.25(zod@4.6.4)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.4)
+      '@tailwindcss/vite': 4.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
+      '@vitejs/plugin-react': 6.0.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
       chalk: 5.6.2
       commander: 14.0.3
       glob: 13.0.6
@@ -11496,9 +11501,9 @@ snapshots:
       sharp: 0.35.4(@types/node@26.5.1)
       storybook: 10.5.2(@types/react@19.3.0)(react@19.2.7)
       tailwindcss: 4.3.3
-      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
-      vite-plugin-singlefile: 2.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
-      zod: 4.6.2
+      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
+      vite-plugin-singlefile: 2.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
+      zod: 4.6.4
     transitivePeerDependencies:
       - '@cfworker/json-schema'
       - '@rolldown/plugin-babel'
@@ -11524,11 +11529,11 @@ snapshots:
       - vite-plus
       - yaml
 
-  '@agimon-ai/vibe-lint@0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3))(supports-color@7.2.0)':
+  '@agimon-ai/vibe-lint@0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)':
     dependencies:
       '@agimon-ai/foundation-exec': 0.26.25(zod@4.4.3)
       '@agimon-ai/foundation-validator': 0.26.25(zod@4.4.3)
-      '@agimon-ai/log-sink-mcp': 0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3))(supports-color@7.2.0)(zod@4.4.3)
+      '@agimon-ai/log-sink-mcp': 0.29.25(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.4.3)
       '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.4.3)
       chalk: 5.6.2
       commander: 14.0.3
@@ -11576,71 +11581,71 @@ snapshots:
       - supports-color
       - unstorage
 
-  '@agimon-ai/vibe-lint@0.0.1-alpha.35(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)':
+  '@agimon-ai/workflow-mcp@0.23.26(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)':
     dependencies:
-      '@agimon-ai/foundation-exec': 0.26.25(zod@4.4.3)
-      '@agimon-ai/foundation-validator': 0.26.25(zod@4.4.3)
-      '@agimon-ai/log-sink-mcp': 0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.4.3)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.4.3)
-      chalk: 5.6.2
-      commander: 14.0.3
-      hono: 4.13.7
-      inversify: 8.2.1(reflect-metadata@0.2.2)
-      js-yaml: 5.4.1
-      minimatch: 10.2.5
-      reflect-metadata: 0.2.2
-      typescript: 6.0.3
-      zod: 4.4.3
-    optionalDependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.4.3)
-      '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.4.3)
-    transitivePeerDependencies:
-      - '@aws-sdk/client-rds-data'
-      - '@cfworker/json-schema'
-      - '@cloudflare/workers-types'
-      - '@earendil-works/pi-coding-agent'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@libsql/client-wasm'
-      - '@neondatabase/serverless'
-      - '@op-engineering/op-sqlite'
-      - '@planetscale/database'
-      - '@prisma/client'
-      - '@tidbcloud/serverless'
-      - '@types/better-sqlite3'
-      - '@types/pg'
-      - '@types/sql.js'
-      - '@upstash/redis'
-      - '@vercel/postgres'
-      - '@xata.io/client'
-      - better-sqlite3
-      - bun-types
-      - expo-sqlite
-      - gel
-      - knex
-      - kysely
-      - mysql2
-      - pg
-      - postgres
-      - prisma
-      - sql.js
-      - sqlite3
-      - supports-color
-      - unstorage
-
-  '@agimon-ai/workflow-mcp@0.23.26(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)':
-    dependencies:
-      '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.6.2)
-      '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.6.2)
-      '@agimon-ai/foundation-validator': 0.26.25(zod@4.6.2)
-      '@agimon-ai/log-sink-mcp': 0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2))(supports-color@7.2.0)(zod@4.6.2)
-      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.2)
+      '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.6.4)
+      '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.6.4)
+      '@agimon-ai/foundation-validator': 0.26.25(zod@4.6.4)
+      '@agimon-ai/log-sink-mcp': 0.29.25(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.4)
       '@rmux/sdk': 0.6.5
       chalk: 5.6.2
       commander: 14.0.3
       js-yaml: 4.3.2
       proper-lockfile: 4.1.2
-      zod: 4.6.2
+      zod: 4.6.4
+    optionalDependencies:
+      '@agimon-ai/rmux-darwin-arm64': 0.9.2
+      '@agimon-ai/rmux-darwin-x64': 0.9.2
+      '@agimon-ai/rmux-linux-arm64': 0.9.2
+      '@agimon-ai/rmux-linux-x64': 0.9.2
+    transitivePeerDependencies:
+      - '@aws-sdk/client-rds-data'
+      - '@cfworker/json-schema'
+      - '@cloudflare/workers-types'
+      - '@earendil-works/pi-coding-agent'
+      - '@electric-sql/pglite'
+      - '@libsql/client'
+      - '@libsql/client-wasm'
+      - '@neondatabase/serverless'
+      - '@op-engineering/op-sqlite'
+      - '@planetscale/database'
+      - '@prisma/client'
+      - '@tidbcloud/serverless'
+      - '@types/better-sqlite3'
+      - '@types/pg'
+      - '@types/sql.js'
+      - '@upstash/redis'
+      - '@vercel/postgres'
+      - '@xata.io/client'
+      - better-sqlite3
+      - bun-types
+      - expo-sqlite
+      - gel
+      - knex
+      - kysely
+      - mysql2
+      - pg
+      - postgres
+      - prisma
+      - sql.js
+      - sqlite3
+      - supports-color
+      - unstorage
+
+  '@agimon-ai/workflow-mcp@0.23.26(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)':
+    dependencies:
+      '@agimon-ai/foundation-port-registry': 0.29.25(zod@4.6.4)
+      '@agimon-ai/foundation-process-registry': 0.29.25(zod@4.6.4)
+      '@agimon-ai/foundation-validator': 0.26.25(zod@4.6.4)
+      '@agimon-ai/log-sink-mcp': 0.29.25(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(zod@4.6.4)
+      '@modelcontextprotocol/sdk': 1.29.0(supports-color@7.2.0)(zod@4.6.4)
+      '@rmux/sdk': 0.6.5
+      chalk: 5.6.2
+      commander: 14.0.3
+      js-yaml: 4.3.2
+      proper-lockfile: 4.1.2
+      zod: 4.6.4
     optionalDependencies:
       '@agimon-ai/rmux-darwin-arm64': 0.9.2
       '@agimon-ai/rmux-darwin-x64': 0.9.2
@@ -11685,20 +11690,12 @@ snapshots:
       package-manager-detector: 1.8.0
       tinyexec: 1.3.1
 
-  '@anthropic-ai/sdk@0.123.0(zod@4.4.3)':
+  '@anthropic-ai/sdk@0.123.0(zod@4.6.4)':
     dependencies:
       json-schema-to-ts: 3.1.1
       standardwebhooks: 1.1.1
     optionalDependencies:
-      zod: 4.4.3
-    optional: true
-
-  '@anthropic-ai/sdk@0.123.0(zod@4.6.2)':
-    dependencies:
-      json-schema-to-ts: 3.1.1
-      standardwebhooks: 1.1.1
-    optionalDependencies:
-      zod: 4.6.2
+      zod: 4.6.4
 
   '@apidevtools/json-schema-ref-parser@15.3.6(@types/json-schema@7.0.15)':
     dependencies:
@@ -12954,28 +12951,10 @@ snapshots:
     dependencies:
       esbuild: 0.28.1
 
-  '@earendil-works/pi-agent-core@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3)':
+  '@earendil-works/pi-agent-core@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)':
     dependencies:
       '@earendil-works/chord': 0.85.1
-      '@earendil-works/pi-ai': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3)
-      '@earendil-works/pi-telemetry': 0.85.1
-      diff: 8.0.4
-      ignore: 7.0.5
-      typebox: 1.3.7
-      yaml: 2.9.0
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-    optional: true
-
-  '@earendil-works/pi-agent-core@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)':
-    dependencies:
-      '@earendil-works/chord': 0.85.1
-      '@earendil-works/pi-ai': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-ai': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-telemetry': 0.85.1
       diff: 8.0.4
       ignore: 7.0.5
@@ -12989,37 +12968,16 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3)':
+  '@earendil-works/pi-ai@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)':
     dependencies:
-      '@anthropic-ai/sdk': 0.123.0(zod@4.4.3)
+      '@anthropic-ai/sdk': 0.123.0(zod@4.6.4)
       '@aws-sdk/client-bedrock-runtime': 3.1048.0
       '@earendil-works/pi-telemetry': 0.85.1
-      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)
+      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)
       '@smithy/node-http-handler': 4.7.3
       http-proxy-agent: 7.0.2(supports-color@7.2.0)
       https-proxy-agent: 7.0.6(supports-color@7.2.0)
-      openai: 6.40.0(ws@8.21.3)(zod@4.4.3)
-      partial-json: 0.1.7
-      typebox: 1.3.7
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-    optional: true
-
-  '@earendil-works/pi-ai@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)':
-    dependencies:
-      '@anthropic-ai/sdk': 0.123.0(zod@4.6.2)
-      '@aws-sdk/client-bedrock-runtime': 3.1048.0
-      '@earendil-works/pi-telemetry': 0.85.1
-      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)
-      '@smithy/node-http-handler': 4.7.3
-      http-proxy-agent: 7.0.2(supports-color@7.2.0)
-      https-proxy-agent: 7.0.6(supports-color@7.2.0)
-      openai: 6.40.0(ws@8.21.3)(zod@4.6.2)
+      openai: 6.40.0(ws@8.21.3)(zod@4.6.4)
       partial-json: 0.1.7
       typebox: 1.3.7
     transitivePeerDependencies:
@@ -13035,43 +12993,11 @@ snapshots:
       '@earendil-works/chord': 0.85.1
       '@earendil-works/pi-protocol': 0.85.1
 
-  '@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3)':
+  '@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)':
     dependencies:
       '@earendil-works/chord': 0.85.1
-      '@earendil-works/pi-agent-core': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3)
-      '@earendil-works/pi-ai': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)(ws@8.21.3)(zod@4.4.3)
-      '@earendil-works/pi-tui': 0.85.1
-      '@silvia-odwyer/photon-node': 0.3.4
-      chalk: 5.6.2
-      cross-spawn: 7.0.6
-      diff: 8.0.4
-      grok-mermaid: 0.2.2
-      highlight.js: 10.7.3
-      hosted-git-info: 9.0.3
-      ignore: 7.0.5
-      jiti: 2.7.0
-      minimatch: 10.2.5
-      proper-lockfile: 4.1.2
-      semver: 7.8.0
-      typebox: 1.3.7
-      undici: 8.9.0
-      yaml: 2.9.0
-    optionalDependencies:
-      '@mariozechner/clipboard': 0.3.9
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-    optional: true
-
-  '@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)':
-    dependencies:
-      '@earendil-works/chord': 0.85.1
-      '@earendil-works/pi-agent-core': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
-      '@earendil-works/pi-ai': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-agent-core': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
+      '@earendil-works/pi-ai': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-tui': 0.85.1
       '@silvia-odwyer/photon-node': 0.3.4
       chalk: 5.6.2
@@ -13103,10 +13029,10 @@ snapshots:
       '@earendil-works/chord': 0.85.1
       typebox: 1.3.7
 
-  '@earendil-works/pi-server@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)':
+  '@earendil-works/pi-server@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)':
     dependencies:
       '@earendil-works/chord': 0.85.1
-      '@earendil-works/pi-agent-core': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-agent-core': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
       '@earendil-works/pi-protocol': 0.85.1
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
@@ -13116,10 +13042,10 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-session-backend-sqlite-node@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)':
+  '@earendil-works/pi-session-backend-sqlite-node@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)':
     dependencies:
-      '@earendil-works/pi-agent-core': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
-      '@earendil-works/pi-ai': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-agent-core': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
+      '@earendil-works/pi-ai': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - bufferutil
@@ -13292,28 +13218,14 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3))(supports-color@7.2.0)':
+  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)':
     dependencies:
       google-auth-library: 10.9.1(supports-color@7.2.0)
       p-retry: 4.6.2
       protobufjs: 7.6.6
       ws: 8.21.3
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.30.0(supports-color@7.2.0)(zod@4.4.3)
-    transitivePeerDependencies:
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-    optional: true
-
-  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)':
-    dependencies:
-      google-auth-library: 10.9.1(supports-color@7.2.0)
-      p-retry: 4.6.2
-      protobufjs: 7.6.6
-      ws: 8.21.3
-    optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.30.0(supports-color@7.2.0)(zod@4.6.2)
+      '@modelcontextprotocol/sdk': 1.30.0(supports-color@7.2.0)(zod@4.6.4)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -13338,10 +13250,10 @@ snapshots:
       hono: 4.12.34
       zod: 4.4.3
 
-  '@hono/zod-validator@0.7.6(hono@4.12.34)(zod@4.6.2)':
+  '@hono/zod-validator@0.7.6(hono@4.12.34)(zod@4.6.4)':
     dependencies:
       hono: 4.12.34
-      zod: 4.6.2
+      zod: 4.6.4
 
   '@iconify/types@2.0.0': {}
 
@@ -13800,7 +13712,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.29.0(supports-color@7.2.0)(zod@4.6.2)':
+  '@modelcontextprotocol/sdk@1.29.0(supports-color@7.2.0)(zod@4.6.4)':
     dependencies:
       '@hono/node-server': 1.19.17(hono@4.13.7)
       ajv: 8.20.0
@@ -13817,12 +13729,12 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 4.6.2
-      zod-to-json-schema: 3.25.2(zod@4.6.2)
+      zod: 4.6.4
+      zod-to-json-schema: 3.25.2(zod@4.6.4)
     transitivePeerDependencies:
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.4.3)':
+  '@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.7)
       ajv: 8.20.0
@@ -13839,31 +13751,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 4.4.3
-      zod-to-json-schema: 3.25.2(zod@4.4.3)
-    transitivePeerDependencies:
-      - supports-color
-    optional: true
-
-  '@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2)':
-    dependencies:
-      '@hono/node-server': 2.1.1(hono@4.13.7)
-      ajv: 8.20.0
-      ajv-formats: 3.0.1(ajv@8.20.0)
-      content-type: 1.0.5
-      cors: 2.8.6
-      cross-spawn: 7.0.6
-      eventsource: 3.0.7
-      eventsource-parser: 3.1.1
-      express: 5.2.1(supports-color@7.2.0)
-      express-rate-limit: 8.6.2(express@5.2.1(supports-color@7.2.0))(supports-color@7.2.0)
-      hono: 4.13.7
-      jose: 6.2.9
-      json-schema-typed: 8.0.2
-      pkce-challenge: 5.0.1
-      raw-body: 3.0.2
-      zod: 4.6.2
-      zod-to-json-schema: 3.25.2(zod@4.6.2)
+      zod: 4.6.4
+      zod-to-json-schema: 3.25.2(zod@4.6.4)
     transitivePeerDependencies:
       - supports-color
 
@@ -15387,7 +15276,7 @@ snapshots:
 
   '@simplewebauthn/browser@14.0.0': {}
 
-  '@simplewebauthn/server@14.0.1':
+  '@simplewebauthn/server@14.0.2':
     dependencies:
       '@hexagon/base64': 1.1.28
       '@levischuck/tiny-cbor': 0.2.11
@@ -15671,12 +15560,12 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.3
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.3
 
-  '@tailwindcss/vite@4.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))':
+  '@tailwindcss/vite@4.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))':
     dependencies:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
-      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
 
   '@tanstack/history@1.162.3': {}
 
@@ -15696,9 +15585,9 @@ snapshots:
       react-dom: 19.3.0(react@19.3.0)
       use-sync-external-store: 1.6.0(react@19.3.0)
 
-  '@tanstack/react-virtual@3.14.11(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
+  '@tanstack/react-virtual@3.14.12(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
-      '@tanstack/virtual-core': 3.17.9
+      '@tanstack/virtual-core': 3.17.10
       react: 19.3.0
       react-dom: 19.3.0(react@19.3.0)
 
@@ -15711,7 +15600,7 @@ snapshots:
 
   '@tanstack/store@0.11.1': {}
 
-  '@tanstack/virtual-core@3.17.9': {}
+  '@tanstack/virtual-core@3.17.10': {}
 
   '@testing-library/dom@10.4.1':
     dependencies:
@@ -16072,15 +15961,15 @@ snapshots:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
 
-  '@vitejs/plugin-react@6.0.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))':
+  '@vitejs/plugin-react@6.0.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
 
-  '@vitejs/plugin-react@6.1.1(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))':
+  '@vitejs/plugin-react@6.1.1(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
 
   '@vitest/coverage-v8@5.0.0(vitest@5.0.0)':
     dependencies:
@@ -16092,7 +15981,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.1
-      vitest: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+      vitest: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
 
   '@vitest/expect@3.2.4':
     dependencies:
@@ -16108,14 +15997,14 @@ snapshots:
     dependencies:
       '@vitest/istanbul-lib-coverage': 1.0.1
 
-  '@vitest/mocker@5.0.0(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))':
+  '@vitest/mocker@5.0.0(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.0
       estree-walker: 3.0.3
       magic-string: 1.2.3
     optionalDependencies:
-      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
 
   '@vitest/pretty-format@3.2.4':
     dependencies:
@@ -18081,7 +17970,7 @@ snapshots:
       string-argv: 0.3.2
       tinyexec: 1.3.1
     optionalDependencies:
-      yaml: 2.9.0
+      yaml: 2.9.1
 
   liquidjs@10.29.0:
     dependencies:
@@ -18121,7 +18010,7 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
-  lucide-react@1.44.0(react@19.3.0):
+  lucide-react@1.45.0(react@19.3.0):
     dependencies:
       react: 19.3.0
 
@@ -18810,7 +18699,7 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  open@11.0.2:
+  open@11.0.3:
     dependencies:
       default-browser: 5.5.1
       define-lazy-prop: 3.0.0
@@ -18819,16 +18708,10 @@ snapshots:
       powershell-utils: 0.2.1
       wsl-utils: 1.0.0
 
-  openai@6.40.0(ws@8.21.3)(zod@4.4.3):
+  openai@6.40.0(ws@8.21.3)(zod@4.6.4):
     optionalDependencies:
       ws: 8.21.3
-      zod: 4.4.3
-    optional: true
-
-  openai@6.40.0(ws@8.21.3)(zod@4.6.2):
-    optionalDependencies:
-      ws: 8.21.3
-      zod: 4.6.2
+      zod: 4.6.4
 
   openapi-types@12.1.3: {}
 
@@ -19024,9 +18907,9 @@ snapshots:
 
   pend@1.2.0: {}
 
-  pi-cache-optimizer@2.8.7(@earendil-works/pi-coding-agent@0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)):
+  pi-cache-optimizer@2.8.10(@earendil-works/pi-coding-agent@0.85.1(supports-color@7.2.0)(zod@4.6.4)):
     dependencies:
-      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@earendil-works/pi-coding-agent': 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.4))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.4)
 
   picocolors@1.1.1: {}
 
@@ -19930,7 +19813,7 @@ snapshots:
 
   supports-preserve-symlinks-flag@1.0.0: {}
 
-  tailwind-merge@3.6.0: {}
+  tailwind-merge@3.7.0: {}
 
   tailwindcss@4.3.3: {}
 
@@ -20247,12 +20130,12 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite-plugin-singlefile@2.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)):
+  vite-plugin-singlefile@2.3.3(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)):
     dependencies:
       micromatch: 4.0.8
-      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
 
-  vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0):
+  vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1):
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
@@ -20264,12 +20147,12 @@ snapshots:
       esbuild: 0.28.1
       fsevents: 2.3.3
       jiti: 2.7.0
-      yaml: 2.9.0
+      yaml: 2.9.1
 
-  vitest@5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)):
+  vitest@5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.0(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+      '@vitest/mocker': 5.0.0(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1))
       chai: 6.2.2
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -20280,7 +20163,7 @@ snapshots:
       tinybench: 6.1.4
       tinyexec: 1.3.0
       tinyglobby: 0.2.17
-      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0)
+      vite: 8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
@@ -20385,7 +20268,7 @@ snapshots:
 
   xmlchars@2.2.0: {}
 
-  xstate@5.32.6: {}
+  xstate@5.33.0: {}
 
   y18n@5.0.8: {}
 
@@ -20396,6 +20279,8 @@ snapshots:
   yaml@2.8.3: {}
 
   yaml@2.9.0: {}
+
+  yaml@2.9.1: {}
 
   yargs-parser@21.1.1: {}
 
@@ -20477,14 +20362,14 @@ snapshots:
     dependencies:
       zod: 4.4.3
 
-  zod-to-json-schema@3.25.2(zod@4.6.2):
+  zod-to-json-schema@3.25.2(zod@4.6.4):
     dependencies:
-      zod: 4.6.2
+      zod: 4.6.4
 
   zod@4.3.6: {}
 
   zod@4.4.3: {}
 
-  zod@4.6.2: {}
+  zod@4.6.4: {}
 
   zwitch@2.0.4: {}

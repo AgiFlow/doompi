@@ -82,13 +82,13 @@
     "@xterm/xterm": "6.0.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "lucide-react": "1.44.0",
+    "lucide-react": "1.45.0",
     "mermaid": "11.17.2",
     "pdfjs-dist": "6.3.289",
     "radix-ui": "1.6.7",
     "react-markdown": "10.1.0",
     "remark-gfm": "4.0.1",
-    "tailwind-merge": "3.6.0"
+    "tailwind-merge": "3.7.0"
   },
   "devDependencies": {
     "@agimon-ai/doompi-core": "workspace:*",
