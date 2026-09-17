@@ -2495,8 +2495,9 @@ describe('RPC-LIFECYCLE installed runtime', () => {
  *   DOOMPI_STARTUP_BENCHMARK=1 pnpm nx run @agimon-ai/doompi:test-system
  */
 const startupBenchmarkRequested = process.env.DOOMPI_STARTUP_BENCHMARK === '1';
+const startupBenchmarkSuite = startupBenchmarkRequested ? describe : describe.skip;
 
-describe.skipIf(!startupBenchmarkRequested)('packed startup input readiness', () => {
+startupBenchmarkSuite('packed startup input readiness', () => {
   it(
     'measures direct entries and the synced Doom wrapper before accepting input',
     async () => {
