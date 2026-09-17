@@ -2,7 +2,18 @@
 
 Optional DoomPi integration for building disposable interactive story previews with `@agimon-ai/style-system`.
 
-When this package and `@agimon-ai/doompi-author` are both installed, Author shows an **Open story preview** action. The temporary tab builds an exact `.stories.ts` or `.stories.tsx` export, runs the compiled HTML in an isolated iframe, and retains the composer for source-targeted feedback.
+When this package and `@agimon-ai/doompi-author` are both installed, Author shows an **Open story preview** action. The temporary tab reads the focused `.stories.js`, `.stories.jsx`, `.stories.ts`, or `.stories.tsx` source, discovers exact named exports, builds only after an explicit action, runs the compiled HTML in an isolated iframe, and retains the composer for source-targeted feedback.
+
+The portable `doompi-design` binary also works without Pi, DoomPi, Author, or MCP. Discovery commands delegate to the published style-system CLI. Structured commands provide exact story metadata, bounded checks, stale-evidence verification, and explicit preview builds:
+
+```bash
+doompi-design metadata --story-path src/Button.stories.tsx
+doompi-design check --target docs/specs/button/design-target.json --report docs/specs/button/design-check.json
+doompi-design verify --report docs/specs/button/design-check.json
+doompi-design preview --app-path . --story-path src/Button.stories.tsx --story-export Playground --output .tmp/button.html
+```
+
+Use `--workspace <path>` when the process working directory is not the admitted project root.
 
 ## Opt in
 

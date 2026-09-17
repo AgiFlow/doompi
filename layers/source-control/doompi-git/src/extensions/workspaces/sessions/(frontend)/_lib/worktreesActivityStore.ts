@@ -19,7 +19,12 @@
  */
 import { defineGlobalStore, defineSessionStore, type WebPluginRuntime } from '@agimon-ai/doompi-core/web';
 
-import { GIT_WORKTREES_TYPE, type GitWorktreesCommand, type WorktreeView } from '../../../../../types/webWorktrees';
+import {
+  GIT_WORKTREES_TYPE,
+  type GitWorktreesCommand,
+  type WorktreeErrorTarget,
+  type WorktreeView,
+} from '../../../../../types/webWorktrees';
 
 export interface WorktreesSession {
   /** The worktrees the hub last reported for this session's repository. */
@@ -28,12 +33,15 @@ export interface WorktreesSession {
   pending: string | undefined;
   /** The last failure the hub reported, shown until the next command. */
   error: string | undefined;
+  /** The operation that produced the last failure, when known. */
+  errorTarget?: WorktreeErrorTarget;
 }
 
 export const worktreeActivity = defineSessionStore<WorktreesSession>({
   worktrees: [],
   pending: undefined,
   error: undefined,
+  errorTarget: undefined,
 });
 
 /**
@@ -88,6 +96,15 @@ function optionalText(value: unknown): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined;
 }
 
+function optionalErrorTarget(value: unknown): WorktreeErrorTarget | undefined {
+  if (!isRecord(value)) return undefined;
+  if (value.action === 'create') return { action: 'create' };
+  if (value.action === 'close' && typeof value.id === 'string' && value.id !== '') {
+    return { action: 'close', id: value.id };
+  }
+  return undefined;
+}
+
 /** The plugin's session data channel: 'git_worktrees' payloads into the store. */
 export const worktreesChannel = worktreeActivity.channel<WorktreesSession>({
   channel: GIT_WORKTREES_TYPE,
@@ -97,6 +114,7 @@ export const worktreesChannel = worktreeActivity.channel<WorktreesSession>({
       worktrees: input.worktrees.filter(isRecord) as unknown as WorktreeView[],
       pending: optionalText(input.pending),
       error: optionalText(input.error),
+      errorTarget: optionalErrorTarget(input.errorTarget),
     };
   },
   reduce(_current, next) {

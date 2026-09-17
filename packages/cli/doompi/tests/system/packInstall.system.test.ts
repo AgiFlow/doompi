@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 
 import type { DoomHelpService } from '@agimon-ai/doompi-core/help';
@@ -1183,8 +1184,17 @@ async function waitForDelegationResult(file: string, timeoutMs = 10_000): Promis
 beforeAll(async () => {
   packRoot = createTemporaryRoot('dp-pack-');
   consumer = createConsumerRoot();
+  const packStartedAt = performance.now();
   packedPackages = await packPackageMatrix(packRoot);
+  const installStartedAt = performance.now();
   consumerInstall = await installLocalPackages(consumer, packedPackages);
+  const timing = {
+    packMs: Math.round(installStartedAt - packStartedAt),
+    installMs: Math.round(performance.now() - installStartedAt),
+  };
+  const timingFile = process.env.DOOMPI_SYSTEM_TIMING_FILE;
+  if (timingFile) fs.writeFileSync(timingFile, `${JSON.stringify(timing)}\n`);
+  process.stderr.write(`System-test setup timing: ${JSON.stringify(timing)}\n`);
 }, SYSTEM_HOOK_TIMEOUT_MS);
 
 afterEach(() => {
@@ -2014,8 +2024,8 @@ describe('DPI installed experiment runtime', () => {
       fs.writeFileSync(registrationAPath, validRegistrationA);
     }
     // Two isolated installs and five syncs include two cold browser builds.
-    // Each subprocess keeps its own deadline; the scenario needs room for their sum.
-  }, 600_000);
+    // Each subprocess keeps its own deadline; hosted runners can spend more than ten minutes on their sum.
+  }, 1_200_000);
 });
 
 describe('DOOM-PI-LAUNCH installed runtime modes', () => {
@@ -2495,8 +2505,9 @@ describe('RPC-LIFECYCLE installed runtime', () => {
  *   DOOMPI_STARTUP_BENCHMARK=1 pnpm nx run @agimon-ai/doompi:test-system
  */
 const startupBenchmarkRequested = process.env.DOOMPI_STARTUP_BENCHMARK === '1';
+const startupBenchmarkSuite = startupBenchmarkRequested ? describe : describe.skip;
 
-describe.skipIf(!startupBenchmarkRequested)('packed startup input readiness', () => {
+startupBenchmarkSuite('packed startup input readiness', () => {
   it(
     'measures direct entries and the synced Doom wrapper before accepting input',
     async () => {

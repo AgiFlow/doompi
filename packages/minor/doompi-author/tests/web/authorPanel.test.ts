@@ -28,7 +28,10 @@ describe('the Author web plugin', () => {
     expect(webPlugin.dockFaces).toEqual([
       expect.objectContaining({ id: 'authoring', label: 'authoring', order: 30, autoSelect: true }),
     ]);
-    expect(webPlugin.slots).toEqual([expect.objectContaining({ slot: 'author.preview-provider' })]);
+    expect(webPlugin.slots).toEqual([
+      expect.objectContaining({ slot: 'author.preview-action' }),
+      expect.objectContaining({ slot: 'author.preview-provider' }),
+    ]);
   });
   it('requires active Author mode and remains available for optional preview providers', () => {
     const face = webPlugin.dockFaces![0]!;

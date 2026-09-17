@@ -3,11 +3,21 @@ import type {
   BuildStoryPreviewRequest,
   BuildStoryPreviewView,
   ExportStoryPreviewImageView,
+  StoryPreviewMetadataRequest,
+  StoryPreviewMetadataView,
 } from '../../../../../types/previewApi';
 
 function errorMessage(result: { status: number; error: string }): string {
   if (result.status === 0) return 'The preview service is unreachable.';
   return result.error === '' ? `The preview service answered ${String(result.status)}.` : result.error;
+}
+
+export async function storyMetadata(
+  sessionId: string,
+  request: StoryPreviewMetadataRequest,
+): Promise<{ ok: true; metadata: StoryPreviewMetadataView } | { ok: false; error: string }> {
+  const result = await api.session(sessionId).metadata({ body: request });
+  return result.ok ? { ok: true, metadata: result.data } : { ok: false, error: errorMessage(result) };
 }
 
 export async function buildPreview(

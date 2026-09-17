@@ -70,8 +70,8 @@ function grantedSurface(grant: SessionMcpAccessGrant, surface: SessionToolSurfac
   const skillNames = new Set(grant.skills);
   return {
     snapshot,
-    tools: snapshot.tools.filter((tool) => toolNames.has(tool.name)),
-    skills: snapshot.skills.filter((skill) => skillNames.has(skill.name)),
+    tools: grant.scope === 'session' ? snapshot.tools : snapshot.tools.filter((tool) => toolNames.has(tool.name)),
+    skills: grant.scope === 'session' ? snapshot.skills : snapshot.skills.filter((skill) => skillNames.has(skill.name)),
   };
 }
 
@@ -141,7 +141,7 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
     });
     server.setRequestHandler(CallToolRequestSchema, async (message, extra): Promise<CallToolResult> => {
       const active = await authorizeOperation();
-      if (!active.grant.tools.includes(message.params.name)) {
+      if (active.grant.scope === 'restricted' && !active.grant.tools.includes(message.params.name)) {
         throw new McpError(ErrorCode.InvalidParams, `Tool '${message.params.name}' is not granted.`);
       }
       const { snapshot, tools } = grantedSurface(active.grant, active.target.toolSurface);
@@ -196,7 +196,10 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
         authInfo: {
           token,
           clientId: grant.clientId,
-          scopes: [...grant.tools.map((name) => `tool:${name}`), ...grant.skills.map((name) => `skill:${name}`)],
+          scopes:
+            grant.scope === 'session'
+              ? ['session']
+              : [...grant.tools.map((name) => `tool:${name}`), ...grant.skills.map((name) => `skill:${name}`)],
           expiresAt: Math.floor(grant.expiresAt / 1000),
           resource: new URL(exactAudience),
         },

@@ -131,7 +131,7 @@ const PACKAGE_RESOURCES: Readonly<Record<string, readonly string[]>> = {
   ],
   '@agimon-ai/doompi-author': ['./llms.txt', './README.md', './src/prompts/doompi-use-author/SKILL.md'],
   '@agimon-ai/doompi-cache': ['./llms.txt', './README.md', './src/prompts/doompi-use-cache/SKILL.md'],
-  '@agimon-ai/doompi-style-system': ['./README.md'],
+  '@agimon-ai/doompi-style-system': ['./README.md', './skills/design-workflow/SKILL.md'],
   '@agimon-ai/doompi-computer-use': ['./llms.txt', './README.md', './src/prompts/doompi-use-computer-use/SKILL.md'],
   '@agimon-ai/doompi-config': [
     './llms.txt',

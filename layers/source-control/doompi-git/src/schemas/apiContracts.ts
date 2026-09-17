@@ -17,12 +17,17 @@ const RecordSchema = Type.Object({
   status: literals(['spawning', 'running', 'closing', 'orphaned']),
   createdAt: S,
 });
+const ErrorTargetSchema = Type.Union([
+  Type.Object({ action: Type.Literal('create') }),
+  Type.Object({ action: Type.Literal('close'), id: S }),
+]);
 export const WorktreesPayloadSchema = Type.Object({
   worktrees: Type.Array(
     Type.Object({ id: S, branch: S, path: S, sessionId: Type.Union([S, Type.Null()]), orphaned: B, unowned: B }),
   ),
   pending: O(S),
   error: O(S),
+  errorTarget: O(ErrorTargetSchema),
 });
 export const WorktreesCommandSchema = Type.Union([
   Type.Object({ action: Type.Literal('create'), branch: S, baseRef: O(S) }),

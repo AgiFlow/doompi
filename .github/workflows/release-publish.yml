@@ -6,33 +6,78 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: doompi-release
   cancel-in-progress: false
 
 jobs:
-  publish:
-    # A merge commit does not always carry the release pull request title in its
-    # body, and one that does not used to skip the publish silently, leaving main
-    # on a version the registry never received. The release branch name is in the
-    # merge subject either way, so it is matched as well.
+  prepare:
     if: >-
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'workflow_dispatch' ||
       contains(github.event.head_commit.message, 'chore(release): publish') ||
       contains(github.event.head_commit.message, format('from {0}/release/alpha-', github.repository_owner)))
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-    environment:
-      name: npm-release
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      candidate_commit: ${{ steps.candidate.outputs.candidate_commit }}
     steps:
       - name: Check out the merged release commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Freeze the published commit
+        id: candidate
+        run: |
+          set -euo pipefail
+          CANDIDATE_COMMIT="$(git rev-parse HEAD)"
+          readonly CANDIDATE_COMMIT
+          test "${CANDIDATE_COMMIT}" = "${GITHUB_SHA}"
+          readonly BUNDLE="${RUNNER_TEMP}/candidate.bundle"
+          readonly METADATA="${RUNNER_TEMP}/candidate.env"
+          git bundle create "${BUNDLE}" HEAD
+          {
+            printf 'candidate_commit=%s\n' "${CANDIDATE_COMMIT}"
+            printf 'release_projects=\n'
+          } > "${METADATA}"
+          echo "candidate_commit=${CANDIDATE_COMMIT}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload the frozen published commit
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-publish-candidate
+          path: |
+            ${{ runner.temp }}/candidate.bundle
+            ${{ runner.temp }}/candidate.env
+          if-no-files-found: error
+          retention-days: 1
+
+  validate-build:
+    needs: prepare
+    if: needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen published commit
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-publish-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ""
 
       - name: Set up pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -52,23 +97,310 @@ jobs:
       - name: Verify Runner native payloads
         run: pnpm runner:check
 
+      - name: Audit ownership and dependency boundaries
+        run: pnpm audit:workspace
+
+      - name: Check formatting
+        run: pnpm fmt:check
+
+      - name: Build packages
+        run: pnpm nx run-many -t build --parallel=3
+
+      - name: Validate plugin and workflow examples
+        run: pnpm examples:check
+
+      - name: Verify release test shard coverage
+        run: node scripts/check-system-test-shards.mjs
+
+  validate-lint:
+    needs: prepare
+    if: needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen published commit
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-publish-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ""
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Lint packages
+        run: pnpm nx run-many -t lint --parallel=3
+
+      - name: Run deterministic Vibe-Lint review
+        run: pnpm lint:vibe --preflight-only
+
+  validate-typecheck:
+    needs: prepare
+    if: needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen published commit
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-publish-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ""
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Type-check packages
+        run: pnpm nx run-many -t typecheck --parallel=3
+
+  validate-package-tests:
+    needs: prepare
+    if: needs.prepare.result == 'success'
+    name: Package tests (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen published commit
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-publish-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ""
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Run package-test shard
+        run: node scripts/run-release-test-shard.mjs run "${{ matrix.shard }}" 4
+
+  validate-system-tests:
+    needs: prepare
+    if: needs.prepare.result == 'success'
+    name: System tests (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: CLI 1/6
+            project: "@agimon-ai/doompi"
+            shard: "1"
+          - name: CLI 2/6
+            project: "@agimon-ai/doompi"
+            shard: "2"
+          - name: CLI 3/6
+            project: "@agimon-ai/doompi"
+            shard: "3"
+          - name: CLI 4/6
+            project: "@agimon-ai/doompi"
+            shard: "4"
+          - name: CLI 5/6
+            project: "@agimon-ai/doompi"
+            shard: "5"
+          - name: CLI 6/6
+            project: "@agimon-ai/doompi"
+            shard: "6"
+          - name: Team
+            project: "@agimon-ai/doompi-team"
+            shard: ""
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen published commit
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-publish-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ""
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Run isolated system-test shard
+        env:
+          DOOMPI_SYSTEM_SHARD: ${{ matrix.shard }}
+          DOOMPI_SYSTEM_TIMING_FILE: ${{ runner.temp }}/doompi-system-timing.json
+        run: |
+          set +e
+          pnpm nx run "${{ matrix.project }}:test-system"
+          status=$?
+          if [[ -f "${DOOMPI_SYSTEM_TIMING_FILE}" ]]; then cat "${DOOMPI_SYSTEM_TIMING_FILE}"; fi
+          exit "${status}"
+
+  validate:
+    if: always()
+    needs:
+      - prepare
+      - validate-build
+      - validate-lint
+      - validate-typecheck
+      - validate-package-tests
+      - validate-system-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Require every release validation lane to pass
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          BUILD_RESULT: ${{ needs.validate-build.result }}
+          LINT_RESULT: ${{ needs.validate-lint.result }}
+          TYPECHECK_RESULT: ${{ needs.validate-typecheck.result }}
+          PACKAGE_RESULT: ${{ needs.validate-package-tests.result }}
+          SYSTEM_RESULT: ${{ needs.validate-system-tests.result }}
+        run: |
+          set -euo pipefail
+          if [[ "${PREPARE_RESULT}" != "success" ]]; then
+            echo "Release candidate preparation finished with: ${PREPARE_RESULT}" >&2
+            exit 1
+          fi
+          for result in "${BUILD_RESULT}" "${LINT_RESULT}" "${TYPECHECK_RESULT}" "${PACKAGE_RESULT}" "${SYSTEM_RESULT}"; do
+            if [[ "${result}" != "success" ]]; then
+              echo "A release validation lane finished with: ${result}" >&2
+              exit 1
+            fi
+          done
+
+  publish:
+    needs:
+      - prepare
+      - validate
+    if: needs.prepare.result == 'success' && needs.validate.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment:
+      name: npm-release
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen published commit
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-publish-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ""
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Configure release git identity
         run: |
           git config user.name "doompi-release-bot"
           git config user.email "doompi-release-bot@users.noreply.github.com"
-
-      - name: Validate the release commit
-        run: |
-          set -euo pipefail
-          pnpm audit:workspace
-          pnpm fmt:check
-          pnpm nx run-many -t build --parallel=3
-          pnpm examples:check
-          pnpm nx run-many -t lint --parallel=3
-          pnpm lint:vibe --preflight-only
-          pnpm nx run-many -t typecheck --parallel=3
-          pnpm nx run-many -t test --parallel=1
-          pnpm nx run-many -t test-system --parallel=1
 
       - name: Select the versions that are missing from the registry
         run: |
@@ -77,11 +409,11 @@ jobs:
 
           : > "${MISSING_FILE}"
           while IFS=$'\t' read -r name version; do
-            if npm view "$name@$version" version --prefer-online > /dev/null 2>&1; then
-              echo "$name@$version is already on the registry."
+            if npm view "${name}@${version}" version --prefer-online > /dev/null 2>&1; then
+              echo "${name}@${version} is already on the registry."
             else
-              echo "$name" >> "${MISSING_FILE}"
-              echo "$name@$version is missing from the registry and will be published."
+              echo "${name}" >> "${MISSING_FILE}"
+              echo "${name}@${version} is missing from the registry and will be published."
             fi
           done < <(node scripts/list-packages.mjs)
 
@@ -97,7 +429,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          test -n "$NODE_AUTH_TOKEN"
+          test -n "${NODE_AUTH_TOKEN}"
           pnpm nx release publish --projects "${PUBLISH_PROJECTS}" --tag alpha
 
       - name: Reconcile every release version with the alpha tag
@@ -105,7 +437,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          test -n "$NODE_AUTH_TOKEN"
+          test -n "${NODE_AUTH_TOKEN}"
           # npm serves a version it has just accepted from a read path that lags
           # behind the write path, so the budget has to outlast that lag: a short
           # one fails the job over a registry that is merely catching up, and
@@ -125,26 +457,26 @@ jobs:
           for ((attempt = 1; attempt <= RECONCILE_ATTEMPTS; attempt += 1)); do
             : > "${ROUND_FILE}"
             while IFS=$'\t' read -r name version; do
-              if ! npm view "$name@$version" version --prefer-online > /dev/null 2>&1; then
-                printf '%s\t%s\n' "$name" "$version" >> "${ROUND_FILE}"
-                echo "$name@$version is absent from the registry (attempt $attempt/$RECONCILE_ATTEMPTS)"
+              if ! npm view "${name}@${version}" version --prefer-online > /dev/null 2>&1; then
+                printf '%s\t%s\n' "${name}" "${version}" >> "${ROUND_FILE}"
+                echo "${name}@${version} is absent from the registry (attempt ${attempt}/${RECONCILE_ATTEMPTS})"
                 if ((attempt > 1 && attempt < RECONCILE_ATTEMPTS)); then
-                  echo "Publishing $name@$version on its own."
-                  pnpm nx release publish --projects "$name" --tag alpha || echo "Republish of $name@$version was rejected, the next round re-reads the registry."
+                  echo "Publishing ${name}@${version} on its own."
+                  pnpm nx release publish --projects "${name}" --tag alpha || echo "Republish of ${name}@${version} was rejected, the next round re-reads the registry."
                 fi
                 continue
               fi
 
-              alpha="$(npm view "$name" dist-tags.alpha --prefer-online 2>/dev/null || true)"
-              if [[ "$alpha" == "$version" ]]; then
+              alpha="$(npm view "${name}" dist-tags.alpha --prefer-online 2>/dev/null || true)"
+              if [[ "${alpha}" == "${version}" ]]; then
                 continue
               fi
 
-              printf '%s\t%s\n' "$name" "$version" >> "${ROUND_FILE}"
-              echo "$name@$version is on the registry but alpha points at ${alpha:-unavailable} (attempt $attempt/$RECONCILE_ATTEMPTS)"
+              printf '%s\t%s\n' "${name}" "${version}" >> "${ROUND_FILE}"
+              echo "${name}@${version} is on the registry but alpha points at ${alpha:-unavailable} (attempt ${attempt}/${RECONCILE_ATTEMPTS})"
               if ((attempt > 1 && attempt < RECONCILE_ATTEMPTS)); then
-                echo "Moving the alpha tag of $name to $version."
-                npm dist-tag add "$name@$version" alpha || true
+                echo "Moving the alpha tag of ${name} to ${version}."
+                npm dist-tag add "${name}@${version}" alpha || true
               fi
             done < "${PENDING_FILE}"
             mv "${ROUND_FILE}" "${PENDING_FILE}"
@@ -154,17 +486,17 @@ jobs:
               exit 0
             fi
             if ((attempt < RECONCILE_ATTEMPTS)); then
-              sleep "$RECONCILE_DELAY_SECONDS"
+              sleep "${RECONCILE_DELAY_SECONDS}"
             fi
           done
 
-          echo "::error::$(wc -l < "${PENDING_FILE}" | tr -d ' ') package(s) missing from the alpha tag after $RECONCILE_ATTEMPTS attempts"
+          echo "::error::$(wc -l < "${PENDING_FILE}" | tr -d ' ') package(s) missing from the alpha tag after ${RECONCILE_ATTEMPTS} attempts"
           while IFS=$'\t' read -r name version; do
-            alpha="$(npm view "$name" dist-tags.alpha --prefer-online 2>/dev/null || true)"
-            if npm view "$name@$version" version --prefer-online > /dev/null 2>&1; then
-              echo "  $name@$version is on the registry but alpha still points at ${alpha:-unavailable}"
+            alpha="$(npm view "${name}" dist-tags.alpha --prefer-online 2>/dev/null || true)"
+            if npm view "${name}@${version}" version --prefer-online > /dev/null 2>&1; then
+              echo "  ${name}@${version} is on the registry but alpha still points at ${alpha:-unavailable}"
             else
-              echo "  $name@$version never reached the registry and alpha points at ${alpha:-unavailable}"
+              echo "  ${name}@${version} never reached the registry and alpha points at ${alpha:-unavailable}"
             fi
           done < "${PENDING_FILE}"
           exit 1
@@ -203,5 +535,5 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          test -n "$NODE_AUTH_TOKEN"
-          while IFS=$'\t' read -r name version; do npm dist-tag add "$name@$version" latest; done < <(node scripts/list-packages.mjs)
+          test -n "${NODE_AUTH_TOKEN}"
+          while IFS=$'\t' read -r name version; do npm dist-tag add "${name}@${version}" latest; done < <(node scripts/list-packages.mjs)

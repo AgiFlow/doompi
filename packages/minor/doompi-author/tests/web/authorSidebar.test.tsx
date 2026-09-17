@@ -62,6 +62,38 @@ afterEach(() => {
 });
 
 describe('Author annotation sidebar', () => {
+  it('hands the focused story path and dirty state to an explicit preview action', () => {
+    const props = setup();
+    workspace.putAuthorDocument('s', { path: 'Button.stories.tsx', kind: 'story-preview', sourceSha256: 'sha' });
+    workspace.focusAuthorDocument('s', 'Button.stories.tsx', 0, 'sha');
+    workspace.reviseAuthorDocument('s', 'Button.stories.tsx', 'unsaved story source');
+    const createTab = vi.fn(() => ({
+      id: 'story-preview',
+      label: 'Story preview',
+      panel: () => null,
+      retainComposer: true,
+    }));
+    props.slotData = vi.fn(
+      () =>
+        [
+          {
+            pluginId: 'style-system',
+            id: 'story-preview',
+            data: { version: 1, label: 'Open story preview', createTab },
+          },
+        ] as never,
+    ) as unknown as WebPluginSlotProps['slotData'];
+    props.openTransientTab = vi.fn();
+
+    const button = nodes(AuthorPanel(props)).find((node) => node.props.children === 'Open story preview')!;
+    void button.props.onClick!();
+
+    expect(createTab).toHaveBeenCalledWith({
+      source: { path: 'Button.stories.tsx', hasUnsavedChanges: true },
+    });
+    expect(props.openTransientTab).toHaveBeenCalledOnce();
+  });
+
   it('submits annotations asynchronously without navigation or changing the composer', async () => {
     const props = setup();
     const controls = nodes(AuthorPanel(props));

@@ -6,11 +6,34 @@ import type {
   BuildStoryPreviewRequest,
   DisposeStoryPreviewRequest,
   ExportStoryPreviewImageRequest,
+  StoryPreviewMetadataRequest,
 } from '../../types/previewApi';
 import { StoryPreviewService } from '../storyPreview';
 
 export function createPreviewApi(workspaceRoot: string, previews = new StoryPreviewService(workspaceRoot)): Hono {
   const app = new Hono();
+
+  app.post(routes.metadata.path, async (context) => {
+    let request: StoryPreviewMetadataRequest;
+    try {
+      request = (await context.req.json()) as StoryPreviewMetadataRequest;
+    } catch {
+      return context.json({ error: 'The story metadata request body is not JSON.' }, 400);
+    }
+    if (
+      request === null ||
+      typeof request !== 'object' ||
+      typeof request.storyPath !== 'string' ||
+      (request.appPath !== undefined && typeof request.appPath !== 'string')
+    ) {
+      return context.json({ error: 'Story metadata requires a storyPath.' }, 400);
+    }
+    try {
+      return context.json(await previews.metadata(request));
+    } catch (reason) {
+      return context.json({ error: reason instanceof Error ? reason.message : 'Unable to read story metadata.' }, 400);
+    }
+  });
 
   app.post(routes.build.path, async (context) => {
     let request: BuildStoryPreviewRequest;

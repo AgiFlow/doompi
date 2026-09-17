@@ -147,6 +147,8 @@ export function startSessionRuntime(): () => void {
   let deferredVoiceOwnershipFrame: Record<string, unknown> | undefined;
   const applyPresentationFrame = (sessionId: string, frame: Record<string, unknown>, replay: boolean): void => {
     applySessionFrame(sessionId, frame, { replay });
+    // The direct protocol callback has no hub envelope, but channel demux needs the session identity.
+    dispatchChannelFrame({ ...frame, sessionId });
     if (replay) return;
     const notification = parseDoomNotificationEntry(frame);
     if (notification) void deliverBrowserNotification(sessionId, notification.entryId, notification.data);

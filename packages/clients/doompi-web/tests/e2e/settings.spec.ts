@@ -86,32 +86,27 @@ test('saves a named tunnel on the remote control settings page and reuses it aft
   await expect(page.getByTestId('remote-tunnel-name')).toHaveValue('doompi');
 });
 
-test('creates and revokes a host-only session MCP client with explicit grants', async ({ page, cockpit }) => {
+test('creates and revokes a host-only session-scoped MCP client with ChatGPT callback', async ({ page, cockpit }) => {
   const config = {
     audience: 'https://doom.example.com/api/workspaces/workspace/sessions/s1/mcp',
     authorizationEndpoint: 'https://doom.example.com/oauth/authorize',
     tokenEndpoint: 'https://doom.example.com/oauth/token',
-    tools: [
-      { name: 'bash', label: 'Bash', description: 'Run a shell command.' },
-      { name: 'read', label: 'Read', description: 'Read a file.' },
-    ],
+    tools: [{ name: 'bash', label: 'Bash', description: 'Run a shell command.' }],
     skills: [{ name: 'review', description: 'Review the current changes.', uri: 'doompi://skills/review' }],
   };
   let clients: Record<string, unknown>[] = [];
   await page.route('**/api/workspaces/*/sessions/*/mcp/config', (route) => route.fulfill({ json: config }));
   await page.route('**/api/workspaces/*/sessions/*/mcp/clients', async (route) => {
     if (route.request().method() === 'POST') {
-      const input = route.request().postDataJSON() as {
-        name: string;
-        redirectUri: string;
-        tools: string[];
-        skills: string[];
-      };
+      const input = route.request().postDataJSON() as { redirectUri: string; scope: string };
       const metadata = {
         ...input,
+        name: 'ChatGPT · doom.example.com',
         clientId: 'chatgpt-client',
         tokenEndpointAuthMethod: 'client_secret_post',
         createdAt: Date.now(),
+        tools: [],
+        skills: [],
         audience: config.audience,
       };
       clients = [metadata];
@@ -131,24 +126,23 @@ test('creates and revokes a host-only session MCP client with explicit grants', 
   await expect(page.getByTestId('session-mcp-settings')).toBeVisible();
   await expect(page.getByTestId('session-mcp-url')).toHaveText(config.audience);
   await expect(page.getByTestId('session-mcp-create-button')).toBeDisabled();
+  await expect(page.getByTestId('session-mcp-name')).toHaveCount(0);
+  await expect(page.getByTestId('session-mcp-tools')).toHaveCount(0);
+  await expect(page.getByTestId('session-mcp-skills')).toHaveCount(0);
 
-  await page.getByTestId('session-mcp-name').fill('ChatGPT');
   await page.getByTestId('session-mcp-callback').fill('http://chatgpt.com/callback');
   await expect(page.getByTestId('session-mcp-create-button')).toBeDisabled();
   await page.getByTestId('session-mcp-callback').fill('https://chatgpt.com/callback');
-  await page.getByRole('checkbox', { name: 'grant tool Bash' }).click();
-  await page.getByRole('checkbox', { name: 'grant skill review' }).click();
 
   const createdRequest = page.waitForRequest(
     (request) => request.method() === 'POST' && request.url().endsWith('/mcp/clients'),
   );
   await page.getByTestId('session-mcp-create-button').click();
   expect((await createdRequest).postDataJSON()).toEqual({
-    name: 'ChatGPT',
     redirectUri: 'https://chatgpt.com/callback',
-    tools: ['bash'],
-    skills: ['review'],
+    scope: 'session',
   });
+  await expect(page.getByTestId('session-mcp-created-url')).toHaveText(config.audience);
   await expect(page.getByTestId('session-mcp-created-id')).toHaveText('chatgpt-client');
   await expect(page.getByTestId('session-mcp-created-secret')).toHaveText('one-time-secret');
   await expect(page.getByTestId('session-mcp-secret')).toContainText('client_secret_post');
@@ -156,7 +150,7 @@ test('creates and revokes a host-only session MCP client with explicit grants', 
   await page.getByTestId('settings-section-appearance').click();
   await page.getByTestId('settings-section-remote').click();
   await expect(page.getByTestId('session-mcp-secret')).toHaveCount(0);
-  await expect(page.getByTestId('session-mcp-clients')).not.toContainText('one-time-secret');
+  await expect(page.getByTestId('session-mcp-clients')).toContainText('ChatGPT · doom.example.com');
   await page.getByRole('button', { name: 'revoke' }).click();
   await expect(page.getByTestId('session-mcp-clients')).toContainText('no clients registered');
 });
@@ -186,6 +180,7 @@ test('hides session MCP creation from a remote caller while retaining permitted 
             redirectUri: 'https://chatgpt.com/callback',
             tokenEndpointAuthMethod: 'client_secret_post',
             createdAt: 1,
+            scope: 'session',
             tools: [],
             skills: [],
             audience: 'https://doom.example.com/session/mcp',

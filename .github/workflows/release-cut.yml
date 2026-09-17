@@ -10,17 +10,21 @@ on:
         type: boolean
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pull-requests: none
 
 concurrency:
   group: doompi-release-cut
   cancel-in-progress: false
 
 jobs:
-  cut:
+  prepare:
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    outputs:
+      has_release: ${{ steps.select.outputs.release_projects != '' }}
+      release_projects: ${{ steps.select.outputs.release_projects }}
+      candidate_commit: ${{ steps.candidate.outputs.candidate_commit }}
     steps:
       - name: Check out the selected release revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -62,9 +66,11 @@ jobs:
           git rebase "origin/${GITHUB_REF_NAME}"
 
       - name: Select the projects to release
+        id: select
         run: |
           set -euo pipefail
           readonly AFFECTED_FILE="${RUNNER_TEMP}/doompi-release-affected.json"
+          RELEASE_PROJECTS=""
 
           if BASE_TAG="$(git describe --tags --abbrev=0 HEAD 2> /dev/null)"; then
             BASE_SHA="$(git rev-list -n 1 "${BASE_TAG}")"
@@ -81,32 +87,411 @@ jobs:
           else
             echo "Releasing ${RELEASE_PROJECTS}"
           fi
-          echo "RELEASE_PROJECTS=${RELEASE_PROJECTS}" >> "${GITHUB_ENV}"
+          echo "release_projects=${RELEASE_PROJECTS}" >> "${GITHUB_OUTPUT}"
 
       - name: Raise the selected versions to the registry floor
-        if: env.RELEASE_PROJECTS != ''
+        if: steps.select.outputs.release_projects != ''
+        env:
+          RELEASE_PROJECTS: ${{ steps.select.outputs.release_projects }}
         run: node scripts/sync-registry-versions.mjs "${RELEASE_PROJECTS}"
 
-      - name: Validate the release candidate
-        if: env.RELEASE_PROJECTS != ''
+      - name: Freeze the release candidate
+        id: candidate
+        if: steps.select.outputs.release_projects != ''
+        env:
+          RELEASE_PROJECTS: ${{ steps.select.outputs.release_projects }}
         run: |
           set -euo pipefail
-          pnpm audit:workspace
-          pnpm fmt:check
-          pnpm nx run-many -t build --parallel=3
-          pnpm examples:check
-          pnpm nx run-many -t lint --parallel=3
-          pnpm lint:vibe --preflight-only
-          pnpm nx run-many -t typecheck --parallel=3
-          pnpm nx run-many -t test --parallel=1
-          pnpm nx run-many -t test-system --parallel=1
+          CHANGED_FILES="$(git diff --name-only)"
+          readonly CHANGED_FILES
+          if [[ -n "${CHANGED_FILES}" ]]; then
+            while IFS= read -r file; do
+              case "${file}" in
+                package.json|*/package.json) ;;
+                *) echo "Unexpected release-floor change: ${file}" >&2; exit 1 ;;
+              esac
+            done <<< "${CHANGED_FILES}"
+            git add --all
+            git commit -m "chore(release): sync registry floors"
+          fi
+
+          CANDIDATE_COMMIT="$(git rev-parse HEAD)"
+          readonly CANDIDATE_COMMIT
+          readonly BUNDLE="${RUNNER_TEMP}/candidate.bundle"
+          readonly METADATA="${RUNNER_TEMP}/candidate.env"
+          git bundle create "${BUNDLE}" HEAD
+          {
+            printf 'candidate_commit=%s\n' "${CANDIDATE_COMMIT}"
+            printf 'release_projects=%s\n' "${RELEASE_PROJECTS}"
+          } > "${METADATA}"
+          echo "candidate_commit=${CANDIDATE_COMMIT}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload the frozen release candidate
+        if: steps.select.outputs.release_projects != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-cut-candidate
+          path: |
+            ${{ runner.temp }}/candidate.bundle
+            ${{ runner.temp }}/candidate.env
+          if-no-files-found: error
+          retention-days: 1
+
+  validate-build:
+    needs: prepare
+    if: needs.prepare.outputs.has_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen release candidate
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-cut-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ${{ needs.prepare.outputs.release_projects }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Audit ownership and dependency boundaries
+        run: pnpm audit:workspace
+
+      - name: Check formatting
+        run: pnpm fmt:check
+
+      - name: Build packages
+        run: pnpm nx run-many -t build --parallel=3
+
+      - name: Validate plugin and workflow examples
+        run: pnpm examples:check
+
+      - name: Verify release test shard coverage
+        run: node scripts/check-system-test-shards.mjs
+
+  validate-lint:
+    needs: prepare
+    if: needs.prepare.outputs.has_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen release candidate
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-cut-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ${{ needs.prepare.outputs.release_projects }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Lint packages
+        run: pnpm nx run-many -t lint --parallel=3
+
+      - name: Run deterministic Vibe-Lint review
+        run: pnpm lint:vibe --preflight-only
+
+  validate-typecheck:
+    needs: prepare
+    if: needs.prepare.outputs.has_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen release candidate
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-cut-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ${{ needs.prepare.outputs.release_projects }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Type-check packages
+        run: pnpm nx run-many -t typecheck --parallel=3
+
+  validate-package-tests:
+    needs: prepare
+    if: needs.prepare.outputs.has_release == 'true'
+    name: Package tests (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen release candidate
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-cut-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ${{ needs.prepare.outputs.release_projects }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Run package-test shard
+        run: node scripts/run-release-test-shard.mjs run "${{ matrix.shard }}" 4
+
+  validate-system-tests:
+    needs: prepare
+    if: needs.prepare.outputs.has_release == 'true'
+    name: System tests (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: CLI 1/6
+            project: "@agimon-ai/doompi"
+            shard: "1"
+          - name: CLI 2/6
+            project: "@agimon-ai/doompi"
+            shard: "2"
+          - name: CLI 3/6
+            project: "@agimon-ai/doompi"
+            shard: "3"
+          - name: CLI 4/6
+            project: "@agimon-ai/doompi"
+            shard: "4"
+          - name: CLI 5/6
+            project: "@agimon-ai/doompi"
+            shard: "5"
+          - name: CLI 6/6
+            project: "@agimon-ai/doompi"
+            shard: "6"
+          - name: Team
+            project: "@agimon-ai/doompi-team"
+            shard: ""
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen release candidate
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-cut-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ${{ needs.prepare.outputs.release_projects }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify Runner native payloads
+        run: pnpm runner:check
+
+      - name: Run isolated system-test shard
+        env:
+          DOOMPI_SYSTEM_SHARD: ${{ matrix.shard }}
+          DOOMPI_SYSTEM_TIMING_FILE: ${{ runner.temp }}/doompi-system-timing.json
+        run: |
+          set +e
+          pnpm nx run "${{ matrix.project }}:test-system"
+          status=$?
+          if [[ -f "${DOOMPI_SYSTEM_TIMING_FILE}" ]]; then cat "${DOOMPI_SYSTEM_TIMING_FILE}"; fi
+          exit "${status}"
+
+  validate:
+    if: always()
+    needs:
+      - prepare
+      - validate-build
+      - validate-lint
+      - validate-typecheck
+      - validate-package-tests
+      - validate-system-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Require every release validation lane to pass
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          HAS_RELEASE: ${{ needs.prepare.outputs.has_release }}
+          BUILD_RESULT: ${{ needs.validate-build.result }}
+          LINT_RESULT: ${{ needs.validate-lint.result }}
+          TYPECHECK_RESULT: ${{ needs.validate-typecheck.result }}
+          PACKAGE_RESULT: ${{ needs.validate-package-tests.result }}
+          SYSTEM_RESULT: ${{ needs.validate-system-tests.result }}
+        run: |
+          set -euo pipefail
+          if [[ "${PREPARE_RESULT}" != "success" ]]; then
+            echo "Release candidate preparation finished with: ${PREPARE_RESULT}" >&2
+            exit 1
+          fi
+          if [[ "${HAS_RELEASE}" != "true" ]]; then
+            echo "No release projects were selected."
+            exit 0
+          fi
+          for result in "${BUILD_RESULT}" "${LINT_RESULT}" "${TYPECHECK_RESULT}" "${PACKAGE_RESULT}" "${SYSTEM_RESULT}"; do
+            if [[ "${result}" != "success" ]]; then
+              echo "A release validation lane finished with: ${result}" >&2
+              exit 1
+            fi
+          done
+
+  release:
+    needs:
+      - prepare
+      - validate
+    if: needs.prepare.outputs.has_release == 'true' && needs.validate.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      RELEASE_PROJECTS: ${{ needs.prepare.outputs.release_projects }}
+    steps:
+      - name: Check out the workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore the frozen release candidate
+        uses: ./.github/actions/restore-release-candidate
+        with:
+          artifact-name: release-cut-candidate
+          candidate-commit: ${{ needs.prepare.outputs.candidate_commit }}
+          release-projects: ${{ needs.prepare.outputs.release_projects }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 12.3.4
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.22.1
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install frozen registry and workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure release git identity
+        run: |
+          git config user.name "doompi-release-bot"
+          git config user.email "doompi-release-bot@users.noreply.github.com"
 
       - name: Preview the next alpha versions
-        if: env.RELEASE_PROJECTS != ''
         run: pnpm nx release prerelease --preid alpha --projects "${RELEASE_PROJECTS}" --dry-run --skip-publish
 
       - name: Cut the release branch
-        if: env.RELEASE_PROJECTS != '' && !inputs.dry_run
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -46,10 +46,14 @@ export type GitWorktreesCommand =
   | { action: 'create'; branch: string; baseRef?: string }
   | { action: 'close'; id: string; force?: boolean };
 
+export type WorktreeErrorTarget = { action: 'create' } | { action: 'close'; id: string };
+
 export interface GitWorktreesPayload {
   worktrees: WorktreeView[];
   /** Label of the operation in flight, absent when the session is idle. */
   pending?: string;
   /** The last failure, cleared when the next command starts. */
   error?: string;
+  /** The operation that produced the last failure, when known. */
+  errorTarget?: WorktreeErrorTarget;
 }

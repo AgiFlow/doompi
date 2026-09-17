@@ -1,7 +1,6 @@
 import {
   Badge,
   Button,
-  Checkbox,
   Input,
   Select,
   SelectContent,
@@ -32,13 +31,55 @@ function exactHttpsUrl(value: string): boolean {
   }
 }
 
-function toggleGrant(current: string[], name: string, checked: boolean): string[] {
-  return checked ? [...current, name] : current.filter((candidate) => candidate !== name);
-}
-
 function withoutSecret(client: CreatedSessionMcpClient): SessionMcpClient {
   const { clientSecret: _clientSecret, ...metadata } = client;
   return metadata;
+}
+
+type CopyState = 'idle' | 'copied' | 'failed';
+
+function CopyValue({ label, value, testId }: { label: string; value: string; testId: string }) {
+  const [state, setState] = useState<CopyState>('idle');
+
+  async function copy(): Promise<void> {
+    if (navigator.clipboard === undefined) {
+      setState('failed');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      setState('copied');
+    } catch {
+      setState('failed');
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-2 text-xs text-doom-faint">
+        <span>{label}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          data-testid={`${testId}-copy`}
+          aria-label={`copy ${label}`}
+          onClick={() => void copy()}
+        >
+          {state === 'copied' ? 'copied' : 'copy'}
+        </Button>
+      </div>
+      <code className="break-all text-sm text-doom-text" data-testid={testId}>
+        {value}
+      </code>
+      <output aria-live="polite" className="text-xs text-doom-faint">
+        {state === 'failed'
+          ? `copying ${label.toLowerCase()} was blocked. select the value above to copy it manually.`
+          : ''}
+        {state === 'copied' ? `${label} copied.` : ''}
+      </output>
+    </div>
+  );
 }
 
 /** Local management for the inbound, session-bound MCP endpoint exposed by the host. */
@@ -60,10 +101,7 @@ export function SessionMcpSettings() {
   const remoteCaller = rememberedHostChannelKey() !== undefined;
   const [config, setConfig] = useState<SessionMcpConfig>();
   const [clients, setClients] = useState<SessionMcpClient[]>([]);
-  const [name, setName] = useState('');
   const [redirectUri, setRedirectUri] = useState('');
-  const [tools, setTools] = useState<string[]>([]);
-  const [skills, setSkills] = useState<string[]>([]);
   const [created, setCreated] = useState<{ sessionId: string; client: CreatedSessionMcpClient }>();
   const visibleCreated = created?.sessionId === sessionId ? created.client : undefined;
   const [loading, setLoading] = useState(false);
@@ -83,10 +121,7 @@ export function SessionMcpSettings() {
     // never let a one-time secret survive a selection change.
     // eslint-disable-next-line react/set-state-in-effect -- selection owns and resets this local credential draft.
     setCreated(undefined);
-    setName('');
     setRedirectUri('');
-    setTools([]);
-    setSkills([]);
     setConfig(undefined);
     setClients([]);
     setError(undefined);
@@ -115,14 +150,7 @@ export function SessionMcpSettings() {
   }, [available, sessionId, workspaceId]);
 
   const invalidCallback = redirectUri !== '' && !exactHttpsUrl(redirectUri);
-  const canCreate =
-    available &&
-    !remoteCaller &&
-    config !== undefined &&
-    name.trim() !== '' &&
-    exactHttpsUrl(redirectUri) &&
-    tools.length + skills.length > 0 &&
-    !busy;
+  const canCreate = available && !remoteCaller && config !== undefined && exactHttpsUrl(redirectUri) && !busy;
 
   async function createClient(): Promise<void> {
     if (!canCreate || workspaceId === undefined) return;
@@ -130,10 +158,8 @@ export function SessionMcpSettings() {
     setBusy(true);
     setError(undefined);
     const result = await createSessionMcpClient(workspaceId, sessionId, {
-      name: name.trim(),
       redirectUri: redirectUri.trim(),
-      tools,
-      skills,
+      scope: 'session',
     });
     if (selectionKeyRef.current !== operationSelection) return;
     setBusy(false);
@@ -143,10 +169,7 @@ export function SessionMcpSettings() {
     }
     setCreated({ sessionId, client: result.client });
     setClients((current) => [withoutSecret(result.client), ...current]);
-    setName('');
     setRedirectUri('');
-    setTools([]);
-    setSkills([]);
   }
 
   async function revoke(clientId: string): Promise<void> {
@@ -168,10 +191,10 @@ export function SessionMcpSettings() {
   return (
     <section className="flex flex-col gap-4 border-t border-doom-border pt-5" data-testid="session-mcp-settings">
       <div className="flex flex-col gap-1">
-        <h3 className="text-sm font-bold text-doom-hi">session MCP clients</h3>
+        <h3 className="text-sm font-bold text-doom-hi">session MCP</h3>
         <p className="text-sm leading-relaxed text-doom-faint">
-          expose only selected capabilities from one live session to ChatGPT or another inbound MCP client. this is
-          separate from outbound MCP servers, remote pairing, and remote control.
+          connect one live DoomPi session to ChatGPT or another inbound MCP client. this is separate from outbound MCP
+          servers, remote pairing, and remote control.
         </p>
       </div>
 
@@ -200,7 +223,7 @@ export function SessionMcpSettings() {
       ) : loading ? (
         <p className="flex items-center gap-2 text-sm text-doom-faint">
           <Spinner label="loading session MCP configuration" />
-          loading the final active tools, skills, and clients…
+          loading the session MCP connection…
         </p>
       ) : null}
 
@@ -210,104 +233,60 @@ export function SessionMcpSettings() {
         </p>
       ) : null}
 
+      {selected !== undefined && available && !loading && config === undefined && error === undefined ? (
+        <p className="text-sm text-doom-faint">
+          enable Remote Control with a public HTTPS origin before using session MCP.
+        </p>
+      ) : null}
+
       {config === undefined ? null : (
-        <div className="flex flex-col gap-1 rounded-md border border-doom-border bg-doom-deep p-3 text-sm">
-          <span className="text-doom-faint">public / local MCP URL</span>
-          <code className="break-all text-doom-text" data-testid="session-mcp-url">
-            {config.audience}
-          </code>
-          <span className="mt-1 text-doom-faint">authorization endpoint</span>
-          <code className="break-all text-doom-text">{config.authorizationEndpoint}</code>
-          <span className="mt-1 text-doom-faint">token endpoint</span>
-          <code className="break-all text-doom-text">{config.tokenEndpoint}</code>
+        <div className="flex flex-col gap-3 rounded-md border border-doom-border bg-doom-deep p-3 text-sm">
+          <CopyValue label="MCP URL" value={config.audience} testId="session-mcp-url" />
+          <details>
+            <summary className="cursor-pointer text-doom-faint">connection details</summary>
+            <div className="mt-2 flex flex-col gap-1">
+              <span className="text-xs text-doom-faint">authorization endpoint</span>
+              <code className="break-all text-xs text-doom-text">{config.authorizationEndpoint}</code>
+              <span className="mt-1 text-xs text-doom-faint">token endpoint</span>
+              <code className="break-all text-xs text-doom-text">{config.tokenEndpoint}</code>
+            </div>
+          </details>
         </div>
       )}
 
       {config === undefined || remoteCaller ? null : (
         <div className="flex flex-col gap-3 rounded-md border border-doom-border p-3" data-testid="session-mcp-create">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label htmlFor="session-mcp-name" className="flex flex-col gap-1 text-sm text-doom-faint">
-              client name
-              <Input
-                id="session-mcp-name"
-                data-testid="session-mcp-name"
-                value={name}
-                placeholder="ChatGPT"
-                onChange={(event) => setName(event.target.value)}
-              />
-            </label>
-            <label htmlFor="session-mcp-callback" className="flex flex-col gap-1 text-sm text-doom-faint">
-              exact ChatGPT HTTPS callback
-              <Input
-                id="session-mcp-callback"
-                data-testid="session-mcp-callback"
-                type="url"
-                value={redirectUri}
-                placeholder="https://chatgpt.com/…"
-                aria-invalid={invalidCallback}
-                onChange={(event) => setRedirectUri(event.target.value)}
-              />
-            </label>
+          <div className="flex flex-col gap-1">
+            <h4 className="text-sm font-bold text-doom-hi">connect this session to ChatGPT</h4>
+            <p className="text-sm leading-relaxed text-doom-faint">
+              In ChatGPT, choose <strong>User-Defined OAuth Client</strong>, copy its <strong>Callback URL</strong>, and
+              paste it below.
+            </p>
           </div>
+          <label htmlFor="session-mcp-callback" className="flex flex-col gap-1 text-sm text-doom-faint">
+            Callback URL from ChatGPT
+            <Input
+              id="session-mcp-callback"
+              data-testid="session-mcp-callback"
+              type="url"
+              value={redirectUri}
+              placeholder="https://chatgpt.com/connector/oauth/…"
+              aria-invalid={invalidCallback}
+              aria-describedby="session-mcp-callback-help"
+              onChange={(event) => setRedirectUri(event.target.value)}
+            />
+          </label>
+          <p id="session-mcp-callback-help" className="text-xs leading-relaxed text-doom-faint">
+            Paste the exact HTTPS callback ChatGPT shows. DoomPi cannot generate this URL for you.
+          </p>
           {invalidCallback ? (
             <p className="text-xs text-doom-red">
-              paste the exact absolute HTTPS callback without credentials or a fragment.
+              use the exact absolute HTTPS callback without credentials or a fragment.
             </p>
           ) : null}
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-2" data-testid="session-mcp-tools">
-              <span className="text-sm font-bold text-doom-hi">tool grants</span>
-              {config.tools.length === 0 ? <span className="text-xs text-doom-faint">no active tools</span> : null}
-              {config.tools.map((tool, index) => (
-                <label
-                  key={tool.name}
-                  htmlFor={`session-mcp-tool-${String(index)}`}
-                  className="flex items-start gap-2 text-sm text-doom-text"
-                >
-                  <Checkbox
-                    id={`session-mcp-tool-${String(index)}`}
-                    checked={tools.includes(tool.name)}
-                    onCheckedChange={(checked) =>
-                      setTools((current) => toggleGrant(current, tool.name, checked === true))
-                    }
-                    aria-label={`grant tool ${tool.label}`}
-                  />
-                  <span>
-                    <span className="block">{tool.label}</span>
-                    <span className="block text-xs text-doom-faint">{tool.description}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-            <div className="flex flex-col gap-2" data-testid="session-mcp-skills">
-              <span className="text-sm font-bold text-doom-hi">skill grants</span>
-              {config.skills.length === 0 ? <span className="text-xs text-doom-faint">no active skills</span> : null}
-              {config.skills.map((skill, index) => (
-                <label
-                  key={skill.name}
-                  htmlFor={`session-mcp-skill-${String(index)}`}
-                  className="flex items-start gap-2 text-sm text-doom-text"
-                >
-                  <Checkbox
-                    id={`session-mcp-skill-${String(index)}`}
-                    checked={skills.includes(skill.name)}
-                    onCheckedChange={(checked) =>
-                      setSkills((current) => toggleGrant(current, skill.name, checked === true))
-                    }
-                    aria-label={`grant skill ${skill.name}`}
-                  />
-                  <span>
-                    <span className="block">{skill.name}</span>
-                    <span className="block text-xs text-doom-faint">{skill.description}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
           <p className="text-xs leading-relaxed text-doom-faint">
-            granting <code>bash</code> lets the client run shell commands with this session&apos;s permissions. it can
-            read, change, or remove files, so grant it only to a client you trust.
+            Access follows this session&apos;s current major mode, minor modes, domains, and profile, including future
+            changes. Session tools run with the session&apos;s permissions.
           </p>
           <Button
             data-testid="session-mcp-create-button"
@@ -315,7 +294,7 @@ export function SessionMcpSettings() {
             disabled={!canCreate}
             onClick={() => void createClient()}
           >
-            create client
+            create OAuth client
           </Button>
         </div>
       )}
@@ -329,27 +308,28 @@ export function SessionMcpSettings() {
 
       {visibleCreated === undefined ? null : (
         <div
-          className="flex flex-col gap-2 rounded-md border border-doom-blue/50 bg-doom-deep p-3"
+          className="flex flex-col gap-3 rounded-md border border-doom-blue/50 bg-doom-deep p-3"
           data-testid="session-mcp-secret"
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-bold text-doom-hi">save this one-time secret now</span>
+            <span className="text-sm font-bold text-doom-hi">save these connection details now</span>
             <Button variant="ghost" size="xs" onClick={() => setCreated(undefined)}>
               dismiss
             </Button>
           </div>
-          <span className="text-xs text-doom-faint">client ID</span>
-          <code className="break-all text-sm text-doom-text" data-testid="session-mcp-created-id">
-            {visibleCreated.clientId}
-          </code>
-          <span className="text-xs text-doom-faint">one-time client secret</span>
-          <code className="break-all text-sm text-doom-text" data-testid="session-mcp-created-secret">
-            {visibleCreated.clientSecret}
-          </code>
+          {config === undefined ? null : (
+            <CopyValue label="MCP URL" value={config.audience} testId="session-mcp-created-url" />
+          )}
+          <CopyValue label="Client ID" value={visibleCreated.clientId} testId="session-mcp-created-id" />
+          <CopyValue
+            label="one-time client secret"
+            value={visibleCreated.clientSecret}
+            testId="session-mcp-created-secret"
+          />
           <p className="text-xs leading-relaxed text-doom-faint">
-            ChatGPT must authenticate at the token endpoint with <code>client_secret_post</code>: send the client ID and
-            secret as <code>client_id</code> and <code>client_secret</code> form fields. this secret is kept only in
-            this panel and disappears on dismissal, navigation, or session change.
+            Paste these values into ChatGPT. Select <code>client_secret_post</code> as the token endpoint auth method,
+            not <code>none</code>. The secret is shown only once and disappears on dismissal, navigation, or session
+            change.
           </p>
         </div>
       )}
@@ -367,13 +347,18 @@ export function SessionMcpSettings() {
             <div className="min-w-0 flex-1 text-sm">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-bold text-doom-hi">{client.name}</span>
+                <Badge tone="neutral">{client.scope === 'session' ? 'session scope' : 'restricted scope'}</Badge>
                 <Badge tone="neutral">{client.tokenEndpointAuthMethod}</Badge>
               </div>
               <code className="block break-all text-xs text-doom-faint">{client.clientId}</code>
               <span className="block break-all text-xs text-doom-faint">{client.redirectUri}</span>
-              <span className="block text-xs text-doom-faint">
-                tools: {client.tools.join(', ') || 'none'} · skills: {client.skills.join(', ') || 'none'}
-              </span>
+              {client.scope === 'session' ? (
+                <span className="block text-xs text-doom-faint">access follows the live session surface</span>
+              ) : (
+                <span className="block text-xs text-doom-faint">
+                  tools: {client.tools.join(', ') || 'none'} · skills: {client.skills.join(', ') || 'none'}
+                </span>
+              )}
             </div>
             <Button variant="outline" size="xs" disabled={busy} onClick={() => void revoke(client.clientId)}>
               revoke

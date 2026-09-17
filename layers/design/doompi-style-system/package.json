@@ -23,8 +23,12 @@
     "url": "git+https://github.com/AgiFlow/doompi.git",
     "directory": "layers/design/doompi-style-system"
   },
+  "bin": {
+    "doompi-design": "./dist/cli.mjs"
+  },
   "files": [
     "dist",
+    "skills",
     "README.md"
   ],
   "type": "module",
@@ -41,6 +45,11 @@
       "types": "./dist/api-contracts.d.mts",
       "import": "./dist/api-contracts.mjs",
       "require": "./dist/api-contracts.cjs"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.mts",
+      "import": "./dist/cli.mjs",
+      "require": "./dist/cli.cjs"
     },
     "./extensions/pi": {
       "types": "./dist/extensions/pi.d.mts",

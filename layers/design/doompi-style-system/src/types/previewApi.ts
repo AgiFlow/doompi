@@ -1,5 +1,29 @@
 export const STYLE_SYSTEM_PREVIEW_BASE_PATH = 'style-system-preview';
 
+export interface StoryPreviewSeed {
+  source?: {
+    path: string;
+    hasUnsavedChanges: boolean;
+  };
+}
+
+export interface StoryPreviewMetadataRequest {
+  storyPath: string;
+  appPath?: string;
+}
+
+export interface StoryPreviewExport {
+  exportName: string;
+  label?: string;
+}
+
+export interface StoryPreviewMetadataView {
+  storyPath: string;
+  appPath: string;
+  projectResolution: 'explicit' | 'config' | 'package' | 'workspace';
+  exports: readonly StoryPreviewExport[];
+}
+
 export interface BuildStoryPreviewRequest {
   appPath: string;
   storyPath: string;

@@ -147,18 +147,45 @@ jobs:
   # Packed-install gate: packs and installs every package for real, checks the
   # frozen published compatibility baseline, then asserts startup latency.
   #
-  # It runs on pull requests, not only on pushes. It was push-only while it
-  # needed a machine of ours, and the cost showed: an export added to the
-  # contracts package went unrecorded through review and only failed after it
-  # reached main, because nothing ran this gate before the merge.
-  #
-  # The latency assertions compare measurements from one machine, so a
-  # uniformly slower runner cancels out, but a noisy shared one may not. Watch
-  # for flakiness before trusting a failure here, and prefer giving the parity
-  # comparison its own allowance over widening the shared jitter again.
-  installed-runtime:
+  # The CLI system suites are split by top-level suite across disposable hosted
+  # runners. Each runner keeps Vitest file execution serial because the tests
+  # launch real processes and use shared resources within that runner.
+  installed_runtime_shards:
+    name: Installed runtime (${{ matrix.name }})
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: CLI system tests (1/6)
+            project: "@agimon-ai/doompi"
+            shard: "1"
+            check: true
+          - name: CLI system tests (2/6)
+            project: "@agimon-ai/doompi"
+            shard: "2"
+            check: false
+          - name: CLI system tests (3/6)
+            project: "@agimon-ai/doompi"
+            shard: "3"
+            check: false
+          - name: CLI system tests (4/6)
+            project: "@agimon-ai/doompi"
+            shard: "4"
+            check: false
+          - name: CLI system tests (5/6)
+            project: "@agimon-ai/doompi"
+            shard: "5"
+            check: false
+          - name: CLI system tests (6/6)
+            project: "@agimon-ai/doompi"
+            shard: "6"
+            check: false
+          - name: Team system tests
+            project: "@agimon-ai/doompi-team"
+            shard: ""
+            check: false
     steps:
       - name: Check out materialized package snapshot
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -177,5 +204,33 @@ jobs:
       - name: Build package matrix
         run: pnpm build
 
+      - name: Verify system-test shard coverage
+        if: matrix.check
+        run: node scripts/check-system-test-shards.mjs
+
       - name: Pack, install, and test the runtime
-        run: pnpm nx run-many -t test-system --parallel=1
+        env:
+          DOOMPI_SYSTEM_SHARD: ${{ matrix.shard }}
+          DOOMPI_SYSTEM_TIMING_FILE: ${{ runner.temp }}/doompi-system-timing.json
+        run: |
+          set +e
+          pnpm nx run "${{ matrix.project }}:test-system"
+          status=$?
+          if [[ -f "${DOOMPI_SYSTEM_TIMING_FILE}" ]]; then cat "${DOOMPI_SYSTEM_TIMING_FILE}"; fi
+          exit "${status}"
+
+  # Keep one stable required check while the execution matrix evolves.
+  installed-runtime:
+    if: always()
+    needs: installed_runtime_shards
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every installed-runtime shard to pass
+        env:
+          SHARDS_RESULT: ${{ needs.installed_runtime_shards.result }}
+        run: |
+          if [[ "$SHARDS_RESULT" != "success" ]]; then
+            printf 'An installed-runtime shard finished with result: %s\n' "$SHARDS_RESULT"
+            exit 1
+          fi

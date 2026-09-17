@@ -60,6 +60,7 @@ function isClient(value: unknown): value is SessionMcpClient {
     typeof value.redirectUri === 'string' &&
     value.tokenEndpointAuthMethod === 'client_secret_post' &&
     typeof value.createdAt === 'number' &&
+    (value.scope === undefined || value.scope === 'restricted' || value.scope === 'session') &&
     isStringArray(value.tools) &&
     isStringArray(value.skills) &&
     typeof value.audience === 'string'
@@ -74,6 +75,7 @@ function clientMetadata(value: unknown): SessionMcpClient | undefined {
     redirectUri: value.redirectUri,
     tokenEndpointAuthMethod: value.tokenEndpointAuthMethod,
     createdAt: value.createdAt,
+    scope: value.scope === 'session' ? 'session' : 'restricted',
     tools: value.tools,
     skills: value.skills,
     audience: value.audience,

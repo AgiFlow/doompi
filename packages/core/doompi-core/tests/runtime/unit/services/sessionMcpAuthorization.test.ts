@@ -181,6 +181,25 @@ describe('session MCP restricted OAuth', () => {
     ).toThrow('without credentials, a query, or a fragment');
   });
 
+  it('carries explicit session scope through authorization grants', () => {
+    const service = createSessionMcpAuthorizationService();
+    const client = service.createClient({ name: 'Session client', redirectUri: CALLBACK });
+    const binding = service.createAuthorizationBinding({
+      clientId: client.clientId,
+      sessionId: 'alpha',
+      sessionGeneration: 4,
+      audience: AUDIENCE,
+      scope: 'session',
+    });
+    expect(binding).toMatchObject({ scope: 'session', tools: [], skills: [] });
+    const authorization = service.issueAuthorizationCode({
+      clientId: client.clientId,
+      redirectUri: CALLBACK,
+      codeChallenge: CHALLENGE,
+      codeChallengeMethod: 'S256',
+    });
+    expect(authorization.grant).toMatchObject({ scope: 'session', tools: [], skills: [] });
+  });
   it('sweeps expired codes and orphan grants before enforcing the record bound', () => {
     let now = 1_000;
     const service = createSessionMcpAuthorizationService({

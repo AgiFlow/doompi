@@ -68,7 +68,7 @@ export default defineConfig(async ({ command }) => {
   const signingKey = command === 'serve' ? await devSigningKey(proxyTarget) : undefined;
   return {
     root: clientRoot,
-    publicDir: fileURLToPath(new URL('./src/pwa/public', import.meta.url)),
+    publicDir: fileURLToPath(new URL('./src/web/public', import.meta.url)),
     plugins: [...dev.plugins, react(), tailwindcss(), bundleAssetPolicyPlugin()],
     ...(signingKey ? { define: { 'import.meta.env.VITE_DOOMPI_PLUGIN_PUBLIC_KEY': JSON.stringify(signingKey) } } : {}),
     resolve: {
@@ -101,6 +101,7 @@ export default defineConfig(async ({ command }) => {
       proxy: {
         '/api': { target: proxyTarget, changeOrigin: true, ws: true },
         '/sw.js': { target: proxyTarget },
+        '/manifest.webmanifest': { target: proxyTarget },
         '/pwa': { target: proxyTarget },
         '/bundle-manifest.json': { target: proxyTarget },
         '/bundle-assets': { target: proxyTarget },

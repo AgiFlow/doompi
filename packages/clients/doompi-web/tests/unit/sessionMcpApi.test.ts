@@ -20,12 +20,13 @@ const config = {
 };
 const client = {
   clientId: 'client-1',
-  name: 'ChatGPT',
+  name: 'ChatGPT · doom.example',
   redirectUri: 'https://chatgpt.com/callback',
   tokenEndpointAuthMethod: 'client_secret_post' as const,
   createdAt: 1,
-  tools: ['bash'],
-  skills: ['review'],
+  scope: 'session' as const,
+  tools: [],
+  skills: [],
   audience: config.audience,
 };
 
@@ -49,27 +50,23 @@ describe('session MCP management API', () => {
     });
   });
 
-  it('creates an immutable explicit grant and returns the one-time secret', async () => {
+  it('creates a live session-scoped client and returns the one-time secret', async () => {
     const created = { ...client, clientSecret: 'one-time-secret' };
     const fetchMock = vi.fn().mockResolvedValue(respond(201, { client: created }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(
       createSessionMcpClient('workspace', 'session', {
-        name: 'ChatGPT',
         redirectUri: 'https://chatgpt.com/callback',
-        tools: ['bash'],
-        skills: ['review'],
+        scope: 'session',
       }),
     ).resolves.toEqual({ client: created });
     expect(fetchMock).toHaveBeenCalledWith('/api/workspaces/workspace/sessions/session/mcp/clients', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Doompi-Mcp-Csrf': '1' },
       body: JSON.stringify({
-        name: 'ChatGPT',
         redirectUri: 'https://chatgpt.com/callback',
-        tools: ['bash'],
-        skills: ['review'],
+        scope: 'session',
       }),
     });
   });

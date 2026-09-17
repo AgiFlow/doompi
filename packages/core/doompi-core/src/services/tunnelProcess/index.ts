@@ -430,6 +430,7 @@ function createSingleTunnelLauncher(options: TunnelProcessOptions): TunnelLaunch
     let seenConnection = false;
 
     const waitToRetry = async (): Promise<void> => {
+      if (selfTestRetryMs <= 0) return;
       await new Promise<void>((resolve) => {
         const done = (): void => {
           clearTimeout(timer);

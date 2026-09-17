@@ -132,6 +132,35 @@ describe('session runtime backlog publication', () => {
       dropSessionStore('s1');
     }
   });
+  it('routes focused-session channel frames through replay and reconnect', () => {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+    const sessionId = 'remote-focused';
+    const stop = startSessionRuntime();
+    const replay = { type: 'runner_runs', payload: { runs: [{ id: 'replayed' }] } };
+    const live = { type: 'runner_runs', payload: { runs: [{ id: 'live' }] } };
+    try {
+      socketState.handlers?.onFrame({
+        type: 'sessions_snapshot',
+        sessions: [{ id: sessionId, name: 'Remote', createdAt: '1' }],
+      });
+      setActiveSession(sessionId);
+      socketState.handlers?.onClose();
+      socketState.handlers?.onFrame({
+        type: 'sessions_snapshot',
+        sessions: [{ id: sessionId, name: 'Remote', createdAt: '1' }],
+      });
+      socketState.presentation?.(sessionId, replay, true);
+      socketState.presentation?.(sessionId, live, false);
+
+      expect(pluginState.dispatched).toEqual([
+        { ...replay, sessionId },
+        { ...live, sessionId },
+      ]);
+    } finally {
+      stop();
+      dropSessionStore(sessionId);
+    }
+  });
   it.each(['session', 'protocol', 'thread'] as const)('publishes only the completed %s replay', (kind) => {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
     const sessionId = `backlog-${kind}`;

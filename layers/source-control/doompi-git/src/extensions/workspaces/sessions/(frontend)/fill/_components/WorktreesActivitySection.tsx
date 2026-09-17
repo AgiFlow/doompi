@@ -61,18 +61,20 @@ export function WorktreesActivitySection({ sessionId, openTransientTab }: WebPlu
           className="min-w-0 gap-1.5 px-1"
           onClick={() => openTransientTab(worktreesTab())}
         >
-          <Dot tone={worktree.orphaned ? 'red' : worktree.sessionId === null ? 'muted' : 'blue'} />
-          <span className="min-w-0 flex-1 truncate text-left text-xs font-bold text-doom-hi">{worktree.branch}</span>
-          {worktree.orphaned ? (
-            <StatusBadge tone="error" size="xs">
-              orphaned
-            </StatusBadge>
-          ) : null}
-          {worktree.unowned ? (
-            <StatusBadge tone="info" size="xs">
-              unowned
-            </StatusBadge>
-          ) : null}
+          <span className="flex w-full min-w-0 items-center gap-1.5">
+            <Dot tone={worktree.orphaned ? 'red' : worktree.sessionId === null ? 'muted' : 'blue'} />
+            <span className="min-w-0 flex-1 truncate text-left text-xs font-bold text-doom-hi">{worktree.branch}</span>
+            {worktree.orphaned ? (
+              <StatusBadge tone="error" size="xs">
+                orphaned
+              </StatusBadge>
+            ) : null}
+            {worktree.unowned ? (
+              <StatusBadge tone="info" size="xs">
+                unowned
+              </StatusBadge>
+            ) : null}
+          </span>
         </Button>
       ))}
     </div>

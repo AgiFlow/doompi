@@ -130,6 +130,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   const subscriptions = new Set<() => void>();
   const sessionCleanups = new Map<string, () => void>();
   const presentationCleanups = new Map<string, () => void>();
+  const sessionShutdowns = new Map<string, { session: HeadlessHubSession; promise: Promise<void>; pending: boolean }>();
   const directEventListeners = new Map<string, Set<(payload: unknown) => void>>();
   const directEventLatest = new Map<string, unknown>();
   const maxDirectEventLatest = 4096;
@@ -147,6 +148,8 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   const belongs = (mount: DoomApiMount, session: HeadlessHubSession): boolean =>
     mount.scope === 'global' ||
     (mount.scope === 'workspace' ? session.workspaceId === mount.workspaceId : session.id === mount.sessionId);
+  const canClose = (mount: DoomApiMount, session: HeadlessHubSession): boolean =>
+    belongs(mount, session) || (mount.scope === 'session' && session.parentSessionId === mount.sessionId);
   const selectedChannels = (session: HeadlessHubSession): StartedChannel[] => {
     const selected = new Map<string, StartedChannel>();
     for (const started of channels.values()) {
@@ -253,7 +256,15 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       },
       close: async (id) => {
         const session = sessions.get(id);
-        if (!session || !belongs(mount, session)) throw new Error('Session is outside this mount.');
+        if (session === undefined) {
+          const shutdown = sessionShutdowns.get(id);
+          if (shutdown !== undefined) {
+            if (!canClose(mount, shutdown.session)) throw new Error('Session is outside this mount.');
+            await shutdown.promise;
+          }
+          return;
+        }
+        if (!canClose(mount, session)) throw new Error('Session is outside this mount.');
         await sessionService.close(id);
       },
       isLive: (id) => {
@@ -361,9 +372,29 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     emit({ kind: 'removed', sessionId });
   };
 
+  const startSessionShutdown = (session: HeadlessHubSession): Promise<void> => {
+    const existing = sessionShutdowns.get(session.id);
+    if (existing !== undefined) return existing.promise;
+    const shutdown = { session, promise: Promise.resolve(), pending: true };
+    const promise = Promise.resolve().then(() => options.manager.closeSession(session.id));
+    shutdown.promise = promise;
+    sessionShutdowns.set(session.id, shutdown);
+    void promise.then(
+      () => {
+        shutdown.pending = false;
+        if (sessionShutdowns.get(session.id) === shutdown) sessionShutdowns.delete(session.id);
+      },
+      () => {
+        shutdown.pending = false;
+      },
+    );
+    return promise;
+  };
+
   const register = (session: HeadlessHubSession): void => {
     if (closed) throw new Error('The headless hub is closed.');
     if (sessions.has(session.id)) throw new Error(`Session '${session.id}' is already registered.`);
+    if (sessionShutdowns.has(session.id)) throw new Error(`Session '${session.id}' is still shutting down.`);
     let current: HeadlessHubSession = {
       ...session,
       updatedAt: session.updatedAt ?? session.createdAt,
@@ -418,14 +449,11 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       subscriptions.delete(cleanup);
       sessionCleanups.delete(session.id);
       if (!active()) return;
-      unregisterSession(session.id);
-      void options.manager
-        .closeSession(session.id)
-        .catch((error: unknown) =>
-          options.onNotice?.(
-            `session ${session.id} cleanup failed (${error instanceof Error ? error.message : String(error)})`,
-          ),
-        );
+      void closeSession(session.id).catch((error: unknown) =>
+        options.onNotice?.(
+          `session ${session.id} cleanup failed (${error instanceof Error ? error.message : String(error)})`,
+        ),
+      );
     };
     sessionCleanups.set(session.id, cleanup);
     void session.host.runtime.exited.then(cleanup, cleanup);
@@ -434,10 +462,15 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   };
 
   const closeSession = async (sessionId: string): Promise<void> => {
+    const pending = sessionShutdowns.get(sessionId);
+    if (pending !== undefined) {
+      await pending.promise;
+      return;
+    }
     const session = sessions.get(sessionId);
     if (session === undefined) return;
     unregisterSession(sessionId);
-    await options.manager.closeSession(sessionId);
+    await startSessionShutdown(session);
   };
 
   sessionService = {
@@ -650,8 +683,15 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       for (const { source } of channels.values()) source.close();
       channels.clear();
       listeners.clear();
+      const shutdowns: Promise<void>[] = [...sessionShutdowns.values()]
+        .filter(({ pending }) => pending)
+        .map(({ promise }) => promise);
+      for (const id of ids) {
+        const session = sessions.get(id);
+        if (session !== undefined && !sessionShutdowns.has(id)) shutdowns.push(startSessionShutdown(session));
+      }
       sessions.clear();
-      const outcomes = await Promise.allSettled(ids.map((id) => options.manager.closeSession(id)));
+      const outcomes = await Promise.allSettled(shutdowns);
       for (const outcome of outcomes) if (outcome.status === 'rejected') failures.push(outcome.reason);
       if (failures.length) throw new AggregateError(failures, 'Mount shutdown failed');
     },

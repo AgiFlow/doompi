@@ -44,6 +44,12 @@ export function WorktreesPanel({ sessionId }: WebPluginSlotProps) {
 
   const busy = session.pending !== undefined;
   const canCreate = sessionId !== null && branch.trim() !== '' && !busy;
+  const createError = session.errorTarget?.action === 'create' ? session.error : undefined;
+  const closeErrorId = session.errorTarget?.action === 'close' ? session.errorTarget.id : undefined;
+  const panelError =
+    session.error !== undefined &&
+    (session.errorTarget === undefined ||
+      (closeErrorId !== undefined && !session.worktrees.some((worktree) => worktree.id === closeErrorId)));
 
   const create = (): void => {
     if (sessionId === null || !canCreate) return;
@@ -95,16 +101,22 @@ export function WorktreesPanel({ sessionId }: WebPluginSlotProps) {
             Create
           </Button>
         </div>
-        {session.error === undefined ? (
+        {createError === undefined ? (
           <p className="text-2xs text-doom-faint">
             Creates the worktree outside the repository and starts a session nested under this one.
           </p>
         ) : (
-          <p data-testid="git-worktree-error" className="text-2xs text-doom-red">
-            {session.error}
+          <p role="alert" data-testid="git-worktree-error" className="text-2xs text-doom-red">
+            {createError}
           </p>
         )}
       </div>
+
+      {panelError ? (
+        <p role="alert" data-testid="git-worktree-error" className="px-3 pt-2 text-2xs text-doom-red sm:px-[26px]">
+          {session.error}
+        </p>
+      ) : null}
 
       {session.worktrees.length === 0 ? (
         <EmptyState
@@ -116,7 +128,13 @@ export function WorktreesPanel({ sessionId }: WebPluginSlotProps) {
       ) : (
         <ul data-testid="git-worktrees-list" className="flex flex-col gap-2.5 px-3 py-3 sm:px-[26px]">
           {session.worktrees.map((worktree: WorktreeView) => (
-            <WorktreeCard key={worktree.id} worktree={worktree} sessionId={sessionId} busy={busy} />
+            <WorktreeCard
+              key={worktree.id}
+              worktree={worktree}
+              sessionId={sessionId}
+              busy={busy}
+              error={closeErrorId === worktree.id ? session.error : undefined}
+            />
           ))}
         </ul>
       )}
@@ -129,9 +147,11 @@ function WorktreeCard({
   worktree,
   sessionId,
   busy,
+  error,
 }: {
   worktree: WorktreeView;
   busy: boolean;
+  error?: string;
 } & Pick<WebPluginSlotProps, 'sessionId'>) {
   return (
     <li
@@ -170,6 +190,11 @@ function WorktreeCard({
           </Button>
         )}
       </div>
+      {error === undefined ? null : (
+        <p role="alert" data-testid="git-worktree-error" className="text-2xs text-doom-red">
+          {error}
+        </p>
+      )}
     </li>
   );
 }

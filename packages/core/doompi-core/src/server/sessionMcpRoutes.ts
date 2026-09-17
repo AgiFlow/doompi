@@ -63,6 +63,10 @@ function parseStringArray(value: unknown): readonly string[] | undefined {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string') ? value : undefined;
 }
 
+function defaultClientName(origin: string): string {
+  return `ChatGPT · ${new URL(origin).hostname}`;
+}
+
 function formString(form: FormData, name: string): string {
   const value = form.get(name);
   return typeof value === 'string' ? value : '';
@@ -71,6 +75,7 @@ function formString(form: FormData, name: string): string {
 function publicClient(client: SessionMcpClient, binding: SessionMcpAuthorizationBinding): Record<string, unknown> {
   return {
     ...client,
+    scope: binding.scope,
     tools: binding.tools,
     skills: binding.skills,
     audience: binding.audience,
@@ -302,7 +307,8 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         });
       }
       if (clientId === undefined && request.method === 'POST') {
-        if (origin() === undefined) return json(503, { error: 'Session MCP public origin is unavailable.' });
+        const configuredOrigin = origin();
+        if (configuredOrigin === undefined) return json(503, { error: 'Session MCP public origin is unavailable.' });
         let body: unknown;
         try {
           body = await request.json();
@@ -311,32 +317,59 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         }
         if (typeof body !== 'object' || body === null) return json(400, { error: 'Invalid client request.' });
         const input = body as Record<string, unknown>;
+        const requestedScope = input.scope;
+        if (requestedScope !== undefined && requestedScope !== 'session' && requestedScope !== 'restricted') {
+          return json(400, { error: 'Authorization scope is not supported.' });
+        }
+        const scope = requestedScope === 'session' ? 'session' : 'restricted';
+        const hasTools = Object.hasOwn(input, 'tools');
+        const hasSkills = Object.hasOwn(input, 'skills');
         const tools = parseStringArray(input.tools);
         const skills = parseStringArray(input.skills);
-        if (typeof input.name !== 'string' || typeof input.redirectUri !== 'string' || !tools || !skills)
-          return json(400, { error: 'A name, redirectUri, tools, and skills are required.' });
-        let surface;
-        try {
-          surface = resolved.session.host.toolSurface.readSurface();
-        } catch {
-          return json(409, { error: 'The session capability surface is not ready.' });
+        if (typeof input.redirectUri !== 'string') return json(400, { error: 'A redirectUri is required.' });
+        if (scope === 'session' && (hasTools || hasSkills)) {
+          return json(400, { error: 'Session scope cannot include capability grants.' });
         }
-        const activeTools = new Set(surface.tools.map((tool) => tool.name));
-        const activeSkills = new Set(surface.skills.map((skill) => skill.name));
-        if (tools.some((name) => !activeTools.has(name)) || skills.some((name) => !activeSkills.has(name)))
-          return json(400, { error: 'Every requested grant must be active in the session.' });
-        try {
-          const client = authorization.createClient({ name: input.name, redirectUri: input.redirectUri });
-          const audience = `${origin()!}${sessionPath(workspaceId, sessionId)}`;
+        if (scope === 'restricted' && (typeof input.name !== 'string' || !tools || !skills)) {
+          return json(400, { error: 'Restricted scope requires a name, tools, and skills.' });
+        }
+        if (scope === 'restricted') {
+          let surface;
           try {
-            const binding = authorization.createAuthorizationBinding({
-              clientId: client.clientId,
-              sessionId,
-              sessionGeneration: resolved.generation,
-              audience,
-              tools: [...new Set(tools)],
-              skills: [...new Set(skills)],
-            });
+            surface = resolved.session.host.toolSurface.readSurface();
+          } catch {
+            return json(409, { error: 'The session capability surface is not ready.' });
+          }
+          const activeTools = new Set(surface.tools.map((tool) => tool.name));
+          const activeSkills = new Set(surface.skills.map((skill) => skill.name));
+          if (tools!.some((name) => !activeTools.has(name)) || skills!.some((name) => !activeSkills.has(name)))
+            return json(400, { error: 'Every requested grant must be active in the session.' });
+        }
+        try {
+          const client = authorization.createClient({
+            name: scope === 'session' ? defaultClientName(configuredOrigin) : (input.name as string),
+            redirectUri: input.redirectUri,
+          });
+          const audience = `${configuredOrigin}${sessionPath(workspaceId, sessionId)}`;
+          try {
+            const binding =
+              scope === 'session'
+                ? authorization.createAuthorizationBinding({
+                    clientId: client.clientId,
+                    sessionId,
+                    sessionGeneration: resolved.generation,
+                    audience,
+                    scope: 'session',
+                  })
+                : authorization.createAuthorizationBinding({
+                    clientId: client.clientId,
+                    sessionId,
+                    sessionGeneration: resolved.generation,
+                    audience,
+                    scope: 'restricted',
+                    tools: [...new Set(tools!)],
+                    skills: [...new Set(skills!)],
+                  });
             return json(201, { client: publicClient(client, binding) });
           } catch (error) {
             authorization.revokeClient(client.clientId);

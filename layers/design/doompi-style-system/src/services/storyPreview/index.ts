@@ -11,6 +11,7 @@ import {
   type DesignSystemConfig,
 } from '@agimon-ai/style-system';
 
+import type { StoryPreviewExport, StoryPreviewMetadataRequest, StoryPreviewMetadataView } from '../../types/previewApi';
 import type {
   StoryPreviewBuildInput,
   StoryPreviewBuildResult,
@@ -18,8 +19,25 @@ import type {
   StoryPreviewServiceDependencies,
 } from './type';
 
-const STORY_FILE_PATTERN = /\.stories\.(?:ts|tsx)$/;
+const STORY_FILE_PATTERN = /\.stories\.(?:js|jsx|ts|tsx)$/u;
 const STORY_EXPORT_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+const NON_STORY_EXPORTS = new Set([
+  'afterAll',
+  'afterEach',
+  'argTypes',
+  'beforeAll',
+  'beforeEach',
+  'component',
+  'decorators',
+  'excludeStories',
+  'globals',
+  'includeStories',
+  'loaders',
+  'meta',
+  'parameters',
+  'render',
+  'tags',
+]);
 
 interface OwnedArtifact {
   directory: string;
@@ -28,6 +46,106 @@ interface OwnedArtifact {
 function isContained(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
   return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+}
+
+function stripComments(source: string): string {
+  let output = '';
+  let quote: "'" | '"' | '`' | undefined;
+  let escaped = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    const next = source[index + 1];
+    if (quote !== undefined) {
+      output += character === '\n' ? '\n' : ' ';
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === '"' || character === "'" || character === '`') {
+      quote = character;
+      output += ' ';
+    } else if (character === '/' && next === '/') {
+      output += '  ';
+      index += 2;
+      while (index < source.length && source[index] !== '\n') {
+        output += ' ';
+        index += 1;
+      }
+      if (index < source.length) output += '\n';
+    } else if (character === '/' && next === '*') {
+      output += '  ';
+      index += 2;
+      while (index < source.length && !(source[index - 1] === '*' && source[index] === '/')) {
+        output += source[index] === '\n' ? '\n' : ' ';
+        index += 1;
+      }
+    } else output += character;
+  }
+  return output;
+}
+
+function storyLabel(source: string, clean: string, exportName: string): string | undefined {
+  const escapedExport = exportName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const declaration = new RegExp(`\\bexport\\s+(?:const|let|var)\\s+${escapedExport}\\b[^=]*=\\s*\\{`, 'u');
+  const match = clean.match(declaration);
+  if (match === null || match.index === undefined) return undefined;
+  const opening = clean.indexOf('{', match.index);
+  let depth = 0;
+  for (let index = opening; index < clean.length; index += 1) {
+    if (clean[index] === '{') depth += 1;
+    else if (clean[index] === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        const label = source
+          .slice(opening, index)
+          .match(/\bname\s*:\s*(['"])(.*?)\1/u)?.[2]
+          ?.trim();
+        return label === '' ? undefined : label;
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Extracts named CSF candidates without evaluating workspace source. */
+export function extractStoryExports(source: string): readonly StoryPreviewExport[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  const add = (name: string): void => {
+    if (name === 'default' || NON_STORY_EXPORTS.has(name) || seen.has(name)) return;
+    seen.add(name);
+    names.push(name);
+  };
+  const clean = stripComments(source);
+  const declarations = /\bexport\s+(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][A-Za-z0-9_$]*)/gu;
+  for (const match of clean.matchAll(declarations)) add(match[1]!);
+  const lists = /\bexport\s*\{([^}]*)\}/gu;
+  for (const match of clean.matchAll(lists)) {
+    for (const item of match[1]!.split(',')) {
+      const parts = item.trim().split(/\s+as\s+/u);
+      const name = (parts.at(-1) ?? '').trim();
+      if (/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(name)) add(name);
+    }
+  }
+  return names.map((exportName) => {
+    const label = storyLabel(source, clean, exportName);
+    return label === undefined ? { exportName } : { exportName, label };
+  });
+}
+
+async function exists(filePath: string): Promise<boolean> {
+  try {
+    await fs.stat(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function relativeWorkspacePath(root: string, candidate: string): string {
+  const relative = path.relative(root, candidate).split(path.sep).join('/');
+  return relative === '' ? '.' : relative;
 }
 
 const defaultDependencies: StoryPreviewServiceDependencies = {
@@ -49,14 +167,53 @@ export class StoryPreviewService {
     this.dependencies = dependencies;
   }
 
+  async metadata(input: StoryPreviewMetadataRequest): Promise<StoryPreviewMetadataView> {
+    const root = await fs.realpath(this.root);
+    const storyPath = await this.resolveContainedPath(root, input.storyPath, 'storyPath');
+    if (!STORY_FILE_PATTERN.test(storyPath))
+      throw new Error('storyPath must name a .stories.js, .stories.jsx, .stories.ts, or .stories.tsx file');
+    const project = await this.resolveProject(root, storyPath, input.appPath);
+    const source = await fs.readFile(storyPath, 'utf8');
+    return {
+      storyPath: relativeWorkspacePath(root, storyPath),
+      appPath: relativeWorkspacePath(root, project.path),
+      projectResolution: project.resolution,
+      exports: extractStoryExports(source),
+    };
+  }
+
+  private async resolveProject(
+    root: string,
+    storyPath: string,
+    requestedPath: string | undefined,
+  ): Promise<{ path: string; resolution: StoryPreviewMetadataView['projectResolution'] }> {
+    if (requestedPath !== undefined && requestedPath.trim() !== '') {
+      return { path: await this.resolveContainedPath(root, requestedPath, 'appPath'), resolution: 'explicit' };
+    }
+    let directory = path.dirname(storyPath);
+    let packagePath: string | undefined;
+    while (isContained(root, directory)) {
+      if (await exists(path.join(directory, 'style-system.config.yaml'))) {
+        return { path: directory, resolution: 'config' };
+      }
+      if (packagePath === undefined && (await exists(path.join(directory, 'package.json')))) packagePath = directory;
+      if (directory === root) break;
+      directory = path.dirname(directory);
+    }
+    return packagePath === undefined
+      ? { path: root, resolution: 'workspace' }
+      : { path: packagePath, resolution: 'package' };
+  }
+
   private async exactStory(root: string, storyPath: string, storyExport: string) {
+    const source = await fs.readFile(storyPath, 'utf8');
+    if (!extractStoryExports(source).some((entry) => entry.exportName === storyExport)) {
+      throw new Error(`Story export "${storyExport}" was not found in ${relativeWorkspacePath(root, storyPath)}.`);
+    }
     const index = new StoriesIndexService({ workspaceRoot: root, storyFiles: [storyPath], searchRoots: [] });
     await index.initialize();
     const component = index.getAllComponents().find((entry) => path.resolve(entry.filePath) === storyPath);
     if (component === undefined) throw new Error('The requested story file could not be indexed.');
-    if (!component.stories.includes(storyExport)) {
-      throw new Error(`Story export "${storyExport}" was not found in ${path.relative(root, storyPath)}.`);
-    }
     return component;
   }
 
@@ -68,7 +225,8 @@ export class StoryPreviewService {
     const root = await fs.realpath(this.root);
     const appPath = await this.resolveContainedPath(root, input.appPath, 'appPath');
     const storyPath = await this.resolveContainedPath(root, input.storyPath, 'storyPath');
-    if (!STORY_FILE_PATTERN.test(storyPath)) throw new Error('storyPath must name a .stories.ts or .stories.tsx file');
+    if (!STORY_FILE_PATTERN.test(storyPath))
+      throw new Error('storyPath must name a .stories.js, .stories.jsx, .stories.ts, or .stories.tsx file');
     await this.exactStory(root, storyPath, input.storyExport);
 
     const [source, config] = await Promise.all([fs.readFile(storyPath, 'utf8'), this.dependencies.loadConfig(appPath)]);
@@ -90,7 +248,7 @@ export class StoryPreviewService {
       const htmlPath = await fs.realpath(rendered.htmlFilePath);
       const candidateDirectory = path.dirname(htmlPath);
       const temporaryRoot = path.join(appPath, '.tmp');
-      if (!isContained(temporaryRoot, candidateDirectory)) {
+      if (candidateDirectory === temporaryRoot || !isContained(temporaryRoot, candidateDirectory)) {
         throw new Error('Style-system returned a preview artifact outside the project temporary directory');
       }
       artifactDirectory = candidateDirectory;
@@ -101,7 +259,7 @@ export class StoryPreviewService {
       return {
         handle,
         html,
-        storyPath: path.relative(root, storyPath),
+        storyPath: relativeWorkspacePath(root, storyPath),
         storyExport: input.storyExport,
         sourceSha256: createHash('sha256').update(source).digest('hex'),
       };
@@ -119,7 +277,8 @@ export class StoryPreviewService {
     const root = await fs.realpath(this.root);
     const appPath = await this.resolveContainedPath(root, input.appPath, 'appPath');
     const storyPath = await this.resolveContainedPath(root, input.storyPath, 'storyPath');
-    if (!STORY_FILE_PATTERN.test(storyPath)) throw new Error('storyPath must name a .stories.ts or .stories.tsx file');
+    if (!STORY_FILE_PATTERN.test(storyPath))
+      throw new Error('storyPath must name a .stories.js, .stories.jsx, .stories.ts, or .stories.tsx file');
 
     const [source, config] = await Promise.all([fs.readFile(storyPath, 'utf8'), this.dependencies.loadConfig(appPath)]);
     const renderer = new ComponentRendererService(config, appPath);
@@ -140,7 +299,7 @@ export class StoryPreviewService {
       return {
         data: image.toString('base64'),
         mimeType: 'image/png',
-        storyPath: path.relative(root, storyPath),
+        storyPath: relativeWorkspacePath(root, storyPath),
         storyExport: input.storyExport,
         sourceSha256: createHash('sha256').update(source).digest('hex'),
       };

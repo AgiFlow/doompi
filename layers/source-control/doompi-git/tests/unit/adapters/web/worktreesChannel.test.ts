@@ -10,6 +10,7 @@ import { DoomGitExpectedError } from '../../../../src/services/errors';
 import { registryFile } from '../../../../src/services/paths';
 import { GIT_WORKTREE_LIFECYCLE_EVENT } from '../../../../src/services/worktreeEvents';
 import type { WorktreeOperations } from '../../../../src/services/worktreeOperations';
+import type { WorktreeErrorTarget } from '../../../../src/types/webWorktrees';
 import { WORKTREE_RECORD_VERSION, type WorktreeRecord } from '../../../../src/types/worktreeRegistry';
 
 let home: string;
@@ -54,7 +55,12 @@ function seed(...entries: WorktreeRecord[]): void {
 
 interface Published {
   sessionId: string;
-  payload: { worktrees: { id: string; unowned: boolean }[]; pending?: string; error?: string };
+  payload: {
+    worktrees: { id: string; unowned: boolean }[];
+    pending?: string;
+    error?: string;
+    errorTarget?: WorktreeErrorTarget;
+  };
 }
 
 function fakeHost(
@@ -224,6 +230,22 @@ describe('commands from the dock', () => {
     await settle();
 
     expect(operations.close).toHaveBeenCalledWith({ cwd: repository, sessionId: 'parent-1' }, 'wt1', false);
+    expect(published.at(-1)?.payload.errorTarget).toBeUndefined();
+  });
+
+  it('targets a close failure at the worktree that failed', async () => {
+    const operations = fakeOperations({
+      close: vi.fn().mockRejectedValue(new DoomGitExpectedError('worktree_dirty', 'The worktree is dirty.', false, '')),
+    });
+    const published: Published[] = [];
+    const { channel, source } = start(published, operations);
+    source.sessionAdded?.(OWNER);
+
+    channel.receive?.(OWNER, { action: 'close', id: 'wt1' }, { connectionId: 'c1' });
+    await settle();
+
+    expect(published.at(-1)?.payload.error).toContain('The worktree is dirty.');
+    expect(published.at(-1)?.payload.errorTarget).toEqual({ action: 'close', id: 'wt1' });
   });
 
   it('reports the operation while it runs and clears it after', async () => {
@@ -281,6 +303,34 @@ describe('commands from the dock', () => {
     await settle();
     expect(published.at(-1)?.payload.pending).toBeUndefined();
   });
+
+  it('ignores completion from a removed session after its id is reused', async () => {
+    let release: () => void = () => undefined;
+    const operations = fakeOperations({
+      spawn: vi.fn().mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            release = () => resolve(record());
+          }),
+      ) as WorktreeOperations['spawn'],
+    });
+    const published: Published[] = [];
+    const { channel, source } = start(published, operations);
+    source.sessionAdded?.(OWNER);
+
+    channel.receive?.(OWNER, { action: 'create', branch: 'wt/two' }, { connectionId: 'c1' });
+    await settle();
+    expect(published.at(-1)?.payload.pending).toBe('creating wt/two…');
+
+    source.sessionRemoved?.(OWNER.sessionId);
+    source.sessionAdded?.(OWNER);
+    const countAfterReuse = published.length;
+    release();
+    await settle();
+
+    expect(published).toHaveLength(countAfterReuse);
+    expect(published.at(-1)?.payload.pending).toBeUndefined();
+  });
   /** A create runs for minutes; a second click must not start a second worktree behind the first. */
   it('drops a second command while one is in flight', async () => {
     const operations = fakeOperations({
@@ -313,6 +363,7 @@ describe('commands from the dock', () => {
     await settle();
 
     expect(published.at(-1)?.payload.error).toContain('already has a worktree');
+    expect(published.at(-1)?.payload.errorTarget).toEqual({ action: 'create' });
     expect(published.at(-1)?.payload.pending).toBeUndefined();
   });
 
