@@ -41,8 +41,20 @@ const WORKTREES: WorktreeView[] = [
 worktreeActivity.update('panel-live', () => ({ worktrees: WORKTREES, pending: undefined, error: undefined }));
 worktreeActivity.update('panel-busy', () => ({
   worktrees: WORKTREES.slice(0, 1),
-  pending: 'starting session\u2026',
-  error: 'close refused: wt/split-hub has uncommitted changes',
+  pending: 'starting session…',
+  error: undefined,
+}));
+worktreeActivity.update('panel-create-error', () => ({
+  worktrees: [],
+  pending: undefined,
+  error: 'Branch wt/two already has a worktree.',
+  errorTarget: { action: 'create' },
+}));
+worktreeActivity.update('panel-close-error', () => ({
+  worktrees: WORKTREES.slice(0, 1),
+  pending: undefined,
+  error: 'The worktree has uncommitted changes.',
+  errorTarget: { action: 'close', id: 'a1b2c3d4' },
 }));
 
 const slot = (sessionId: string | null) => slotPropsFixture({ sessionId }).props;
@@ -69,8 +81,18 @@ export const Playground = {
       </div>
 
       <div className="flex w-96 flex-col gap-2">
-        <span className="text-2xs text-doom-dim uppercase tracking-widest">work in flight · last failure</span>
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">work in flight</span>
         <WorktreesPanel {...slot('panel-busy')} />
+      </div>
+
+      <div className="flex w-96 flex-col gap-2">
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">create failure</span>
+        <WorktreesPanel {...slot('panel-create-error')} />
+      </div>
+
+      <div className="flex w-96 flex-col gap-2">
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">close failure on one card</span>
+        <WorktreesPanel {...slot('panel-close-error')} />
       </div>
     </div>
   ),

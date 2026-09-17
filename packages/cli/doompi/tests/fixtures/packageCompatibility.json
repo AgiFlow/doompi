@@ -2845,6 +2845,7 @@
     "exports": {
       ".": "tir",
       "./api-contracts": "tir",
+      "./cli": "tir",
       "./extensions/server": "tir",
       "./extensions/web": "i",
       "./package.json": "esm",
@@ -2860,6 +2861,11 @@
         "types": "./dist/api-contracts.d.mts",
         "import": "./dist/api-contracts.mjs",
         "require": "./dist/api-contracts.cjs"
+      },
+      "./cli": {
+        "types": "./dist/cli.d.mts",
+        "import": "./dist/cli.mjs",
+        "require": "./dist/cli.cjs"
       },
       "./extensions/server": {
         "types": "./dist/extensions/server.d.mts",
@@ -2879,12 +2885,12 @@
     "main": "./dist/index.cjs",
     "types": "./dist/index.d.mts",
     "jsnextMain": "./dist/index.mjs",
-    "bin": {},
+    "bin": { "doompi-design": "./dist/cli.mjs" },
     "pi": {
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./README.md"],
-    "files": ["dist", "README.md"],
+    "files": ["dist", "skills", "README.md"],
     "os": [],
     "cpu": []
   },

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { readFileSync, realpathSync } from 'node:fs';
 import { promises as fs } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
-import { checkDesignTarget, readDesignTarget, verifyDesignReport } from '../services/designCheck';
-import { StoryPreviewService } from '../services/storyPreview';
+import { checkDesignTarget, readDesignTarget, verifyDesignReport } from '../designCheck';
+import { StoryPreviewService } from '../storyPreview';
 
 const DISCOVERY_COMMANDS = new Set([
   'list-shared-components',
@@ -195,6 +195,8 @@ async function runStructured(parsed: ParsedArguments, workspace: string): Promis
     return result.current && result.report.status === 'ready' ? 0 : 2;
   }
   if (command === 'preview') {
+    const output = option(values, '--output');
+    const targetPath = output === undefined ? undefined : await outputPath(workspace, output, 'output');
     const service = new StoryPreviewService(workspace);
     const result = await service.build({
       appPath: requiredOption(values, '--app-path'),
@@ -203,13 +205,16 @@ async function runStructured(parsed: ParsedArguments, workspace: string): Promis
       darkMode: values.includes('--dark-mode'),
     });
     try {
-      const output = option(values, '--output');
-      if (output === undefined) process.stdout.write(result.html);
+      if (targetPath === undefined) process.stdout.write(result.html);
       else {
-        const targetPath = await outputPath(workspace, output, 'output');
         await fs.mkdir(path.dirname(targetPath), { recursive: true });
         await fs.writeFile(targetPath, result.html, 'utf8');
-        printJson({ handle: result.handle, storyPath: result.storyPath, storyExport: result.storyExport, outputPath: path.relative(workspace, targetPath) });
+        printJson({
+          handle: result.handle,
+          storyPath: result.storyPath,
+          storyExport: result.storyExport,
+          outputPath: path.relative(workspace, targetPath),
+        });
       }
     } finally {
       await service.dispose(result.handle);
@@ -250,7 +255,8 @@ export async function main(argv: readonly string[] = process.argv.slice(2)): Pro
   return runStructured(parsed, workspace);
 }
 
-const invoked = process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+const invoked =
+  process.argv[1] !== undefined && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
 if (invoked) {
   void main().then(
     (code) => {

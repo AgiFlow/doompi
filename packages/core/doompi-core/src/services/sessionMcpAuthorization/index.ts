@@ -25,6 +25,8 @@ export class SessionMcpOAuthError extends Error {
   }
 }
 
+export type SessionMcpScope = 'restricted' | 'session';
+
 export interface SessionMcpClient {
   readonly clientId: string;
   readonly name: string;
@@ -43,11 +45,19 @@ export interface SessionMcpAuthorizationBinding {
   readonly sessionId: string;
   readonly sessionGeneration: number;
   readonly audience: string;
+  readonly scope: SessionMcpScope;
   readonly tools: readonly string[];
   readonly skills: readonly string[];
 }
 
-export interface CreateSessionMcpAuthorizationBindingInput extends SessionMcpAuthorizationBinding {}
+export type CreateSessionMcpAuthorizationBindingInput = Omit<
+  SessionMcpAuthorizationBinding,
+  'scope' | 'tools' | 'skills'
+> &
+  (
+    | { readonly scope: 'session'; readonly tools?: never; readonly skills?: never }
+    | { readonly scope?: 'restricted'; readonly tools: readonly string[]; readonly skills: readonly string[] }
+  );
 
 export interface SessionMcpGrant extends SessionMcpAuthorizationBinding {
   readonly id: string;
@@ -338,13 +348,33 @@ export function createSessionMcpAuthorizationService(
       if (!Number.isSafeInteger(input.sessionGeneration) || input.sessionGeneration < 0) {
         throw new SessionMcpOAuthError('invalid_request', 'Session generation must be a non-negative safe integer.');
       }
+      const scope = input.scope ?? 'restricted';
+      if (scope !== 'session' && scope !== 'restricted') {
+        throw new SessionMcpOAuthError('invalid_request', 'Authorization scope is not supported.');
+      }
+      let tools: readonly string[];
+      let skills: readonly string[];
+      if (scope === 'session') {
+        if (input.tools !== undefined || input.skills !== undefined) {
+          throw new SessionMcpOAuthError('invalid_request', 'Session scope cannot include capability grants.');
+        }
+        tools = Object.freeze([] as string[]);
+        skills = Object.freeze([] as string[]);
+      } else {
+        if (!Array.isArray(input.tools) || !Array.isArray(input.skills)) {
+          throw new SessionMcpOAuthError('invalid_request', 'Restricted scope requires tool and skill grants.');
+        }
+        tools = exactUniqueGrants(input.tools, 'Tool');
+        skills = exactUniqueGrants(input.skills, 'Skill');
+      }
       const binding: SessionMcpAuthorizationBinding = Object.freeze({
         clientId: input.clientId,
         sessionId: requireName(input.sessionId, 'Session ID'),
         sessionGeneration: input.sessionGeneration,
         audience: requireHttpsUrl(input.audience, 'Audience', false),
-        tools: exactUniqueGrants(input.tools, 'Tool'),
-        skills: exactUniqueGrants(input.skills, 'Skill'),
+        scope,
+        tools,
+        skills,
       });
       bindings.set(input.clientId, binding);
       return binding;

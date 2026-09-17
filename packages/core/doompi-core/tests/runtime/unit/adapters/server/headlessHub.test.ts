@@ -155,6 +155,8 @@ describe('createHeadlessHub', () => {
     });
     expect(createSession).toHaveBeenCalledOnce();
     await expect(scopedSessions?.close('two')).rejects.toThrow('outside this mount');
+    await expect(scopedSessions?.close('missing')).resolves.toBeUndefined();
+    expect(closeSession).not.toHaveBeenCalled();
     expect((await channelHost?.requestSessionApi({ sessionId: 'two', cwd: '/two' }, {} as never))?.status).toBe(404);
     expect((await channelHost?.requestSessionApi({ sessionId: 'one', cwd: '/one' }, {} as never))?.status).toBe(200);
     expect(requestSessionApi).toHaveBeenCalledOnce();
@@ -183,6 +185,164 @@ describe('createHeadlessHub', () => {
     hub.receiveChannel('two', 'workspace-only', {}, 'client');
     hub.receiveChannel('one', 'workspace-only', {}, 'client');
     expect(receive).toHaveBeenCalledOnce();
+    await hub.close();
+  });
+
+  it('lets a session-scoped channel close its direct child but not a foreign session', async () => {
+    const parent = host();
+    const child = host();
+    const foreign = host();
+    const closeSession = vi.fn(async () => undefined);
+    const hub = createHeadlessHub({ manager: { closeSession } as never });
+    hub.register({ id: 'parent', name: 'Parent', cwd: '/repo', createdAt: 'now', host: parent.host });
+    hub.register({
+      id: 'child',
+      name: 'Child',
+      cwd: '/repo/worktree',
+      createdAt: 'now',
+      parentSessionId: 'parent',
+      host: child.host,
+    });
+    hub.register({
+      id: 'foreign',
+      name: 'Foreign',
+      cwd: '/repo/other',
+      createdAt: 'now',
+      parentSessionId: 'another-parent',
+      host: foreign.host,
+    });
+    let channelHost: Parameters<DoomHubChannel['start']>[0] | undefined;
+    hub.registerChannel(
+      {
+        frameType: 'session-only',
+        start(api) {
+          channelHost = api;
+          return { payloadFor: () => undefined, close: vi.fn() };
+        },
+      },
+      { scope: 'session', sessionId: 'parent' },
+    );
+
+    await expect(channelHost!.sessionService!.close('child')).resolves.toBeUndefined();
+    expect(closeSession).toHaveBeenCalledWith('child');
+    await expect(channelHost!.sessionService!.close('foreign')).rejects.toThrow('outside this mount');
+    await hub.close();
+  });
+
+  it('does not reuse a session id while its shutdown is pending', async () => {
+    const session = host();
+    let resolveShutdown: (() => void) | undefined;
+    let first = true;
+    const closeSession = vi.fn(() => {
+      if (!first) return Promise.resolve();
+      first = false;
+      return new Promise<void>((resolve) => {
+        resolveShutdown = resolve;
+      });
+    });
+    const hub = createHeadlessHub({ manager: { closeSession } as never });
+    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: session.host });
+
+    const closing = hub.closeSession('one');
+    await vi.waitFor(() => expect(closeSession).toHaveBeenCalledWith('one'));
+    expect(() =>
+      hub.register({ id: 'one', name: 'Replacement', cwd: '/repo', createdAt: 'now', host: host().host }),
+    ).toThrow('still shutting down');
+
+    resolveShutdown!();
+    await closing;
+    hub.register({ id: 'one', name: 'Replacement', cwd: '/repo', createdAt: 'now', host: host().host });
+    await hub.close();
+  });
+
+  it('waits for a shutdown already in flight when the hub closes', async () => {
+    const session = host();
+    let resolveShutdown: (() => void) | undefined;
+    const closeSession = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveShutdown = resolve;
+        }),
+    );
+    const hub = createHeadlessHub({ manager: { closeSession } as never });
+    hub.register({ id: 'one', name: 'One', cwd: '/repo', createdAt: 'now', host: session.host });
+
+    const closing = hub.closeSession('one');
+    await vi.waitFor(() => expect(closeSession).toHaveBeenCalledWith('one'));
+    let settled = false;
+    const hubClosing = hub.close().then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    resolveShutdown!();
+    await closing;
+    await hubClosing;
+  });
+
+  it('waits for an in-flight shutdown before a scoped retry resolves', async () => {
+    const session = host();
+    let resolveShutdown: (() => void) | undefined;
+    const closeSession = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveShutdown = resolve;
+        }),
+    );
+    const hub = createHeadlessHub({ manager: { closeSession } as never });
+    hub.register({ id: 'one', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: session.host });
+    let channelHost: Parameters<DoomHubChannel['start']>[0] | undefined;
+    hub.registerChannel(
+      {
+        frameType: 'workspace-only',
+        start(api) {
+          channelHost = api;
+          return { payloadFor: () => undefined, close: vi.fn() };
+        },
+      },
+      { scope: 'workspace', workspaceId: 'one' },
+    );
+
+    session.exit();
+    await vi.waitFor(() => expect(closeSession).toHaveBeenCalledWith('one'));
+    let settled = false;
+    const retry = channelHost!.sessionService!.close('one').then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    resolveShutdown!();
+    await retry;
+    expect(settled).toBe(true);
+    await hub.close();
+  });
+
+  it('keeps a failed shutdown failure for scoped retries', async () => {
+    const session = host();
+    const closeSession = vi.fn(async () => {
+      throw new Error('cleanup unavailable');
+    });
+    const hub = createHeadlessHub({ manager: { closeSession } as never });
+    hub.register({ id: 'one', workspaceId: 'one', name: 'One', cwd: '/one', createdAt: 'now', host: session.host });
+    let channelHost: Parameters<DoomHubChannel['start']>[0] | undefined;
+    hub.registerChannel(
+      {
+        frameType: 'workspace-only',
+        start(api) {
+          channelHost = api;
+          return { payloadFor: () => undefined, close: vi.fn() };
+        },
+      },
+      { scope: 'workspace', workspaceId: 'one' },
+    );
+
+    session.exit();
+    await vi.waitFor(() => expect(closeSession).toHaveBeenCalledWith('one'));
+    await expect(channelHost!.sessionService!.close('one')).rejects.toThrow('cleanup unavailable');
+    await expect(channelHost!.sessionService!.close('one')).rejects.toThrow('cleanup unavailable');
+    expect(closeSession).toHaveBeenCalledOnce();
     await hub.close();
   });
 

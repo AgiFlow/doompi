@@ -2,8 +2,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { DOOM_SKILL_SOURCES_SERVICE, requireDoomSkillSourcesService } from '@agimon-ai/doompi-core/skills';
 import type { PiEventHandlers, PiPluginContext } from '@agimon-ai/doompi-core/pi-extension';
+import { DOOM_SKILL_SOURCES_SERVICE, requireDoomSkillSourcesService } from '@agimon-ai/doompi-core/skills';
 
 type PiContext = PiPluginContext<unknown>['context'];
 
@@ -52,7 +52,10 @@ function registerSkillSource(context: PiContext): void {
   });
 }
 
-export function createStyleSystemPiRoot(): { value: StyleSystemPiScope; services: readonly [typeof registerSkillSource] } {
+export function createStyleSystemPiRoot(): {
+  value: StyleSystemPiScope;
+  services: readonly [typeof registerSkillSource];
+} {
   const seen = new Set<string>();
   let reminded = false;
   const toolResult: NonNullable<PiEventHandlers['tool_result']> = async (event, context) => {

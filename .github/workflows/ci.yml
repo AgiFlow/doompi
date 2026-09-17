@@ -158,17 +158,29 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: CLI system tests (1/3)
+          - name: CLI system tests (1/6)
             project: "@agimon-ai/doompi"
             shard: "1"
             check: true
-          - name: CLI system tests (2/3)
+          - name: CLI system tests (2/6)
             project: "@agimon-ai/doompi"
             shard: "2"
             check: false
-          - name: CLI system tests (3/3)
+          - name: CLI system tests (3/6)
             project: "@agimon-ai/doompi"
             shard: "3"
+            check: false
+          - name: CLI system tests (4/6)
+            project: "@agimon-ai/doompi"
+            shard: "4"
+            check: false
+          - name: CLI system tests (5/6)
+            project: "@agimon-ai/doompi"
+            shard: "5"
+            check: false
+          - name: CLI system tests (6/6)
+            project: "@agimon-ai/doompi"
+            shard: "6"
             check: false
           - name: Team system tests
             project: "@agimon-ai/doompi-team"
@@ -199,7 +211,13 @@ jobs:
       - name: Pack, install, and test the runtime
         env:
           DOOMPI_SYSTEM_SHARD: ${{ matrix.shard }}
-        run: pnpm nx run "${{ matrix.project }}:test-system"
+          DOOMPI_SYSTEM_TIMING_FILE: ${{ runner.temp }}/doompi-system-timing.json
+        run: |
+          set +e
+          pnpm nx run "${{ matrix.project }}:test-system"
+          status=$?
+          if [[ -f "${DOOMPI_SYSTEM_TIMING_FILE}" ]]; then cat "${DOOMPI_SYSTEM_TIMING_FILE}"; fi
+          exit "${status}"
 
   # Keep one stable required check while the execution matrix evolves.
   installed-runtime:

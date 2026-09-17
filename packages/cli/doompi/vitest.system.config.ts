@@ -2,30 +2,35 @@ import { defineConfig } from 'vitest/config';
 
 const systemShard = process.env.DOOMPI_SYSTEM_SHARD;
 const groupedSuites = {
-  '1': ['DPI installed experiment runtime', 'DOOM-PI-LAUNCH installed runtime modes'],
-  '2': ['RPC-LIFECYCLE installed runtime', 'conventional Pi discovery'],
+  '1': ['DPI installed experiment runtime'],
+  '2': ['DOOM-PI-LAUNCH installed runtime modes'],
+  '3': ['RPC-LIFECYCLE installed runtime'],
+  '4': ['packed package identity and closure', 'conventional Pi discovery'],
+  '5': ['consumer ownership boundaries', 'resources, RMUX, and installed text rendering'],
+  '6': [
+    'system target and CI gate',
+    'frozen published package compatibility baseline',
+    'a composed session against a scripted model',
+    'packed startup input readiness',
+    'measures direct entries and the synced Doom wrapper before accepting input',
+  ],
 } as const;
 
-type SystemShard = keyof typeof groupedSuites | '3';
+type SystemShard = keyof typeof groupedSuites;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function suitesForShard(shard: SystemShard): readonly string[] {
-  if (shard === '3') return Object.values(groupedSuites).flat();
-  return groupedSuites[shard];
-}
-
 function systemTestNamePattern(): RegExp | undefined {
   if (systemShard === undefined) return undefined;
-  if (systemShard !== '1' && systemShard !== '2' && systemShard !== '3') {
-    throw new Error('DOOMPI_SYSTEM_SHARD must be 1, 2, or 3');
+  if (!(systemShard in groupedSuites)) {
+    throw new Error('DOOMPI_SYSTEM_SHARD must be 1, 2, 3, 4, 5, or 6');
   }
 
-  const suites = suitesForShard(systemShard);
+  const suites = groupedSuites[systemShard as SystemShard];
   const suiteBoundary = `(?:${suites.map(escapeRegExp).join('|')})(?: > |$)`;
-  return systemShard === '3' ? new RegExp(`^(?!${suiteBoundary})`) : new RegExp(`^${suiteBoundary}`);
+  return new RegExp(`^${suiteBoundary}`);
 }
 
 export default defineConfig({

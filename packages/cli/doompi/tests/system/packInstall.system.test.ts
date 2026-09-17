@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 
 import type { DoomHelpService } from '@agimon-ai/doompi-core/help';
@@ -1183,8 +1184,17 @@ async function waitForDelegationResult(file: string, timeoutMs = 10_000): Promis
 beforeAll(async () => {
   packRoot = createTemporaryRoot('dp-pack-');
   consumer = createConsumerRoot();
+  const packStartedAt = performance.now();
   packedPackages = await packPackageMatrix(packRoot);
+  const installStartedAt = performance.now();
   consumerInstall = await installLocalPackages(consumer, packedPackages);
+  const timing = {
+    packMs: Math.round(installStartedAt - packStartedAt),
+    installMs: Math.round(performance.now() - installStartedAt),
+  };
+  const timingFile = process.env.DOOMPI_SYSTEM_TIMING_FILE;
+  if (timingFile) fs.writeFileSync(timingFile, `${JSON.stringify(timing)}\n`);
+  process.stderr.write(`System-test setup timing: ${JSON.stringify(timing)}\n`);
 }, SYSTEM_HOOK_TIMEOUT_MS);
 
 afterEach(() => {

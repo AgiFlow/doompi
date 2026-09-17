@@ -16,7 +16,7 @@ const vitestArgs = [
   'vitest.system.config.ts',
   '--json',
 ];
-const shardValues = ['1', '2', '3'];
+const shardValues = ['1', '2', '3', '4', '5', '6'];
 
 function fail(message) {
   throw new Error(message);
@@ -122,7 +122,7 @@ function assertShardCoverage(benchmark) {
 }
 
 function assertInvalidShardFails() {
-  const env = { ...process.env, DOOMPI_SYSTEM_SHARD: '4' };
+  const env = { ...process.env, DOOMPI_SYSTEM_SHARD: '7' };
   const result = spawnSync('pnpm', vitestArgs, { cwd: root, encoding: 'utf8', env });
   if (result.error) fail(`invalid shard check could not start: ${result.error.message}`);
   if (result.status === 0) fail('invalid DOOMPI_SYSTEM_SHARD value unexpectedly succeeded');

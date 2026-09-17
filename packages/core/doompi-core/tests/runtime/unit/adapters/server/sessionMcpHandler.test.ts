@@ -10,17 +10,20 @@ import type { SessionToolSurface } from '../../../../../src/types/server/session
 const AUDIENCE = 'https://host.example/sessions/alpha/mcp';
 const VERIFIER = 'v'.repeat(43);
 
-function fixture() {
+function fixture(scope: 'restricted' | 'session' = 'restricted') {
   const authorization = createSessionMcpAuthorizationService();
   const client = authorization.createClient({ name: 'MCP client', redirectUri: 'https://client.example/callback' });
-  authorization.createAuthorizationBinding({
+  const binding = {
     clientId: client.clientId,
     sessionId: 'alpha',
     sessionGeneration: 7,
     audience: AUDIENCE,
-    tools: ['allowed_tool'],
-    skills: ['allowed-skill'],
-  });
+  };
+  authorization.createAuthorizationBinding(
+    scope === 'session'
+      ? { ...binding, scope: 'session' }
+      : { ...binding, tools: ['allowed_tool'], skills: ['allowed-skill'] },
+  );
   const code = authorization.issueAuthorizationCode({
     clientId: client.clientId,
     redirectUri: client.redirectUri,
@@ -37,16 +40,24 @@ function fixture() {
   });
   const invokeTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'called' }] }));
   const readSkill = vi.fn(() => '# Allowed skill');
+  let revision = 12;
+  let includeNewCapabilities = false;
   const toolSurface: SessionToolSurface = {
     readSurface: () => ({
-      revision: 12,
+      revision,
       tools: [
         { name: 'allowed_tool', label: 'Allowed tool', description: 'May run', parameters: Type.Object({}) },
         { name: 'hidden_tool', label: 'Hidden tool', description: 'Must not leak', parameters: Type.Object({}) },
+        ...(includeNewCapabilities
+          ? [{ name: 'new_tool', label: 'New tool', description: 'Newly enabled', parameters: Type.Object({}) }]
+          : []),
       ],
       skills: [
         { name: 'allowed-skill', description: 'May read', uri: 'doompi://session/alpha/skills/allowed-skill' },
         { name: 'hidden-skill', description: 'Must not leak', uri: 'doompi://session/alpha/skills/hidden-skill' },
+        ...(includeNewCapabilities
+          ? [{ name: 'new-skill', description: 'Newly enabled', uri: 'doompi://session/alpha/skills/new-skill' }]
+          : []),
       ],
     }),
     invokeTool,
@@ -84,6 +95,10 @@ function fixture() {
     readSkill,
     grantId: code.grant.id,
     setGeneration: (value: number) => (generation = value),
+    enableNewCapabilities: () => {
+      includeNewCapabilities = true;
+      revision = 13;
+    },
     revokeDuringNextOperation: () => (revokeAtResolve = resolveCount + 2),
   };
 }
@@ -151,6 +166,26 @@ describe('session MCP Streamable HTTP handler', () => {
     expect(invokeTool).toHaveBeenCalledTimes(1);
   });
 
+  it('session scope follows capabilities added to the live surface', async () => {
+    const session = fixture('session');
+
+    const initial = await session.request('tools/list');
+    await expect(initial.json()).resolves.toMatchObject({
+      result: { tools: [{ name: 'allowed_tool' }, { name: 'hidden_tool' }] },
+    });
+    session.enableNewCapabilities();
+    const updated = await session.request('tools/list');
+    await expect(updated.json()).resolves.toMatchObject({
+      result: { tools: [{ name: 'allowed_tool' }, { name: 'hidden_tool' }, { name: 'new_tool' }] },
+    });
+    const called = await session.request('tools/call', { name: 'new_tool', arguments: {} });
+    await expect(called.json()).resolves.toMatchObject({ result: { content: [{ type: 'text', text: 'called' }] } });
+
+    const resources = await session.request('resources/list');
+    await expect(resources.json()).resolves.toMatchObject({
+      result: { resources: [{ name: 'allowed-skill' }, { name: 'hidden-skill' }, { name: 'new-skill' }] },
+    });
+  });
   it('lists and reads only granted active skill resources', async () => {
     const { request, readSkill } = fixture();
 

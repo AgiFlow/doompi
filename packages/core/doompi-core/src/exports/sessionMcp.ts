@@ -15,6 +15,7 @@ export type {
   SessionMcpAuthorizationCode,
   SessionMcpAuthorizationService,
   SessionMcpAuthorizationServiceOptions,
+  SessionMcpScope,
   SessionMcpClient,
   SessionMcpGrant,
   SessionMcpOAuthErrorCode,

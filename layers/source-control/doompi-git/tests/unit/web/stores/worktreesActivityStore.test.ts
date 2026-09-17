@@ -79,20 +79,41 @@ describe('the commands the panel sends', () => {
 });
 
 describe('what the channel accepts from the hub', () => {
-  it('reads worktrees, pending and error', () => {
+  it('reads worktrees, pending, error and its target', () => {
     const parsed = worktreesChannel.parse({
       worktrees: [
         { id: 'wt1', branch: 'wt/one', path: '/tmp/wt1', sessionId: 'child', orphaned: false, unowned: false },
       ],
       pending: 'creating wt/one…',
       error: 'nope',
+      errorTarget: { action: 'close', id: 'wt1' },
     });
 
     expect(parsed).toEqual({
       worktrees: [expect.objectContaining({ id: 'wt1' })],
       pending: 'creating wt/one…',
       error: 'nope',
+      errorTarget: { action: 'close', id: 'wt1' },
     });
+  });
+
+  it('accepts a create failure target', () => {
+    expect(worktreesChannel.parse({ worktrees: [], error: 'nope', errorTarget: { action: 'create' } })).toEqual({
+      worktrees: [],
+      pending: undefined,
+      error: 'nope',
+      errorTarget: { action: 'create' },
+    });
+  });
+
+  it('drops malformed error targets without rejecting the worktree list', () => {
+    expect(
+      worktreesChannel.parse({
+        worktrees: [],
+        error: 'nope',
+        errorTarget: { action: 'close', id: '' },
+      }),
+    ).toEqual({ worktrees: [], pending: undefined, error: 'nope', errorTarget: undefined });
   });
 
   it('rejects a payload that is not a worktree list', () => {
@@ -124,5 +145,14 @@ describe('what counts as work in progress', () => {
     }));
 
     expect(worktreeActivitySource.isActive('s1')).toBe(true);
+  });
+
+  it('notifies activity subscribers', () => {
+    const listener = vi.fn();
+    const stop = worktreeActivitySource.subscribe(listener);
+    worktreeActivity.update('subscriber', (current) => ({ ...current, pending: 'closing wt/one…' }));
+
+    expect(listener).toHaveBeenCalled();
+    stop();
   });
 });

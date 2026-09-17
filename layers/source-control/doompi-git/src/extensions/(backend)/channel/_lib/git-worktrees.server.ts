@@ -17,12 +17,18 @@ import { registryFile } from '../../../../services/paths';
 import { GIT_WORKTREE_LIFECYCLE_EVENT, isWorktreeLifecycleEvent } from '../../../../services/worktreeEvents';
 import { createWorktreeOperations, type WorktreeOperations } from '../../../../services/worktreeOperations';
 import { createWorktreeRegistry } from '../../../../services/worktreeRegistry';
-import { GIT_WORKTREES_TYPE, type GitWorktreesCommand, type WorktreeView } from '../../../../types/webWorktrees';
+import {
+  GIT_WORKTREES_TYPE,
+  type GitWorktreesCommand,
+  type WorktreeErrorTarget,
+  type WorktreeView,
+} from '../../../../types/webWorktrees';
 
 interface SessionState {
   worktrees: WorktreeView[];
   pending: string | undefined;
   error: string | undefined;
+  errorTarget: WorktreeErrorTarget | undefined;
 }
 
 function payloadOf(state: SessionState): Record<string, unknown> {
@@ -30,6 +36,7 @@ function payloadOf(state: SessionState): Record<string, unknown> {
     worktrees: state.worktrees,
     ...(state.pending === undefined ? {} : { pending: state.pending }),
     ...(state.error === undefined ? {} : { error: state.error }),
+    ...(state.errorTarget === undefined ? {} : { errorTarget: state.errorTarget }),
   };
 }
 
@@ -84,6 +91,10 @@ function sameList(left: readonly WorktreeView[], right: readonly WorktreeView[])
   });
 }
 
+function errorTargetFor(command: GitWorktreesCommand): WorktreeErrorTarget {
+  return command.action === 'create' ? { action: 'create' } : { action: 'close', id: command.id };
+}
+
 /** A command the page sent, or undefined when the frame was not one. */
 function parseCommand(payload: unknown): GitWorktreesCommand | undefined {
   if (typeof payload !== 'object' || payload === null) return undefined;
@@ -136,6 +147,12 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
       const latest = new Map<string, SessionState>();
       const subscriptions = new Map<string, () => void>();
       const busy = new Set<string>();
+      const generations = new Map<string, symbol>();
+      const newGeneration = (sessionId: string): symbol => {
+        const generation = Symbol(sessionId);
+        generations.set(sessionId, generation);
+        return generation;
+      };
 
       /** Republishes a session, skipping a frame that would say nothing new. */
       const publish = (scope: DoomHubSessionScope, force: boolean): void => {
@@ -144,13 +161,15 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
           worktrees: viewsFor(scope, views),
           pending: previous?.pending,
           error: previous?.error,
+          errorTarget: previous?.errorTarget,
         };
         if (
           !force &&
           previous !== undefined &&
           sameList(previous.worktrees, next.worktrees) &&
           previous.pending === next.pending &&
-          previous.error === next.error
+          previous.error === next.error &&
+          previous.errorTarget === next.errorTarget
         ) {
           return;
         }
@@ -158,12 +177,18 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
         host.publish(scope.sessionId, payloadOf(next));
       };
 
-      const mark = (scope: DoomHubSessionScope, pending: string | undefined, error: string | undefined): void => {
+      const mark = (
+        scope: DoomHubSessionScope,
+        pending: string | undefined,
+        error: string | undefined,
+        errorTarget: WorktreeErrorTarget | undefined,
+      ): void => {
         const previous = latest.get(scope.sessionId);
         latest.set(scope.sessionId, {
           worktrees: previous?.worktrees ?? viewsFor(scope, views),
           pending,
           error,
+          errorTarget,
         });
         publish(scope, true);
       };
@@ -176,10 +201,22 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
         });
       };
 
-      const run = async (scope: DoomHubSessionScope, command: GitWorktreesCommand): Promise<void> => {
+      const run = async (
+        scope: DoomHubSessionScope,
+        command: GitWorktreesCommand,
+        generation: symbol,
+      ): Promise<void> => {
         const context = { cwd: scope.cwd, sessionId: scope.sessionId };
+        const markCurrent = (
+          pending: string | undefined,
+          error: string | undefined,
+          errorTarget: WorktreeErrorTarget | undefined,
+        ): void => {
+          if (generations.get(scope.sessionId) !== generation) return;
+          mark(scope, pending, error, errorTarget);
+        };
         if (command.action === 'create') {
-          mark(scope, `creating ${command.branch}\u2026`, undefined);
+          markCurrent(`creating ${command.branch}…`, undefined, undefined);
           const record = await worktrees.spawn(
             context,
             {
@@ -188,13 +225,15 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
             },
             // Each phase replaces the label, so the panel says what is
             // happening instead of holding one line for the whole wait.
-            { onProgress: (label) => mark(scope, label, undefined) },
+            { onProgress: (label) => markCurrent(label, undefined, undefined) },
           );
+          if (generations.get(scope.sessionId) !== generation) return;
           publishLifecycle(scope, record.repositoryRoot);
           return;
         }
-        mark(scope, `closing ${command.id}…`, undefined);
+        markCurrent(`closing ${command.id}…`, undefined, undefined);
         const record = await worktrees.close(context, command.id, command.force ?? false);
+        if (generations.get(scope.sessionId) !== generation) return;
         publishLifecycle(scope, record.repositoryRoot);
       };
 
@@ -204,6 +243,7 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
           return state === undefined ? undefined : payloadOf(state);
         },
         sessionAdded(scope) {
+          newGeneration(scope.sessionId);
           publish(scope, false);
           const unsubscribe = host.directEvents.subscribe(GIT_WORKTREE_LIFECYCLE_EVENT, scope.sessionId, (payload) => {
             if (!isWorktreeLifecycleEvent(payload)) return;
@@ -219,6 +259,7 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
           subscriptions.set(scope.sessionId, unsubscribe);
         },
         sessionRemoved(sessionId) {
+          newGeneration(sessionId);
           subscriptions.get(sessionId)?.();
           subscriptions.delete(sessionId);
           latest.delete(sessionId);
@@ -229,6 +270,7 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
           subscriptions.clear();
           latest.clear();
           busy.clear();
+          generations.clear();
         },
       };
       receiveCommand = (scope, payload) => {
@@ -237,17 +279,21 @@ export function createWorktreesChannel(options: WorktreesChannelOptions = {}): D
         // One operation per session. A create runs for minutes, and a second
         // click must not start a second worktree behind the first.
         if (busy.has(scope.sessionId)) return;
+        const generation = generations.get(scope.sessionId);
+        if (generation === undefined) return;
         busy.add(scope.sessionId);
-        void run(scope, command)
+        void run(scope, command, generation)
           .then(() => {
-            mark(scope, undefined, undefined);
+            if (generations.get(scope.sessionId) !== generation) return;
+            mark(scope, undefined, undefined, undefined);
           })
           .catch((error: unknown) => {
+            if (generations.get(scope.sessionId) !== generation) return;
             host.onNotice(`worktree command failed for ${scope.sessionId} (${failureText(error)})`);
-            mark(scope, undefined, failureText(error));
+            mark(scope, undefined, failureText(error), errorTargetFor(command));
           })
           .finally(() => {
-            busy.delete(scope.sessionId);
+            if (generations.get(scope.sessionId) === generation) busy.delete(scope.sessionId);
           });
       };
 

@@ -36,7 +36,7 @@ export function AuthorPanel({
   const grid = useStore(authorGrid.store, (state) => (sessionId === null ? undefined : state.sessions[sessionId]));
   const focused = documents.find((document) => document.path === workspace?.focusedDocument?.path);
   const previewSource =
-    workspace?.focusedDocument === undefined || focused === undefined
+    workspace?.focusedDocument === undefined || focused?.kind !== 'story-preview'
       ? undefined
       : {
           path: workspace.focusedDocument.path,
