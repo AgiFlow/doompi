@@ -99,7 +99,23 @@ jobs:
           pnpm lint:vibe --preflight-only
           pnpm nx run-many -t typecheck --parallel=3
           pnpm nx run-many -t test --parallel=1
-          pnpm nx run-many -t test-system --parallel=1
+          node scripts/check-system-test-shards.mjs
+          # Run each isolated test process together so release validation does not
+          # wait on the serialized 30-minute system-test gate.
+          pids=()
+          DOOMPI_SYSTEM_SHARD=1 pnpm nx run @agimon-ai/doompi:test-system &
+          pids+=("$!")
+          DOOMPI_SYSTEM_SHARD=2 pnpm nx run @agimon-ai/doompi:test-system &
+          pids+=("$!")
+          DOOMPI_SYSTEM_SHARD=3 pnpm nx run @agimon-ai/doompi:test-system &
+          pids+=("$!")
+          pnpm nx run @agimon-ai/doompi-team:test-system &
+          pids+=("$!")
+          status=0
+          for pid in "${pids[@]}"; do
+            if ! wait "$pid"; then status=1; fi
+          done
+          exit "$status"
 
       - name: Preview the next alpha versions
         if: env.RELEASE_PROJECTS != ''
