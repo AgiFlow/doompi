@@ -2024,8 +2024,8 @@ describe('DPI installed experiment runtime', () => {
       fs.writeFileSync(registrationAPath, validRegistrationA);
     }
     // Two isolated installs and five syncs include two cold browser builds.
-    // Each subprocess keeps its own deadline; the scenario needs room for their sum.
-  }, 600_000);
+    // Each subprocess keeps its own deadline; hosted runners can spend more than ten minutes on their sum.
+  }, 1_200_000);
 });
 
 describe('DOOM-PI-LAUNCH installed runtime modes', () => {
