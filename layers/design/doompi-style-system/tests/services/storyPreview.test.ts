@@ -120,7 +120,7 @@ describe('StoryPreviewService', () => {
     fs.rmSync(outside, { recursive: true, force: true });
   });
 
-  it('returns exact metadata for each source file even when titles are duplicated', async () => {
+  it('returns exact metadata concurrently for duplicated story titles', async () => {
     const app = path.join(root, 'app');
     fs.mkdirSync(app, { recursive: true });
     fs.writeFileSync(
@@ -132,13 +132,17 @@ describe('StoryPreviewService', () => {
       "export default { title: 'Shared' }; export const Alternate = {};",
     );
     const service = new StoryPreviewService(root);
+    const [first, second] = await Promise.all([
+      service.metadata({ storyPath: 'app/First.stories.js' }),
+      service.metadata({ storyPath: 'app/Second.stories.tsx' }),
+    ]);
 
-    await expect(service.metadata({ storyPath: 'app/First.stories.js' })).resolves.toMatchObject({
+    expect(first).toMatchObject({
       storyPath: 'app/First.stories.js',
       appPath: '.',
       exports: [{ exportName: 'Primary', label: 'First' }],
     });
-    await expect(service.metadata({ storyPath: 'app/Second.stories.tsx' })).resolves.toMatchObject({
+    expect(second).toMatchObject({
       storyPath: 'app/Second.stories.tsx',
       exports: [{ exportName: 'Alternate' }],
     });
