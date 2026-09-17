@@ -18,6 +18,7 @@ const WEB_DIST_ENV = 'DOOMPI_WEB_DIST';
 const WEB_PACKAGE_ROOT_ENV = 'DOOMPI_WEB_PACKAGE_ROOT';
 const PWA_ASSET_PREFIX = '/pwa/';
 const MAX_PROXY_BODY_BYTES = 8 * 1024 * 1024;
+const SESSION_MCP_CSRF_HEADER = 'x-doompi-mcp-csrf';
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
   'keep-alive',
@@ -65,6 +66,19 @@ function readAsset(filePath: string): Buffer | undefined {
   } catch {
     return undefined;
   }
+}
+
+function isSessionMcpProxyPath(pathname: string): boolean {
+  return (
+    pathname === '/.well-known/oauth-authorization-server' ||
+    pathname === '/oauth/authorize' ||
+    pathname === '/oauth/token' ||
+    /^\/\.well-known\/oauth-protected-resource\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/mcp$/u.test(pathname)
+  );
+}
+
+function isSessionMcpManagementPath(pathname: string): boolean {
+  return /^\/api\/workspaces\/[^/]+\/sessions\/[^/]+\/mcp\/(?:config|clients(?:\/[^/]+)?)$/u.test(pathname);
 }
 
 function requestUrl(request: IncomingMessage): URL {
@@ -229,6 +243,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
   const assetsDir = resolveAssetsDir(options.assetsDir);
   const pwaDir = packagedPwaDir();
   const headlessUrl = new URL(options.headlessUrl ?? DEFAULT_HEADLESS_URL);
+  let presentationOrigin: string | undefined;
   const server = createServer((request, response) => {
     const url = requestUrl(request);
     if (url.pathname === '/api/remote/frontend' || url.pathname === '/api/plugins/remote/frontend') {
@@ -236,8 +251,21 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
       response.end(JSON.stringify({ error: 'Not found.' }));
       return;
     }
+    if (isSessionMcpManagementPath(url.pathname)) {
+      const expected = presentationOrigin === undefined ? undefined : new URL(presentationOrigin);
+      const suppliedOrigin = request.headers.origin;
+      const hostMatches = expected !== undefined && request.headers.host?.toLowerCase() === expected.host.toLowerCase();
+      const originMatches = suppliedOrigin === undefined || suppliedOrigin === expected?.origin;
+      const mutating = request.method !== 'GET' && request.method !== 'HEAD';
+      const csrfMatches = !mutating || request.headers[SESSION_MCP_CSRF_HEADER] === '1';
+      if (!hostMatches || !originMatches || !csrfMatches) {
+        writeJson(response, 403, { error: 'Session MCP management request refused.' });
+        return;
+      }
+    }
     if (
       url.pathname.startsWith('/api/') ||
+      isSessionMcpProxyPath(url.pathname) ||
       url.pathname === '/bundle-manifest.json' ||
       url.pathname.startsWith('/bundle-assets/')
     ) {
@@ -309,6 +337,7 @@ export async function serveWeb(options: WebServerOptions): Promise<WebServer> {
     throw new Error('The web presentation server did not expose a TCP address.');
   }
   const url = `http://${host}:${String(address.port)}`;
+  presentationOrigin = url;
   try {
     const registration = await fetch(new URL('/api/remote/frontend', headlessUrl), {
       method: 'POST',

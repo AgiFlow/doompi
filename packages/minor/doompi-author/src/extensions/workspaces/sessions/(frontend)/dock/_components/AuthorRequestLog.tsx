@@ -51,6 +51,8 @@ function anchorLabel(anchor: AuthorNativeAnchor): string {
         .padStart(2, '0');
       return `Video ${minutes}:${seconds}`;
     }
+    case 'story-preview-rect':
+      return `${anchor.preview.storyPath}#${anchor.preview.storyExport}`;
   }
 }
 

@@ -400,6 +400,11 @@
       "import": "./dist/session-files-api.mjs",
       "require": "./dist/session-files-api.cjs"
     },
+    "./session-mcp": {
+      "types": "./dist/session-mcp.d.mts",
+      "import": "./dist/session-mcp.mjs",
+      "require": "./dist/session-mcp.cjs"
+    },
     "./session-protocol": {
       "types": "./dist/session-protocol.d.mts",
       "import": "./dist/session-protocol.mjs",
@@ -545,6 +550,7 @@
     "@earendil-works/pi-server": "0.85.1",
     "@earendil-works/pi-session-backend-sqlite-node": "0.85.1",
     "@hono/node-server": "2.1.1",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@simplewebauthn/server": "^14.0.1",
     "cross-spawn": "7.0.6",
     "gpt-tokenizer": "4.0.0",

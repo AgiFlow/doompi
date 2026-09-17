@@ -38,6 +38,7 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-autostop': 'packages/foundations/doompi-autostop',
   '@agimon-ai/doompi-author': 'packages/minor/doompi-author',
   '@agimon-ai/doompi-cache': 'packages/foundations/doompi-cache',
+  '@agimon-ai/doompi-style-system': 'packages/minor/doompi-style-system',
   '@agimon-ai/doompi-computer-use': 'packages/minor/doompi-computer-use',
   '@agimon-ai/doompi-config': 'packages/foundations/doompi-config',
   '@agimon-ai/doompi-domain': 'packages/foundations/doompi-domain',
@@ -129,6 +130,7 @@ const PACKAGE_RESOURCES: Readonly<Record<string, readonly string[]>> = {
   ],
   '@agimon-ai/doompi-author': ['./llms.txt', './README.md', './src/prompts/doompi-use-author/SKILL.md'],
   '@agimon-ai/doompi-cache': ['./llms.txt', './README.md', './src/prompts/doompi-use-cache/SKILL.md'],
+  '@agimon-ai/doompi-style-system': ['./README.md'],
   '@agimon-ai/doompi-computer-use': ['./llms.txt', './README.md', './src/prompts/doompi-use-computer-use/SKILL.md'],
   '@agimon-ai/doompi-config': [
     './llms.txt',

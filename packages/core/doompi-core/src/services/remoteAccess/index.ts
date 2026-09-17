@@ -79,6 +79,8 @@ export interface RemoteAccess {
   tunnelPort(): number | undefined;
   /** The public origin the tunnel currently answers on, while one is up. */
   publicOrigin(): string | undefined;
+  /** Changes whenever an established public exposure is torn down. */
+  publicOriginRevision(): number;
   tunnelPolicy(): OriginPolicy | undefined;
   enable(): Promise<{ ok: true } | { ok: false; error: string }>;
   /** True between a contained `enable` and the handover its response defers. */
@@ -152,6 +154,7 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
   let stopTunnel: (() => Promise<void>) | undefined;
   let tunnelStartup: { controller: AbortController; outcome: Promise<TunnelStartResult> } | undefined;
   let publicOrigin: string | undefined;
+  let publicOriginRevision = 0;
   let policy: OriginPolicy | undefined;
   let startedAt: number | undefined;
   let closesAt: number | undefined;
@@ -285,6 +288,7 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
     stopTunnel = undefined;
     await listener?.close().catch(() => undefined);
     listener = undefined;
+    if (publicOrigin !== undefined) publicOriginRevision += 1;
     publicOrigin = undefined;
     policy = undefined;
     startedAt = undefined;
@@ -310,6 +314,7 @@ export function createRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
     state: (selfDeviceId, forLocalCaller = false) => view(selfDeviceId, forLocalCaller),
     settings: () => settings,
     publicOrigin: () => publicOrigin,
+    publicOriginRevision: () => publicOriginRevision,
 
     updateSettings(patch) {
       // Through the parser rather than spread straight in, so a value out of

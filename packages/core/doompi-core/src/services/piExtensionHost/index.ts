@@ -36,7 +36,7 @@ import {
   type ToolInfo,
 } from '@earendil-works/pi-coding-agent';
 
-import type { DoomHeadlessClient, DoomHeadlessClientRequest } from '../../exports/headless';
+import type { DoomHeadlessClient, DoomHeadlessClientRequest, DoomHeadlessToolResult } from '../../exports/headless';
 import { contextTokensOf, contextUsageOf, latestAssistantUsage } from '../../services/contextUsage';
 import {
   fromPiSessionEntry,
@@ -177,6 +177,13 @@ export interface PiExtensionHost {
   readonly toolGuidance: readonly ToolPromptEntry[];
   /** Session lifetime skills contributed by Pi extensions, in discovery order. */
   readonly skills: readonly Skill[];
+  executeTool(
+    name: string,
+    toolCallId: string,
+    parameters: Record<string, unknown>,
+    signal?: AbortSignal,
+    onUpdate?: (result: DoomHeadlessToolResult) => void,
+  ): Promise<DoomHeadlessToolResult>;
   /**
    * Pi's `context` event, as one step in the host's transform chain.
    *
@@ -253,6 +260,29 @@ function piBranchEntries(entries: readonly Entry[]): SessionEntry[] {
   return toPiSessionEntries(entries);
 }
 
+async function executePiTool(
+  registered: RegisteredTool,
+  runner: () => ExtensionRunner,
+  isActive: (name: string) => boolean,
+  toolCallId: string,
+  parameters: unknown,
+  signal: AbortSignal | undefined,
+  onUpdate: ((result: DoomHeadlessToolResult) => void) | undefined,
+): Promise<DoomHeadlessToolResult> {
+  const definition = registered.definition;
+  // Admission, not visibility. A cached definition must still be active when called.
+  if (!isActive(definition.name)) throw new Error(`Tool '${definition.name}' is no longer active`);
+  const prepared = definition.prepareArguments ? definition.prepareArguments(parameters) : parameters;
+  const result = await definition.execute(
+    toolCallId,
+    prepared,
+    signal,
+    (partial) => onUpdate?.({ content: partial.content, details: partial.details }),
+    runner().createContext(),
+  );
+  return { content: result.content, details: result.details };
+}
+
 function toHarnessTool(
   registered: RegisteredTool,
   runner: () => ExtensionRunner,
@@ -266,18 +296,14 @@ function toHarnessTool(
     parameters: definition.parameters,
     ...(definition.executionMode === undefined ? {} : { executionMode: definition.executionMode }),
     async execute(toolCallId, parameters, onUpdate, _toolContext, _invocation, context) {
-      // Admission, not visibility. The harness keeps the tool list it was last
-      // given, so a name dropped from the active set stays dispatchable until
-      // the next replaceTools. The facet path checks the same thing in
-      // systems/main/adapters/headlessHost.
-      if (!isActive(definition.name)) throw new Error(`Tool '${definition.name}' is no longer active`);
-      const prepared = definition.prepareArguments ? definition.prepareArguments(parameters) : parameters;
-      const result = await definition.execute(
+      const result = await executePiTool(
+        registered,
+        runner,
+        isActive,
         toolCallId,
-        prepared,
+        parameters,
         context.abortSignal,
         (partial) => onUpdate({ content: partial.content, details: partial.details }),
-        runner().createContext(),
       );
       return { content: result.content, details: result.details };
     },
@@ -906,6 +932,20 @@ export function createPiExtensionHost(options: PiExtensionHostOptions): PiExtens
 
     get skills() {
       return skills;
+    },
+
+    executeTool(name, toolCallId, parameters, signal, onUpdate) {
+      const tool = registered.find((entry) => entry.definition.name === name);
+      if (tool === undefined) throw new Error(`Unknown Pi extension tool '${name}'`);
+      return executePiTool(
+        tool,
+        requireRunner,
+        (candidate) => activeNames.has(candidate),
+        toolCallId,
+        parameters,
+        signal,
+        onUpdate,
+      );
     },
 
     async load(): Promise<void> {

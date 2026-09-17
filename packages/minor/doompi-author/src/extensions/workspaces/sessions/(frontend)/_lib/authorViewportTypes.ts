@@ -1,4 +1,5 @@
 import type { AuthorJsonSchema } from '../../../../../types/author';
+import type { AuthorStoryPreviewIdentity } from '../../../../../types/authorPreview';
 import type { CsvDialect, DocumentFragment, StructuredDocumentFormat } from '../../../../../types/structuredDocuments';
 
 export type AuthorDocumentKind =
@@ -11,6 +12,7 @@ export type AuthorDocumentKind =
   | 'image'
   | 'video'
   | 'pdf'
+  | 'story-preview'
   | 'opaque';
 
 export interface AuthorDocumentInput {
@@ -25,6 +27,7 @@ export interface AuthorDocumentInput {
   csvDialect?: CsvDialect;
   fragments?: readonly DocumentFragment[];
   originalFragments?: readonly DocumentFragment[];
+  storyPreview?: AuthorStoryPreviewIdentity;
 }
 
 export interface AuthorAnnotation {
@@ -99,13 +102,20 @@ export interface AuthorVideoTimeRectAnchor {
   intrinsicHeight?: number;
 }
 
+export interface AuthorStoryPreviewRectAnchor {
+  kind: 'story-preview-rect';
+  rect: AuthorNormalizedRect;
+  preview: AuthorStoryPreviewIdentity;
+}
+
 export type AuthorNativeAnchor =
   | AuthorTextRangeAnchor
   | AuthorCellAnchor
   | AuthorSlideElementAnchor
   | AuthorImageRectAnchor
   | AuthorPdfPageRectAnchor
-  | AuthorVideoTimeRectAnchor;
+  | AuthorVideoTimeRectAnchor
+  | AuthorStoryPreviewRectAnchor;
 
 /** View state retained as capture evidence, never as mutation authority. */
 export interface AuthorViewportSnapshot {

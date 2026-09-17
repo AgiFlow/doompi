@@ -6,6 +6,7 @@ import type { InstalledServerFacets } from '../../../exports/serverFacet';
 import type { DoomServerBundleEntry } from '../../../exports/serverFacet';
 import type { ContextProjectionInput } from '../../../services/contextProjection';
 import type { DirectHarnessRuntime } from '../../../types/server/directHarnessRuntime';
+import type { SessionToolSurface } from '../../../types/server/sessionToolSurface';
 import type { HeadlessHost } from '../adapters/headlessHost';
 import type { HeadlessHostOptions } from './headlessHost';
 
@@ -41,6 +42,7 @@ export interface HeadlessSessionHostOptions {
 export interface HeadlessSessionHost {
   readonly runtime: DirectHarnessRuntime;
   readonly host: HeadlessHost | undefined;
+  readonly toolSurface: SessionToolSurface;
   readonly prepareFacets: (root: Context) => void;
   readonly activateFacets: (installed: InstalledServerFacets) => Promise<void>;
   readonly canDispatch: () => boolean;

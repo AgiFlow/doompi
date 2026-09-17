@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import type { Context as CordisContext } from '@deepseek-ai/cordis';
@@ -16,6 +17,7 @@ import {
   SettingsManager,
   type Args,
 } from '@earendil-works/pi-coding-agent';
+import { Value } from 'typebox/value';
 
 import { DOOM_CHILD_SESSION_SERVICE } from '../../../exports/childSession';
 import type {
@@ -39,8 +41,13 @@ import {
 } from '../../../services/piExtensionHost';
 import { formatToolPrompt, type ToolPromptEntry } from '../../../services/toolPrompt';
 import type { ContextPromptStage } from '../../../types/contextApi';
-import type { DirectHarnessRuntime } from '../../../types/server/directHarnessRuntime';
+import type { DirectHarnessRuntime, DirectHarnessRuntimeOptions } from '../../../types/server/directHarnessRuntime';
 import type { SessionFrame } from '../../../types/server/session';
+import type {
+  SessionSkillDescriptor,
+  SessionToolDescriptor,
+  SessionToolSurface,
+} from '../../../types/server/sessionToolSurface';
 import { createHeadlessChildSessionServiceProvider } from '../../child/adapters/headlessChildSessionService';
 import type { ResolvedHeadlessResource } from '../types/headlessHost';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '../types/headlessSessionHost';
@@ -52,6 +59,18 @@ type AfterToolPatch = NonNullable<HookMap['after_tool']['result']>;
 type ToolContent = NonNullable<AfterToolPatch['content']>;
 type CompactResult = NonNullable<NonNullable<HookMap['before_compaction']['result']>['compaction']>;
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+
+const EXTERNAL_OPERATION = 'external';
+
+interface AppliedSessionTool {
+  readonly descriptor: SessionToolDescriptor;
+  execute(
+    toolCallId: string,
+    parameters: Record<string, unknown>,
+    signal?: AbortSignal,
+    onUpdate?: Parameters<SessionToolSurface['invokeTool']>[0]['onUpdate'],
+  ): Promise<import('../../../exports/headless').DoomHeadlessToolResult>;
+}
 
 function isRecord(value: unknown): value is AnyRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -512,6 +531,62 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     if (builtSystemPrompt !== undefined) return { text: builtSystemPrompt, stage: 'effective' };
     return { text: composeSystemPrompt(headlessHost.appliedResources), stage: 'base' };
   };
+  const beforeTool: NonNullable<DirectHarnessRuntimeOptions['beforeTool']> = async (event) => {
+    if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
+    const patches = await headlessHost.dispatchHook('tool_call', event);
+    let args = event.args;
+    let block: NonNullable<HookMap['before_tool']['result']>['block'];
+    for (const patch of patches) {
+      if (!isRecord(patch)) continue;
+      if (patch.args !== undefined) {
+        if (!isJsonObject(patch.args)) throw new Error('Invalid headless tool arguments');
+        args = patch.args as typeof args;
+      }
+      if (patch.block === undefined) continue;
+      if (
+        !isRecord(patch.block) ||
+        typeof patch.block.reason !== 'string' ||
+        (patch.block.terminate !== undefined && typeof patch.block.terminate !== 'boolean')
+      ) {
+        throw new Error('Invalid headless tool denial');
+      }
+      block = {
+        reason: patch.block.reason,
+        ...(typeof patch.block.terminate === 'boolean' ? { terminate: patch.block.terminate } : {}),
+      };
+      break;
+    }
+    return {
+      ...(args === event.args ? {} : { args }),
+      ...(block === undefined ? {} : { block }),
+    };
+  };
+  const afterTool: NonNullable<DirectHarnessRuntimeOptions['afterTool']> = async (event) => {
+    if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
+    const reportedError = reportedToolErrors.delete(event.toolCallId);
+    const original = reportedError ? { ...event, isError: true } : event;
+    const patches = await headlessHost.dispatchHook('tool_result', original);
+    let content = original.content;
+    let details = original.details;
+    let isError = original.isError;
+    let usage = original.usage;
+    let terminate: boolean | undefined;
+    for (const patch of patches) {
+      if (!isRecord(patch)) continue;
+      if (isToolContent(patch.content)) content = patch.content;
+      if ('details' in patch && isJsonValue(patch.details)) details = patch.details;
+      if (typeof patch.isError === 'boolean') isError = patch.isError;
+      if (isUsage(patch.usage)) usage = patch.usage;
+      if (typeof patch.terminate === 'boolean') terminate = patch.terminate;
+    }
+    return {
+      ...(content === event.content ? {} : { content }),
+      ...(details === event.details ? {} : { details }),
+      ...(isError === event.isError ? {} : { isError }),
+      ...(usage === event.usage ? {} : { usage }),
+      ...(terminate === undefined ? {} : { terminate }),
+    };
+  };
   const runtime = await createDirectHarnessRuntime({
     cwd: options.cwd,
     sessionId: options.sessionId,
@@ -548,62 +623,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       // a facet name wins over a Pi name, so a Pi contribution is the outer layer.
       return { messages: await (piHost?.transformContext(messages) ?? messages), systemPrompt };
     },
-    beforeTool: async (event) => {
-      if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
-      const patches = await headlessHost.dispatchHook('tool_call', event);
-      let args = event.args;
-      let block: NonNullable<HookMap['before_tool']['result']>['block'];
-      for (const patch of patches) {
-        if (!isRecord(patch)) continue;
-        if (patch.args !== undefined) {
-          if (!isJsonObject(patch.args)) throw new Error('Invalid headless tool arguments');
-          args = patch.args as typeof args;
-        }
-        if (patch.block === undefined) continue;
-        if (
-          !isRecord(patch.block) ||
-          typeof patch.block.reason !== 'string' ||
-          (patch.block.terminate !== undefined && typeof patch.block.terminate !== 'boolean')
-        ) {
-          throw new Error('Invalid headless tool denial');
-        }
-        block = {
-          reason: patch.block.reason,
-          ...(typeof patch.block.terminate === 'boolean' ? { terminate: patch.block.terminate } : {}),
-        };
-        break;
-      }
-      return {
-        ...(args === event.args ? {} : { args }),
-        ...(block === undefined ? {} : { block }),
-      };
-    },
-    afterTool: async (event) => {
-      if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
-      const reportedError = reportedToolErrors.delete(event.toolCallId);
-      const original = reportedError ? { ...event, isError: true } : event;
-      const patches = await headlessHost.dispatchHook('tool_result', original);
-      let content = original.content;
-      let details = original.details;
-      let isError = original.isError;
-      let usage = original.usage;
-      let terminate: boolean | undefined;
-      for (const patch of patches) {
-        if (!isRecord(patch)) continue;
-        if (isToolContent(patch.content)) content = patch.content;
-        if ('details' in patch && isJsonValue(patch.details)) details = patch.details;
-        if (typeof patch.isError === 'boolean') isError = patch.isError;
-        if (isUsage(patch.usage)) usage = patch.usage;
-        if (typeof patch.terminate === 'boolean') terminate = patch.terminate;
-      }
-      return {
-        ...(content === event.content ? {} : { content }),
-        ...(details === event.details ? {} : { details }),
-        ...(isError === event.isError ? {} : { isError }),
-        ...(usage === event.usage ? {} : { usage }),
-        ...(terminate === undefined ? {} : { terminate }),
-      };
-    },
+    beforeTool,
+    afterTool,
     beforePayload: async (event) => {
       if (!headlessReady || !headlessHost) throw new Error('Headless capabilities are not installed.');
       const patches = await headlessHost.dispatchHook('before_provider_request', event);
@@ -859,9 +880,14 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   // rebuild the merged surface in memory, the same way the kernel's tools sink does, instead of
   // forcing a session reload.
   let appliedFacetTools: readonly HeadlessTool[] = [];
+  let appliedSessionTools = new Map<string, AppliedSessionTool>();
+  let appliedSkills = new Map<string, { descriptor: SessionSkillDescriptor; content: string }>();
+  let surfaceRevision = 0;
+  let toolSurfaceReady = false;
   let toolReapplyQueued = false;
 
   const applyToolSurface = async (tools: readonly HeadlessTool[]): Promise<void> => {
+    toolSurfaceReady = false;
     const facetTools = tools.map((tool) => toolAdapter(tool, () => headlessHost!.context, reportedToolErrors));
     // Facet tools win a name collision, including when the collision is with a
     // name the facet surface declared and then gated out. The reconciled set
@@ -869,7 +895,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     // mode-aware facet deliberately left empty.
     const facetNames = headlessHost?.declaredToolNames ?? new Set(facetTools.map((tool) => tool.name));
     const piTools = (piHost?.tools ?? []).filter((tool) => !facetNames.has(tool.name));
-    toolGuidance = [
+    const nextToolGuidance = [
       ...(piHost?.toolGuidance ?? []).filter((entry) => !facetNames.has(entry.name)),
       ...tools.map((tool) => ({
         name: tool.name,
@@ -878,6 +904,35 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       })),
     ];
     await runtime.replaceTools([...piTools, ...facetTools]);
+    const next = new Map<string, AppliedSessionTool>();
+    for (const tool of piTools) {
+      next.set(tool.name, {
+        descriptor: {
+          name: tool.name,
+          label: tool.label ?? tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+        },
+        execute: (toolCallId, parameters, signal, onUpdate) =>
+          piHost!.executeTool(tool.name, toolCallId, parameters, signal, onUpdate),
+      });
+    }
+    for (const tool of tools) {
+      next.set(tool.name, {
+        descriptor: {
+          name: tool.name,
+          label: tool.label ?? tool.name,
+          description: tool.description,
+          parameters: tool.parameters,
+        },
+        execute: (toolCallId, parameters, signal, onUpdate) =>
+          tool.execute(toolCallId, parameters, signal, onUpdate, headlessHost!.context),
+      });
+    }
+    toolGuidance = nextToolGuidance;
+    appliedSessionTools = next;
+    surfaceRevision += 1;
+    toolSurfaceReady = true;
   };
 
   /**
@@ -942,11 +997,23 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         // Facet skills win a name collision, for the same reason facet tools do.
         const facetNames = new Set((mapped.harness.skills ?? []).map((skill) => skill.name));
         const piSkills = (piHost?.skills ?? []).filter((skill) => !facetNames.has(skill.name));
+        const mergedSkills = [...piSkills, ...(mapped.harness.skills ?? [])];
         await runtime.replaceResources(
-          piSkills.length === 0
-            ? mapped.harness
-            : { ...mapped.harness, skills: [...piSkills, ...(mapped.harness.skills ?? [])] },
+          piSkills.length === 0 ? mapped.harness : { ...mapped.harness, skills: mergedSkills },
         );
+        appliedSkills = new Map(
+          mergedSkills.map((skill) => {
+            const uri = `doompi://session/${encodeURIComponent(runtime.sessionId)}/skills/${encodeURIComponent(skill.name)}`;
+            return [
+              uri,
+              {
+                descriptor: { name: skill.name, description: skill.description, uri },
+                content: skill.content,
+              },
+            ];
+          }),
+        );
+        surfaceRevision += 1;
       },
       onApplied: async (selection) => {
         if (headlessReady) await publishComposition(selection);
@@ -1037,11 +1104,115 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     );
   };
 
+  const toolSurface: SessionToolSurface = {
+    readSurface() {
+      if (disposed || !headlessReady || !toolSurfaceReady || !headlessHost?.status.ready)
+        throw new Error('Headless capability preparation is not ready.');
+      return {
+        revision: surfaceRevision,
+        tools: [...appliedSessionTools.values()].map((tool) => tool.descriptor),
+        skills: [...appliedSkills.values()].map((skill) => skill.descriptor),
+      };
+    },
+    async invokeTool(invocation) {
+      if (disposed || !headlessReady || !toolSurfaceReady || !headlessHost?.status.ready)
+        throw new Error('Headless capability preparation is not ready.');
+      if (invocation.revision !== surfaceRevision) throw new Error('The session tool surface has changed');
+      if (!isJsonObject(invocation.arguments)) throw new Error('Tool arguments must be a JSON object');
+      const applied = appliedSessionTools.get(invocation.name);
+      if (applied === undefined) throw new Error(`Tool '${invocation.name}' is not active`);
+      if (!Value.Check(applied.descriptor.parameters, invocation.arguments))
+        throw new Error(`Invalid arguments for tool '${invocation.name}'`);
+      return runtime.runExternalOperation(async () => {
+        const toolCallId = `external-${randomUUID()}`;
+        const before = await beforeTool(
+          { toolCallId, toolName: invocation.name, args: invocation.arguments as Record<string, JsonValue> },
+          BACKGROUND_CONTEXT,
+        );
+        if (before?.block !== undefined) {
+          return { content: [{ type: 'text', text: before.block.reason }], isError: true };
+        }
+        const args = before?.args ?? (invocation.arguments as Record<string, JsonValue>);
+        if (!Value.Check(applied.descriptor.parameters, args))
+          throw new Error(`A tool hook produced invalid arguments for '${invocation.name}'`);
+        if (invocation.revision !== surfaceRevision || appliedSessionTools.get(invocation.name) !== applied)
+          throw new Error(`Tool '${invocation.name}' is no longer active`);
+        emitTo(listeners, {
+          type: 'tool_execution_start',
+          runId: EXTERNAL_OPERATION,
+          turnId: EXTERNAL_OPERATION,
+          toolCallId,
+          toolName: invocation.name,
+          args,
+        });
+        let result;
+        try {
+          result = await applied.execute(toolCallId, args, invocation.signal, (partial) => {
+            emitTo(listeners, {
+              type: 'tool_execution_update',
+              runId: EXTERNAL_OPERATION,
+              turnId: EXTERNAL_OPERATION,
+              toolCallId,
+              toolName: invocation.name,
+              partialResult: partial,
+            });
+            invocation.onUpdate?.(partial);
+          });
+        } catch (error) {
+          result = {
+            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+            isError: true,
+          };
+        }
+        const patch = await afterTool(
+          {
+            toolCallId,
+            toolName: invocation.name,
+            args,
+            content: result.content,
+            ...(isJsonValue(result.details) ? { details: result.details } : {}),
+            isError: result.isError === true,
+          },
+          BACKGROUND_CONTEXT,
+        );
+        const patched = {
+          content: patch?.content ?? result.content,
+          ...(patch?.details !== undefined
+            ? { details: patch.details }
+            : result.details === undefined
+              ? {}
+              : { details: result.details }),
+          isError: patch?.isError ?? result.isError ?? false,
+        };
+        emitTo(listeners, {
+          type: 'tool_execution_end',
+          runId: EXTERNAL_OPERATION,
+          turnId: EXTERNAL_OPERATION,
+          toolCallId,
+          toolName: invocation.name,
+          result: patched,
+          isError: patched.isError,
+          terminate: patch?.terminate ?? false,
+        });
+        return patched;
+      });
+    },
+    readSkill(revision, uri) {
+      if (disposed || !headlessReady || !toolSurfaceReady || !headlessHost?.status.ready)
+        throw new Error('Headless capability preparation is not ready.');
+      if (revision !== surfaceRevision) throw new Error('The session skill surface has changed');
+      const skill = appliedSkills.get(uri);
+      if (skill === undefined) throw new Error('The session skill is not active');
+      return skill.content;
+    },
+  };
+
   return {
     runtime,
     get host() {
       return headlessHost;
     },
+    toolSurface,
     prepareFacets,
     activateFacets,
     canDispatch: () => !disposed && headlessReady && !promptPreparationFailed && headlessHost?.status.ready === true,

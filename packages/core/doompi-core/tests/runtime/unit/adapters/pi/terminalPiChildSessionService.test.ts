@@ -57,6 +57,7 @@ function fakeRuntime(options: DirectHarnessRuntimeOptions): DirectHarnessRuntime
     replaceTools: async () => undefined,
     replaceResources: async () => undefined,
     readResources: async () => ({}),
+    runExternalOperation: (operation) => operation(),
     appendCustomEntry: async () => 'entry',
     appendMessage: async () => 'entry',
     setLabel: async () => undefined,

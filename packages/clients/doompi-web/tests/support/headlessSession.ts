@@ -409,6 +409,15 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
   const host: HeadlessSessionHost = {
     runtime,
     host: undefined,
+    toolSurface: {
+      readSurface: () => ({ revision: 1, tools: [], skills: [] }),
+      invokeTool: async () => {
+        throw new Error('The cockpit test session has no external tools.');
+      },
+      readSkill: () => {
+        throw new Error('The cockpit test session has no external skills.');
+      },
+    },
     prepareFacets: (root) => {
       root.provide(DOOM_HEADLESS_HOST_SERVICE, headlessHost);
     },

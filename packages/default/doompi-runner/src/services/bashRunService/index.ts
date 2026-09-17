@@ -27,6 +27,8 @@ import type { IRunnerNamer } from '../runnerNamer/type';
 const TIMED_OUT = Symbol('threshold-reached');
 /** The command outlived the caller's explicit timeout and should be stopped. */
 const DEADLINE = Symbol('deadline-reached');
+/** The caller cancelled the command and its owned runner should be stopped. */
+const ABORTED = Symbol('aborted');
 
 function runnerId(): string {
   const timestamp = Date.now().toString(36);
@@ -49,6 +51,7 @@ export class BashRunService implements IBashRunService {
     const name = await this.namer.allocate(request.command, request.sessionId, request.name);
     const cwd = request.cwd ?? process.cwd();
     const interactive = request.interactive === true;
+    if (request.signal?.aborted) return { kind: FAILED, id, name, error: 'Operation aborted' };
 
     let handle: RunHandle;
     try {
@@ -72,6 +75,10 @@ export class BashRunService implements IBashRunService {
     if (handle.pid === undefined) {
       return { kind: FAILED, id, name, error: 'The command did not start, so it cannot be supervised' };
     }
+    if (request.signal?.aborted) {
+      await handle.stop();
+      return { kind: FAILED, id, name, error: 'Operation aborted' };
+    }
 
     try {
       await this.registry.register({
@@ -94,15 +101,31 @@ export class BashRunService implements IBashRunService {
     // An interactive run has nothing to wait for: it is going to prompt, so
     // the model needs the runner name before it can answer.
     if (request.background === true || interactive) {
-      return this.promote(handle, request.background === true ? 'requested' : 'interactive');
+      return this.promote(handle, request.background === true ? 'requested' : 'interactive', request.signal);
     }
 
     const outputUpdates = request.onOutput ? this.followOutput(handle, request.onOutput) : undefined;
     try {
-      const outcome = await this.race(handle, request.timeoutMs);
+      const outcome = await this.race(handle, request.timeoutMs, request.signal);
       outputUpdates?.flush();
       if (outcome === TIMED_OUT) {
-        return this.promote(handle, 'threshold');
+        return this.promote(handle, 'threshold', request.signal);
+      }
+      if (outcome === ABORTED) {
+        await handle.stop();
+        outputUpdates?.flush();
+        await this.registry.complete(id, { reason: 'stopped', code: null, signal: 'SIGTERM' });
+        return {
+          kind: COMPLETED,
+          id,
+          name,
+          output: handle.output(),
+          exitCode: null,
+          signal: 'SIGTERM',
+          logPath: handle.logPath,
+          backend: handle.backend,
+          aborted: true,
+        };
       }
       if (outcome === DEADLINE) {
         // An explicit timeout means the caller wants the command dead, not
@@ -200,7 +223,10 @@ export class BashRunService implements IBashRunService {
   private async race(
     handle: RunHandle,
     timeoutMs: number | undefined,
-  ): Promise<Awaited<ReturnType<RunHandle['completion']>> | Error | typeof TIMED_OUT | typeof DEADLINE> {
+    signal: AbortSignal | undefined,
+  ): Promise<
+    Awaited<ReturnType<RunHandle['completion']>> | Error | typeof TIMED_OUT | typeof DEADLINE | typeof ABORTED
+  > {
     const cancels: Array<() => void> = [];
     const racers: Array<Promise<unknown>> = [handle.completion().catch((error: Error) => error)];
 
@@ -216,36 +242,82 @@ export class BashRunService implements IBashRunService {
         }),
       );
     }
+    if (signal) {
+      racers.push(
+        new Promise((resolve) => {
+          if (signal.aborted) {
+            resolve(ABORTED);
+            return;
+          }
+          const abort = (): void => resolve(ABORTED);
+          signal.addEventListener('abort', abort, { once: true });
+          cancels.push(() => signal.removeEventListener('abort', abort));
+        }),
+      );
+    }
 
     try {
-      return (await Promise.race(racers)) as Awaited<ReturnType<RunHandle['completion']>> | Error | typeof TIMED_OUT;
+      return (await Promise.race(racers)) as
+        | Awaited<ReturnType<RunHandle['completion']>>
+        | Error
+        | typeof TIMED_OUT
+        | typeof DEADLINE
+        | typeof ABORTED;
     } finally {
       for (const cancel of cancels) cancel();
     }
   }
 
-  private async promote(handle: RunHandle, reason: PromotedRun['reason']): Promise<BashRunResult> {
+  private async promote(
+    handle: RunHandle,
+    reason: PromotedRun['reason'],
+    signal: AbortSignal | undefined,
+  ): Promise<BashRunResult> {
     if (handle.pid === undefined)
       return { kind: FAILED, id: handle.id, name: handle.name, error: 'The command did not start' };
     await this.registry.markPromoted(handle.id);
     // Registration first: an unregistered runner is invisible, and the handle
     // stops buffering the moment it is detached.
     handle.detach();
+    let abortStop: Promise<boolean> | undefined;
+    const abort = (): void => {
+      abortStop = handle
+        .stop()
+        .then(async () => {
+          await this.registry.complete(handle.id, { reason: 'stopped', code: null, signal: 'SIGTERM' });
+          return true;
+        })
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          process.emitWarning(`Failed to stop aborted runner ${handle.id}: ${message}`);
+          return false;
+        });
+    };
+    if (signal) {
+      if (signal.aborted) abort();
+      else signal.addEventListener('abort', abort, { once: true });
+    }
     void handle
       .completion()
       .then(
-        (outcome) =>
-          this.registry.complete(handle.id, {
+        async (outcome) => {
+          if (await abortStop) return;
+          await this.registry.complete(handle.id, {
             reason: outcome.signal ? SIGNALED : outcome.code === 0 ? COMPLETED : FAILED,
             code: outcome.code,
             signal: outcome.signal,
-          }),
-        () => this.registry.complete(handle.id, { reason: LAUNCHER_ERROR, code: null, signal: null }),
+          });
+        },
+        async () => {
+          if (await abortStop) return;
+          await this.registry.complete(handle.id, { reason: LAUNCHER_ERROR, code: null, signal: null });
+        },
       )
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
         process.emitWarning(`Failed to complete runner ${handle.id}: ${message}`);
-      });
+      })
+      .finally(() => signal?.removeEventListener('abort', abort));
 
     return {
       kind: 'promoted',

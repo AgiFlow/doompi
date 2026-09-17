@@ -12,6 +12,7 @@ function host(): HeadlessSessionHost {
   return {
     runtime: { exited: new Promise<number>(() => undefined) } as HeadlessSessionHost['runtime'],
     host: undefined,
+    toolSurface: {} as HeadlessSessionHost['toolSurface'],
     prepareFacets: () => undefined,
     activateFacets: async () => undefined,
     canDispatch: () => true,

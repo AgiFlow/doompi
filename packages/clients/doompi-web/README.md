@@ -31,6 +31,7 @@ Packages contribute browser UI through `doompiWeb.client`. Server channels and A
 | [Package APIs](docs/package-apis.md)       | Headless API scopes and caller context              |
 | [Web bundling and serving](docs/bundle.md) | Browser build outputs and serving                   |
 | [Remote security](docs/security.md)        | Browser transport and deployment boundaries         |
+| [Session MCP](docs/session-mcp.md)         | Exposing a live session to a custom MCP connector   |
 
 ## Programmatic use
 

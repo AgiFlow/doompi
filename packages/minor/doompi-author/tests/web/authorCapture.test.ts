@@ -64,6 +64,53 @@ describe('Author multi-region capture packet', () => {
     expect(new TextEncoder().encode(context.metadata!).byteLength).toBeLessThanOrEqual(AUTHOR_PACKET_MAX_BYTES);
   });
 
+  it('puts story source provenance and edit guidance in model-visible content', () => {
+    const storyPreview = {
+      version: 1 as const,
+      provider: 'style-system',
+      projectPath: 'apps/site',
+      storyPath: 'src/Button.stories.tsx',
+      storyExport: 'Primary',
+      buildRevision: 'build-7',
+      viewport: { width: 1024, height: 768 },
+      sources: [
+        { path: 'apps/site/src/Button.stories.tsx', sha256: 'story-sha' },
+        { path: 'apps/site/src/Button.tsx', sha256: 'component-sha' },
+      ],
+    };
+    const previewDocument: AuthorWorkspaceDocument = {
+      ...document,
+      path: 'author-preview/style-system/button-primary',
+      kind: 'story-preview',
+      storyPreview,
+    };
+    const previewRegion: AuthorRegionDraft = {
+      ...region('preview'),
+      documentPath: previewDocument.path,
+      anchor: {
+        kind: 'story-preview-rect',
+        rect: { x: 0.1, y: 0.2, width: 0.3, height: 0.4 },
+        preview: storyPreview,
+      },
+    };
+
+    const context = authorCaptureContext(
+      createAuthorCapturePacket('capture-preview', 10, previewDocument, [previewRegion]),
+    );
+
+    expect(context.content).toContain('Story: src/Button.stories.tsx#Primary');
+    expect(context.content).toContain('apps/site/src/Button.tsx (sha256 component-sha)');
+    expect(context.content).toContain('edit these sources, never the generated preview artifact');
+    expect(context.content).toContain('rebuild the preview');
+    expect(context.content).toContain('[story preview x 10%, y 20%, w 30%, h 40%]');
+  });
+
+  it('requires provenance for story-preview captures', () => {
+    expect(() =>
+      createAuthorCapturePacket('capture-preview', 10, { ...document, kind: 'story-preview' }, [region('preview')]),
+    ).toThrow('requires source provenance');
+  });
+
   it('includes concise video timestamps and spatial anchors in model-visible text', () => {
     const video = {
       ...region('video'),

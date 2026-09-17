@@ -21,6 +21,7 @@ import { createTunnelLauncher, reapStaleTunnel } from '../services/tunnelProcess
 import { stepUpActionFor } from '../services/webauthnPolicy';
 import { type TunnelLauncher } from '../types/remote';
 import { registerRemoteRoutes } from './remoteRoutes';
+import { isPublicSessionMcpRoute, isSessionMcpHostRoute } from './sessionMcpRoutes';
 
 const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
 const TUNNEL_HEADERS_TIMEOUT_MS = 5_000;
@@ -139,9 +140,14 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
   let frontendOrigin: string | undefined;
   app.use('*', async (context, next) => {
     if (context.env.listener === 'local') return next();
+    const path = context.req.path;
+    const publicSessionMcp = isPublicSessionMcpRoute(context.req.method, path);
     const verdict = originVerdict({
       listener: 'tunnel',
-      method: context.req.method,
+      // Exact OAuth and MCP routes authenticate at the application layer. Treat
+      // an absent Origin like a server-to-server read while retaining Host and
+      // supplied-Origin validation.
+      method: publicSessionMcp ? 'GET' : context.req.method,
       isUpgrade: false,
       origin: context.req.header('origin'),
       host: context.req.header('host'),
@@ -149,8 +155,7 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
       tunnel: remote.tunnelPolicy(),
     });
     if (verdict !== 'allow') return context.json({ error: `Tunnel request refused: ${verdict}.` }, 403);
-    const path = context.req.path;
-    if (isPublicPairingRoute(context.req.method, path)) return next();
+    if (isPublicPairingRoute(context.req.method, path) || publicSessionMcp) return next();
     const device = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
     if (device === undefined) return context.json({ error: 'This device is not paired.' }, 401);
     if (context.env.sealedDeviceId === device) return next();
@@ -175,17 +180,27 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
       const webSockets = new WebSocketServer({ noServer: true, maxPayload: MAX_REQUEST_BYTES });
       const server = createServer((incoming, outgoing) => {
         void (async () => {
-          const url = new URL(incoming.url ?? '/', `http://${incoming.headers.host ?? 'localhost'}`);
-          const headers = new Headers();
-          for (const [name, value] of Object.entries(incoming.headers))
-            if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value);
-          const body = incoming.method === 'GET' || incoming.method === 'HEAD' ? undefined : await readBody(incoming);
-          const request = new Request(url, {
-            method: incoming.method,
-            headers,
-            ...(body === undefined ? {} : { body }),
-          });
-          await writeResponse(outgoing, await app.fetch(request, { listener: 'tunnel', incoming }));
+          const abort = new AbortController();
+          const disconnected = (): void => abort.abort();
+          incoming.once('aborted', disconnected);
+          outgoing.once('close', disconnected);
+          try {
+            const url = new URL(incoming.url ?? '/', `http://${incoming.headers.host ?? 'localhost'}`);
+            const headers = new Headers();
+            for (const [name, value] of Object.entries(incoming.headers))
+              if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value);
+            const body = incoming.method === 'GET' || incoming.method === 'HEAD' ? undefined : await readBody(incoming);
+            const request = new Request(url, {
+              method: incoming.method,
+              headers,
+              signal: abort.signal,
+              ...(body === undefined ? {} : { body }),
+            });
+            await writeResponse(outgoing, await app.fetch(request, { listener: 'tunnel', incoming }));
+          } finally {
+            incoming.off('aborted', disconnected);
+            outgoing.off('close', disconnected);
+          }
         })().catch((error: unknown) => {
           options.onNotice(`tunnel request failed: ${String(error)}`);
           if (!outgoing.headersSent) {
@@ -392,6 +407,8 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
     let response: Response;
     if (stepUpDenied) {
       response = context.json({ error: 'This action needs a fresh passkey gesture.', action }, 401);
+    } else if (isSessionMcpHostRoute(target.pathname)) {
+      response = context.json({ error: 'Session MCP management is only available on the host.' }, 403);
     } else {
       const internal = new Request(target, {
         method: inner.method,
@@ -423,7 +440,12 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
       ? context.json(sealed.envelope)
       : context.json({ error: `The sealed response failed: ${sealed.failure}.` }, 503);
   });
+  app.on(['POST', 'DELETE'], '*', async (context) => {
+    if (!isPublicSessionMcpRoute(context.req.method, context.req.path)) return context.notFound();
+    return options.forward(context.req.raw);
+  });
   app.on(['GET', 'HEAD'], '*', async (context) => {
+    if (isPublicSessionMcpRoute(context.req.method, context.req.path)) return options.forward(context.req.raw);
     if (context.req.path.startsWith('/api/')) return context.json({ error: 'Not found.' }, 404);
     if (context.req.path === '/' && remote.authorize(getCookie(context, DEVICE_COOKIE, 'host')) === undefined)
       return context.redirect('/pair');

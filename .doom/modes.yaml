@@ -26,6 +26,14 @@ layers:
   team:
     packages:
       - name: "./layers/team/doompi-team"
+        # Optional Team configuration. Uncomment and choose models available to Pi.
+        config:
+          models:
+            - model: openai-codex/gpt-5.6-luna
+              thinking: max
+          # Tool names excluded from subagents launched by this package. These
+          # remove model-visible tools while preserving hidden team transport.
+          excludeTools: [ask_user_question, intercom, subagent]
   ask-user:
     packages:
       - "./layers/ask-user/doompi-user-feedback"

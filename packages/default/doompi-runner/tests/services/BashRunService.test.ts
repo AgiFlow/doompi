@@ -12,7 +12,12 @@ import type { IRunnerPaths } from '../../src/services/runnerPaths/type';
 import type { RunHandle } from '../../src/types/launcher';
 import type { IRmuxBackend } from '../../src/types/rmuxBackend';
 import type { IRtkProcessor } from '../../src/types/rtkProcessor';
-import type { IRunnerRegistry, RegisterRunnerInput, RunnerRecord } from '../../src/types/runnerRegistry';
+import type {
+  CompleteRunnerInput,
+  IRunnerRegistry,
+  RegisterRunnerInput,
+  RunnerRecord,
+} from '../../src/types/runnerRegistry';
 import type { ExitResult } from '../../src/types/spawner';
 import { FakeClock, FakeLogFile, FakeProcessControl, FakeRtkProcessor, FakeRunnerPaths, FakeSpawner } from '../doubles';
 
@@ -50,6 +55,7 @@ const OUTPUT_UPDATE_POLL_MS = 100;
 /** Records what was registered without touching the real registry. */
 class RecordingRegistry implements IRunnerRegistry {
   readonly registered: RegisterRunnerInput[] = [];
+  readonly completed: Array<{ id: string; outcome: CompleteRunnerInput }> = [];
   readonly released: string[] = [];
 
   async register(input: RegisterRunnerInput): Promise<RunnerRecord> {
@@ -85,7 +91,8 @@ class RecordingRegistry implements IRunnerRegistry {
     return undefined;
   }
 
-  async complete(): Promise<RunnerRecord | undefined> {
+  async complete(id: string, outcome: CompleteRunnerInput): Promise<RunnerRecord | undefined> {
+    this.completed.push({ id, outcome });
     return undefined;
   }
 
@@ -420,6 +427,125 @@ describe('BashRunService', () => {
     const { service, registry } = harness(null);
 
     await expect(service.run({ ...request, background: true })).resolves.toMatchObject({ kind: 'failed' });
+    expect(registry.registered).toEqual([]);
+  });
+
+  it('stops a foreground command when its caller aborts', async () => {
+    const stop = vi.fn(async () => true);
+    const handle: RunHandle = {
+      id: 'rmux-abort',
+      name: 'derived-name',
+      pid: 4242,
+      logPath: '/logs/rmux-abort.log',
+      backend: 'rmux',
+      output: () => 'partial output',
+      completion: () => new Promise(() => undefined),
+      detach: () => undefined,
+      stop,
+    };
+    const backend: IRmuxBackend = { ...rmuxBackend, launch: async ({ id }) => ({ ...handle, id }) };
+    const { service, registry } = harness(4242, backend);
+    const controller = new AbortController();
+    const running = service.run({ ...request, signal: controller.signal });
+
+    await flushPromises();
+    controller.abort();
+
+    await expect(running).resolves.toMatchObject({ kind: 'completed', aborted: true, signal: 'SIGTERM' });
+    expect(stop).toHaveBeenCalledOnce();
+    expect(registry.completed).toEqual([
+      { id: registry.registered[0]?.id, outcome: { reason: 'stopped', code: null, signal: 'SIGTERM' } },
+    ]);
+  });
+
+  it('keeps abort ownership after promoting a background runner', async () => {
+    let finish: (result: ExitResult) => void = () => undefined;
+    const completion = new Promise<ExitResult>((resolve) => {
+      finish = resolve;
+    });
+    const stop = vi.fn(async () => {
+      finish({ code: null, signal: 'SIGTERM' });
+      return true;
+    });
+    const handle: RunHandle = {
+      id: 'rmux-background-abort',
+      name: 'derived-name',
+      pid: 4242,
+      logPath: '/logs/rmux-background-abort.log',
+      backend: 'rmux',
+      output: () => '',
+      completion: () => completion,
+      detach: () => undefined,
+      stop,
+    };
+    const backend: IRmuxBackend = { ...rmuxBackend, launch: async ({ id }) => ({ ...handle, id }) };
+    const { service, registry } = harness(4242, backend);
+    const controller = new AbortController();
+
+    await expect(service.run({ ...request, background: true, signal: controller.signal })).resolves.toMatchObject({
+      kind: 'promoted',
+    });
+    controller.abort();
+    await flushPromises();
+
+    expect(stop).toHaveBeenCalledOnce();
+    expect(registry.completed).toEqual([
+      { id: registry.registered[0]?.id, outcome: { reason: 'stopped', code: null, signal: 'SIGTERM' } },
+    ]);
+  });
+
+  it('preserves promoted completion when abort stop rejects', async () => {
+    let finish: (result: ExitResult) => void = () => undefined;
+    const completion = new Promise<ExitResult>((resolve) => {
+      finish = resolve;
+    });
+    const stop = vi.fn(async () => {
+      throw new Error('stop rejected');
+    });
+    const handle: RunHandle = {
+      id: 'rmux-background-stop-rejection',
+      name: 'derived-name',
+      pid: 4242,
+      logPath: '/logs/rmux-background-stop-rejection.log',
+      backend: 'rmux',
+      output: () => '',
+      completion: () => completion,
+      detach: () => undefined,
+      stop,
+    };
+    const backend: IRmuxBackend = { ...rmuxBackend, launch: async ({ id }) => ({ ...handle, id }) };
+    const { service, registry } = harness(4242, backend);
+    const controller = new AbortController();
+    const warning = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined);
+
+    try {
+      await service.run({ ...request, background: true, signal: controller.signal });
+      controller.abort();
+      await flushPromises();
+
+      expect(warning).toHaveBeenCalledWith(expect.stringContaining('Failed to stop aborted runner'));
+      expect(registry.completed).toEqual([]);
+
+      finish({ code: 7, signal: null });
+      await flushPromises();
+
+      expect(registry.completed).toEqual([
+        { id: registry.registered[0]?.id, outcome: { reason: 'failed', code: 7, signal: null } },
+      ]);
+    } finally {
+      warning.mockRestore();
+    }
+  });
+
+  it('does not launch an already aborted command', async () => {
+    const { service, registry } = harness();
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(service.run({ ...request, signal: controller.signal })).resolves.toMatchObject({
+      kind: 'failed',
+      error: 'Operation aborted',
+    });
     expect(registry.registered).toEqual([]);
   });
 

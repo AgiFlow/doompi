@@ -89,6 +89,18 @@ Two consequences are worth stating plainly, because both are downgrades and neit
 
 Proxied bytes are also outside the signed-bundle guarantee below: the service worker passes the prefix to the network instead of serving it from the verified cache, because a dev server's output changes on every keystroke and carries no cockpit signature.
 
+## Session MCP connectors
+
+A live session can expose explicitly selected tools and skills through a session-scoped MCP endpoint. These server-to-server requests cannot use the paired-browser cookie or sealed HTTP gateway. They use a separately generated confidential OAuth client and Bearer access token.
+
+Client creation is available only from the host's **Settings → Remote control** page. Public Dynamic Client Registration and Client Identifier Metadata Documents are disabled. The host registers one exact HTTPS callback and preauthorizes the session incarnation, MCP resource, and named capabilities. Public authorization requests cannot widen that binding.
+
+OAuth discovery, authorization, token exchange, and the MCP resource are narrow public tunnel exceptions. They do not disable the existing Origin, pairing, or sealed-browser policy for other routes. Connector tokens are rejected by administrative routes, and the proxy's internal headless token is not connector authorization.
+
+The generated secret is shown once, the browser does not persist it, and the server retains only the material needed to authenticate it in process memory. Session close or restart, host restart, Remote Control shutdown, public-origin change, client revocation, and grant revocation invalidate access.
+
+Granting `bash` is remote shell access with the session process's privileges. Capability selection and OAuth are authorization controls, not containment. Revocation prevents later admissions and attempts to stop owned work, but cannot undo completed side effects. See [Session MCP](session-mcp.md) for setup and lifecycle details.
+
 ## Device identity
 
 ### Pairing is code plus host approval

@@ -188,6 +188,46 @@ describe('direct AgentHarness runtime', () => {
     }
   });
 
+  it('atomically excludes external tools from agent admissions and command dispatch', async () => {
+    const repository = new MemorySessionRepo();
+    const session = await repository.create({ id: 'external-admission-test' }, BACKGROUND_CONTEXT);
+    let releaseCommand: (() => void) | undefined;
+    const commandPending = new Promise<void>((resolve) => {
+      releaseCommand = resolve;
+    });
+    const dispatchCommand = vi.fn(async () => {
+      await commandPending;
+      return true;
+    });
+    const runtime = await createDirectHarnessRuntime({ cwd: '/tmp', session, models, model, dispatchCommand });
+    try {
+      const command = runtime.submitPrompt('/known');
+      await expect(runtime.runExternalOperation(async () => undefined)).rejects.toThrow('busy with an agent operation');
+      releaseCommand?.();
+      await expect(command).resolves.toMatchObject({ handledCommand: true });
+
+      let releaseExternal: (() => void) | undefined;
+      const externalPending = new Promise<void>((resolve) => {
+        releaseExternal = resolve;
+      });
+      const external = runtime.runExternalOperation(() => externalPending);
+      await Promise.resolve();
+
+      await expect(runtime.submitPrompt('/blocked')).rejects.toThrow('busy with an external tool invocation');
+      await expect(runtime.steer('blocked')).rejects.toThrow('busy with an external tool invocation');
+      await expect(runtime.followUp('blocked')).rejects.toThrow('busy with an external tool invocation');
+      await expect(runtime.nextRun('blocked')).rejects.toThrow('busy with an external tool invocation');
+      expect(dispatchCommand).toHaveBeenCalledOnce();
+
+      releaseExternal?.();
+      await external;
+      await expect(runtime.resume()).resolves.toBe(false);
+    } finally {
+      await runtime.dispose();
+      await repository.close(BACKGROUND_CONTEXT);
+    }
+  });
+
   it('reports an idle lane as having nothing to resume instead of failing', async () => {
     const repository = new MemorySessionRepo();
     const session = await repository.create({ id: 'resume-idle-test' }, BACKGROUND_CONTEXT);

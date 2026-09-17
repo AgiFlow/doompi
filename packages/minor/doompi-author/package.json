@@ -27,6 +27,7 @@
   "files": [
     "dist",
     "src/types/author.ts",
+    "src/types/authorPreview.ts",
     "src/types/webAuthor.ts",
     "src/types/structuredDocuments.ts",
     "src/prompts",

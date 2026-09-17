@@ -119,6 +119,7 @@ export function putAuthorDocument(sessionId: string, input: AuthorDocumentInput)
           regions: [],
           candidate: undefined,
           requests: session.requests.map((request) =>
+            input.kind !== 'story-preview' &&
             request.documentPath === path &&
             (request.status === 'REQUESTED' || request.status === 'CHANGING' || request.status === 'CHANGED')
               ? {

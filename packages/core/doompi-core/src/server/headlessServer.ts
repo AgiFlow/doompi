@@ -13,6 +13,7 @@ import { observe, type ServerTelemetry } from '../services/serverTelemetry';
 import type { SavedSession } from '../services/sqliteSessionHistory';
 import type { HeadlessHub, HeadlessHubEvent, HeadlessHubSession } from './headlessHub';
 import { createHeadlessProtocol } from './headlessProtocol';
+import { createSessionMcpRoutes, isPublicSessionMcpRoute, isSessionMcpHostRoute } from './sessionMcpRoutes';
 
 /**
  * The canonical public shape of a package API request, as dispatch reads it.
@@ -67,6 +68,8 @@ export interface HeadlessServerOptions {
   dormantSessions?: () => readonly OpenSessionRecord[];
   removeDormantSession?: (record: OpenSessionRecord) => void | Promise<void>;
   reviveSession?: (record: OpenSessionRecord) => Promise<void>;
+  /** Trusted HTTPS origin advertised for public session MCP and OAuth endpoints. */
+  sessionMcpPublicOrigin?: () => string | undefined;
 }
 
 export interface HeadlessServer {
@@ -128,16 +131,12 @@ function json(response: ServerResponse, status: number, value: unknown): void {
   response.end(body);
 }
 
-function bearer(request: IncomingMessage): string | undefined {
-  const value = request.headers.authorization;
-  if (value?.startsWith('Bearer ')) return value.slice('Bearer '.length);
-  const header = request.headers['x-doompi-token'];
-  return typeof header === 'string' ? header : undefined;
-}
-
 function authorized(request: IncomingMessage, token: string | undefined): boolean {
   if (token === undefined) return true;
-  if (bearer(request) === token) return true;
+  const authorization = request.headers.authorization;
+  if (authorization?.startsWith('Bearer ') && authorization.slice('Bearer '.length) === token) return true;
+  const header = request.headers['x-doompi-token'];
+  if (typeof header === 'string' && header === token) return true;
   try {
     return new URL(request.url ?? '/', 'http://doompi.local').searchParams.get('token') === token;
   } catch {
@@ -236,6 +235,24 @@ function parseJson(body: Uint8Array): unknown {
   return JSON.parse(Buffer.from(body).toString('utf8')) as unknown;
 }
 
+function webRequest(request: IncomingMessage, url: URL, signal?: AbortSignal): Request {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value);
+  }
+  return new Request(url, {
+    method: request.method,
+    headers,
+    signal,
+    ...(request.method === 'GET' || request.method === 'HEAD'
+      ? {}
+      : {
+          body: Readable.toWeb(request) as never,
+          duplex: 'half' as const,
+        }),
+  });
+}
+
 async function writeResponse(response: ServerResponse, result: Response): Promise<void> {
   response.writeHead(result.status, Object.fromEntries(result.headers.entries()));
   if (result.body === null) {
@@ -289,6 +306,10 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     onNotice: options.onNotice,
     dormantSessions: dormant,
   });
+  const sessionMcp = createSessionMcpRoutes({
+    headlessHub: options.headlessHub,
+    publicOrigin: options.sessionMcpPublicOrigin ?? (() => undefined),
+  });
   const server = createServer((request, response) => {
     void handleRequest(request, response).catch((error: unknown) => {
       if (response.headersSent) {
@@ -315,9 +336,33 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       });
       return;
     }
+    if (isPublicSessionMcpRoute(request.method ?? 'GET', url.pathname)) {
+      const sessionMcpAbort = new AbortController();
+      const abortSessionMcp = (): void => {
+        if (!response.writableEnded) sessionMcpAbort.abort();
+      };
+      response.once('close', abortSessionMcp);
+      const publicSessionMcp = await sessionMcp.handlePublic(webRequest(request, url, sessionMcpAbort.signal));
+      if (publicSessionMcp !== undefined) {
+        try {
+          await writeResponse(response, publicSessionMcp);
+        } finally {
+          response.off('close', abortSessionMcp);
+        }
+        return;
+      }
+      response.off('close', abortSessionMcp);
+    }
     if (!authorized(request, options.token)) {
       json(response, 401, { error: 'Unauthorized.' });
       return;
+    }
+    if (isSessionMcpHostRoute(url.pathname)) {
+      const hostSessionMcp = await sessionMcp.handleHost(webRequest(request, url));
+      if (hostSessionMcp !== undefined) {
+        await writeResponse(response, hostSessionMcp);
+        return;
+      }
     }
     if (url.pathname === '/api/remote' || url.pathname.startsWith('/api/remote/')) {
       const headers = new Headers();
@@ -759,6 +804,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       sse.clear();
       for (const client of clients) client.socket.terminate();
       clients.clear();
+      sessionMcp.close();
       await Promise.all([protocol.close(), ...[...scopedProtocols].map((selected) => selected.close())]);
       webSockets.close();
       server.closeAllConnections();

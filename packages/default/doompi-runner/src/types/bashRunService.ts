@@ -16,6 +16,8 @@ export interface BashRunRequest {
   name?: string;
   /** Receives bounded output snapshots while the command remains in the foreground. */
   onOutput?: (output: string) => void;
+  /** Stops this run, including after promotion to a supervised background runner. */
+  signal?: AbortSignal;
   /** Session that owns the runner, so shutdown can stop what it started. */
   sessionId: string;
 }
@@ -36,6 +38,8 @@ export interface CompletedRun {
   rtkWarning?: string;
   /** True when the run was stopped by the caller's timeout rather than finishing. */
   timedOut?: boolean;
+  /** True when the run was stopped by the caller's abort signal. */
+  aborted?: boolean;
 }
 
 /** The command is still running and is now a supervised background runner. */

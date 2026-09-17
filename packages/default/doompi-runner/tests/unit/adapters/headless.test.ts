@@ -77,6 +77,19 @@ describe('headless bash adapter', () => {
     expect(run.mock.calls[0]?.[0].timeoutMs).toBeUndefined();
   });
 
+  it('passes cancellation ownership to the runner service', async () => {
+    const controller = new AbortController();
+    const run = vi.fn(async (request: BashRunRequest) => {
+      expect(request.signal).toBe(controller.signal);
+      controller.abort();
+      return { ...completed, aborted: true };
+    });
+
+    await expect(
+      createHeadlessBashTool({ run }).execute('call', { command: 'true' }, controller.signal, undefined, execution()),
+    ).rejects.toThrow('Operation aborted');
+  });
+
   it('rejects an already aborted call before starting a process', async () => {
     const run = vi.fn(async (_request: BashRunRequest) => completed);
     await expect(
