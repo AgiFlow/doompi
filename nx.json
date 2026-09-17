@@ -44,7 +44,7 @@
     },
     "lint": {
       "inputs": ["default", "lintConfig"],
-      "dependsOn": ["^build"],
+      "dependsOn": ["build", "^build"],
       "cache": true
     }
   },

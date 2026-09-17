@@ -44,6 +44,10 @@ interface PresetConfig {
   platform: 'node';
   sourcemap: boolean;
   unbundle: boolean;
+  outExtensions: ({ format }: { format: string }) => {
+    js: string;
+    dts: string;
+  };
   hooks: { 'build:done': () => void };
 }
 
@@ -169,6 +173,10 @@ export function doompiExtension(
     // Node output uses fixed extensions, so pi.extensions and doompiServer.dist
     // both land on the .mjs filenames their hosts require.
     platform: 'node',
+    outExtensions: ({ format }) => ({
+      js: format === 'es' ? '.mjs' : '.cjs',
+      dts: format === 'es' ? '.d.mts' : '.d.cts',
+    }),
     sourcemap: true,
     unbundle: true,
     hooks: {
