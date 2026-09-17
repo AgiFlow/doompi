@@ -1,3 +1,7 @@
+## 0.0.1-alpha.69 (2026-09-17)
+
+This was a version bump only for @agimon-ai/doompi-runner-rmux-linux-arm64 to align it with other projects, there were no code changes.
+
 ## 0.0.1-alpha.68 (2026-09-16)
 
 This was a version bump only for @agimon-ai/doompi-runner-rmux-linux-arm64 to align it with other projects, there were no code changes.

@@ -1,3 +1,28 @@
+## 0.0.1-alpha.38 (2026-09-17)
+
+### 🚀 Features
+
+- finalize session MCP and workspace updates ([3f43e555](https://github.com/AgiFlow/doompi/commit/3f43e555))
+- add session MCP and style system support ([5912ce17](https://github.com/AgiFlow/doompi/commit/5912ce17))
+
+### 🩹 Fixes
+
+- **web:** show background warning only when idle ([d35c2156](https://github.com/AgiFlow/doompi/commit/d35c2156))
+- recover web navigation and lint reviewer ([fb2c0336](https://github.com/AgiFlow/doompi/commit/fb2c0336))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.73
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.74
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.32
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.34
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.68
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.37 (2026-09-16)
 
 ### 🚀 Features

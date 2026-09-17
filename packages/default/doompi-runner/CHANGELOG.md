@@ -1,3 +1,30 @@
+## 0.0.1-alpha.74 (2026-09-17)
+
+### 🚀 Features
+
+- add session MCP and style system support ([5912ce17](https://github.com/AgiFlow/doompi/commit/5912ce17))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.3
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.74
+- Updated @agimon-ai/doompi-runner-rmux-darwin-arm64 to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-runner-rmux-darwin-x64 to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-runner-rmux-linux-arm64 to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-runner-rmux-linux-x64 to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-runner-rtk-darwin-arm64 to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-runner-rtk-darwin-x64 to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-runner-rtk-linux-arm64 to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-runner-rtk-linux-x64 to 0.0.1-alpha.69
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.71
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.74
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.32
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.34
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.73 (2026-09-16)
 
 ### 🚀 Features
