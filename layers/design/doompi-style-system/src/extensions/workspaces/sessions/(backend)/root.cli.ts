@@ -1,3 +1,5 @@
 import { defineRoot } from '@agimon-ai/doompi-core/extension-file';
 
-export default defineRoot(() => ({ value: {} }));
+import createStyleSystemPiRoot from './_lib/piRoot';
+
+export default defineRoot(() => createStyleSystemPiRoot());

@@ -6,6 +6,7 @@ const routed = doompiExtension({
   exportsDir: 'src/exports/_none',
   entry: {
     'api-contracts': 'src/exports/apiContracts.ts',
+    cli: 'src/services/designCli/main.ts',
     index: 'src/exports/index.ts',
   },
 });

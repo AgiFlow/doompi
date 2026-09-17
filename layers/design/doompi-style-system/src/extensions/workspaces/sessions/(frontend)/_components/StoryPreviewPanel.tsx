@@ -6,8 +6,10 @@ import type {
   BuildStoryPreviewRequest,
   BuildStoryPreviewView,
   ExportStoryPreviewImageView,
+  StoryPreviewMetadataView,
+  StoryPreviewSeed,
 } from '../../../../../types/previewApi';
-import { buildPreview, disposePreview, exportPreviewImage } from '../_lib/previewApi';
+import { buildPreview, disposePreview, exportPreviewImage, storyMetadata } from '../_lib/previewApi';
 import {
   isolatedPreviewHtml,
   normalizedAnnotationRect,
@@ -29,10 +31,16 @@ function point(event: ReactPointerEvent<HTMLElement>): PreviewPoint {
     y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
   };
 }
-export function StoryPreviewPanel({ sessionId, submitCapture }: WebPluginSlotProps) {
+interface StoryPreviewPanelProps extends WebPluginSlotProps {
+  seed?: StoryPreviewSeed;
+}
+
+export function StoryPreviewPanel({ sessionId, submitCapture, seed }: StoryPreviewPanelProps) {
+  const seededPath = seed?.source?.path ?? '';
   const [appPath, setAppPath] = useState('.');
-  const [storyPath, setStoryPath] = useState('');
-  const [storyExport, setStoryExport] = useState('Playground');
+  const [storyPath, setStoryPath] = useState(seededPath);
+  const [storyExport, setStoryExport] = useState(seed === undefined ? 'Playground' : '');
+  const [storyExports, setStoryExports] = useState<readonly StoryPreviewMetadataView['exports'][number][]>();
   const [darkMode, setDarkMode] = useState(false);
   const [preview, setPreview] = useState<BuildStoryPreviewView>();
   const [builtRequest, setBuiltRequest] = useState<BuildStoryPreviewRequest>();
@@ -40,8 +48,47 @@ export function StoryPreviewPanel({ sessionId, submitCapture }: WebPluginSlotPro
   const [annotationStart, setAnnotationStart] = useState<PreviewPoint>();
   const [annotationRect, setAnnotationRect] = useState<PreviewAnnotationRect>();
   const [feedback, setFeedback] = useState('');
-  const [status, setStatus] = useState('Choose an exact story file and export.');
+  const [status, setStatus] = useState(
+    seed === undefined
+      ? 'Choose an exact story file and export.'
+      : seed.source?.hasUnsavedChanges === true
+        ? 'Loading story metadata. Preview uses saved source; unsaved edits will not be included.'
+        : 'Loading story metadata…',
+  );
   const [working, setWorking] = useState(false);
+
+  useEffect(() => {
+    if (sessionId === null || seededPath === '') return;
+    let current = true;
+    void storyMetadata(sessionId, { storyPath: seededPath }).then((result) => {
+      if (!current) return;
+      if (!result.ok) {
+        setStatus(result.error);
+        setStoryExports(undefined);
+        return;
+      }
+      setAppPath(result.metadata.appPath);
+      setStoryPath(result.metadata.storyPath);
+      setStoryExports(result.metadata.exports);
+      if (result.metadata.exports.length === 1) {
+        setStoryExport(result.metadata.exports[0]!.exportName);
+        setStatus(
+          seed?.source?.hasUnsavedChanges === true
+            ? 'Story selected. Preview uses saved source; unsaved edits will not be included.'
+            : 'Story selected. Build when ready.',
+        );
+      } else if (result.metadata.exports.length > 1) {
+        setStoryExport('');
+        setStatus('Choose a story export. Build remains explicit.');
+      } else {
+        setStoryExport('');
+        setStatus('No story exports were found. Enter an exact export or choose another file.');
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, [seed, seededPath, sessionId]);
   const request = useMemo<BuildStoryPreviewRequest>(
     () => ({ appPath, storyPath, storyExport, darkMode }),
     [appPath, storyPath, storyExport, darkMode],
@@ -121,20 +168,41 @@ export function StoryPreviewPanel({ sessionId, submitCapture }: WebPluginSlotPro
             className="rounded border border-doom-border bg-doom-bg px-2 py-1 text-doom-text"
             placeholder="packages/ui/Button.stories.tsx"
             value={storyPath}
-            onChange={(event) => setStoryPath(event.target.value)}
+            onChange={(event) => {
+              setStoryPath(event.target.value);
+              setStoryExports(undefined);
+            }}
           />
         </label>
         <label className="grid gap-1 text-xs text-doom-dim">
           Story export
-          <input
-            className="rounded border border-doom-border bg-doom-bg px-2 py-1 text-doom-text"
-            value={storyExport}
-            onChange={(event) => setStoryExport(event.target.value)}
-          />
+          {storyExports === undefined ? (
+            <input
+              className="rounded border border-doom-border bg-doom-bg px-2 py-1 text-doom-text"
+              value={storyExport}
+              onChange={(event) => setStoryExport(event.target.value)}
+            />
+          ) : (
+            <select
+              className="rounded border border-doom-border bg-doom-bg px-2 py-1 text-doom-text"
+              value={storyExport}
+              onChange={(event) => setStoryExport(event.target.value)}
+            >
+              <option value="">Choose an export</option>
+              {storyExports.map((entry) => (
+                <option key={entry.exportName} value={entry.exportName}>
+                  {entry.label ?? entry.exportName}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
       </header>
       <div className="flex flex-wrap items-center gap-2">
-        <Button disabled={sessionId === null || working || storyPath.trim() === ''} onClick={() => void rebuild()}>
+        <Button
+          disabled={sessionId === null || working || storyPath.trim() === '' || storyExport.trim() === ''}
+          onClick={() => void rebuild()}
+        >
           {preview === undefined ? 'Build preview' : 'Refresh preview'}
         </Button>
         <Button

@@ -41,7 +41,17 @@ const WORKTREES: WorktreeView[] = [
 worktreeActivity.update('s-live', () => ({ worktrees: WORKTREES, pending: undefined, error: undefined }));
 worktreeActivity.update('s-busy', () => ({
   worktrees: WORKTREES.slice(0, 1),
-  pending: 'starting session\u2026',
+  pending: 'starting session…',
+  error: undefined,
+}));
+worktreeActivity.update('s-narrow', () => ({
+  worktrees: [
+    {
+      ...WORKTREES[1],
+      branch: 'wt/a-very-long-branch-name-that-should-truncate',
+    },
+  ],
+  pending: undefined,
   error: undefined,
 }));
 
@@ -76,6 +86,11 @@ export const Playground = {
       <div className="flex w-80 flex-col gap-2">
         <span className="text-2xs text-doom-dim uppercase tracking-widest">work in flight</span>
         <WorktreesActivitySection {...slot('s-busy')} />
+      </div>
+
+      <div className="flex w-56 flex-col gap-2">
+        <span className="text-2xs text-doom-dim uppercase tracking-widest">narrow · long branch</span>
+        <WorktreesActivitySection {...slot('s-narrow')} />
       </div>
     </div>
   ),
