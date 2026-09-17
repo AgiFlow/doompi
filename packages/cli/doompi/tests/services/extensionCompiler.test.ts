@@ -1373,6 +1373,9 @@ describe('compiled extension sets', () => {
     const directory = temporaryDirectory();
     const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
       repositoryRoot,
+      ...(manifest.name === '@agimon-ai/doompi-style-system'
+        ? { sharedCacheDirectory: path.join(directory, 'shared-cache') }
+        : {}),
       outputDirectory: path.join(directory, 'generation'),
       // Runner resources relocate import.meta.url in published bundles. No live dependency tree may be required.
       ...(manifest.name === '@agimon-ai/doompi-runner'
