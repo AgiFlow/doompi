@@ -12,6 +12,14 @@ describe('preview frame helpers', () => {
     expect(html.indexOf('Content-Security-Policy')).toBeLessThan(html.indexOf('</head>'));
   });
 
+  it('does not place the policy in a comment or script string', () => {
+    const html = isolatedPreviewHtml(
+      '<!doctype html><!-- <head> --><script>const text = "<head>";</script><html><head><title>Story</title></head></html>',
+    );
+
+    expect(html.indexOf('<!-- <head> -->')).toBeLessThan(html.indexOf('Content-Security-Policy'));
+    expect(html.indexOf('Content-Security-Policy')).toBeGreaterThan(html.indexOf('<html><head>'));
+  });
   it('creates a head when the bundle omits one', () => {
     expect(isolatedPreviewHtml('<!doctype html><button>Story</button>')).toMatch(
       /^<!doctype html><head><meta http-equiv="Content-Security-Policy"/,

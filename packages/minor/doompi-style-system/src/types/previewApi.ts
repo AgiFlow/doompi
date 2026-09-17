@@ -20,6 +20,9 @@ export type ExportStoryPreviewImageRequest = BuildStoryPreviewRequest;
 export interface ExportStoryPreviewImageView {
   data: string;
   mimeType: 'image/png';
+  storyPath: string;
+  storyExport: string;
+  sourceSha256: string;
 }
 
 export interface DisposeStoryPreviewRequest {

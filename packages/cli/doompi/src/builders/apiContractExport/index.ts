@@ -27,7 +27,11 @@ export function exportApiContracts(options: {
   const globalRoot = globalDoomConfigDirectory(options.homeDirectory);
   const workspaceRoot = resolveDoomConfigurationRoot(options.cwd, options.homeDirectory);
   const read = (root: string) => {
-    const drift = readSyncDrift({ repoRoot: root, homeDirectory: options.homeDirectory });
+    const drift = readSyncDrift({
+      repoRoot: root,
+      homeDirectory: options.homeDirectory,
+      requireFreshSources: false,
+    });
     if (!drift.fresh)
       throw new Error(`Run doompi sync for '${root}' before exporting API contracts: ${drift.reasons.join(', ')}`);
     const registration = readSyncRegistration(root, options.homeDirectory);

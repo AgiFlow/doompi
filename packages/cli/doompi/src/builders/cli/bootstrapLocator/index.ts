@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,12 +12,14 @@ import { readSyncState } from '../../../composition/syncState';
 import { ownEntry } from '../entryResolution';
 
 const BOOTSTRAP_ENTRY_ENV = 'DOOMPI_BOOTSTRAP_ENTRY';
+const SHA256 = /^[a-f0-9]{64}$/u;
 
 interface CompilerManifest {
   output: string;
   artifacts: string[];
   entries: string[];
   inputs: InputFingerprint[];
+  artifactInputs?: InputFingerprint[];
 }
 
 interface BootstrapState {
@@ -68,6 +71,14 @@ function canonicalPath(target: string): string {
 function isInside(directory: string, target: string): boolean {
   const relative = path.relative(canonicalPath(directory), canonicalPath(target));
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function parseFingerprints(value: unknown): InputFingerprint[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const fingerprints = value.map(parseInputFingerprint);
+  return fingerprints.some((fingerprint) => fingerprint === undefined)
+    ? undefined
+    : (fingerprints as InputFingerprint[]);
 }
 
 function packagedDoomEntry(): string {
@@ -140,18 +151,14 @@ function readCompilerManifest(manifestPath: string, generatedDirectory: string):
       parsed.artifacts.some((artifact) => typeof artifact !== 'string') ||
       !Array.isArray(parsed.entries) ||
       parsed.entries.some((entry) => typeof entry !== 'string') ||
-      !Array.isArray(parsed.inputs)
+      !Array.isArray(parsed.inputs) ||
+      (parsed.artifactInputs !== undefined && !Array.isArray(parsed.artifactInputs))
     ) {
       return undefined;
     }
-    const inputs: InputFingerprint[] = [];
-    for (const input of parsed.inputs) {
-      // A manifest written before digests were recorded cannot be confirmed by
-      // content, so it reads as absent and the next sync rewrites it.
-      const fingerprint = parseInputFingerprint(input);
-      if (fingerprint === undefined) return undefined;
-      inputs.push(fingerprint);
-    }
+    const inputs = parseFingerprints(parsed.inputs);
+    const artifactInputs = parsed.artifactInputs === undefined ? undefined : parseFingerprints(parsed.artifactInputs);
+    if (!inputs || (parsed.artifactInputs !== undefined && !artifactInputs)) return undefined;
     const artifacts = parsed.artifacts as string[];
     const entries = parsed.entries as string[];
     if (
@@ -160,18 +167,45 @@ function readCompilerManifest(manifestPath: string, generatedDirectory: string):
     ) {
       return undefined;
     }
-    return { output: parsed.output, artifacts, entries, inputs };
+    return { output: parsed.output, artifacts, entries, inputs, ...(artifactInputs ? { artifactInputs } : {}) };
   } catch {
     return undefined;
   }
 }
 
-function compilerManifestIsFresh(manifest: CompilerManifest): boolean {
-  if (!fs.existsSync(manifest.output) || manifest.artifacts.some((artifact) => !fs.existsSync(artifact))) return false;
-  return inputsAreFresh(manifest.inputs);
+function artifactInputsAreIntact(manifest: CompilerManifest, generatedDirectory: string): boolean {
+  try {
+    if (!manifest.artifactInputs || manifest.artifactInputs.length === 0) return false;
+    const expected = new Set([manifest.output, ...manifest.artifacts].map(canonicalPath));
+    const seen = new Set<string>();
+    for (const input of manifest.artifactInputs) {
+      if (!SHA256.test(input.sha256) || !isInside(generatedDirectory, input.path)) return false;
+      const target = canonicalPath(input.path);
+      if (!expected.has(target) || seen.has(target)) return false;
+      const stat = fs.statSync(target);
+      if (!stat.isFile() || stat.size !== input.size) return false;
+      if (crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex') !== input.sha256) return false;
+      seen.add(target);
+    }
+    return seen.size === expected.size;
+  } catch {
+    return false;
+  }
 }
 
-function freshBootstrapRecord(state: BootstrapState, expectedBootstrapEntry: string): CompilerManifest | undefined {
+function compilerManifestIsUsable(manifest: CompilerManifest, generatedDirectory: string): boolean {
+  return artifactInputsAreIntact(manifest, generatedDirectory);
+}
+
+function compilerManifestIsFresh(manifest: CompilerManifest, generatedDirectory: string): boolean {
+  return compilerManifestIsUsable(manifest, generatedDirectory) && inputsAreFresh(manifest.inputs);
+}
+
+function bootstrapRecord(
+  state: BootstrapState,
+  expectedBootstrapEntry: string,
+  requireFreshInputs: boolean,
+): CompilerManifest | undefined {
   if (!state.bootstrap || !state.precompile) return undefined;
   if (
     state.precompile.version !== PRECOMPILE_STATE_VERSION ||
@@ -182,7 +216,8 @@ function freshBootstrapRecord(state: BootstrapState, expectedBootstrapEntry: str
   const record = readCompilerManifest(state.precompile.bootstrapManifest, state.generatedDirectory);
   if (
     !record ||
-    !compilerManifestIsFresh(record) ||
+    !compilerManifestIsUsable(record, state.generatedDirectory) ||
+    (requireFreshInputs && !compilerManifestIsFresh(record, state.generatedDirectory)) ||
     record.output !== state.bootstrap ||
     record.entries.length !== 1 ||
     canonicalPath(record.entries[0] ?? '') !== canonicalPath(expectedBootstrapEntry)
@@ -190,6 +225,14 @@ function freshBootstrapRecord(state: BootstrapState, expectedBootstrapEntry: str
     return undefined;
   }
   return record;
+}
+
+function usableBootstrapRecord(state: BootstrapState, expectedBootstrapEntry: string): CompilerManifest | undefined {
+  return bootstrapRecord(state, expectedBootstrapEntry, false);
+}
+
+function freshBootstrapRecord(state: BootstrapState, expectedBootstrapEntry: string): CompilerManifest | undefined {
+  return bootstrapRecord(state, expectedBootstrapEntry, true);
 }
 
 /** Validates only the bootstrap graph needed before the generated bootstrap is imported. */
@@ -203,7 +246,7 @@ export function readStartupBootstrapStatus(
   if (!state) return { bootstrap: undefined, fresh: false };
   return {
     bootstrap: state.bootstrap,
-    fresh: freshBootstrapRecord(state, expected) !== undefined,
+    fresh: usableBootstrapRecord(state, expected) !== undefined,
   };
 }
 
@@ -222,7 +265,7 @@ export function readBundleStatus(
   const manifest = readCompilerManifest(manifestPath, state.generatedDirectory);
   return {
     bundle,
-    fresh: Boolean(manifest && manifest.output === bundle && compilerManifestIsFresh(manifest)),
+    fresh: Boolean(manifest && manifest.output === bundle && compilerManifestIsUsable(manifest, state.generatedDirectory)),
   };
 }
 
@@ -243,7 +286,7 @@ export function readBootstrapStatus(
     const manifestPath = state.precompile?.bundleManifests[fingerprint];
     if (!manifestPath) return false;
     const manifest = readCompilerManifest(manifestPath, state.generatedDirectory);
-    return Boolean(manifest && manifest.output === bundle && compilerManifestIsFresh(manifest));
+    return Boolean(manifest && manifest.output === bundle && compilerManifestIsFresh(manifest, state.generatedDirectory));
   });
   return { bootstrap: state.bootstrap, fresh };
 }

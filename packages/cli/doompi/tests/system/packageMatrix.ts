@@ -89,6 +89,7 @@ const STANDARD_PI_NAMES = [
   '@agimon-ai/doompi-autocompact',
   '@agimon-ai/doompi-autostop',
   '@agimon-ai/doompi-author',
+  '@agimon-ai/doompi-style-system',
   '@agimon-ai/doompi-cache',
   '@agimon-ai/doompi-computer-use',
   '@agimon-ai/doompi-config',

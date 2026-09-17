@@ -27,7 +27,8 @@ describe('StoryPreviewService', () => {
     const story = path.join(app, 'Button.stories.tsx');
     const artifact = path.join(app, '.tmp', 'dist-test');
     fs.mkdirSync(artifact, { recursive: true });
-    fs.writeFileSync(story, 'export const Primary = {};');
+    const storySource = "export default { title: 'Button' }; export const Primary = {};";
+    fs.writeFileSync(story, storySource);
     const htmlPath = path.join(artifact, 'index.html');
     fs.writeFileSync(htmlPath, '<!doctype html><button>Preview</button>');
     const prerenderComponent = vi.fn().mockResolvedValue({ htmlFilePath: htmlPath });
@@ -44,7 +45,7 @@ describe('StoryPreviewService', () => {
         handle: 'preview-handle',
         storyPath: 'app/Button.stories.tsx',
         storyExport: 'Primary',
-        sourceSha256: createHash('sha256').update('export const Primary = {};').digest('hex'),
+        sourceSha256: createHash('sha256').update(storySource).digest('hex'),
       }),
     );
     expect(result.html).toContain('<button>Preview</button>');
@@ -58,6 +59,24 @@ describe('StoryPreviewService', () => {
     await expect(service.dispose('preview-handle')).resolves.toBe(true);
     expect(fs.existsSync(artifact)).toBe(false);
     await expect(service.dispose('preview-handle')).resolves.toBe(false);
+  });
+
+  it('rejects a valid identifier that is not an exported story', async () => {
+    const app = path.join(root, 'app');
+    const story = path.join(app, 'Button.stories.tsx');
+    fs.mkdirSync(app, { recursive: true });
+    fs.writeFileSync(story, "export default { title: 'Button' }; export const Primary = {};\n");
+    const createBundler = vi.fn();
+    const service = new StoryPreviewService(root, {
+      loadConfig: async () => config(),
+      createBundler,
+      createHandle: () => 'unused',
+    });
+
+    await expect(
+      service.build({ appPath: 'app', storyPath: 'app/Button.stories.tsx', storyExport: 'Secondary' }),
+    ).rejects.toThrow('was not found');
+    expect(createBundler).not.toHaveBeenCalled();
   });
 
   it('rejects paths that escape the workspace through a symlink', async () => {

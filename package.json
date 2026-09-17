@@ -22,6 +22,7 @@
     "runner:fetch": "node scripts/fetch-runner-binaries.mjs",
     "runner:check": "node scripts/fetch-runner-binaries.mjs --check",
     "release": "nx release",
+    "release:desktop": "node scripts/release-desktop.mjs",
     "release:dry-run": "nx release prerelease --preid alpha --groups alpha --dry-run --skip-publish",
     "prepare": "node scripts/fetch-runner-binaries.mjs && nx run-many -t build -p @agimon-ai/vibe-lint-plugin-doom-extension @agimon-ai/vibe-lint-plugin-doom-web @agimon-ai/vibe-lint-plugin-doom-core @agimon-ai/vibe-lint-plugin-doom-cli && husky"
   },

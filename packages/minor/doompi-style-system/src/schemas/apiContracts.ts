@@ -53,7 +53,15 @@ export const apiContracts = defineApiContract({
           darkMode: Type.Optional(Type.Boolean()),
         }),
       },
-      responses: jsonApiResponses(Type.Object({ data: StringSchema, mimeType: Type.Literal('image/png') })),
+      responses: jsonApiResponses(
+        Type.Object({
+          data: StringSchema,
+          mimeType: Type.Literal('image/png'),
+          storyPath: StringSchema,
+          storyExport: StringSchema,
+          sourceSha256: StringSchema,
+        }),
+      ),
     },
     {
       id: 'style-system-preview.dispose',

@@ -49,6 +49,17 @@ export class StoryPreviewService {
     this.dependencies = dependencies;
   }
 
+  private async exactStory(root: string, storyPath: string, storyExport: string) {
+    const index = new StoriesIndexService({ workspaceRoot: root, storyFiles: [storyPath], searchRoots: [] });
+    await index.initialize();
+    const component = index.getAllComponents().find((entry) => path.resolve(entry.filePath) === storyPath);
+    if (component === undefined) throw new Error('The requested story file could not be indexed.');
+    if (!component.stories.includes(storyExport)) {
+      throw new Error(`Story export "${storyExport}" was not found in ${path.relative(root, storyPath)}.`);
+    }
+    return component;
+  }
+
   async build(input: StoryPreviewBuildInput): Promise<StoryPreviewBuildResult> {
     if (!STORY_EXPORT_PATTERN.test(input.storyExport)) {
       throw new Error('storyExport must be an exact JavaScript named export');
@@ -58,6 +69,7 @@ export class StoryPreviewService {
     const appPath = await this.resolveContainedPath(root, input.appPath, 'appPath');
     const storyPath = await this.resolveContainedPath(root, input.storyPath, 'storyPath');
     if (!STORY_FILE_PATTERN.test(storyPath)) throw new Error('storyPath must name a .stories.ts or .stories.tsx file');
+    await this.exactStory(root, storyPath, input.storyExport);
 
     const [source, config] = await Promise.all([fs.readFile(storyPath, 'utf8'), this.dependencies.loadConfig(appPath)]);
     const bundler = this.dependencies.createBundler(config);
@@ -102,19 +114,31 @@ export class StoryPreviewService {
     const storyPath = await this.resolveContainedPath(root, input.storyPath, 'storyPath');
     if (!STORY_FILE_PATTERN.test(storyPath)) throw new Error('storyPath must name a .stories.ts or .stories.tsx file');
 
-    const config = await this.dependencies.loadConfig(appPath);
-    const index = new StoriesIndexService({ workspaceRoot: root, storyFiles: [storyPath], searchRoots: [] });
-    await index.initialize();
-    const component = index.getAllComponents().find((entry) => path.resolve(entry.filePath) === storyPath);
-    if (component === undefined) throw new Error('The requested story file could not be indexed.');
+    const [source, config] = await Promise.all([fs.readFile(storyPath, 'utf8'), this.dependencies.loadConfig(appPath)]);
     const renderer = new ComponentRendererService(config, appPath);
-    const rendered = await renderer.renderComponent(component, {
-      storyName: input.storyExport,
-      darkMode: input.darkMode,
-    });
-    const imagePath = await fs.realpath(rendered.imagePath);
-    const image = await fs.readFile(imagePath);
-    return { data: image.toString('base64'), mimeType: 'image/png' };
+    let imagePath: string | undefined;
+    try {
+      const component = await this.exactStory(root, storyPath, input.storyExport);
+      const rendered = await renderer.renderComponent(component, {
+        storyName: input.storyExport,
+        darkMode: input.darkMode,
+      });
+      imagePath = await fs.realpath(rendered.imagePath);
+      const image = await fs.readFile(imagePath);
+      return {
+        data: image.toString('base64'),
+        mimeType: 'image/png',
+        storyPath: path.relative(root, storyPath),
+        storyExport: input.storyExport,
+        sourceSha256: createHash('sha256').update(source).digest('hex'),
+      };
+    } finally {
+      try {
+        if (imagePath !== undefined) await fs.rm(imagePath, { force: true });
+      } finally {
+        await renderer.dispose();
+      }
+    }
   }
 
   async dispose(handle: string): Promise<boolean> {

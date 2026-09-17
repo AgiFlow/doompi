@@ -23,7 +23,9 @@ import {
   syncGenerationDirectory,
 } from '@agimon-ai/doompi-core/sync-location';
 import {
+  DOOMPI_API_VERSION,
   publishSyncRegistration,
+  readSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
   type SyncPackageRegistration,
@@ -269,6 +271,9 @@ export function collectDrift(
 ): string[] {
   if (!state) return ['no sync state: run doompi sync'];
   const drift: string[] = [];
+  if (syncRegistrationNeedsApiMigration(repoRoot, environment.HOME ?? os.homedir())) {
+    drift.push('DoomPi registration needs API migration');
+  }
   if (!syncStateRootMatches(repoRoot, state.root)) drift.push('sync state belongs to a different repository');
   const recorded = state.selection;
   if (
@@ -375,20 +380,40 @@ function packageRegistrationFor(): SyncPackageRegistration {
   const manifestPath = path.join(root, 'package.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
     version?: unknown;
+    doompiApiVersion?: unknown;
     pi?: { extensions?: unknown };
   };
   const version = manifest.version;
+  const apiVersion = manifest.doompiApiVersion;
   const extensions = manifest.pi?.extensions;
   const extension = Array.isArray(extensions) ? extensions.find((value) => typeof value === 'string') : undefined;
-  if (typeof version !== 'string' || typeof extension !== 'string') {
-    throw new Error(`Installed DoomPi package at ${root} has no versioned Pi extension entry`);
+  if (
+    typeof version !== 'string' ||
+    typeof apiVersion !== 'number' ||
+    !Number.isSafeInteger(apiVersion) ||
+    apiVersion < 1 ||
+    apiVersion !== DOOMPI_API_VERSION ||
+    typeof extension !== 'string'
+  ) {
+    throw new Error(`Installed DoomPi package at ${root} has no supported API-versioned Pi extension entry`);
   }
   return {
     root,
     version,
+    apiVersion: apiVersion as number,
     manifestPath,
     entry: fs.realpathSync(path.resolve(root, extension)),
   };
+}
+
+/** Returns true when a valid legacy registration must be republished with API metadata. */
+export function syncRegistrationNeedsApiMigration(repoRoot: string, homeDirectory: string): boolean {
+  try {
+    const registration = readSyncRegistration(repoRoot, homeDirectory);
+    return registration?.package.apiVersion === undefined;
+  } catch {
+    return false;
+  }
 }
 
 /** Resolves the matrix, stages it into home-scoped worktree storage, and publishes one generation. */
@@ -517,7 +542,8 @@ export async function synchronize(
     homeDirectory,
     requireWebBundle: Boolean(environment.DOOMPI_WEB_PACKAGE_ROOT),
   };
-  if (!force && readSyncDrift(driftOptions).fresh) {
+  const registrationNeedsMigration = syncRegistrationNeedsApiMigration(repoRoot, homeDirectory);
+  if (!force && !registrationNeedsMigration && readSyncDrift(driftOptions).fresh) {
     output.write('doompi sync is already up to date\n');
     return 0;
   }
@@ -530,7 +556,8 @@ export async function synchronize(
   try {
     // A concurrent publisher may have resolved the drift while this command
     // waited for the lock. Avoid moving the registration for no change.
-    if (!force && readSyncDrift(driftOptions).fresh) {
+    const registrationNeedsMigration = syncRegistrationNeedsApiMigration(repoRoot, homeDirectory);
+    if (!force && !registrationNeedsMigration && readSyncDrift(driftOptions).fresh) {
       output.write('doompi sync is already up to date\n');
       return 0;
     }

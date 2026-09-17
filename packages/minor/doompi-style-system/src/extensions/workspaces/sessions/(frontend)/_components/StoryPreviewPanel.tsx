@@ -2,7 +2,11 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Button } from '@agimon-ai/doompi-web-components';
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
-import type { BuildStoryPreviewRequest, BuildStoryPreviewView } from '../../../../../types/previewApi';
+import type {
+  BuildStoryPreviewRequest,
+  BuildStoryPreviewView,
+  ExportStoryPreviewImageView,
+} from '../../../../../types/previewApi';
 import { buildPreview, disposePreview, exportPreviewImage } from '../_lib/previewApi';
 import {
   isolatedPreviewHtml,
@@ -32,7 +36,7 @@ export function StoryPreviewPanel({ sessionId, submitCapture }: WebPluginSlotPro
   const [darkMode, setDarkMode] = useState(false);
   const [preview, setPreview] = useState<BuildStoryPreviewView>();
   const [builtRequest, setBuiltRequest] = useState<BuildStoryPreviewRequest>();
-  const [annotationImage, setAnnotationImage] = useState<{ data: string; mimeType: 'image/png' }>();
+  const [annotationImage, setAnnotationImage] = useState<ExportStoryPreviewImageView>();
   const [annotationStart, setAnnotationStart] = useState<PreviewPoint>();
   const [annotationRect, setAnnotationRect] = useState<PreviewAnnotationRect>();
   const [feedback, setFeedback] = useState('');
@@ -70,7 +74,7 @@ export function StoryPreviewPanel({ sessionId, submitCapture }: WebPluginSlotPro
     }
   }
 
-  async function image(): Promise<{ data: string; mimeType: 'image/png' } | undefined> {
+  async function image(): Promise<ExportStoryPreviewImageView | undefined> {
     if (sessionId === null || working || builtRequest === undefined) return undefined;
     setWorking(true);
     setStatus('Rendering a fresh source-backed image…');
@@ -230,13 +234,13 @@ export function StoryPreviewPanel({ sessionId, submitCapture }: WebPluginSlotPro
                   kind: 'author-capture',
                   source: 'style-system',
                   id: crypto.randomUUID(),
-                  label: `${preview.storyPath}#${preview.storyExport}`,
+                  label: `${annotationImage.storyPath}#${annotationImage.storyExport}`,
                   content: [
                     'Edit the underlying story or component source, never the generated preview HTML.',
                     `Project: ${builtRequest?.appPath ?? appPath}`,
-                    `Story: ${preview.storyPath}#${preview.storyExport}`,
-                    `Story source sha256: ${preview.sourceSha256}`,
-                    `Preview artifact revision: ${preview.handle}`,
+                    `Story: ${annotationImage.storyPath}#${annotationImage.storyExport}`,
+                    `Story source sha256: ${annotationImage.sourceSha256}`,
+                    `Source-backed image revision: ${annotationImage.sourceSha256}`,
                     location,
                     `Feedback: ${feedback.trim()}`,
                     'After editing, rebuild this preview before treating it as visually verified.',

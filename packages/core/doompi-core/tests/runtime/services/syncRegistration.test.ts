@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { resolveSyncLocation, syncGenerationDirectory } from '../../../src/services/syncLocation';
 import {
+  DOOMPI_API_VERSION,
   publishSyncRegistration,
   readSyncRegistration,
   SYNC_REGISTRATION_VERSION,
@@ -80,6 +81,35 @@ describe('sync registration', () => {
     expect(readSyncRegistration(repoRoot, home)).toEqual(expected);
   });
 
+  it('accepts a compatible API after the producer npm version changes', () => {
+    const home = temporaryDirectory();
+    const packages = temporaryDirectory();
+    const repoRoot = temporaryDirectory();
+    const expected = registration(repoRoot, home, packages);
+    const manifest = JSON.parse(fs.readFileSync(expected.package.manifestPath, 'utf8')) as Record<string, unknown>;
+    manifest.version = 'new-release';
+    manifest.doompiApiVersion = DOOMPI_API_VERSION;
+    fs.writeFileSync(expected.package.manifestPath, `${JSON.stringify(manifest)}\n`);
+    expected.package.version = 'old-release';
+    expected.package.apiVersion = DOOMPI_API_VERSION;
+
+    publishSyncRegistration(repoRoot, expected, home);
+
+    expect(readSyncRegistration(repoRoot, home)).toEqual(expected);
+  });
+
+  it('rejects an unsupported package API version', () => {
+    const home = temporaryDirectory();
+    const packages = temporaryDirectory();
+    const repoRoot = temporaryDirectory();
+    const expected = registration(repoRoot, home, packages);
+    const manifest = JSON.parse(fs.readFileSync(expected.package.manifestPath, 'utf8')) as Record<string, unknown>;
+    manifest.doompiApiVersion = DOOMPI_API_VERSION + 1;
+    fs.writeFileSync(expected.package.manifestPath, `${JSON.stringify(manifest)}\n`);
+    expected.package.apiVersion = DOOMPI_API_VERSION + 1;
+
+    expect(() => publishSyncRegistration(repoRoot, expected, home)).toThrow('Unsupported DoomPi package API version');
+  });
   it('keeps two repository registrations byte-isolated', () => {
     const home = temporaryDirectory();
     const packages = temporaryDirectory();

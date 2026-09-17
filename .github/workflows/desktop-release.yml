@@ -5,8 +5,6 @@ name: Desktop release
 # The desktop app is private and ships as a GitHub Release artifact instead, so
 # it has its own trigger and its own matrix.
 on:
-  push:
-    tags: ["desktop-v*"]
   workflow_dispatch:
 
 permissions:

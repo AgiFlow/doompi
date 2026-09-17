@@ -165,14 +165,17 @@ describe('readBootstrapStatus freshness', () => {
   const entry = path.resolve(import.meta.dirname, '../../src/extensions/composedPi.ts');
 
   function compilerManifest(output: string, entries: string[]): Record<string, unknown> {
+    const artifacts: string[] = [];
+    const fingerprint = (file: string) => {
+      const stat = fs.statSync(file);
+      return { path: file, size: stat.size, mtimeMs: stat.mtimeMs, sha256: sha256Of(file) };
+    };
     return {
       output,
-      artifacts: [],
+      artifacts,
       entries,
-      inputs: entries.map((input) => {
-        const stat = fs.statSync(input);
-        return { path: input, size: stat.size, mtimeMs: stat.mtimeMs, sha256: sha256Of(input) };
-      }),
+      inputs: entries.map(fingerprint),
+      artifactInputs: [output, ...artifacts].map(fingerprint),
     };
   }
 
@@ -295,7 +298,7 @@ describe('readBootstrapStatus freshness', () => {
     expect(readBundleStatus(root, TEST_COMPOSITION_FINGERPRINT, homeFor(root))).toEqual({ bundle, fresh: true });
     expect(readBundleStatus(root, INACTIVE_COMPOSITION_FINGERPRINT, homeFor(root))).toEqual({
       bundle: inactiveBundle,
-      fresh: false,
+      fresh: true,
     });
     expect(readBootstrapStatus(root, entry, homeFor(root))).toEqual({ bootstrap, fresh: false });
   });

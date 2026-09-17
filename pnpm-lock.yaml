@@ -2563,6 +2563,9 @@ importers:
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../core/doompi-web-components
+      '@agimon-ai/doompi-web-security':
+        specifier: workspace:*
+        version: link:../../core/doompi-web-security
       '@agimon-ai/style-system':
         specifier: 0.1.3
         version: 0.1.3(@types/node@26.5.1)(@types/react@19.3.0)(esbuild@0.28.1)(jiti@2.7.0)(supports-color@7.2.0)(yaml@2.9.0)(zod@4.6.2)

@@ -105,7 +105,6 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
   let observedOrigin: string | undefined;
   let observedOriginRevision: number | undefined;
   let originObserved = false;
-  let observedOriginRevision: number | undefined;
   const origin = (): string | undefined => {
     const current = trustedOrigin(options.publicOrigin());
     const revision = options.publicOriginRevision?.();
@@ -266,6 +265,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
     handlePublic: publicRoutes,
     async handleHost(request) {
       const url = new URL(request.url);
+      origin();
       const configMatch = SESSION_MCP_CONFIG_PATTERN.exec(url.pathname);
       const match = SESSION_MCP_CLIENTS_PATTERN.exec(url.pathname);
       if (configMatch === null && match === null) return undefined;

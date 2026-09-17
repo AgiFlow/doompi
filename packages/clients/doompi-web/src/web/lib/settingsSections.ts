@@ -60,7 +60,7 @@ const GENERAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: 'remote',
     label: 'remote control',
-    detail: 'save a named tunnel for remote access',
+    detail: 'save a named tunnel and expose live sessions to MCP clients',
     workspace: 'general',
   },
   {

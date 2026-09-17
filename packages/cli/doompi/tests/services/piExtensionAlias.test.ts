@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
+  DOOMPI_API_VERSION,
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
@@ -107,7 +108,8 @@ describe('Pi extension dispatcher package', () => {
       manifestPath,
       `${JSON.stringify({
         name: '@agimon-ai/doompi',
-        version: 'test',
+        version: 'new-release',
+        doompiApiVersion: DOOMPI_API_VERSION,
         pi: { extensions: ['./extension.mjs'] },
       })}\n`,
     );
@@ -132,7 +134,13 @@ describe('Pi extension dispatcher package', () => {
         stateSha256: syncStateSha256(statePath),
         webDirectory: null,
         apiDirectory,
-        package: { root: packageRoot, version: 'test', manifestPath, entry },
+        package: {
+          root: packageRoot,
+          version: 'old-release',
+          apiVersion: DOOMPI_API_VERSION,
+          manifestPath,
+          entry,
+        },
       },
       homeDirectory,
     );

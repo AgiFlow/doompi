@@ -112,6 +112,7 @@ function writeFreshBuild(root: string): { artifact: string; input: string; manif
       output: artifact,
       artifacts: [artifact],
       inputs: [{ path: input, size: stat.size, mtimeMs: stat.mtimeMs, sha256: sha256Of(input) }],
+      artifactInputs: [{ path: artifact, size: fs.statSync(artifact).size, mtimeMs: fs.statSync(artifact).mtimeMs, sha256: sha256Of(artifact) }],
     }),
   );
   writeState(root, {

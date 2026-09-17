@@ -164,6 +164,12 @@ function writeCompiledBundle(
       artifacts: [bundle],
       entries: [input],
       inputs: [{ path: input, size: stat.size, mtimeMs: stat.mtimeMs, sha256: sha256Of(input) }],
+      artifactInputs: [{
+        path: bundle,
+        size: fs.statSync(bundle).size,
+        mtimeMs: fs.statSync(bundle).mtimeMs,
+        sha256: sha256Of(bundle),
+      }],
     }),
   );
   return { bundle, input, manifest };
@@ -776,7 +782,7 @@ describe('composeDoomSession', () => {
     await cleanupRunDirectory(root, environment);
   });
 
-  it('fails closed before importing a stale selected bundle', async () => {
+  it('loads the selected bundle when only its producer source changed', async () => {
     const root = makeRoot();
     const builds = await writeModeBundles(root);
     fs.appendFileSync(builds.copilot.input, '// stale selected mode\n');
@@ -789,9 +795,9 @@ describe('composeDoomSession', () => {
       environment,
     });
 
-    expect(outcome.loaded).toEqual([]);
-    expect(outcome.problems).toEqual(['doompi could not read its synchronized state. Run doompi sync.']);
-    expect(registerCommand).not.toHaveBeenCalled();
+    expect(outcome.loaded).toEqual([builds.copilot.bundle]);
+    expect(outcome.problems).toEqual([]);
+    expect(registerCommand).toHaveBeenCalledWith('copilot-loaded');
     await cleanupRunDirectory(root, environment);
   });
 

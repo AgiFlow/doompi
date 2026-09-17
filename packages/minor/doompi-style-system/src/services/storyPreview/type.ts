@@ -19,6 +19,9 @@ export interface StoryPreviewBuildResult {
 export interface StoryPreviewImageResult {
   data: string;
   mimeType: 'image/png';
+  storyPath: string;
+  storyExport: string;
+  sourceSha256: string;
 }
 
 export interface StoryPreviewServiceDependencies {

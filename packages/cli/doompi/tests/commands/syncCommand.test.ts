@@ -7,6 +7,7 @@ import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '@agim
 import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
+  DOOMPI_API_VERSION,
   publishSyncRegistration,
   readSyncRegistration,
   SYNC_REGISTRATION_VERSION,
@@ -253,6 +254,7 @@ async function writeMatchingState(root: string): Promise<SyncState> {
   const manifestPath = path.join(packageRoot, 'package.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
     version: string;
+    doompiApiVersion: number;
     pi: { extensions: string[] };
   };
   publishSyncRegistration(
@@ -271,6 +273,7 @@ async function writeMatchingState(root: string): Promise<SyncState> {
       package: {
         root: packageRoot,
         version: manifest.version,
+        apiVersion: manifest.doompiApiVersion,
         manifestPath,
         entry: fs.realpathSync(path.resolve(packageRoot, manifest.pi.extensions[0])),
       },
@@ -647,7 +650,7 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     const code = await new SyncCommand().execute(['sync'], environmentFor(root), root, output);
 
     expect(code).toBe(0);
-    expect(text()).toContain('repair:   upgraded Pi user dispatcher from protocol 1 to 2');
+    expect(text()).toContain(`repair:   upgraded Pi user dispatcher from protocol 1 to ${String(PI_DISPATCHER_VERSION)}`);
     const manifest = JSON.parse(fs.readFileSync(path.join(dispatcherPath, 'package.json'), 'utf8')) as {
       doompiDispatcher?: unknown;
     };

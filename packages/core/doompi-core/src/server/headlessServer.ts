@@ -70,6 +70,8 @@ export interface HeadlessServerOptions {
   reviveSession?: (record: OpenSessionRecord) => Promise<void>;
   /** Trusted HTTPS origin advertised for public session MCP and OAuth endpoints. */
   sessionMcpPublicOrigin?: () => string | undefined;
+  /** Monotonic exposure revision, including disable/re-enable cycles. */
+  sessionMcpPublicOriginRevision?: () => number;
 }
 
 export interface HeadlessServer {
@@ -309,6 +311,7 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
   const sessionMcp = createSessionMcpRoutes({
     headlessHub: options.headlessHub,
     publicOrigin: options.sessionMcpPublicOrigin ?? (() => undefined),
+    publicOriginRevision: options.sessionMcpPublicOriginRevision,
   });
   const server = createServer((request, response) => {
     void handleRequest(request, response).catch((error: unknown) => {

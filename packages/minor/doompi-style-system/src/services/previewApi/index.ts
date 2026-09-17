@@ -20,6 +20,8 @@ export function createPreviewApi(workspaceRoot: string, previews = new StoryPrev
       return context.json({ error: 'The preview request body is not JSON.' }, 400);
     }
     if (
+      request === null ||
+      typeof request !== 'object' ||
       typeof request.appPath !== 'string' ||
       typeof request.storyPath !== 'string' ||
       typeof request.storyExport !== 'string' ||
@@ -45,9 +47,12 @@ export function createPreviewApi(workspaceRoot: string, previews = new StoryPrev
       return context.json({ error: 'The image request body is not JSON.' }, 400);
     }
     if (
+      request === null ||
+      typeof request !== 'object' ||
       typeof request.appPath !== 'string' ||
       typeof request.storyPath !== 'string' ||
-      typeof request.storyExport !== 'string'
+      typeof request.storyExport !== 'string' ||
+      (request.darkMode !== undefined && typeof request.darkMode !== 'boolean')
     ) {
       return context.json({ error: 'An image export requires appPath, storyPath, and an exact storyExport.' }, 400);
     }
@@ -68,7 +73,9 @@ export function createPreviewApi(workspaceRoot: string, previews = new StoryPrev
     } catch {
       return context.json({ error: 'The dispose request body is not JSON.' }, 400);
     }
-    if (typeof request.handle !== 'string') return context.json({ error: 'A preview handle is required.' }, 400);
+    if (request === null || typeof request !== 'object' || typeof request.handle !== 'string') {
+      return context.json({ error: 'A preview handle is required.' }, 400);
+    }
     return context.json({ disposed: await previews.dispose(request.handle) });
   });
 

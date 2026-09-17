@@ -60,6 +60,39 @@ Packaging is not a portable cross-platform build. Build each target on the corre
 
 For artifact structure, signing inputs, and the absence of an in-app updater, read [Runtime and packaging](./runtime-and-packaging.md).
 
+### Build and stage the rolling macOS nightly
+
+The local release script is the default distribution path for the desktop app. It must run on an Apple Silicon Mac running macOS 15 or newer, because the native computer-use helper targets that platform:
+
+```bash
+export CSC_NAME='Developer ID Application: Your Company (TEAMID1234)'
+export APPLE_ID='your-apple-id@example.com'
+export APPLE_APP_SPECIFIC_PASSWORD='use-an-app-specific-password'
+export APPLE_TEAM_ID='TEAMID1234'
+export NOTARYTOOL_KEYCHAIN_PROFILE='DoomPiNotary'
+pnpm release:desktop
+```
+
+The script requires a clean checkout, an installed Developer ID Application certificate with its private key, authenticated `gh` access with push permission to `AgiFlow/doompi`, and a validated `notarytool` keychain profile. It builds only the macOS arm64 DMG and ZIP, verifies the signed apps inside both downloads, and preserves the generated files in a temporary directory. It never publishes npm packages.
+
+Create the notarization profile once in your login keychain. Do not commit the password or put it in a repository file:
+
+```bash
+xcrun notarytool store-credentials DoomPiNotary \\
+  --apple-id "$APPLE_ID" \\
+  --team-id "$APPLE_TEAM_ID" \\
+  --password "$APPLE_APP_SPECIFIC_PASSWORD"
+gh auth login --hostname github.com
+```
+
+The Apple Developer account must have a Developer ID Application certificate. Open Keychain Access after creating or importing it and confirm that the certificate has its private key. `security find-identity -v -p codesigning` must list the exact value used in `CSC_NAME`.
+
+A successful run refreshes the single rolling `desktop-nightly` GitHub prerelease as a **draft**. The script moves only that tag to the built commit, uploads generation-specific DMG, ZIP, and SHA-256 files, removes older assets from that release, and verifies the final inventory. It never publishes the release or marks it latest. Review the draft and publish it manually after installing both files on a clean Apple Silicon Mac. The tag workflow is manual-only.
+
+If an already published nightly is refreshed, the script first returns it to draft. Downloads are therefore unavailable until you publish the refreshed draft again. GitHub mutations are not transactional: a failure after the tag or asset step can leave a partial draft. Keep the preserved temporary directory, stop other release writers, and rerun the script to repair the nightly. Do not manually publish while a replacement is in progress.
+
+The downloaded DMG and ZIP should be smoke-tested on a Mac without Node.js, pnpm, or the workspace installed. Confirm DoomPi starts its local server and web proxy, the cockpit loads, and quitting the app cleans up both child processes.
+
 ## Troubleshooting
 
 ### The application never becomes ready

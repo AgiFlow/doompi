@@ -159,12 +159,14 @@ describe('serveHeadlessServer', () => {
       onNotice: vi.fn(),
     });
     let publicOrigin = 'https://remote.example.com';
+    let publicOriginRevision = 0;
     const root = '/api/workspaces/test-workspace/sessions/one/mcp';
     const server = await serveHeadlessServer({
       headlessHub: hub,
       port: 0,
       token: 'browser-secret',
       sessionMcpPublicOrigin: () => publicOrigin,
+      sessionMcpPublicOriginRevision: () => publicOriginRevision,
     });
     servers.push(server);
     const hostHeaders = { 'x-doompi-token': 'browser-secret' };
@@ -291,6 +293,15 @@ describe('serveHeadlessServer', () => {
       ).status,
     ).toBe(401);
 
+    publicOrigin = 'https://replacement.example.com';
+    const replacedConfig = await fetch(`${server.url}${root}/config`, { headers: hostHeaders });
+    expect(replacedConfig.status).toBe(200);
+    const replacementListed = (await (
+      await fetch(`${server.url}${root}/clients`, { headers: hostHeaders })
+    ).json()) as {
+      clients: Record<string, unknown>[];
+    };
+    expect(replacementListed.clients).toHaveLength(0);
     const replacementClient = await fetch(`${server.url}${root}/clients`, {
       method: 'POST',
       headers: hostHeaders,
@@ -302,11 +313,9 @@ describe('serveHeadlessServer', () => {
       }),
     });
     expect(replacementClient.status).toBe(201);
-    publicOrigin = 'https://replacement.example.com';
-    const replacedConfig = await fetch(`${server.url}${root}/config`, { headers: hostHeaders });
-    expect(replacedConfig.status).toBe(200);
-    const clientsAfterOriginChange = await fetch(`${server.url}${root}/clients`, { headers: hostHeaders });
-    await expect(clientsAfterOriginChange.json()).resolves.toEqual({ clients: [] });
+    publicOriginRevision += 1;
+    const reenabledClients = await fetch(`${server.url}${root}/clients`, { headers: hostHeaders });
+    await expect(reenabledClients.json()).resolves.toEqual({ clients: [] });
     await hub.close();
   });
 
