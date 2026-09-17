@@ -200,7 +200,7 @@ function tokenReferences(source: string): Array<{ name: string; index: number }>
 function declaredTokens(files: readonly ReadFile[]): Set<string> {
   const result = new Set<string>();
   for (const file of files) {
-    for (const match of file.content.matchAll(/(--[A-Za-z0-9_-]+)\s*:/gu)) result.add(match[1]!);
+    for (const match of stripComments(file.content).matchAll(/(--[A-Za-z0-9_-]+)\s*:/gu)) result.add(match[1]!);
   }
   return result;
 }
@@ -466,7 +466,7 @@ export async function checkDesignTarget(
 
   for (const file of files) {
     if (!CODE_FILE_PATTERN.test(file.relativePath)) continue;
-    for (const classValue of extractClassValues(file.content)) {
+    for (const classValue of extractClassValues(stripComments(file.content))) {
       if (classValue.dynamic) {
         addFinding(unresolved, {
           kind: 'unresolved',
@@ -503,7 +503,7 @@ export async function checkDesignTarget(
   const prefixes = target.managedTokenPrefixes ?? DEFAULT_MANAGED_TOKEN_PREFIXES;
   let tokenValidation: DesignCheckReport['coverage']['tokenValidation'] = 'not-configured';
   for (const file of files) {
-    for (const reference of tokenReferences(file.content)) {
+    for (const reference of tokenReferences(stripComments(file.content))) {
       const managed =
         configuredTokens?.has(reference.name) || prefixes.some((prefix) => reference.name.startsWith(prefix));
       if (!managed) continue;

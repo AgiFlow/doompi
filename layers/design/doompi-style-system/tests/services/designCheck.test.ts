@@ -31,9 +31,12 @@ describe('bounded design checks', () => {
     fs.mkdirSync(path.join(root, 'src'), { recursive: true });
     fs.writeFileSync(
       path.join(root, 'src/Button.stories.tsx'),
-      "export default {}; export const Playground = {}; export function View(){return <><div className={ready ? 'bg-red-500' : 'flex'} /><span className=\"bg-red-500\" /></>} import './missing.css';",
+      "/* <span className=\"bg-red-500\" /> */\nexport default {}; export const Playground = {}; export function View(){return <><div className={ready ? 'bg-red-500' : 'flex'} /><span className=\"bg-red-500\" /></>} import './missing.css';",
     );
-    fs.writeFileSync(path.join(root, 'styles.css'), '@import "https://example.test/theme.css";\n@plugin "bad";');
+    fs.writeFileSync(
+      path.join(root, 'styles.css'),
+      '/* var(--doom-missing) */\n@import "https://example.test/theme.css";\n@plugin "bad";',
+    );
     const target: DesignTargetManifest = {
       version: 1,
       appPath: '.',

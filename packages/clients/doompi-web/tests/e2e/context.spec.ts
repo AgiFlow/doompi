@@ -97,12 +97,18 @@ test.describe('with the synced MCP context contribution', () => {
     await expect(serverList).not.toContainText(serverName);
   });
   test('opens OAuth in a new tab and keeps a copyable manual link in the dialog', async ({ page, cockpit }) => {
+    let copiedOAuthLink: string | undefined;
     await page.context().route('https://auth.example.test/**', (route) => route.fulfill({ body: 'Provider sign-in' }));
+    await page.exposeFunction('captureCopiedOAuthLink', (value: string) => {
+      copiedOAuthLink = value;
+    });
     await page.addInitScript(() => {
       Object.defineProperty(navigator, 'clipboard', {
         value: {
           writeText: async (value: string) => {
-            localStorage.setItem('copied-oauth-link', value);
+            await (
+              window as unknown as { captureCopiedOAuthLink: (value: string) => Promise<void> }
+            ).captureCopiedOAuthLink(value);
           },
         },
       });
@@ -132,7 +138,7 @@ test.describe('with the synced MCP context contribution', () => {
     );
     await dialog.getByRole('button', { name: 'copy link' }).click();
     await expect(dialog).toContainText('Link copied.');
-    expect(await page.evaluate(() => localStorage.getItem('copied-oauth-link'))).toBe(authorizationUrl);
+    expect(copiedOAuthLink).toBe(authorizationUrl);
     cockpit.session.emit(
       status('doom-mcp-session-auth', JSON.stringify([{ name: 'agiflow-mcp', state: 'connected' }])),
     );
