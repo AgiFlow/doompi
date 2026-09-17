@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
+  DOOMPI_API_VERSION,
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
@@ -69,7 +70,12 @@ function writeStateText(root: string, text: string, homeDirectory: string = home
   fs.writeFileSync(entry, 'export default () => undefined;\n');
   fs.writeFileSync(
     path.join(packageRoot, 'package.json'),
-    JSON.stringify({ name: '@agimon-ai/doompi', version: 'test', pi: { extensions: ['./dist/extensions/pi.mjs'] } }),
+    JSON.stringify({
+      name: '@agimon-ai/doompi',
+      version: 'test',
+      doompiApiVersion: DOOMPI_API_VERSION,
+      pi: { extensions: ['./dist/extensions/pi.mjs'] },
+    }),
   );
   fs.writeFileSync(statePath, text);
   publishSyncRegistration(
@@ -84,7 +90,13 @@ function writeStateText(root: string, text: string, homeDirectory: string = home
       stateSha256: syncStateSha256(statePath),
       webDirectory: null,
       apiDirectory,
-      package: { root: packageRoot, version: 'test', manifestPath: path.join(packageRoot, 'package.json'), entry },
+      package: {
+        root: packageRoot,
+        version: 'test',
+        apiVersion: DOOMPI_API_VERSION,
+        manifestPath: path.join(packageRoot, 'package.json'),
+        entry,
+      },
     },
     homeDirectory,
   );

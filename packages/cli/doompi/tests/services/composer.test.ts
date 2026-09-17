@@ -6,6 +6,7 @@ import path from 'node:path';
 import { loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
+  DOOMPI_API_VERSION,
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
@@ -109,10 +110,18 @@ async function writeRegisteredState(root: string, value: SyncState = syncedState
   const entry = path.join(packageRoot, 'pi.mjs');
   fs.mkdirSync(apiDirectory, { recursive: true });
   fs.mkdirSync(packageRoot, { recursive: true });
-  fs.writeFileSync(entry, 'export default () => undefined;\n');
+  fs.writeFileSync(
+    entry,
+    'export default () => undefined;\n',
+  );
   fs.writeFileSync(
     manifestPath,
-    `${JSON.stringify({ name: '@agimon-ai/doompi', version: 'test', pi: { extensions: ['./pi.mjs'] } })}\n`,
+    `${JSON.stringify({
+      name: '@agimon-ai/doompi',
+      version: 'test',
+      doompiApiVersion: DOOMPI_API_VERSION,
+      pi: { extensions: ['./pi.mjs'] },
+    })}\n`,
   );
   publishSyncRegistration(
     root,
@@ -126,7 +135,13 @@ async function writeRegisteredState(root: string, value: SyncState = syncedState
       stateSha256: syncStateSha256(statePath),
       webDirectory: null,
       apiDirectory,
-      package: { root: fs.realpathSync(packageRoot), version: 'test', manifestPath, entry },
+      package: {
+        root: fs.realpathSync(packageRoot),
+        version: 'test',
+        apiVersion: DOOMPI_API_VERSION,
+        manifestPath,
+        entry,
+      },
     },
     homeDirectory,
   );

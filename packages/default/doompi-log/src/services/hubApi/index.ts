@@ -2,6 +2,7 @@ import type { DoomApi, DoomApiContext, DoomApiHandler } from '@agimon-ai/doompi-
 import type { LogMetricGroupRow, LogMetricsReport, ToolMetricRow } from '@agimon-ai/log-sink-mcp';
 import { Hono } from 'hono';
 
+import { PACKAGE_NAME, SERVICE_NAME } from '../../constants/telemetry';
 import { createIssuesSource } from '../../services/issuesSource';
 import { createMetricsSource } from '../../services/metricsSource';
 import routes from '../../types/apiRoutes';
@@ -146,9 +147,9 @@ function toReport(report: LogMetricsReport, source: MetricsSource, dimension: Me
 }
 
 /**
- * A report the sink answered but with nothing in it reads as "no data", not as
- * an empty chart. The distinction the reader needs is whether telemetry is not
- * being recorded or simply has not been recorded yet.
+ * A report with nothing in it reads as "no data", not as an empty chart. The
+ * reader may have used the HTTP sink or a worker against an empty history, so
+ * the empty-state detail must not claim the sink is running.
  */
 function isEmpty(report: MetricsReport): boolean {
   return report.totals.totalTokens === 0 && report.groups.length === 0 && report.tools.length === 0;
@@ -164,8 +165,8 @@ export function createLogHubApi(options: HubApiOptions = {}): Hono {
   const app = new Hono();
   // One source for the life of the hub: it caches the resolved sink endpoint,
   // and rebuilding it per request would re-probe the daemon every time.
-  const source = options.source ?? createMetricsSource();
-  const issues = options.issues ?? createIssuesSource();
+  const source = options.source ?? createMetricsSource({ packageName: PACKAGE_NAME, serviceName: SERVICE_NAME });
+  const issues = options.issues ?? createIssuesSource({ packageName: PACKAGE_NAME, serviceName: SERVICE_NAME });
 
   app.get(routes.metrics.path, async (context) => {
     const requestedDimension = context.req.query(METRICS_QUERY_PARAMS.dimension) ?? DEFAULT_DIMENSION;
@@ -205,7 +206,7 @@ export function createLogHubApi(options: HubApiOptions = {}): Hono {
     if (isEmpty(body)) {
       const unavailable: MetricsUnavailable = {
         unavailable: 'no-data',
-        detail: 'The log sink is running but has recorded no usage for this period.',
+        detail: 'No recorded usage was found for this period.',
       };
       return context.json(unavailable);
     }

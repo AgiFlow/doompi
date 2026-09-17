@@ -8,6 +8,7 @@ import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
   DOOMPI_API_VERSION,
+  LEGACY_SYNC_REGISTRATION_VERSION,
   publishSyncRegistration,
   readSyncRegistration,
   SYNC_REGISTRATION_VERSION,
@@ -759,6 +760,27 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(text()).toContain('already up to date');
   });
 
+  it('migrates a legacy registration during an explicit sync', async () => {
+    const root = makeRepository();
+    const homeDirectory = homeFor(root);
+    await new SyncCommand().execute(['sync'], environmentFor(root), root, capture().output);
+    const location = resolveSyncLocation(root, homeDirectory);
+    const legacy = JSON.parse(fs.readFileSync(location.registrationPath, 'utf8')) as {
+      version: number;
+      package: { apiVersion?: number };
+    };
+    legacy.version = LEGACY_SYNC_REGISTRATION_VERSION;
+    delete legacy.package.apiVersion;
+    fs.writeFileSync(location.registrationPath, `${JSON.stringify(legacy)}\n`);
+
+    const { output, text } = capture();
+    expect(await new SyncCommand().execute(['sync'], environmentFor(root), root, output)).toBe(0);
+
+    const migrated = readSyncRegistration(root, homeDirectory);
+    expect(migrated?.version).toBe(SYNC_REGISTRATION_VERSION);
+    expect(migrated?.package.apiVersion).toBe(DOOMPI_API_VERSION);
+    expect(text()).not.toContain('already up to date');
+  });
   it('builds missing web artifacts once for concurrent sessions and reuses their generation', async () => {
     const root = makeRepository();
     const homeDirectory = homeFor(root);

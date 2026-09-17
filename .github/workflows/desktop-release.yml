@@ -1,14 +1,12 @@
-name: Desktop release
+name: Desktop package check
 
-# Kept separate from `Release publish` on purpose: that workflow publishes npm
-# packages and asserts every project it names appears on the alpha dist-tag.
-# The desktop app is private and ships as a GitHub Release artifact instead, so
-# it has its own trigger and its own matrix.
+# This manual workflow checks platform packaging only. The local
+# `scripts/release-desktop.mjs` flow owns signed nightly GitHub releases.
 on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: doompi-desktop-release-${{ github.ref }}
@@ -20,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
+          - runner: macos-15
             platform: mac
             target: darwin-arm64
           - runner: ubuntu-latest
@@ -31,10 +29,6 @@ jobs:
             target: linux-arm64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
-    env:
-      # The secrets context is not available to a step-level `if`, so signing
-      # availability is decided once here and read as an ordinary variable.
-      SIGNING_AVAILABLE: ${{ secrets.APPLE_ID != '' }}
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -53,7 +47,7 @@ jobs:
           node-version: 22.22.1
           cache: pnpm
 
-      - name: Confirm release target
+      - name: Confirm package target
         run: |
           actual="$(node -p 'process.platform + "-" + process.arch')"
           test "$actual" = "${{ matrix.target }}"
@@ -64,11 +58,30 @@ jobs:
       - name: Build the workspace packages the app bundles
         run: pnpm nx run-many -t build -p @agimon-ai/doompi-web @agimon-ai/doompi-desktop
 
+      - name: Require macOS signing credentials
+        if: matrix.platform == 'mac'
+        env:
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          CSC_NAME: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$CSC_LINK"
+          test -n "$CSC_KEY_PASSWORD"
+          test -n "$CSC_NAME"
+          test -n "$APPLE_ID"
+          test -n "$APPLE_APP_SPECIFIC_PASSWORD"
+          test -n "$APPLE_TEAM_ID"
+
       - name: Package the desktop app
         run: pnpm nx run @agimon-ai/doompi-desktop:package
         env:
-          # Absent on forks and on Linux, where electron-builder skips signing
-          # and still produces artifacts.
+          # Linux remains unsigned. macOS packaging fails closed when any signing
+          # or notarization input is absent.
+          DOOMPI_DESKTOP_REQUIRE_SIGNING: ${{ matrix.platform == 'mac' && '1' || '0' }}
           CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           CSC_NAME: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -77,19 +90,8 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Confirm macOS artifacts are notarized
-        if: matrix.platform == 'mac' && env.SIGNING_AVAILABLE == 'true'
+        if: matrix.platform == 'mac'
         run: |
           app="packages/clients/doompi-desktop/release/mac-arm64/DoomPi.app"
           codesign -dv --verbose=4 "$app"
           spctl -a -vvv -t install "$app"
-
-      - name: Upload the artifacts to the release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          files: |
-            packages/clients/doompi-desktop/release/*.dmg
-            packages/clients/doompi-desktop/release/*.zip
-            packages/clients/doompi-desktop/release/*.AppImage
-            packages/clients/doompi-desktop/release/*.deb
-          draft: true
-          fail_on_unmatched_files: false

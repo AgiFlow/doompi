@@ -303,10 +303,25 @@ function finalizeArtifacts(outputDirectory, version, commit, builtAt) {
   const zip = path.join(outputDirectory, names.zip);
   fs.renameSync(built.dmg, dmg);
   fs.renameSync(built.zip, zip);
-  const checksum = path.join(outputDirectory, names.checksum);
-  const lines = [`${sha256(dmg)}  ${names.dmg}`, `${sha256(zip)}  ${names.zip}`];
-  fs.writeFileSync(checksum, `${lines.join('\n')}\n`, 'utf8');
-  return { dmg, zip, checksum, names };
+  return { dmg, zip, checksum: path.join(outputDirectory, names.checksum), names };
+}
+
+export function checksumContents(artifacts) {
+  const lines = [
+    `${sha256(artifacts.dmg)}  ${artifacts.names.dmg}`,
+    `${sha256(artifacts.zip)}  ${artifacts.names.zip}`,
+  ];
+  return `${lines.join('\n')}\n`;
+}
+
+function writeChecksums(artifacts) {
+  fs.writeFileSync(artifacts.checksum, checksumContents(artifacts), 'utf8');
+}
+
+function verifyChecksums(artifacts) {
+  if (fs.readFileSync(artifacts.checksum, 'utf8') !== checksumContents(artifacts)) {
+    throw new Error('The local artifact checksums do not match the final notarized files.');
+  }
 }
 
 function isMachO(filePath) {
@@ -379,16 +394,51 @@ function verifyApp(appPath, expectedVersion, teamId) {
   for (const binary of binaries) runCommand('codesign', ['--verify', '--strict', '--verbose=2', binary]);
 }
 
-function verifyZip(zipPath, expectedVersion, teamId) {
+function zipApplication(zipPath) {
   const extractionDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-desktop-zip-'));
   try {
     runCommand('ditto', ['-x', '-k', zipPath, extractionDirectory]);
     const applications = findApplications(extractionDirectory);
     if (applications.length !== 1)
       throw new Error(`Expected one app in ${path.basename(zipPath)}; found ${applications.length}.`);
-    verifyApp(applications[0], expectedVersion, teamId);
-  } finally {
+    return { extractionDirectory, application: applications[0] };
+  } catch (error) {
     fs.rmSync(extractionDirectory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+function ensureZipTicket(zipPath) {
+  const extracted = zipApplication(zipPath);
+  let repackaged = false;
+  try {
+    const validation = runCommand('xcrun', ['stapler', 'validate', extracted.application], { allowFailure: true });
+    if (validation.status !== 0) {
+      runCommand('xcrun', ['stapler', 'staple', extracted.application]);
+      runCommand('xcrun', ['stapler', 'validate', extracted.application]);
+      repackaged = true;
+    }
+    if (repackaged) {
+      const replacement = `${zipPath}.repackaged`;
+      fs.rmSync(replacement, { force: true });
+      try {
+        runCommand('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', extracted.application, replacement]);
+        fs.renameSync(replacement, zipPath);
+      } finally {
+        fs.rmSync(replacement, { force: true });
+      }
+    }
+  } finally {
+    fs.rmSync(extracted.extractionDirectory, { recursive: true, force: true });
+  }
+}
+
+function verifyZip(zipPath, expectedVersion, teamId) {
+  const extracted = zipApplication(zipPath);
+  try {
+    verifyApp(extracted.application, expectedVersion, teamId);
+  } finally {
+    fs.rmSync(extracted.extractionDirectory, { recursive: true, force: true });
   }
 }
 
@@ -432,6 +482,7 @@ function notarizeAndVerify(artifacts, version, teamId, profile) {
   if (report.status !== 'Accepted') throw new Error(`Apple notarization was not accepted: ${String(report.status)}.`);
   runCommand('xcrun', ['stapler', 'staple', artifacts.dmg]);
   verifyDmg(artifacts.dmg, version, teamId);
+  ensureZipTicket(artifacts.zip);
   verifyZip(artifacts.zip, version, teamId);
 }
 
@@ -510,6 +561,23 @@ function assertReleaseReady(release, id) {
   }
 }
 
+export function verifyRemoteAssets(assets, artifacts) {
+  const expected = new Map([
+    [artifacts.names.dmg, artifacts.dmg],
+    [artifacts.names.zip, artifacts.zip],
+    [artifacts.names.checksum, artifacts.checksum],
+  ]);
+  for (const [name, filePath] of expected) {
+    const asset = assets.find((candidate) => candidate.name === name);
+    if (asset === undefined || asset.size !== fs.statSync(filePath).size) {
+      throw new Error(`GitHub asset ${name} does not match the local artifact size.`);
+    }
+    if (typeof asset.digest === 'string' && asset.digest !== `sha256:${sha256(filePath)}`) {
+      throw new Error(`GitHub asset ${name} has an unexpected digest.`);
+    }
+  }
+}
+
 function uploadAssets(release, artifacts, client) {
   runCommand(
     'gh',
@@ -520,6 +588,7 @@ function uploadAssets(release, artifacts, client) {
   const expected = new Set(Object.values(artifacts.names));
   const uploaded = new Set(assets.map((asset) => asset.name));
   for (const name of expected) if (!uploaded.has(name)) throw new Error(`GitHub upload did not produce ${name}.`);
+  verifyRemoteAssets(assets, artifacts);
   return assets;
 }
 
@@ -545,6 +614,7 @@ function confirmRemoteState(releaseId, commit, artifacts, client) {
   if (JSON.stringify(names) !== JSON.stringify(expected)) {
     throw new Error(`Nightly assets are not the expected current generation: ${names.join(', ')}.`);
   }
+  verifyRemoteAssets(assets, artifacts);
   return finalRelease.html_url;
 }
 
@@ -634,6 +704,8 @@ export function runRelease() {
     const builtAt = new Date();
     const artifacts = finalizeArtifacts(outputDirectory, version, commit, builtAt);
     notarizeAndVerify(artifacts, version, teamId, profile);
+    writeChecksums(artifacts);
+    verifyChecksums(artifacts);
     const url = replaceNightlyRelease(version, commit, builtAt, artifacts);
     console.log(`Draft nightly release ready: ${url}`);
     return { url, outputDirectory, artifacts };

@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
+  DOOMPI_API_VERSION,
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
@@ -83,7 +84,12 @@ function writeState(root: string, state: unknown): void {
   fs.writeFileSync(entry, 'export default () => undefined;\n');
   fs.writeFileSync(
     path.join(packageRoot, 'package.json'),
-    JSON.stringify({ name: '@agimon-ai/doompi', version: 'test', pi: { extensions: ['./dist/extensions/pi.mjs'] } }),
+    JSON.stringify({
+      name: '@agimon-ai/doompi',
+      version: 'test',
+      doompiApiVersion: DOOMPI_API_VERSION,
+      pi: { extensions: ['./dist/extensions/pi.mjs'] },
+    }),
   );
   fs.writeFileSync(statePath, JSON.stringify(state));
   publishSyncRegistration(
@@ -98,7 +104,13 @@ function writeState(root: string, state: unknown): void {
       stateSha256: syncStateSha256(statePath),
       webDirectory: null,
       apiDirectory,
-      package: { root: packageRoot, version: 'test', manifestPath: path.join(packageRoot, 'package.json'), entry },
+      package: {
+        root: packageRoot,
+        version: 'test',
+        apiVersion: DOOMPI_API_VERSION,
+        manifestPath: path.join(packageRoot, 'package.json'),
+        entry,
+      },
     },
     homeFor(root),
   );
@@ -301,5 +313,15 @@ describe('readBootstrapStatus freshness', () => {
       fresh: true,
     });
     expect(readBootstrapStatus(root, entry, homeFor(root))).toEqual({ bootstrap, fresh: false });
+  });
+  it('rejects artifact tampering even when size and mtime are preserved', () => {
+    const root = temporaryRoot();
+    const { bootstrap } = bundledState(root);
+    const stat = fs.statSync(bootstrap);
+    const original = fs.readFileSync(bootstrap, 'utf8');
+    fs.writeFileSync(bootstrap, original.replace('undefined', 'corrupt!!'));
+    fs.utimesSync(bootstrap, stat.atime, stat.mtime);
+
+    expect(readStartupBootstrapStatus(root, entry, homeFor(root))).toEqual({ bootstrap, fresh: false });
   });
 });

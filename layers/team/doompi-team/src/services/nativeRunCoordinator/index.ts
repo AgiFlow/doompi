@@ -148,10 +148,11 @@ export class NativeRunCoordinator implements NativeRunCoordinatorContract {
       status: event.state === 'starting' ? 'queued' : event.state === 'running' ? 'running' : event.state,
       startedAt: entry.startedAt,
       updatedAt: event.timestamp,
+      ...(event.cost === undefined ? {} : { cost: event.cost }),
+      ...(event.sessionFile ? { sessionFile: event.sessionFile } : {}),
       ...(event.message
         ? { error: status === 'failed' || status === 'stopped' ? event.message : undefined, summary: event.message }
         : {}),
-      ...(event.sessionFile ? { sessionFile: event.sessionFile } : {}),
     };
     this.tracker.upsertNative(entry.sessionId, entry.scope, projection);
     this.projection?.publish(entry.sessionId, projection);

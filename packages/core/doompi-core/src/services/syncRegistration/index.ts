@@ -13,8 +13,10 @@ import {
   type SyncLocation,
 } from '../syncLocation';
 
-/** Stable protocol shared by sync, the managed dispatcher, and runtime consumers. */
-export const SYNC_REGISTRATION_VERSION = 1;
+/** Current registration schema shared by sync, the managed dispatcher, and runtime consumers. */
+export const SYNC_REGISTRATION_VERSION = 2;
+/** Legacy schema accepted only with exact producer npm-version validation. */
+export const LEGACY_SYNC_REGISTRATION_VERSION = 1;
 /** Runtime API contract shared by synchronized generations and DoomPi releases. */
 export const DOOMPI_API_VERSION = 1;
 
@@ -90,7 +92,7 @@ function sha256File(filePath: string): string {
   return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
 }
 
-function validatePackage(value: SyncPackageRegistration, recordPath: string): void {
+function validatePackage(value: SyncPackageRegistration, recordPath: string, recordVersion: number): void {
   const packageRoot = canonicalPath(value.root);
   if (packageRoot !== path.resolve(value.root)) {
     throw new Error(`Doom sync registration at ${recordPath} has a noncanonical package root`);
@@ -110,13 +112,16 @@ function validatePackage(value: SyncPackageRegistration, recordPath: string): vo
   if (manifest.name !== DOOM_PACKAGE_NAME || typeof manifest.version !== 'string') {
     throw new Error(`Doom sync registration at ${recordPath} does not match its DoomPi package`);
   }
-  if (value.apiVersion === undefined) {
+  if (recordVersion === LEGACY_SYNC_REGISTRATION_VERSION && value.apiVersion === undefined) {
     // Registrations written before API compatibility was persisted remain valid
     // only when their exact producer release is still installed.
     if (manifest.version !== value.version) {
       throw new Error(`Doom sync registration at ${recordPath} does not match its DoomPi package`);
     }
   } else {
+    if (value.apiVersion === undefined) {
+      throw new Error(`Doom sync registration at ${recordPath} has no package API version`);
+    }
     if (!Number.isSafeInteger(value.apiVersion) || value.apiVersion < 1) {
       throw new Error(`Doom sync registration at ${recordPath} has an invalid package API version`);
     }
@@ -142,7 +147,8 @@ function validatePackage(value: SyncPackageRegistration, recordPath: string): vo
 /** Validates one parsed registration against its canonical repository/worktree location. */
 export function validateSyncRegistration(registration: SyncRegistration, location: SyncLocation): SyncRegistration {
   const recordPath = location.registrationPath;
-  if (registration.version !== SYNC_REGISTRATION_VERSION) {
+  const recordVersion = registration.version;
+  if (recordVersion !== SYNC_REGISTRATION_VERSION && recordVersion !== LEGACY_SYNC_REGISTRATION_VERSION) {
     throw new Error(`Unsupported Doom sync registration version at ${recordPath}`);
   }
   const canonicalRoot = canonicalPath(registration.root);
@@ -208,7 +214,7 @@ export function validateSyncRegistration(registration: SyncRegistration, locatio
   } else if (state.serverBundle !== undefined) {
     throw new Error(`Doom sync registration at ${recordPath} is missing its server bundle record`);
   }
-  validatePackage(registration.package, recordPath);
+  validatePackage(registration.package, recordPath, recordVersion);
   return registration;
 }
 

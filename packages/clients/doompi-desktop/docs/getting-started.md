@@ -87,7 +87,7 @@ gh auth login --hostname github.com
 
 The Apple Developer account must have a Developer ID Application certificate. Open Keychain Access after creating or importing it and confirm that the certificate has its private key. `security find-identity -v -p codesigning` must list the exact value used in `CSC_NAME`.
 
-A successful run refreshes the single rolling `desktop-nightly` GitHub prerelease as a **draft**. The script moves only that tag to the built commit, uploads generation-specific DMG, ZIP, and SHA-256 files, removes older assets from that release, and verifies the final inventory. It never publishes the release or marks it latest. Review the draft and publish it manually after installing both files on a clean Apple Silicon Mac. The tag workflow is manual-only.
+A successful run refreshes the single rolling `desktop-nightly` GitHub prerelease as a **draft**. The script moves only that tag to the built commit, uploads generation-specific DMG, ZIP, and SHA-256 files, removes older assets from that release, and verifies the final inventory. It never publishes the release or marks it latest. Review the draft and publish it manually after installing both files on a clean Apple Silicon Mac. The CI package-check workflow is manual-only and never publishes a release.
 
 If an already published nightly is refreshed, the script first returns it to draft. Downloads are therefore unavailable until you publish the refreshed draft again. GitHub mutations are not transactional: a failure after the tag or asset step can leave a partial draft. Keep the preserved temporary directory, stop other release writers, and rerun the script to repair the nightly. Do not manually publish while a replacement is in progress.
 

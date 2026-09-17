@@ -5,6 +5,7 @@ import path from 'node:path';
 import { loadMajorModesConfig } from '@agimon-ai/doompi-config/majorModes';
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
+  DOOMPI_API_VERSION,
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
@@ -85,7 +86,12 @@ function publishTestRegistration(root: string, target: string): void {
   fs.writeFileSync(entry, 'export default () => undefined;\n');
   fs.writeFileSync(
     manifestPath,
-    `${JSON.stringify({ name: '@agimon-ai/doompi', version: 'test', pi: { extensions: ['./pi.mjs'] } })}\n`,
+    `${JSON.stringify({
+      name: '@agimon-ai/doompi',
+      version: 'test',
+      doompiApiVersion: DOOMPI_API_VERSION,
+      pi: { extensions: ['./pi.mjs'] },
+    })}\n`,
   );
   publishSyncRegistration(
     root,
@@ -102,6 +108,7 @@ function publishTestRegistration(root: string, target: string): void {
       package: {
         root: fs.realpathSync(packageRoot),
         version: 'test',
+        apiVersion: DOOMPI_API_VERSION,
         manifestPath,
         entry,
       },

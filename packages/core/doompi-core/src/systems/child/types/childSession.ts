@@ -80,12 +80,18 @@ export interface DoomChildSessionRequest {
   readonly environment: Readonly<Record<string, string | undefined>>;
 }
 
+export interface DoomChildSessionUsage {
+  readonly rowId: string;
+  readonly cost: number;
+}
+
 export interface DoomChildSessionEvent {
   readonly runId: string;
   readonly state: DoomChildSessionState;
   readonly timestamp: number;
   readonly message?: string;
   readonly sessionFile?: string;
+  readonly cost?: number;
 }
 
 export interface DoomChildSessionToolResult {
@@ -120,6 +126,7 @@ export interface DoomChildSessionRuntime {
   steer(message: string): Promise<void>;
   followUp?(message: string): Promise<void>;
   abort(): Promise<void>;
+  onUsage?(listener: (usage: DoomChildSessionUsage) => void): () => void;
   /** Reads only this runtime's owned journal. The callback may remain valid after runtime disposal. */
   readTranscriptPage?(request: Omit<TranscriptPageRequest, 'threadId'>, signal?: AbortSignal): Promise<TranscriptPage>;
   dispose(): Promise<void>;

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { resolveSyncLocation, syncGenerationDirectory } from '../../../src/services/syncLocation';
 import {
   DOOMPI_API_VERSION,
+  LEGACY_SYNC_REGISTRATION_VERSION,
   publishSyncRegistration,
   readSyncRegistration,
   SYNC_REGISTRATION_VERSION,
@@ -32,7 +33,12 @@ function packageFixture(
   fs.writeFileSync(entry, 'export default () => undefined;\n');
   fs.writeFileSync(
     path.join(packageRoot, 'package.json'),
-    `${JSON.stringify({ name: '@agimon-ai/doompi', version, pi: { extensions: ['./dist/entries/doom.mjs'] } })}\n`,
+    `${JSON.stringify({
+      name: '@agimon-ai/doompi',
+      version,
+      doompiApiVersion: DOOMPI_API_VERSION,
+      pi: { extensions: ['./dist/entries/doom.mjs'] },
+    })}\n`,
   );
   return { root: fs.realpathSync(packageRoot), manifestPath: path.join(packageRoot, 'package.json'), entry, version };
 }
@@ -58,7 +64,7 @@ function registration(repoRoot: string, home: string, packageRoot: string): Sync
     stateSha256: syncStateSha256(statePath),
     webDirectory,
     apiDirectory,
-    package: packageRecord,
+    package: { ...packageRecord, apiVersion: DOOMPI_API_VERSION },
   };
 }
 
@@ -98,6 +104,21 @@ describe('sync registration', () => {
     expect(readSyncRegistration(repoRoot, home)).toEqual(expected);
   });
 
+  it('accepts API metadata in a transitional legacy registration', () => {
+    const home = temporaryDirectory();
+    const packages = temporaryDirectory();
+    const repoRoot = temporaryDirectory();
+    const expected = registration(repoRoot, home, packages);
+    expected.version = LEGACY_SYNC_REGISTRATION_VERSION;
+    expected.package.version = 'old-release';
+    const manifest = JSON.parse(fs.readFileSync(expected.package.manifestPath, 'utf8')) as Record<string, unknown>;
+    manifest.version = 'new-release';
+    fs.writeFileSync(expected.package.manifestPath, `${JSON.stringify(manifest)}\n`);
+
+    publishSyncRegistration(repoRoot, expected, home);
+
+    expect(readSyncRegistration(repoRoot, home)).toEqual(expected);
+  });
   it('rejects an unsupported package API version', () => {
     const home = temporaryDirectory();
     const packages = temporaryDirectory();
@@ -146,5 +167,20 @@ describe('sync registration', () => {
     expected.package.entry = expected.statePath;
 
     expect(() => publishSyncRegistration(repoRoot, expected, home)).toThrow('outside');
+  });
+  it('accepts a legacy registration only while its exact npm version remains installed', () => {
+    const home = temporaryDirectory();
+    const packages = temporaryDirectory();
+    const repoRoot = temporaryDirectory();
+    const expected = registration(repoRoot, home, packages);
+    expected.version = LEGACY_SYNC_REGISTRATION_VERSION;
+    delete expected.package.apiVersion;
+    const manifest = JSON.parse(fs.readFileSync(expected.package.manifestPath, 'utf8')) as Record<string, unknown>;
+    delete manifest.doompiApiVersion;
+    fs.writeFileSync(expected.package.manifestPath, `${JSON.stringify(manifest)}\n`);
+
+    publishSyncRegistration(repoRoot, expected, home);
+
+    expect(readSyncRegistration(repoRoot, home)).toEqual(expected);
   });
 });

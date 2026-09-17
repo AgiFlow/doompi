@@ -47,6 +47,7 @@ export interface NativeAsyncJobProjection {
   error?: string;
   sessionFile?: string;
   transcriptPath?: string;
+  cost?: number;
   summary?: string;
 }
 

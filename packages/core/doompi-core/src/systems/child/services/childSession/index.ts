@@ -6,6 +6,7 @@ import type {
   DoomChildSessionRuntimeFactory,
   DoomChildSessionService,
   DoomChildSessionState,
+  DoomChildSessionUsage,
 } from '../../types/childSession';
 
 export interface DoomChildSessionServiceDependencies {
@@ -145,6 +146,9 @@ async function createHandle(
   let abortCleanup: (() => void) | undefined;
   const listeners = new Set<(event: DoomChildSessionEvent) => void>();
   const sessionFile = runtime.sessionFile;
+  const usageRows = new Set<string>();
+  let cost: number | undefined;
+  let usageCleanup: (() => void) | undefined;
 
   const emit = (next: DoomChildSessionState, message?: string): void => {
     state = next;
@@ -154,6 +158,7 @@ async function createHandle(
       timestamp: dependencies.now(),
       ...(message ? { message } : {}),
       ...(sessionFile ? { sessionFile } : {}),
+      ...(cost === undefined ? {} : { cost }),
     };
     lastEvent = event;
     for (const listener of Array.from(listeners)) {
@@ -165,11 +170,20 @@ async function createHandle(
     }
   };
 
+  const onUsage = (usage: DoomChildSessionUsage): void => {
+    if (usageRows.has(usage.rowId) || !Number.isFinite(usage.cost)) return;
+    usageRows.add(usage.rowId);
+    cost = (cost ?? 0) + usage.cost;
+    emit('running');
+  };
+
   const cleanup = (): Promise<void> => {
     cleanupPromise ??= (async () => {
       try {
         await runtime.dispose();
       } finally {
+        usageCleanup?.();
+        usageCleanup = undefined;
         abortCleanup?.();
         abortCleanup = undefined;
       }
@@ -266,6 +280,7 @@ async function createHandle(
     signal.addEventListener('abort', onAbort, { once: true });
     abortCleanup = () => signal.removeEventListener('abort', onAbort);
   }
+  usageCleanup = runtime.onUsage?.(onUsage);
   emit('running');
   void Promise.resolve()
     .then(() => runtime.prompt(request.task))

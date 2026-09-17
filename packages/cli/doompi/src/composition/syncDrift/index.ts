@@ -60,7 +60,7 @@ function artifactReceiptIsIntact(
     const input = parseInputFingerprint(value);
     if (!input || !/^[a-f0-9]{64}$/u.test(input.sha256) || !inside(input.path)) return false;
     const target = fs.realpathSync(input.path);
-    if (!expected.has(target) || seen.has(target)) return false;
+    if (!expected.has(target)) return false;
     const stat = fs.statSync(target);
     if (!stat.isFile() || stat.size !== input.size) return false;
     if (crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex') !== input.sha256) return false;

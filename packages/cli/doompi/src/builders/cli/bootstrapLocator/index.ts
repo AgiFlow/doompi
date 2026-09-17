@@ -181,7 +181,7 @@ function artifactInputsAreIntact(manifest: CompilerManifest, generatedDirectory:
     for (const input of manifest.artifactInputs) {
       if (!SHA256.test(input.sha256) || !isInside(generatedDirectory, input.path)) return false;
       const target = canonicalPath(input.path);
-      if (!expected.has(target) || seen.has(target)) return false;
+      if (!expected.has(target)) return false;
       const stat = fs.statSync(target);
       if (!stat.isFile() || stat.size !== input.size) return false;
       if (crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex') !== input.sha256) return false;

@@ -61,6 +61,31 @@ describe('StoryPreviewService', () => {
     await expect(service.dispose('preview-handle')).resolves.toBe(false);
   });
 
+  it('cleans the artifact when handle registration fails', async () => {
+    const app = path.join(root, 'app');
+    const story = path.join(app, 'Button.stories.tsx');
+    const artifact = path.join(app, '.tmp', 'dist-test');
+    fs.mkdirSync(artifact, { recursive: true });
+    fs.writeFileSync(story, "export default { title: 'Button' }; export const Primary = {};\n");
+    const htmlPath = path.join(artifact, 'index.html');
+    fs.writeFileSync(htmlPath, '<!doctype html><button>Preview</button>');
+    const service = new StoryPreviewService(root, {
+      loadConfig: async () => config(),
+      createBundler: () =>
+        ({
+          prerenderComponent: vi.fn().mockResolvedValue({ htmlFilePath: htmlPath }),
+        }) as unknown as BaseBundlerService,
+      createHandle: () => {
+        throw new Error('handle unavailable');
+      },
+    });
+
+    await expect(
+      service.build({ appPath: 'app', storyPath: 'app/Button.stories.tsx', storyExport: 'Primary' }),
+    ).rejects.toThrow('handle unavailable');
+    expect(fs.existsSync(artifact)).toBe(false);
+  });
+
   it('rejects a valid identifier that is not an exported story', async () => {
     const app = path.join(root, 'app');
     const story = path.join(app, 'Button.stories.tsx');

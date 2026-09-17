@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createDoomChildSessionService } from '../../../src/systems/child/services/childSession';
-import type { DoomChildSessionRequest, DoomChildSessionRuntime } from '../../../src/systems/child/types/childSession';
+import type {
+  DoomChildSessionRequest,
+  DoomChildSessionRuntime,
+  DoomChildSessionUsage,
+} from '../../../src/systems/child/types/childSession';
 
 function deferred<T = void>(): {
   readonly promise: Promise<T>;
@@ -82,6 +86,42 @@ describe('createDoomChildSessionService', () => {
     expect(lateEvents).toEqual(['completed']);
     await handle.dispose();
     expect(child.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('deduplicates usage rows and carries the final cost through cleanup and replay', async () => {
+    const prompt = deferred<void>();
+    const dispose = deferred();
+    let usageListener: ((usage: DoomChildSessionUsage) => void) | undefined;
+    const unsubscribe = vi.fn();
+    const child = runtime({
+      prompt: vi.fn(() => prompt.promise),
+      onUsage: vi.fn((listener: (usage: DoomChildSessionUsage) => void) => {
+        usageListener = listener;
+        return unsubscribe;
+      }),
+      dispose: vi.fn(() => dispose.promise),
+    });
+    const sessions = service(async () => child);
+    const handle = await sessions.start(request());
+    const events: Array<{ state: string; cost?: number }> = [];
+    handle.subscribe((event) => events.push(event));
+
+    usageListener?.({ rowId: 'usage-1', cost: 1.25 });
+    usageListener?.({ rowId: 'usage-1', cost: 10 });
+    usageListener?.({ rowId: 'usage-2', cost: -0.25 });
+    expect(events.at(-1)).toMatchObject({ state: 'running', cost: 1 });
+
+    prompt.resolve();
+    await vi.waitFor(() => expect(child.dispose).toHaveBeenCalledOnce());
+    usageListener?.({ rowId: 'usage-3', cost: 0.5 });
+    dispose.resolve();
+    await vi.waitFor(() => expect(handle.state()).toBe('completed'));
+
+    expect(events.at(-1)).toMatchObject({ state: 'completed', cost: 1.5 });
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    const replay: Array<{ state: string; cost?: number }> = [];
+    handle.subscribe((event) => replay.push(event));
+    expect(replay).toEqual([{ runId: 'run-1', state: 'completed', timestamp: 104, cost: 1.5 }]);
   });
 
   it('keeps an owned transcript reader after the active handle completes', async () => {

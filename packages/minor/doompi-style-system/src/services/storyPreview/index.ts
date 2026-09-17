@@ -73,35 +73,42 @@ export class StoryPreviewService {
 
     const [source, config] = await Promise.all([fs.readFile(storyPath, 'utf8'), this.dependencies.loadConfig(appPath)]);
     const bundler = this.dependencies.createBundler(config);
-    const rendered = await bundler.prerenderComponent({
-      componentPath: storyPath,
-      storyName: input.storyExport,
-      args: input.args,
-      darkMode: input.darkMode,
-      appPath,
-      themePath: config.themeProvider,
-      cssFiles: config.cssFiles,
-      rootComponent: config.rootComponent,
-      unistylesConfig: config.unistylesConfig,
-    });
+    let artifactDirectory: string | undefined;
+    try {
+      const rendered = await bundler.prerenderComponent({
+        componentPath: storyPath,
+        storyName: input.storyExport,
+        args: input.args,
+        darkMode: input.darkMode,
+        appPath,
+        themePath: config.themeProvider,
+        cssFiles: config.cssFiles,
+        rootComponent: config.rootComponent,
+        unistylesConfig: config.unistylesConfig,
+      });
 
-    const htmlPath = await fs.realpath(rendered.htmlFilePath);
-    const artifactDirectory = path.dirname(htmlPath);
-    const temporaryRoot = path.join(appPath, '.tmp');
-    if (!isContained(temporaryRoot, artifactDirectory)) {
-      throw new Error('Style-system returned a preview artifact outside the project temporary directory');
+      const htmlPath = await fs.realpath(rendered.htmlFilePath);
+      const candidateDirectory = path.dirname(htmlPath);
+      const temporaryRoot = path.join(appPath, '.tmp');
+      if (!isContained(temporaryRoot, candidateDirectory)) {
+        throw new Error('Style-system returned a preview artifact outside the project temporary directory');
+      }
+      artifactDirectory = candidateDirectory;
+
+      const handle = this.dependencies.createHandle();
+      const html = await fs.readFile(htmlPath, 'utf8');
+      this.artifacts.set(handle, { directory: artifactDirectory });
+      return {
+        handle,
+        html,
+        storyPath: path.relative(root, storyPath),
+        storyExport: input.storyExport,
+        sourceSha256: createHash('sha256').update(source).digest('hex'),
+      };
+    } catch (reason) {
+      if (artifactDirectory !== undefined) await fs.rm(artifactDirectory, { recursive: true, force: true });
+      throw reason;
     }
-
-    const handle = this.dependencies.createHandle();
-    const html = await fs.readFile(htmlPath, 'utf8');
-    this.artifacts.set(handle, { directory: artifactDirectory });
-    return {
-      handle,
-      html,
-      storyPath: path.relative(root, storyPath),
-      storyExport: input.storyExport,
-      sourceSha256: createHash('sha256').update(source).digest('hex'),
-    };
   }
 
   /** Renders a fresh source-backed PNG. This does not preserve transient iframe interaction state. */
@@ -123,7 +130,12 @@ export class StoryPreviewService {
         storyName: input.storyExport,
         darkMode: input.darkMode,
       });
-      imagePath = await fs.realpath(rendered.imagePath);
+      const renderedImagePath = await fs.realpath(rendered.imagePath);
+      const imageRoot = await fs.realpath(path.join(appPath, '.tmp'));
+      if (!isContained(imageRoot, renderedImagePath)) {
+        throw new Error('Style-system returned an image artifact outside the project temporary directory');
+      }
+      imagePath = renderedImagePath;
       const image = await fs.readFile(imagePath);
       return {
         data: image.toString('base64'),
