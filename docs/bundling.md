@@ -78,6 +78,7 @@ Published generations are not edited in place. A cleanup failure is reported, bu
 
 The registration is part of the boundary. It pins the repository identity, worktree, DoomPi package root, npm version provenance, API version, Pi entry, state hash, and generation paths. A missing, stale, foreign, traversing, or malformed registration is rejected rather than replaced with a guessed source checkout or another repository's state. Schema-1 registrations without API metadata retain exact npm-version validation until an explicit sync republishes them in the current schema.
 Runtime checks hash recorded bootstrap, bundle, server, contract, and compiler artifact bytes. A package release with the same supported API version can therefore reuse an intact generation even when its producer sources changed. `doompi sync --check` remains source-sensitive, and `doompi sync` is the explicit refresh path.
+
 ## What happens when a selection changes
 
 DoomPi resolves the candidate selection before applying it:

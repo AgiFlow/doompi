@@ -766,6 +766,7 @@
       "./server-facet": "tir",
       "./server-telemetry": "tir",
       "./session-files-api": "tir",
+      "./session-mcp": "tir",
       "./session-protocol": "tir",
       "./skills": "tir",
       "./sqlite-history-import": "tir",
@@ -1162,6 +1163,11 @@
         "types": "./dist/session-files-api.d.mts",
         "import": "./dist/session-files-api.mjs",
         "require": "./dist/session-files-api.cjs"
+      },
+      "./session-mcp": {
+        "types": "./dist/session-mcp.d.mts",
+        "import": "./dist/session-mcp.mjs",
+        "require": "./dist/session-mcp.cjs"
       },
       "./session-protocol": {
         "types": "./dist/session-protocol.d.mts",

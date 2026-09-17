@@ -1,7 +1,6 @@
 {
   "name": "@agimon-ai/doompi",
   "version": "0.0.1-alpha.74",
-  "doompiApiVersion": 1,
   "description": "Opinionated, composable Pi distribution for scoped agent tools, skills, MCP servers, and developer workflows.",
   "keywords": [
     "ai",
@@ -347,6 +346,7 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "doompiApiVersion": 1,
   "doompiServer": {
     "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",

@@ -410,8 +410,10 @@ function packageRegistrationFor(): SyncPackageRegistration {
 export function syncRegistrationNeedsApiMigration(repoRoot: string, homeDirectory: string): boolean {
   try {
     const registration = readSyncRegistration(repoRoot, homeDirectory);
-    return registration !== undefined &&
-      (registration.version !== SYNC_REGISTRATION_VERSION || registration.package.apiVersion === undefined);
+    return (
+      registration !== undefined &&
+      (registration.version !== SYNC_REGISTRATION_VERSION || registration.package.apiVersion === undefined)
+    );
   } catch {
     return false;
   }

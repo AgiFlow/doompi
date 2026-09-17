@@ -38,7 +38,7 @@ const OWNED_PACKAGE_DIRECTORIES: Readonly<Record<string, string>> = {
   '@agimon-ai/doompi-autostop': 'packages/foundations/doompi-autostop',
   '@agimon-ai/doompi-author': 'packages/minor/doompi-author',
   '@agimon-ai/doompi-cache': 'packages/foundations/doompi-cache',
-  '@agimon-ai/doompi-style-system': 'packages/minor/doompi-style-system',
+  '@agimon-ai/doompi-style-system': 'layers/design/doompi-style-system',
   '@agimon-ai/doompi-computer-use': 'packages/minor/doompi-computer-use',
   '@agimon-ai/doompi-config': 'packages/foundations/doompi-config',
   '@agimon-ai/doompi-domain': 'packages/foundations/doompi-domain',

@@ -651,7 +651,9 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     const code = await new SyncCommand().execute(['sync'], environmentFor(root), root, output);
 
     expect(code).toBe(0);
-    expect(text()).toContain(`repair:   upgraded Pi user dispatcher from protocol 1 to ${String(PI_DISPATCHER_VERSION)}`);
+    expect(text()).toContain(
+      `repair:   upgraded Pi user dispatcher from protocol 1 to ${String(PI_DISPATCHER_VERSION)}`,
+    );
     const manifest = JSON.parse(fs.readFileSync(path.join(dispatcherPath, 'package.json'), 'utf8')) as {
       doompiDispatcher?: unknown;
     };

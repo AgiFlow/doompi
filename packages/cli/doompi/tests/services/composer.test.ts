@@ -110,10 +110,7 @@ async function writeRegisteredState(root: string, value: SyncState = syncedState
   const entry = path.join(packageRoot, 'pi.mjs');
   fs.mkdirSync(apiDirectory, { recursive: true });
   fs.mkdirSync(packageRoot, { recursive: true });
-  fs.writeFileSync(
-    entry,
-    'export default () => undefined;\n',
-  );
+  fs.writeFileSync(entry, 'export default () => undefined;\n');
   fs.writeFileSync(
     manifestPath,
     `${JSON.stringify({
@@ -179,12 +176,14 @@ function writeCompiledBundle(
       artifacts: [bundle],
       entries: [input],
       inputs: [{ path: input, size: stat.size, mtimeMs: stat.mtimeMs, sha256: sha256Of(input) }],
-      artifactInputs: [{
-        path: bundle,
-        size: fs.statSync(bundle).size,
-        mtimeMs: fs.statSync(bundle).mtimeMs,
-        sha256: sha256Of(bundle),
-      }],
+      artifactInputs: [
+        {
+          path: bundle,
+          size: fs.statSync(bundle).size,
+          mtimeMs: fs.statSync(bundle).mtimeMs,
+          sha256: sha256Of(bundle),
+        },
+      ],
     }),
   );
   return { bundle, input, manifest };

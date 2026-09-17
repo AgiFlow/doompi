@@ -46,11 +46,12 @@ export interface ReadSyncDriftOptions {
   requireFreshSources?: boolean;
 }
 
-function artifactReceiptIsIntact(
-  receipt: Record<string, unknown>,
-  inside: (target: string) => boolean,
-): boolean {
-  if (typeof receipt.output !== 'string' || !Array.isArray(receipt.artifacts) || !Array.isArray(receipt.artifactInputs)) {
+function artifactReceiptIsIntact(receipt: Record<string, unknown>, inside: (target: string) => boolean): boolean {
+  if (
+    typeof receipt.output !== 'string' ||
+    !Array.isArray(receipt.artifacts) ||
+    !Array.isArray(receipt.artifactInputs)
+  ) {
     return false;
   }
   if (receipt.artifactInputs.length === 0 || receipt.artifacts.some((file) => typeof file !== 'string')) return false;
@@ -75,14 +76,9 @@ function serverBundleIsUsable(
   requireFreshSources: boolean,
 ): boolean {
   const bundle = state.serverBundle;
-  if (
-    !bundle ||
-    !registration.serverBundle ||
-    (requireFreshSources && bundle.sourcesHash !== computeServerSourcesHash(state.resolved))
-  ) {
-    return false;
-  }
+  if (!bundle || !registration.serverBundle) return false;
   try {
+    if (requireFreshSources && bundle.sourcesHash !== computeServerSourcesHash(state.resolved)) return false;
     const descriptorPath = fs.realpathSync(bundle.descriptorPath);
     if (descriptorPath !== fs.realpathSync(registration.serverBundle.path)) return false;
     const descriptor = parseDoomServerBundle(JSON.parse(fs.readFileSync(descriptorPath, 'utf8')));
@@ -123,7 +119,7 @@ function serverBundleIsUsable(
         return false;
       const inputs = Array.isArray(receipt.inputs) ? receipt.inputs.map(parseInputFingerprint) : [];
       if (inputs.length === 0 || inputs.some((input) => input === undefined)) return false;
-      if (requireFreshSources && !inputsAreFresh(inputs as NonNullable<typeof inputs[number]>[])) return false;
+      if (requireFreshSources && !inputsAreFresh(inputs as NonNullable<(typeof inputs)[number]>[])) return false;
       if (!artifactReceiptIsIntact(receipt, inside)) return false;
     }
     return true;
@@ -225,7 +221,8 @@ export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
   if (!fs.existsSync(registration.apiDirectory)) reasons.push('package-apis-missing');
   if (
     !(requireFreshSources ? serverBundleIsFresh(state, registration) : serverBundleIsRuntimeUsable(state, registration))
-  ) reasons.push('server-bundle-stale');
+  )
+    reasons.push('server-bundle-stale');
 
   return {
     fresh: reasons.length === 0,

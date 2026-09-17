@@ -150,7 +150,7 @@ async function validateMajorMode() {
   assertArrayEqual(config.majorMode?.minimal?.layers, ['team', 'task', 'llm'], 'majorMode.minimal.layers');
   assertArrayEqual(
     config.majorMode?.copilot?.layers,
-    ['team', 'ask-user', 'task', 'sandbox', 'llm', 'source-control'],
+    ['team', 'ask-user', 'task', 'sandbox', 'llm', 'source-control', 'design'],
     'majorMode.copilot.layers',
   );
   assertArrayEqual(config.majorMode?.examples?.layers, [], 'majorMode.examples.layers');

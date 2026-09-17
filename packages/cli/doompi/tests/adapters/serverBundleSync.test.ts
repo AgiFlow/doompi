@@ -251,6 +251,10 @@ describe('syncServerBundle', () => {
     expect(serverBundleIsFresh(state, registration)).toBe(false);
     fs.writeFileSync(manifest, originalManifest);
     expect(serverBundleIsFresh(state, registration)).toBe(true);
+    fs.writeFileSync(manifest, '{');
+    expect(serverBundleIsFresh(state, registration)).toBe(false);
+    fs.writeFileSync(manifest, originalManifest);
+    expect(serverBundleIsFresh(state, registration)).toBe(true);
     fs.appendFileSync(path.resolve(input.outputDirectory, descriptor.entries[0]!.module), '\n// corrupt');
     expect(serverBundleIsFresh(state, registration)).toBe(false);
   });

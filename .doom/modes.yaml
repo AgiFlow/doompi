@@ -43,6 +43,9 @@ layers:
   sandbox:
     packages:
       - "./layers/sandbox/doompi-sandbox"
+  design:
+    packages:
+      - "./layers/design/doompi-style-system"
   llm:
     packages:
       - "./layers/llm/doompi-model-guidance"
@@ -58,7 +61,7 @@ majorMode:
     layers: [team, task, llm]
   copilot:
     description: General-purpose coding mode with delegation, persistent tasks, supervised commands, and structured user feedback.
-    layers: [team, ask-user, task, sandbox, llm, source-control]
+    layers: [team, ask-user, task, sandbox, llm, source-control, design]
   examples:
     description: Layer-free base mode for the repository's plugin and workflow examples.
     layers: []

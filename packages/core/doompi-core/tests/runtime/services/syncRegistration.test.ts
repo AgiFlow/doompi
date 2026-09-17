@@ -182,5 +182,8 @@ describe('sync registration', () => {
     publishSyncRegistration(repoRoot, expected, home);
 
     expect(readSyncRegistration(repoRoot, home)).toEqual(expected);
+    manifest.version = 'other-release';
+    fs.writeFileSync(expected.package.manifestPath, `${JSON.stringify(manifest)}\n`);
+    expect(() => readSyncRegistration(repoRoot, home)).toThrow('does not match');
   });
 });

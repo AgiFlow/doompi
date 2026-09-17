@@ -21,7 +21,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AgiFlow/doompi.git",
-    "directory": "packages/minor/doompi-style-system"
+    "directory": "layers/design/doompi-style-system"
   },
   "files": [
     "dist",

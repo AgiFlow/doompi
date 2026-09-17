@@ -265,7 +265,9 @@ export function readBundleStatus(
   const manifest = readCompilerManifest(manifestPath, state.generatedDirectory);
   return {
     bundle,
-    fresh: Boolean(manifest && manifest.output === bundle && compilerManifestIsUsable(manifest, state.generatedDirectory)),
+    fresh: Boolean(
+      manifest && manifest.output === bundle && compilerManifestIsUsable(manifest, state.generatedDirectory),
+    ),
   };
 }
 
@@ -286,7 +288,9 @@ export function readBootstrapStatus(
     const manifestPath = state.precompile?.bundleManifests[fingerprint];
     if (!manifestPath) return false;
     const manifest = readCompilerManifest(manifestPath, state.generatedDirectory);
-    return Boolean(manifest && manifest.output === bundle && compilerManifestIsFresh(manifest, state.generatedDirectory));
+    return Boolean(
+      manifest && manifest.output === bundle && compilerManifestIsFresh(manifest, state.generatedDirectory),
+    );
   });
   return { bootstrap: state.bootstrap, fresh };
 }
