@@ -161,11 +161,13 @@ async function sendMessage(data: unknown): Promise<Record<string, unknown>> {
   return reply;
 }
 
-function dispatchFetch(path: string): FetchOutcome {
+function dispatchFetch(path: string, mode?: RequestMode): FetchOutcome {
   let response: Promise<Response> | undefined;
   let lifetime: Promise<unknown> | undefined;
+  const request = new Request(`https://cockpit.test${path}`);
+  if (mode !== undefined) Object.defineProperty(request, 'mode', { value: mode });
   const event = {
-    request: new Request(`https://cockpit.test${path}`),
+    request,
     respondWith: (value: Promise<Response>) => (response = value),
     waitUntil: (value: Promise<unknown>) => (lifetime = value),
   };
@@ -346,6 +348,22 @@ describe('verified bundle activation', () => {
 
     await expect(activate()).resolves.toMatchObject({ ok: true, revision: 1 });
     expect(mocks.active?.cacheName).toBe(cacheName);
+  });
+
+  it('revalidates an unreadable inherited bundle before returning a failed navigation', async () => {
+    mocks.manifest = manifest(2, { '/index.html': 'fresh index' });
+    mocks.active = {
+      signerPublicKey: 'key',
+      manifestDigest: 'old',
+      revision: 1,
+      cacheName: 'doompi-bundle-old',
+    };
+    await cacheStorage.open(mocks.active.cacheName);
+
+    const navigation = dispatchFetch('/session/stale', 'navigate');
+
+    await expect(body(navigation.response)).resolves.toBe('fresh index');
+    expect(mocks.active.revision).toBe(2);
   });
 
   it('falls back to eager delivery when the authenticated optional policy is invalid', async () => {

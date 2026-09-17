@@ -814,11 +814,25 @@ function revalidatePinnedBundle(state: ActiveBundleState): Promise<void> {
   return revalidation;
 }
 
-/** Reads the pin itself, so scheduling never has to wait on the response path. */
+/** Reads the pin itself, so scheduling never has to wait on a healthy response path. */
 async function revalidateOnNavigation(): Promise<void> {
   const state = await readActiveBundle();
   if (state === undefined) return;
   await revalidatePinnedBundle(state);
+}
+
+async function verifiedFetch(request: Request): Promise<Response> {
+  const state = await readActiveBundle();
+  if (state === undefined) return await fetch(request);
+  const response = await verifiedResponse(state, request);
+  if (request.mode !== 'navigate' || response.status !== 404) return response;
+
+  // A newly installed worker can inherit an older durable state that it can no
+  // longer read. Revalidate that state once before exposing a transient blank
+  // page, while still refusing to serve any bytes that fail verification.
+  await revalidatePinnedBundle(state);
+  const refreshed = await readActiveBundle();
+  return refreshed === undefined ? response : await verifiedResponse(refreshed, request);
 }
 
 worker.addEventListener('fetch', (event) => {
@@ -836,15 +850,11 @@ worker.addEventListener('fetch', (event) => {
   )
     return;
   // A navigation is the one moment a returning device is reliably online and
-  // between pages, so it is where the pin gets questioned. Scheduled here, while
-  // the event is certainly still extendable, and kept off the response path: a
-  // refused or impossible update must never cost the page its bundle.
+  // between pages, so it is where the pin gets questioned. Schedule it while the
+  // event is extendable and keep it off a healthy response path. Only an already
+  // unreadable bundle waits for the shared revalidation in `verifiedFetch`.
   if (event.request.mode === 'navigate') event.waitUntil(revalidateOnNavigation());
-  event.respondWith(
-    readActiveBundle().then(async (state) =>
-      state === undefined ? await fetch(event.request) : await verifiedResponse(state, event.request),
-    ),
-  );
+  event.respondWith(verifiedFetch(event.request));
 });
 
 worker.addEventListener('push', (event) => {
