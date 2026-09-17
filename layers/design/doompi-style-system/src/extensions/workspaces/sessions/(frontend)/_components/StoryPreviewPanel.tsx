@@ -96,6 +96,13 @@ export function StoryPreviewPanel({ sessionId, submitCapture, seed, source }: St
   );
 
   useEffect(() => {
+    operationRef.current += 1;
+    if (!workingRef.current) return;
+    workingRef.current = false;
+    setWorking(false);
+  }, [request]);
+
+  useEffect(() => {
     const generation = generationRef.current + 1;
     generationRef.current = generation;
     operationRef.current += 1;
