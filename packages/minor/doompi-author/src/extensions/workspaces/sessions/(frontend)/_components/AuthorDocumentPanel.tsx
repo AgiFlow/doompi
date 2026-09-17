@@ -3,6 +3,7 @@ import { Button } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 
+import { authorPreviewActionSlot, type AuthorPreviewActionSource } from '../../../../../types/authorPreview';
 import { focusAuthorViewport } from '../_lib/authorBrowserBridge';
 import { loadAuthorDocument, saveAuthorDocument } from '../_lib/authorFiles';
 import { authorProfilesForDocument } from '../_lib/authorProfiles';
@@ -63,7 +64,8 @@ export function AuthorDocumentPanel(props: AuthorDocumentPanelProps) {
   return <ActiveAuthorDocumentPanel {...props} />;
 }
 
-function ActiveAuthorDocumentPanel({ path, sessionId, statuses }: AuthorDocumentPanelProps) {
+function ActiveAuthorDocumentPanel(props: AuthorDocumentPanelProps) {
+  const { path, sessionId, statuses } = props;
   const document = useStore(authorWorkspace.store, (state) =>
     sessionId === null ? undefined : state.documents[authorDocumentKey(sessionId, path)],
   );
@@ -74,7 +76,27 @@ function ActiveAuthorDocumentPanel({ path, sessionId, statuses }: AuthorDocument
   const activeTool = workspace?.activeTool ?? 'select';
   const [markdownPreview, setMarkdownPreview] = useState(true);
   const [status, setStatus] = useState<string | undefined>();
+  const [previewOpen, setPreviewOpen] = useState(false);
   const kind = document?.kind;
+  const previewSource: AuthorPreviewActionSource | undefined =
+    document === undefined
+      ? undefined
+      : {
+          path: document.path,
+          kind: document.kind,
+          hasUnsavedChanges: document.version !== document.savedVersion,
+          revision: document.savedVersion,
+          sourceSha256: document.sourceSha256,
+        };
+  const previewAction =
+    previewSource === undefined
+      ? undefined
+      : (props.slotData?.(authorPreviewActionSlot) ?? []).find(
+          ({ data }) =>
+            data.embeddedPanel !== undefined &&
+            (data.supportsSource === undefined || data.supportsSource(previewSource)),
+        );
+  const PreviewPanel = previewAction?.data.embeddedPanel;
   useEffect(() => {
     if (document !== undefined || sessionId === null) return;
     const controller = new AbortController();
@@ -143,11 +165,39 @@ function ActiveAuthorDocumentPanel({ path, sessionId, statuses }: AuthorDocument
       displayedRegions={displayedRegions}
     />
   );
+  const sourcePanel =
+    document.kind === 'text' || document.kind === 'markdown' || document.kind === 'story-preview' ? (
+      textPanel
+    ) : document.structuredFormat !== undefined ? (
+      <AuthorStructuredView sessionId={sessionId} document={document} displayedRegions={displayedRegions} />
+    ) : (
+      <AuthorMediaView
+        key={document.path}
+        sessionId={sessionId}
+        document={document}
+        activeTool={activeTool}
+        displayedRegions={displayedRegions}
+        pendingCandidate={workspace?.candidate !== undefined}
+        seekRequest={workspace?.videoSeekRequest}
+      />
+    );
 
   return (
     <section data-testid="author-document" className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-center gap-2 border-b border-doom-border px-4 py-2">
         <strong className="min-w-0 flex-1 truncate text-base text-doom-hi">{document.title ?? document.path}</strong>
+        {PreviewPanel !== undefined && previewSource !== undefined ? (
+          <Button
+            size="xs"
+            variant={previewOpen ? 'primary' : 'outline'}
+            data-testid="author-story-preview-toggle"
+            aria-pressed={previewOpen}
+            aria-label={previewOpen ? 'show story source' : 'show story preview'}
+            onClick={() => setPreviewOpen(!previewOpen)}
+          >
+            {previewOpen ? 'Source' : 'Preview'}
+          </Button>
+        ) : null}
         {document.kind === 'markdown' ? (
           <Button
             size="xs"
@@ -168,28 +218,20 @@ function ActiveAuthorDocumentPanel({ path, sessionId, statuses }: AuthorDocument
             disabled={document.revisions.length === 0 || document.savingVersion !== undefined}
             onClick={() => void save()}
           >
-            Save
+            {previewOpen && previewSource?.hasUnsavedChanges ? 'Save & refresh' : 'Save'}
           </Button>
         )}
       </header>
       {status === undefined ? null : <output className="px-4 py-1 text-xs text-doom-faint">{status}</output>}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {document.kind === 'text' || document.kind === 'markdown' ? (
-          textPanel
-        ) : document.structuredFormat !== undefined ? (
-          <AuthorStructuredView sessionId={sessionId} document={document} displayedRegions={displayedRegions} />
+        {previewOpen && PreviewPanel !== undefined && previewSource !== undefined ? (
+          <PreviewPanel {...props} source={previewSource} />
         ) : (
-          <AuthorMediaView
-            key={document.path}
-            sessionId={sessionId}
-            document={document}
-            activeTool={activeTool}
-            displayedRegions={displayedRegions}
-            pendingCandidate={workspace?.candidate !== undefined}
-            seekRequest={workspace?.videoSeekRequest}
-          />
+          sourcePanel
         )}
-        <AuthorGridOverlay sessionId={sessionId} document={document} visible={gridVisible} />
+        {previewOpen && PreviewPanel !== undefined && previewSource !== undefined ? null : (
+          <AuthorGridOverlay sessionId={sessionId} document={document} visible={gridVisible} />
+        )}
       </div>
     </section>
   );

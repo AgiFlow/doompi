@@ -9,7 +9,7 @@ import { createHeadlessHub, type HeadlessHub } from '@agimon-ai/doompi-core/head
 import { serveHeadlessServer } from '@agimon-ai/doompi-core/headless-server';
 import type { HeadlessSessionHost, HeadlessSessionHostOptions } from '@agimon-ai/doompi-core/headless-session-host';
 import { createHeadlessSessionManager } from '@agimon-ai/doompi-core/headless-session-manager';
-import { createOpenSessionRegistry, listSavedSessions } from '@agimon-ai/doompi-core/history';
+import { createOpenSessionRegistry, listSavedSessions, readSqliteTranscript } from '@agimon-ai/doompi-core/history';
 import type { OpenSessionRecord } from '@agimon-ai/doompi-core/history';
 import type {
   DoomHubSessionApiRequest,
@@ -524,6 +524,16 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           path.join(piAgentDirectory(baseEnvironment), 'server', 'sessions'),
           workspaceRoot,
           new Set(hub.snapshot().map((active) => active.id)),
+        );
+      },
+      readDormantTranscript: (record, request, context) => {
+        const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === record.workspaceId)?.root;
+        if (!workspaceRoot) throw new Error('Saved transcript unavailable.');
+        return readSqliteTranscript(
+          path.join(piAgentDirectory(baseEnvironment), 'server', 'sessions', `${record.sessionId}.sqlite`),
+          request,
+          context,
+          { sessionId: record.sessionId, workspaceRoot },
         );
       },
       restartSession: async (session) => {

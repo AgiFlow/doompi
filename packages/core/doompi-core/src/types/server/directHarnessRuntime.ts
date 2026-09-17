@@ -152,6 +152,8 @@ export interface DirectHarnessRuntime<TContext extends object | undefined = obje
   readState(): Promise<Record<string, unknown>>;
   readEntries(): Promise<{ entries: Entry[]; leafId: string | null }>;
   listCommands(): readonly { name: string; description: string }[];
+  /** Dispatches a registered command without admitting a model turn. */
+  dispatchCommand(text: string): Promise<boolean>;
   setModel(model: { provider: string; id: string }): Promise<void>;
   availableModels(): Promise<readonly Model<Api>[]>;
   /** Shares the harness dispatch guards with host-owned auxiliary model requests. */

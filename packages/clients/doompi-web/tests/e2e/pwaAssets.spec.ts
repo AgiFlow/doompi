@@ -216,6 +216,27 @@ test('reloads the verified core shell offline', async ({ page, context, cockpit 
   expect(await bundleCacheName(page, before.manifest.revision)).toBe(before.cacheName);
 });
 
+test('automatically reloads an open cockpit after a newer verified revision is committed', async ({
+  page,
+  cockpit,
+  assetPackageRoot,
+}) => {
+  await page.goto(cockpit.url);
+  await expect(page.getByTestId('cockpit')).toBeVisible();
+  const before = await bundleSnapshot(page);
+  await expect.poll(async () => await page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
+
+  const navigation = page.waitForEvent('framenavigated', { predicate: (frame) => frame === page.mainFrame() });
+  publishChangedWebTree(assetPackageRoot);
+  cockpit.republishShell();
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await navigation;
+
+  await expect(page.getByTestId('cockpit')).toBeVisible();
+  const after = await bundleSnapshot(page);
+  expect(after.manifest.revision).toBeGreaterThan(before.manifest.revision);
+});
+
 test('notifies every controlled tab after a newer verified revision is committed', async ({
   page,
   context,

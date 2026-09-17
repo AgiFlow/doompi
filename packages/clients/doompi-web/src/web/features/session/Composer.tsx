@@ -47,6 +47,7 @@ import {
 } from '../../stores/sessionStore';
 import { useToolPrompt } from '../../stores/useToolPrompt';
 import { ComposerPrompt } from './ComposerPrompt';
+import { DormantPanel } from './DormantPanel';
 import { QueueSheet } from './QueueSheet';
 
 /** The input grows with the draft up to this many pixels, then scrolls. */
@@ -186,7 +187,8 @@ export function Composer() {
   const containerRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const attached = meta?.attach === 'attached';
+  const dormant = meta?.summary.dormant === true;
+  const attached = !dormant && meta?.attach === 'attached';
   const queued = Math.max(meta?.summary.pendingMessageCount ?? 0, queuedEntries.length);
 
   // Completion and drag state are transient. The draft and attachments below
@@ -214,7 +216,7 @@ export function Composer() {
   // Overlays hand the keyboard back here when they close. Re-registered when
   // a tool prompt stands the input down and again when it gives it back:
   // otherwise the ref stays as it was and every later hand-back goes nowhere.
-  useEffect(() => registerPromptInput(inputRef.current), [prompt]);
+  useEffect(() => registerPromptInput(inputRef.current), [dormant, prompt]);
 
   useEffect(() => {
     if (editorTextRequest === null) return;
@@ -484,6 +486,14 @@ export function Composer() {
       abort
     </Button>
   );
+
+  if (dormant && meta !== null && sessionId !== null) {
+    return (
+      <div className="shrink-0 border-t border-doom-border bg-doom-rail px-3 pt-3 pb-2.5 sm:px-5">
+        <DormantPanel key={sessionId} meta={meta} />
+      </div>
+    );
+  }
 
   // A tool waiting on an answer takes the input's place rather than opening
   // over the conversation: the transcript is what the reader needs in order

@@ -15,6 +15,8 @@ const socketState = vi.hoisted(() => ({
   presentation: undefined as ((sessionId: string, frame: Record<string, unknown>, replay: boolean) => void) | undefined,
 }));
 
+const bundleState = vi.hoisted(() => ({ refresh: vi.fn() }));
+
 const pluginState = vi.hoisted(() => ({
   dispatched: [] as Record<string, unknown>[],
   focus: (_sessionId: string): Promise<void> => Promise.resolve(),
@@ -72,6 +74,10 @@ vi.mock('../../src/web/stores/menuStore', () => ({
   },
 }));
 
+vi.mock('../../src/pwa/workerClient', () => ({
+  refreshVerifiedBundle: () => bundleState.refresh(),
+}));
+
 import { startSessionRuntime } from '../../src/web/app/sessionRuntime';
 import { onHubConnected } from '../../src/web/lib/transport';
 import { onCaptureStatus, pendingCaptureSessions, submitCapture } from '../../src/web/stores/captureStore';
@@ -86,6 +92,7 @@ import {
 import { threadStoreKey } from '../../src/web/stores/threadStore';
 
 afterEach(() => {
+  bundleState.refresh.mockReset();
   socketState.protocolReady = true;
   socketState.handlers = undefined;
   socketState.presentation = undefined;
@@ -393,6 +400,24 @@ describe('session runtime hub connection lifecycle', () => {
     expect(hydratedStates).toEqual([true, true]);
   });
 
+  it('handles a rejected session plugin focus without an unhandled rejection', async () => {
+    const error = new Error('composition unavailable');
+    pluginState.focus = (sessionId) => (sessionId === 's1' ? Promise.reject(error) : Promise.resolve());
+    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
+    const stop = startSessionRuntime();
+    try {
+      socketState.handlers?.onFrame({
+        type: 'sessions_snapshot',
+        sessions: [{ id: 's1', name: 'Focused', createdAt: '1' }],
+      });
+      setActiveSession('s1');
+      await vi.waitFor(() => expect(report).toHaveBeenCalledWith(error));
+    } finally {
+      report.mockRestore();
+      stop();
+    }
+  });
   it.each(['close', 'stop'] as const)('clears replay guards when the socket %s', (cleanup) => {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: { location: {} } });
     const sessionId = `replay-cleanup-${cleanup}`;
@@ -613,4 +638,78 @@ describe('pending capture subscription lifetime', () => {
       }
     },
   );
+});
+
+describe('bundle refresh watcher', () => {
+  it('checks visible tabs without overlapping requests and stops on disposal', async () => {
+    vi.useFakeTimers();
+    const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+    const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    const worker = new EventTarget();
+    const documentTarget = new EventTarget();
+    const reload = vi.fn();
+    let visibilityState: DocumentVisibilityState = 'visible';
+    Object.defineProperty(documentTarget, 'visibilityState', {
+      configurable: true,
+      get: () => visibilityState,
+    });
+    const windowTarget = Object.assign(new EventTarget(), {
+      location: { reload, replace: vi.fn() },
+      sessionStorage: { getItem: () => null, removeItem: vi.fn(), setItem: vi.fn() },
+      setInterval,
+      clearInterval,
+    });
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: windowTarget });
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: documentTarget });
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { serviceWorker: worker } });
+
+    let resolveFirst: ((value: { ok: true }) => void) | undefined;
+    bundleState.refresh
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ ok: true }>((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockResolvedValue({ ok: true });
+    const stop = startSessionRuntime();
+    try {
+      expect(bundleState.refresh).toHaveBeenCalledTimes(1);
+
+      visibilityState = 'hidden';
+      documentTarget.dispatchEvent(new Event('visibilitychange'));
+      windowTarget.dispatchEvent(new Event('online'));
+      vi.advanceTimersByTime(60_000);
+      expect(bundleState.refresh).toHaveBeenCalledTimes(1);
+
+      visibilityState = 'visible';
+      documentTarget.dispatchEvent(new Event('visibilitychange'));
+      expect(bundleState.refresh).toHaveBeenCalledTimes(1);
+
+      resolveFirst?.({ ok: true });
+      await Promise.resolve();
+      await Promise.resolve();
+      windowTarget.dispatchEvent(new Event('online'));
+      expect(bundleState.refresh).toHaveBeenCalledTimes(2);
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(bundleState.refresh).toHaveBeenCalledTimes(3);
+
+      worker.dispatchEvent(new MessageEvent('message', { data: { type: 'doompi:bundle-updated', revision: 2 } }));
+      expect(reload).toHaveBeenCalledTimes(1);
+      stop();
+      windowTarget.dispatchEvent(new Event('online'));
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(bundleState.refresh).toHaveBeenCalledTimes(3);
+    } finally {
+      stop();
+      if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+      else Reflect.deleteProperty(globalThis, 'window');
+      if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
+      else Reflect.deleteProperty(globalThis, 'document');
+      if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
+      else Reflect.deleteProperty(globalThis, 'navigator');
+    }
+  });
 });

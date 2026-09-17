@@ -501,6 +501,53 @@ describe('serveHeadlessServer', () => {
     expect(removeDormantSession).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'asleep' }));
     await hub.close();
   });
+  it('reads a dormant transcript without reviving it or accepting another workspace', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    const records = [
+      { sessionId: 'asleep', workspaceId: 'test-workspace', cwd: '/repo', name: 'Asleep', createdAt: '2025-01-02' },
+    ];
+    const readDormantTranscript = vi.fn(async () => ({
+      entries: [],
+      startCursor: null,
+      endCursor: null,
+      olderCursor: null,
+      newerCursor: null,
+      generation: 0,
+      revision: 0,
+      context: [],
+      drafts: [],
+    }));
+    const reviveSession = vi.fn(async () => undefined);
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    const server = await serveHeadlessServer({
+      headlessHub: hub,
+      port: 0,
+      dormantSessions: () => records,
+      readDormantTranscript,
+      reviveSession,
+    });
+    servers.push(server);
+
+    const page = await fetch(`${server.url}/api/workspaces/test-workspace/sessions/asleep/transcript?limit=10`);
+    expect(page.status).toBe(200);
+    expect(await page.json()).toMatchObject({ entries: [], generation: 0 });
+    expect(readDormantTranscript).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'asleep', workspaceId: 'test-workspace' }),
+      { limit: 10 },
+      expect.anything(),
+    );
+    expect(reviveSession).not.toHaveBeenCalled();
+    expect((await fetch(`${server.url}/api/workspaces/other/sessions/asleep/transcript`)).status).toBe(404);
+    expect(
+      (await fetch(`${server.url}/api/workspaces/test-workspace/sessions/asleep/transcript?limit=101`)).status,
+    ).toBe(400);
+    await hub.close();
+  });
   it('serves compositions, assets, remote requests, and directory suggestions', async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-directories-'));
     temporaryDirectories.push(directory);

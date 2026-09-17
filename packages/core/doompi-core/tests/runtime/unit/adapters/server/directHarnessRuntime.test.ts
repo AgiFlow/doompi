@@ -449,6 +449,9 @@ describe('direct AgentHarness runtime', () => {
       frames.length = 0;
       await runtime.prompt('/known argument');
       expect(dispatchCommand).toHaveBeenCalledWith('/known argument');
+      await expect(runtime.dispatchCommand('/known argument')).resolves.toBe(true);
+      await expect(runtime.dispatchCommand('/unknown argument')).resolves.toBe(false);
+      expect(streamSimple).toHaveBeenCalledOnce();
       expect(frames).not.toContainEqual(expect.objectContaining({ type: 'agent_settled' }));
     } finally {
       await runtime.dispose();

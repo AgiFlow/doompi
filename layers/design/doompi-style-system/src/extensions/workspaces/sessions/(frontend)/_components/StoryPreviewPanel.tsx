@@ -1,6 +1,6 @@
 import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { Button } from '@agimon-ai/doompi-web-components';
-import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 import type {
   BuildStoryPreviewRequest,
@@ -31,116 +31,250 @@ function point(event: ReactPointerEvent<HTMLElement>): PreviewPoint {
     y: Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height)),
   };
 }
-interface StoryPreviewPanelProps extends WebPluginSlotProps {
-  seed?: StoryPreviewSeed;
+
+interface StoryPreviewSource {
+  path: string;
+  hasUnsavedChanges: boolean;
+  kind?: string;
+  revision?: number;
+  sourceSha256?: string;
 }
 
-export function StoryPreviewPanel({ sessionId, submitCapture, seed }: StoryPreviewPanelProps) {
-  const seededPath = seed?.source?.path ?? '';
-  const [appPath, setAppPath] = useState('.');
-  const [storyPath, setStoryPath] = useState(seededPath);
-  const [storyExport, setStoryExport] = useState(seed === undefined ? 'Playground' : '');
-  const [storyExports, setStoryExports] = useState<readonly StoryPreviewMetadataView['exports'][number][]>();
+interface StoryPreviewPanelProps extends WebPluginSlotProps {
+  seed?: StoryPreviewSeed;
+  source?: StoryPreviewSource;
+}
+
+function preferredExport(exports: readonly StoryPreviewMetadataView['exports'][number][]): string {
+  return exports.find((entry) => entry.exportName === 'Playground')?.exportName ?? exports[0]?.exportName ?? '';
+}
+
+function errorText(reason: unknown): string {
+  return reason instanceof Error ? reason.message : String(reason);
+}
+
+export function StoryPreviewPanel({ sessionId, submitCapture, seed, source }: StoryPreviewPanelProps) {
+  const contextualSource = source ?? seed?.source;
+  const sourcePath = contextualSource?.path ?? '';
+  const sourceDirty = contextualSource?.hasUnsavedChanges === true;
+  const sourceRevision = contextualSource?.revision ?? 0;
+  const sourceSha256 = contextualSource?.sourceSha256 ?? '';
+  const contextual = contextualSource !== undefined;
+  const [appPath, setAppPath] = useState(contextual ? '' : '.');
+  const [storyPath, setStoryPath] = useState(sourcePath);
+  const [storyExport, setStoryExport] = useState(contextual ? '' : 'Playground');
+  const [storyExports, setStoryExports] = useState<
+    readonly StoryPreviewMetadataView['exports'][number][] | undefined
+  >();
   const [darkMode, setDarkMode] = useState(false);
-  const [preview, setPreview] = useState<BuildStoryPreviewView>();
-  const [builtRequest, setBuiltRequest] = useState<BuildStoryPreviewRequest>();
-  const [annotationImage, setAnnotationImage] = useState<ExportStoryPreviewImageView>();
-  const [annotationStart, setAnnotationStart] = useState<PreviewPoint>();
-  const [annotationRect, setAnnotationRect] = useState<PreviewAnnotationRect>();
+  const [preview, setPreview] = useState<BuildStoryPreviewView | undefined>(undefined);
+  const [builtRequest, setBuiltRequest] = useState<BuildStoryPreviewRequest | undefined>(undefined);
+  const [annotationImage, setAnnotationImage] = useState<ExportStoryPreviewImageView | undefined>(undefined);
+  const [annotationStart, setAnnotationStart] = useState<PreviewPoint | undefined>(undefined);
+  const [annotationRect, setAnnotationRect] = useState<PreviewAnnotationRect | undefined>(undefined);
   const [feedback, setFeedback] = useState('');
   const [status, setStatus] = useState(
-    seed === undefined
-      ? 'Choose an exact story file and export.'
-      : seed.source?.hasUnsavedChanges === true
-        ? 'Loading story metadata. Preview uses saved source; unsaved edits will not be included.'
-        : 'Loading story metadata…',
+    contextual
+      ? sourceDirty
+        ? 'Loading story metadata. Preview uses saved source.'
+        : 'Loading story metadata…'
+      : 'Choose an exact story file and export.',
   );
   const [working, setWorking] = useState(false);
+  const generationRef = useRef(0);
+  const operationRef = useRef(0);
+  const previewRef = useRef<BuildStoryPreviewView | undefined>(undefined);
+  const builtRequestRef = useRef<BuildStoryPreviewRequest | undefined>(undefined);
+  const workingRef = useRef(false);
+  const dirtyRef = useRef(sourceDirty);
 
-  useEffect(() => {
-    if (sessionId === null || seededPath === '') return;
-    let current = true;
-    void storyMetadata(sessionId, { storyPath: seededPath }).then((result) => {
-      if (!current) return;
-      if (!result.ok) {
-        setStatus(result.error);
-        setStoryExports(undefined);
-        return;
-      }
-      setAppPath(result.metadata.appPath);
-      setStoryPath(result.metadata.storyPath);
-      setStoryExports(result.metadata.exports);
-      if (result.metadata.exports.length === 1) {
-        setStoryExport(result.metadata.exports[0]!.exportName);
-        setStatus(
-          seed?.source?.hasUnsavedChanges === true
-            ? 'Story selected. Preview uses saved source; unsaved edits will not be included.'
-            : 'Story selected. Build when ready.',
-        );
-      } else if (result.metadata.exports.length > 1) {
-        setStoryExport('');
-        setStatus('Choose a story export. Build remains explicit.');
-      } else {
-        setStoryExport('');
-        setStatus('No story exports were found. Enter an exact export or choose another file.');
-      }
-    });
-    return () => {
-      current = false;
-    };
-  }, [seed, seededPath, sessionId]);
+  dirtyRef.current = sourceDirty;
+
   const request = useMemo<BuildStoryPreviewRequest>(
     () => ({ appPath, storyPath, storyExport, darkMode }),
     [appPath, storyPath, storyExport, darkMode],
   );
 
-  useEffect(
-    () => () => {
-      if (sessionId !== null && preview !== undefined) void disposePreview(sessionId, preview.handle);
-    },
-    [preview, sessionId],
-  );
+  useEffect(() => {
+    const generation = generationRef.current + 1;
+    generationRef.current = generation;
+    operationRef.current += 1;
+    workingRef.current = false;
+    setWorking(false);
+    setStoryExports(undefined);
+    setAppPath(contextual ? '' : '.');
+    setStoryPath(sourcePath);
+    setStoryExport(contextual ? '' : 'Playground');
+    builtRequestRef.current = undefined;
+    setBuiltRequest(undefined);
+    setAnnotationImage(undefined);
+    setAnnotationStart(undefined);
+    setAnnotationRect(undefined);
 
-  async function rebuild(): Promise<void> {
-    if (sessionId === null || working) return;
+    if (sessionId === null || sourcePath === '') {
+      setPreview(undefined);
+      previewRef.current = undefined;
+      return () => {
+        if (generationRef.current === generation) generationRef.current += 1;
+      };
+    }
+
+    const previous = previewRef.current;
+    previewRef.current = undefined;
+    setPreview(undefined);
+    if (previous !== undefined) void disposePreview(sessionId, previous.handle);
+
+    let current = true;
+    setStatus(sourceDirty ? 'Loading story metadata. Preview uses saved source.' : 'Loading story metadata…');
+    void storyMetadata(sessionId, { storyPath: sourcePath })
+      .then((result) => {
+        if (!current || generationRef.current !== generation) return;
+        if (!result.ok) {
+          setStoryExports(undefined);
+          setStatus(result.error);
+          return;
+        }
+        const exports = result.metadata.exports;
+        setAppPath(result.metadata.appPath);
+        setStoryPath(result.metadata.storyPath);
+        setStoryExports(exports);
+        setStoryExport(preferredExport(exports));
+        if (exports.length === 0) {
+          setStatus('No story exports were found in this file.');
+        } else if (dirtyRef.current) {
+          setStatus('Save changes to preview. Preview uses saved source.');
+        } else if (exports.length === 1) {
+          setStatus('Story found. Building preview…');
+        } else {
+          setStatus('Story found. Building the Playground export…');
+        }
+      })
+      .catch((reason: unknown) => {
+        if (current && generationRef.current === generation) setStatus(errorText(reason));
+      });
+
+    return () => {
+      current = false;
+      if (generationRef.current === generation) generationRef.current += 1;
+      operationRef.current += 1;
+      const ownedPreview = previewRef.current;
+      previewRef.current = undefined;
+      if (ownedPreview !== undefined) void disposePreview(sessionId, ownedPreview.handle);
+    };
+  }, [contextual, sessionId, sourcePath, sourceRevision, sourceSha256]);
+
+  useEffect(() => {
+    if (!contextual || !sourceDirty) return;
+    setStatus('Save changes to preview. Preview uses saved source.');
+  }, [contextual, sourceDirty]);
+
+  const rebuild = useCallback(async (): Promise<boolean> => {
+    if (
+      sessionId === null ||
+      workingRef.current ||
+      request.appPath.trim() === '' ||
+      request.storyPath.trim() === '' ||
+      request.storyExport.trim() === ''
+    )
+      return false;
+    if (dirtyRef.current) {
+      setStatus('Save changes to preview. Preview uses saved source.');
+      return false;
+    }
+
+    const generation = generationRef.current;
+    const operation = operationRef.current + 1;
+    operationRef.current = operation;
+    const requestSessionId = sessionId;
+    workingRef.current = true;
     setWorking(true);
     setStatus('Building preview…');
     try {
-      const result = await buildPreview(sessionId, request);
+      const result = await buildPreview(requestSessionId, request);
+      if (generationRef.current !== generation || operationRef.current !== operation) {
+        if (result.ok) void disposePreview(requestSessionId, result.preview.handle);
+        return false;
+      }
       if (!result.ok) {
         setStatus(result.error);
-        return;
+        return false;
       }
+      const previous = previewRef.current;
+      previewRef.current = result.preview;
+      builtRequestRef.current = request;
       setPreview(result.preview);
       setBuiltRequest(request);
       setAnnotationImage(undefined);
+      setAnnotationStart(undefined);
       setAnnotationRect(undefined);
-      setStatus('Preview ready. Refresh after source edits.');
+      if (previous !== undefined && previous.handle !== result.preview.handle) {
+        void disposePreview(requestSessionId, previous.handle);
+      }
+      setStatus(
+        dirtyRef.current
+          ? 'Preview ready from saved source. Save changes to refresh.'
+          : 'Preview ready. Refresh after source edits.',
+      );
+      return true;
+    } catch (reason: unknown) {
+      if (generationRef.current === generation && operationRef.current === operation) setStatus(errorText(reason));
+      return false;
     } finally {
-      setWorking(false);
+      if (generationRef.current === generation && operationRef.current === operation) {
+        workingRef.current = false;
+        setWorking(false);
+      }
     }
-  }
+  }, [request, sessionId]);
 
-  async function image(): Promise<ExportStoryPreviewImageView | undefined> {
-    if (sessionId === null || working || builtRequest === undefined) return undefined;
+  useEffect(() => {
+    if (
+      !contextual ||
+      sessionId === null ||
+      sourceDirty ||
+      storyExports === undefined ||
+      storyExport.trim() === '' ||
+      appPath.trim() === '' ||
+      storyPath.trim() === ''
+    )
+      return;
+    void rebuild();
+  }, [appPath, contextual, rebuild, sessionId, sourceDirty, storyExport, storyExports, storyPath]);
+
+  const image = useCallback(async (): Promise<ExportStoryPreviewImageView | undefined> => {
+    const currentRequest = builtRequestRef.current;
+    if (sessionId === null || workingRef.current || currentRequest === undefined) return undefined;
+    const generation = generationRef.current;
+    const operation = operationRef.current + 1;
+    operationRef.current = operation;
+    const requestSessionId = sessionId;
+    workingRef.current = true;
     setWorking(true);
     setStatus('Rendering a fresh source-backed image…');
     try {
-      const result = await exportPreviewImage(sessionId, builtRequest);
+      const result = await exportPreviewImage(requestSessionId, currentRequest);
+      if (generationRef.current !== generation || operationRef.current !== operation) return undefined;
       if (!result.ok) {
         setStatus(result.error);
         return undefined;
       }
       setStatus('Image rendered from the current source. Transient iframe interactions are not included.');
       return result.image;
+    } catch (reason: unknown) {
+      if (generationRef.current === generation && operationRef.current === operation) setStatus(errorText(reason));
+      return undefined;
     } finally {
-      setWorking(false);
+      if (generationRef.current === generation && operationRef.current === operation) {
+        workingRef.current = false;
+        setWorking(false);
+      }
     }
-  }
+  }, [sessionId]);
 
   async function prepareAnnotation(): Promise<void> {
+    const generation = generationRef.current;
     const result = await image();
-    if (result === undefined) return;
+    if (result === undefined || generationRef.current !== generation) return;
     setAnnotationImage(result);
     setAnnotationRect(undefined);
     setStatus('Annotation image ready. Drag a region or comment on the whole preview.');
@@ -151,64 +285,112 @@ export function StoryPreviewPanel({ sessionId, submitCapture, seed }: StoryPrevi
     const end = point(event);
     setAnnotationRect(normalizedAnnotationRect(annotationStart, end));
   }
+
+  const multipleExports = storyExports !== undefined && storyExports.length > 1;
+  const previewVisible = preview !== undefined;
+
   return (
-    <section className="flex h-full min-h-0 flex-col gap-3 p-3" data-testid="style-system-preview-panel">
-      <header className="grid gap-2 md:grid-cols-3">
-        <label className="grid gap-1 text-xs text-doom-dim">
-          Project path
-          <input
-            className="rounded border border-doom-border bg-doom-bg px-2 py-1 text-doom-text"
-            value={appPath}
-            onChange={(event) => setAppPath(event.target.value)}
-          />
-        </label>
-        <label className="grid gap-1 text-xs text-doom-dim">
-          Story file
-          <input
-            className="rounded border border-doom-border bg-doom-bg px-2 py-1 text-doom-text"
-            placeholder="packages/ui/Button.stories.tsx"
-            value={storyPath}
-            onChange={(event) => {
-              setStoryPath(event.target.value);
-              setStoryExports(undefined);
-            }}
-          />
-        </label>
-        <label className="grid gap-1 text-xs text-doom-dim">
-          Story export
-          {storyExports === undefined ? (
+    <section className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-3 p-3" data-testid="style-system-preview-panel">
+      {contextual ? (
+        <header className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-doom-dim">
+          <span>
+            Story: <strong className="text-doom-text">{storyPath || sourcePath}</strong>
+          </span>
+          <span>
+            Project: <strong className="text-doom-text">{appPath || 'resolving…'}</strong>
+          </span>
+          {multipleExports ? (
+            <label className="flex items-center gap-1">
+              Export
+              <select
+                className="rounded border border-doom-border bg-doom-bg px-2 py-1 text-doom-text"
+                value={storyExport}
+                aria-label="story export"
+                onChange={(event) => {
+                  setStoryExport(event.target.value);
+                  builtRequestRef.current = undefined;
+                  setBuiltRequest(undefined);
+                  setAnnotationImage(undefined);
+                  setAnnotationRect(undefined);
+                }}
+              >
+                {storyExports.map((entry) => (
+                  <option key={entry.exportName} value={entry.exportName}>
+                    {entry.label ?? entry.exportName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : storyExport !== '' ? (
+            <span>
+              Export: <strong className="text-doom-text">{storyExport}</strong>
+            </span>
+          ) : null}
+        </header>
+      ) : (
+        <header className="grid gap-2 md:grid-cols-3">
+          <label className="grid gap-1 text-xs text-doom-dim">
+            Project path
             <input
               className="rounded border border-doom-border bg-doom-bg px-2 py-1 text-doom-text"
-              value={storyExport}
-              onChange={(event) => setStoryExport(event.target.value)}
+              value={appPath}
+              onChange={(event) => setAppPath(event.target.value)}
             />
-          ) : (
-            <select
+          </label>
+          <label className="grid gap-1 text-xs text-doom-dim">
+            Story file
+            <input
               className="rounded border border-doom-border bg-doom-bg px-2 py-1 text-doom-text"
-              value={storyExport}
-              onChange={(event) => setStoryExport(event.target.value)}
-            >
-              <option value="">Choose an export</option>
-              {storyExports.map((entry) => (
-                <option key={entry.exportName} value={entry.exportName}>
-                  {entry.label ?? entry.exportName}
-                </option>
-              ))}
-            </select>
-          )}
-        </label>
-      </header>
+              placeholder="packages/ui/Button.stories.tsx"
+              value={storyPath}
+              onChange={(event) => {
+                setStoryPath(event.target.value);
+                setStoryExports(undefined);
+              }}
+            />
+          </label>
+          <label className="grid gap-1 text-xs text-doom-dim">
+            Story export
+            {storyExports === undefined ? (
+              <input
+                className="rounded border border-doom-border bg-doom-bg px-2 py-1 text-doom-text"
+                value={storyExport}
+                onChange={(event) => setStoryExport(event.target.value)}
+              />
+            ) : (
+              <select
+                className="rounded border border-doom-border bg-doom-bg px-2 py-1 text-doom-text"
+                value={storyExport}
+                onChange={(event) => setStoryExport(event.target.value)}
+              >
+                <option value="">Choose an export</option>
+                {storyExports.map((entry) => (
+                  <option key={entry.exportName} value={entry.exportName}>
+                    {entry.label ?? entry.exportName}
+                  </option>
+                ))}
+              </select>
+            )}
+          </label>
+        </header>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <Button
-          disabled={sessionId === null || working || storyPath.trim() === '' || storyExport.trim() === ''}
+          disabled={
+            sessionId === null ||
+            working ||
+            sourceDirty ||
+            request.storyPath.trim() === '' ||
+            request.storyExport.trim() === ''
+          }
           onClick={() => void rebuild()}
         >
-          {preview === undefined ? 'Build preview' : 'Refresh preview'}
+          {previewVisible ? 'Refresh preview' : 'Build preview'}
         </Button>
         <Button
           variant="outline"
           disabled={preview === undefined || working}
-          onClick={() => void image().then((result) => result && imageDownload(result.data, storyExport))}
+          onClick={() => void image().then((result) => result && imageDownload(result.data, result.storyExport))}
         >
           Export PNG
         </Button>
@@ -222,6 +404,11 @@ export function StoryPreviewPanel({ sessionId, submitCapture, seed }: StoryPrevi
           {status}
         </output>
       </div>
+      {sourceDirty ? (
+        <p data-testid="style-system-preview-dirty" className="text-xs text-doom-yellow">
+          Save changes to preview. Preview uses saved source.
+        </p>
+      ) : null}
       {preview === undefined ? (
         <div className="grid min-h-48 place-items-center rounded border border-dashed border-doom-border text-sm text-doom-faint">
           No preview built.
@@ -296,6 +483,7 @@ export function StoryPreviewPanel({ sessionId, submitCapture, seed }: StoryPrevi
                 annotationRect === undefined
                   ? 'Whole preview'
                   : `Region: x=${annotationRect.x.toFixed(3)}, y=${annotationRect.y.toFixed(3)}, width=${annotationRect.width.toFixed(3)}, height=${annotationRect.height.toFixed(3)}`;
+              const generation = generationRef.current;
               void submitCapture({
                 ...annotationImage,
                 context: {
@@ -314,10 +502,15 @@ export function StoryPreviewPanel({ sessionId, submitCapture, seed }: StoryPrevi
                     'After editing, rebuild this preview before treating it as visually verified.',
                   ].join('\n'),
                 },
-              }).then(() => {
-                setStatus('Feedback and the frozen source-backed annotation image were submitted to the agent.');
-                setFeedback('');
-              });
+              })
+                .then(() => {
+                  if (generationRef.current !== generation) return;
+                  setStatus('Feedback and the frozen source-backed annotation image were submitted to the agent.');
+                  setFeedback('');
+                })
+                .catch((reason: unknown) => {
+                  if (generationRef.current === generation) setStatus(errorText(reason));
+                });
             }}
           >
             Send to AI

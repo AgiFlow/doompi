@@ -989,6 +989,12 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     if (!result.ok) resultError(result);
     return result.value.usageId;
   };
+  const tryDispatchCommand = async (text: string): Promise<boolean> => (await options.dispatchCommand?.(text)) ?? false;
+  const dispatchCommand = (text: string): Promise<boolean> =>
+    runAgentOperation(async () => {
+      guardLive();
+      return tryDispatchCommand(text);
+    });
   const submitPrompt = async (
     text: string,
     images?: ImageContent[],
@@ -996,7 +1002,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
   ): Promise<{ settled: Promise<void>; handledCommand?: boolean }> => {
     const release = acquireAgentOperation();
     try {
-      if (await options.dispatchCommand?.(text)) {
+      if (await tryDispatchCommand(text)) {
         release();
         return { settled: Promise.resolve(), handledCommand: true };
       }
@@ -1177,6 +1183,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     readState,
     readEntries,
     listCommands,
+    dispatchCommand,
     setModel,
     availableModels,
     availableThinkingLevels,

@@ -30,9 +30,11 @@ vi.mock('../../src/web/lib/sealedSession', () => ({ sealedHttpSession: { fetch: 
 
 import {
   refreshWebPluginCompositions,
+  retryWebPluginCompositions,
   focusSessionWebPlugins,
   removeSessionWebPluginRuntime,
   startSessionWebPluginRuntime,
+  webPluginCompositionStore,
 } from '../../src/web/lib/pluginRuntime';
 
 interface FakeElement {
@@ -148,6 +150,55 @@ async function start() {
   await refreshWebPluginCompositions();
   vi.clearAllMocks();
 }
+
+describe('composition bootstrap recovery', () => {
+  it('reports a failed bootstrap and retries the remote composition', async () => {
+    mocks.fetch.mockRejectedValueOnce(new Error('tunnel closed'));
+    const stop = startSessionWebPluginRuntime({ onHubConnected: () => () => {} } as unknown as WebPluginRuntime);
+    stops.push(stop);
+
+    await vi.waitFor(() => expect(webPluginCompositionStore.state.phase).toBe('error'));
+    expect(webPluginCompositionStore.state.error).toBe('tunnel closed');
+
+    await retryWebPluginCompositions();
+
+    expect(webPluginCompositionStore.state).toEqual({ phase: 'ready' });
+    expect(mocks.installGlobalWebPlugins).toHaveBeenCalled();
+  });
+
+  it('recovers a failed bootstrap when the hub reconnects', async () => {
+    let reconnect!: () => void;
+    mocks.fetch.mockRejectedValueOnce(new Error('bridge unavailable'));
+    const stop = startSessionWebPluginRuntime({
+      onHubConnected: (listener: () => void) => {
+        reconnect = listener;
+        return () => undefined;
+      },
+    } as unknown as WebPluginRuntime);
+    stops.push(stop);
+
+    await vi.waitFor(() => expect(webPluginCompositionStore.state.phase).toBe('error'));
+    reconnect();
+    await vi.waitFor(() => expect(webPluginCompositionStore.state.phase).toBe('ready'));
+
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+  it('restores the requested session composition after a mount failure', async () => {
+    await start();
+    scriptPlugins = [{ id: 'fixture', session: {} }];
+    mocks.activateVerifiedPluginComposition.mockRejectedValueOnce(new Error('asset unavailable'));
+
+    await expect(focusSessionWebPlugins('one', composition('a', 1), 'workspace-one')).rejects.toThrow(
+      'asset unavailable',
+    );
+    expect(webPluginCompositionStore.state.phase).toBe('error');
+
+    await retryWebPluginCompositions();
+
+    expect(webPluginCompositionStore.state.phase).toBe('ready');
+    expect(mocks.installSessionWebPlugins).toHaveBeenCalledWith('one', expect.anything());
+  });
+});
 
 describe('three-level web plugin mounts', () => {
   it('pins the local signed shell before mounting its plugins', async () => {

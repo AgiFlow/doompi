@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react';
 import { PluginSurface } from '../../components/PluginSurface';
 import { type ActivityGroup, useActivityGroups, useDockFaces } from '../../lib/composition';
 import { activityGroupSlot, HOST_SLOTS, slotFills } from '../../lib/pluginRegistry';
+import { retryWebPluginCompositions, webPluginCompositionStore } from '../../lib/pluginRuntime';
 import { sessionsStore } from '../../stores/sessionsStore';
 import { useActiveSession } from '../../stores/sessionStore';
 import { setDockTab, uiStore } from '../../stores/uiStore';
@@ -41,6 +42,7 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
   const automaticFace = dockFaces.find((face) => face.autoSelect === true);
   const automaticFaceKey = `${activeId ?? ''}:${automaticFace?.id ?? ''}`;
   const lastAutomaticFaceKey = useRef<string | undefined>(undefined);
+  const compositionState = useStore(webPluginCompositionStore);
   const groups = useActivityGroups(statuses, widgets, activeId);
   const ordinaryGroups = groups.filter((group) => group.placement !== 'bottom');
   const pinnedGroups = groups.filter((group) => group.placement === 'bottom');
@@ -82,7 +84,32 @@ export function ActivityDock({ onClose, onOpenContent }: { onClose: () => void; 
       ) : (
         <>
           <div data-testid="activity-scroll" className="min-h-0 flex-1 overflow-y-auto">
-            {groups.length === 0 ? (
+            {compositionState.phase === 'error' ? (
+              <div
+                data-testid="activity-error"
+                role="alert"
+                className="flex items-center justify-between gap-3 border-b border-doom-border-soft px-4 py-3"
+              >
+                <span className="text-xs text-doom-dim">activity failed to load</span>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  data-testid="activity-retry"
+                  onClick={() => void retryWebPluginCompositions().catch(() => undefined)}
+                >
+                  retry
+                </Button>
+              </div>
+            ) : null}
+            {groups.length === 0 && compositionState.phase === 'loading' ? (
+              <EmptyState
+                data-testid="activity-loading"
+                className="px-4 py-5"
+                title="loading activity"
+                description="loading the package extensions that supervise work."
+              />
+            ) : null}
+            {groups.length === 0 && compositionState.phase !== 'loading' && compositionState.phase !== 'error' ? (
               <EmptyState
                 data-testid="activity-empty"
                 className="px-4 py-5"

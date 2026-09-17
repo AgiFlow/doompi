@@ -20,7 +20,8 @@ export type {
 } from '../services/historyImport';
 export { exportV4ToV3 } from '../services/v3Export';
 export { listSavedSessions } from '../services/sqliteSessionHistory';
-export type { SavedSession } from '../services/sqliteSessionHistory';
+export { readSqliteTranscript } from '../services/sqliteTranscriptReader';
+export type { SqliteTranscriptOwnership } from '../services/sqliteTranscriptReader';
 export { createOpenSessionRegistry } from '../services/openSessionRegistry';
 export type {
   OpenSessionRecord,

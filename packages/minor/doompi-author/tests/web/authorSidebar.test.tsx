@@ -2,6 +2,7 @@ import type { WebPluginSlotProps } from '@agimon-ai/doompi-core/web';
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AuthorDocumentPanel } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
 import { multiRegionCaptureProvider } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorCapture';
 import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 import { AuthorPanel } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorPanel';
@@ -11,6 +12,8 @@ import { AuthorToolPalette } from '../../src/extensions/workspaces/sessions/(fro
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
   useState: (value: unknown) => [value, vi.fn()],
+  useRef: (current: unknown) => ({ current }),
+  useEffect: () => undefined,
 }));
 vi.mock('@tanstack/react-store', () => ({
   useStore: (store: { state: unknown }, selector: (state: unknown) => unknown) => selector(store.state),
@@ -27,6 +30,7 @@ type Props = {
   onClick?: () => void | Promise<void>;
   disabled?: boolean;
   className?: string;
+  'aria-pressed'?: boolean;
   'data-testid'?: string;
 };
 function nodes(node: ReactNode): ReactElement<Props>[] {
@@ -62,36 +66,47 @@ afterEach(() => {
 });
 
 describe('Author annotation sidebar', () => {
-  it('hands the focused story path and dirty state to an explicit preview action', () => {
+  it('offers an embedded preview toggle for focused story source', () => {
     const props = setup();
     workspace.putAuthorDocument('s', { path: 'Button.stories.tsx', kind: 'story-preview', sourceSha256: 'sha' });
     workspace.focusAuthorDocument('s', 'Button.stories.tsx', 0, 'sha');
     workspace.reviseAuthorDocument('s', 'Button.stories.tsx', 'unsaved story source');
-    const createTab = vi.fn(() => ({
-      id: 'story-preview',
-      label: 'Story preview',
-      panel: () => null,
-      retainComposer: true,
-    }));
+    const supportsSource = vi.fn(() => true);
+    const createTab = vi.fn();
     props.slotData = vi.fn(
       () =>
         [
           {
             pluginId: 'style-system',
             id: 'story-preview',
-            data: { version: 1, label: 'Open story preview', createTab },
+            data: {
+              version: 1,
+              label: 'Preview',
+              supportsSource,
+              embeddedPanel: () => null,
+              createTab,
+            },
           },
         ] as never,
     ) as unknown as WebPluginSlotProps['slotData'];
-    props.openTransientTab = vi.fn();
 
-    const button = nodes(AuthorPanel(props)).find((node) => node.props.children === 'Open story preview')!;
-    void button.props.onClick!();
-
-    expect(createTab).toHaveBeenCalledWith({
-      source: { path: 'Button.stories.tsx', hasUnsavedChanges: true },
+    const element = AuthorDocumentPanel({ ...props, path: 'Button.stories.tsx' } as WebPluginSlotProps & {
+      path: string;
     });
-    expect(props.openTransientTab).toHaveBeenCalledOnce();
+    const controls = nodes((element.type as (props: unknown) => ReactNode)(element.props));
+    const toggle = controls.find((node) => node.props['data-testid'] === 'author-story-preview-toggle');
+
+    expect(toggle?.props.children).toBe('Preview');
+    expect(toggle?.props['aria-pressed']).toBe(false);
+    expect(controls.find((node) => node.props['data-testid'] === 'author-save')?.props.children).toBe('Save');
+    expect(supportsSource).toHaveBeenCalledWith({
+      path: 'Button.stories.tsx',
+      kind: 'story-preview',
+      hasUnsavedChanges: true,
+      revision: 0,
+      sourceSha256: 'sha',
+    });
+    expect(createTab).not.toHaveBeenCalled();
   });
 
   it('submits annotations asynchronously without navigation or changing the composer', async () => {

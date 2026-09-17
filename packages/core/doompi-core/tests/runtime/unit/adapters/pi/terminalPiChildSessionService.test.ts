@@ -44,6 +44,7 @@ function fakeRuntime(options: DirectHarnessRuntimeOptions): DirectHarnessRuntime
     readState: async () => ({}),
     readEntries: async () => ({ entries: [], leafId: null }),
     listCommands: () => [],
+    dispatchCommand: async () => false,
     setModel: async () => undefined,
     availableModels: async () => [],
     availableThinkingLevels: async () => [],

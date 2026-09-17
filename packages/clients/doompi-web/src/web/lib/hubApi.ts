@@ -1,3 +1,4 @@
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
 import { sessionApiPath } from '@agimon-ai/doompi-core/web';
 
 import { DIRECTORIES_API_ROUTE, type PiSessionHistoryItem, type SessionSummary } from '../../types/hub';
@@ -152,6 +153,29 @@ export async function reviveSession(sessionId: string): Promise<ReviveSessionRes
   return { error };
 }
 
+export async function readDormantTranscriptPage(
+  sessionId: string,
+  request: TranscriptPageRequest,
+  signal?: AbortSignal,
+): Promise<TranscriptPage> {
+  const params = new URLSearchParams();
+  if (request.cursor !== undefined) params.set('cursor', request.cursor);
+  if (request.direction !== undefined) params.set('direction', request.direction);
+  if (request.limit !== undefined) params.set('limit', String(request.limit));
+  const query = params.toString();
+  const response = await sealedHttpSession.fetch(
+    `${sessionApiPath(sessionId)}/transcript${query === '' ? '' : `?${query}`}`,
+    signal === undefined ? {} : { signal },
+  );
+  const body: unknown = await response.json().catch(() => undefined);
+  if (!response.ok) {
+    const message =
+      isRecord(body) && typeof body.error === 'string' ? body.error : `The hub answered ${response.status}.`;
+    throw new Error(message);
+  }
+  if (!isRecord(body) || !Array.isArray(body.entries)) throw new Error('The saved transcript response was invalid.');
+  return body as unknown as TranscriptPage;
+}
 export type SessionHistoryResult = { sessions: PiSessionHistoryItem[] } | { error: string };
 
 /** Lists the Pi threads saved for a live session's workspace. */

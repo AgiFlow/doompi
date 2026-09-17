@@ -3,7 +3,6 @@ import { Button } from '@agimon-ai/doompi-web-components';
 import { useStore } from '@tanstack/react-store';
 import { useState } from 'react';
 
-import { authorPreviewActionSlot } from '../../../../../../types/authorPreview';
 import { autonomousVoiceGridVisible } from '../../_components/AuthorGridOverlay';
 import { authorCaptureContext, createAuthorCapturePacket, multiRegionCaptureProvider } from '../../_lib/authorCapture';
 import { authorGrid } from '../../_lib/authorGrid';
@@ -12,15 +11,7 @@ import { AuthorRegionDrafts } from './AuthorRegionDrafts';
 import { AuthorRequestLog } from './AuthorRequestLog';
 import { AuthorToolPalette } from './AuthorToolPalette';
 
-export function AuthorPanel({
-  sessionId,
-  activeMinorModes,
-  submitCapture,
-  statuses,
-  renderSlot,
-  slotData,
-  openTransientTab,
-}: WebPluginSlotProps) {
+export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, statuses, renderSlot }: WebPluginSlotProps) {
   const [captureStatus, setCaptureStatus] = useState<string>();
   const [capturing, setCapturing] = useState(false);
   const documents = useStore(authorWorkspace.store, (state) => {
@@ -35,34 +26,9 @@ export function AuthorPanel({
   );
   const grid = useStore(authorGrid.store, (state) => (sessionId === null ? undefined : state.sessions[sessionId]));
   const focused = documents.find((document) => document.path === workspace?.focusedDocument?.path);
-  const previewSource =
-    workspace?.focusedDocument === undefined || focused?.kind !== 'story-preview'
-      ? undefined
-      : {
-          path: workspace.focusedDocument.path,
-          hasUnsavedChanges: focused.version !== focused.savedVersion,
-        };
-  const previewActions = slotData?.(authorPreviewActionSlot) ?? [];
   if (!activeMinorModes?.includes('author')) return null;
   return (
     <section data-testid="author-panel" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
-      {previewActions.length === 0 ? null : (
-        <div data-testid="author-preview-actions" className="grid gap-2">
-          {previewActions.map((fill) => (
-            <div key={`${fill.pluginId}:${fill.id}`} className="grid gap-1">
-              <Button
-                className="min-h-11 w-full text-base [@media(pointer:fine)]:min-h-8 sm:text-sm"
-                variant="outline"
-                disabled={sessionId === null}
-                onClick={() => openTransientTab(fill.data.createTab({ source: previewSource }))}
-              >
-                {fill.data.label}
-              </Button>
-              {fill.data.detail === undefined ? null : <p className="text-xs text-doom-faint">{fill.data.detail}</p>}
-            </div>
-          ))}
-        </div>
-      )}
       <div data-testid="author-preview-providers">{renderSlot('author.preview-provider')}</div>
       {sessionId !== null && workspace !== undefined && focused !== undefined ? (
         <>

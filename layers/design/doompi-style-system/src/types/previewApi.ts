@@ -4,6 +4,9 @@ export interface StoryPreviewSeed {
   source?: {
     path: string;
     hasUnsavedChanges: boolean;
+    kind?: string;
+    revision?: number;
+    sourceSha256?: string;
   };
 }
 

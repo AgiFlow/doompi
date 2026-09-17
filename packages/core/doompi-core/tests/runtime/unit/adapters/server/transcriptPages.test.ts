@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { BACKGROUND_CONTEXT } from '@earendil-works/pi-agent-core/harness/context';
-import type { Write } from '@earendil-works/pi-agent-core/harness/session';
+import { value, type Write } from '@earendil-works/pi-agent-core/harness/session';
 import { expect, it } from 'vitest';
 
 import { createHistoryOwnership } from '../../../../../src/services/historyOwnership';
@@ -18,6 +18,7 @@ it('keeps indexed pages bounded at 1k, 10k and 100k entries, with bidirectional 
     BACKGROUND_CONTEXT,
   );
   try {
+    await storage.session.setValue(value('doompi.session', 'workspaceRoot'), '/repo', BACKGROUND_CONTEXT);
     const branch = await storage.session.createBranch('main', null, BACKGROUND_CONTEXT);
     const reader = { sessionId: 'pages', laneName: 'main', lane: branch };
     let count = 0;
@@ -76,8 +77,27 @@ it('keeps indexed pages bounded at 1k, 10k and 100k entries, with bidirectional 
         readTranscriptPage({ ...reader, sessionId: 'other' }, { cursor: page.olderCursor! }, 0, BACKGROUND_CONTEXT),
       ).rejects.toThrow('Invalid transcript cursor');
       await expect(readTranscriptPage(reader, { limit: 101 }, 0, BACKGROUND_CONTEXT)).rejects.toThrow('limit');
-      const child = await readSqliteTranscript(storage.sessionFile, {}, BACKGROUND_CONTEXT);
+      const filesBefore = await fs.readdir(sessionsRoot);
+      const child = await readSqliteTranscript(storage.sessionFile, {}, BACKGROUND_CONTEXT, {
+        sessionId: 'pages',
+        workspaceRoot: '/repo',
+      });
       expect(child.entries).toEqual(page.entries);
+      expect(await fs.readdir(sessionsRoot)).toEqual(filesBefore);
+      if (size === 1_000) {
+        await expect(
+          readSqliteTranscript(storage.sessionFile, {}, BACKGROUND_CONTEXT, {
+            sessionId: 'other',
+            workspaceRoot: '/repo',
+          }),
+        ).rejects.toThrow('Saved transcript does not belong to this session');
+        await expect(
+          readSqliteTranscript(storage.sessionFile, {}, BACKGROUND_CONTEXT, {
+            sessionId: 'pages',
+            workspaceRoot: '/other',
+          }),
+        ).rejects.toThrow('Saved transcript does not belong to this workspace');
+      }
     }
   } finally {
     await storage.session.close(BACKGROUND_CONTEXT);

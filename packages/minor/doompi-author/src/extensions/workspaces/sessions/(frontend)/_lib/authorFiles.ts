@@ -24,10 +24,12 @@ function structuredFormat(path: string): StructuredDocumentFormat | undefined {
 }
 
 export function authorKindForPath(path: string): AuthorDocumentKind {
+  const lower = path.toLowerCase();
+  if (/\.stories\.(?:js|jsx|ts|tsx)$/u.test(lower)) return 'story-preview';
   const format = structuredFormat(path);
   if (format === 'markdown-slides') return 'slides';
   if (format !== undefined) return format;
-  const extension = path.split('.').at(-1)?.toLowerCase() ?? '';
+  const extension = lower.split('.').at(-1) ?? '';
   if (extension === 'md') return 'markdown';
   if (IMAGE_EXTENSIONS.has(extension)) return 'image';
   if (VIDEO_EXTENSIONS.has(extension)) return 'video';
@@ -94,7 +96,8 @@ export async function loadAuthorDocument(
     };
   }
   const mediaUrl = kind === 'image' || kind === 'video' || kind === 'pdf' || kind === 'opaque' ? url : undefined;
-  const content = kind === 'text' || kind === 'markdown' ? await response.text() : undefined;
+  const content =
+    kind === 'text' || kind === 'markdown' || kind === 'story-preview' ? await response.text() : undefined;
   return {
     path,
     kind,
@@ -156,7 +159,8 @@ async function croppedImageBytes(documentInput: AuthorDocumentInput, signal?: Ab
 }
 
 async function bytesToSave(sessionId: string, document: AuthorDocumentInput, signal?: AbortSignal): Promise<BodyInit> {
-  if (document.kind === 'text' || document.kind === 'markdown') return document.content ?? '';
+  if (document.kind === 'text' || document.kind === 'markdown' || document.kind === 'story-preview')
+    return document.content ?? '';
   if (document.kind === 'image' && document.crop !== undefined) return await croppedImageBytes(document, signal);
   if (document.structuredFormat === undefined) throw new Error('This Author view cannot be saved.');
   const operations = operationsFor(document);
