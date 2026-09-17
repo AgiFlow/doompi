@@ -53,6 +53,7 @@ function setup() {
     attachComposerCapture: vi.fn(),
     submitCapture: vi.fn(async () => undefined),
     openTab: vi.fn(),
+    renderSlot: vi.fn(() => null),
   } as unknown as WebPluginSlotProps;
 }
 afterEach(() => {
@@ -64,6 +65,7 @@ describe('Author annotation sidebar', () => {
   it('submits annotations asynchronously without navigation or changing the composer', async () => {
     const props = setup();
     const controls = nodes(AuthorPanel(props));
+    expect(props.renderSlot).toHaveBeenCalledWith('author.preview-provider');
     const review = controls.find((node) => node.props['data-testid'] === 'author-attach-capture')!;
     expect(review.props.disabled).toBe(false);
     expect(review.props.className).toContain('min-h-11');

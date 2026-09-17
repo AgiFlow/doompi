@@ -346,6 +346,7 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "doompiApiVersion": 1,
   "doompiServer": {
     "entry": "./src/extensions/server.ts",
     "dist": "./dist/extensions/server.mjs",

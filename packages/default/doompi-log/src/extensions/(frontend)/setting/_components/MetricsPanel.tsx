@@ -43,6 +43,7 @@ export function MetricsPanel(_props: SettingsPanelProps) {
   const [response, setResponse] = useState<MetricsResponse | undefined>(undefined);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -59,7 +60,7 @@ export function MetricsPanel(_props: SettingsPanelProps) {
       setLoading(false);
     });
     return () => controller.abort();
-  }, [dimension, period, focus]);
+  }, [dimension, period, focus, refreshKey]);
 
   const report: MetricsReport | undefined =
     response === undefined || isMetricsUnavailable(response) ? undefined : response;
@@ -102,7 +103,7 @@ export function MetricsPanel(_props: SettingsPanelProps) {
           variant="ghost"
           size="xs"
           className="ml-auto text-2xs"
-          onClick={() => setPeriod((current) => current)}
+          onClick={() => setRefreshKey((current) => current + 1)}
           disabled={loading}
         >
           refresh

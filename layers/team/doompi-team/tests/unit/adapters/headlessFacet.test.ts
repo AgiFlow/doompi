@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { facet as teamHeadlessFacet } from '../../../generated/server';
 import { SUBAGENT_ACTIONS } from '../../../src/exports/subagentTool';
 import { TEAM_API_BASE_PATH } from '../../../src/extensions/workspaces/sessions/(backend)/api/_lib/route.server';
+import { nativeRunProjection } from '../../../src/services/nativeRunProjection';
 import { sessionScopeDir } from '../../../src/services/sessionPaths';
 import * as runtimeModule from '../../../src/services/teamRuntime';
 import type { TeamExtensionRuntime } from '../../../src/services/teamRuntime';
@@ -191,6 +192,60 @@ describe('teamHeadlessFacet', () => {
       expect(jobs.list()).toMatchObject([{ runId: 'retained-run' }]);
       await activityStop?.();
       activityStop = undefined;
+    } finally {
+      await activityStop?.();
+      await test.dispose();
+      fs.rmSync(sessionScopeDir(scope), { recursive: true, force: true });
+    }
+  });
+
+  it('publishes child cost and retains updates while the activity is disabled', async () => {
+    const test = await fixture();
+    const scope = TEST_SESSION_SCOPE;
+    let activityStop: (() => void | Promise<void>) | undefined;
+    const status = {
+      runId: 'cost-run',
+      agent: 'worker',
+      task: 'costed work',
+      cwd: process.cwd(),
+      runtime: 'external',
+      state: 'completed',
+      startedAt: 1,
+      updatedAt: 2,
+      cost: 1.25,
+    };
+
+    try {
+      activityStop = await test.activities[0]!.start(test.execution);
+      test.runtime.asyncJobTracker.upsertExternal(test.sessionId, scope, status);
+      expect(test.client.setStatus).toHaveBeenLastCalledWith('doom-team-cost', '1.25');
+
+      const nativeProjection = {
+        runId: 'native-run',
+        agent: 'worker',
+        task: 'native work',
+        cwd: process.cwd(),
+        runtime: 'pi',
+        status: 'running',
+        startedAt: 1,
+        updatedAt: 2,
+        cost: 0.75,
+      } as const;
+      test.runtime.asyncJobTracker.upsertNative(test.sessionId, scope, nativeProjection);
+      nativeRunProjection.publish(test.sessionId, nativeProjection);
+      expect(test.client.setStatus).toHaveBeenLastCalledWith('doom-team-cost', '2');
+
+      const updatedNativeProjection = { ...nativeProjection, cost: 1.25, updatedAt: 3 };
+      test.runtime.asyncJobTracker.upsertNative(test.sessionId, scope, updatedNativeProjection);
+      nativeRunProjection.publish(test.sessionId, updatedNativeProjection);
+      expect(test.client.setStatus).toHaveBeenLastCalledWith('doom-team-cost', '2.5');
+      await activityStop?.();
+      activityStop = undefined;
+      test.runtime.asyncJobTracker.upsertExternal(test.sessionId, scope, { ...status, cost: 2.5, updatedAt: 3 });
+      expect(test.client.setStatus).toHaveBeenLastCalledWith('doom-team-cost', undefined);
+
+      activityStop = await test.activities[0]!.start(test.execution);
+      expect(test.client.setStatus).toHaveBeenLastCalledWith('doom-team-cost', '3.75');
     } finally {
       await activityStop?.();
       await test.dispose();

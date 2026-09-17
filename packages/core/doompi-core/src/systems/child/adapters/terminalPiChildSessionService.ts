@@ -73,6 +73,12 @@ function childRuntime(
     prompt: (task) => promptForAssistantText(runtime, task),
     steer: (message) => runtime.steer(message),
     followUp: (message) => runtime.followUp(message),
+    onUsage(listener) {
+      return runtime.onEvent((event) => {
+        if (event.type !== 'usage') return;
+        listener({ rowId: event.row.id, cost: event.row.usage.cost.total });
+      });
+    },
     abort: () => runtime.abort(),
     dispose: async () => {
       try {

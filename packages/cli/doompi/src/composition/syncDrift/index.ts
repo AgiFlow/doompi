@@ -7,7 +7,7 @@ import { parseCompiledContracts } from '@agimon-ai/doompi-core/api-contracts';
 import { parseDoomServerBundle } from '@agimon-ai/doompi-core/server-facet';
 import { readSyncRegistration, type SyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
 
-import { readBootstrapStatus } from '../../builders/cli/bootstrapLocator';
+import { readStartupBootstrapStatus, readBootstrapStatus } from '../../builders/cli/bootstrapLocator';
 import { inputsAreFresh, parseInputFingerprint } from '../../compiler/inputs';
 import {
   computeInputsHash,
@@ -42,18 +42,46 @@ export interface ReadSyncDriftOptions {
   homeDirectory?: string;
   /** Web hosts cannot reuse a CLI-only generation without plugin artifacts. */
   requireWebBundle?: boolean;
+  /** Ignore producer source drift while retaining generation and artifact checks. */
+  requireFreshSources?: boolean;
 }
 
-/** Validate direct-module receipts without importing candidates or loading the compiler. */
-export function serverBundleIsFresh(
+function artifactReceiptIsIntact(receipt: Record<string, unknown>, inside: (target: string) => boolean): boolean {
+  if (
+    typeof receipt.output !== 'string' ||
+    !Array.isArray(receipt.artifacts) ||
+    !Array.isArray(receipt.artifactInputs)
+  ) {
+    return false;
+  }
+  if (receipt.artifactInputs.length === 0 || receipt.artifacts.some((file) => typeof file !== 'string')) return false;
+  const expected = new Set([receipt.output, ...(receipt.artifacts as string[])].map((file) => fs.realpathSync(file)));
+  const seen = new Set<string>();
+  for (const value of receipt.artifactInputs) {
+    const input = parseInputFingerprint(value);
+    if (!input || !/^[a-f0-9]{64}$/u.test(input.sha256) || !inside(input.path)) return false;
+    const target = fs.realpathSync(input.path);
+    if (!expected.has(target)) return false;
+    const stat = fs.statSync(target);
+    if (!stat.isFile() || stat.size !== input.size) return false;
+    if (crypto.createHash('sha256').update(fs.readFileSync(target)).digest('hex') !== input.sha256) return false;
+    seen.add(target);
+  }
+  return seen.size === expected.size;
+}
+
+function serverBundleIsUsable(
   state: Pick<SyncState, 'serverBundle' | 'resolved'>,
   registration: Pick<SyncRegistration, 'generation' | 'generationRoot' | 'serverBundle'>,
+  requireFreshSources: boolean,
 ): boolean {
   const bundle = state.serverBundle;
-  if (!bundle || !registration.serverBundle || bundle.sourcesHash !== computeServerSourcesHash(state.resolved))
-    return false;
+  if (!bundle || !registration.serverBundle) return false;
   try {
-    const descriptor = parseDoomServerBundle(JSON.parse(fs.readFileSync(bundle.descriptorPath, 'utf8')));
+    if (requireFreshSources && bundle.sourcesHash !== computeServerSourcesHash(state.resolved)) return false;
+    const descriptorPath = fs.realpathSync(bundle.descriptorPath);
+    if (descriptorPath !== fs.realpathSync(registration.serverBundle.path)) return false;
+    const descriptor = parseDoomServerBundle(JSON.parse(fs.readFileSync(descriptorPath, 'utf8')));
     if (descriptor.generation !== registration.generation || descriptor.fingerprint !== bundle.fingerprint)
       return false;
 
@@ -63,7 +91,7 @@ export function serverBundleIsFresh(
       return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
     };
     if (!descriptor.contracts) return false;
-    const contractFile = path.resolve(path.dirname(bundle.descriptorPath), descriptor.contracts.file);
+    const contractFile = path.resolve(path.dirname(descriptorPath), descriptor.contracts.file);
     if (!inside(contractFile)) return false;
     const bytes = fs.readFileSync(contractFile);
     if (crypto.createHash('sha256').update(bytes).digest('hex') !== descriptor.contracts.sha256) return false;
@@ -84,26 +112,36 @@ export function serverBundleIsFresh(
       if (
         typeof receipt.output !== 'string' ||
         !inside(receipt.output) ||
-        fs.realpathSync(receipt.output) !==
-          fs.realpathSync(path.resolve(path.dirname(bundle.descriptorPath), entry.module)) ||
+        fs.realpathSync(receipt.output) !== fs.realpathSync(path.resolve(path.dirname(descriptorPath), entry.module)) ||
         !Array.isArray(receipt.artifacts) ||
         !receipt.artifacts.every((file) => typeof file === 'string' && inside(file))
       )
         return false;
-      for (const value of [receipt.inputs, receipt.artifactInputs]) {
-        if (!Array.isArray(value) || value.length === 0) return false;
-        const inputs = value.map(parseInputFingerprint);
-        if (
-          inputs.some((input) => input === undefined) ||
-          !inputsAreFresh(inputs.filter((input) => input !== undefined))
-        )
-          return false;
-      }
+      const inputs = Array.isArray(receipt.inputs) ? receipt.inputs.map(parseInputFingerprint) : [];
+      if (inputs.length === 0 || inputs.some((input) => input === undefined)) return false;
+      if (requireFreshSources && !inputsAreFresh(inputs as NonNullable<(typeof inputs)[number]>[])) return false;
+      if (!artifactReceiptIsIntact(receipt, inside)) return false;
     }
     return true;
   } catch {
     return false;
   }
+}
+
+/** Validate direct-module receipts without importing candidates or loading the compiler. */
+export function serverBundleIsFresh(
+  state: Pick<SyncState, 'serverBundle' | 'resolved'>,
+  registration: Pick<SyncRegistration, 'generation' | 'generationRoot' | 'serverBundle'>,
+): boolean {
+  return serverBundleIsUsable(state, registration, true);
+}
+
+/** Validate generated server artifacts while allowing the producer source to drift. */
+export function serverBundleIsRuntimeUsable(
+  state: Pick<SyncState, 'serverBundle' | 'resolved'>,
+  registration: Pick<SyncRegistration, 'generation' | 'generationRoot' | 'serverBundle'>,
+): boolean {
+  return serverBundleIsUsable(state, registration, false);
 }
 
 /**
@@ -122,6 +160,7 @@ export function serverBundleIsFresh(
  */
 export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
   const homeDirectory = options.homeDirectory ?? os.homedir();
+  const requireFreshSources = options.requireFreshSources ?? true;
   const reasons: SyncDriftReason[] = [];
 
   let state: SyncState | undefined;
@@ -151,15 +190,20 @@ export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
   // rebuilt plugin surface is a real change that no configuration hash sees. A
   // state recorded before this was tracked has nothing to compare and is left
   // alone rather than being called stale on sight.
-  if (state.webSourcesHash !== undefined && computeWebSourcesHash(state.resolved) !== state.webSourcesHash) {
+  if (
+    requireFreshSources &&
+    state.webSourcesHash !== undefined &&
+    computeWebSourcesHash(state.resolved) !== state.webSourcesHash
+  ) {
     reasons.push('code-changed');
   }
   // The same question the `--check` path asks, so the cockpit and the CLI
   // cannot disagree about whether one repository is synced.
   try {
-    if (!readBootstrapStatus(options.repoRoot, options.expectedBootstrapEntry, homeDirectory).fresh) {
-      reasons.push('runtime-stale');
-    }
+    const bootstrapStatus = requireFreshSources
+      ? readBootstrapStatus(options.repoRoot, options.expectedBootstrapEntry, homeDirectory)
+      : readStartupBootstrapStatus(options.repoRoot, options.expectedBootstrapEntry, homeDirectory);
+    if (!bootstrapStatus.fresh) reasons.push('runtime-stale');
   } catch {
     // An unreadable bootstrap record is exactly as unusable as a stale one, and
     // syncing is what reports the underlying cause.
@@ -175,7 +219,10 @@ export function readSyncDrift(options: ReadSyncDriftOptions): SyncDrift {
     reasons.push('cockpit-bundle-missing');
   }
   if (!fs.existsSync(registration.apiDirectory)) reasons.push('package-apis-missing');
-  if (!serverBundleIsFresh(state, registration)) reasons.push('server-bundle-stale');
+  if (
+    !(requireFreshSources ? serverBundleIsFresh(state, registration) : serverBundleIsRuntimeUsable(state, registration))
+  )
+    reasons.push('server-bundle-stale');
 
   return {
     fresh: reasons.length === 0,

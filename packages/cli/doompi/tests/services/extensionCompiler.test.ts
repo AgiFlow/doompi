@@ -661,24 +661,66 @@ describe('compiled direct modules', () => {
     ).rejects.toThrow(/resource escapes package/i);
   });
 
-  it('rejects direct modules with package-owned resources that are not published as artifacts', async () => {
-    const directory = temporaryDirectory();
-    const packageDirectory = path.join(directory, 'node_modules', 'open');
-    fs.mkdirSync(packageDirectory, { recursive: true });
-    fs.writeFileSync(
-      path.join(packageDirectory, 'package.json'),
-      JSON.stringify({ name: 'open', type: 'module', exports: './index.mjs' }),
-    );
-    fs.writeFileSync(
-      path.join(packageDirectory, 'index.mjs'),
-      'export default () => new URL("./xdg-open", import.meta.url).href;',
-    );
-    const entry = writeModule(directory, 'resource-runtime', 'import open from "open"; export default open;');
+  it.each([false, true])(
+    'rejects direct modules with package-owned resources that are not published as artifacts (absolute import: %s)',
+    async (absolute) => {
+      const directory = temporaryDirectory();
+      const packageDirectory = path.join(directory, 'node_modules', 'open');
+      fs.mkdirSync(packageDirectory, { recursive: true });
+      fs.writeFileSync(
+        path.join(packageDirectory, 'package.json'),
+        JSON.stringify({ name: 'open', type: 'module', exports: './index.mjs' }),
+      );
+      fs.writeFileSync(
+        path.join(packageDirectory, 'index.mjs'),
+        'export default () => new URL("./xdg-open", import.meta.url).href;',
+      );
+      const specifier = absolute ? path.join(packageDirectory, 'index.mjs') : 'open';
+      const entry = writeModule(
+        directory,
+        'resource-runtime',
+        `import open from ${javascriptStringLiteral(specifier)}; export default open;`,
+      );
 
-    await expect(compileExtensionModule(entry, path.join(directory, 'cache'))).rejects.toThrow(
-      /dependency "open" has native bindings or package-owned resources/u,
-    );
-  });
+      await expect(compileExtensionModule(entry, path.join(directory, 'cache'))).rejects.toThrow(
+        /dependency "open" has native bindings or package-owned resources/u,
+      );
+    },
+  );
+
+  it.each([false, true])(
+    'keeps the published style-system runtime external from direct modules (absolute import: %s)',
+    async (absolute) => {
+      const directory = temporaryDirectory();
+      const packageDirectory = path.dirname(
+        createRequire(import.meta.url).resolve('@agimon-ai/style-system/package.json'),
+      );
+      const packageLink = path.join(directory, 'node_modules/@agimon-ai/style-system');
+      fs.mkdirSync(path.dirname(packageLink), { recursive: true });
+      fs.symlinkSync(packageDirectory, packageLink, 'dir');
+      const specifier = absolute ? path.join(packageDirectory, 'dist/index.mjs') : '@agimon-ai/style-system';
+      const entry = writeModule(
+        directory,
+        'style-system-runtime',
+        `import { ComponentRendererService } from ${javascriptStringLiteral(specifier)}; export default typeof ComponentRendererService;`,
+      );
+      const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
+        outputDirectory: path.join(directory, 'generation'),
+      });
+
+      expect(readCompiledSource(output)).toContain(path.join(packageDirectory, 'dist/index.mjs'));
+      const result = execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `console.log(JSON.stringify((await import(${javascriptStringLiteral(pathToFileURL(output).href)})).default));`,
+        ],
+        { cwd: directory, env: { ...process.env, NODE_PATH: '', NODE_OPTIONS: '' }, encoding: 'utf8' },
+      );
+      expect(JSON.parse(result)).toBe('function');
+    },
+  );
 
   it('rebuilds changed inputs without altering an earlier materialized generation', async () => {
     const directory = temporaryDirectory();
@@ -1316,17 +1358,24 @@ describe('compiled extension sets', () => {
     'packages/default/doompi-runner',
     'packages/default/doompi-log',
     'packages/cli/doompi',
+    'layers/design/doompi-style-system',
   ])('compiles and loads the %s server graph without package-local dependency paths', async (relativeRoot) => {
     const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
     const packageRoot = path.join(repositoryRoot, relativeRoot);
     const manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8')) as {
       name: string;
-      doompiServer: { dist: string };
+      doompiServer: { entry: string; dist: string };
     };
-    const entry = path.resolve(packageRoot, manifest.doompiServer.dist);
+    const entry = path.resolve(
+      packageRoot,
+      manifest.name === '@agimon-ai/doompi-style-system' ? manifest.doompiServer.entry : manifest.doompiServer.dist,
+    );
     const directory = temporaryDirectory();
     const output = await compileExtensionModule(entry, path.join(directory, 'cache'), {
       repositoryRoot,
+      ...(manifest.name === '@agimon-ai/doompi-style-system'
+        ? { sharedCacheDirectory: path.join(directory, 'shared-cache') }
+        : {}),
       outputDirectory: path.join(directory, 'generation'),
       // Runner resources relocate import.meta.url in published bundles. No live dependency tree may be required.
       ...(manifest.name === '@agimon-ai/doompi-runner'
@@ -1348,17 +1397,22 @@ describe('compiled extension sets', () => {
       manifest.name === '@agimon-ai/doompi'
         ? [fs.realpathSync(fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent')))]
         : [];
+    const retainedRuntimeImports =
+      manifest.name === '@agimon-ai/doompi-style-system'
+        ? [fs.realpathSync(fileURLToPath(import.meta.resolve('@agimon-ai/style-system')))]
+        : [];
+    const expectedExternalImports = [...hostedRuntimeImports, ...retainedRuntimeImports];
     const packageImports = externalImports.filter(
       (specifier) => !isBuiltin(specifier) && !specifier.startsWith('${') && !specifier.startsWith('.'),
     );
-    const sourceWithoutHostedRuntimeImports = hostedRuntimeImports.reduce(
+    const sourceWithoutExternalRuntimeImports = expectedExternalImports.reduce(
       (compiled, specifier) => compiled.replaceAll(specifier, ''),
       source,
     );
 
     expect(loadedType, manifest.name).toBe('object');
-    expect(packageImports).toEqual(hostedRuntimeImports);
-    expect(sourceWithoutHostedRuntimeImports, manifest.name).not.toContain(path.join(repositoryRoot, 'node_modules'));
+    expect(packageImports, manifest.name).toEqual(expectedExternalImports);
+    expect(sourceWithoutExternalRuntimeImports, manifest.name).not.toContain(path.join(repositoryRoot, 'node_modules'));
   });
 });
 

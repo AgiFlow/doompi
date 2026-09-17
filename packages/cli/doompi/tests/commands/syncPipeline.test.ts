@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   buildExecute: vi.fn(),
   ensureLayerPackages: vi.fn(),
   readSyncDrift: vi.fn(),
+  registrationNeedsApiMigration: vi.fn(() => false),
   syncExecute: vi.fn(),
   syncOptions: vi.fn(),
 }));
@@ -26,6 +27,7 @@ vi.mock('../../src/cli/commands/sync', () => ({
     mocks.syncOptions(args[4]);
     return mocks.syncExecute(...args.slice(0, 4));
   },
+  syncRegistrationNeedsApiMigration: mocks.registrationNeedsApiMigration,
 }));
 
 import { runSync } from '../../src/cli/commands/sync/workflow';

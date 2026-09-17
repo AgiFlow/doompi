@@ -114,6 +114,16 @@ describe('the web presentation server', () => {
         markSlowStarted?.();
         return;
       }
+      if (
+        request.url === '/.well-known/oauth-authorization-server' ||
+        request.url?.startsWith('/.well-known/oauth-protected-resource/') === true ||
+        request.url?.startsWith('/oauth/authorize') === true ||
+        request.url === '/oauth/token'
+      ) {
+        response.writeHead(200, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ path: request.url, token: request.headers['x-doompi-token'] }));
+        return;
+      }
       if (request.url !== '/api/health') {
         response.writeHead(404);
         response.end();
@@ -171,6 +181,61 @@ describe('the web presentation server', () => {
     }
   });
 
+  it('proxies public OAuth discovery and endpoint paths outside the API namespace', async () => {
+    for (const requestPath of [
+      '/.well-known/oauth-authorization-server',
+      '/.well-known/oauth-protected-resource/api/workspaces/work/sessions/session/mcp',
+      '/oauth/authorize?client_id=test',
+    ]) {
+      const response = await fetch(`${presentation.url}${requestPath}`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ path: requestPath, token: 'test-token' });
+    }
+    const token = await fetch(`${presentation.url}/oauth/token`, { method: 'POST', body: 'grant_type=test' });
+    expect(token.status).toBe(200);
+    expect(await token.json()).toEqual({ path: '/oauth/token', token: 'test-token' });
+    expect((await fetch(`${presentation.url}/oauth/register`, { method: 'POST' })).status).toBe(404);
+  });
+
+  it('guards host-only MCP management before injecting the headless credential', async () => {
+    const management = '/api/workspaces/work/sessions/session/mcp/clients';
+    expect((await fetch(`${presentation.url}${management}`, { method: 'POST', body: '{}' })).status).toBe(403);
+    expect(
+      (
+        await fetch(`${presentation.url}${management}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-doompi-mcp-csrf': '1' },
+          body: '{}',
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await fetch(`${presentation.url}${management}`, {
+          headers: { origin: 'https://attacker.example' },
+        })
+      ).status,
+    ).toBe(403);
+
+    const target = new URL(presentation.url);
+    const rebound = await new Promise<number>((resolve, reject) => {
+      const request = requestHttp(
+        {
+          hostname: target.hostname,
+          port: target.port,
+          path: management,
+          headers: { host: 'attacker.example' },
+        },
+        (response) => {
+          response.resume();
+          response.once('end', () => resolve(response.statusCode ?? 0));
+        },
+      );
+      request.once('error', reject);
+      request.end();
+    });
+    expect(rebound).toBe(403);
+  });
   it('streams headless HTTP responses without waiting for the upstream body to end', async () => {
     const pending = fetch(`${presentation.url}/api/stream`);
     await streamStarted;

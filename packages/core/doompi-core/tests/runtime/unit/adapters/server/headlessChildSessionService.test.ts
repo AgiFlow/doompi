@@ -57,6 +57,7 @@ function fakeRuntime(sessionId: string, filePath?: string): DirectHarnessRuntime
     replaceTools: async () => undefined,
     replaceResources: async () => undefined,
     readResources: async () => ({}),
+    runExternalOperation: (operation) => operation(),
     appendCustomEntry: async () => 'entry',
     appendMessage: async () => 'entry',
     setLabel: async () => undefined,
@@ -125,6 +126,40 @@ describe('headless child session provider', () => {
     );
     expect(factory.mock.calls[0]?.[0]).not.toHaveProperty('sessionPath');
     await handle.dispose();
+    await handle.dispose();
+    expect(runtime.dispose).toHaveBeenCalledOnce();
+  });
+
+  it('forwards committed runtime usage into the child lifecycle cost', async () => {
+    const listeners = new Set<Parameters<DirectHarnessRuntime['onEvent']>[0]>();
+    const onEvent = vi.fn((listener: Parameters<DirectHarnessRuntime['onEvent']>[0]) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    });
+    const runtime = { ...fakeRuntime('usage-child'), onEvent } as DirectHarnessRuntime;
+    const service = createHeadlessChildSessionService({
+      parentSessionId: 'parent-session',
+      cwd: '/tmp',
+      runtimeFactory: runtimeFactory(runtime),
+    });
+    const handle = await service.start(request({ kind: 'fresh' }));
+    const events: Array<{ state: string; cost?: number }> = [];
+    handle.subscribe((event) => events.push(event));
+
+    for (const listener of listeners) {
+      void listener(
+        {
+          type: 'usage',
+          lane: 'main',
+          row: { id: 'usage-1', usage: { cost: { total: 1.25 } } },
+          totals: {},
+        } as never,
+        {} as never,
+      );
+    }
+
+    expect(onEvent).toHaveBeenCalledOnce();
+    expect(events.at(-1)).toMatchObject({ state: 'running', cost: 1.25 });
     await handle.dispose();
     expect(runtime.dispose).toHaveBeenCalledOnce();
   });

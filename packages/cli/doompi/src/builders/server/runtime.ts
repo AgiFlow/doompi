@@ -515,6 +515,8 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
       port: options.webPort,
       headlessHub: hub,
       token: attachToken,
+      sessionMcpPublicOrigin: () => remoteRuntime?.remote.publicOrigin(),
+      sessionMcpPublicOriginRevision: () => remoteRuntime?.remote.publicOriginRevision() ?? 0,
       sessionHistory: (session) => {
         const workspaceRoot = hub.workspaces().find((workspace) => workspace.id === session.workspaceId)?.root;
         if (!workspaceRoot) throw new Error('Session workspace not found.');

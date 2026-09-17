@@ -58,9 +58,11 @@ export function createHeadlessBashTool(
         interactive,
         name,
         ...(onOutput ? { onOutput } : {}),
+        ...(signal ? { signal } : {}),
         cwd: context.cwd,
         sessionId: context.sessionId,
       });
+      if (signal?.aborted) throw new Error('Operation aborted');
       return formatRunResult(result, parseResultPragma(command), summarizeLog);
     },
   };

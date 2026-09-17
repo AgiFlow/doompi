@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { createClientHandshake } from '@agimon-ai/doompi-web-security/node';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
 
 import { createRemoteRuntime, type RemoteRuntime } from '../../../../../src/server/remoteRuntime';
@@ -23,7 +23,9 @@ afterEach(async () => {
   for (const home of homes.splice(0)) fs.rmSync(home, { recursive: true, force: true });
 });
 
-function runtime(): RemoteRuntime {
+function runtime(
+  forward: (request: Request) => Promise<Response> = async () => Response.json({ ok: true }),
+): RemoteRuntime {
   const homeDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'doompi-remote-test-'));
   homes.push(homeDirectory);
   const protocol = new WebSocketServer({ host: '127.0.0.1', port: 0 });
@@ -34,7 +36,7 @@ function runtime(): RemoteRuntime {
     registrationToken: 'isolated-registration-token',
     bundleTrust: () => trust,
     onNotice: () => undefined,
-    forward: async () => Response.json({ ok: true }),
+    forward,
     connectProtocol: () => {
       const address = protocol.address();
       if (!address || typeof address === 'string') throw new Error('The test protocol is not ready.');
@@ -65,7 +67,14 @@ function local(
   );
 }
 
-function tunnel(port: number, route: string, method = 'GET', body?: unknown, cookie?: string): Promise<Response> {
+function tunnel(
+  port: number,
+  route: string,
+  method = 'GET',
+  body?: unknown,
+  cookie?: string,
+  includeOrigin = true,
+): Promise<Response> {
   return new Promise((resolve, reject) => {
     const request = httpRequest(
       {
@@ -76,7 +85,9 @@ function tunnel(port: number, route: string, method = 'GET', body?: unknown, coo
         headers: {
           host: 'remote.example.com',
           ...(cookie === undefined ? {} : { cookie }),
-          ...(method === 'GET' ? {} : { origin: PUBLIC_ORIGIN, 'content-type': 'application/json' }),
+          ...(method === 'GET'
+            ? {}
+            : { ...(includeOrigin ? { origin: PUBLIC_ORIGIN } : {}), 'content-type': 'application/json' }),
         },
       },
       async (response) => {
@@ -99,6 +110,68 @@ function tunnel(port: number, route: string, method = 'GET', body?: unknown, coo
 }
 
 describe('global remote control', () => {
+  it('forwards only the exact public MCP and OAuth allowlist without pairing', async () => {
+    const forward = vi.fn(async (request: Request) => Response.json({ path: new URL(request.url).pathname }));
+    const control = runtime(forward);
+    await local(control, '/api/remote/settings', 'PUT', {
+      tunnel: { kind: 'named', hostname: 'remote.example.com' },
+    });
+    expect((await local(control, '/api/remote/enable', 'POST')).status).toBe(200);
+    const port = control.remote.tunnelPort()!;
+    const discovery = await tunnel(port, '/.well-known/oauth-authorization-server');
+    expect(discovery.status).toBe(200);
+    expect(await discovery.json()).toEqual({ path: '/.well-known/oauth-authorization-server' });
+    const mcp = await tunnel(port, '/api/workspaces/work/sessions/session/mcp', 'POST', {}, undefined, false);
+    expect(mcp.status).toBe(200);
+    expect(await mcp.json()).toEqual({ path: '/api/workspaces/work/sessions/session/mcp' });
+    const token = await tunnel(port, '/oauth/token', 'POST', {}, undefined, false);
+    expect(token.status).toBe(200);
+    expect(await token.json()).toEqual({ path: '/oauth/token' });
+    expect((await tunnel(port, '/api/workspaces/work/sessions/session/mcp/clients')).status).toBe(401);
+    expect((await tunnel(port, '/oauth/register', 'POST', {})).status).toBe(401);
+    expect(forward).toHaveBeenCalledTimes(3);
+  });
+
+  it('aborts a forwarded public MCP request when the tunnel client disconnects', async () => {
+    let markStarted: (() => void) | undefined;
+    let markAborted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const aborted = new Promise<void>((resolve) => {
+      markAborted = resolve;
+    });
+    const control = runtime(async (request) => {
+      markStarted?.();
+      await new Promise<void>((resolve) => {
+        request.signal.addEventListener(
+          'abort',
+          () => {
+            markAborted?.();
+            resolve();
+          },
+          { once: true },
+        );
+      });
+      return new Response(null, { status: 499 });
+    });
+    await local(control, '/api/remote/settings', 'PUT', {
+      tunnel: { kind: 'named', hostname: 'remote.example.com' },
+    });
+    expect((await local(control, '/api/remote/enable', 'POST')).status).toBe(200);
+    const request = httpRequest({
+      host: '127.0.0.1',
+      port: control.remote.tunnelPort()!,
+      path: '/api/workspaces/work/sessions/session/mcp',
+      method: 'POST',
+      headers: { host: 'remote.example.com', 'content-type': 'application/json' },
+    });
+    request.once('error', () => undefined);
+    request.end('{}');
+    await started;
+    request.destroy();
+    await aborted;
+  });
   it('enables a separate guarded listener and completes host-approved pairing', async () => {
     const control = runtime();
     const first = await local(control, '/api/remote');
@@ -198,6 +271,24 @@ describe('global remote control', () => {
     expect(
       (JSON.parse(Buffer.from(inner.body, 'base64').toString('utf8')) as { state: { status: string } }).state.status,
     ).toBe('on');
+    const management = channel.seal(
+      Buffer.from(
+        JSON.stringify({
+          v: 1,
+          method: 'GET',
+          target: '/api/workspaces/test-workspace/sessions/one/mcp/clients',
+          headers: [],
+        }),
+      ),
+    );
+    if (!management.ok) throw new Error('Could not seal the MCP management request.');
+    const managementGateway = await tunnel(publicPort, '/api/remote/request', 'POST', management.envelope, cookie);
+    const openedManagement = channel.open(await managementGateway.json());
+    expect(openedManagement.ok).toBe(true);
+    if (!openedManagement.ok) throw new Error('Could not open the MCP management response.');
+    expect((JSON.parse(Buffer.from(openedManagement.plaintext).toString('utf8')) as { status: number }).status).toBe(
+      403,
+    );
     const create = channel.seal(
       Buffer.from(
         JSON.stringify({

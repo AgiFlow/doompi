@@ -10,11 +10,6 @@ import {
   displayedAuthorRegions,
 } from '../../src/extensions/workspaces/sessions/(frontend)/_components/AuthorDocumentPanel';
 import type { AuthorRequestRecord } from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorViewportTypes';
-import {
-  focusAuthorDocument,
-  releaseAuthorDocumentFocus,
-  dropAuthorSession,
-} from '../../src/extensions/workspaces/sessions/(frontend)/_lib/authorWorkspaceStore';
 import { AuthorRequestLog } from '../../src/extensions/workspaces/sessions/(frontend)/dock/_components/AuthorRequestLog';
 import {
   OpenAuthoringFileToolCard,
@@ -33,22 +28,15 @@ describe('the Author web plugin', () => {
     expect(webPlugin.dockFaces).toEqual([
       expect.objectContaining({ id: 'authoring', label: 'authoring', order: 30, autoSelect: true }),
     ]);
+    expect(webPlugin.slots).toEqual([expect.objectContaining({ slot: 'author.preview-provider' })]);
   });
-  it('requires active Author mode and reacts only to the focused session document', () => {
+  it('requires active Author mode and remains available for optional preview providers', () => {
     const face = webPlugin.dockFaces![0]!;
     expect(face.requiredMinorMode).toBe('author');
-    const listener = vi.fn();
-    const release = face.visibility!.subscribe(listener);
+    const release = face.visibility!.subscribe(vi.fn());
     expect(face.visibility!.isVisible(null)).toBe(false);
-    expect(face.visibility!.isVisible('gating')).toBe(false);
-    const generation = focusAuthorDocument('gating', 'doc.md', 0, 'sha');
-    expect(listener).toHaveBeenCalled();
     expect(face.visibility!.isVisible('gating')).toBe(true);
-    expect(face.visibility!.isVisible('another-session')).toBe(false);
-    releaseAuthorDocumentFocus('gating', generation);
-    expect(face.visibility!.isVisible('gating')).toBe(false);
     release();
-    dropAuthorSession('gating');
   });
   it.each([undefined, [], ['voice']])(
     'withholds document editing without Author activation: %j',

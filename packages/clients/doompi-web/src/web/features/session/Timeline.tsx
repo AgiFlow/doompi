@@ -752,13 +752,17 @@ export function Transcript({
 /** The focused session's conversation; an empty one offers a few openers. */
 export function Timeline() {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
+  const idle = useStore(
+    sessionsStore,
+    (state) => state.activeId !== null && state.byId[state.activeId]?.summary.phase === 'idle',
+  );
   const statuses = useActiveSession((state) => state.statuses);
   const widgets = useActiveSession((state) => state.widgets);
   const settled = useActiveSession((state) => state.settled);
   // Only worth saying once the agent has stopped: while it is still running the
   // transcript already shows the work, and the notice would just be noise.
   const hasActiveWork = useActivityGroups(statuses, widgets, activeId).some((group) => group.active);
-  const backgroundWorkActive = settled && hasActiveWork;
+  const backgroundWorkActive = idle && settled && hasActiveWork;
   return (
     <Transcript
       store={sessionStoreFor(activeId)}

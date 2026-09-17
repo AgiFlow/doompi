@@ -206,10 +206,22 @@ test('highlights background work and renders its resume notice once the agent se
   cockpit.session.emit({ type: 'agent_start' });
   await expect(notice).toBeHidden();
 
+  // A state response sampled before the run must not override the lifecycle phase.
+  cockpit.session.emit({
+    type: 'response',
+    command: 'get_state',
+    success: true,
+    data: { isStreaming: false },
+  });
+  await expect(notice).toBeHidden();
+
   cockpit.session.emit({ type: 'agent_settled' });
   await expect(notice).toHaveText('Background work is still running. The agent will resume when results are ready.');
   await expect.poll(() => notice.evaluate((element) => getComputedStyle(element).position)).toBe('static');
   await expect.poll(() => notice.evaluate((element) => element.parentElement?.lastElementChild === element)).toBe(true);
+
+  cockpit.session.emit({ type: 'agent_start' });
+  await expect(notice).toBeHidden();
 });
 
 test('shows an active goal without claiming background work is running', async ({ page, cockpit }) => {

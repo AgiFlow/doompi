@@ -127,6 +127,59 @@ describe('Author workspace store', () => {
       focusedDocument: { revision: 1 },
     });
   });
+  it('keeps submitted preview requests immutable while invalidating stale draft regions after a rebuild', () => {
+    const preview = {
+      version: 1 as const,
+      provider: 'style-system',
+      projectPath: 'apps/site',
+      storyPath: 'src/Button.stories.tsx',
+      storyExport: 'Primary',
+      buildRevision: 'build-1',
+      viewport: { width: 800, height: 600 },
+      sources: [{ path: 'apps/site/src/Button.tsx', sha256: 'a' }],
+    };
+    const path = 'author-preview/style-system/button-primary';
+    putAuthorDocument('s1', { path, kind: 'story-preview', sourceSha256: 'a', storyPreview: preview });
+    focusAuthorDocument('s1', path, 0, 'a');
+    const region = {
+      id: 'r1',
+      documentPath: path,
+      revision: 0,
+      sourceSha256: 'a',
+      comment: 'increase contrast',
+      anchor: {
+        kind: 'story-preview-rect' as const,
+        rect: { x: 0, y: 0, width: 0.5, height: 0.5 },
+        preview,
+      },
+      viewport: { width: 800, height: 600 },
+      createdAt: 1,
+    };
+    addAuthorRegion('s1', region);
+    putAuthorRequest('s1', {
+      id: 'active-preview',
+      documentPath: path,
+      requestText: 'increase contrast',
+      regions: [region],
+      status: 'CHANGING',
+      createdAt: 1,
+      updatedAt: 1,
+      revision: 0,
+      sourceSha256: 'a',
+    });
+
+    putAuthorDocument('s1', {
+      path,
+      kind: 'story-preview',
+      sourceSha256: 'b',
+      storyPreview: { ...preview, buildRevision: 'build-2' },
+    });
+
+    expect(authorSessionWorkspace('s1').regions).toEqual([]);
+    expect(authorSessionWorkspace('s1').requests[0]).toMatchObject({ id: 'active-preview', status: 'CHANGING' });
+    expect(authorSessionWorkspace('s1').requests[0]!.regions).toEqual([region]);
+  });
+
   it('invalidates drafts and active work on an external source change without rewriting completed history', () => {
     putAuthorDocument('s1', { path: 'notes.md', kind: 'markdown', content: 'before', sourceSha256: 'a' });
     focusAuthorDocument('s1', 'notes.md', 0, 'a');

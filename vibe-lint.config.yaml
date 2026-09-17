@@ -46,3 +46,25 @@ overrides:
       # Route identity follows the host's path grammar. Commands are kebab-case,
       # hooks are event names, and component routes may be PascalCase.
       file-naming-convention: off
+
+llm:
+  providers:
+    - tool: script
+      command: doompi
+      args:
+        - --major-mode
+        - minimal
+        - --no-domains
+        - --no-mcp
+        - --mute
+        - --no-agents
+        - --output-format=vibe-lint
+        - --model
+        - openai-codex/gpt-5.6-luna
+        - --thinking
+        - low
+    - tool: antigravity
+      model: gemini-3.6-flash-medium
+      timeout: 180000
+    - tool: claude-code
+      model: claude-haiku-4-5-20251001

@@ -129,6 +129,12 @@ describe('active headless execution hooks', () => {
           inject: [DOOM_HEADLESS_HOST_SERVICE],
           apply(context: Context) {
             const host = requireDoomHeadlessHost(context);
+            host.registerResource({
+              name: 'fixture-skill',
+              description: 'Fixture skill',
+              kind: 'skill',
+              read: () => 'fixture instructions',
+            });
             host.registerTool({
               name: 'fixture_tool',
               description: 'Fixture tool',
@@ -385,6 +391,50 @@ describe('active headless execution hooks', () => {
         await session.runtime.prompt('recovered context');
         expect(streamSimple).toHaveBeenCalledTimes(failure === 'throws' ? 10 : 9);
         expect(contexts[failure === 'throws' ? 9 : 8]?.systemPrompt).toContain('transformed twice');
+
+        const surface = session.toolSurface.readSurface();
+        expect(surface.tools.map((tool) => tool.name)).toContain('fixture_tool');
+        const skill = surface.skills.find((entry) => entry.name === 'fixture-skill');
+        expect(skill).toBeDefined();
+        expect(session.toolSurface.readSkill(surface.revision, skill!.uri)).toBe('fixture instructions');
+        await expect(
+          session.toolSurface.invokeTool({
+            revision: surface.revision,
+            name: 'fixture_tool',
+            arguments: { value: 'external' },
+          }),
+        ).resolves.toMatchObject({
+          content: [{ type: 'text', text: 'twice:patched:raw:guarded:checked' }],
+          details: { patched: true },
+          isError: false,
+        });
+        expect(executed.at(-1)).toBe('guarded:checked');
+        expect(reportedFrames).toContainEqual(
+          expect.objectContaining({
+            type: 'tool_execution_end',
+            runId: 'external',
+            toolName: 'fixture_tool',
+            isError: false,
+          }),
+        );
+        await expect(
+          session.toolSurface.invokeTool({ revision: surface.revision, name: 'fixture_tool', arguments: {} }),
+        ).rejects.toThrow("Invalid arguments for tool 'fixture_tool'");
+
+        vi.spyOn(session.runtime, 'replaceTools').mockRejectedValueOnce(new Error('replacement failed'));
+        const applyTools = (
+          session.host as unknown as { options: { applyTools(tools: readonly never[]): Promise<void> } }
+        ).options.applyTools;
+        await expect(applyTools([])).rejects.toThrow('replacement failed');
+        expect(session.host!.status.ready).toBe(true);
+        expect(() => session!.toolSurface.readSurface()).toThrow('Headless capability preparation is not ready.');
+        await expect(
+          session.toolSurface.invokeTool({
+            revision: surface.revision,
+            name: 'fixture_tool',
+            arguments: { value: 'x' },
+          }),
+        ).rejects.toThrow('Headless capability preparation is not ready.');
       } finally {
         await session?.dispose().catch(() => undefined);
         await apis?.close().catch(() => undefined);

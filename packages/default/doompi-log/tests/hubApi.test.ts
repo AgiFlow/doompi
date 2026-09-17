@@ -6,6 +6,14 @@ import type { IssuesSource } from '../src/types/issuesSource';
 import type { MetricsSource } from '../src/types/metricsSource';
 import type { IssuesView, MetricsReport, MetricsUnavailable } from '../src/types/webMetrics';
 
+const { createIssuesSourceMock, createMetricsSourceMock } = vi.hoisted(() => ({
+  createIssuesSourceMock: vi.fn(),
+  createMetricsSourceMock: vi.fn(),
+}));
+
+vi.mock('../src/services/issuesSource', () => ({ createIssuesSource: createIssuesSourceMock }));
+vi.mock('../src/services/metricsSource', () => ({ createMetricsSource: createMetricsSourceMock }));
+
 /**
  * The hub route is the whole browser-facing surface of this package, so these
  * exercise it through `fetch` rather than by calling the handler, which is what
@@ -36,7 +44,7 @@ function reportWith(overrides: Partial<LogMetricsReport> = {}): LogMetricsReport
   } as unknown as LogMetricsReport;
 }
 
-function sourceReturning(report: LogMetricsReport, transport: 'http' | 'cli' = 'http'): MetricsSource {
+function sourceReturning(report: LogMetricsReport, transport: 'http' | 'worker' = 'http'): MetricsSource {
   return {
     query: vi.fn().mockResolvedValue(report),
     lastTransport: () => transport,
@@ -44,6 +52,21 @@ function sourceReturning(report: LogMetricsReport, transport: 'http' | 'cli' = '
 }
 
 describe('the log hub API', () => {
+  it('resolves default sources under the Pi telemetry identity', () => {
+    createMetricsSourceMock.mockReturnValue(sourceReturning(reportWith()));
+    createIssuesSourceMock.mockReturnValue({ query: vi.fn() } as unknown as IssuesSource);
+
+    createLogHubApi();
+
+    expect(createMetricsSourceMock).toHaveBeenCalledWith({
+      packageName: '@agimon-ai/doompi-log',
+      serviceName: 'pi',
+    });
+    expect(createIssuesSourceMock).toHaveBeenCalledWith({
+      packageName: '@agimon-ai/doompi-log',
+      serviceName: 'pi',
+    });
+  });
   it('projects the sink report onto the wire shape the page reads', async () => {
     const source = sourceReturning(reportWith());
     const app = createLogHubApi({ source });
@@ -120,11 +143,12 @@ describe('the log hub API', () => {
         issueCount: 0,
       },
     } as unknown as Partial<LogMetricsReport>);
-    const app = createLogHubApi({ source: sourceReturning(empty) });
+    const app = createLogHubApi({ source: sourceReturning(empty, 'worker') });
 
     const body = (await (await app.fetch(new Request('http://hub/metrics'))).json()) as MetricsUnavailable;
 
     expect(body.unavailable).toBe('no-data');
+    expect(body.detail).toBe('No recorded usage was found for this period.');
   });
 
   it('reports both transports declining as absence, not as a fault', async () => {

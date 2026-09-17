@@ -11,7 +11,7 @@ import { AuthorRegionDrafts } from './AuthorRegionDrafts';
 import { AuthorRequestLog } from './AuthorRequestLog';
 import { AuthorToolPalette } from './AuthorToolPalette';
 
-export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, statuses }: WebPluginSlotProps) {
+export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, statuses, renderSlot }: WebPluginSlotProps) {
   const [captureStatus, setCaptureStatus] = useState<string>();
   const [capturing, setCapturing] = useState(false);
   const documents = useStore(authorWorkspace.store, (state) => {
@@ -26,9 +26,10 @@ export function AuthorPanel({ sessionId, activeMinorModes, submitCapture, status
   );
   const grid = useStore(authorGrid.store, (state) => (sessionId === null ? undefined : state.sessions[sessionId]));
   const focused = documents.find((document) => document.path === workspace?.focusedDocument?.path);
-  if (!activeMinorModes?.includes('author') || focused === undefined) return null;
+  if (!activeMinorModes?.includes('author')) return null;
   return (
     <section data-testid="author-panel" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
+      <div data-testid="author-preview-providers">{renderSlot('author.preview-provider')}</div>
       {sessionId !== null && workspace !== undefined && focused !== undefined ? (
         <>
           <h2 className="text-base font-semibold text-doom-text">Annotations</h2>

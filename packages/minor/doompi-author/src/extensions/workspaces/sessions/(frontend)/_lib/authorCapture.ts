@@ -48,7 +48,13 @@ export interface AuthorCapturePacket {
   version: 1;
   captureId: string;
   capturedAt: number;
-  document: { path: string; kind: AuthorWorkspaceDocument['kind']; revision: number; sourceSha256?: string };
+  document: {
+    path: string;
+    kind: AuthorWorkspaceDocument['kind'];
+    revision: number;
+    sourceSha256?: string;
+    storyPreview?: AuthorWorkspaceDocument['storyPreview'];
+  };
   regions: AuthorCapturePacketRegion[];
 }
 
@@ -77,6 +83,9 @@ export function createAuthorCapturePacket(
   regions: readonly AuthorRegionDraft[],
 ): AuthorCapturePacket {
   if (regions.length === 0 || regions.length > 16) throw new Error('Capture requires between 1 and 16 regions.');
+  if (document.kind === 'story-preview' && document.storyPreview === undefined) {
+    throw new Error('Story preview capture requires source provenance.');
+  }
   const packet: AuthorCapturePacket = {
     version: 1,
     captureId,
@@ -86,6 +95,7 @@ export function createAuthorCapturePacket(
       kind: document.kind,
       revision: document.version,
       ...(document.sourceSha256 === undefined ? {} : { sourceSha256: document.sourceSha256 }),
+      ...(document.storyPreview === undefined ? {} : { storyPreview: structuredClone(document.storyPreview) }),
     },
     regions: regions.map((region, index) => {
       if (
@@ -135,17 +145,38 @@ function anchorLocation(anchor: AuthorNativeAnchor): string {
       return `page ${String(anchor.page)}, ${rectLocation(anchor.rect)}`;
     case 'video-time-rect':
       return `time ${anchor.timeSeconds.toFixed(3)}s${anchor.frame === undefined ? '' : `, frame ${String(anchor.frame)}`}, ${rectLocation(anchor.rect)}`;
+    case 'story-preview-rect':
+      return `story preview ${rectLocation(anchor.rect)}`;
   }
 }
+
+function storyPreviewProvenance(packet: AuthorCapturePacket): string | undefined {
+  const preview = packet.document.storyPreview;
+  if (preview === undefined) return undefined;
+  const sources = preview.sources.map((source) => `- ${source.path} (sha256 ${source.sha256})`).join('\n');
+  return [
+    'Story preview source (edit these sources, never the generated preview artifact):',
+    `Project: ${preview.projectPath}`,
+    `Story: ${preview.storyPath}#${preview.storyExport}`,
+    `Build revision: ${preview.buildRevision}`,
+    `Viewport: ${String(preview.viewport.width)}x${String(preview.viewport.height)}`,
+    'Sources:',
+    sources,
+    'After editing the underlying story or component source, rebuild the preview before treating it as visually verified.',
+  ].join('\n');
+}
+
 export function authorCaptureContext(packet: AuthorCapturePacket): WebPluginContextItem {
   const metadata = JSON.stringify(packet);
   if (bytes(metadata) > AUTHOR_PACKET_MAX_BYTES) throw new Error('Author capture packet exceeds 64 KiB.');
-  const content = packet.regions
+  const annotations = packet.regions
     .map(
       (region) =>
         `(${String(region.ordinal)}) ${region.comment} [${anchorLocation(region.anchor)}]${region.quote ? `\nQuoted text: ${region.quote}` : ''}`,
     )
     .join('\n\n');
+  const provenance = storyPreviewProvenance(packet);
+  const content = provenance === undefined ? annotations : `${provenance}\n\nAnnotations:\n${annotations}`;
   return {
     kind: 'author-capture',
     source: 'author',

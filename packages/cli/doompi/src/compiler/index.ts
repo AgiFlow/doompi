@@ -181,6 +181,9 @@ const DIRECT_RESOURCE_PACKAGES = new Set([
   'open',
 ]);
 
+/** Published runtimes that intentionally retain their native dependency graph outside direct artifacts. */
+const DIRECT_EXTERNAL_PACKAGES = new Set(['@agimon-ai/style-system']);
+
 /**
  * @rmux/sdk only looks up the caller-provided `rmux` executable by name and has
  * no package-owned executable or resource lookup. Its JavaScript graph is safe
@@ -1021,6 +1024,10 @@ function setExternalResolver(
       if (path.isAbsolute(specifier)) {
         if (!importer && entry && path.resolve(specifier) === path.resolve(entry)) return null;
         const root = packageRootFromPath(specifier);
+        if (root && kind === 'module' && DIRECT_EXTERNAL_PACKAGES.has(root)) {
+          inputs.add(specifier);
+          return { id: specifier, external: true };
+        }
         if (
           root &&
           kind === 'module' &&
@@ -1064,6 +1071,13 @@ function setExternalResolver(
         if (typebox) {
           inputs.add(typebox);
           return { id: typebox, external: kind === 'pi-set' };
+        }
+      }
+      if (root && kind === 'module' && DIRECT_EXTERNAL_PACKAGES.has(root)) {
+        const resolved = await this.resolve(renamed, importer, options);
+        if (resolved) {
+          inputs.add(resolved.id);
+          return { id: resolved.id, external: true };
         }
       }
       if (

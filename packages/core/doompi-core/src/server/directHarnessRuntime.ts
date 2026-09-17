@@ -877,6 +877,40 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     resolveExited(code);
   };
 
+  let externalOperationActive = false;
+  let agentOperationsActive = 0;
+  const acquireAgentOperation = (): (() => void) => {
+    if (externalOperationActive) throw new Error('The session is busy with an external tool invocation');
+    agentOperationsActive += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      agentOperationsActive -= 1;
+    };
+  };
+  const runAgentOperation = async <T>(operation: () => Promise<T>): Promise<T> => {
+    const release = acquireAgentOperation();
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  };
+  const runExternalOperation = async <T>(operation: () => Promise<T>): Promise<T> => {
+    guardWritable();
+    if (externalOperationActive) throw new Error('The session is busy with an external tool invocation');
+    if (agentOperationsActive > 0) throw new Error('The session is busy with an agent operation');
+    externalOperationActive = true;
+    try {
+      const execution = await lane.inspectExecution(context);
+      if (execution.current !== null) throw new Error('The session is busy with an agent operation');
+      return await operation();
+    } finally {
+      externalOperationActive = false;
+    }
+  };
+
   const drive = async (operationId: string): Promise<void> => {
     const result = await writable(() => lane.drive({ operationId, waitForRetry: true }, context));
     await settledEvents;
@@ -921,18 +955,19 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     return { settled: drive(admission.value.operationId) };
   };
 
-  const replaceTools = async (tools: AgentHarnessTool<TContext>[]): Promise<void> => {
-    toolsReady = false;
-    await writable(async () => {
-      await harness.setTools(tools, context);
-      await lane.setActiveTools(
-        tools.map((tool) => tool.name),
-        context,
-      );
-      activeToolNames = new Set(tools.map((tool) => tool.name));
-      toolsReady = true;
+  const replaceTools = (tools: AgentHarnessTool<TContext>[]): Promise<void> =>
+    runAgentOperation(async () => {
+      toolsReady = false;
+      await writable(async () => {
+        await harness.setTools(tools, context);
+        await lane.setActiveTools(
+          tools.map((tool) => tool.name),
+          context,
+        );
+        activeToolNames = new Set(tools.map((tool) => tool.name));
+        toolsReady = true;
+      });
     });
-  };
   const replaceResources = async (resources: Parameters<typeof harness.setResources>[0]): Promise<void> => {
     await writable(() => harness.setResources(resources, context));
   };
@@ -959,47 +994,72 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     images?: ImageContent[],
     streamingBehavior?: 'steer' | 'followUp',
   ): Promise<{ settled: Promise<void>; handledCommand?: boolean }> => {
-    if (await options.dispatchCommand?.(text)) {
-      return { settled: Promise.resolve(), handledCommand: true };
+    const release = acquireAgentOperation();
+    try {
+      if (await options.dispatchCommand?.(text)) {
+        release();
+        return { settled: Promise.resolve(), handledCommand: true };
+      }
+      const submission = await admitPrompt(text, images, streamingBehavior);
+      void submission.settled.then(release, release);
+      return submission;
+    } catch (error) {
+      release();
+      throw error;
     }
-    return admitPrompt(text, images, streamingBehavior);
   };
   const prompt = async (text: string, images?: ImageContent[]): Promise<void> => {
     const submission = await submitPrompt(text, images);
     await submission.settled;
   };
-  const admitMessage = (message: AgentMessage): Promise<{ settled: Promise<void> }> => admitPrompt(message);
-  const steer = async (message: string | AgentMessage, images?: ImageContent[]): Promise<void> => {
-    const result = await writable(() => lane.steer(message, images, context));
-    if (!result.ok) resultError(result);
+  const admitMessage = async (message: AgentMessage): Promise<{ settled: Promise<void> }> => {
+    const release = acquireAgentOperation();
+    try {
+      const submission = await admitPrompt(message);
+      void submission.settled.then(release, release);
+      return submission;
+    } catch (error) {
+      release();
+      throw error;
+    }
   };
-  const followUp = async (message: string | AgentMessage, images?: ImageContent[]): Promise<void> => {
-    const result = await writable(() => lane.followUp(message, images, context));
-    if (!result.ok) resultError(result);
-  };
-  const nextRun = async (message: string | AgentMessage, images?: ImageContent[]): Promise<void> => {
-    const result = await writable(() => lane.nextRun(message, images, context));
-    if (!result.ok) resultError(result);
-  };
-  const abort = async (): Promise<void> => {
-    const result = await writable(() => lane.abort(context));
-    if (!result.ok) resultError(result);
-  };
-  const compact = async (customInstructions?: string): Promise<void> => {
-    const result = await writable(() =>
-      lane.compact(customInstructions === undefined ? undefined : { customInstructions }, context),
-    );
-    if (!result.ok) resultError(result);
-  };
-  const resume = async (): Promise<boolean> => {
-    const result = await writable(() => lane.resume(context));
-    // A lane with no persisted operation has nothing to continue. That is the
-    // ordinary state of a session reopened while idle, not a failure, so it is
-    // reported rather than thrown: only the caller knows whether it expected one.
-    if (!result.ok && result.error._tag === 'NothingToResume') return false;
-    if (!result.ok) resultError(result);
-    return true;
-  };
+  const steer = (message: string | AgentMessage, images?: ImageContent[]): Promise<void> =>
+    runAgentOperation(async () => {
+      const result = await writable(() => lane.steer(message, images, context));
+      if (!result.ok) resultError(result);
+    });
+  const followUp = (message: string | AgentMessage, images?: ImageContent[]): Promise<void> =>
+    runAgentOperation(async () => {
+      const result = await writable(() => lane.followUp(message, images, context));
+      if (!result.ok) resultError(result);
+    });
+  const nextRun = (message: string | AgentMessage, images?: ImageContent[]): Promise<void> =>
+    runAgentOperation(async () => {
+      const result = await writable(() => lane.nextRun(message, images, context));
+      if (!result.ok) resultError(result);
+    });
+  const abort = (): Promise<void> =>
+    runAgentOperation(async () => {
+      const result = await writable(() => lane.abort(context));
+      if (!result.ok) resultError(result);
+    });
+  const compact = (customInstructions?: string): Promise<void> =>
+    runAgentOperation(async () => {
+      const result = await writable(() =>
+        lane.compact(customInstructions === undefined ? undefined : { customInstructions }, context),
+      );
+      if (!result.ok) resultError(result);
+    });
+  const resume = (): Promise<boolean> =>
+    runAgentOperation(async () => {
+      const result = await writable(() => lane.resume(context));
+      // A lane with no persisted operation has nothing to continue. That is the
+      // ordinary state of a session reopened while idle, not a failure, so it is
+      // reported rather than thrown: only the caller knows whether it expected one.
+      if (!result.ok && result.error._tag === 'NothingToResume') return false;
+      if (!result.ok) resultError(result);
+      return true;
+    });
   const readState = async (): Promise<Record<string, unknown>> => {
     const [execution, persisted, stats, thinking] = await Promise.all([
       lane.inspectExecution(context),
@@ -1046,14 +1106,15 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     writable(() => harness.setSteeringMode(mode, context));
   const setFollowUpMode = (mode: Parameters<typeof harness.setFollowUpMode>[0]) =>
     writable(() => harness.setFollowUpMode(mode, context));
-  const navigateTree = async (targetId: string | null, navigationOptions?: Record<string, unknown>) => {
-    const result = await writable(() => lane.navigateTree(targetId, navigationOptions as never, context));
-    if (!result.ok) resultError(result);
-    return {
-      cancelled: result.value.navigation.status !== 'completed',
-      entries: await entriesForLane(lane, context),
-    };
-  };
+  const navigateTree = (targetId: string | null, navigationOptions?: Record<string, unknown>) =>
+    runAgentOperation(async () => {
+      const result = await writable(() => lane.navigateTree(targetId, navigationOptions as never, context));
+      if (!result.ok) resultError(result);
+      return {
+        cancelled: result.value.navigation.status !== 'completed',
+        entries: await entriesForLane(lane, context),
+      };
+    });
   const clearQueue = async () => {
     const queued = (await storage.session.getValue(laneState(laneName), context))?.value.inbox ?? [];
     for (const item of queued) {
@@ -1129,6 +1190,7 @@ export async function createDirectHarnessRuntime<TContext extends object | undef
     replaceTools,
     replaceResources,
     readResources,
+    runExternalOperation,
     appendCustomEntry,
     appendMessage,
     setLabel,

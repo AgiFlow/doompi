@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -54,6 +55,15 @@ function host() {
     host: {
       runtime,
       host: undefined,
+      toolSurface: {
+        readSurface: () => ({
+          revision: 1,
+          tools: [{ name: 'read', label: 'Read', description: 'Read a file', parameters: { type: 'object' } as never }],
+          skills: [{ name: 'review', description: 'Review code', uri: 'doompi://session/session/skills/review' }],
+        }),
+        invokeTool: vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'done' }] })),
+        readSkill: vi.fn(() => '# Review'),
+      },
       prepareFacets: () => undefined,
       activateFacets: async () => undefined,
       canDispatch: () => true,
@@ -129,6 +139,184 @@ describe('serveHeadlessServer', () => {
 
     await server.close();
     await client.dispose();
+  });
+
+  it('routes host-managed session MCP and public confidential OAuth without the browser token', async () => {
+    const first = host();
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: first.host,
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    let publicOrigin = 'https://remote.example.com';
+    let publicOriginRevision = 0;
+    const root = '/api/workspaces/test-workspace/sessions/one/mcp';
+    const server = await serveHeadlessServer({
+      headlessHub: hub,
+      port: 0,
+      token: 'browser-secret',
+      sessionMcpPublicOrigin: () => publicOrigin,
+      sessionMcpPublicOriginRevision: () => publicOriginRevision,
+    });
+    servers.push(server);
+    const hostHeaders = { 'x-doompi-token': 'browser-secret' };
+
+    expect((await fetch(`${server.url}${root}/config`)).status).toBe(401);
+    const config = await fetch(`${server.url}${root}/config`, { headers: hostHeaders });
+    await expect(config.json()).resolves.toMatchObject({
+      audience: `${publicOrigin}${root}`,
+      authorizationEndpoint: `${publicOrigin}/oauth/authorize`,
+      tools: [{ name: 'read' }],
+      skills: [{ name: 'review' }],
+    });
+    expect(
+      (
+        await fetch(`${server.url}${root}/config`, {
+          headers: { authorization: 'Bearer unrelated-application-token', ...hostHeaders },
+        })
+      ).status,
+    ).toBe(200);
+    const invalid = await fetch(`${server.url}${root}/clients`, {
+      method: 'POST',
+      headers: hostHeaders,
+      body: JSON.stringify({
+        name: 'ChatGPT',
+        redirectUri: 'https://chatgpt.com/connector/oauth/callback',
+        tools: ['missing'],
+        skills: [],
+      }),
+    });
+    expect(invalid.status).toBe(400);
+    const created = await fetch(`${server.url}${root}/clients`, {
+      method: 'POST',
+      headers: hostHeaders,
+      body: JSON.stringify({
+        name: 'ChatGPT',
+        redirectUri: 'https://chatgpt.com/connector/oauth/callback',
+        tools: ['read'],
+        skills: ['review'],
+      }),
+    });
+    expect(created.status).toBe(201);
+    expect(created.headers.get('cache-control')).toBe('no-store');
+    const createdClient = (await created.json()) as {
+      client: { clientId: string; clientSecret: string; redirectUri: string };
+    };
+    const listed = (await (await fetch(`${server.url}${root}/clients`, { headers: hostHeaders })).json()) as {
+      clients: Record<string, unknown>[];
+    };
+    expect(listed.clients).toHaveLength(1);
+    expect(listed.clients[0]).not.toHaveProperty('clientSecret');
+
+    const verifier = 'v'.repeat(43);
+    const challenge = createHash('sha256').update(verifier).digest('base64url');
+    const authorize = new URL('/oauth/authorize', server.url);
+    authorize.searchParams.set('response_type', 'code');
+    authorize.searchParams.set('client_id', createdClient.client.clientId);
+    authorize.searchParams.set('redirect_uri', createdClient.client.redirectUri);
+    authorize.searchParams.set('code_challenge', challenge);
+    authorize.searchParams.set('code_challenge_method', 'S256');
+    authorize.searchParams.set('resource', `${publicOrigin}${root}`);
+    authorize.searchParams.set('scope', 'tool:missing');
+    authorize.searchParams.set('state', 'kept');
+    const invalidAuthorize = new URL(authorize);
+    invalidAuthorize.searchParams.set('response_type', 'token');
+    const rejectedAuthorization = await fetch(invalidAuthorize, { redirect: 'manual' });
+    const rejectedCallback = new URL(rejectedAuthorization.headers.get('location')!);
+    expect(rejectedCallback.searchParams.get('error')).toBe('invalid_request');
+    expect(rejectedCallback.searchParams.get('state')).toBe('kept');
+
+    const authorized = await fetch(authorize, { redirect: 'manual' });
+    expect(authorized.status).toBe(302);
+    const callback = new URL(authorized.headers.get('location')!);
+    expect(callback.searchParams.get('state')).toBe('kept');
+    const token = await fetch(`${server.url}/oauth/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: createdClient.client.clientId,
+        client_secret: createdClient.client.clientSecret,
+        code: callback.searchParams.get('code')!,
+        redirect_uri: createdClient.client.redirectUri,
+        code_verifier: verifier,
+      }),
+    });
+    expect(token.status).toBe(200);
+    const tokens = (await token.json()) as { access_token: string };
+    const mcp = await fetch(`${server.url}${root}`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${tokens.access_token}`,
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    await expect(mcp.json()).resolves.toMatchObject({ result: { tools: [{ name: 'read' }] } });
+    expect(
+      (
+        await fetch(`${server.url}${root}`, {
+          method: 'POST',
+          headers: { 'x-doompi-token': 'browser-secret', 'content-type': 'application/json' },
+          body: '{}',
+        })
+      ).status,
+    ).toBe(401);
+
+    await hub.closeSession('one');
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'Replacement',
+      cwd: '/repo',
+      createdAt: 'later',
+      host: host().host,
+    });
+    expect(
+      (
+        await fetch(`${server.url}${root}`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${tokens.access_token}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }),
+        })
+      ).status,
+    ).toBe(401);
+
+    publicOrigin = 'https://replacement.example.com';
+    const replacedConfig = await fetch(`${server.url}${root}/config`, { headers: hostHeaders });
+    expect(replacedConfig.status).toBe(200);
+    const replacementListed = (await (
+      await fetch(`${server.url}${root}/clients`, { headers: hostHeaders })
+    ).json()) as {
+      clients: Record<string, unknown>[];
+    };
+    expect(replacementListed.clients).toHaveLength(0);
+    const replacementClient = await fetch(`${server.url}${root}/clients`, {
+      method: 'POST',
+      headers: hostHeaders,
+      body: JSON.stringify({
+        name: 'Replacement ChatGPT',
+        redirectUri: 'https://chatgpt.com/connector/oauth/replacement',
+        tools: ['read'],
+        skills: [],
+      }),
+    });
+    expect(replacementClient.status).toBe(201);
+    publicOriginRevision += 1;
+    const reenabledClients = await fetch(`${server.url}${root}/clients`, { headers: hostHeaders });
+    await expect(reenabledClients.json()).resolves.toEqual({ clients: [] });
+    await hub.close();
   });
 
   it('serves mentioned files only from the session working directory', async () => {

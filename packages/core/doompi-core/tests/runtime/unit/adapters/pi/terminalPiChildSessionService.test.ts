@@ -57,6 +57,7 @@ function fakeRuntime(options: DirectHarnessRuntimeOptions): DirectHarnessRuntime
     replaceTools: async () => undefined,
     replaceResources: async () => undefined,
     readResources: async () => ({}),
+    runExternalOperation: (operation) => operation(),
     appendCustomEntry: async () => 'entry',
     appendMessage: async () => 'entry',
     setLabel: async () => undefined,
@@ -196,6 +197,55 @@ describe('terminal Pi child session provider', () => {
     await handle.dispose();
     await handle.dispose();
     expect(runtime?.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards committed runtime usage into terminal child cost events', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'doom-terminal-provider-usage-'));
+    tempRoots.push(root);
+    const { ownership } = owner();
+    const listeners: Array<Parameters<DirectHarnessRuntime['onEvent']>[0]> = [];
+    const onEvent = vi.fn((listener: Parameters<DirectHarnessRuntime['onEvent']>[0]) => {
+      listeners.push(listener);
+      return () => undefined;
+    });
+    const runtimeFactory = vi.fn(async (options: DirectHarnessRuntimeOptions) => ({
+      ...fakeRuntime(options),
+      onEvent,
+      prompt: vi.fn(() => new Promise<void>(() => undefined)),
+    }));
+    const service = createTerminalPiChildSessionService({
+      cwd: root,
+      sessionsRoot: root,
+      historyOwnership: ownership,
+      runtimeFactory,
+    });
+    const handle = await service.start(
+      request(
+        {
+          kind: 'terminal-pi-fork',
+          sourceSessionId: 'parent-session',
+          sourceLeafId: 'parent-leaf',
+          snapshotJsonl: v3Snapshot(),
+        },
+        root,
+      ),
+    );
+    const events: Array<{ state: string; cost?: number }> = [];
+    handle.subscribe((event) => events.push(event));
+    void listeners[0]?.(
+      {
+        type: 'usage',
+        lane: 'main',
+        row: { id: 'usage-1', usage: { cost: { total: 2.5 } } },
+        totals: {},
+      } as never,
+      {} as never,
+    );
+
+    expect(onEvent).toHaveBeenCalledOnce();
+    expect(events.at(-1)).toMatchObject({ state: 'running', cost: 2.5 });
+    await handle.dispose();
+    await service.close();
   });
 
   it('rejects malformed and v4 terminal snapshots before creating a runtime', async () => {

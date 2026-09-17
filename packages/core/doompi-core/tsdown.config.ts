@@ -37,6 +37,7 @@ export default defineConfig({
     'hub-channel': 'src/exports/hubChannel.ts',
     'server-facet': 'src/exports/serverFacet.ts',
     'session-protocol': 'src/exports/sessionProtocol.ts',
+    'session-mcp': 'src/exports/sessionMcp.ts',
     skills: 'src/exports/skills.ts',
     testing: 'src/exports/testing.ts',
     'tool-overrides': 'src/exports/toolOverrides.ts',

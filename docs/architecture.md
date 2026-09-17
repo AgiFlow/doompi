@@ -146,9 +146,9 @@ Publication follows three steps:
 
 Published artifacts are not mutated in place.
 
-Repository and worktree identities are the routing boundary. Consumers accept state only through the exact validated registration for the nearest repository. Registration validation confines paths to the generation, verifies the state hash and repository identity, and pins the DoomPi package root, version, manifest, Pi entry, and server bundle that produced it. Missing, malformed, foreign, traversing, symlinked, stale, and unsupported registrations fail closed. Consumers do not guess another repository, source checkout, legacy state file, or global `current` directory.
+Repository and worktree identities are the routing boundary. Consumers accept state only through the exact validated registration for the nearest repository. Registration validation confines paths to the generation, verifies the state hash and repository identity, and pins the DoomPi package root, npm version provenance, API version, manifest, Pi entry, and server bundle that produced it. The npm version is not the compatibility gate: releases with the same supported API version may load an intact synchronized generation. Missing, malformed, foreign, traversing, symlinked, stale, and unsupported registrations fail closed. Consumers do not guess another repository, source checkout, legacy state file, or global `current` directory.
 
-Synchronized state maps composition fingerprints to Pi bundles and compiler manifests. The bootstrap has its own manifest. Server admission separately validates the registered server bundle's generation and fingerprint before importing any facet. Immutable compiler artifacts may be reused through the shared cache, but publication and runtime selection remain repository-isolated.
+Synchronized state maps composition fingerprints to Pi bundles and compiler manifests. Runtime admission verifies generated artifact receipts by content before reuse, while sync and `sync --check` also compare current source inputs. A producer upgrade with the same API version therefore keeps valid generated bundles runnable until an explicit sync refreshes them. The bootstrap has its own manifest. Server admission separately validates the registered server bundle's generation, descriptor, contracts, and artifact fingerprints before importing any facet. Immutable compiler artifacts may be reused through the shared cache, but publication and runtime selection remain repository-isolated.
 
 The package bootstrap is inert outside a synchronized repository. Inside one, it imports only the package and bootstrap pinned by the validated registration and never compiles during startup. An unusable registration, bootstrap, or recorded bundle reports:
 
@@ -156,7 +156,7 @@ The package bootstrap is inert outside a synchronized repository. Inside one, it
 doompi could not read its synchronized state. Run doompi sync.
 ```
 
-`doompi init` owns the global Pi dispatcher, user settings integration, and default theme. `doompi sync` requires that integration for persisted mode but does not rewrite it. It reconciles existing repository Pi settings and removes a legacy repository alias. `dpi` supplies its overlay in memory and uses the same repository-isolated publication without requiring persisted settings.
+`doompi init` owns the global Pi dispatcher, user settings integration, and default theme. Existing registrations without API metadata use their legacy exact npm-version check and migrate on the next explicit sync. `doompi sync` requires that integration for persisted mode but does not rewrite it. It reconciles existing repository Pi settings and removes a legacy repository alias. `dpi` supplies its overlay in memory and uses the same repository-isolated publication without requiring persisted settings.
 
 ## Headless server and presentation clients
 

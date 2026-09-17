@@ -350,6 +350,7 @@
     "files": [
       "dist",
       "src/types/author.ts",
+      "src/types/authorPreview.ts",
       "src/types/webAuthor.ts",
       "src/types/structuredDocuments.ts",
       "src/prompts",
@@ -689,129 +690,6 @@
     "os": [],
     "cpu": []
   },
-  "@agimon-ai/doompi-domain": {
-    "exports": {
-      ".": "tir",
-      "./api-contracts": "tir",
-      "./apply": "tir",
-      "./extensions/pi": "tir",
-      "./extensions/server": "tir",
-      "./extensions/web": "i",
-      "./mcp": "tir",
-      "./plugins": "tir",
-      "./resources": "tir",
-      "./package.json": "esm"
-    },
-    "exportTargets": {
-      ".": {
-        "types": "./dist/index.d.mts",
-        "import": "./dist/index.mjs",
-        "require": "./dist/index.cjs"
-      },
-      "./api-contracts": {
-        "types": "./dist/api-contracts.d.mts",
-        "import": "./dist/api-contracts.mjs",
-        "require": "./dist/api-contracts.cjs"
-      },
-      "./apply": {
-        "types": "./dist/apply.d.mts",
-        "import": "./dist/apply.mjs",
-        "require": "./dist/apply.cjs"
-      },
-      "./extensions/pi": {
-        "types": "./dist/extensions/pi.d.mts",
-        "import": "./dist/extensions/pi.mjs",
-        "require": "./dist/extensions/pi.cjs"
-      },
-      "./extensions/server": {
-        "types": "./dist/extensions/server.d.mts",
-        "import": "./dist/extensions/server.mjs",
-        "require": "./dist/extensions/server.cjs"
-      },
-      "./extensions/web": {
-        "import": "./dist/extensions/web.mjs"
-      },
-      "./mcp": {
-        "types": "./dist/mcp.d.mts",
-        "import": "./dist/mcp.mjs",
-        "require": "./dist/mcp.cjs"
-      },
-      "./plugins": {
-        "types": "./dist/plugins.d.mts",
-        "import": "./dist/plugins.mjs",
-        "require": "./dist/plugins.cjs"
-      },
-      "./resources": {
-        "types": "./dist/resources.d.mts",
-        "import": "./dist/resources.mjs",
-        "require": "./dist/resources.cjs"
-      },
-      "./package.json": "./package.json"
-    },
-    "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
-    "jsnextMain": "./dist/index.mjs",
-    "bin": {},
-    "pi": {
-      "extensions": ["./dist/extensions/pi.mjs"]
-    },
-    "assets": [
-      "./llms.txt",
-      "./README.md",
-      "./src/prompts/doompi-author-domain/SKILL.md",
-      "./src/prompts/doompi-author-domain/references/domains-contract.md"
-    ],
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
-    "os": [],
-    "cpu": []
-  },
-  "@agimon-ai/doompi-edit": {
-    "exports": {
-      ".": "tir",
-      "./api-contracts": "tir",
-      "./extensions/pi": "tir",
-      "./extensions/server": "tir",
-      "./extensions/web": "i",
-      "./package.json": "esm"
-    },
-    "exportTargets": {
-      ".": {
-        "types": "./dist/index.d.mts",
-        "import": "./dist/index.mjs",
-        "require": "./dist/index.cjs"
-      },
-      "./api-contracts": {
-        "types": "./dist/api-contracts.d.mts",
-        "import": "./dist/api-contracts.mjs",
-        "require": "./dist/api-contracts.cjs"
-      },
-      "./extensions/pi": {
-        "types": "./dist/extensions/pi.d.mts",
-        "import": "./dist/extensions/pi.mjs",
-        "require": "./dist/extensions/pi.cjs"
-      },
-      "./extensions/server": {
-        "types": "./dist/extensions/server.d.mts",
-        "import": "./dist/extensions/server.mjs",
-        "require": "./dist/extensions/server.cjs"
-      },
-      "./extensions/web": {
-        "import": "./dist/extensions/web.mjs"
-      },
-      "./package.json": "./package.json"
-    },
-    "main": "./dist/index.cjs",
-    "types": "./dist/index.d.cts",
-    "jsnextMain": "./dist/index.mjs",
-    "bin": {},
-    "pi": {
-      "extensions": ["./dist/extensions/pi.mjs"]
-    },
-    "assets": [],
-    "files": ["dist"],
-    "os": [],
-    "cpu": []
-  },
   "@agimon-ai/doompi-core": {
     "exports": {
       ".": "tir",
@@ -888,6 +766,7 @@
       "./server-facet": "tir",
       "./server-telemetry": "tir",
       "./session-files-api": "tir",
+      "./session-mcp": "tir",
       "./session-protocol": "tir",
       "./skills": "tir",
       "./sqlite-history-import": "tir",
@@ -1285,6 +1164,11 @@
         "import": "./dist/session-files-api.mjs",
         "require": "./dist/session-files-api.cjs"
       },
+      "./session-mcp": {
+        "types": "./dist/session-mcp.d.mts",
+        "import": "./dist/session-mcp.mjs",
+        "require": "./dist/session-mcp.cjs"
+      },
       "./session-protocol": {
         "types": "./dist/session-protocol.d.mts",
         "import": "./dist/session-protocol.mjs",
@@ -1414,6 +1298,129 @@
     "pi": {},
     "assets": [],
     "files": ["dist", "README.md"],
+    "os": [],
+    "cpu": []
+  },
+  "@agimon-ai/doompi-domain": {
+    "exports": {
+      ".": "tir",
+      "./api-contracts": "tir",
+      "./apply": "tir",
+      "./extensions/pi": "tir",
+      "./extensions/server": "tir",
+      "./extensions/web": "i",
+      "./mcp": "tir",
+      "./plugins": "tir",
+      "./resources": "tir",
+      "./package.json": "esm"
+    },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./api-contracts": {
+        "types": "./dist/api-contracts.d.mts",
+        "import": "./dist/api-contracts.mjs",
+        "require": "./dist/api-contracts.cjs"
+      },
+      "./apply": {
+        "types": "./dist/apply.d.mts",
+        "import": "./dist/apply.mjs",
+        "require": "./dist/apply.cjs"
+      },
+      "./extensions/pi": {
+        "types": "./dist/extensions/pi.d.mts",
+        "import": "./dist/extensions/pi.mjs",
+        "require": "./dist/extensions/pi.cjs"
+      },
+      "./extensions/server": {
+        "types": "./dist/extensions/server.d.mts",
+        "import": "./dist/extensions/server.mjs",
+        "require": "./dist/extensions/server.cjs"
+      },
+      "./extensions/web": {
+        "import": "./dist/extensions/web.mjs"
+      },
+      "./mcp": {
+        "types": "./dist/mcp.d.mts",
+        "import": "./dist/mcp.mjs",
+        "require": "./dist/mcp.cjs"
+      },
+      "./plugins": {
+        "types": "./dist/plugins.d.mts",
+        "import": "./dist/plugins.mjs",
+        "require": "./dist/plugins.cjs"
+      },
+      "./resources": {
+        "types": "./dist/resources.d.mts",
+        "import": "./dist/resources.mjs",
+        "require": "./dist/resources.cjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.cts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": {
+      "extensions": ["./dist/extensions/pi.mjs"]
+    },
+    "assets": [
+      "./llms.txt",
+      "./README.md",
+      "./src/prompts/doompi-author-domain/SKILL.md",
+      "./src/prompts/doompi-author-domain/references/domains-contract.md"
+    ],
+    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "os": [],
+    "cpu": []
+  },
+  "@agimon-ai/doompi-edit": {
+    "exports": {
+      ".": "tir",
+      "./api-contracts": "tir",
+      "./extensions/pi": "tir",
+      "./extensions/server": "tir",
+      "./extensions/web": "i",
+      "./package.json": "esm"
+    },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./api-contracts": {
+        "types": "./dist/api-contracts.d.mts",
+        "import": "./dist/api-contracts.mjs",
+        "require": "./dist/api-contracts.cjs"
+      },
+      "./extensions/pi": {
+        "types": "./dist/extensions/pi.d.mts",
+        "import": "./dist/extensions/pi.mjs",
+        "require": "./dist/extensions/pi.cjs"
+      },
+      "./extensions/server": {
+        "types": "./dist/extensions/server.d.mts",
+        "import": "./dist/extensions/server.mjs",
+        "require": "./dist/extensions/server.cjs"
+      },
+      "./extensions/web": {
+        "import": "./dist/extensions/web.mjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.cts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": {
+      "extensions": ["./dist/extensions/pi.mjs"]
+    },
+    "assets": [],
+    "files": ["dist"],
     "os": [],
     "cpu": []
   },
@@ -1930,6 +1937,91 @@
       "extensions": ["./dist/extensions/pi.mjs"]
     },
     "assets": ["./llms.txt", "./README.md", "./src/prompts/doompi-use-mcp/SKILL.md"],
+    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
+    "os": [],
+    "cpu": []
+  },
+  "@agimon-ai/doompi-minor-mode": {
+    "assets": [],
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./catalog": {
+        "types": "./dist/catalog.d.mts",
+        "import": "./dist/catalog.mjs",
+        "require": "./dist/catalog.cjs"
+      },
+      "./command": {
+        "types": "./dist/command.d.mts",
+        "import": "./dist/command.mjs",
+        "require": "./dist/command.cjs"
+      },
+      "./extensions/pi": {
+        "types": "./dist/extensions/pi.d.mts",
+        "import": "./dist/extensions/pi.mjs",
+        "require": "./dist/extensions/pi.cjs"
+      },
+      "./extensions/server": {
+        "types": "./dist/extensions/server.d.mts",
+        "import": "./dist/extensions/server.mjs",
+        "require": "./dist/extensions/server.cjs"
+      },
+      "./minor-mode-command": {
+        "types": "./dist/minor-mode-command.d.mts",
+        "import": "./dist/minor-mode-command.mjs",
+        "require": "./dist/minor-mode-command.cjs"
+      },
+      "./mode": {
+        "types": "./dist/mode.d.mts",
+        "import": "./dist/mode.mjs",
+        "require": "./dist/mode.cjs"
+      },
+      "./mode-definition": {
+        "types": "./dist/mode-definition.d.mts",
+        "import": "./dist/mode-definition.mjs",
+        "require": "./dist/mode-definition.cjs"
+      },
+      "./owner": {
+        "types": "./dist/owner.d.mts",
+        "import": "./dist/owner.mjs",
+        "require": "./dist/owner.cjs"
+      },
+      "./projection": {
+        "types": "./dist/projection.d.mts",
+        "import": "./dist/projection.mjs",
+        "require": "./dist/projection.cjs"
+      },
+      "./reload-handoff": {
+        "types": "./dist/reload-handoff.d.mts",
+        "import": "./dist/reload-handoff.mjs",
+        "require": "./dist/reload-handoff.cjs"
+      },
+      "./package.json": "./package.json"
+    },
+    "exports": {
+      ".": "tir",
+      "./catalog": "tir",
+      "./command": "tir",
+      "./extensions/pi": "tir",
+      "./extensions/server": "tir",
+      "./minor-mode-command": "tir",
+      "./mode": "tir",
+      "./mode-definition": "tir",
+      "./owner": "tir",
+      "./projection": "tir",
+      "./reload-handoff": "tir",
+      "./package.json": "esm"
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.mts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": {
+      "extensions": ["./dist/extensions/pi.mjs"]
+    },
     "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
@@ -2749,6 +2841,53 @@
     "os": [],
     "cpu": []
   },
+  "@agimon-ai/doompi-style-system": {
+    "exports": {
+      ".": "tir",
+      "./api-contracts": "tir",
+      "./extensions/server": "tir",
+      "./extensions/web": "i",
+      "./package.json": "esm",
+      "./extensions/pi": "tir"
+    },
+    "exportTargets": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "require": "./dist/index.cjs"
+      },
+      "./api-contracts": {
+        "types": "./dist/api-contracts.d.mts",
+        "import": "./dist/api-contracts.mjs",
+        "require": "./dist/api-contracts.cjs"
+      },
+      "./extensions/server": {
+        "types": "./dist/extensions/server.d.mts",
+        "import": "./dist/extensions/server.mjs",
+        "require": "./dist/extensions/server.cjs"
+      },
+      "./extensions/web": {
+        "import": "./dist/extensions/web.mjs"
+      },
+      "./package.json": "./package.json",
+      "./extensions/pi": {
+        "types": "./dist/extensions/pi.d.mts",
+        "import": "./dist/extensions/pi.mjs",
+        "require": "./dist/extensions/pi.cjs"
+      }
+    },
+    "main": "./dist/index.cjs",
+    "types": "./dist/index.d.mts",
+    "jsnextMain": "./dist/index.mjs",
+    "bin": {},
+    "pi": {
+      "extensions": ["./dist/extensions/pi.mjs"]
+    },
+    "assets": ["./README.md"],
+    "files": ["dist", "README.md"],
+    "os": [],
+    "cpu": []
+  },
   "@agimon-ai/doompi-task": {
     "exports": {
       ".": "tir",
@@ -3477,91 +3616,6 @@
       "src/types/webWorkflows.ts",
       "src/types/webWorkflowTerminal.ts"
     ],
-    "os": [],
-    "cpu": []
-  },
-  "@agimon-ai/doompi-minor-mode": {
-    "assets": [],
-    "exportTargets": {
-      ".": {
-        "types": "./dist/index.d.mts",
-        "import": "./dist/index.mjs",
-        "require": "./dist/index.cjs"
-      },
-      "./catalog": {
-        "types": "./dist/catalog.d.mts",
-        "import": "./dist/catalog.mjs",
-        "require": "./dist/catalog.cjs"
-      },
-      "./command": {
-        "types": "./dist/command.d.mts",
-        "import": "./dist/command.mjs",
-        "require": "./dist/command.cjs"
-      },
-      "./extensions/pi": {
-        "types": "./dist/extensions/pi.d.mts",
-        "import": "./dist/extensions/pi.mjs",
-        "require": "./dist/extensions/pi.cjs"
-      },
-      "./extensions/server": {
-        "types": "./dist/extensions/server.d.mts",
-        "import": "./dist/extensions/server.mjs",
-        "require": "./dist/extensions/server.cjs"
-      },
-      "./minor-mode-command": {
-        "types": "./dist/minor-mode-command.d.mts",
-        "import": "./dist/minor-mode-command.mjs",
-        "require": "./dist/minor-mode-command.cjs"
-      },
-      "./mode": {
-        "types": "./dist/mode.d.mts",
-        "import": "./dist/mode.mjs",
-        "require": "./dist/mode.cjs"
-      },
-      "./mode-definition": {
-        "types": "./dist/mode-definition.d.mts",
-        "import": "./dist/mode-definition.mjs",
-        "require": "./dist/mode-definition.cjs"
-      },
-      "./owner": {
-        "types": "./dist/owner.d.mts",
-        "import": "./dist/owner.mjs",
-        "require": "./dist/owner.cjs"
-      },
-      "./projection": {
-        "types": "./dist/projection.d.mts",
-        "import": "./dist/projection.mjs",
-        "require": "./dist/projection.cjs"
-      },
-      "./reload-handoff": {
-        "types": "./dist/reload-handoff.d.mts",
-        "import": "./dist/reload-handoff.mjs",
-        "require": "./dist/reload-handoff.cjs"
-      },
-      "./package.json": "./package.json"
-    },
-    "exports": {
-      ".": "tir",
-      "./catalog": "tir",
-      "./command": "tir",
-      "./extensions/pi": "tir",
-      "./extensions/server": "tir",
-      "./minor-mode-command": "tir",
-      "./mode": "tir",
-      "./mode-definition": "tir",
-      "./owner": "tir",
-      "./projection": "tir",
-      "./reload-handoff": "tir",
-      "./package.json": "esm"
-    },
-    "main": "./dist/index.cjs",
-    "types": "./dist/index.d.mts",
-    "jsnextMain": "./dist/index.mjs",
-    "bin": {},
-    "pi": {
-      "extensions": ["./dist/extensions/pi.mjs"]
-    },
-    "files": ["dist", "llms.txt", "src/prompts", "README.md", "LICENSE", "package.json"],
     "os": [],
     "cpu": []
   }

@@ -22,6 +22,7 @@ function host() {
     host: {
       runtime,
       host: undefined,
+      toolSurface: {} as HeadlessSessionHost['toolSurface'],
       prepareFacets: () => undefined,
       activateFacets: async () => undefined,
       canDispatch: () => true,

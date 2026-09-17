@@ -3,10 +3,14 @@ import path from 'node:path';
 
 import { DOOM_PACKAGE_NAME, manifestName } from '@agimon-ai/doompi-core/doom-package';
 import { writeFileAtomic } from '@agimon-ai/doompi-core/runtime-json';
-import { SYNC_REGISTRATION_VERSION } from '@agimon-ai/doompi-core/sync-registration';
+import {
+  DOOMPI_API_VERSION,
+  LEGACY_SYNC_REGISTRATION_VERSION,
+  SYNC_REGISTRATION_VERSION,
+} from '@agimon-ai/doompi-core/sync-registration';
 
 /** Protocol marker proving that the user package path is managed by DoomPi init. */
-export const PI_DISPATCHER_VERSION = 2;
+export const PI_DISPATCHER_VERSION = 3;
 
 const DISPATCHER_ENTRY = 'dispatcher.mjs';
 const PACKAGE_MANIFEST = 'package.json';
@@ -35,6 +39,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const REGISTRATION_VERSION = ${String(SYNC_REGISTRATION_VERSION)};
+const LEGACY_REGISTRATION_VERSION = ${String(LEGACY_SYNC_REGISTRATION_VERSION)};
+const API_VERSION = ${String(DOOMPI_API_VERSION)};
 const PACKAGE_NAME = ${JSON.stringify(DOOM_PACKAGE_NAME)};
 const WARNING = 'warning';
 
@@ -97,7 +103,7 @@ function registration(root) {
   const ids = identity(root);
   const recordPath = path.join(os.homedir(), '.pi', '.doom', 'sync', 'registrations', ids.repositoryId, \`\${ids.worktreeId}.json\`);
   const value = JSON.parse(fs.readFileSync(recordPath, 'utf8'));
-  if (value.version !== REGISTRATION_VERSION || canonical(value.root) !== root) throw new Error('registration identity mismatch');
+  if ((value.version !== REGISTRATION_VERSION && value.version !== LEGACY_REGISTRATION_VERSION) || canonical(value.root) !== root) throw new Error('registration identity mismatch');
   if (value.identity?.repositoryId !== ids.repositoryId || value.identity?.worktreeId !== ids.worktreeId) throw new Error('registration worktree mismatch');
   if (!inside(value.generationRoot, value.statePath) || !inside(value.package.root, value.package.entry)) throw new Error('registration path escapes its owner');
   const stateHash = crypto.createHash('sha256').update(fs.readFileSync(value.statePath)).digest('hex');
@@ -105,7 +111,14 @@ function registration(root) {
   const manifestPath = path.join(canonical(value.package.root), 'package.json');
   if (canonical(value.package.manifestPath) !== canonical(manifestPath)) throw new Error('registration package manifest mismatch');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  if (manifest.name !== PACKAGE_NAME || manifest.version !== value.package.version) throw new Error('registration package mismatch');
+  if (manifest.name !== PACKAGE_NAME || typeof manifest.version !== 'string') throw new Error('registration package mismatch');
+  if (value.version === LEGACY_REGISTRATION_VERSION && value.package.apiVersion === undefined) {
+    if (manifest.version !== value.package.version) throw new Error('registration package mismatch');
+  } else {
+    if (!Number.isSafeInteger(value.package.apiVersion) || value.package.apiVersion < 1) throw new Error('invalid package API version');
+    if (manifest.doompiApiVersion !== value.package.apiVersion) throw new Error('registration package API mismatch');
+    if (value.package.apiVersion !== API_VERSION) throw new Error('unsupported package API version');
+  }
   const entries = manifest.pi?.extensions;
   if (!Array.isArray(entries) || !entries.some((entry) => typeof entry === 'string' && canonical(path.resolve(value.package.root, entry)) === canonical(value.package.entry))) throw new Error('registration package entry mismatch');
   return value;

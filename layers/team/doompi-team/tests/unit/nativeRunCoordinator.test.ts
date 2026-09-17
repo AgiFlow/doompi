@@ -149,6 +149,16 @@ describe('NativeRunCoordinator', () => {
     expect(notifier.results[0]).toMatchObject({ runId: 'run-a', success: true, durationMs: 20 });
   });
 
+  it('carries cumulative child cost through every native projection', async () => {
+    const { service, tracker, projection, coordinator } = setup();
+    await coordinator.start('session-a', request('run-a', 'session-a'));
+    service.handles.get('run-a')!.emit({ runId: 'run-a', state: 'running', timestamp: 20, cost: 1.25 });
+    service.handles.get('run-a')!.emit({ runId: 'run-a', state: 'completed', timestamp: 30, cost: 1.5 });
+
+    expect(projection.runs.get('session-a:run-a')).toMatchObject({ cost: 1.5 });
+    expect(tracker.getNative('session-a', 'run-a')).toMatchObject({ cost: 1.5 });
+  });
+
   it('routes steer and stop through the typed handle and projects cancellation', async () => {
     const { service, tracker, coordinator } = setup();
     await coordinator.start('session-a', request('run-a', 'session-a'));

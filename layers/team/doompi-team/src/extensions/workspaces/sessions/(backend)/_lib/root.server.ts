@@ -103,6 +103,36 @@ function publishRuns(
   directEvents.publish(SUBAGENT_RUNS_TYPE, sessionId, { runs });
 }
 
+const TEAM_COST_STATUS = 'doom-team-cost';
+const COST_DECIMALS = 6;
+
+function updateTeamCost(
+  client: { setStatus(source: string, text: string | undefined): void },
+  jobs: readonly TrackedAsyncJob[],
+  nativeRuns: ReadonlyMap<string, NativeAsyncJobProjection>,
+  costs: Map<string, number>,
+  previousText: string | undefined,
+  attached: boolean,
+  force = false,
+): string | undefined {
+  const trackedCosts = new Map<string, number>();
+  for (const job of jobs) {
+    if (job.cost !== undefined && Number.isFinite(job.cost)) trackedCosts.set(job.runId, job.cost);
+  }
+  for (const [runId, run] of nativeRuns) {
+    if (trackedCosts.has(runId) || run.cost === undefined || !Number.isFinite(run.cost)) continue;
+    costs.set(runId, run.cost);
+  }
+  for (const [runId, cost] of trackedCosts) costs.set(runId, cost);
+
+  let total = 0;
+  for (const cost of costs.values()) total += cost;
+  const text = total > 0 ? String(Number(total.toFixed(COST_DECIMALS))) : undefined;
+  if (!force && text === previousText) return previousText;
+  if (attached) client.setStatus(TEAM_COST_STATUS, text);
+  return text;
+}
+
 const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerPluginContext) => {
   if (!host) throw new Error('Team session requires the headless host.');
   if (serverHost.context.environment === undefined) {
@@ -128,6 +158,26 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
     scheduler: runtime.pollScheduler,
     tracker: runtime.asyncJobTracker,
     loadConfig: () => loadConfig().config,
+  });
+  const nativeRuns = new Map<string, NativeAsyncJobProjection>();
+  const childCosts = new Map<string, number>();
+  let costText: string | undefined;
+  let activityAttached = false;
+  const publishRunSnapshot = (): void => {
+    if (activityAttached) publishRuns(directEvents, execution.sessionId, jobs.list(), nativeRuns);
+  };
+  const publishCost = (force = false): void => {
+    costText = updateTeamCost(execution.client, jobs.list(), nativeRuns, childCosts, costText, activityAttached, force);
+  };
+  const unsubscribeCostTracker = runtime.asyncJobTracker.subscribe(execution.sessionId, () => {
+    publishCost();
+    publishRunSnapshot();
+  });
+  const unsubscribeCostNative = subscribeNativeRunProjection(execution.sessionId, (runs) => {
+    nativeRuns.clear();
+    for (const run of runs) nativeRuns.set(run.runId, run);
+    publishCost();
+    publishRunSnapshot();
   });
 
   // Three jobs the Pi facet gets from one `ExtensionAPI.sendMessage`, which a
@@ -226,16 +276,8 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
   const activity: DoomHeadlessActivity = {
     name: '@agimon-ai/doompi-team',
     async start(activityContext) {
-      const nativeRuns = new Map<string, NativeAsyncJobProjection>();
-      const publishRunSnapshot = (): void => publishRuns(directEvents, execution.sessionId, jobs.list(), nativeRuns);
-      const cleanups = [
-        runtime.asyncJobTracker.subscribe(execution.sessionId, publishRunSnapshot),
-        subscribeNativeRunProjection(execution.sessionId, (runs) => {
-          nativeRuns.clear();
-          for (const run of runs) nativeRuns.set(run.runId, run);
-          publishRunSnapshot();
-        }),
-      ];
+      activityAttached = true;
+      publishCost(true);
       publishRunSnapshot();
       try {
         const discovered = runtime.discovery.discover(execution.cwd, 'both').agents;
@@ -258,11 +300,14 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
           await activityContext.client.notify({ body: formatSuspendedRuns(opened.suspended), level: 'info' });
         channel.bindMainSession(activityContext.sessionId);
         return () => {
-          for (const cleanup of cleanups.reverse()) cleanup();
+          if (!activityAttached) return;
+          activityAttached = false;
           channel.dispose();
+          execution.client.setStatus(TEAM_COST_STATUS, undefined);
         };
       } catch (error) {
-        for (const cleanup of cleanups.reverse()) cleanup();
+        activityAttached = false;
+        execution.client.setStatus(TEAM_COST_STATUS, undefined);
         throw error;
       }
     },
@@ -290,6 +335,8 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
       runtime.pollScheduler.start();
     },
     async onDispose() {
+      activityAttached = false;
+      execution.client.setStatus(TEAM_COST_STATUS, undefined);
       channel.dispose();
       runtime.completionNotifier.dispose();
       const suspension = suspendScopeRuns({
@@ -304,6 +351,11 @@ const root = defineRoot(({ context, host: serverHost, agent: host }: DoomServerP
         if (outcome.status === 'rejected')
           process.emitWarning(`Could not shut down headless Team runs: ${String(outcome.reason)}`);
       }
+      unsubscribeCostTracker();
+      unsubscribeCostNative();
+      nativeRuns.clear();
+      childCosts.clear();
+      costText = undefined;
       bridge.abandonAll();
       runtime.dispose();
       runtime.asyncJobTracker.stop();

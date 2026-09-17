@@ -12,6 +12,7 @@ interface PackageManifest {
   readonly files?: readonly string[];
   readonly pi?: unknown;
   readonly dependencies?: Readonly<Record<string, string>>;
+  readonly devDependencies?: Readonly<Record<string, string>>;
   readonly peerDependencies?: Readonly<Record<string, string>>;
   readonly peerDependenciesMeta?: Readonly<Record<string, { optional?: boolean }>>;
 }
@@ -31,11 +32,16 @@ describe('core web capability package boundary', () => {
     expect(manifest.version).toMatch(SEMVER_PATTERN);
     expect(manifest.type).toBe('module');
     expect(manifest.pi).toBeUndefined();
-    expect(manifest.peerDependencies).toMatchObject({
+    expect(manifest.dependencies).toMatchObject({
       '@tanstack/store': '0.11.1',
+    });
+    expect(manifest.devDependencies).not.toHaveProperty('@tanstack/store');
+    expect(manifest.peerDependencies).not.toHaveProperty('@tanstack/store');
+    expect(manifest.peerDependencies).toMatchObject({
       react: '19.3.0',
       'react-dom': '19.3.0',
     });
+    expect(manifest.peerDependenciesMeta).not.toHaveProperty('@tanstack/store');
     expect(manifest.peerDependenciesMeta).toMatchObject({
       react: { optional: true },
       'react-dom': { optional: true },

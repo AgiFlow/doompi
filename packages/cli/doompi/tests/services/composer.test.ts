@@ -6,6 +6,7 @@ import path from 'node:path';
 import { loadMajorModesConfig, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
+  DOOMPI_API_VERSION,
   publishSyncRegistration,
   SYNC_REGISTRATION_VERSION,
   syncStateSha256,
@@ -112,7 +113,12 @@ async function writeRegisteredState(root: string, value: SyncState = syncedState
   fs.writeFileSync(entry, 'export default () => undefined;\n');
   fs.writeFileSync(
     manifestPath,
-    `${JSON.stringify({ name: '@agimon-ai/doompi', version: 'test', pi: { extensions: ['./pi.mjs'] } })}\n`,
+    `${JSON.stringify({
+      name: '@agimon-ai/doompi',
+      version: 'test',
+      doompiApiVersion: DOOMPI_API_VERSION,
+      pi: { extensions: ['./pi.mjs'] },
+    })}\n`,
   );
   publishSyncRegistration(
     root,
@@ -126,7 +132,13 @@ async function writeRegisteredState(root: string, value: SyncState = syncedState
       stateSha256: syncStateSha256(statePath),
       webDirectory: null,
       apiDirectory,
-      package: { root: fs.realpathSync(packageRoot), version: 'test', manifestPath, entry },
+      package: {
+        root: fs.realpathSync(packageRoot),
+        version: 'test',
+        apiVersion: DOOMPI_API_VERSION,
+        manifestPath,
+        entry,
+      },
     },
     homeDirectory,
   );
@@ -164,6 +176,14 @@ function writeCompiledBundle(
       artifacts: [bundle],
       entries: [input],
       inputs: [{ path: input, size: stat.size, mtimeMs: stat.mtimeMs, sha256: sha256Of(input) }],
+      artifactInputs: [
+        {
+          path: bundle,
+          size: fs.statSync(bundle).size,
+          mtimeMs: fs.statSync(bundle).mtimeMs,
+          sha256: sha256Of(bundle),
+        },
+      ],
     }),
   );
   return { bundle, input, manifest };
@@ -776,7 +796,7 @@ describe('composeDoomSession', () => {
     await cleanupRunDirectory(root, environment);
   });
 
-  it('fails closed before importing a stale selected bundle', async () => {
+  it('loads the selected bundle when only its producer source changed', async () => {
     const root = makeRoot();
     const builds = await writeModeBundles(root);
     fs.appendFileSync(builds.copilot.input, '// stale selected mode\n');
@@ -789,9 +809,9 @@ describe('composeDoomSession', () => {
       environment,
     });
 
-    expect(outcome.loaded).toEqual([]);
-    expect(outcome.problems).toEqual(['doompi could not read its synchronized state. Run doompi sync.']);
-    expect(registerCommand).not.toHaveBeenCalled();
+    expect(outcome.loaded).toEqual([builds.copilot.bundle]);
+    expect(outcome.problems).toEqual([]);
+    expect(registerCommand).toHaveBeenCalledWith('copilot-loaded');
     await cleanupRunDirectory(root, environment);
   });
 

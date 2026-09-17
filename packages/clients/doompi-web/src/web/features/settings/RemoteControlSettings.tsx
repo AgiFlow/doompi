@@ -3,6 +3,7 @@ import { useStore } from '@tanstack/react-store';
 import { useEffect } from 'react';
 
 import { refreshRemoteState, remoteAccessStore } from '../../stores/remoteAccessStore';
+import { SessionMcpSettings } from './SessionMcpSettings';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 import { TunnelSettings } from './TunnelSettings';
 
@@ -41,6 +42,8 @@ export function RemoteControlSettings() {
         install <code>cloudflared</code> on this machine before turning remote access on. the remote access dialog
         remains the place to start the tunnel, pair devices, and turn access off.
       </p>
+
+      <SessionMcpSettings />
     </div>
   );
 }

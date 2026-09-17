@@ -10,7 +10,7 @@ import { resolveDoomConfigurationRoot } from '../../../composition/repository';
 import { readSyncDrift } from '../../../composition/syncDrift';
 import { wantsHelp } from '../../router';
 import { syncHelp } from './help';
-import { synchronize, type SyncSettingsMode } from './index';
+import { synchronize, syncRegistrationNeedsApiMigration, type SyncSettingsMode } from './index';
 import { prepareSync } from './prepare';
 import { SyncProgress, type SyncProgressOutput } from './presenter';
 
@@ -76,7 +76,11 @@ export async function runSync(
     homeDirectory,
     requireWebBundle: Boolean(environment.DOOMPI_WEB_PACKAGE_ROOT),
   };
-  if (!args.includes(FORCE_OPTION) && readSyncDrift(driftOptions).fresh) {
+  if (
+    !args.includes(FORCE_OPTION) &&
+    !syncRegistrationNeedsApiMigration(repoRoot, homeDirectory) &&
+    readSyncDrift(driftOptions).fresh
+  ) {
     output.write('doompi sync is already up to date\n');
     return 0;
   }
@@ -85,7 +89,11 @@ export async function runSync(
   try {
     // A concurrent publisher may have resolved the drift while this command
     // waited for the lock. Do not rebuild and republish the same generation.
-    if (!args.includes(FORCE_OPTION) && readSyncDrift(driftOptions).fresh) {
+    if (
+      !args.includes(FORCE_OPTION) &&
+      !syncRegistrationNeedsApiMigration(repoRoot, homeDirectory) &&
+      readSyncDrift(driftOptions).fresh
+    ) {
       output.write('doompi sync is already up to date\n');
       return 0;
     }

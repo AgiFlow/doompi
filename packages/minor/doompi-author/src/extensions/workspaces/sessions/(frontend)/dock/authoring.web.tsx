@@ -1,6 +1,5 @@
 import { defineDockFace } from '@agimon-ai/doompi-core/web';
 
-import { authorWorkspace } from '../_lib/authorWorkspaceStore';
 import { AuthorPanel } from './_components/AuthorPanel';
 
 export default defineDockFace({
@@ -11,12 +10,11 @@ export default defineDockFace({
   panel: AuthorPanel,
   requiredMinorMode: 'author',
   visibility: {
-    subscribe(listener: () => void) {
-      const subscription = authorWorkspace.store.subscribe(listener);
-      return () => subscription.unsubscribe();
+    subscribe() {
+      return () => undefined;
     },
     isVisible(sessionId: string | null) {
-      return sessionId !== null && authorWorkspace.store.state.sessions[sessionId]?.focusedDocument !== undefined;
+      return sessionId !== null;
     },
   },
 });

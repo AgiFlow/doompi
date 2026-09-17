@@ -22,6 +22,7 @@ export * from '../services/structuredDocuments';
 export { AUTHOR_MODE_ID } from '../types/author';
 export type * from '../types/author';
 export type * from '../types/authorApi';
+export type * from '../types/authorPreview';
 export type * from '../types/extension';
 export type * from '../types/structuredDocuments';
 export type * from '../types/webAuthor';

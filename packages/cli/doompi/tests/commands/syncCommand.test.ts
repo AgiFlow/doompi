@@ -7,6 +7,8 @@ import { AMBIENT_EXTENSION_FILTER, readPiSettings, writePiSettings } from '@agim
 import { DOOM_SERVER_BUNDLE_FILE } from '@agimon-ai/doompi-core/server-facet';
 import { resolveSyncLocation, syncGenerationDirectory } from '@agimon-ai/doompi-core/sync-location';
 import {
+  DOOMPI_API_VERSION,
+  LEGACY_SYNC_REGISTRATION_VERSION,
   publishSyncRegistration,
   readSyncRegistration,
   SYNC_REGISTRATION_VERSION,
@@ -253,6 +255,7 @@ async function writeMatchingState(root: string): Promise<SyncState> {
   const manifestPath = path.join(packageRoot, 'package.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
     version: string;
+    doompiApiVersion: number;
     pi: { extensions: string[] };
   };
   publishSyncRegistration(
@@ -271,6 +274,7 @@ async function writeMatchingState(root: string): Promise<SyncState> {
       package: {
         root: packageRoot,
         version: manifest.version,
+        apiVersion: manifest.doompiApiVersion,
         manifestPath,
         entry: fs.realpathSync(path.resolve(packageRoot, manifest.pi.extensions[0])),
       },
@@ -647,7 +651,9 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     const code = await new SyncCommand().execute(['sync'], environmentFor(root), root, output);
 
     expect(code).toBe(0);
-    expect(text()).toContain('repair:   upgraded Pi user dispatcher from protocol 1 to 2');
+    expect(text()).toContain(
+      `repair:   upgraded Pi user dispatcher from protocol 1 to ${String(PI_DISPATCHER_VERSION)}`,
+    );
     const manifest = JSON.parse(fs.readFileSync(path.join(dispatcherPath, 'package.json'), 'utf8')) as {
       doompiDispatcher?: unknown;
     };
@@ -756,6 +762,27 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(text()).toContain('already up to date');
   });
 
+  it('migrates a legacy registration during an explicit sync', async () => {
+    const root = makeRepository();
+    const homeDirectory = homeFor(root);
+    await new SyncCommand().execute(['sync'], environmentFor(root), root, capture().output);
+    const location = resolveSyncLocation(root, homeDirectory);
+    const legacy = JSON.parse(fs.readFileSync(location.registrationPath, 'utf8')) as {
+      version: number;
+      package: { apiVersion?: number };
+    };
+    legacy.version = LEGACY_SYNC_REGISTRATION_VERSION;
+    delete legacy.package.apiVersion;
+    fs.writeFileSync(location.registrationPath, `${JSON.stringify(legacy)}\n`);
+
+    const { output, text } = capture();
+    expect(await new SyncCommand().execute(['sync'], environmentFor(root), root, output)).toBe(0);
+
+    const migrated = readSyncRegistration(root, homeDirectory);
+    expect(migrated?.version).toBe(SYNC_REGISTRATION_VERSION);
+    expect(migrated?.package.apiVersion).toBe(DOOMPI_API_VERSION);
+    expect(text()).not.toContain('already up to date');
+  });
   it('builds missing web artifacts once for concurrent sessions and reuses their generation', async () => {
     const root = makeRepository();
     const homeDirectory = homeFor(root);
