@@ -811,6 +811,9 @@ importers:
       '@simplewebauthn/server':
         specifier: ^14.0.1
         version: 14.0.1
+      '@tanstack/store':
+        specifier: 0.11.1
+        version: 0.11.1
       cross-spawn:
         specifier: 7.0.6
         version: 7.0.6
@@ -854,9 +857,6 @@ importers:
       '@earendil-works/pi-tui':
         specifier: 0.85.1
         version: 0.85.1
-      '@tanstack/store':
-        specifier: 0.11.1
-        version: 0.11.1
       '@types/cross-spawn':
         specifier: 6.0.6
         version: 6.0.6

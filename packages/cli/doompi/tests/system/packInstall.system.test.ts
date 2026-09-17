@@ -36,6 +36,7 @@ import {
   installedPiCli,
   installLocalPackages,
   listPackageFiles,
+  type PackageManifest,
   type PackedPackage,
   packageManifestText,
   packageRootIsInRepository,
@@ -1620,6 +1621,28 @@ describe('consumer ownership boundaries', () => {
           expect(fs.existsSync(installedPackageRoot(isolatedConsumer.root, name)), name).toBe(false);
         }
         expect(fs.existsSync(installedPackageRoot(isolatedConsumer.root, '@agimon-ai/doompi-web'))).toBe(false);
+
+        const coreRoot = installedPackageRoot(isolatedConsumer.root, '@agimon-ai/doompi-core');
+        const coreManifest = JSON.parse(
+          fs.readFileSync(path.join(coreRoot, 'package.json'), 'utf8'),
+        ) as PackageManifest;
+        expect(coreManifest.dependencies).toMatchObject({
+          '@tanstack/store': '0.11.1',
+        });
+
+        const webEntry = installedPackageEntry(isolatedConsumer.root, '@agimon-ai/doompi-core', './web');
+        if (!webEntry) throw new Error('Core-only consumer is missing the Doom Pi web entry');
+        const web = (await import(pathToFileURL(webEntry).href)) as {
+          defineWorkspaceStore<T>(empty: T): {
+            readonly store: { readonly state: Record<string, T> };
+            readonly select: (state: Record<string, T>, workspaceId: string | null) => T;
+            readonly update: (workspaceId: string, updater: (current: T) => T) => void;
+          };
+        };
+        const state = web.defineWorkspaceStore(0);
+        expect(state.select(state.store.state, 'workspace')).toBe(0);
+        state.update('workspace', (current) => current + 1);
+        expect(state.select(state.store.state, 'workspace')).toBe(1);
 
         const extensionEntry = installedPackageEntry(isolatedConsumer.root, '@agimon-ai/doompi', './extensions/pi');
         if (!extensionEntry) throw new Error('Core-only consumer is missing the Doom Pi extension entry');
