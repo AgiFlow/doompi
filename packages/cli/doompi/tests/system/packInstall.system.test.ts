@@ -108,6 +108,7 @@ const SYSTEM_CONFIG_PATH = path.join(REPOSITORY_ROOT, 'packages/cli/doompi/vites
 const PACKAGE_MANIFEST_PATH = path.join(REPOSITORY_ROOT, 'packages/cli/doompi/package.json');
 const CI_WORKFLOW_PATH = path.join(REPOSITORY_ROOT, '.github/workflows/ci.yml');
 const RELEASE_WORKFLOW_PATH = path.join(REPOSITORY_ROOT, '.github/workflows/release-publish.yml');
+const RELEASE_CUT_WORKFLOW_PATH = path.join(REPOSITORY_ROOT, '.github/workflows/release-cut.yml');
 const standardPackageSet = new Set(STANDARD_PI_ENTRIES.map((entry) => entry.name));
 const selectablePackageNames = PACKAGE_MATRIX.filter(
   (entry) => entry.layer !== 'core' && entry.layer !== 'foundations' && !FOUNDATION_PACKAGE_NAMES.includes(entry.name),
@@ -304,6 +305,10 @@ function readWorkflow(): string {
 
 function readReleaseWorkflow(): string {
   return fs.readFileSync(RELEASE_WORKFLOW_PATH, 'utf8');
+}
+
+function readReleaseCutWorkflow(): string {
+  return fs.readFileSync(RELEASE_CUT_WORKFLOW_PATH, 'utf8');
 }
 
 type ProbeLifecycleHandler = (event: unknown, context: unknown) => unknown;
@@ -1222,6 +1227,37 @@ describe('packed package identity and closure', () => {
     expect(result.packedManifest.keywords).toEqual(expect.arrayContaining(REQUIRED_DOOM_PACKAGE_KEYWORDS));
     expect(packageRootIsInRepository(entry.name)).toBe(true);
     expect(path.basename(packageRootFor(entry.name))).toBe(path.basename(entry.relativeDirectory));
+  });
+
+  it('supports a one-time full package redeployment', () => {
+    const workflow = readReleaseCutWorkflow();
+    expect(workflow).toContain(
+      [
+        '      all_packages:',
+        '        description: Version every package for a one-time full redeployment.',
+        '        required: true',
+        '        default: false',
+        '        type: boolean',
+      ].join('\n'),
+    );
+    expect(workflow).toContain('ALL_PACKAGES: ${{ inputs.all_packages }}');
+
+    const selectionStart = workflow.indexOf('- name: Select the projects to release');
+    const registryFloor = workflow.indexOf('- name: Raise the selected versions to the registry floor');
+    expect(selectionStart).toBeGreaterThanOrEqual(0);
+    expect(registryFloor).toBeGreaterThan(selectionStart);
+    const selection = workflow.slice(selectionStart, registryFloor);
+    const fullRedeployment = selection.indexOf('if [[ "${ALL_PACKAGES}" == "true" ]]');
+    const allProjects = selection.indexOf('RELEASE_PROJECTS="$(node scripts/filter-release-projects.mjs --all)"');
+    const affectedProjects = selection.indexOf('pnpm nx show projects --affected');
+
+    expect(fullRedeployment).toBeGreaterThanOrEqual(0);
+    expect(fullRedeployment).toBeLessThan(allProjects);
+    expect(allProjects).toBeLessThan(affectedProjects);
+    expect(workflow).toContain('run: node scripts/sync-registry-versions.mjs "${RELEASE_PROJECTS}"');
+    expect(workflow).toContain(
+      'pnpm nx release prerelease --preid alpha --projects "${RELEASE_PROJECTS}" --skip-publish',
+    );
   });
 
   it('builds and verifies publication artifacts before either publication path', () => {

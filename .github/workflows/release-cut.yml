@@ -8,6 +8,11 @@ on:
         required: true
         default: true
         type: boolean
+      all_packages:
+        description: Version every package for a one-time full redeployment.
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -67,12 +72,17 @@ jobs:
 
       - name: Select the projects to release
         id: select
+        env:
+          ALL_PACKAGES: ${{ inputs.all_packages }}
         run: |
           set -euo pipefail
           readonly AFFECTED_FILE="${RUNNER_TEMP}/doompi-release-affected.json"
           RELEASE_PROJECTS=""
 
-          if BASE_TAG="$(git describe --tags --abbrev=0 HEAD 2> /dev/null)"; then
+          if [[ "${ALL_PACKAGES}" == "true" ]]; then
+            echo "Selecting every project in the alpha release group for full redeployment."
+            RELEASE_PROJECTS="$(node scripts/filter-release-projects.mjs --all)"
+          elif BASE_TAG="$(git describe --tags --abbrev=0 HEAD 2> /dev/null)"; then
             BASE_SHA="$(git rev-list -n 1 "${BASE_TAG}")"
             echo "Detecting the projects affected since ${BASE_TAG} (${BASE_SHA})."
             pnpm nx show projects --affected --base="${BASE_SHA}" --head=HEAD --json > "${AFFECTED_FILE}"
