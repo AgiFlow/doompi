@@ -1,3 +1,9 @@
+## 0.0.1-alpha.40 (2026-09-18)
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.77
+
 ## 0.0.1-alpha.39 (2026-09-18)
 
 ### 🚀 Features

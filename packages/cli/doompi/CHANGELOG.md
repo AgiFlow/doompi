@@ -1,3 +1,13 @@
+## 0.0.1-alpha.77 (2026-09-18)
+
+### 🩹 Fixes
+
+- build packages before release publishing ([f9756ab1](https://github.com/AgiFlow/doompi/commit/f9756ab1))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.76 (2026-09-18)
 
 ### 🚀 Features
