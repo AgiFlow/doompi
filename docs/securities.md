@@ -11,7 +11,7 @@ What can the relay read?     -> signed assets and sealed application traffic
 What can the agent reach?    -> optional container and mounted workspaces
 ```
 
-These controls compose, but none substitutes for another. Authentication decides who may ask the agent to act. Sealing limits what a tunnel provider can read or change after bootstrap. Containment limits which host resources the agent can reach. A paired and encrypted session is still dangerous when it controls an uncontained shell.
+Authentication decides who may ask the agent to act. Sealing limits what a tunnel provider can read or change after bootstrap. Containment limits which host resources the agent can reach. A paired and encrypted session is still dangerous when it controls an uncontained shell.
 
 This guide starts with the threat model, then follows a remote request from listener classification through device proof, transport protection, and containment. [Trust and data boundaries](trust-and-data-boundaries.md) inventories executable inputs, credentials, model calls, voice, native binaries, and telemetry.
 
@@ -47,24 +47,19 @@ These checks address browser-driven requests; they do not authenticate a hostile
 
 ## The listener is the boundary
 
-One Hono app runs behind two sockets. The loopback listener is open to whoever already has an
-account on this machine. The tunnel listener faces the public internet. Except for the exact bootstrap
-allowlist below, every request arriving there must prove it holds a paired session.
+One Hono app runs behind two sockets.
 
-The discriminator is the socket a request arrived on, read from the connection's own local port. It
-cannot be a header: `cloudflared` connects from `127.0.0.1` exactly like every local client, and
-there is no header a remote caller cannot set. It is phrased as allow-only-if-provably-local, so a
-missing value, an unreadable port, or a socket torn down mid-request all resolve to `tunnel` and are
-subjected to tunnel policy. The mirror-image phrasing fails open on every one of those.
+- The loopback listener is open to whoever already has an
+  account on this machine.
+- The tunnel listener faces the public internet. Except for the exact bootstrap
+  allowlist below, every request arriving there must prove it holds a paired session.
 
 The guard is the first middleware on the app. Hono composes matching handlers in registration order,
 so a guard added after a terminating handler never runs for that path.
 
 ### The unauthenticated allowlist
 
-Thirteen routes, matched by exact string equality. No wildcard or open static prefix is public. The pairing
-status endpoint takes its id in the query string precisely so the allowlist never needs a path parameter. A
-contract test pins the list so an addition cannot arrive without review.
+The pairing status endpoint takes its id in the query string precisely so the allowlist never needs a path parameter. A contract test pins the list so an addition cannot arrive without review.
 
 | Route group                                             | Why it cannot require a session                               |
 | ------------------------------------------------------- | ------------------------------------------------------------- |
@@ -75,9 +70,7 @@ contract test pins the list so an addition cannot arrive without review.
 | `POST /api/remote/passkeys/authenticate/{begin,finish}` | Passkey proof creates a session                               |
 | `POST /api/remote/passkeys/register/{begin,finish}`     | Direct pairing-page enrolment, still requires a device cookie |
 
-The passkey authentication routes are public because proving a registered private key is how a returning
-device obtains a session. Registration is reachable from the shell but its handler still requires the paired
-device cookie. The PWA routes are package-owned bootstrap bytes, never host or plugin bundle bytes.
+The passkey authentication routes are public because proving a registered private key is how a returning device obtains a session. Registration is reachable from the shell but its handler still requires the paired device cookie. The PWA routes are package-owned bootstrap bytes, never host or plugin bundle bytes.
 
 The path compared is the value the router matched on, which Hono has already percent-decoded. A
 separately parsed pathname would let the guard and the router disagree about the same request, and
@@ -158,25 +151,14 @@ the cockpit carries. Two layers narrow that, both in `@agimon-ai/doompi-web-secu
 
 ### The bundle is signed and verified before execution
 
-Every other guarantee here rests on the cockpit JavaScript being what this hub built. The package-owned
-`/pair` shell, scanner, manifest, and `/sw.js` verifier are built separately from plugin-generated cockpit
-code. The QR fragment pins both the host's ECDSA P-256 SPKI (`s`) and the minimum signed revision (`r`).
+Every other guarantee here rests on the cockpit JavaScript being what this hub built. The package-owned `/pair` shell, scanner, manifest, and `/sw.js` verifier are built separately from plugin-generated cockpit code. The QR fragment pins both the host's ECDSA P-256 SPKI (`s`) and the minimum signed revision (`r`).
 
-The hub keeps `~/.doompi/web/signing.json` at mode `0600`. Manifest v2 signs a canonical list containing
-revision, path, SHA-256, byte length, and MIME type for every public asset, including `/index.html`.
-`webPlugins.server.json` remains outside the public asset root and is never signed or served.
+The hub keeps `~/.doompi/web/signing.json` at mode `0600`. Manifest v2 signs a canonical list containing revision, path, SHA-256, byte length, and MIME type for every public asset, including `/index.html`. `webPlugins.server.json` remains outside the public asset root and is never signed or served.
 
 The worker fetches `/bundle-manifest.json`, rejects signer or revision conflicts, fetches only
-`/bundle-assets/<revision>/*`, and verifies every byte before writing a staging Cache Storage entry. Only
-after the complete bundle passes does it atomically commit the active revision in IndexedDB. Navigations
-and static requests then resolve only from that verified cache. A failed refresh retains the last-known-good
-bundle. Missing WebCrypto, IndexedDB, Cache Storage, a pinned signer, or a required asset is a stop, not a
-request to execute unverified host JavaScript.
+`/bundle-assets/<revision>/*`, and verifies every byte before writing a staging Cache Storage entry. Only after the complete bundle passes does it atomically commit the active revision in IndexedDB. Navigations and static requests then resolve only from that verified cache. A failed refresh retains the last-known-good bundle. Missing WebCrypto, IndexedDB, Cache Storage, a pinned signer, or a required asset is a stop, not a request to execute unverified host JavaScript.
 
-Signer loss, signer rotation, and host or container transitions require an explicit fingerprint confirmation
-and trust reset. Revision numbers are monotonic and a reused revision with different manifest bytes is
-refused. Session file assets never enter this pipeline: they use sealed `no-store` HTTP and ephemeral Blob
-URLs, not Cache Storage, IndexedDB, signatures, or Push payloads.
+Signer loss, signer rotation, and host or container transitions require an explicit fingerprint confirmation and trust reset. Revision numbers are monotonic and a reused revision with different manifest bytes is refused. Session file assets never enter this pipeline: they use sealed `no-store` HTTP and ephemeral Blob URLs, not Cache Storage, IndexedDB, signatures, or Push payloads.
 
 ### The payload is sealed
 
@@ -201,16 +183,9 @@ admits for exactly this reason. The host cannot enforce it, which is why it is w
 
 ### Closed-app Web Push is live and generic
 
-A paired installed PWA can register a Push subscription only through its device-bound sealed HTTP channel.
-The VAPID credential is stored at mode `0600`, but subscriptions live only in process memory. A host restart
-therefore requires an open page to re-register the browser's existing subscription. There is no database,
-outbox, replay, or historical delivery.
+A paired installed PWA can register a Push subscription only through its device-bound sealed HTTP channel. The VAPID credential is stored at mode `0600`, but subscriptions live only in process memory. A host restart therefore requires an open page to re-register the browser's existing subscription. There is no database, outbox, replay, or historical delivery.
 
-The hub sends Push only for a notification frame arriving now and only when that device has no connected
-cockpit socket. The encrypted payload is fixed generic copy with `TTL: 0`; it contains no prompt, response,
-session id, file asset, or other mutable session data. Provider `404` and `410` responses remove the
-subscription. Browser disable, device revocation or expiry, remote shutdown, and key or process rotation
-also remove it.
+The hub sends Push only for a notification frame arriving now and only when that device has no connected cockpit socket. The encrypted payload is fixed generic copy with `TTL: 0`; it contains no prompt, response, session id, file asset, or other mutable session data. Provider `404` and `410` responses remove the subscription. Browser disable, device revocation or expiry, remote shutdown, and key or process rotation also remove it.
 
 ## Narrowing what is in reach
 
@@ -246,9 +221,7 @@ every paired device refuse the cockpit. Deliberately absent: the host home direc
 `~/.gitconfig`, the container socket, and every repository not listed.
 
 `DOOMPI_SANDBOX_DEVCONTAINER=0` is forced. A workspace carrying a dev container configuration would
-otherwise replace the whole plan with an author-controlled one that can mount anything, including the
-container socket. That mode is a convenience elsewhere in DoomPi and is documented as such; silently
-inheriting it here would make the containment claim false.
+otherwise replace the whole plan with an author-controlled one that can mount anything, including the container socket. That mode is a convenience elsewhere in DoomPi and is documented as such; silently inheriting it here would make the containment claim false.
 
 One port is published, `127.0.0.1:<port>:<port>`, with the hub binding `0.0.0.0` inside because the
 engine forwards to the container's external interface rather than its loopback.
@@ -277,9 +250,6 @@ Remote access, tunnel auto-close, session expiry, and containment are opt-in. Ho
 
 ## What an attacker still gets
 
-Named rather than buried, because a boundary you have not stated the limits of is a claim rather
-than a boundary.
-
 - **The container engine is part of the trusted base.** Anyone who can talk to the daemon can escape
   any container it runs. This does not defend against a compromised engine or a user in the `docker`
   group.
@@ -287,8 +257,7 @@ than a boundary.
   `--volume=/:/host` passes. It is an operator escape hatch, not a boundary.
 - **Sessions share one container** and can read each other's mounted workspaces. Session-to-session
   isolation is out of scope; one boundary against the host is the point.
-- **A mounted workspace is fully writable.** The agent can still destroy the repository it was given.
-  The container protects everything else, not that.
+- **A mounted workspace is fully writable.** The agent can still destroy the repository it was given. The container protects everything else, not that.
 - **Network access is unrestricted**, as it already is for `doompi --sandbox`. An agent can reach
   anything the host can reach.
 - **The relay still sees traffic shape.** Timing, message sizes, and connection patterns survive the

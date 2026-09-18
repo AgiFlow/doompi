@@ -98,13 +98,13 @@ matter, and profiles choose a point of view.
 
 ### Major and minor modes
 
-A major mode is the base config. It names the extension layers that should run together. Minor
-modes are batteries-included switches inside that base. They stack freely and keep their tools and
+A major mode is the preset. It names the extension layers that should run together. Minor
+modes are batteries-included switches inside the session. They stack freely and keep their tools and
 skills out of context until turned on.
 
 ### Domains
 
-A domain is a named group of agent plugins. It carries the skills and MCP servers for one kind of
+A domain is a named group of Codex or Claude Code plugins. It carries the skills and MCP servers for one kind of
 work, and `/domains` switches it while the session is running.
 
 ### Profile

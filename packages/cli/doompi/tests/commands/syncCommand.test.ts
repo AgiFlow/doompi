@@ -27,14 +27,17 @@ import * as webSync from '../../src/builders/web';
 import * as webBundle from '../../src/builders/web/bundle';
 import {
   collectDrift,
+  environmentForSyncScope,
   formatSyncResult,
   recordedEnvironment,
+  resolveSyncRoots,
   SyncCommand,
   selectionCompositionFingerprint,
   selectionEnvironment,
   toSelection,
 } from '../../src/cli/commands/sync';
 import { computeServerSourcesHash } from '../../src/composition/syncState';
+import { HARNESS_STATE_POINTER } from '../../src/exports/harnessState';
 import {
   computeInputsHash,
   readSyncState,
@@ -360,7 +363,39 @@ describe('selection defaults', () => {
     expect(text()).toContain('selection changed since the last sync');
   });
 });
+describe('sync scope', () => {
+  it('keeps workspace and global package destinations separate', () => {
+    const root = makeRepository();
+    const homeDirectory = homeFor(root);
+    const environment = {
+      ...environmentFor(root),
+      DOOMPI_MAJOR_MODE: 'minimal',
+      DOOMPI_DOMAINS: 'development',
+      DOOMPI_PROFILE: 'reviewer',
+      [HARNESS_STATE_POINTER]: '/workspace/state.json',
+    };
+    const workspace = resolveSyncRoots(['sync'], environment, root, homeDirectory);
+    const global = resolveSyncRoots(['sync', '--global'], environment, root, homeDirectory);
+    const globalRoot = path.join(homeDirectory, '.pi', '.doom');
 
+    expect(workspace).toEqual({
+      globalOnly: false,
+      globalRoot,
+      sourceRoot: root,
+      targetRoot: root,
+    });
+    expect(global).toEqual({
+      globalOnly: true,
+      globalRoot,
+      sourceRoot: root,
+      targetRoot: globalRoot,
+    });
+    expect(environmentForSyncScope(environment, true)).toEqual({
+      HOME: homeDirectory,
+      PI_CODING_AGENT_DIR: agentDirectory(root),
+    });
+  });
+});
 describe('recorded environment', () => {
   it('records the harness variables and nothing else the machine happens to carry', () => {
     const recorded = recordedEnvironment({
@@ -483,6 +518,20 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(fs.existsSync(globalModesPath)).toBe(false);
   });
 
+  it('keeps a workspace sync out of the global generation', async () => {
+    const root = makeRepository();
+    const homeDirectory = homeFor(root);
+    const globalRoot = path.join(homeDirectory, '.pi', '.doom');
+    fs.mkdirSync(globalRoot, { recursive: true });
+    fs.writeFileSync(path.join(globalRoot, 'modes.yaml'), LAYERS);
+
+    await expect(new SyncCommand().execute(['sync'], environmentFor(root), root, capture().output)).resolves.toBe(0);
+
+    expect(readSyncState(root, homeDirectory)?.root).toBe(root);
+    expect(readSyncState(globalRoot, homeDirectory)).toBeUndefined();
+    expect(readSyncRegistration(globalRoot, homeDirectory)).toBeUndefined();
+  });
+
   it('syncs personal configuration into a Git checkout with no local .doom directory', async () => {
     const root = makeGitRepositoryWithPersonalConfig();
     const homeDirectory = homeFor(root);
@@ -529,7 +578,7 @@ describe('doompi sync', { timeout: 30_000 }, () => {
     expect(checked.text()).toBe('doompi sync is up to date\n');
     const globalChecked = capture();
     expect(await command.execute(['sync', '--global', '--check'], environment, root, globalChecked.output)).toBe(1);
-    expect(globalChecked.text()).toContain('precompiled runtime is missing or stale');
+    expect(globalChecked.text()).toContain('no sync state: run doompi sync');
     mocks.readBootstrapStatus.mockReturnValue({ bootstrap: '/generated/bootstrap.mjs', fresh: true });
   });
 

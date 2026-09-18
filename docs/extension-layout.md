@@ -272,7 +272,7 @@ None of these fields are new. The convention narrows an existing union by path i
 
 ## No catch-all entries
 
-`extra.cli.ts`, `extra.server.ts`, and `extra.web.ts` are forbidden. They hide identity, cardinality, scope, and host ownership from both the scanner and reviewers. Use a standard named surface for every contribution. Shared mount state and lifecycle belong in `root.cli.ts` or `root.server.ts`.
+Use a standard named surface for every contribution. Shared mount state and lifecycle belong in `root.cli.ts` or `root.server.ts`.
 
 A tool override stays in `tool/`, because from the author's side both values mean that the package provides the named tool:
 

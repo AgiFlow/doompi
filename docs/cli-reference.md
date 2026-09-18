@@ -14,23 +14,24 @@ Use `dpi` to evaluate the distribution, `doompi init` to make it part of regular
 
 ## Setup and synchronization
 
-| Command               | Effect                                                                                                            |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `dpi init`            | Creates missing `.doom` files in the current repository without changing Pi settings.                             |
-| `dpi init --force`    | Replaces the repository's four `.doom` files with current templates.                                              |
-| `dpi sync`            | Installs required packages and publishes synchronized state for an in-memory Pi settings overlay.                 |
-| `dpi`                 | Runs pinned Pi with that in-memory overlay. DoomPi handles `--sandbox`; remaining arguments pass to Pi.           |
-| `doompi init`         | Creates missing personal `.doom` files and registers the DoomPi extension alias and theme in Pi settings.         |
-| `doompi init --force` | Replaces the four personal `.doom` files and refreshes the Pi integration resources.                              |
-| `doompi sync`         | Installs required packages and publishes state for the registered integration without rewriting Pi user settings. |
-| `doompi sync --check` | Checks package resolution, drift, artifacts, alias, theme, and Pi settings without writing.                       |
-| `doompi doctor`       | Runs the strict configuration check, then everything `sync --check` reports. Changes nothing.                     |
+| Command                | Effect                                                                                                    |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- |
+| `dpi init`             | Creates missing `.doom` files in the current repository without changing Pi settings.                     |
+| `dpi init --force`     | Replaces the repository's four `.doom` files with current templates.                                      |
+| `dpi sync`             | Installs required packages and publishes synchronized state for an in-memory Pi settings overlay.         |
+| `dpi`                  | Runs pinned Pi with that in-memory overlay. DoomPi handles `--sandbox`; remaining arguments pass to Pi.   |
+| `doompi init`          | Creates missing personal `.doom` files and registers the DoomPi extension alias and theme in Pi settings. |
+| `doompi init --force`  | Replaces the four personal `.doom` files and refreshes the Pi integration resources.                      |
+| `doompi sync`          | Installs required packages into the current scope and publishes state without rewriting Pi user settings. |
+| `doompi sync --global` | Promotes the current workspace's required published packages into the global cache only.                  |
+| `doompi sync --check`  | Checks package resolution, drift, artifacts, alias, theme, and Pi settings without writing.               |
+| `doompi doctor`        | Runs the strict configuration check, then everything `sync --check` reports. Changes nothing.             |
 
 Every command accepts `-h`/`--help`, including the subcommands: `doompi sync --help` prints help rather than running a sync.
 
 `doompi sync` reports unsupported keys in `.doom/config.yaml` and `.doom/modes.yaml` and then ignores them, so a config written against a different version cannot break a build. Invalid values for keys it does recognize still fail. `doompi doctor` is the strict check that reports those keys as problems.
 
-Synchronized state is repository- and worktree-scoped under `~/.pi/.doom/sync`. Publication is atomic and retains one superseded generation. See [Composition and runtime bundling](bundling.md) for the lifecycle.
+Synchronized state is repository- and worktree-scoped under `~/.pi/.doom/sync`. Workspace package manifests live under `<workspace>/.pi/npm`; `--global` uses `~/.pi/.doom/.pi/npm` for promoted published packages. Publication is atomic and retains one superseded generation. See [Composition and runtime bundling](bundling.md) for the lifecycle.
 
 ## Matrix and launch options
 

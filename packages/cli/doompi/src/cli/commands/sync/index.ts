@@ -105,6 +105,45 @@ const RUNTIME_LABEL = 'runtime';
 const WEB_LABEL = 'web';
 const API_LABEL = 'api';
 
+export interface SyncRoots {
+  globalOnly: boolean;
+  globalRoot: string;
+  sourceRoot: string;
+  targetRoot: string;
+}
+
+/** Resolves the configuration source and publication destination for one sync. */
+export function resolveSyncRoots(
+  args: readonly string[],
+  environment: NodeJS.ProcessEnv = process.env,
+  currentDirectory = process.cwd(),
+  homeDirectory = environment.HOME ?? os.homedir(),
+): SyncRoots {
+  const globalRoot = globalDoomConfigDirectory(homeDirectory);
+  const inheritedRoot = environment[HARNESS_ROOT_ENV];
+  const sourceRoot = inheritedRoot
+    ? path.resolve(inheritedRoot)
+    : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
+  const globalOnly = args.includes(GLOBAL_OPTION);
+  return { globalOnly, globalRoot, sourceRoot, targetRoot: globalOnly ? globalRoot : sourceRoot };
+}
+
+const GLOBAL_SCOPE_INHERITED_KEYS = [
+  HARNESS_ROOT_ENV,
+  HARNESS_STATE_POINTER,
+  DOOMPI_MAJOR_MODE_ENV,
+  DOOMPI_DOMAINS_ENV,
+  DOOMPI_PROFILE_ENV,
+] as const;
+
+/** Removes workspace-only state before a global runtime is resolved. */
+export function environmentForSyncScope(environment: NodeJS.ProcessEnv, globalOnly: boolean): NodeJS.ProcessEnv {
+  if (!globalOnly) return environment;
+  const scoped = { ...environment };
+  for (const key of GLOBAL_SCOPE_INHERITED_KEYS) delete scoped[key];
+  return scoped;
+}
+
 /**
  * Harness variables worth recording, by prefix or exact name.
  *
@@ -429,45 +468,12 @@ export async function synchronize(
 ): Promise<number> {
   const check = args.includes(CHECK_OPTION);
   const force = args.includes(FORCE_OPTION);
-  const globalOnly = args.includes(GLOBAL_OPTION);
   const rest = args.slice(1).filter((argument) => ![CHECK_OPTION, FORCE_OPTION, GLOBAL_OPTION].includes(argument));
   const homeDirectory = commandOptions.homeDirectory ?? environment.HOME ?? os.homedir();
-  const inheritedRoot = environment[HARNESS_ROOT_ENV];
-  const globalRoot = globalDoomConfigDirectory(homeDirectory);
-  const repoRoot = globalOnly
-    ? globalRoot
-    : inheritedRoot
-      ? path.resolve(inheritedRoot)
-      : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
+  const roots = resolveSyncRoots(args, environment, currentDirectory, homeDirectory);
+  const { globalOnly, globalRoot, targetRoot: repoRoot } = roots;
+  const scopedEnvironment = environmentForSyncScope(environment, globalOnly);
   if (globalOnly && !check) fs.mkdirSync(globalRoot, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
-  // A fresh home has no global plugin selection until `doompi init` creates
-  // modes.yaml. Repository sync can still publish its own workspace bundle.
-  // A check validates its requested scope. Another installed package may own
-  // the shared global generation without making this workspace stale.
-  if (
-    !check &&
-    !globalOnly &&
-    path.resolve(repoRoot) !== path.resolve(globalRoot) &&
-    fs.existsSync(path.join(globalRoot, 'modes.yaml'))
-  ) {
-    const globalEnvironment = { ...environment };
-    for (const key of [
-      HARNESS_ROOT_ENV,
-      HARNESS_STATE_POINTER,
-      DOOMPI_MAJOR_MODE_ENV,
-      DOOMPI_DOMAINS_ENV,
-      DOOMPI_PROFILE_ENV,
-    ])
-      delete globalEnvironment[key];
-    const globalStatus = await synchronize(
-      [SYNC_COMMAND, GLOBAL_OPTION, ...(force ? [FORCE_OPTION] : [])],
-      globalEnvironment,
-      globalRoot,
-      output,
-      { settingsMode: 'embedded', homeDirectory },
-    );
-    if (globalStatus !== 0) return globalStatus;
-  }
   // Sync tolerates keys it does not recognise so a config written against a
   // different version cannot break a build. `doompi doctor` reports them.
   const modes = loadMajorModesConfigLenient(repoRoot, homeDirectory);
@@ -476,13 +482,13 @@ export async function synchronize(
   const defaultDomains = loadDomains(repoRoot, homeDirectory).defaultDomains;
   const parsed = parseHarnessArgs(
     rest,
-    selectionEnvironment(repoRoot, environment, homeDirectory),
+    selectionEnvironment(repoRoot, scopedEnvironment, homeDirectory),
     globalOnly ? globalRoot : currentDirectory,
     defaultMajorMode,
     defaultDomains,
   );
   const selection = toSelection(parsed.options);
-  const agentDirectory = piAgentDirectory(environment, homeDirectory);
+  const agentDirectory = piAgentDirectory(scopedEnvironment, homeDirectory);
   if ((commandOptions.settingsMode ?? 'persisted') === 'persisted' && !check) {
     if (piExtensionDispatcherIsUpgradeable(agentDirectory)) {
       const previousVersion = piExtensionDispatcherVersion(agentDirectory);
@@ -525,7 +531,7 @@ export async function synchronize(
       repoRoot,
       selection,
       located?.state,
-      environment,
+      scopedEnvironment,
       commandOptions.settingsMode ?? 'persisted',
       expectedCompositionFingerprint,
     );
@@ -564,7 +570,7 @@ export async function synchronize(
       output.write('doompi sync is already up to date\n');
       return 0;
     }
-    result = await stageSync(repoRoot, parsed.options, environment, homeDirectory, progress, commandOptions);
+    result = await stageSync(repoRoot, parsed.options, scopedEnvironment, homeDirectory, progress, commandOptions);
   } finally {
     await releaseLock?.();
   }
