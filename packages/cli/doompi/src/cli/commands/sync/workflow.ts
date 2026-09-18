@@ -90,6 +90,9 @@ export async function runSync(
     const progress = new SyncProgress(output);
     if (promotingWorkspacePackages) {
       await refreshPackages(sourceRoot, targetRoot, homeDirectory, environment, progress);
+      // --global from a workspace only promotes packages. The workspace owns
+      // configuration; publishing a global runtime would change personal state.
+      return 0;
     }
 
     // A concurrent publisher may have resolved the drift while this command
@@ -102,9 +105,7 @@ export async function runSync(
       output.write('doompi sync is already up to date\n');
       return 0;
     }
-    if (!promotingWorkspacePackages) {
-      await refreshPackages(sourceRoot, targetRoot, homeDirectory, environment, progress);
-    }
+    await refreshPackages(sourceRoot, targetRoot, homeDirectory, environment, progress);
 
     const captured: string[] = [];
     const done = progress.start(BUILD_LABEL, 'compiling the mode extension');

@@ -40,7 +40,7 @@ export async function prepareSync(
   const repoRoot = roots.targetRoot;
   const scopedEnvironment = environmentForSyncScope(environment, roots.globalOnly);
   const parsed = parseHarnessArgs(
-    args.slice(1),
+    args.slice(1).filter((argument) => argument !== '--global'),
     selectionEnvironment(repoRoot, scopedEnvironment, homeDirectory),
     roots.globalOnly ? repoRoot : currentDirectory,
     loadMajorModesConfig(repoRoot, homeDirectory).defaultMajorMode,

@@ -142,7 +142,7 @@ describe('SyncPipeline', () => {
     expect(mocks.syncExecute).toHaveBeenCalledWith(['sync', '--force'], globalEnvironment, currentDirectory, output);
   });
 
-  it('promotes workspace packages into the global cache before checking global freshness', async () => {
+  it('promotes workspace packages into the global cache without building a global runtime', async () => {
     const fixture = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doom-sync-pipeline-promotion-')));
     temporaryRoots.push(fixture);
     const homeDirectory = path.join(fixture, 'home');
@@ -150,7 +150,7 @@ describe('SyncPipeline', () => {
     const workspaceRoot = path.join(fixture, 'workspace');
     const globalEnvironment = { HOME: homeDirectory, DOOMPI_ROOT: workspaceRoot };
     fs.mkdirSync(workspaceRoot, { recursive: true });
-    mocks.readSyncDrift.mockReturnValue({ fresh: true, reasons: [] });
+    mocks.readSyncDrift.mockReturnValue({ fresh: false, reasons: ['never-synced'] });
 
     await expect(runSync(['sync', '--global'], globalEnvironment, workspaceRoot, output)).resolves.toBe(0);
 
