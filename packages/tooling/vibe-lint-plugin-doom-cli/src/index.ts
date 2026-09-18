@@ -58,10 +58,42 @@ export const architecture: RuleDefinition = {
     return problems.length ? [...new Set(problems)].join('\n') : null;
   },
 };
+
+export const stableDispatcherMarker: RuleDefinition = {
+  preflight: true,
+  rule: 'Keep the generated Pi dispatcher marker fixed at 1',
+  rationale: 'Generated content determines freshness. Changing the ownership marker creates needless migration code.',
+  check(filePath, configRoot) {
+    const relative = path.relative(configRoot, filePath).replaceAll(path.sep, '/');
+    if (relative !== 'src/builders/cli/piExtensionDispatcher/index.ts' || !fs.existsSync(filePath)) return null;
+    const source = ts.createSourceFile(filePath, fs.readFileSync(filePath, 'utf8'), ts.ScriptTarget.Latest, true);
+    for (const statement of source.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === 'PI_DISPATCHER_VERSION') {
+          return declaration.initializer &&
+            ts.isNumericLiteral(declaration.initializer) &&
+            declaration.initializer.text === '1'
+            ? null
+            : 'PI_DISPATCHER_VERSION must remain 1';
+        }
+      }
+    }
+    return 'PI_DISPATCHER_VERSION must remain 1';
+  },
+};
+
 const plugin: VibeLintPlugin = {
   name: 'doom-cli',
-  rules: { 'doom-cli-architecture': architecture },
+  rules: {
+    'doom-cli-architecture': architecture,
+    'stable-dispatcher-marker': stableDispatcherMarker,
+  },
   patterns: { ownership: { description: architecture.rule, includes: ['src/**/*.ts', 'package.json'] } },
-  configs: { recommended: { rules: { 'doom-cli-architecture': 'error' } } },
+  configs: {
+    recommended: {
+      rules: { 'doom-cli-architecture': 'error', 'stable-dispatcher-marker': 'error' },
+    },
+  },
 };
 export default plugin;

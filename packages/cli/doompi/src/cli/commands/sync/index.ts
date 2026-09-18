@@ -46,11 +46,7 @@ import {
   piExtensionAliasIsCurrent,
   writePiExtensionAlias,
 } from '../../../builders/cli/piExtensionAlias';
-import {
-  PI_DISPATCHER_VERSION,
-  piExtensionDispatcherIsUpgradeable,
-  piExtensionDispatcherVersion,
-} from '../../../builders/cli/piExtensionDispatcher';
+import { piExtensionDispatcherIsUpgradeable } from '../../../builders/cli/piExtensionDispatcher';
 import {
   DUPLICATE_REGISTRATION_DRIFT,
   projectRegistersDoom,
@@ -491,11 +487,8 @@ export async function synchronize(
   const agentDirectory = piAgentDirectory(scopedEnvironment, homeDirectory);
   if ((commandOptions.settingsMode ?? 'persisted') === 'persisted' && !check) {
     if (piExtensionDispatcherIsUpgradeable(agentDirectory)) {
-      const previousVersion = piExtensionDispatcherVersion(agentDirectory);
       writePiExtensionAlias(agentDirectory);
-      output.write(
-        `repair:   upgraded Pi user dispatcher from protocol ${String(previousVersion)} to ${String(PI_DISPATCHER_VERSION)}\n`,
-      );
+      output.write('repair:   refreshed Pi user dispatcher\n');
     }
     const drift = piIntegrationDrift(agentDirectory);
     if (drift.length > 0) {

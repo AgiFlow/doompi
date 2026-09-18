@@ -10,7 +10,7 @@ import {
 } from '@agimon-ai/doompi-core/sync-registration';
 
 /** Protocol marker proving that the user package path is managed by DoomPi init. */
-export const PI_DISPATCHER_VERSION = 3;
+export const PI_DISPATCHER_VERSION = 1;
 
 const DISPATCHER_ENTRY = 'dispatcher.mjs';
 const PACKAGE_MANIFEST = 'package.json';
@@ -165,17 +165,19 @@ function managedManifest(directory: string): boolean {
   return managedManifestVersion(directory) === PI_DISPATCHER_VERSION;
 }
 
-function upgradeableManagedManifest(directory: string): boolean {
-  const version = managedManifestVersion(directory);
-  return version !== undefined && version > 0 && version <= PI_DISPATCHER_VERSION;
-}
-
-/** Whether init's dispatcher package has a supported protocol and complete entry. */
+/** Whether init's dispatcher package has the expected generated content. */
 export function piExtensionDispatcherIsCurrent(piDirectory: string): boolean {
   const directory = piExtensionDispatcherPath(piDirectory);
   const stat = fs.lstatSync(directory, { throwIfNoEntry: false });
   if (!stat?.isDirectory() || stat.isSymbolicLink() || !managedManifest(directory)) return false;
-  return fs.lstatSync(path.join(directory, DISPATCHER_ENTRY), { throwIfNoEntry: false })?.isFile() === true;
+  try {
+    return (
+      fs.readFileSync(path.join(directory, PACKAGE_MANIFEST), 'utf8') === dispatcherManifest() &&
+      fs.readFileSync(path.join(directory, DISPATCHER_ENTRY), 'utf8') === dispatcherSource()
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** Whether an existing managed dispatcher is stale but safe to upgrade in place. */
@@ -183,12 +185,7 @@ export function piExtensionDispatcherIsUpgradeable(piDirectory: string): boolean
   const directory = piExtensionDispatcherPath(piDirectory);
   const stat = fs.lstatSync(directory, { throwIfNoEntry: false });
   if (!stat?.isDirectory() || stat.isSymbolicLink()) return false;
-  return upgradeableManagedManifest(directory) && !managedManifest(directory);
-}
-
-/** Installed protocol version of the dispatcher package, if it is DoomPi-owned. */
-export function piExtensionDispatcherVersion(piDirectory: string): number | undefined {
-  return managedManifestVersion(piExtensionDispatcherPath(piDirectory));
+  return managedManifest(directory) && !piExtensionDispatcherIsCurrent(piDirectory);
 }
 
 function legacyLinkIsManaged(linkPath: string): boolean {
@@ -208,7 +205,7 @@ export function writePiExtensionDispatcher(piDirectory: string): string {
       throw new Error(`Refusing to replace unmanaged Pi extension path: ${directory}`);
     }
     fs.rmSync(directory, { force: true });
-  } else if (current && (!current.isDirectory() || !upgradeableManagedManifest(directory))) {
+  } else if (current && (!current.isDirectory() || !managedManifest(directory))) {
     throw new Error(`Refusing to replace unmanaged Pi extension path: ${directory}`);
   }
 

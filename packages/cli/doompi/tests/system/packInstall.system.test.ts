@@ -2256,7 +2256,7 @@ describe('RPC-LIFECYCLE installed runtime', () => {
       expect(fs.lstatSync(dispatcher).isSymbolicLink()).toBe(false);
       expect(JSON.parse(fs.readFileSync(path.join(dispatcher, 'package.json'), 'utf8'))).toMatchObject({
         name: '@agimon-ai/doompi',
-        doompiDispatcher: 3,
+        doompiDispatcher: 1,
       });
       expect(fs.statSync(path.join(dispatcher, 'dispatcher.mjs')).isFile()).toBe(true);
       const statePath = packedSyncStatePath(fixture.root, environment);
