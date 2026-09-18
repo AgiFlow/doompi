@@ -22,7 +22,6 @@ import {
 import {
   PI_DISPATCHER_VERSION,
   piExtensionDispatcherIsUpgradeable,
-  piExtensionDispatcherVersion,
 } from '../../src/builders/cli/piExtensionDispatcher';
 
 const temporaryRoots: string[] = [];
@@ -180,7 +179,7 @@ describe('Pi extension dispatcher package', () => {
     expect(piExtensionAliasIsCurrent(root)).toBe(true);
   });
 
-  it('upgrades an init-owned dispatcher from an earlier protocol', () => {
+  it('refreshes stale generated content without changing the marker', () => {
     const root = temporaryRoot();
     const packageRoot = fakePackage(path.join(root, 'install', 'doompi'));
     const dispatcherPath = piExtensionAliasPath(root);
@@ -212,7 +211,6 @@ describe('Pi extension dispatcher package', () => {
 
     expect(piExtensionAliasIsCurrent(root)).toBe(false);
     expect(piExtensionDispatcherIsUpgradeable(root)).toBe(true);
-    expect(piExtensionDispatcherVersion(root)).toBe(1);
   });
 
   it('reports a current dispatcher as not upgradeable', () => {
@@ -222,7 +220,6 @@ describe('Pi extension dispatcher package', () => {
 
     expect(piExtensionAliasIsCurrent(root)).toBe(true);
     expect(piExtensionDispatcherIsUpgradeable(root)).toBe(false);
-    expect(piExtensionDispatcherVersion(root)).toBe(PI_DISPATCHER_VERSION);
   });
 
   it('reports an unmanaged dispatcher path as not upgradeable', () => {
@@ -231,7 +228,6 @@ describe('Pi extension dispatcher package', () => {
     fs.mkdirSync(dispatcherPath, { recursive: true });
 
     expect(piExtensionDispatcherIsUpgradeable(root)).toBe(false);
-    expect(piExtensionDispatcherVersion(root)).toBeUndefined();
   });
   it('does not replace an unmanaged path', () => {
     const root = temporaryRoot();

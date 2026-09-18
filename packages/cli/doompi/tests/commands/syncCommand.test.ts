@@ -691,18 +691,13 @@ describe('doompi sync', { timeout: 30_000 }, () => {
   it('self-heals a stale but upgradeable Pi dispatcher and reports the repair', async () => {
     const root = makeRepository();
     const dispatcherPath = piExtensionAliasPath(agentDirectory(root));
-    fs.writeFileSync(
-      path.join(dispatcherPath, 'package.json'),
-      `${JSON.stringify({ name: '@agimon-ai/doompi', doompiDispatcher: 1 })}\n`,
-    );
+    fs.writeFileSync(path.join(dispatcherPath, 'dispatcher.mjs'), 'stale\n');
 
     const { output, text } = capture();
     const code = await new SyncCommand().execute(['sync'], environmentFor(root), root, output);
 
     expect(code).toBe(0);
-    expect(text()).toContain(
-      `repair:   upgraded Pi user dispatcher from protocol 1 to ${String(PI_DISPATCHER_VERSION)}`,
-    );
+    expect(text()).toContain('repair:   refreshed Pi user dispatcher');
     const manifest = JSON.parse(fs.readFileSync(path.join(dispatcherPath, 'package.json'), 'utf8')) as {
       doompiDispatcher?: unknown;
     };

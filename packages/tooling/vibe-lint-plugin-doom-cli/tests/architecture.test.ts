@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { expect, test } from 'vitest';
 
-import { architecture } from '../src/index';
+import { architecture, stableDispatcherMarker } from '../src/index';
 test('rejects opaque root folders and retired package imports', () => {
   const root = mkdtempSync(join(tmpdir(), 'doom-cli-rules-'));
   try {
@@ -30,6 +30,21 @@ test.each([
     mkdirSync(join(file, '..'), { recursive: true });
     writeFileSync(file, `export const load = () => import('${reference}');`);
     expect(architecture.check!(file, root)).toContain('cannot depend');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('keeps the generated dispatcher marker fixed at 1', () => {
+  const root = mkdtempSync(join(tmpdir(), 'doom-cli-dispatcher-'));
+  try {
+    const file = join(root, 'src/builders/cli/piExtensionDispatcher/index.ts');
+    mkdirSync(join(file, '..'), { recursive: true });
+    writeFileSync(file, 'export const PI_DISPATCHER_VERSION = 1;');
+    expect(stableDispatcherMarker.check!(file, root)).toBeNull();
+
+    writeFileSync(file, 'export const PI_DISPATCHER_VERSION = 2;');
+    expect(stableDispatcherMarker.check!(file, root)).toContain('must remain 1');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
