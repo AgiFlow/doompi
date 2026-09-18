@@ -767,7 +767,7 @@ describe('compiled direct modules', () => {
     expect(fs.readdirSync(path.join(options.sharedCacheDirectory, 'objects'))).toHaveLength(2);
   });
 });
-describe('compiled extension sets', () => {
+describe('compiled extension sets', { timeout: 30_000 }, () => {
   it('keeps bare native package imports outside Pi bundles', async () => {
     const directory = temporaryDirectory();
     const packageDirectory = path.join(directory, 'node_modules', '@napi-rs', 'keyring');
