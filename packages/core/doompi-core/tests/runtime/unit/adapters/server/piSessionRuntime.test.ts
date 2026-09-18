@@ -16,6 +16,7 @@ function fixture(telemetry?: ServerTelemetry) {
     readEntries: vi.fn(async () => ({ entries: [], leafId: null })),
     readState: vi.fn(async () => ({ sessionId: 's1', thinkingLevel: 'off' })),
     listCommands: vi.fn(() => [{ name: 'run', description: 'Run' }]),
+    dispatchCommand: vi.fn(async () => false),
     availableModels: vi.fn(async () => [{ provider: 'test', id: 'm', api: 'test' }]),
     availableThinkingLevels: vi.fn(async () => ['off', 'high']),
     setModel: vi.fn(async () => undefined),
@@ -181,6 +182,61 @@ describe('typed session runtime controls', () => {
 
     await runtime.prompt({ text: 'accepted', waitFor: 'accepted' }, BACKGROUND_CONTEXT);
     expect(direct.submitPrompt).toHaveBeenLastCalledWith('accepted', undefined);
+    await runtime.dispose();
+  });
+
+  it.each(['/mode', '/domains', '/profile', '/minor'] as const)(
+    'dispatches %s while a turn is running',
+    async (command) => {
+      const { direct, runtime, emit } = fixture();
+      const active = runtime.prompt('active turn', BACKGROUND_CONTEXT);
+      await vi.waitFor(() => expect(direct.submitPrompt).toHaveBeenCalledWith('active turn', undefined));
+      emit({ type: 'agent_start' });
+      vi.mocked(direct.dispatchCommand).mockResolvedValueOnce(true);
+
+      await expect(runtime.prompt(`${command} value`, BACKGROUND_CONTEXT)).resolves.toBeUndefined();
+      expect(direct.dispatchCommand).toHaveBeenCalledWith(`${command} value`);
+      expect(direct.submitPrompt).toHaveBeenCalledOnce();
+      expect(direct.abort).not.toHaveBeenCalled();
+
+      let finished = false;
+      void active.then(() => {
+        finished = true;
+      });
+      await Promise.resolve();
+      expect(finished).toBe(false);
+      emit({ type: 'agent_settled' });
+      await active;
+      await runtime.dispose();
+    },
+  );
+
+  it('keeps ordinary and unrelated commands blocked during a turn', async () => {
+    const { direct, runtime, emit } = fixture();
+    const active = runtime.prompt('active turn', BACKGROUND_CONTEXT);
+    await vi.waitFor(() => expect(direct.submitPrompt).toHaveBeenCalledWith('active turn', undefined));
+    emit({ type: 'agent_start' });
+
+    await expect(runtime.prompt('/run', BACKGROUND_CONTEXT)).rejects.toThrow('A turn is already running');
+    await expect(runtime.prompt('ordinary text', BACKGROUND_CONTEXT)).rejects.toThrow('A turn is already running');
+    expect(direct.dispatchCommand).not.toHaveBeenCalled();
+
+    emit({ type: 'agent_settled' });
+    await active;
+    await runtime.dispose();
+  });
+
+  it('does not abort the active turn when a selection command fails', async () => {
+    const { direct, runtime, emit } = fixture();
+    const active = runtime.prompt('active turn', BACKGROUND_CONTEXT);
+    await vi.waitFor(() => expect(direct.submitPrompt).toHaveBeenCalledWith('active turn', undefined));
+    emit({ type: 'agent_start' });
+    vi.mocked(direct.dispatchCommand).mockRejectedValueOnce(new Error('selection failed'));
+
+    await expect(runtime.prompt('/mode value', BACKGROUND_CONTEXT)).rejects.toThrow('selection failed');
+    expect(direct.abort).not.toHaveBeenCalled();
+    emit({ type: 'agent_settled' });
+    await active;
     await runtime.dispose();
   });
 

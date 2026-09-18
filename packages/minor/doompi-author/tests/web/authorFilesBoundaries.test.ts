@@ -29,6 +29,7 @@ describe('Author file boundary failures and supported encodings', () => {
     ['a.mp4', 'video'],
     ['a.pdf', 'pdf'],
     ['a.tsx', 'text'],
+    ['Button.stories.tsx', 'story-preview'],
     ['a', 'opaque'],
     ['a.slides.md', 'slides'],
     ['a.xlsx', 'xlsx'],
@@ -44,6 +45,24 @@ describe('Author file boundary failures and supported encodings', () => {
       else expect(result.mediaUrl).toContain('session%20%2F');
     },
   );
+  it('loads story sources as editable text', async () => {
+    responses(new Response("export default { title: 'Button' }; export const Playground = {};"));
+    await expect(loadAuthorDocument('s', 'Button.stories.tsx')).resolves.toMatchObject({
+      kind: 'story-preview',
+      content: "export default { title: 'Button' }; export const Playground = {};",
+    });
+  });
+  it('saves story source bytes without treating the story as a generic opaque file', async () => {
+    const content = "export default { title: 'Button' }; export const Playground = {};";
+    const fetch = responses(new Response('', { headers: { 'X-File-SHA256': sha } }));
+    await expect(
+      saveAuthorDocument('s', { path: 'Button.stories.tsx', kind: 'story-preview', content, sourceSha256: sha }),
+    ).resolves.toBe(sha);
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/file?path=Button.stories.tsx'),
+      expect.objectContaining({ method: 'PUT', body: content }),
+    );
+  });
   it('rejects failed reads and API failures with useful server or fallback messages', async () => {
     responses(new Response('', { status: 404 }));
     await expect(loadAuthorDocument('s', 'a.md')).rejects.toThrow('404');

@@ -138,12 +138,14 @@ type UserMessageActions = ReturnType<typeof pluginUserMessageActions>;
 function MessageActions({
   actions,
   disabled,
+  actionsDisabled,
   onQuote,
   onRewind,
   userMessage,
 }: {
   actions: UserMessageActions;
   disabled: boolean;
+  actionsDisabled: boolean;
   onQuote: () => void;
   onRewind: () => void;
   userMessage?: UserMessageActionRunContext;
@@ -164,6 +166,7 @@ function MessageActions({
                 data-testid="entry-plugin-action"
                 aria-label={action.label}
                 title={action.label}
+                disabled={actionsDisabled}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => action.run(userMessage)}
                 className={ActionIcon ? 'border-0 shadow-none' : 'h-6 border-0 px-2 text-xs shadow-none'}
@@ -179,7 +182,7 @@ function MessageActions({
         data-testid="entry-rewind"
         aria-label="Rewind to message"
         title={disabled ? 'Wait for the current response before rewinding' : 'Rewind to message'}
-        disabled={disabled}
+        disabled={disabled || actionsDisabled}
         onMouseDown={(event) => event.preventDefault()}
         onClick={onRewind}
         className="border-0 shadow-none"
@@ -192,6 +195,7 @@ function MessageActions({
         data-testid="entry-quote"
         aria-label="Quote message"
         title="Quote message"
+        disabled={actionsDisabled}
         onMouseDown={(event) => event.preventDefault()}
         onClick={onQuote}
         className="border-0 shadow-none"
@@ -271,6 +275,7 @@ interface EntryProps {
   sessionId: string | null;
   sessionIdentity: ProfileIdentity | null;
   sessionStreaming: boolean;
+  runtimeActionsDisabled: boolean;
   slotProps: WebPluginSlotProps;
   toolStatuses: Readonly<Record<string, string>>;
 }
@@ -282,6 +287,7 @@ const Entry = memo(function Entry({
   sessionId,
   sessionIdentity,
   sessionStreaming,
+  runtimeActionsDisabled,
   slotProps,
   toolStatuses,
 }: EntryProps) {
@@ -337,6 +343,7 @@ const Entry = memo(function Entry({
           <MessageActions
             actions={pluginActions}
             disabled={sessionStreaming}
+            actionsDisabled={runtimeActionsDisabled}
             onQuote={() => quoteMessage(entry.text)}
             onRewind={() => rewindToMessage(entry.id, sessionId)}
             userMessage={
@@ -379,6 +386,7 @@ const Entry = memo(function Entry({
           <MessageActions
             actions={pluginActions}
             disabled={sessionStreaming}
+            actionsDisabled={runtimeActionsDisabled}
             onQuote={() => quoteMessage(entry.text)}
             onRewind={() => rewindToMessage(entry.id, sessionId)}
           />
@@ -444,14 +452,16 @@ function entriesEqual(previous: EntryProps, next: EntryProps): boolean {
     return (
       previous.onFileLink === next.onFileLink &&
       previous.pluginActions === next.pluginActions &&
-      previous.sessionStreaming === next.sessionStreaming
+      previous.sessionStreaming === next.sessionStreaming &&
+      previous.runtimeActionsDisabled === next.runtimeActionsDisabled
     );
   }
   if (next.entry.kind === 'assistant') {
     return (
       previous.onFileLink === next.onFileLink &&
       previous.sessionIdentity === next.sessionIdentity &&
-      previous.sessionStreaming === next.sessionStreaming
+      previous.sessionStreaming === next.sessionStreaming &&
+      previous.runtimeActionsDisabled === next.runtimeActionsDisabled
     );
   }
   return true;
@@ -483,6 +493,7 @@ export function Transcript({
   empty,
   testId = 'timeline',
   backgroundWorkActive = false,
+  runtimeActionsDisabled = false,
   limit,
   compact = false,
 }: {
@@ -492,6 +503,7 @@ export function Transcript({
   empty: ReactNode;
   testId?: string;
   backgroundWorkActive?: boolean;
+  runtimeActionsDisabled?: boolean;
   limit?: number;
   compact?: boolean;
 }) {
@@ -723,6 +735,7 @@ export function Transcript({
                     sessionId={sessionId}
                     sessionIdentity={sessionIdentity}
                     sessionStreaming={sessionStreaming}
+                    runtimeActionsDisabled={runtimeActionsDisabled}
                     slotProps={slotProps}
                     toolStatuses={toolStatuses}
                   />
@@ -749,9 +762,13 @@ export function Transcript({
   );
 }
 
-/** The focused session's conversation; an empty one offers a few openers. */
+/** The focused session's conversation, with saved history readable before wake. */
 export function Timeline() {
   const activeId = useStore(sessionsStore, (state) => state.activeId);
+  const dormant = useStore(
+    sessionsStore,
+    (state) => state.activeId !== null && state.byId[state.activeId]?.summary.dormant === true,
+  );
   const idle = useStore(
     sessionsStore,
     (state) => state.activeId !== null && state.byId[state.activeId]?.summary.phase === 'idle',
@@ -767,28 +784,35 @@ export function Timeline() {
     <Transcript
       store={sessionStoreFor(activeId)}
       sessionId={activeId}
+      runtimeActionsDisabled={dormant}
       backgroundWorkActive={backgroundWorkActive}
       empty={
         <EmptyState
           data-testid="timeline"
           title="no messages yet"
-          description="this session is attached and waiting. anything you send goes straight to the supervised agent."
+          description={
+            dormant
+              ? 'there is no saved conversation to show yet. waking starts the agent again when you are ready.'
+              : 'this session is attached and waiting. anything you send goes straight to the supervised agent.'
+          }
         >
-          <div data-testid="timeline-empty" className="mt-2 flex w-full flex-col gap-1.5">
-            {SUGGESTIONS.map((suggestion, index) => (
-              <Button
-                key={suggestion}
-                variant="outline"
-                size="lg"
-                data-testid={`suggestion-${index}`}
-                onClick={() => submitMessage(suggestion)}
-                className="h-auto justify-between bg-doom-panel px-3 py-2 text-left font-normal text-doom-text"
-              >
-                <span className="flex-1 truncate">{suggestion}</span>
-                <ExternalLinkIcon className="h-3 w-3 shrink-0 text-doom-faint" />
-              </Button>
-            ))}
-          </div>
+          {dormant ? null : (
+            <div data-testid="timeline-empty" className="mt-2 flex w-full flex-col gap-1.5">
+              {SUGGESTIONS.map((suggestion, index) => (
+                <Button
+                  key={suggestion}
+                  variant="outline"
+                  size="lg"
+                  data-testid={`suggestion-${index}`}
+                  onClick={() => submitMessage(suggestion)}
+                  className="h-auto justify-between bg-doom-panel px-3 py-2 text-left font-normal text-doom-text"
+                >
+                  <span className="flex-1 truncate">{suggestion}</span>
+                  <ExternalLinkIcon className="h-3 w-3 shrink-0 text-doom-faint" />
+                </Button>
+              ))}
+            </div>
+          )}
         </EmptyState>
       }
     />

@@ -1,5 +1,7 @@
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { batch } from '@tanstack/store';
 
+import { refreshVerifiedBundle as requestBundleRefresh } from '../../pwa/workerClient';
 import { parseBundleUpdatedMessage } from '../../types/bundle';
 import {
   HISTORY_PAGE_TYPE,
@@ -19,6 +21,7 @@ import { parseDoomNotificationEntry } from '../../types/notification';
 import { REMOTE_PAIRING_REQUEST_TYPE, REMOTE_STATE_TYPE, type RemoteAccessStateView } from '../../types/remoteAccess';
 import { deliverBrowserNotification } from '../lib/browserNotifications';
 import { browserReadyDuration, recordBrowserPerformance } from '../lib/browserTelemetry';
+import { readDormantTranscriptPage } from '../lib/hubApi';
 import { dispatchChannelFrame } from '../lib/pluginRegistry';
 import { focusSessionWebPlugins, removeSessionWebPluginRuntime } from '../lib/pluginRuntime';
 import { createProtocolHubSocket } from '../lib/protocolHubSocket';
@@ -28,6 +31,7 @@ import { applyCaptureFrame, disconnectCaptures, pendingCaptureSessions } from '.
 import { dropComposerState, restoreComposerDrafts, saveComposerDrafts } from '../stores/composerStore';
 import { bindSessionFileLinkModes } from '../stores/fileLinkModesStore';
 import { claimDialogMenu, clearPendingMenu } from '../stores/menuStore';
+import { createPagedTranscript } from '../stores/pagedTranscriptStore';
 import { applyRemoteState } from '../stores/remoteAccessStore';
 import {
   applySessionBacklog,
@@ -56,6 +60,7 @@ import { applyThreadTranscriptFrame, dropThreads, resubscribeThreads, threadStor
 import { dropTransientTabs } from '../stores/transientTabsStore';
 import { startProtocolRuntime } from './protocolRuntime';
 
+const BUNDLE_REFRESH_INTERVAL_MS = 60_000;
 const VOICE_OWNERSHIP_FRAME_TYPE = 'voice_ownership';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -106,20 +111,53 @@ async function refreshVerifiedBundle(): Promise<void> {
 }
 
 /**
- * Reloads once the verifier reports a newer bundle it already committed.
+ * Keeps an open cockpit aware of verified bundle commits.
  *
- * The worker revalidates on navigation, which is the only moment a returning
- * device reliably asks the host anything. By the time this message arrives the
- * replacement is verified and on disk, so the reload just picks it up.
+ * The worker verifies replacement bytes before announcing them; the runtime only
+ * reloads after that announcement arrives.
  */
 function watchVerifiedBundleUpdates(): () => void {
-  if (!('serviceWorker' in navigator)) return () => {};
+  if (
+    typeof navigator === 'undefined' ||
+    !('serviceWorker' in navigator) ||
+    typeof document === 'undefined' ||
+    typeof window === 'undefined'
+  )
+    return () => {};
+
+  let pendingRefresh: Promise<void> | undefined;
+  const refresh = (): void => {
+    if (document.visibilityState !== 'visible' || pendingRefresh !== undefined) return;
+    pendingRefresh = requestBundleRefresh()
+      .then(
+        () => undefined,
+        () => undefined,
+      )
+      .finally(() => {
+        pendingRefresh = undefined;
+      });
+  };
   const onMessage = (event: MessageEvent<unknown>): void => {
     if (parseBundleUpdatedMessage(event.data) === undefined) return;
     reloadForBundle();
   };
+  const onVisibilityChange = (): void => {
+    if (document.visibilityState === 'visible') refresh();
+  };
+  const onOnline = (): void => refresh();
+  const interval = window.setInterval(refresh, BUNDLE_REFRESH_INTERVAL_MS);
+
   navigator.serviceWorker.addEventListener('message', onMessage);
-  return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('online', onOnline);
+  refresh();
+
+  return () => {
+    window.clearInterval(interval);
+    navigator.serviceWorker.removeEventListener('message', onMessage);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('online', onOnline);
+  };
 }
 
 /**
@@ -168,36 +206,84 @@ export function startSessionRuntime(): () => void {
     }
   };
   const protocol = startProtocolRuntime(window.location, applyPresentationFrame);
+  const dormantTranscripts = new Map<string, ReturnType<typeof createPagedTranscript>>();
+  const disposeDormantTranscript = (sessionId: string): void => {
+    const transcript = dormantTranscripts.get(sessionId);
+    if (transcript === undefined) return;
+    dormantTranscripts.delete(sessionId);
+    transcript.dispose();
+  };
+  const ensureDormantTranscript = (sessionId: string): void => {
+    if (dormantTranscripts.has(sessionId)) return;
+    const transcript = createPagedTranscript(
+      sessionId,
+      {
+        readTranscriptPage: (request, context) => readDormantTranscriptPage(sessionId, request, context.abortSignal),
+      },
+      applyPresentationFrame,
+      BACKGROUND_CONTEXT,
+    );
+    dormantTranscripts.set(sessionId, transcript);
+    void transcript.initialize().catch((error: unknown) => {
+      if (dormantTranscripts.get(sessionId) !== transcript) return;
+      applyPresentationFrame(
+        sessionId,
+        { type: 'error', message: error instanceof Error ? error.message : String(error) },
+        false,
+      );
+    });
+  };
+  const disposeDormantTranscripts = (): void => {
+    for (const sessionId of dormantTranscripts.keys()) disposeDormantTranscript(sessionId);
+  };
 
   const clearSubscriptions = (): void => {
     for (const sessionId of subscribed) endSessionReplay(sessionId);
     subscribed.clear();
   };
+  const reportPluginFocusFailure = (error: unknown): void => {
+    console.error(error instanceof Error ? error : new Error(String(error)));
+  };
 
   const syncSubscription = (force = false): void => {
     const { activeId, byId } = sessionsStore.state;
     const target = activeId !== null && activeId in byId ? activeId : null;
+    const dormantTarget = target !== null && byId[target].summary.dormant === true;
     const focused = focusSessionWebPlugins(
       target,
       target === null ? undefined : byId[target].summary.webComposition,
       target === null ? undefined : byId[target].summary.workspaceId,
     );
-    protocol.focus(target);
+    for (const sessionId of dormantTranscripts.keys()) {
+      if (sessionId !== target || !dormantTarget) disposeDormantTranscript(sessionId);
+    }
+    if (dormantTarget) {
+      protocol.focus(null);
+      ensureDormantTranscript(target);
+    } else protocol.focus(target);
     if (deferredVoiceOwnershipFrame !== undefined && target !== null && pendingVoiceTransferTarget === target) {
       const deferred = deferredVoiceOwnershipFrame;
       const transferFocus = (pendingVoiceTransferFocus ??= focused);
-      void transferFocus.then(() => {
-        if (sessionsStore.state.activeId !== target || pendingVoiceTransferTarget !== target) return;
-        deferredVoiceOwnershipFrame = undefined;
-        pendingVoiceTransferFocus = undefined;
-        pendingVoiceTransferTarget = undefined;
-        dispatchChannelFrame(deferred);
-        completeSessionTransfer(target);
-      });
+      void transferFocus.then(
+        () => {
+          if (sessionsStore.state.activeId !== target || pendingVoiceTransferTarget !== target) return;
+          deferredVoiceOwnershipFrame = undefined;
+          pendingVoiceTransferFocus = undefined;
+          pendingVoiceTransferTarget = undefined;
+          dispatchChannelFrame(deferred);
+          completeSessionTransfer(target);
+        },
+        (error: unknown) => {
+          if (pendingVoiceTransferFocus === transferFocus) pendingVoiceTransferFocus = undefined;
+          reportPluginFocusFailure(error);
+        },
+      );
+    } else {
+      void focused.catch(reportPluginFocusFailure);
     }
 
     const desired = new Set<string>();
-    if (target !== null) desired.add(target);
+    if (target !== null && !dormantTarget) desired.add(target);
     if (currentVoiceOwner !== null && currentVoiceOwner in byId) desired.add(currentVoiceOwner);
     for (const sessionId of pendingCaptureSessions.state) {
       if (sessionId in byId) desired.add(sessionId);
@@ -256,6 +342,7 @@ export function startSessionRuntime(): () => void {
         case SESSION_REMOVED_TYPE: {
           if (typeof frame.sessionId !== 'string') return;
           disconnectCaptures(frame.sessionId);
+          disposeDormantTranscript(frame.sessionId);
           applySessionRemoved(frame);
           dropComposerState(frame.sessionId);
           dropSessionStore(frame.sessionId);
@@ -379,6 +466,7 @@ export function startSessionRuntime(): () => void {
     },
     onClose() {
       disconnectCaptures();
+      disposeDormantTranscripts();
       markSocketClosed();
       clearSubscriptions();
     },
@@ -398,6 +486,7 @@ export function startSessionRuntime(): () => void {
     stopFileLinkModes();
     subscription.unsubscribe();
     captureSubscription.unsubscribe();
+    disposeDormantTranscripts();
     clearSubscriptions();
     void focusSessionWebPlugins(null, undefined);
     protocol.stop();

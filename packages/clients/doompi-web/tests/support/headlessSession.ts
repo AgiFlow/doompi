@@ -264,6 +264,11 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
       const response = (await answer('get_commands', { commands })) as { commands?: typeof commands };
       return response.commands ?? commands;
     },
+    dispatchCommand: async (message: string) => {
+      record({ type: 'prompt', message });
+      await answer('prompt', undefined);
+      return true;
+    },
     setModel: async (model: { provider: string; id: string }) => {
       record({ type: 'set_model', provider: model.provider, modelId: model.id });
       await answer('set_model', undefined);

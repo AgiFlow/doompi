@@ -19,6 +19,7 @@ import * as workspace from '../../src/extensions/workspaces/sessions/(frontend)/
 const hooks = vi.hoisted(() => ({
   values: [] as unknown[],
   setters: [] as ReturnType<typeof vi.fn>[],
+  statusSetters: [] as ReturnType<typeof vi.fn>[],
   effects: [] as (() => void | (() => void))[],
   cleanups: [] as (() => void)[],
 }));
@@ -27,6 +28,7 @@ vi.mock('react', async (importOriginal) => ({
   useState: (initial: unknown) => {
     const setter = vi.fn();
     hooks.setters.push(setter);
+    if (initial === undefined) hooks.statusSetters.push(setter);
     return [hooks.values.length ? hooks.values.shift() : initial, setter];
   },
   useRef: (current: unknown) => ({ current }),
@@ -79,6 +81,7 @@ afterEach(() => {
   hooks.effects = [];
   hooks.values = [];
   hooks.setters = [];
+  hooks.statusSetters = [];
   workspace.authorWorkspace.reset();
   vi.clearAllMocks();
 });
@@ -200,7 +203,7 @@ describe('Author document lifecycle', () => {
       version: 2,
       savingVersion: undefined,
     });
-    expect(hooks.setters.at(-1)).toHaveBeenCalledWith('Conflict');
+    expect(hooks.statusSetters.at(-1)).toHaveBeenCalledWith('Conflict');
     workspace.requestAuthorSave('s', 'doc');
     hooks.values = [true, 'saving'];
     expect(render().find((node) => node.props['data-testid'] === 'author-save')?.props.disabled).toBe(true);

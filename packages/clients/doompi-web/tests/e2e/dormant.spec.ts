@@ -15,7 +15,9 @@ test('shows a recorded session as stopped and starts it only when asked', async 
   // it. Focus must not be enough to start an agent: that is the whole point of
   // restoring lazily, and the card staying stopped is the proof.
   await expect(page.getByTestId('dormant-session')).toBeVisible();
+  await expect(page.getByText('saved history for d1')).toBeVisible();
   await expect(page.getByTestId('composer-input')).toBeHidden();
+  await expect(page.getByTestId('suggestion-0')).toBeHidden();
   await expect(card).toContainText('stopped');
 
   // A live session is still reachable without touching the dormant one.

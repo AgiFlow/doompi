@@ -1,7 +1,8 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import type { Context } from '@earendil-works/chord';
-import { branchTip } from '@earendil-works/pi-agent-core/harness/session';
+import { branchTip, value } from '@earendil-works/pi-agent-core/harness/session';
 import {
   SqliteSessionRepo,
   SqliteStorage,
@@ -11,24 +12,47 @@ import {
 import type { TranscriptPageRequest, TranscriptPage } from '../../exports/sessionProtocol';
 import { readTranscriptPage } from '../transcriptPages';
 
+export interface SqliteTranscriptOwnership {
+  sessionId: string;
+  workspaceRoot: string;
+}
+
 /** A completed child is read through a separate read-only WAL connection, never a second writer. */
 export async function readSqliteTranscript(
   file: string,
   request: TranscriptPageRequest,
   context: Context,
+  ownership?: SqliteTranscriptOwnership,
 ): Promise<TranscriptPage> {
+  try {
+    const stat = await fs.stat(file);
+    if (!stat.isFile()) throw new Error('Child SQLite session not found');
+  } catch {
+    throw new Error('Child SQLite session not found');
+  }
   const factory = createNodeSqliteFactory();
   const repository = new SqliteSessionRepo({
     directory: path.dirname(file),
     databasePath: file,
     databaseFactory: factory,
   });
-  const sessions = await repository.list(undefined, context);
-  await repository.close(context);
+  let sessions: Awaited<ReturnType<typeof repository.list>>;
+  try {
+    sessions = await repository.list(undefined, context);
+  } finally {
+    await repository.close(context);
+  }
   if (sessions.length !== 1) throw new Error('Child SQLite session not found');
+  if (ownership !== undefined && sessions[0]!.id !== ownership.sessionId)
+    throw new Error('Saved transcript does not belong to this session');
   const database = await factory.openReadOnly(file);
   const storage = new SqliteStorage(database, { sessionId: sessions[0]!.id });
   try {
+    if (ownership !== undefined) {
+      const owner = await storage.getValue(value('doompi.session', 'workspaceRoot'), context);
+      if (owner?.value !== ownership.workspaceRoot)
+        throw new Error('Saved transcript does not belong to this workspace');
+    }
     const branches = await storage.scanValues(branchTip(''), context);
     const branch =
       branches.find((item) => item.address.key === 'main') ?? (branches.length === 1 ? branches[0] : undefined);

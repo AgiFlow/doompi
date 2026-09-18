@@ -243,6 +243,9 @@ jobs:
       - name: Verify Runner native payloads
         run: pnpm runner:check
 
+      - name: Build packages
+        run: pnpm nx run-many -t build --parallel=3
+
       - name: Run package-test shard
         run: node scripts/run-release-test-shard.mjs run "${{ matrix.shard }}" 4
 
@@ -311,6 +314,9 @@ jobs:
       - name: Verify Runner native payloads
         run: pnpm runner:check
 
+      - name: Build packages
+        run: pnpm nx run-many -t build --parallel=3
+
       - name: Run isolated system-test shard
         env:
           DOOMPI_SYSTEM_SHARD: ${{ matrix.shard }}
@@ -323,7 +329,7 @@ jobs:
           exit "${status}"
 
   validate:
-    if: always()
+    if: always() && needs.prepare.result == 'success'
     needs:
       - prepare
       - validate-build

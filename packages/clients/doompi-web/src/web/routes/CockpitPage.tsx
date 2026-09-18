@@ -11,7 +11,6 @@ import { CommandPalette } from '../features/leader/CommandPalette';
 import { SelectionBar } from '../features/selection/SelectionBar';
 import { Composer } from '../features/session/Composer';
 import { Timeline } from '../features/session/Timeline';
-import { DormantPanel } from '../features/sessions/DormantPanel';
 import { SessionRail } from '../features/sessions/SessionRail';
 import { WelcomePanel } from '../features/sessions/WelcomePanel';
 import { TopBar } from '../features/status/TopBar';
@@ -39,9 +38,6 @@ export function CockpitPage() {
   });
   const noSessions = useNoSessions();
   const activeMeta = useActiveSessionMeta();
-  // A recorded session with no runtime has no transcript to show and no agent
-  // to address, so it takes the conversation's place rather than rendering an
-  // empty timeline over a composer that would fail to send.
   const dormantMeta = activeMeta?.summary.dormant === true ? activeMeta : null;
   const dialogId = useActiveSession((state) => state.dialog?.id ?? null);
   // A declared tab first, then one a plugin opened at runtime for this session.
@@ -150,27 +146,20 @@ export function CockpitPage() {
             setMobileActivityOpen(true);
           }}
         />
-        {/* A plugin panel normally replaces the conversation composer because it
-            shows a different surface. A tab opts back in only when composing
-            against that surface is its stated purpose. The selection bar remains
-            conversation-only. */}
+        {/* Plugin panels may replace the conversation, but the composer remains
+            responsible for stopped-session wake gating. */}
         {tab ? (
           <>
             <tab.panel {...slotProps} />
             {tab.retainComposer === true ? <Composer /> : null}
           </>
         ) : noSessions ? (
-          // Same reasoning as above, taken to its end: with no session there is
-          // no agent to address, so the conversation and everything that talks
-          // to it give way to the one thing there is to do.
           <WelcomePanel />
-        ) : dormantMeta ? (
-          <DormantPanel meta={dormantMeta} />
         ) : (
           <>
             <Timeline />
             <Composer />
-            <SelectionBar />
+            {dormantMeta === null ? <SelectionBar /> : null}
           </>
         )}
       </main>

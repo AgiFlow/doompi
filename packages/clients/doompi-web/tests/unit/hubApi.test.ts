@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createSession,
   listSessionHistory,
+  readDormantTranscriptPage,
   restartSession,
   resumeSession,
   reviveSession,
@@ -111,6 +112,33 @@ describe('reviveSession', () => {
   it('reports an unreachable hub instead of throwing', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection refused')));
     await expect(reviveSession('dormant')).resolves.toEqual({ error: 'The cockpit hub is unreachable.' });
+  });
+});
+
+describe('readDormantTranscriptPage', () => {
+  it('requests a scoped read-only page with paging and cancellation', async () => {
+    const page = {
+      entries: [],
+      startCursor: null,
+      endCursor: null,
+      olderCursor: null,
+      newerCursor: null,
+      generation: 0,
+      revision: 0,
+      context: [],
+      drafts: [],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(respond(200, page));
+    vi.stubGlobal('fetch', fetchMock);
+    const signal = new AbortController().signal;
+
+    await expect(
+      readDormantTranscriptPage('dormant', { cursor: 'older', direction: 'older', limit: 10 }, signal),
+    ).resolves.toEqual(page);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/workspaces/test-workspace/sessions/dormant/transcript?cursor=older&direction=older&limit=10',
+      { signal },
+    );
   });
 });
 describe('Pi session history', () => {

@@ -8,6 +8,7 @@ import type { DoomHubSessionCreateRequest } from '@agimon-ai/doompi-core/hub-cha
 import { type PackageApiServer, serveSessionApis } from '@agimon-ai/doompi-core/package-api-server';
 import { createHeadlessHub, serveHeadlessServer, type HeadlessSessionHost } from '@agimon-ai/doompi-core/server';
 import { loadServerBundle, resolveServerBundleSource } from '@agimon-ai/doompi-core/server-facet';
+import type { TranscriptPage, TranscriptPageRequest } from '@agimon-ai/doompi-core/session-protocol';
 import { readSyncRegistration } from '@agimon-ai/doompi-core/sync-registration';
 import { createWebCompositions } from '@agimon-ai/doompi-core/web-compositions';
 import { test as base } from '@playwright/test';
@@ -155,6 +156,24 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       throw new Error('The Playwright headless fixture is not ready to create sessions.');
     };
     const dormantRecords: OpenSessionRecord[] = [];
+    const dormantTranscriptEntries = new Map<string, TranscriptPage['entries']>();
+    let readDormantTranscript = async (
+      record: OpenSessionRecord,
+      request: TranscriptPageRequest,
+    ): Promise<TranscriptPage> => {
+      void request;
+      return {
+        entries: dormantTranscriptEntries.get(record.sessionId) ?? [],
+        startCursor: null,
+        endCursor: null,
+        olderCursor: null,
+        newerCursor: null,
+        generation: 0,
+        revision: 0,
+        context: [],
+        drafts: [],
+      };
+    };
     let reviveSession = async (_record: OpenSessionRecord): Promise<void> => {
       throw new Error('The Playwright headless fixture is not ready to revive sessions.');
     };
@@ -253,6 +272,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
       token: E2E_HEADLESS_TOKEN,
       requestAsset: (request) => webCompositions.request(request),
       dormantSessions: () => dormantRecords,
+      readDormantTranscript: (record, request) => readDormantTranscript(record, request),
       reviveSession: (record) => reviveSession(record),
       onNotice: (message) => console.error(`[headless] ${message}`),
       compositions: () => ({
@@ -272,6 +292,7 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
         token: E2E_HEADLESS_TOKEN,
         requestAsset: (request) => webCompositions.request(request),
         dormantSessions: () => dormantRecords,
+        readDormantTranscript: (record, request) => readDormantTranscript(record, request),
         reviveSession: (record) => reviveSession(record),
         onNotice: (message) => console.error(`[headless] ${message}`),
         compositions: () => ({
@@ -359,6 +380,18 @@ export const test = base.extend<CockpitOptions & { cockpit: CockpitFixture }>({
     }
     for (let index = 0; index < dormantSessionCount; index += 1) {
       const id = `d${index + 1}`;
+      dormantTranscriptEntries.set(id, [
+        {
+          type: 'message',
+          id: `${id}-user`,
+          message: { role: 'user', content: `resume ${id} from the saved thread` },
+        },
+        {
+          type: 'message',
+          id: `${id}-assistant`,
+          message: { role: 'assistant', content: `saved history for ${id}` },
+        },
+      ]);
       dormantRecords.push({
         sessionId: id,
         workspaceId,

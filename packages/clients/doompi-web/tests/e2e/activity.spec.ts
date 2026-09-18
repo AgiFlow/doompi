@@ -23,6 +23,30 @@ const widget = (widgetKey: string) => ({
   widgetLines: ['running'],
 });
 
+test('shows a retry state when composition delivery fails before the Activity dock is mounted', async ({
+  page,
+  cockpit,
+}) => {
+  let compositionAvailable = false;
+  await page.route('**/api/compositions', async (route) => {
+    if (compositionAvailable) {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'temporary' }) });
+  });
+
+  await page.goto(cockpit.url);
+  await expect(page.getByTestId('activity-error')).toBeVisible();
+  await expect(page.getByTestId('activity-empty')).toBeHidden();
+
+  compositionAvailable = true;
+  await page.getByTestId('activity-retry').click({ force: true });
+  await cockpit.session.waitForAttach();
+  await expect(page.getByTestId('activity-error')).toBeHidden();
+  await expect(page.getByTestId('activity-workflow-launch')).toBeVisible();
+});
+
 test('keeps the workflow launcher available before any package reports work', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

@@ -38,6 +38,28 @@ test('shows the profile the session publishes on its own axis', async ({ page, c
   await expect(page.getByTestId('selection-mode')).toHaveText('COPILOT');
 });
 
+test('keeps the mode switch interactive while the agent is working', async ({ page, cockpit }) => {
+  await page.goto(cockpit.url);
+  await cockpit.session.waitForAttach();
+
+  cockpit.session.emit(status('doom-major-mode', LIVE));
+  cockpit.session.emit({ type: 'agent_start' });
+  cockpit.session.emit({
+    type: 'message_update',
+    assistantMessageEvent: { type: 'text_delta', delta: 'still working' },
+  });
+  await expect(page.getByTestId('entry-assistant')).toHaveAttribute('data-streaming', 'true');
+
+  await page.getByTestId('axis-mode').click();
+  const sent = await cockpit.session.waitForCommand('prompt');
+  expect(sent.message).toBe('/mode');
+  expect(cockpit.session.received.some((frame) => frame.type === 'abort' || frame.type === 'steer')).toBe(false);
+  await expect(page.getByTestId('entry-assistant')).toHaveAttribute('data-streaming', 'true');
+
+  cockpit.session.emit({ type: 'agent_settled' });
+  await expect(page.getByTestId('entry-assistant')).toHaveAttribute('data-streaming', 'false');
+});
+
 test('offers the empty profile axis once the session reports profiles exist', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await cockpit.session.waitForAttach();

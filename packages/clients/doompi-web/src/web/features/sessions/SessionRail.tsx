@@ -1,19 +1,12 @@
 import {
-  AlertIcon,
-  BranchIcon,
-  ForkIcon,
   Button,
-  buttonVariants,
-  cn,
   Dialog,
   DialogBody,
-  CloseIcon,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Dot,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -21,22 +14,16 @@ import {
   GearIcon,
   Input,
   KebabIcon,
-  PlusIcon,
-  SectionLabel,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from '@agimon-ai/doompi-web-components';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useStore } from '@tanstack/react-store';
 import { useEffect, useRef, useState } from 'react';
 
-import { MascotMark } from '../../components/MascotMark';
 import { PluginSurface } from '../../components/PluginSurface';
 import { RemoteAccessButton } from '../../components/RemoteAccessButton';
 import { restartSession, stopSession } from '../../lib/hubApi';
 import { HOST_SLOTS } from '../../lib/pluginRegistry';
-import { abbreviateCwd, sessionStatusLine } from '../../lib/sessionSummary';
+import { sessionStatusLine } from '../../lib/sessionSummary';
 import { DEFAULT_SETTINGS_SECTION } from '../../lib/settingsSections';
 import { closeNewSession, openNewSession, newSessionStore } from '../../stores/newSessionStore';
 import { paletteStore } from '../../stores/paletteStore';
@@ -45,6 +32,7 @@ import { applySessionRemoved, resolveParentId, sessionsStore, type SessionMeta }
 import { renameSession, sessionStoreFor } from '../../stores/sessionStore';
 import { NewSessionDialog } from './NewSessionDialog';
 import { ResumeSessionDialog } from './ResumeSessionDialog';
+import { SessionCardView, SessionRailView } from './SessionRailView';
 const STATUS_REFRESH_MS = 30_000;
 
 /**
@@ -184,190 +172,111 @@ function SessionCard({
     globalThis.location.reload();
   };
 
-  const cardClass = active ? 'bg-doom-selected hover:bg-doom-selected' : 'hover:bg-doom-panel';
   const menuOpen = mode === 'menu';
-  const details = (
-    <>
-      {/* The status line already says it, but it says it in the same dim voice
-          as the branch and the cwd. A blocked session is the one thing in this
-          list a reader must act on, so it gets a colour of its own. */}
-      <span className="flex items-start gap-1">
-        {awaitingInput ? (
-          <AlertIcon
-            data-testid="session-awaiting-input"
-            aria-label="waiting for your input"
-            className="mt-[2px] h-[11px] w-[11px] shrink-0 text-doom-red"
-          />
-        ) : null}
-        <span
-          data-testid="session-status"
-          className={`text-sm leading-snug ${awaitingInput ? 'text-doom-red' : active ? 'line-clamp-2 text-doom-on-selected/85' : 'truncate text-doom-dim'}`}
-        >
-          {restarting ? 'restarting…' : status}
-        </span>
-      </span>
-      {summary.git ? (
-        <span
-          data-testid="session-branch"
-          className={`flex items-center gap-[7px] pt-0.5 text-xs ${active ? 'text-doom-on-selected/85' : 'text-doom-faint'}`}
-        >
-          <BranchIcon
-            className={`h-[10px] w-[10px] shrink-0 ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}
-          />
-          {summary.git.branch}
-          {summary.git.dirty ? '*' : ''}
-        </span>
-      ) : null}
-      {/* A nested session's cwd is a generated worktree path that repeats what
-          the branch already says, so the child stays lighter than its parent. */}
-      {nested ? null : (
-        <span className={`truncate text-xs ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}>
-          {abbreviateCwd(summary.cwd)}
-        </span>
-      )}
-      {error ? (
-        <span data-testid="session-error" className="line-clamp-3 text-xs break-words text-doom-red">
-          {error}
-        </span>
-      ) : null}
-    </>
-  );
-
-  return (
-    <div
-      className={cn('group relative', nested && 'pl-3')}
-      data-testid={`session-card-${summary.id}`}
-      data-active={active}
-      data-nested={nested}
-    >
-      {mode === 'rename' ? (
-        // The name field cannot live inside the card button, so the card
-        // briefly stops being one while it takes a name.
-        <div className={cn(buttonVariants({ variant: 'ghost', size: 'card' }), cardClass, 'cursor-default')}>
-          <Input
-            data-testid={`session-name-input-${summary.id}`}
-            value={draft}
-            autoFocus
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') commitRename();
-              if (event.key === 'Escape') enterMode('view');
-            }}
-            onBlur={() => enterMode('view')}
-            className="border-doom-blue/60 px-1.5 py-0.5 text-base font-bold"
-          />
-          {details}
-        </div>
-      ) : (
-        <Button
-          variant="ghost"
-          size="card"
-          data-testid={`session-open-${summary.id}`}
-          onClick={() => {
-            onNavigate?.();
-            void navigate({ to: '/session/$sessionId', params: { sessionId: summary.id } });
+  const editing =
+    mode === 'rename' ? (
+      <Input
+        data-testid={`session-name-input-${summary.id}`}
+        value={draft}
+        autoFocus
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') commitRename();
+          if (event.key === 'Escape') enterMode('view');
+        }}
+        onBlur={() => enterMode('view')}
+        className="border-doom-blue/60 px-1.5 py-0.5 text-base font-bold"
+      />
+    ) : undefined;
+  const menu =
+    mode === 'view' || menuOpen ? (
+      <div
+        className={`absolute top-2 right-2 transition-opacity ${
+          menuOpen ? 'opacity-100' : 'group-focus-within:opacity-100 group-hover:opacity-100'
+        }`}
+      >
+        <DropdownMenu
+          open={menuOpen}
+          onOpenChange={(next) => {
+            const current = modeRef.current;
+            enterMode(next ? 'menu' : current === 'menu' ? 'view' : current);
           }}
-          className={cardClass}
         >
-          <div className="flex items-center gap-2">
-            {/* Provenance picks the glyph rather than adding a text chip: the
-                indent and the branch name already say "worktree" twice. */}
-            {nested && summary.sessionProvenance ? (
-              <ForkIcon
-                aria-label={summary.sessionProvenance}
-                className={`h-[11px] w-[11px] shrink-0 ${active ? 'text-doom-on-selected/70' : 'text-doom-faint'}`}
-              />
-            ) : null}
-            <span
-              className={`min-w-0 flex-1 truncate text-base font-bold ${active ? 'text-doom-on-selected' : 'text-doom-hi'}`}
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              data-testid={`session-menu-${summary.id}`}
+              title="session actions"
+              className={
+                active
+                  ? 'text-doom-on-selected/80 hover:bg-doom-on-selected/20 hover:text-doom-on-selected data-[state=open]:bg-doom-on-selected/20 data-[state=open]:text-doom-on-selected'
+                  : 'text-doom-faint hover:bg-doom-deep hover:text-doom-hi data-[state=open]:bg-doom-deep data-[state=open]:text-doom-hi'
+              }
             >
-              {summary.name || 'untitled'}
-            </span>
-            {ordinal <= 9 ? (
-              <span
-                title={`press ${String(ordinal)} to focus`}
-                className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full text-2xs font-bold transition-opacity group-focus-within:opacity-0 group-hover:opacity-0 ${
-                  active ? 'bg-doom-on-selected/20 text-doom-on-selected' : 'bg-doom-tint-magenta text-doom-magenta'
-                }`}
-              >
-                {ordinal}
-              </span>
-            ) : null}
-          </div>
-          {details}
-        </Button>
-      )}
-
-      {mode === 'view' || menuOpen ? (
-        <div
-          className={`absolute top-2 right-2 transition-opacity ${
-            menuOpen ? 'opacity-100' : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'
-          }`}
-        >
-          <DropdownMenu
-            open={menuOpen}
-            onOpenChange={(next) => {
-              const current = modeRef.current;
-              enterMode(next ? 'menu' : current === 'menu' ? 'view' : current);
+              <KebabIcon className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            data-testid={`session-menu-list-${summary.id}`}
+            onCloseAutoFocus={(event) => {
+              if (modeRef.current !== 'view') event.preventDefault();
             }}
           >
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                data-testid={`session-menu-${summary.id}`}
-                title="session actions"
-                className={
-                  active
-                    ? 'text-doom-on-selected/80 hover:bg-doom-on-selected/20 hover:text-doom-on-selected data-[state=open]:bg-doom-on-selected/20 data-[state=open]:text-doom-on-selected'
-                    : 'text-doom-faint hover:bg-doom-deep hover:text-doom-hi data-[state=open]:bg-doom-deep data-[state=open]:text-doom-hi'
-                }
-              >
-                <KebabIcon className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              data-testid={`session-menu-list-${summary.id}`}
-              onCloseAutoFocus={(event) => {
-                if (modeRef.current !== 'view') event.preventDefault();
-              }}
+            <DropdownMenuItem data-testid={`session-rename-${summary.id}`} onSelect={beginRename}>
+              edit
+            </DropdownMenuItem>
+            <DropdownMenuItem data-testid={`session-resume-${summary.id}`} onSelect={() => enterMode('resume')}>
+              resume
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              data-testid={`session-restart-${summary.id}`}
+              disabled={restarting}
+              onSelect={() => void restart()}
             >
-              <DropdownMenuItem data-testid={`session-rename-${summary.id}`} onSelect={beginRename}>
-                edit
-              </DropdownMenuItem>
-              <DropdownMenuItem data-testid={`session-resume-${summary.id}`} onSelect={() => enterMode('resume')}>
-                resume
-              </DropdownMenuItem>
-              {/* Syncs, replaces the session's server under the same id, and
-                  reloads the page: the one way a rebuilt extension or a newly
-                  declared package API reaches a session that is already up. */}
-              <DropdownMenuItem
-                data-testid={`session-restart-${summary.id}`}
-                disabled={restarting}
-                onSelect={() => void restart()}
-              >
-                restart
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                data-testid={`session-stop-${summary.id}`}
-                onSelect={() => enterMode('confirm')}
-              >
-                remove
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ) : null}
-      {mode === 'resume' ? <ResumeSessionDialog sessionId={summary.id} onClose={() => enterMode('view')} /> : null}
-      <RemoveSessionDialog
-        sessionId={summary.id}
-        name={summary.name}
-        open={mode === 'confirm'}
-        onConfirm={() => void stop()}
-        onCancel={() => enterMode('view')}
-      />
-    </div>
+              restart
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              data-testid={`session-stop-${summary.id}`}
+              onSelect={() => enterMode('confirm')}
+            >
+              remove
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    ) : null;
+
+  return (
+    <SessionCardView
+      meta={meta}
+      ordinal={ordinal}
+      active={active}
+      status={status}
+      awaitingInput={awaitingInput}
+      restarting={restarting}
+      error={error || undefined}
+      nested={nested}
+      onOpen={() => {
+        onNavigate?.();
+        void navigate({ to: '/session/$sessionId', params: { sessionId: summary.id } });
+      }}
+      editing={editing}
+      menu={
+        <>
+          {menu}
+          {mode === 'resume' ? <ResumeSessionDialog sessionId={summary.id} onClose={() => enterMode('view')} /> : null}
+          <RemoveSessionDialog
+            sessionId={summary.id}
+            name={summary.name}
+            open={mode === 'confirm'}
+            onConfirm={() => void stop()}
+            onCancel={() => enterMode('view')}
+          />
+        </>
+      }
+    />
   );
 }
 
@@ -422,160 +331,58 @@ export function SessionRail({ onDismiss }: { onDismiss?: () => void }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [order, hasDialog, navigate, onDismiss]);
 
+  const cards = order.map((id, index) => (
+    <SessionCard
+      key={id}
+      meta={byId[id]}
+      ordinal={index + 1}
+      active={id === activeId}
+      now={now}
+      onNavigate={onDismiss}
+      nested={resolveParentId(byId, id) !== undefined}
+    />
+  ));
+
   return (
-    <div className="flex h-full flex-col">
-      <div
-        data-doompi-session-rail-header
-        className="flex items-center justify-between border-b border-doom-border px-4 pt-4 pb-3.5"
-      >
-        <span className="flex items-center gap-[3px]" aria-label="DoomPi">
-          <span aria-hidden="true" className="text-lg font-bold tracking-wider text-doom-hi">
-            DOOM
-          </span>
-          <MascotMark size={22} />
-        </span>
-        <span className="flex items-center gap-1">
-          {/* A presentational trigger taking state and one callback, so the rail
-              never imports the remote feature, which no-cross-feature-import
-              forbids. The dialog it opens is mounted once at the app root. */}
-          <RemoteAccessButton
-            status={remote?.status ?? 'off'}
-            deviceCount={remote?.devices.length ?? 0}
-            onOpen={() => {
-              onDismiss?.();
-              openRemoteDialog();
-            }}
-          />
-          {onDismiss ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              data-testid="mobile-sessions-close"
-              title="hide sessions"
-              aria-label="hide sessions"
-              onClick={onDismiss}
-              className="text-doom-dim md:hidden"
-            >
-              <CloseIcon className="h-3 w-3" />
-            </Button>
-          ) : null}
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
-        <SectionLabel>sessions</SectionLabel>
-        <span className="flex items-center gap-2.5">
-          {/* The rail's own action lives in its heading, where a heading's
-              action belongs, instead of a full-width button competing with the
-              cards for the eye. */}
-          <Button
-            variant="ghost"
-            size="icon"
-            data-testid="new-session-open"
-            title="new session"
-            aria-label="new session"
-            onClick={() => {
-              onDismiss?.();
-              openNewSession();
-            }}
-            className="text-doom-faint hover:text-doom-hi"
+    <SessionRailView
+      hasSessions={order.length > 0}
+      cards={cards}
+      remote={remote}
+      remoteAccessButton={
+        <RemoteAccessButton
+          status={remote?.status ?? 'off'}
+          deviceCount={remote?.devices.length ?? 0}
+          onOpen={() => {
+            onDismiss?.();
+            openRemoteDialog();
+          }}
+        />
+      }
+      railContent={<PluginSurface slot={HOST_SLOTS.rail} sessionId={activeId} />}
+      settingsLink={
+        <Button asChild variant="ghost" size="icon" className="text-doom-faint">
+          <Link
+            to="/settings/$section"
+            params={{ section: DEFAULT_SETTINGS_SECTION }}
+            data-testid="settings-open"
+            aria-label="settings"
+            onClick={onDismiss}
           >
-            <PlusIcon className="h-3 w-3" />
-          </Button>
-        </span>
-      </div>
-      <div className="flex flex-col gap-1 px-2.5">
-        {order.map((id, index) => (
-          <SessionCard
-            key={id}
-            meta={byId[id]}
-            ordinal={index + 1}
-            active={id === activeId}
-            now={now}
-            onNavigate={onDismiss}
-            nested={resolveParentId(byId, id) !== undefined}
-          />
-        ))}
-      </div>
-      {/* With no sessions the rail has nothing to show and the plus alone is a
-          thin invitation, so the empty state spells the action out. */}
-      {order.length === 0 ? (
-        <div className="px-2.5 pt-2">
-          <Button
-            variant="outline"
-            size="lg"
-            data-testid="new-session-empty"
-            onClick={() => {
-              onDismiss?.();
-              openNewSession();
-            }}
-            className="w-full justify-start px-[11px] text-sm"
-          >
-            <PlusIcon className="h-3 w-3" />
-            new session
-          </Button>
-        </div>
-      ) : null}
-
-      <PluginSurface slot={HOST_SLOTS.rail} sessionId={activeId} />
-      <div className="flex-1" />
-      <div className="sticky bottom-0 mt-auto shrink-0 bg-doom-rail">
-        {remote === undefined || remote.status === 'off' ? null : (
-          <div
-            data-testid="remote-banner"
-            className={`flex flex-col gap-1.5 border-t px-4 py-2 text-sm ${
-              remote.status === 'failed' ? 'bg-doom-tint-red text-doom-red' : 'bg-doom-tint-yellow text-doom-yellow'
-            }`}
-          >
-            <output className="flex min-w-0 items-center gap-2">
-              <Dot tone={remote.status === 'failed' ? 'red' : 'yellow'} />
-              <span className="truncate">
-                {remote.status === 'failed'
-                  ? `remote access failed: ${remote.error ?? 'the tunnel stopped'}`
-                  : `remote access is ${remote.status === 'starting' ? 'starting' : 'on'}${
-                      remote.publicUrl === undefined ? '' : ` · ${new URL(remote.publicUrl).host}`
-                    } · ${String(remote.devices.length)} device${remote.devices.length === 1 ? '' : 's'} paired`}
-              </span>
-            </output>
-            <span className="flex items-center justify-end gap-1">
-              <Button variant="ghost" size="sm" data-testid="remote-banner-open" onClick={openRemoteDialog}>
-                manage
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                data-testid="remote-banner-off"
-                onClick={() => void turnRemoteAccessOff()}
-              >
-                turn off
-              </Button>
-            </span>
-          </div>
-        )}
-        <div className="flex items-center gap-2.5 border-t border-doom-border px-4 py-3">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button asChild variant="ghost" size="icon" className="text-doom-faint">
-                <Link
-                  to="/settings/$section"
-                  params={{ section: DEFAULT_SETTINGS_SECTION }}
-                  data-testid="settings-open"
-                  aria-label="settings"
-                  onClick={onDismiss}
-                >
-                  <GearIcon className="h-3 w-3" />
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">settings</TooltipContent>
-          </Tooltip>
-          <span className="text-2xs text-doom-faint max-sm:hidden">ctrl+k commands · ctrl+t new session</span>
-        </div>
-      </div>
-
+            <GearIcon className="h-3 w-3" />
+          </Link>
+        </Button>
+      }
+      onDismiss={onDismiss}
+      onOpenRemote={openRemoteDialog}
+      onOpenNewSession={() => {
+        onDismiss?.();
+        openNewSession();
+      }}
+      onTurnRemoteOff={() => void turnRemoteAccessOff()}
+    >
       {creating ? (
         <NewSessionDialog onClose={closeNewSession} suggestedCwds={remote?.settings.sandbox.workspaces ?? []} />
       ) : null}
-    </div>
+    </SessionRailView>
   );
 }

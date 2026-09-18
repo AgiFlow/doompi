@@ -38,6 +38,12 @@ import type { DirectHarnessRuntime, DirectHarnessFrame } from '../types/server/d
 
 const SETTLED = 'agent_settled';
 const PROMPT_LATENCY_EVENT = 'doompi_server.prompt_latency';
+const SELECTION_COMMANDS = new Set(['mode', 'domains', 'profile', 'minor']);
+
+function isSelectionCommand(text: string): boolean {
+  const match = /^\/(\S+)/.exec(text);
+  return match !== null && SELECTION_COMMANDS.has(match[1]!);
+}
 
 type PromptLatency = {
   readonly startedAt: number;
@@ -359,7 +365,10 @@ export function createAgentSessionRuntime(options: AgentSessionRuntimeOptions): 
       const args = messageArgs(text);
       const waitFor = typeof text === 'string' ? 'settled' : (text.waitFor ?? 'settled');
       if (waitFor !== 'accepted' && waitFor !== 'settled') throw new Error('Invalid prompt acknowledgement mode');
-      if (transcript.phase() !== 'idle' || settlers.size > 0) throw new Error('A turn is already running');
+      if (transcript.phase() !== 'idle' || settlers.size > 0) {
+        if (isSelectionCommand(args.message) && (await options.runtime.dispatchCommand(args.message))) return;
+        throw new Error('A turn is already running');
+      }
       if (waitFor === 'accepted') {
         if (!options.telemetry) {
           await options.runtime.submitPrompt(args.message, args.images);

@@ -4,10 +4,13 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
+import type { Context } from '@earendil-works/chord';
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import type { WebSocket } from 'ws';
 import { WebSocketServer } from 'ws';
 
 import { DOOM_API_CALLER_HEADERS, parseDoomSocketPath, type DoomApiMount } from '../exports/packageApi';
+import type { TranscriptPage, TranscriptPageRequest } from '../exports/sessionProtocol';
 import type { OpenSessionRecord } from '../services/openSessionRegistry';
 import { observe, type ServerTelemetry } from '../services/serverTelemetry';
 import type { SavedSession } from '../services/sqliteSessionHistory';
@@ -62,6 +65,11 @@ export interface HeadlessServerOptions {
   compositions?: () => unknown;
   requestAsset?: (request: Request) => Promise<Response | undefined>;
   sessionHistory?: (session: HeadlessHubSession) => Promise<SavedSession[]>;
+  readDormantTranscript?: (
+    record: OpenSessionRecord,
+    request: TranscriptPageRequest,
+    context: Context,
+  ) => Promise<TranscriptPage>;
   restartSession?: (session: HeadlessHubSession) => Promise<void>;
   resumeSession?: (session: HeadlessHubSession, targetSessionId: string) => Promise<string>;
   /** Recorded sessions this server has not reopened, surfaced so a client can ask for one. */
@@ -114,7 +122,7 @@ function dormantView(record: OpenSessionRecord): Record<string, unknown> {
     updatedAt: record.createdAt,
     phase: 'idle',
     phaseSince: record.createdAt,
-    attach: 'attached',
+    attach: 'detached',
     pendingMessageCount: 0,
     everPrompted: false,
     awaitingInput: false,
@@ -148,6 +156,25 @@ function authorized(request: IncomingMessage, token: string | undefined): boolea
 
 function requestPath(request: IncomingMessage): URL {
   return new URL(request.url ?? '/', 'http://doompi.local');
+}
+
+function parseTranscriptRequest(url: URL): TranscriptPageRequest {
+  const request: TranscriptPageRequest = {};
+  const cursor = url.searchParams.get('cursor');
+  const direction = url.searchParams.get('direction');
+  const limit = url.searchParams.get('limit');
+  if (cursor !== null) request.cursor = cursor;
+  if (direction !== null) {
+    if (direction !== 'older' && direction !== 'newer') throw new Error('Invalid transcript direction');
+    request.direction = direction;
+  }
+  if (limit !== null) {
+    if (!/^\d+$/u.test(limit)) throw new Error('Invalid transcript page limit');
+    const parsed = Number(limit);
+    if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 100) throw new Error('Invalid transcript page limit');
+    request.limit = parsed;
+  }
+  return request;
 }
 
 async function sessionFile(session: HeadlessHubSession, relativePath: string | null): Promise<Response> {
@@ -636,6 +663,34 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
     const sessionId = decodeURIComponent(sessionMatch[2]);
     const workspaceId = decodeURIComponent(sessionMatch[1]);
     const session = options.headlessHub.session(sessionId);
+    const suffix = sessionMatch[3] === undefined ? '' : `/${sessionMatch[3]}`;
+    if (suffix === '/transcript' && request.method === 'GET' && options.readDormantTranscript) {
+      const record = dormant().find(
+        (candidate) => candidate.sessionId === sessionId && candidate.workspaceId === workspaceId,
+      );
+      if (record === undefined) {
+        json(response, 404, { error: 'Dormant session not found.' });
+        return;
+      }
+      let transcriptRequest: TranscriptPageRequest;
+      try {
+        transcriptRequest = parseTranscriptRequest(url);
+      } catch (error) {
+        json(response, 400, { error: error instanceof Error ? error.message : 'Invalid transcript request.' });
+        return;
+      }
+      try {
+        const page = await options.readDormantTranscript(record, transcriptRequest, BACKGROUND_CONTEXT);
+        json(response, 200, page);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const status = message === 'STALE_TRANSCRIPT_CURSOR' ? 409 : 422;
+        json(response, status, {
+          error: status === 409 ? message : 'Saved transcript is unavailable.',
+        });
+      }
+      return;
+    }
     // Revive is the one session route that answers before a runtime exists: it
     // is what creates one.
     if (sessionMatch[3] === 'revive' && request.method === 'POST' && options.reviveSession) {
@@ -662,7 +717,6 @@ export async function serveHeadlessServer(options: HeadlessServerOptions): Promi
       json(response, 404, { error: 'Session not found.' });
       return;
     }
-    const suffix = sessionMatch[3] === undefined ? '' : `/${sessionMatch[3]}`;
     if (suffix === '' && request.method === 'GET') {
       json(response, 200, sessionView(session));
       return;

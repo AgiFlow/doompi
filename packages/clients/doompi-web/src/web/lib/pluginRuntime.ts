@@ -83,6 +83,16 @@ interface CompositionsResponse {
   workspaces: { id: string; webComposition?: SessionWebComposition }[];
 }
 
+export type WebPluginCompositionPhase = 'idle' | 'loading' | 'ready' | 'error';
+
+export interface WebPluginCompositionState {
+  phase: WebPluginCompositionPhase;
+  error?: string;
+}
+
+/** The host's composition bootstrap state, shown when remote delivery fails. */
+export const webPluginCompositionStore = new TanstackStore.Store<WebPluginCompositionState>({ phase: 'idle' });
+
 const loadedMounts = new Map<string, LoadedComposition>();
 const mountEpochs = new Map<string, number>();
 const pendingMounts = new Map<string, Promise<void>>();
@@ -91,6 +101,10 @@ let runtimeEpoch = 0;
 let focusEpoch = 0;
 let scriptQueue: Promise<unknown> = Promise.resolve();
 let localVerifier: { key: string; ready: Promise<void> } | undefined;
+let pendingCompositionRefresh: Promise<void> | undefined;
+let focusedSessionComposition:
+  | { sessionId: string; composition?: SessionWebComposition; workspaceId?: string }
+  | undefined;
 
 async function bootstrapLocalVerifier(shell: CompositionsResponse['shell']): Promise<void> {
   if (typeof location === 'undefined' || !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) return;
@@ -303,25 +317,60 @@ async function mountComposition(mount: WebPluginMount, composition: SessionWebCo
   }
 }
 
+function compositionError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function setCompositionState(state: WebPluginCompositionState): void {
+  webPluginCompositionStore.setState(() => state);
+}
+
 async function readCompositions(): Promise<CompositionsResponse> {
   const response = await sealedHttpSession.fetch('/api/compositions', { cache: 'no-store' });
   if (!response.ok) throw new Error(`Could not load web compositions (${response.status}).`);
   return (await response.json()) as CompositionsResponse;
 }
 
-export async function refreshWebPluginCompositions(): Promise<void> {
-  const metadata = await readCompositions();
-  await bootstrapLocalVerifier(metadata.shell);
-  await mountComposition({ scope: 'global' }, metadata.global);
-  for (const workspace of metadata.workspaces) {
-    await mountComposition({ scope: 'workspace', workspaceId: workspace.id }, workspace.webComposition);
-  }
-  const admitted = new Set(metadata.workspaces.map((workspace) => `workspace:${workspace.id}`));
-  for (const key of loadedMounts.keys())
-    if (key.startsWith('workspace:') && !admitted.has(key)) {
-      disposeMount(key);
-      removeWorkspaceWebPlugins(key.slice('workspace:'.length));
+export function refreshWebPluginCompositions(): Promise<void> {
+  if (pendingCompositionRefresh !== undefined) return pendingCompositionRefresh;
+  setCompositionState({ phase: 'loading' });
+  const epoch = runtimeEpoch;
+  const refresh = (async () => {
+    const metadata = await readCompositions();
+    await bootstrapLocalVerifier(metadata.shell);
+    await mountComposition({ scope: 'global' }, metadata.global);
+    for (const workspace of metadata.workspaces) {
+      await mountComposition({ scope: 'workspace', workspaceId: workspace.id }, workspace.webComposition);
     }
+    const admitted = new Set(metadata.workspaces.map((workspace) => `workspace:${workspace.id}`));
+    for (const key of loadedMounts.keys())
+      if (key.startsWith('workspace:') && !admitted.has(key)) {
+        disposeMount(key);
+        removeWorkspaceWebPlugins(key.slice('workspace:'.length));
+      }
+  })();
+  let pending: Promise<void>;
+  pending = refresh
+    .then(() => {
+      if (epoch === runtimeEpoch) setCompositionState({ phase: 'ready' });
+    })
+    .catch((error: unknown) => {
+      if (epoch === runtimeEpoch) setCompositionState({ phase: 'error', error: compositionError(error) });
+      throw error;
+    })
+    .finally(() => {
+      if (pendingCompositionRefresh === pending) pendingCompositionRefresh = undefined;
+    });
+  pendingCompositionRefresh = pending;
+  return pending;
+}
+
+/** Retries composition delivery and restores the last requested session mount. */
+export async function retryWebPluginCompositions(): Promise<void> {
+  await refreshWebPluginCompositions();
+  const focused = focusedSessionComposition;
+  if (focused === undefined || runtime === undefined) return;
+  await focusSessionWebPlugins(focused.sessionId, focused.composition, focused.workspaceId);
 }
 
 export async function focusWorkspaceWebPlugins(workspaceId: string | null): Promise<void> {
@@ -336,23 +385,35 @@ export async function focusSessionWebPlugins(
   workspaceId?: string,
 ): Promise<void> {
   const epoch = ++focusEpoch;
+  const runtimeAtStart = runtimeEpoch;
+  focusedSessionComposition = sessionId === null ? undefined : { sessionId, composition, workspaceId };
   activateWebPluginSession(sessionId);
   if (!sessionId || !runtime) return;
-  if (!workspaceId) throw new Error(`Session '${sessionId}' has no workspace identity.`);
-  await focusWorkspaceWebPlugins(workspaceId);
-  await mountComposition({ scope: 'session', sessionId, workspaceId }, composition);
-  if (epoch === focusEpoch) activateWebPluginSession(sessionId);
+  try {
+    if (!workspaceId) throw new Error(`Session '${sessionId}' has no workspace identity.`);
+    await focusWorkspaceWebPlugins(workspaceId);
+    await mountComposition({ scope: 'session', sessionId, workspaceId }, composition);
+    if (epoch === focusEpoch) activateWebPluginSession(sessionId);
+  } catch (error) {
+    if (epoch === focusEpoch && runtimeAtStart === runtimeEpoch)
+      setCompositionState({ phase: 'error', error: compositionError(error) });
+    throw error;
+  }
 }
 
 export function removeSessionWebPluginRuntime(sessionId: string): void {
   focusEpoch += 1;
+  if (focusedSessionComposition?.sessionId === sessionId) focusedSessionComposition = undefined;
   disposeMount(`session:${sessionId}`);
   removeSessionWebPlugins(sessionId);
 }
 
 /** Owns the three scope lifecycles for this transport connection. */
 export function startSessionWebPluginRuntime(hostRuntime: WebPluginRuntime): () => void {
+  runtimeEpoch += 1;
+  pendingCompositionRefresh = undefined;
   runtime = hostRuntime;
+  setCompositionState({ phase: 'loading' });
   const refresh = () => {
     void refreshWebPluginCompositions().catch((error: unknown) => console.error(error));
   };
@@ -361,6 +422,7 @@ export function startSessionWebPluginRuntime(hostRuntime: WebPluginRuntime): () 
   return () => {
     runtimeEpoch += 1;
     focusEpoch += 1;
+    pendingCompositionRefresh = undefined;
     unsubscribe();
     for (const key of loadedMounts.keys()) {
       disposeMount(key);
@@ -368,8 +430,10 @@ export function startSessionWebPluginRuntime(hostRuntime: WebPluginRuntime): () 
       if (key.startsWith('workspace:')) removeWorkspaceWebPlugins(key.slice('workspace:'.length));
     }
     installGlobalWebPlugins([]);
+    focusedSessionComposition = undefined;
     runtime = undefined;
     activateWebPluginSession(null);
     activateWebPluginWorkspace(null);
+    setCompositionState({ phase: 'idle' });
   };
 }
