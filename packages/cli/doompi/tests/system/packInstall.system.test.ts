@@ -107,6 +107,7 @@ const CHECKED_IN_MODES_PATH = path.join(
 const SYSTEM_CONFIG_PATH = path.join(REPOSITORY_ROOT, 'packages/cli/doompi/vitest.system.config.ts');
 const PACKAGE_MANIFEST_PATH = path.join(REPOSITORY_ROOT, 'packages/cli/doompi/package.json');
 const CI_WORKFLOW_PATH = path.join(REPOSITORY_ROOT, '.github/workflows/ci.yml');
+const RELEASE_WORKFLOW_PATH = path.join(REPOSITORY_ROOT, '.github/workflows/release-publish.yml');
 const standardPackageSet = new Set(STANDARD_PI_ENTRIES.map((entry) => entry.name));
 const selectablePackageNames = PACKAGE_MATRIX.filter(
   (entry) => entry.layer !== 'core' && entry.layer !== 'foundations' && !FOUNDATION_PACKAGE_NAMES.includes(entry.name),
@@ -299,6 +300,10 @@ function readPackageScripts(): Record<string, string> {
 
 function readWorkflow(): string {
   return fs.readFileSync(CI_WORKFLOW_PATH, 'utf8');
+}
+
+function readReleaseWorkflow(): string {
+  return fs.readFileSync(RELEASE_WORKFLOW_PATH, 'utf8');
 }
 
 type ProbeLifecycleHandler = (event: unknown, context: unknown) => unknown;
@@ -1217,6 +1222,37 @@ describe('packed package identity and closure', () => {
     expect(result.packedManifest.keywords).toEqual(expect.arrayContaining(REQUIRED_DOOM_PACKAGE_KEYWORDS));
     expect(packageRootIsInRepository(entry.name)).toBe(true);
     expect(path.basename(packageRootFor(entry.name))).toBe(path.basename(entry.relativeDirectory));
+  });
+
+  it('builds and verifies publication artifacts before either publication path', () => {
+    const workflow = readReleaseWorkflow();
+    const publishStart = workflow.indexOf('\n  publish:\n');
+    expect(publishStart).toBeGreaterThanOrEqual(0);
+    const publishJob = workflow.slice(publishStart);
+    const install = publishJob.indexOf('run: pnpm install --frozen-lockfile');
+    const build = publishJob.indexOf('run: pnpm nx run-many -t build --parallel=3');
+    const gate = publishJob.indexOf(
+      "run: pnpm --filter @agimon-ai/doompi exec vitest run --config vitest.system.config.ts -t 'packed package identity and closure'",
+    );
+    const initialPublish = publishJob.indexOf('pnpm nx release publish --projects "${PUBLISH_PROJECTS}" --tag alpha');
+    const reconcilePublish = publishJob.indexOf('pnpm nx release publish --projects "${name}" --tag alpha');
+
+    for (const position of [install, build, gate, initialPublish, reconcilePublish]) {
+      expect(position).toBeGreaterThanOrEqual(0);
+    }
+    expect(install).toBeLessThan(build);
+    expect(build).toBeLessThan(gate);
+    expect(gate).toBeLessThan(initialPublish);
+    expect(gate).toBeLessThan(reconcilePublish);
+  });
+
+  it('installs an executable DoomPi command from the packed package', async () => {
+    assertConsumerInstall();
+    const executable = path.join(consumer.root, 'node_modules/.bin/doompi');
+    const version = await runCommand(executable, ['--version'], consumer.root);
+
+    expect(version.code, version.stderr || version.stdout).toBe(0);
+    expect(version.stdout.trim()).toBe(packed('@agimon-ai/doompi').packedManifest.version);
   });
 
   it('packs every owned workspace runtime dependency instead of falling through to npm', () => {
