@@ -6,10 +6,12 @@ const SYNC_MATRIX_OPTIONS = `Matrix options:
 `;
 
 export function syncHelp(): string {
-  return `Usage: doompi sync [matrix options] [--check] [--force]
+  return `Usage: doompi sync [matrix options] [--check] [--force] [--global]
 
 Installs required packages, builds, resolves the composition, and publishes
-synchronized state under ~/.pi/.doom/sync.
+synchronized state under ~/.pi/.doom/sync. A repository sync uses the workspace
+package cache. With --global, the current workspace's required published packages
+are promoted to ~/.pi/.doom/.pi/npm without changing personal configuration.
 
 Unsupported keys in .doom/config.yaml and .doom/modes.yaml are reported and
 ignored rather than treated as errors, so a config written for a different
@@ -18,6 +20,7 @@ version cannot break a build. Run doompi doctor for the strict check.
 Options:
   --check                   Report drift and exit non-zero without writing
   --force                   Publish a new generation even without drift
+  --global                  Promote workspace packages to the global cache
   -h, --help                Show this help
 
 ${SYNC_MATRIX_OPTIONS}`;

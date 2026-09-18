@@ -6,18 +6,16 @@ import type { HarnessTelemetry } from '@agimon-ai/doompi-core/runtime-log-sink-t
 import { acquireSyncLocationLock, resolveSyncLocation } from '@agimon-ai/doompi-core/sync-location';
 
 import { ensureLayerPackages, type LayerPackageResult } from '../../../composition/layerPackageInstaller';
-import { resolveDoomConfigurationRoot } from '../../../composition/repository';
 import { readSyncDrift } from '../../../composition/syncDrift';
 import { wantsHelp } from '../../router';
 import { syncHelp } from './help';
-import { synchronize, syncRegistrationNeedsApiMigration, type SyncSettingsMode } from './index';
+import { resolveSyncRoots, synchronize, syncRegistrationNeedsApiMigration, type SyncSettingsMode } from './index';
 import { prepareSync } from './prepare';
 import { SyncProgress, type SyncProgressOutput } from './presenter';
 
 const CHECK_OPTION = '--check';
 /** Rebuilds and republishes even when nothing drifted. */
 const FORCE_OPTION = '--force';
-const HARNESS_ROOT_ENV = 'DOOMPI_ROOT';
 const PACKAGES_LABEL = 'packages';
 const BUILD_LABEL = 'build';
 
@@ -60,45 +58,54 @@ export async function runSync(
   }
 
   const homeDirectory = environment.HOME ?? os.homedir();
-  const inheritedRoot = environment[HARNESS_ROOT_ENV];
-  const repoRoot = inheritedRoot
-    ? path.resolve(inheritedRoot)
-    : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
+  const roots = resolveSyncRoots(args, environment, currentDirectory, homeDirectory);
+  const { globalOnly, globalRoot, sourceRoot, targetRoot } = roots;
+  const promotingWorkspacePackages = globalOnly && path.resolve(sourceRoot) !== path.resolve(globalRoot);
 
   // Nothing drifted means the packages are current, the mode extension is
   // compiled from these exact bytes, and the published generation already
   // describes them. Refreshing and rebuilding anyway costs seconds per call
   // and, worse, ends in a republished generation that reloads every attached
   // cockpit for no change at all. The cockpit calls this before every session
-  // launch, so the cheap answer has to be the common one.
+  // launch, so the cheap answer has to be the common one. A workspace-to-global
+  // promotion is the exception: global runtime inputs do not include the
+  // workspace package selection.
   const driftOptions = {
-    repoRoot,
+    repoRoot: targetRoot,
     homeDirectory,
     requireWebBundle: Boolean(environment.DOOMPI_WEB_PACKAGE_ROOT),
   };
   if (
+    !promotingWorkspacePackages &&
     !args.includes(FORCE_OPTION) &&
-    !syncRegistrationNeedsApiMigration(repoRoot, homeDirectory) &&
+    !syncRegistrationNeedsApiMigration(targetRoot, homeDirectory) &&
     readSyncDrift(driftOptions).fresh
   ) {
     output.write('doompi sync is already up to date\n');
     return 0;
   }
 
-  const releaseLock = await acquireSyncLocationLock(resolveSyncLocation(repoRoot, homeDirectory));
+  const releaseLock = await acquireSyncLocationLock(resolveSyncLocation(targetRoot, homeDirectory));
   try {
+    const progress = new SyncProgress(output);
+    if (promotingWorkspacePackages) {
+      await refreshPackages(sourceRoot, targetRoot, homeDirectory, environment, progress);
+      // --global from a workspace only promotes packages. The workspace owns
+      // configuration; publishing a global runtime would change personal state.
+      return 0;
+    }
+
     // A concurrent publisher may have resolved the drift while this command
     // waited for the lock. Do not rebuild and republish the same generation.
     if (
       !args.includes(FORCE_OPTION) &&
-      !syncRegistrationNeedsApiMigration(repoRoot, homeDirectory) &&
+      !syncRegistrationNeedsApiMigration(targetRoot, homeDirectory) &&
       readSyncDrift(driftOptions).fresh
     ) {
       output.write('doompi sync is already up to date\n');
       return 0;
     }
-    const progress = new SyncProgress(output);
-    await refreshPackages(environment, currentDirectory, progress);
+    await refreshPackages(sourceRoot, targetRoot, homeDirectory, environment, progress);
 
     const captured: string[] = [];
     const done = progress.start(BUILD_LABEL, 'compiling the mode extension');
@@ -132,19 +139,18 @@ export async function runSync(
 }
 /** Moves every package sync owns to its newest published version. */
 async function refreshPackages(
+  sourceRoot: string,
+  targetRoot: string,
+  homeDirectory: string,
   environment: NodeJS.ProcessEnv,
-  currentDirectory: string,
   progress: SyncProgress,
 ): Promise<void> {
-  const homeDirectory = environment.HOME ?? os.homedir();
-  const inheritedRoot = environment[HARNESS_ROOT_ENV];
-  const repoRoot = inheritedRoot
-    ? path.resolve(inheritedRoot)
-    : resolveDoomConfigurationRoot(currentDirectory, homeDirectory);
-  const config = loadMajorModesConfig(repoRoot, homeDirectory);
+  const config = loadMajorModesConfig(sourceRoot, homeDirectory);
   const done = progress.start(PACKAGES_LABEL, 'checking configured packages for updates');
   const result = await ensureLayerPackages({
-    repoRoot,
+    // Configuration may come from a workspace while the managed store belongs
+    // to the global destination during an explicit promotion.
+    repoRoot: targetRoot,
     config,
     // Every declared layer, not only the selected one: sync writes the state a
     // later /mode switch reads without reinstalling.

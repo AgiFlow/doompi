@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   registrationNeedsApiMigration: vi.fn(() => false),
   syncExecute: vi.fn(),
   syncOptions: vi.fn(),
+  resolveSyncRoots: vi.fn(),
 }));
 
 vi.mock('../../src/composition/layerPackageInstaller', () => ({
@@ -23,6 +24,7 @@ vi.mock('../../src/composition/syncDrift', () => ({
 
 vi.mock('../../src/cli/commands/sync/prepare', () => ({ prepareSync: mocks.buildExecute }));
 vi.mock('../../src/cli/commands/sync', () => ({
+  resolveSyncRoots: mocks.resolveSyncRoots,
   synchronize: (...args: unknown[]) => {
     mocks.syncOptions(args[4]);
     return mocks.syncExecute(...args.slice(0, 4));
@@ -46,6 +48,18 @@ describe('SyncPipeline', () => {
     mocks.readSyncDrift.mockReturnValue({ fresh: false, reasons: ['never-synced'] });
     mocks.syncExecute.mockResolvedValue(0);
     mocks.ensureLayerPackages.mockResolvedValue({ installed: [], updated: [], unchecked: [] });
+    mocks.resolveSyncRoots.mockImplementation(
+      (args: string[], environment: NodeJS.ProcessEnv, currentDirectory: string, homeDirectory: string) => {
+        const globalRoot = path.join(homeDirectory, '.pi', '.doom');
+        const sourceRoot = environment.DOOMPI_ROOT
+          ? path.resolve(environment.DOOMPI_ROOT)
+          : fs.existsSync(path.join(currentDirectory, '.doom'))
+            ? currentDirectory
+            : globalRoot;
+        const globalOnly = args.includes('--global');
+        return { globalOnly, globalRoot, sourceRoot, targetRoot: globalOnly ? globalRoot : sourceRoot };
+      },
+    );
   });
 
   it('refreshes packages first, then builds, then synchronizes with the requested settings mode', async () => {
@@ -126,6 +140,29 @@ describe('SyncPipeline', () => {
       undefined,
     );
     expect(mocks.syncExecute).toHaveBeenCalledWith(['sync', '--force'], globalEnvironment, currentDirectory, output);
+  });
+
+  it('promotes workspace packages into the global cache without building a global runtime', async () => {
+    const fixture = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'doom-sync-pipeline-promotion-')));
+    temporaryRoots.push(fixture);
+    const homeDirectory = path.join(fixture, 'home');
+    const globalRoot = path.join(homeDirectory, '.pi', '.doom');
+    const workspaceRoot = path.join(fixture, 'workspace');
+    const globalEnvironment = { HOME: homeDirectory, DOOMPI_ROOT: workspaceRoot };
+    fs.mkdirSync(workspaceRoot, { recursive: true });
+    mocks.readSyncDrift.mockReturnValue({ fresh: false, reasons: ['never-synced'] });
+
+    await expect(runSync(['sync', '--global'], globalEnvironment, workspaceRoot, output)).resolves.toBe(0);
+
+    expect(mocks.ensureLayerPackages).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoRoot: globalRoot,
+        environment: globalEnvironment,
+        refresh: true,
+      }),
+    );
+    expect(mocks.buildExecute).not.toHaveBeenCalled();
+    expect(mocks.syncExecute).not.toHaveBeenCalled();
   });
 
   it('keeps check mode read-only by skipping the package refresh and the build', async () => {

@@ -18,15 +18,13 @@ This separation keeps the base predictable and lets temporary capabilities leave
 
 ## Major modes define the base
 
-A major mode names an ordered list of extension layers. Only one is active at a time. A development mode may include editing and delegation layers; a writing mode may choose a different package graph.
+A major mode (or preset) names an ordered list of extension layers. Only one is active at a time. A development mode may include editing and delegation layers; a writing mode may choose a different package graph.
 
 Changing a major mode first resolves the candidate composition. DoomPi then decides whether Pi can reload it or whether the launcher must start a replacement process. In a synchronized session, the candidate must already have a prepared runtime bundle. See [Composition and runtime bundling](bundling.md).
 
-Major modes answer: **what kind of session is this?**
-
 ## Minor modes change temporary behavior
 
-Minor modes are switches within the current base. They do not define the package graph. The owning packages are already in the composition, but their instructions, tools, or behavior stay inactive until selected.
+Minor modes are idle capabilities that can be turn on and off on-demand. The owning packages are already in the composition, but their instructions, tools, or behavior stay inactive until selected.
 
 DoomPi ships these minor modes:
 
@@ -35,13 +33,13 @@ DoomPi ships these minor modes:
 - **Loop:** run a prompt now and repeat it on a schedule.
 - **Goal:** keep one objective active until it is completed or dismissed.
 - **Workflow:** run jobs with dependencies, timeouts, and artifacts.
-- **Voice:** use local capture and speech for a hands-free session.
-
-Minor modes answer: **what should this session do for the next part of the work?**
+- **Voice:** hands-free session with autonomonous voice conversation.
+- **Author:** allow annotations and authoring exp directly on the documents.
+- **Computer use:** when running doompi desktop, allow agent to use computer.
 
 ## Domains scope subject-matter capabilities
 
-A domain selects agent plugins for one kind of work. Plugins can contribute skills, agents, hooks, and MCP configuration. The plugin is cataloged once; domains refer to that catalog entry and may enable all or only part of it.
+Modes compose `pi` or `doompi` extensions, domains compose `plugins` (Codex, Claude Code, etc...). A domain selects agent plugins for one kind of work. Plugins can contribute skills, agents, hooks, and MCP configuration. The plugin is cataloged once; domains refer to that catalog entry and may enable all or only part of it.
 
 ```yaml
 plugins:

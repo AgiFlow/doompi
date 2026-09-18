@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   readSyncState: vi.fn(),
   recordResolvedEntries: vi.fn(),
   selectionEnvironment: vi.fn(),
+  resolveSyncRoots: vi.fn(),
+  environmentForSyncScope: vi.fn(),
   syncStateRootMatches: vi.fn(),
   projectRegistersDoom: vi.fn(),
 }));
@@ -45,7 +47,11 @@ vi.mock('../../src/builders/cli/extensionAssembler', () => ({
 vi.mock('../../src/composition/repository', () => ({
   resolveDoomConfigurationRoot: mocks.findRepositoryRoot,
 }));
-vi.mock('../../src/cli/commands/sync', () => ({ selectionEnvironment: mocks.selectionEnvironment }));
+vi.mock('../../src/cli/commands/sync', () => ({
+  selectionEnvironment: mocks.selectionEnvironment,
+  resolveSyncRoots: mocks.resolveSyncRoots,
+  environmentForSyncScope: mocks.environmentForSyncScope,
+}));
 vi.mock('../../src/builders/cli/projectSettings', () => ({
   DUPLICATE_REGISTRATION_DRIFT: 'duplicate DoomPi registration in .pi/settings.json',
   projectRegistersDoom: mocks.projectRegistersDoom,
@@ -93,6 +99,17 @@ describe('BuildCommand', () => {
     mocks.loadDomains.mockReturnValue({ defaultDomains: ['development', 'qa'] });
     mocks.loadMajorModesConfig.mockReturnValue({ defaultMajorMode: 'minimal' });
     mocks.selectionEnvironment.mockReturnValue({ DOOMPI_MAJOR_MODE: 'copilot' });
+    mocks.resolveSyncRoots.mockImplementation(
+      (args: string[], environment: NodeJS.ProcessEnv, currentDirectory: string, homeDirectory: string) => {
+        const globalRoot = path.join(homeDirectory, '.pi', '.doom');
+        const sourceRoot = environment.DOOMPI_ROOT
+          ? path.resolve(environment.DOOMPI_ROOT)
+          : mocks.findRepositoryRoot(currentDirectory, homeDirectory);
+        const globalOnly = args.includes('--global');
+        return { globalOnly, globalRoot, sourceRoot, targetRoot: globalOnly ? globalRoot : sourceRoot };
+      },
+    );
+    mocks.environmentForSyncScope.mockImplementation((environment: NodeJS.ProcessEnv) => environment);
     mocks.parseHarnessArgs.mockReturnValue({ options: { cwd: '/repo', majorMode: 'copilot' } });
     mocks.buildHarnessContext.mockResolvedValue(context);
     mocks.ensureLayerPackages.mockResolvedValue([]);
@@ -124,7 +141,11 @@ describe('BuildCommand', () => {
     ).resolves.toBe(0);
 
     expect(mocks.findRepositoryRoot).not.toHaveBeenCalled();
-    expect(mocks.selectionEnvironment).toHaveBeenCalledWith(path.resolve('./repo'), { DOOMPI_ROOT: './repo' });
+    expect(mocks.selectionEnvironment).toHaveBeenCalledWith(
+      path.resolve('./repo'),
+      { DOOMPI_ROOT: './repo' },
+      expect.any(String),
+    );
     expect(mocks.parseHarnessArgs).toHaveBeenCalledWith(
       ['--major-mode', 'copilot'],
       { DOOMPI_MAJOR_MODE: 'copilot' },

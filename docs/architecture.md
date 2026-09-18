@@ -2,7 +2,10 @@
 
 [Back to DoomPi](../README.md)
 
-DoomPi has two runtime paths around the same resolved configuration. Interactive terminal launches compose Pi extensions and let Pi own extension loading, replacement, and the TUI runner. Headless launches run the agent harness directly, install package contributions through DoomPi's kernel and server facets, and expose client-neutral HTTP and WebSocket services. Both paths use the same package selection, synchronized generation, and composition identity.
+DoomPi has two runtime paths around the same resolved configuration.
+
+- Interactive terminal launches compose Pi extensions and let Pi own extension loading, replacement, and the TUI runner.
+- Headless launches run the agent harness directly, install package contributions through DoomPi's kernel and server facets, and expose client-neutral HTTP and WebSocket services.
 
 The architecture follows five boundaries:
 
