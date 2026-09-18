@@ -403,6 +403,12 @@ jobs:
       - name: Install frozen registry and workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build packages for publication
+        run: pnpm nx run-many -t build --parallel=3
+
+      - name: Verify packed publication artifacts
+        run: pnpm --filter @agimon-ai/doompi exec vitest run --config vitest.system.config.ts -t 'packed package identity and closure'
+
       - name: Configure release git identity
         run: |
           git config user.name "doompi-release-bot"
