@@ -249,8 +249,8 @@
     "@deepseek-ai/cordis": "4.0.2",
     "@rmux/sdk": "0.6.5",
     "@xterm/headless": "6.0.0",
-    "hono": "4.13.7",
-    "typebox": "1.3.30"
+    "hono": "4.13.8",
+    "typebox": "1.3.31"
   },
   "devDependencies": {
     "@agimon-ai/doompi-build": "workspace:*",
