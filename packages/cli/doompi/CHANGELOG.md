@@ -1,3 +1,17 @@
+## 0.0.1-alpha.79 (2026-09-18)
+
+### 🩹 Fixes
+
+- refresh stale Pi dispatcher ([#133](https://github.com/AgiFlow/doompi/pull/133))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/vibe-lint-plugin-doom-cli to 0.0.1-alpha.8
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.78 (2026-09-18)
 
 ### 🩹 Fixes
