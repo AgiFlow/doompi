@@ -21,11 +21,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 const root = process.cwd();
 const cacheRoot = path.join(root, '.nx-cache', 'runner-binaries');
 const EXECUTABLE_MODE = 0o755;
+const DOWNLOAD_ATTEMPTS = 5;
+const DOWNLOAD_RETRY_BASE_MS = 1000;
 
 const RMUX_TAG = 'v0.9.1';
 const RMUX_REPO = 'Helvesec/rmux';
@@ -140,20 +143,57 @@ function isMaterialized(target) {
   });
 }
 
-async function downloadAsset(target) {
+function retryableStatus(status) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+async function retryDownload(target, attempt, error) {
+  if (attempt >= DOWNLOAD_ATTEMPTS) throw error;
+  const delayMs = DOWNLOAD_RETRY_BASE_MS * 2 ** (attempt - 1);
+  process.stderr.write(
+    `  ${target.asset} download failed (attempt ${attempt}/${DOWNLOAD_ATTEMPTS}), retrying in ${delayMs}ms: ${error.message}\n`,
+  );
+  await delay(delayMs);
+}
+
+export async function downloadAsset(target) {
   fs.mkdirSync(cacheRoot, { recursive: true });
   const cached = path.join(cacheRoot, `${target.tag}-${target.asset}`);
   if (fs.existsSync(cached)) return cached;
 
   const url = `https://github.com/${target.repo}/releases/download/${target.tag}/${target.asset}`;
-  process.stdout.write(`  fetching ${target.repo}@${target.tag} ${target.asset}\n`);
-  const response = await fetch(url, { redirect: 'follow' });
-  if (!response.ok) throw new Error(`${url} returned ${response.status}`);
-
   const partial = `${cached}.partial`;
-  await pipeline(response.body, fs.createWriteStream(partial));
-  fs.renameSync(partial, cached);
-  return cached;
+  process.stdout.write(`  fetching ${target.repo}@${target.tag} ${target.asset}\n`);
+
+  for (let attempt = 1; attempt <= DOWNLOAD_ATTEMPTS; attempt += 1) {
+    fs.rmSync(partial, { force: true });
+    let response;
+    try {
+      response = await fetch(url, { redirect: 'follow' });
+    } catch (error) {
+      await retryDownload(target, attempt, error instanceof Error ? error : new Error(String(error)));
+      continue;
+    }
+
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      const error = new Error(`${url} returned ${response.status}`);
+      if (!retryableStatus(response.status)) throw error;
+      await retryDownload(target, attempt, error);
+      continue;
+    }
+
+    try {
+      await pipeline(response.body, fs.createWriteStream(partial));
+      fs.renameSync(partial, cached);
+      return cached;
+    } catch (error) {
+      fs.rmSync(partial, { force: true });
+      await retryDownload(target, attempt, error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  throw new Error(`${url} exhausted its download attempts`);
 }
 
 /**

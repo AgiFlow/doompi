@@ -36,6 +36,9 @@ jobs:
       - name: Verify Runner native payloads
         run: pnpm runner:check
 
+      - name: Test Runner payload downloads
+        run: node --test scripts/fetch-runner-binaries.test.mjs
+
       - name: Audit ownership and dependency boundaries
         run: pnpm audit:workspace
 
