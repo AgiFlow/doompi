@@ -1,3 +1,28 @@
+## 0.0.1-alpha.13 (2026-09-18)
+
+### 🚀 Features
+
+- add author story previews and restore favicon ([e0ecf658](https://github.com/AgiFlow/doompi/commit/e0ecf658))
+- add session MCP and style system support ([5912ce17](https://github.com/AgiFlow/doompi/commit/5912ce17))
+
+### 🩹 Fixes
+
+- stabilize validation checks ([316ceb31](https://github.com/AgiFlow/doompi/commit/316ceb31))
+- stabilize CI and runtime contracts ([e83e9987](https://github.com/AgiFlow/doompi/commit/e83e9987))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.4
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.33
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.35
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.70
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.75
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.12 (2026-09-17)
 
 ### 🚀 Features

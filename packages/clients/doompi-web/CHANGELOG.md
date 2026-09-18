@@ -1,3 +1,32 @@
+## 0.0.1-alpha.39 (2026-09-18)
+
+### 🚀 Features
+
+- add author story previews and restore favicon ([e0ecf658](https://github.com/AgiFlow/doompi/commit/e0ecf658))
+- finalize session MCP and workspace updates ([3f43e555](https://github.com/AgiFlow/doompi/commit/3f43e555))
+- add session MCP and style system support ([5912ce17](https://github.com/AgiFlow/doompi/commit/5912ce17))
+
+### 🩹 Fixes
+
+- stabilize validation checks ([316ceb31](https://github.com/AgiFlow/doompi/commit/316ceb31))
+- avoid storing OAuth test secrets ([b53ecd5c](https://github.com/AgiFlow/doompi/commit/b53ecd5c))
+- stabilize CI and runtime contracts ([e83e9987](https://github.com/AgiFlow/doompi/commit/e83e9987))
+- **web:** show background warning only when idle ([d35c2156](https://github.com/AgiFlow/doompi/commit/d35c2156))
+- recover web navigation and lint reviewer ([fb2c0336](https://github.com/AgiFlow/doompi/commit/fb2c0336))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi to 0.0.1-alpha.76
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.74
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.33
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.35
+- Updated @agimon-ai/vibe-lint-plugin-doom-web to 0.0.1-alpha.69
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.38 (2026-09-17)
 
 ### 🚀 Features

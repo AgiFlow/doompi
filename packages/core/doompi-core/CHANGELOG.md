@@ -1,3 +1,28 @@
+## 0.0.1-alpha.75 (2026-09-18)
+
+### 🚀 Features
+
+- finalize session MCP and workspace updates ([3f43e555](https://github.com/AgiFlow/doompi/commit/3f43e555))
+- add session MCP and style system support ([5912ce17](https://github.com/AgiFlow/doompi/commit/5912ce17))
+
+### 🩹 Fixes
+
+- stabilize validation checks ([316ceb31](https://github.com/AgiFlow/doompi/commit/316ceb31))
+- stabilize CI and runtime contracts ([e83e9987](https://github.com/AgiFlow/doompi/commit/e83e9987))
+- stabilize synchronized extension bundles ([97886fcd](https://github.com/AgiFlow/doompi/commit/97886fcd))
+- stabilize session runtime and desktop release ([eb07a2c3](https://github.com/AgiFlow/doompi/commit/eb07a2c3))
+- **core:** declare tanstack store at runtime ([536a056a](https://github.com/AgiFlow/doompi/commit/536a056a))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.35
+- Updated @agimon-ai/vibe-lint-plugin-doom-core to 0.0.1-alpha.6
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.74 (2026-09-17)
 
 ### 🚀 Features

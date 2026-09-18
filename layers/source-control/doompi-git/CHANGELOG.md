@@ -1,3 +1,24 @@
+## 0.0.1-alpha.11 (2026-09-18)
+
+### 🚀 Features
+
+- add author story previews and restore favicon ([e0ecf658](https://github.com/AgiFlow/doompi/commit/e0ecf658))
+
+### 🩹 Fixes
+
+- stabilize CI and runtime contracts ([e83e9987](https://github.com/AgiFlow/doompi/commit/e83e9987))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.4
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.33
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.70
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.10 (2026-09-17)
 
 ### 🧱 Updated Dependencies
