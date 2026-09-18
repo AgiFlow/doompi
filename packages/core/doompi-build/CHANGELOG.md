@@ -1,3 +1,13 @@
+## 0.0.1-alpha.4 (2026-09-18)
+
+### 🩹 Fixes
+
+- **root:** stabilize release validation and packaged builds ([1c123b97](https://github.com/AgiFlow/doompi/commit/1c123b97))
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.3 (2026-09-17)
 
 This was a version bump only for @agimon-ai/doompi-build to align it with other projects, there were no code changes.

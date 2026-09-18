@@ -1,3 +1,22 @@
+## 0.0.1-alpha.75 (2026-09-18)
+
+### 🩹 Fixes
+
+- stabilize session runtime and desktop release ([eb07a2c3](https://github.com/AgiFlow/doompi/commit/eb07a2c3))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.4
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.72
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.75
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.33
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.35
+
+### ❤️ Thank You
+
+- vuongngo
+
 ## 0.0.1-alpha.74 (2026-09-17)
 
 ### 🩹 Fixes
