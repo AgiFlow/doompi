@@ -779,6 +779,15 @@ export function pluginToolRenderer(
   );
 }
 
+/** A session-scoped renderer, or undefined until that session's verified composition is installed. */
+export function sessionToolRenderer(sessionId: string, toolName: string): ToolRendererContribution | undefined {
+  return sessionStates.get(sessionId)?.toolRenderers.get(toolName);
+}
+
+export function sessionWebPluginsInstalled(sessionId: string): boolean {
+  return sessionStates.has(sessionId);
+}
+
 /**
  * Routes one wire frame to the channel owning its type. Returns false when no
  * channel claims it, so the demux can fall through silently the way unknown

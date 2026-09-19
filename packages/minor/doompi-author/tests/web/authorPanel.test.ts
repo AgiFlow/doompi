@@ -109,6 +109,23 @@ describe('the Author web plugin', () => {
       const markup = renderToStaticMarkup(createElement(OpenAuthoringFileToolCard, { ...props, ...update }));
       expect(markup).not.toContain('open in Author');
     }
+
+    const unavailable = renderToStaticMarkup(
+      createElement(OpenAuthoringFileToolCard, { ...props, result: { content: [], details: null } }),
+    );
+    expect(unavailable).toContain('unavailable');
+    expect(unavailable).not.toContain('waiting');
+
+    const failed = renderToStaticMarkup(
+      createElement(OpenAuthoringFileToolCard, {
+        ...props,
+        result: { content: [{ type: 'text', text: 'ENOENT: missing' }], details: null },
+        output: 'ENOENT: missing',
+        isError: true,
+      }),
+    );
+    expect(failed).toContain('ENOENT: missing');
+    expect(failed).toContain('failed');
   });
 
   it('creates and focuses the successful open tool transient tab exactly once per explicit action', () => {
@@ -124,6 +141,23 @@ describe('the Author web plugin', () => {
     expect(webPlugin.toolRenderers).toEqual(
       expect.arrayContaining([expect.objectContaining({ tools: ['open_authoring_file'] })]),
     );
+    const renderer = webPlugin.toolRenderers?.find(({ tools }) => tools.includes('open_authoring_file'));
+    expect(
+      renderer?.completionTab?.({
+        sessionId: 'origin',
+        toolCallId: 'call-1',
+        args: { path: 'docs/report.md' },
+        result: { content: [], details: { path: 'docs/report.md' } },
+      }),
+    ).toMatchObject({ label: 'report.md', retainComposer: true });
+    expect(
+      renderer?.completionTab?.({
+        sessionId: 'origin',
+        toolCallId: 'call-2',
+        args: { path: 'docs/report.md' },
+        result: { content: [], details: null },
+      }),
+    ).toBeUndefined();
   });
 
   it('keeps stable visible numbers for draft and pending document regions', () => {
