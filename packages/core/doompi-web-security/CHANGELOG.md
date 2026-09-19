@@ -1,3 +1,7 @@
+## 0.0.1-alpha.37 (2026-09-19)
+
+This was a version bump only for @agimon-ai/doompi-web-security to align it with other projects, there were no code changes.
+
 ## 0.0.1-alpha.36 (2026-09-18)
 
 This was a version bump only for @agimon-ai/doompi-web-security to align it with other projects, there were no code changes.
