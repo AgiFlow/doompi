@@ -2,12 +2,12 @@
 
 [Back to DoomPi](../README.md)
 
-DoomPi has two runtime paths around the same resolved configuration.
+DoomPi resolves configuration once, then uses it in two runtime paths:
 
-- Interactive terminal launches compose Pi extensions and let Pi own extension loading, replacement, and the TUI runner.
-- Headless launches run the agent harness directly, install package contributions through DoomPi's kernel and server facets, and expose client-neutral HTTP and WebSocket services.
+- An interactive launch composes Pi extensions. Pi owns extension loading, replacement, and the TUI runner.
+- A headless launch runs the agent harness directly. DoomPi installs package contributions through its kernel and server facets, then exposes client-neutral HTTP and WebSocket services.
 
-The architecture follows five boundaries:
+Five rules keep those paths aligned:
 
 1. **One canonical selection:** launcher, synchronization, server admission, and child startup resolve the same defaults, layers, modes, and package provenance.
 2. **Each runtime owns execution:** Pi executes interactive extension factories; the headless host executes kernel contributions and server facets.
@@ -15,11 +15,11 @@ The architecture follows five boundaries:
 4. **The kernel owns headless activation:** session-scoped tools, commands, resources, hooks, restrictions, and activities are gated as one coherent selection.
 5. **Repository identity owns generated state:** synchronized artifacts are immutable and selected through a validated repository or worktree registration.
 
-This guide explains those runtime boundaries and the contributor invariants they create. [Composition and runtime bundling](bundling.md) explains the artifact pipeline in reader-facing terms.
+This guide explains who owns each part and what extension authors need to preserve. For a shorter walkthrough of the artifact pipeline, see [Composition and runtime bundling](bundling.md).
 
 ## System model
 
-Configuration resolution produces one ordered package composition and one SHA-256 fingerprint. Synchronization projects that composition into artifacts for both runtime paths:
+Configuration resolution produces an ordered package composition and a SHA-256 fingerprint. `doompi sync` turns that result into artifacts for both runtime paths:
 
 ```text
 resolved configuration and runtime selection
@@ -49,9 +49,9 @@ resolved configuration and runtime selection
              DirectHarnessRuntime
 ```
 
-An interactive Pi activation begins with `cordisHost` and ends with `cordisFinalizer`. The resolver places fixed, default, layer, and selection-specific entries in canonical order. Default packages run before packages from selected named layers.
+An interactive Pi activation starts with `cordisHost` and ends with `cordisFinalizer`. Between them, the resolver places fixed, default, layer, and selection-specific entries in canonical order. Default packages run before packages from selected named layers.
 
-The server bundle records the built server facet for each selected package, its valid scopes, ownership, and required status. A headless server admits only a synchronized bundle whose generation and fingerprint match the validated registration. Session hosts retain eligible candidates so the kernel can apply selection changes without importing a different generation.
+The server bundle records each selected package's built server facet, valid scopes, ownership, and required status. A headless server accepts the bundle only when its generation and fingerprint match the validated registration. Session hosts retain the generation's session candidates so the kernel can change selections without importing code from somewhere else.
 
 ## Configuration and package boundaries
 
@@ -67,7 +67,7 @@ The server bundle records the built server facet for each selected package, its 
 | `layers/<layer>/*`       | Selectable higher-level extensions.                                                         |
 | `packages/tooling/*`     | Repository-owned development tools that are not part of the runtime package graph.          |
 
-The published `@agimon-ai/doompi` package owns the CLI, interactive host, headless server runtime, and their fixed core dependency set. There is no standalone server package under `packages/clients`; the server entry is built and published by `@agimon-ai/doompi`. Selectable packages remain outside that private dependency closure. This keeps the distribution hosts stable while allowing a repository to choose its features.
+The published `@agimon-ai/doompi` package owns the CLI, interactive host, headless server runtime, and their fixed core dependencies. The server is not a standalone package under `packages/clients`; its entry is built and published by `@agimon-ai/doompi`. Selectable packages stay outside that private dependency closure, so a repository can change features without changing the distribution hosts.
 
 `.doom/modes.yaml` defines an optional default package list, named layers, and major modes. Configuration is resolved with these rules:
 
@@ -96,19 +96,11 @@ is billed for on every turn.
 | `skill`   | ~40 tokens                               | name, description and path; the agent reads the file when it matches the task | every file the package ships                         |
 | `prompt`  | none until invoked                       | nothing                                                                       | `/`-invoked templates                                |
 
-The rule in one line: **if it is a file the package ships, it is a `skill`.** A
-README registered as `context` costs its full length on every single turn, and
-`read()` re-runs from disk each time.
+The practical rule is simple: **if the package ships a file, register it as a `skill`.** Registering a README as `context` sends its full text on every prompt build, and its `read()` callback runs from disk each time.
 
-A `context` resource that must carry a shipped file anyway, such as a Help catalog
-index, needs a `when` clause so it stays out of the default prompt. The
-`doom-resource-kind` lint rule enforces both halves.
+If a `context` resource must carry a shipped file, such as a Help catalog index, give it a `when` clause so it stays out of the default prompt. The `doom-resource-kind` lint rule checks both requirements.
 
-Resolve shipped files with `packageResourcePath` / `readPackageResource` from
-`@agimon-ai/doompi-core/server-facet`. They anchor on the nearest ancestor
-`package.json`, which is the only sentinel correct from `src/` and `dist/` alike;
-a hand-counted `new URL('../../..', import.meta.url)` resolves into `dist/` at
-runtime and silently substitutes placeholder prose into the system prompt.
+Resolve shipped files with `packageResourcePath` or `readPackageResource` from `@agimon-ai/doompi-core/server-facet`. These helpers find the nearest ancestor `package.json`, which works from both `src/` and `dist/`. Do not hand-count parent directories with `new URL('../../..', import.meta.url)`. In a built package that can resolve inside `dist/` and quietly replace the intended prompt with fallback text.
 Selectable packages resolve from the consumer repository through normal `node_modules` lookup or Pi's project-local `.pi/npm` store. Fixed host entries may fall back to the root package dependency closure. When a required bare package is missing, DoomPi asks Pi to resolve `npm:<package-name>` and reuses the installed result. Optional packages and local paths are not installed automatically.
 
 ### Cockpit plugin source
@@ -137,19 +129,23 @@ Synchronization also scans those selected package roots for `doompiServer` decla
 
 ## Runtime artifacts and synchronization
 
-The `doompi` launcher provisions the defaults plus the active mode layers. It builds an aggregate Pi runtime bundle from the canonical activation plan and falls back to the individual ordered entries if bundling is unavailable.
+The `doompi` launcher provisions the defaults plus the active mode layers. It tries to build one aggregate Pi runtime bundle from the canonical activation plan. If that build fails, it gives Pi the same entries individually and in the same order.
 
 `doompi sync` provisions the defaults plus every declared named layer and stages one complete immutable generation in the home-scoped repository/worktree namespace. The generation contains state, Pi bootstraps and mode bundles, package resources, web assets, `server.bundle.json`, built server facets, and exported API contracts.
 
-Publication follows three steps:
+Publication has two steps:
 
-1. Build and validate every artifact. Remove the unpublished generation if this fails.
+1. Build and validate every artifact. If this fails, remove the unpublished generation.
 2. Write the validated registration atomically, so readers select a complete generation.
-3. Retain one superseded generation and attempt to remove older ones. Report cleanup failures without failing the published sync.
 
-Published artifacts are not mutated in place.
+Published artifacts are not mutated in place. Old generations remain on disk
+because a running host may still need them for a later import. Synchronization
+does not use directory age or open-file checks to decide that a generation is
+safe to remove, and it does not automatically prune old generations.
 
-Repository and worktree identities are the routing boundary. Consumers accept state only through the exact validated registration for the nearest repository. Registration validation confines paths to the generation, verifies the state hash and repository identity, and pins the DoomPi package root, npm version provenance, API version, manifest, Pi entry, and server bundle that produced it. The npm version is not the compatibility gate: releases with the same supported API version may load an intact synchronized generation. Missing, malformed, foreign, traversing, symlinked, stale, and unsupported registrations fail closed. Consumers do not guess another repository, source checkout, legacy state file, or global `current` directory.
+Repository and worktree identities are the routing boundary. A consumer accepts state only through the validated registration for the nearest repository. Validation confines paths to the generation, checks the state hash and repository identity, and pins the DoomPi package root, npm version provenance, API version, manifest, Pi entry, and server bundle that produced it.
+
+The npm version alone is not the compatibility gate. Releases that support the same API version may load an intact synchronized generation. Missing, malformed, foreign, traversing, symlinked, stale, or unsupported registrations fail closed. DoomPi does not guess another repository, a source checkout, a legacy state file, or a global `current` directory.
 
 Synchronized state maps composition fingerprints to Pi bundles and compiler manifests. Runtime admission verifies generated artifact receipts by content before reuse, while sync and `sync --check` also compare current source inputs. A producer upgrade with the same API version therefore keeps valid generated bundles runnable until an explicit sync refreshes them. The bootstrap has its own manifest. Server admission separately validates the registered server bundle's generation, descriptor, contracts, and artifact fingerprints before importing any facet. Immutable compiler artifacts may be reused through the shared cache, but publication and runtime selection remain repository-isolated.
 
@@ -177,7 +173,7 @@ Configuration, registration, and descriptor failures fail closed. The server doe
 
 ## Runtime services and lifecycle
 
-Interactive Pi and headless sessions use different execution hosts but the same ownership rule: every contribution belongs to an explicit lifecycle.
+Interactive Pi and headless sessions use different execution hosts, but the ownership rule is the same: every contribution belongs to an explicit lifecycle.
 
 In an interactive Pi runner, `cordisHost` creates the application root. Independently loaded factories discover it through the versioned `doom:cordis:host:v1:query` EventBus contract. The runtime fiber publishes long-lived services, and the session fiber is replaced on each `session_start`. `cordisFinalizer`, the last factory, shuts down the root after package shutdown handlers run.
 
@@ -191,7 +187,7 @@ Only state that must cross Pi module replacement may use `Symbol.for` storage. T
 
 ## Selection and transitions
 
-A selection is the requested major mode, domains, minor modes, profile, and package-owned state. A synchronized generation contains the artifacts needed to realize valid selections without importing code from another generation.
+A selection includes the requested major mode, domains, minor modes, profile, and package-owned state. A synchronized generation contains the artifacts needed to apply valid selections without importing code from another generation.
 
 Interactive Pi sessions classify structural changes before applying them:
 
@@ -214,7 +210,7 @@ Data crossing a child boundary uses explicit request, projection, and intercom c
 
 ## Contributor contract
 
-A standard feature declares contributions through the routed tree described in [Extension layout](extension-layout.md). `root.cli.ts` and `root.server.ts` construct scope-owned state, services, startup work, and lifecycle. Named route files own individual tools, commands, hooks, APIs, channels, methods, providers, resources, shortcuts, and frontend contributions. The build generates `definePiExtension`, `defineServerPlugin`, and `defineWebPlugin` host entries outside `src`.
+A standard feature declares contributions through the routed tree in [Extension layout](extension-layout.md). Use `root.cli.ts` and `root.server.ts` for scope-owned state, services, startup work, and lifecycle. Use named route files for individual tools, commands, hooks, APIs, channels, methods, providers, resources, shortcuts, and frontend contributions. The build generates the `definePiExtension`, `defineServerPlugin`, and `defineWebPlugin` host entries outside `src`.
 
 Every scanned route directly default-exports exactly one typed `define*` declaration. It has no named exports or freeform implementation. `extra.*`, `src/tools`, `src/controllers`, and pseudo-surfaces such as `hook-optional` or `resource-catalog` are forbidden. Non-default cardinality is declared through `defineRoutedContribution(..., { cardinality: 'optional' | 'many' | 'collection' })` on the standard surface.
 

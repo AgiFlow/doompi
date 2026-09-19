@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import { createServer, request as httpRequest, type Server } from 'node:http';
 import os from 'node:os';
@@ -7,6 +8,8 @@ import { createClientHandshake } from '@agimon-ai/doompi-web-security/node';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
 
+import { createHeadlessHub, type HeadlessHub } from '../../../../../src/server/headlessHub';
+import { serveHeadlessServer, type HeadlessServer } from '../../../../../src/server/headlessServer';
 import { createRemoteRuntime, type RemoteRuntime } from '../../../../../src/server/remoteRuntime';
 
 const PUBLIC_ORIGIN = 'https://remote.example.com';
@@ -15,9 +18,13 @@ const homes: string[] = [];
 const runtimes: RemoteRuntime[] = [];
 const protocols: WebSocketServer[] = [];
 const frontends: Server[] = [];
+const headlessServers: HeadlessServer[] = [];
+const hubs: HeadlessHub[] = [];
 
 afterEach(async () => {
   await Promise.all(runtimes.splice(0).map((runtime) => runtime.close()));
+  await Promise.all(headlessServers.splice(0).map((server) => server.close()));
+  await Promise.all(hubs.splice(0).map((hub) => hub.close()));
   await Promise.all(protocols.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
   await Promise.all(frontends.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
   for (const home of homes.splice(0)) fs.rmSync(home, { recursive: true, force: true });
@@ -74,8 +81,11 @@ function tunnel(
   body?: unknown,
   cookie?: string,
   includeOrigin = true,
+  extraHeaders: Record<string, string> = {},
 ): Promise<Response> {
   return new Promise((resolve, reject) => {
+    const form = body instanceof URLSearchParams;
+    const encodedBody = body === undefined ? undefined : form ? body.toString() : JSON.stringify(body);
     const request = httpRequest(
       {
         host: '127.0.0.1',
@@ -87,7 +97,11 @@ function tunnel(
           ...(cookie === undefined ? {} : { cookie }),
           ...(method === 'GET'
             ? {}
-            : { ...(includeOrigin ? { origin: PUBLIC_ORIGIN } : {}), 'content-type': 'application/json' }),
+            : {
+                ...(includeOrigin ? { origin: PUBLIC_ORIGIN } : {}),
+                'content-type': form ? 'application/x-www-form-urlencoded' : 'application/json',
+              }),
+          ...extraHeaders,
         },
       },
       async (response) => {
@@ -105,7 +119,7 @@ function tunnel(
       },
     );
     request.on('error', reject);
-    request.end(body === undefined ? undefined : JSON.stringify(body));
+    request.end(encodedBody);
   });
 }
 
@@ -130,6 +144,129 @@ describe('global remote control', () => {
     expect((await tunnel(port, '/api/workspaces/work/sessions/session/mcp/clients')).status).toBe(401);
     expect((await tunnel(port, '/oauth/register', 'POST', {})).status).toBe(401);
     expect(forward).toHaveBeenCalledTimes(3);
+  });
+
+  it('completes session MCP OAuth and lists tools through the public tunnel', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    hubs.push(hub);
+    hub.register({
+      workspaceId: 'test-workspace',
+      id: 'one',
+      name: 'One',
+      cwd: '/repo',
+      createdAt: 'now',
+      host: {
+        runtime: { exited: new Promise<number>(() => undefined) } as never,
+        host: undefined,
+        toolSurface: {
+          readSurface: () => ({
+            revision: 1,
+            tools: [
+              { name: 'read', label: 'Read', description: 'Read a file', parameters: { type: 'object' } as never },
+            ],
+            skills: [],
+          }),
+          invokeTool: vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'done' }] })),
+          readSkill: vi.fn(),
+        },
+        prepareFacets: () => undefined,
+        activateFacets: async () => undefined,
+        canDispatch: () => true,
+        onPresentationFrame: () => () => undefined,
+        respondToExtensionUi: () => false,
+        dispose: vi.fn(async () => undefined),
+      },
+    });
+    await hub.mountFacets([], {
+      scope: 'workspace',
+      workspaceId: 'test-workspace',
+      workspaceRoot: '/repo',
+      onNotice: vi.fn(),
+    });
+    let server!: HeadlessServer;
+    const control = runtime(async (request) => {
+      const source = new URL(request.url);
+      return fetch(new URL(`${source.pathname}${source.search}`, server.url), {
+        method: request.method,
+        headers: request.headers,
+        redirect: 'manual',
+        ...(request.method === 'GET' || request.method === 'HEAD' ? {} : { body: await request.arrayBuffer() }),
+      });
+    });
+    server = await serveHeadlessServer({
+      headlessHub: hub,
+      port: 0,
+      token: 'browser-secret',
+      sessionMcpPublicOrigin: () => control.remote.publicOrigin(),
+      sessionMcpPublicOriginRevision: () => control.remote.publicOriginRevision(),
+    });
+    headlessServers.push(server);
+    await local(control, '/api/remote/settings', 'PUT', {
+      tunnel: { kind: 'named', hostname: 'remote.example.com' },
+    });
+    expect((await local(control, '/api/remote/enable', 'POST')).status).toBe(200);
+
+    const root = '/api/workspaces/test-workspace/sessions/one/mcp';
+    const created = await fetch(`${server.url}${root}/clients`, {
+      method: 'POST',
+      headers: { 'x-doompi-token': 'browser-secret', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scope: 'session',
+        redirectUri: 'https://chatgpt.com/connector/oauth/callback',
+      }),
+    });
+    expect(created.status).toBe(201);
+    const client = (await created.json()) as {
+      client: { clientId: string; clientSecret: string; redirectUri: string };
+    };
+    const verifier = 'v'.repeat(43);
+    const authorize = new URL('/oauth/authorize', PUBLIC_ORIGIN);
+    authorize.searchParams.set('response_type', 'code');
+    authorize.searchParams.set('client_id', client.client.clientId);
+    authorize.searchParams.set('redirect_uri', client.client.redirectUri);
+    authorize.searchParams.set('code_challenge', createHash('sha256').update(verifier).digest('base64url'));
+    authorize.searchParams.set('code_challenge_method', 'S256');
+    authorize.searchParams.set('resource', `${PUBLIC_ORIGIN}${root}`);
+    authorize.searchParams.set('state', 'kept');
+    const authorized = await tunnel(control.remote.tunnelPort()!, `${authorize.pathname}${authorize.search}`);
+    expect(authorized.status).toBe(302);
+    const callback = new URL(authorized.headers.get('location')!);
+    expect(callback.origin + callback.pathname).toBe(client.client.redirectUri);
+    expect(callback.searchParams.get('state')).toBe('kept');
+    expect(callback.searchParams.get('code')).toBeTruthy();
+    expect(callback.searchParams.get('error')).toBeNull();
+
+    const token = await tunnel(
+      control.remote.tunnelPort()!,
+      '/oauth/token',
+      'POST',
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: client.client.clientId,
+        client_secret: client.client.clientSecret,
+        code: callback.searchParams.get('code')!,
+        redirect_uri: client.client.redirectUri,
+        code_verifier: verifier,
+      }),
+      undefined,
+      false,
+    );
+    expect(token.status, await token.clone().text()).toBe(200);
+    const tokens = (await token.json()) as { access_token: string };
+    const mcp = await tunnel(
+      control.remote.tunnelPort()!,
+      root,
+      'POST',
+      { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+      undefined,
+      false,
+      {
+        authorization: `Bearer ${tokens.access_token}`,
+        accept: 'application/json, text/event-stream',
+      },
+    );
+    expect(mcp.status, await mcp.clone().text()).toBe(200);
+    await expect(mcp.json()).resolves.toMatchObject({ result: { tools: [{ name: 'read' }] } });
   });
 
   it('aborts a forwarded public MCP request when the tunnel client disconnects', async () => {

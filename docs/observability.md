@@ -2,7 +2,7 @@
 
 [Back to DoomPi](../README.md)
 
-DoomPi separates live metrics from retained telemetry:
+DoomPi keeps the useful live view local to the Pi process. A sink is optional and adds history:
 
 ```text
 Pi and browser events
@@ -15,7 +15,7 @@ DoomPi Log in the Pi process ------> current-session counters and findings
                                           +-- persistent metrics and trace lookup
 ```
 
-The in-process view works without a collector. A Log Sink adds history. DoomPi ships neither a vendor collector nor a hosted dashboard, and it drops export when no endpoint is configured unless file fallback is explicitly enabled.
+The in-process view works without a collector. A Log Sink adds history. DoomPi ships neither a vendor collector nor a hosted dashboard. When no endpoint can be configured or discovered, export becomes a no-op unless file fallback is explicitly enabled.
 
 ## What each layer owns
 
@@ -38,7 +38,7 @@ pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp status
 pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp stop
 ```
 
-The default instance is scoped to the current repository and persists records in `./logs/session.db`. Run lifecycle and query commands from the same repository so they resolve the same instance. `status` prints the process, port, health URL, database path, and resolved instance.
+The default instance is scoped to the current repository and persists records in `./logs/session.db`. Run lifecycle and query commands from the same repository so they resolve the same local instance. `status` prints the process, port, health URL, database path, and resolved instance.
 
 After the sink starts, launch DoomPi normally. `/log-metrics` and `SPC h l` open the live metrics view. Headline counters work without a sink; historical top-consumer and token-burn panels require retained records.
 
@@ -67,20 +67,23 @@ The in-memory database belongs to the sink process and disappears when it stops.
 
 ## Browser telemetry
 
-The cockpit posts events to `POST /api/telemetry/browser`; the hub records them under the `doom-web` service. The route accepts at most 60 batches per minute and 10 events per batch. Any invalid event rejects the complete batch.
+The cockpit queues operational events and posts batches of up to 10 to `POST /api/telemetry/browser`.
+The queue holds at most 32 events, waits one second before sending, and backs off to at most 30 seconds
+when a request is retried.
 
-Only two shapes are accepted:
-
-- Performance events use six fixed names: `web.browser.ready`, `web.browser.protocol_ready`, `web.browser.session_socket_ready`, `web.browser.reconnect`, `web.browser.backlog`, and `web.browser.telemetry_drop`. They carry one bounded duration or count.
-- Failure events use `web.browser.error` with a fixed source, error name, bounded message, optional bounded stack, and optional session ID.
-
-Query browser records with:
+Current performance names are `web.browser.ready`, `web.browser.protocol_ready`,
+`web.browser.session_socket_ready`, `web.browser.reconnect`, `web.browser.backlog`,
+`web.browser.transcript_page`, `web.browser.transcript_render`, and `web.browser.telemetry_drop`.
+The cockpit also emits `web.browser.error` markers. The current server stores that event name, but
+not the client's source, message, stack, or session fields. All browser records use the
+`doompi-server` service. Performance records also include a non-negative duration or count. Query
+them with:
 
 ```bash
-pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs query --service doom-web --limit 20
+pnpm --filter @agimon-ai/doompi-log exec log-sink-mcp logs query --service doompi-server --limit 20
 ```
 
-## Disable collection or export
+## Disable export
 
 Set controls before starting Pi:
 
@@ -89,18 +92,20 @@ AGENT_TELEMETRY_DISABLED=1 doompi
 OTEL_SDK_DISABLED=1 doompi
 ```
 
-`AGENT_TELEMETRY_DISABLED` disables DoomPi's Pi telemetry extension. `OTEL_SDK_DISABLED` disables OpenTelemetry SDK export for the process. The metrics UI reports that collection is disabled rather than showing zero activity. `AGENT_OTEL_TRACES` controls span export separately, so disabling traces alone does not disable logs.
+`AGENT_TELEMETRY_DISABLED` and `OTEL_SDK_DISABLED` stop telemetry export. DoomPi's in-process
+aggregator still records the session events it observes, so the live metrics view can continue to show
+activity while sink status reports export as disabled. `AGENT_OTEL_TRACES` controls span export
+separately, so disabling traces alone does not disable logs.
 
 ## Data boundary
 
 Operational telemetry is not harmless merely because prompts are omitted:
 
-- Prompts, tool inputs, and results are omitted by default. `AGENT_OTEL_REDACT=0` includes them and may expose source, commands, credentials, and model content.
+- DoomPi's Pi logger does not attach prompts, tool inputs, or tool results to its operational events. Other callers can still attach sensitive values through custom attributes.
 - Records can still include session identifiers, working directory, model, tool names, token and cost totals, errors, workflow identity, and caller-supplied attributes.
-- Browser errors carry bounded free-text message and stack fields. Stack text can contain bundle paths and function names. Session IDs are hashed for correlation.
 - `./logs/session.db` outlives Pi. Protect, rotate, or remove it according to repository policy.
 - A local sink is not a sandbox. Processes that can read the repository or connect to the sink can read its records.
-- `LOG_SINK_PI_FILE_FALLBACK=1` creates another local retention surface when no endpoint exists.
+- `LOG_SINK_PI_FILE_FALLBACK=1` explicitly allows another local retention surface when no endpoint exists.
 - Standard OTLP environment variables and `LOG_SINK_ENDPOINT` can route records elsewhere. Inspect the launch environment before assuming data stays local.
 
 See [Trust and data boundaries](trust-and-data-boundaries.md#telemetry) for the repository-wide policy.

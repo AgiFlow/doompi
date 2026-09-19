@@ -8,25 +8,28 @@ A DoomPi agent may have shell access. The security architecture therefore separa
 Who can reach the listener?  -> listener, Host, and Origin policy
 Which device may act?        -> host-approved pairing and device session
 What can the relay read?     -> signed assets and sealed application traffic
-What can the agent reach?    -> optional container and mounted workspaces
+What can the agent reach?    -> host process today; container plan is not wired
 ```
 
-Authentication decides who may ask the agent to act. Sealing limits what a tunnel provider can read or change after bootstrap. Containment limits which host resources the agent can reach. A paired and encrypted session is still dangerous when it controls an uncontained shell.
+Authentication decides who may ask the agent to act. Sealing limits what a tunnel provider can read
+or change after bootstrap. A container can limit which host resources the agent reaches, but the
+current remote runtime does not wire the cockpit handover. A paired and encrypted session is still
+dangerous when it controls an uncontained shell.
 
 This guide starts with the threat model, then follows a remote request from listener classification through device proof, transport protection, and containment. [Trust and data boundaries](trust-and-data-boundaries.md) inventories executable inputs, credentials, model calls, voice, native binaries, and telemetry.
 
 ## Threat model
 
-What DoomPi is built to stop:
+What each layer is meant to do:
 
-| Threat                                                                        | Answer                                              |
-| ----------------------------------------------------------------------------- | --------------------------------------------------- |
-| A web page you visit driving your cockpit through your browser                | Origin and Host checks, upgrades refused            |
-| Anyone on the internet reaching a tunnel and using the cockpit                | Pairing, host approval, per-device sessions         |
-| A device that pairs once keeping access forever                               | Idle and absolute expiry, revoke, tunnel auto-close |
-| The tunnel provider reading or altering what the cockpit carries              | Signed bundle, sealed payload                       |
-| A paired device reading the shape of the machine through the cockpit's own UI | Directory scope on the tunnel listener              |
-| An agent reaching files nobody meant to expose                                | The container, with mounts as the boundary          |
+| Threat                                                                    | Answer                                                             |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| A web page you visit driving your cockpit through your browser            | Origin and Host checks, upgrades refused                           |
+| Anyone on the internet reaching a tunnel and using the cockpit            | Pairing, host approval, per-device sessions                        |
+| A device keeping access longer than intended                              | Revocation, remote shutdown, and opt-in idle and absolute expiry   |
+| The tunnel provider reading or altering traffic after a trusted bootstrap | Signed bundles and sealed payloads                                 |
+| A paired device browsing paths outside the intended workspaces            | No tunnel-only directory limit; use separately managed containment |
+| An agent reaching host files                                              | No active cockpit boundary in the current remote runtime           |
 
 What it is not built to stop, stated once here and again at the end: a compromised container engine,
 a hostile process already running as you, a bad model given a good prompt, or the agent destroying
@@ -49,10 +52,11 @@ These checks address browser-driven requests; they do not authenticate a hostile
 
 One Hono app runs behind two sockets.
 
-- The loopback listener is open to whoever already has an
-  account on this machine.
-- The tunnel listener faces the public internet. Except for the exact bootstrap
-  allowlist below, every request arriving there must prove it holds a paired session.
+- The loopback listener is reachable by local processes.
+- The tunnel listener faces the public internet. Cockpit requests need a paired
+  device session, apart from the bootstrap routes below. Exact session MCP and
+  OAuth routes are a separate exception: they authenticate at the application
+  layer rather than through the paired-device cookie.
 
 The guard is the first middleware on the app. Hono composes matching handlers in registration order,
 so a guard added after a terminating handler never runs for that path.
@@ -105,12 +109,15 @@ Scanning does not pair anything. It raises a request the host must approve on th
 
 The status poll carries its request ID in the query string. That ID can redeem an approved request, so it is a short-lived credential and may appear in proxy or edge logs. Keep those logs inside the same trust boundary.
 
-Guessing is not the threat at 256 bits; a scripted attempt being quiet is. Ten wrong codes a minute
-is the limit, so the eleventh is refused, and fifty failures across the life of a tunnel close the
-tunnel and say so.
+Guessing the QR token is not the practical threat at 256 bits. The separately displayed manual code
+is eight digits, so failed claims are rate-limited per reported source. The first ten failures in a
+one-minute window get the normal rejection; later attempts get a rate-limit rejection. The
+implementation does not apply a separate lifetime failure count that automatically closes the
+tunnel.
 
-The address Cloudflare's edge reports is displayed next to the request and never gates a decision.
-Any local process can reach the tunnel listener directly and set that header to anything.
+The address Cloudflare's edge reports is displayed and used to group public abuse throttling. It
+does not authenticate or approve a device. Any local process can reach the tunnel listener directly
+and set that header to anything.
 
 ### Sessions
 
@@ -118,7 +125,11 @@ Redeeming an approved request mints a 256-bit token. Only its SHA-256 is retaine
 
 The cookie is a bearer credential. `HttpOnly` prevents browser JavaScript from reading it, but same-origin code can still send requests with it. Origin checks, signed code delivery, and device revocation therefore remain part of the boundary.
 
-Session expiry is off by default. While it is off, the server accepts a paired session until the device is revoked or remote access is disabled; the browser cookie still has a thirty-day ceiling. When expiry is enabled, the configured idle and absolute limits both apply. Disabling remote access revokes every device, closes remote sockets, and clears pending pairing state.
+Session expiry is off by default. While it is off, the server accepts an in-memory paired session
+until the device is revoked, remote access is disabled, or the process restarts; the browser cookie
+still has a thirty-day ceiling, but a surviving cookie cannot restore forgotten server state. When
+expiry is enabled, the configured idle and absolute limits both apply. Disabling remote access
+revokes every device, closes remote sockets, and clears pending pairing state.
 
 ### Passkeys
 
@@ -129,20 +140,25 @@ never from a request header, because `rpID` is the entire scope of a credential.
 Three hostnames are refused rather than accepted and regretted: a quick tunnel, whose hostname
 rotates on every start, so a passkey registered now would silently stop working on the next one; an
 IP address, which WebAuthn rejects in the browser rather than here, which is a much worse place to
-find out; and anything without a dot. Signature counters are checked, so a cloned authenticator is
-detectable.
+find out; and anything without a dot. DoomPi checks a nonzero authenticator signature counter and
+revokes the credential if the counter repeats or moves backward. Many authenticators report zero,
+so this can flag some cloned credentials, not prove that every clone is detectable.
 
 ### Step-up
 
 A fresh passkey gesture is required for actions that widen machine access even when the device cookie is valid:
 
 - `provider.login` and `provider.logout`
-- `session.create`
+- `session.create` on the matched workspace admission, create, resume, and revive routes
 - `settings.write`
 - `mcp.discover` and `mcp.authorize`
 - `computer-use.activate`
 
 The assertion travels in `x-doompi-assertion`; its challenge is valid for sixty seconds. Ordinary prompting and tool approval remain on the device-session boundary. Quick tunnels cannot supply a stable relying-party ID, so passkey enrollment and step-up are unavailable there.
+
+The route matcher is the boundary, not the action name. In particular, the compatibility route
+`POST /api/sessions` is still served for older verified bundles and is not matched as
+`session.create`; a paired remote caller can reach it through the sealed gateway without step-up.
 
 ## Keeping the relay out of it
 
@@ -153,7 +169,7 @@ the cockpit carries. Two layers narrow that, both in `@agimon-ai/doompi-web-secu
 
 Every other guarantee here rests on the cockpit JavaScript being what this hub built. The package-owned `/pair` shell, scanner, manifest, and `/sw.js` verifier are built separately from plugin-generated cockpit code. The QR fragment pins both the host's ECDSA P-256 SPKI (`s`) and the minimum signed revision (`r`).
 
-The hub keeps `~/.doompi/web/signing.json` at mode `0600`. Manifest v2 signs a canonical list containing revision, path, SHA-256, byte length, and MIME type for every public asset, including `/index.html`. `webPlugins.server.json` remains outside the public asset root and is never signed or served.
+The server keeps the signing state at `~/.pi/.doom/server/signing.json` at mode `0600`. Manifest v2 signs a canonical list containing revision, path, SHA-256, byte length, and MIME type for the regular files in each published asset tree. Source maps are deliberately skipped. The shell publication includes `/index.html`; plugin compositions are signed as separate immutable publications.
 
 The worker fetches `/bundle-manifest.json`, rejects signer or revision conflicts, fetches only
 `/bundle-assets/<revision>/*`, and verifies every byte before writing a staging Cache Storage entry. Only after the complete bundle passes does it atomically commit the active revision in IndexedDB. Navigations and static requests then resolve only from that verified cache. A failed refresh retains the last-known-good bundle. Missing WebCrypto, IndexedDB, Cache Storage, a pinned signer, or a required asset is a stop, not a request to execute unverified host JavaScript.
@@ -173,51 +189,53 @@ rather than decrypted. Sends go through a serial queue, because two async seals 
 counters in one order and reach the wire in another, and the second to arrive would be read as a
 replay of the first.
 
-Because the host key arrived on a screen rather than through the relay, there is no moment at which
-the relay could substitute its own. This is the job Telegram's emoji comparison does for a secret
-chat, done automatically instead of by eye.
+The QR supplies the host key out of band, so an honest bootstrap verifier can reject a substituted
+channel key. That protection starts only after the verifier is trusted. The first pairing page and
+its package-owned JavaScript still arrive through the relay, so a relay that alters that first load
+can defeat the automatic check. This is trust on first use, not independent authentication of the
+bootstrap page.
 
 **A plugin that calls `fetch` directly sends plaintext to the relay.** Plugins use
 `sealedTransport.fetch` from that package's `./browser` subpath, which the plugin import allowlist
 admits for exactly this reason. The host cannot enforce it, which is why it is written down here.
 
-### Closed-app Web Push is live and generic
+### Closed-app Web Push is not an active server feature
 
-A paired installed PWA can register a Push subscription only through its device-bound sealed HTTP channel. The VAPID credential is stored at mode `0600`, but subscriptions live only in process memory. A host restart therefore requires an open page to re-register the browser's existing subscription. There is no database, outbox, replay, or historical delivery.
-
-The hub sends Push only for a notification frame arriving now and only when that device has no connected cockpit socket. The encrypted payload is fixed generic copy with `TTL: 0`; it contains no prompt, response, session id, file asset, or other mutable session data. Provider `404` and `410` responses remove the subscription. Browser disable, device revocation or expiry, remote shutdown, and key or process rotation also remove it.
+The web client and service worker contain Push registration and notification code, and the shared
+constants reserve `/api/remote/push` routes. The current server does not register handlers for those
+routes or create a VAPID sender. Do not rely on closed-app delivery until both halves are wired.
 
 ## Narrowing what is in reach
 
-### Directory scope
+### Directory and workspace scope
 
-While a tunnel is up, the new-session picker answers a request arriving on it from the directory
-`doompi-web` was started in and no further. Unpinned, that route hands a paired device a map of the
-machine: every project, every client name, every checkout, which is worth more to an attacker than
-most of what the cockpit shows.
+The current headless directory completion route is not narrower on the tunnel listener. Given a
+typed path, it can read candidate parent directories based on the server working directory and known
+session directories. An authenticated remote caller can reach that route through the sealed gateway.
 
-Only that request. The local picker is untouched, because the person at the keyboard already has a
-shell and pinning them would cost the picker its usefulness for nothing. A contained cockpit needs
-none of it, because its mounts are already the boundary.
+Workspace APIs make the normal UI path explicit, and admitting or creating a workspace is covered by
+step-up. They are not a filesystem sandbox. The compatibility route `POST /api/sessions` accepts a
+caller-supplied working directory and, as noted above, is not covered by the current step-up matcher.
+If host filesystem scope matters, run the server under separately managed containment. The cockpit
+container plan described below is present in source but is not connected to the current remote
+runtime.
 
-This ends casual enumeration, not directed access. `POST /api/sessions` still accepts any absolute
-path a caller already knows, which is what the container below is for.
+### The container plan and current wiring
 
-### The container
+The settings and sandbox package define an opt-in cockpit container, but the current server runtime
+does not connect it. `createRemoteAccess` needs a `requestHandover` callback and a `contained` flag;
+`createRemoteRuntime` supplies neither. Enabling remote access with cockpit containment selected
+therefore returns `This cockpit cannot hand over to a container.` No containment boundary is active
+in that path.
 
-Off by default, and tied to remote access rather than offered separately: containment is only worth
-anything if it is in place before the tunnel is.
-
-One container holds everything: the hub, every session server it spawns, every agent, and
-`cloudflared`. Not one per session. The reason is a security property rather than a convenience.
-With the hub inside, `POST /api/sessions` can only name a path that is bind-mounted, so spawning in
-an arbitrary directory is closed by construction rather than by a validation check a later refactor
-could weaken.
+The plan is still worth reading before wiring it. It puts the hub, every session server it spawns,
+every agent, and `cloudflared` in one container rather than one container per session. With the hub
+inside, `POST /api/sessions` could only name a path that is bind-mounted.
 
 The configured workspaces are mounted at their identical host paths, so absolute paths keep
 resolving. Home is a named volume, `doompi-cockpit-home`, which is where the signing key and the
-credential store live; they have to survive a restart, because a changed signing key would make
-every paired device refuse the cockpit. Deliberately absent: the host home directory, `~/.ssh`,
+container-side config and session state live; the signing state has to survive a restart, because a
+changed signing key would make every paired device refuse the cockpit. Deliberately absent: the host home directory, `~/.ssh`,
 `~/.gitconfig`, the container socket, and every repository not listed.
 
 `DOOMPI_SANDBOX_DEVCONTAINER=0` is forced. A workspace carrying a dev container configuration would
@@ -226,27 +244,33 @@ otherwise replace the whole plan with an author-controlled one that can mount an
 One port is published, `127.0.0.1:<port>:<port>`, with the hub binding `0.0.0.0` inside because the
 engine forwards to the container's external interface rather than its loopback.
 
-Two things cross the boundary and nothing else does. Provider credentials go through the existing
-broker, which hands the container a per-session token in place of every real key and withholds
-credentials for providers it does not carry. Git identity is passed as `GIT_AUTHOR_*` and
-`GIT_COMMITTER_*`, so an agent can commit and cannot push, because no key crosses.
+The default plan crosses more than two things: configured workspaces, an allowlisted environment,
+Git identity when available, the published loopback port, and the persistent container home. It also
+allows network access. The current cockpit handover does not wire the provider broker into its
+container plan, so allowlisted `*_API_KEY`, `*_AUTH_TOKEN`, and `*_BASE_URL` values can cross directly.
+Do not treat cockpit containment as a credential boundary.
 
-The handover happens on the same port. The host answers the request in full before it stands down,
-then starts the container and recreates the sessions working inside a mounted workspace. Sessions
-working anywhere else are named in the terminal and left on the host, where the contained cockpit
-cannot see them. A container that fails to start rolls back to the host cockpit, sessions and all.
+Git identity is passed as `GIT_AUTHOR_*` and `GIT_COMMITTER_*`; the host `~/.ssh` and `~/.gitconfig`
+are not mounted by the default plan. That removes common host Git credentials, but it does not prove
+that pushing is impossible. A mounted workspace, an environment value, an operator run flag, or a
+credential created inside the container can still make a push possible.
+
+Those are properties of the plan and harness, not observed behavior of the current server launch.
+There is no handover or rollback path wired into the server runtime today.
 
 ## Defaults
 
-Remote access, tunnel auto-close, session expiry, and containment are opt-in. Host approval is always required for a new pairing.
+Remote access, tunnel auto-close, and session expiry are opt-in. The containment
+setting also defaults to off, but the current runtime cannot complete its container
+handover. Host approval is always required for a new pairing.
 
-| Setting           | Default | Why                                                                                                   |
-| ----------------- | ------- | ----------------------------------------------------------------------------------------------------- |
-| Remote access     | off     | Nothing is reachable beyond loopback until it is enabled                                              |
-| Tunnel auto-close | off     | A tunnel remains open until closed or the hub restarts                                                |
-| Session expiry    | off     | Server sessions remain valid until revocation or remote shutdown; the cookie has a thirty-day ceiling |
-| Container         | off     | Containment requires a container engine and an explicit workspace list                                |
-| Host approval     | always  | Scanning a code creates a request; it never pairs a device by itself                                  |
+| Setting           | Default | Why                                                                                                      |
+| ----------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| Remote access     | off     | Nothing is reachable beyond loopback until it is enabled                                                 |
+| Tunnel auto-close | off     | A tunnel remains open until closed or the hub restarts                                                   |
+| Session expiry    | off     | In-memory sessions last until revocation, remote shutdown, or restart; the cookie ceiling is thirty days |
+| Container         | off     | The plan requires an engine and workspace list, but current server wiring cannot hand over               |
+| Host approval     | always  | Scanning a code creates a request; it never pairs a device by itself                                     |
 
 ## What an attacker still gets
 
@@ -255,11 +279,13 @@ Remote access, tunnel auto-close, session expiry, and containment are opt-in. Ho
   group.
 - **`DOOMPI_SANDBOX_RUN_FLAGS` validates shape, not meaning.** It accepts any `--flag=value`, so
   `--volume=/:/host` passes. It is an operator escape hatch, not a boundary.
-- **Sessions share one container** and can read each other's mounted workspaces. Session-to-session
-  isolation is out of scope; one boundary against the host is the point.
-- **A mounted workspace is fully writable.** The agent can still destroy the repository it was given. The container protects everything else, not that.
-- **Network access is unrestricted**, as it already is for `doompi --sandbox`. An agent can reach
-  anything the host can reach.
+- **The available plan puts sessions in one container**, so they can read each other's mounted
+  workspaces. This matters if the handover is wired by a future runtime or another caller.
+- **A mounted workspace is fully writable.** The agent can still destroy the repository it was given.
+  The default mount plan omits other host paths, but the engine, environment, network, and operator
+  run flags remain separate escape routes from that assumption.
+- **Network access is not restricted by DoomPi**, as it already is for `doompi --sandbox`. The
+  container engine and host network configuration decide what destinations are reachable.
 - **The relay still sees traffic shape.** Timing, message sizes, and connection patterns survive the
   sealed channel.
 - **The first page load is trust-on-first-use.** The pairing page itself is delivered by Cloudflare.
@@ -271,20 +297,21 @@ Remote access, tunnel auto-close, session expiry, and containment are opt-in. Ho
 
 Kept short on purpose: a security claim you cannot check is a slogan.
 
-| Concern                      | File                                                             |
-| ---------------------------- | ---------------------------------------------------------------- |
-| Listener, origin, allowlist  | `packages/clients/doompi-web/src/services/remoteGuardPolicy.ts`  |
-| The guard middleware         | `packages/clients/doompi-web/src/adapters/remoteGuard.ts`        |
-| Pairing handshake            | `packages/clients/doompi-web/src/services/pairingFlow.ts`        |
-| Device sessions              | `packages/clients/doompi-web/src/adapters/deviceAuth.ts`         |
-| Passkeys and step-up         | `packages/clients/doompi-web/src/services/webauthnPolicy.ts`     |
-| Bundle signing               | `packages/core/doompi-web-security/src/adapters/bundleSigner.ts` |
-| Worker verification          | `packages/clients/doompi-web/src/pwa/serviceWorker.ts`           |
-| Signed publication routes    | `packages/clients/doompi-web/src/adapters/bundlePublication.ts`  |
-| Sealed channel               | `packages/core/doompi-web-security/src/types/sealedChannel.ts`   |
-| Live Web Push                | `packages/clients/doompi-web/src/adapters/webPush.ts`            |
-| Sealed session file delivery | `packages/clients/doompi-web/src/services/fileMedia.ts`          |
-| Container plan               | `layers/sandbox/doompi-sandbox/src/services/cockpitPlan.ts`      |
+| Concern                       | File                                                                   |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| Listener, origin, allowlist   | `packages/core/doompi-core/src/services/remoteGuardPolicy/index.ts`    |
+| Guard and sealed HTTP gateway | `packages/core/doompi-core/src/server/remoteRuntime.ts`                |
+| Pairing handshake             | `packages/core/doompi-core/src/services/pairingFlow/index.ts`          |
+| Device sessions               | `packages/core/doompi-core/src/services/deviceAuth/index.ts`           |
+| Passkeys and step-up          | `packages/core/doompi-core/src/services/webauthnPolicy/index.ts`       |
+| Bundle signing                | `packages/core/doompi-web-security/src/services/bundleSigner/index.ts` |
+| Worker verification           | `packages/clients/doompi-web/src/pwa/serviceWorker.ts`                 |
+| Signed publication routes     | `packages/core/doompi-core/src/services/webCompositions/index.ts`      |
+| Sealed channel                | `packages/core/doompi-web-security/src/types/sealedChannel.ts`         |
+| Session file response         | `packages/core/doompi-core/src/server/headlessServer.ts`               |
+| Browser Blob URL              | `packages/clients/doompi-web/src/web/lib/sessionAsset.ts`              |
+| Container plan                | `layers/sandbox/doompi-sandbox/src/services/cockpitPlan/index.ts`      |
+| Container launch              | `layers/sandbox/doompi-sandbox/src/services/cockpitHarness/index.ts`   |
 
-The policy files are pure and have no I/O, so the whole trust boundary is readable in one sitting
-and testable without a server. That is why they are shaped that way.
+The policy modules keep most decisions free of I/O and close to the adapters that enforce them.
+Start with the policy, then check the runtime wiring before treating a claim as a boundary.

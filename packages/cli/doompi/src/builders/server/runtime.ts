@@ -277,7 +277,10 @@ export async function runServerRuntime(options: ServeOptions, runtime: ServerRun
           const from = new URL(request.url);
           const headers = new Headers(request.headers);
           headers.set('x-doompi-token', attachToken);
-          return fetch(new URL(`${from.pathname}${from.search}`, cockpit.url), new Request(request, { headers }));
+          return fetch(
+            new URL(`${from.pathname}${from.search}`, cockpit.url),
+            new Request(request, { headers, redirect: 'manual' }),
+          );
         },
         connectProtocol: (pathname) => {
           if (!cockpit || !attachToken) throw new Error('The headless protocol listener is not ready.');
