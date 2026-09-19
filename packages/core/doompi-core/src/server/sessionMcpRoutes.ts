@@ -6,7 +6,7 @@ import {
   type SessionMcpClient,
 } from '../services/sessionMcpAuthorization';
 import type { HeadlessHub, HeadlessHubSession } from './headlessHub';
-import { createSessionMcpHttpHandler } from './sessionMcpHandler';
+import { createSessionMcpHttpHandler, type SessionMcpHttpHandler } from './sessionMcpHandler';
 
 const AUTHORIZATION_SERVER_DISCOVERY = '/.well-known/oauth-authorization-server';
 const AUTHORIZE_ROUTE = '/oauth/authorize';
@@ -85,7 +85,10 @@ function publicClient(client: SessionMcpClient, binding: SessionMcpAuthorization
 /** Routes the process-local session MCP authority and revokes every grant with its live incarnation. */
 export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): SessionMcpRoutes {
   const authorization = options.authorization ?? createSessionMcpAuthorizationService();
-  const incarnations = new Map<string, { host: HeadlessHubSession['host']; generation: number }>();
+  const incarnations = new Map<
+    string,
+    { host: HeadlessHubSession['host']; generation: number; handlers: Map<string, SessionMcpHttpHandler> }
+  >();
   let nextGeneration = 1;
 
   const revokeIncarnation = (sessionId: string, generation: number): void => {
@@ -95,7 +98,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
     const current = incarnations.get(session.id);
     if (current?.host === session.host) return;
     if (current !== undefined) revokeIncarnation(session.id, current.generation);
-    incarnations.set(session.id, { host: session.host, generation: nextGeneration++ });
+    incarnations.set(session.id, { host: session.host, generation: nextGeneration++, handlers: new Map() });
   };
   for (const session of options.headlessHub.snapshot()) register(session);
   const unsubscribe = options.headlessHub.onEvent((event) => {
@@ -118,6 +121,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       (revision !== undefined && observedOriginRevision !== undefined && revision !== observedOriginRevision)
     ) {
       for (const client of authorization.listClients()) authorization.revokeClient(client.clientId);
+      for (const incarnation of incarnations.values()) incarnation.handlers.clear();
     }
     observedOrigin = current;
     observedOriginRevision = revision;
@@ -143,18 +147,22 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
       const exactPath = sessionPath(workspaceId, sessionId);
       if (url.pathname !== exactPath || url.search !== '') return json(404, { error: 'Not found.' });
       const audience = `${configuredOrigin}${exactPath}`;
-      const handler = createSessionMcpHttpHandler({
-        audience,
-        authorization,
-        resourceMetadataUrl: `${configuredOrigin}/.well-known/oauth-protected-resource${exactPath}`,
-        resolveSession: (grantedSessionId) => {
-          if (grantedSessionId !== sessionId) return undefined;
-          const resolved = target(workspaceId, sessionId);
-          return resolved === undefined
-            ? undefined
-            : { generation: resolved.generation, toolSurface: resolved.session.host.toolSurface };
-        },
-      });
+      const handlers = target(workspaceId, sessionId) === undefined ? undefined : incarnations.get(sessionId)?.handlers;
+      const handler =
+        handlers?.get(audience) ??
+        createSessionMcpHttpHandler({
+          audience,
+          authorization,
+          resourceMetadataUrl: `${configuredOrigin}/.well-known/oauth-protected-resource${exactPath}`,
+          resolveSession: (grantedSessionId) => {
+            if (grantedSessionId !== sessionId) return undefined;
+            const resolved = target(workspaceId, sessionId);
+            return resolved === undefined
+              ? undefined
+              : { generation: resolved.generation, toolSurface: resolved.session.host.mcpSurface };
+          },
+        });
+      handlers?.set(audience, handler);
       return handler(new Request(audience, request));
     }
 
@@ -286,7 +294,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         if (configuredOrigin === undefined) return json(503, { error: 'Session MCP public origin is unavailable.' });
         let surface;
         try {
-          surface = resolved.session.host.toolSurface.readSurface();
+          surface = resolved.session.host.mcpSurface.readSurface();
         } catch {
           return json(409, { error: 'The session capability surface is not ready.' });
         }
@@ -336,7 +344,7 @@ export function createSessionMcpRoutes(options: SessionMcpRoutesOptions): Sessio
         if (scope === 'restricted') {
           let surface;
           try {
-            surface = resolved.session.host.toolSurface.readSurface();
+            surface = resolved.session.host.mcpSurface.readSurface();
           } catch {
             return json(409, { error: 'The session capability surface is not ready.' });
           }

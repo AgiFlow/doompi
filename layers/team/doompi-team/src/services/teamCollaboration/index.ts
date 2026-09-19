@@ -1,4 +1,4 @@
-import { DOOM_BACKGROUND_WORK_SERVICE, type DoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
+import { readDoomBackgroundWorkService, type DoomBackgroundWorkService } from '@agimon-ai/doompi-core/background-work';
 import {
   DOOM_CORDIS_SESSION_SERVICE,
   requireDoomCordisSession,
@@ -24,7 +24,6 @@ import { DOOM_FABLE_PLAN_SERVICE, type DoomFablePlanService } from '../../schema
 import { DOOM_SUBAGENT_POLICY_SERVICE, type DoomSubagentPolicyService } from '../../schemas/subagentPolicy';
 import type { SubagentCapabilityPolicyStore } from '../../schemas/team/capabilityCeiling';
 import type { AsyncJobTracker } from '../asyncJobTracker';
-import { createBackgroundWorkService } from '../backgroundWorkService';
 import type { DelegationBridge, DelegationSessionContext } from '../delegationBridge';
 import { registerDirectRunBackgroundWork } from '../directRunBackgroundWork';
 import type { FablePlanBridge } from '../fablePlanBridge';
@@ -51,7 +50,8 @@ export type TeamDelegationObservation =
 
 /** Mount every Team-owned collaboration capability in one session fiber. */
 export function teamCollaborationPlugin(ctx: Context, config: TeamCollaborationPluginConfig): void {
-  const backgroundWork: DoomBackgroundWorkService = createBackgroundWorkService(ctx);
+  const backgroundWork: DoomBackgroundWorkService | undefined = readDoomBackgroundWorkService(ctx);
+  if (backgroundWork === undefined) throw new Error('Team requires the DoomPi Session foundation.');
   const subagentPolicy: DoomSubagentPolicyService = createSubagentPolicyService(config.policies);
   const delegation: DoomDelegationService = config.delegation.createService(ctx, config.session);
   const fablePlan: DoomFablePlanService = config.fablePlan.createService({
@@ -61,7 +61,6 @@ export function teamCollaborationPlugin(ctx: Context, config: TeamCollaborationP
     environment: config.session.environment,
   });
 
-  ctx.provide(DOOM_BACKGROUND_WORK_SERVICE, backgroundWork);
   ctx.provide(DOOM_SUBAGENT_POLICY_SERVICE, subagentPolicy);
   ctx.provide(DOOM_DELEGATION_SERVICE, delegation);
   ctx.provide(DOOM_FABLE_PLAN_SERVICE, fablePlan);

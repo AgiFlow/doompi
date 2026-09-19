@@ -1,6 +1,7 @@
 import { defineRoot, type RootDeclaration } from '@agimon-ai/doompi-core/extension-file';
 import type { DoomServerPluginContext, DoomServerSessionPlugin } from '@agimon-ai/doompi-core/server-facet';
 
+import { mountMcpTools } from '../../../../services/mcpTools';
 import { api } from '../../../../services/planApi';
 import { createPlanServerSession } from '../../../../services/planServerSession';
 
@@ -10,6 +11,9 @@ export default defineRoot(
       api: [api],
       ...(agent ? createPlanServerSession(agent) : {}),
     };
-    return { value, services: value.services };
+    return {
+      value,
+      services: [...(value.services ?? []), ...(value.tools?.length ? [mountMcpTools(value.tools)] : [])],
+    };
   },
 );

@@ -205,7 +205,7 @@ export function createVoiceServer(
     muted: mode.microphoneMuted,
     ...(mode.activationError ? { error: mode.activationError } : {}),
   });
-  const control = async (action: string, target?: number) => {
+  const control = async (action: string, target?: number, revision?: string) => {
     host.assertActive();
     if (action === 'manual') {
       if (mode.state !== 'disabled') throw new Error('Stop autonomous voice before manual dictation.');
@@ -223,7 +223,8 @@ export function createVoiceServer(
     } else if (action === 'mute' || action === 'unmute') mode.setMicrophoneMuted(action === 'mute');
     else if (action === 'interrupt') mode.interruptSpeech();
     else if (action === 'transfer') {
-      if (!target || !ownership.handoff(target)) throw new Error('Choose an available voice session target.');
+      if (!target || !revision || !ownership.handoff(target, revision))
+        throw new Error('Choose a target from the current revision-bound Voice catalog.');
       await bridge.synchronize();
     } else if (action !== 'status') throw new Error(`Unknown voice action: ${action}`);
     return status();
@@ -353,17 +354,25 @@ export function createVoiceServer(
     {
       when,
       name: 'transfer_voice',
-      description: 'Transfer voice to an available session by its catalog order.',
+      get description() {
+        const snapshot = ownership.snapshot();
+        const targets = snapshot.targets.map((target) => `${String(target.order)}. ${target.label}`).join('\n');
+        return `Transfer voice using catalog revision ${snapshot.catalogRevision ?? '(unavailable)'}.\n${targets || '(no eligible targets)'}`;
+      },
       parameters: {
         type: 'object',
-        properties: { target: { type: 'integer', minimum: 1 } },
-        required: ['target'],
+        properties: {
+          target: { type: 'integer', minimum: 1 },
+          revision: { type: 'string', minLength: 1, maxLength: 128 },
+        },
+        required: ['target', 'revision'],
         additionalProperties: false,
       },
       async execute(_id: string, input: unknown) {
         const refused = voiceInactive();
         if (refused) return refused;
-        return result(await control('transfer', (input as { target: number }).target));
+        const transfer = input as { target: number; revision: string };
+        return result(await control('transfer', transfer.target, transfer.revision));
       },
     },
   ];
@@ -377,7 +386,9 @@ export function createVoiceServer(
         });
       },
     ],
-    methods: [defineServerMethod(voiceControlMethod, ({ action, target }) => control(action, target))],
+    methods: [
+      defineServerMethod(voiceControlMethod, ({ action, target, revision }) => control(action, target, revision)),
+    ],
     api: [
       {
         basePath: VOICE_API_BASE_PATH,
@@ -394,7 +405,7 @@ export function createVoiceServer(
               try {
                 const body: unknown = await request.json();
                 if (!Check(voiceControlMethod.input, body)) throw new Error('Invalid voice control request.');
-                return Response.json(await control(body.action, body.target));
+                return Response.json(await control(body.action, body.target, body.revision));
               } catch (error) {
                 return Response.json({ error: String(error) }, { status: 409 });
               }

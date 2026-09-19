@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
+import { build } from 'tsdown';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { defaultPluginId, generateExtension } from '../src/services/generate';
@@ -121,7 +123,7 @@ describe('generateExtension', () => {
       {
         path: 'src/extensions/(frontend)/tab/Panel.ios.tsx',
         message:
-          "'ios' is a forward-looking platform with no build target; this file is not emitted for cli, server or web",
+          "'ios' is a forward-looking platform with no build target; this file is not emitted for cli, server, web or mcp",
       },
     ]);
     expect(read(dir, 'generated/web.ts')).not.toContain('Panel.ios');
@@ -149,6 +151,94 @@ describe('generateExtension', () => {
 });
 
 describe('doompiExtension', () => {
+  it('removes the final MCP target without passing an empty entry to tsdown', async () => {
+    const file = 'src/extensions/workspaces/sessions/(backend)/tool/example.mcp.ts';
+    const dir = packageWith({
+      [file]: EMPTY,
+      'dist/extensions/mcp.mjs': EMPTY,
+      'dist/extensions/mcp.cjs.map': EMPTY,
+      'dist/extensions/mcp.d.mts': EMPTY,
+      'dist/extensions/mcp.d.cts.map': EMPTY,
+      'dist/extensions/pi.mjs': EMPTY,
+      'generated/pi.ts': EMPTY,
+    });
+    const config = doompiExtension({ packageDir: dir, target: 'mcp' });
+    expect(Array.isArray(config)).toBe(false);
+    if (Array.isArray(config)) throw new Error('expected MCP config');
+    config.hooks['build:done']();
+    expect(JSON.parse(read(dir, 'package.json')).doompiMcp).toBeDefined();
+    // Simulate the artifacts emitted by the first build.
+    for (const suffix of ['mjs', 'cjs.map', 'd.mts', 'd.cts.map']) {
+      fs.writeFileSync(path.join(dir, `dist/extensions/mcp.${suffix}`), EMPTY);
+    }
+    fs.rmSync(path.join(dir, file));
+    const empty = doompiExtension({ packageDir: dir, target: 'mcp' });
+    expect(Array.isArray(empty)).toBe(false);
+    if (Array.isArray(empty)) throw new Error('expected no-op MCP config');
+    expect(empty.write).toBe(false);
+    await build({ ...empty, cwd: dir, config: false, logLevel: 'silent' });
+    expect(JSON.parse(read(dir, 'package.json')).doompiMcp).toBeUndefined();
+    expect(exists(dir, 'generated/mcp.ts')).toBe(false);
+    expect(fs.readdirSync(path.join(dir, 'dist/extensions'))).toEqual(['pi.mjs']);
+    expect(read(dir, 'generated/pi.ts')).toBe(EMPTY);
+  });
+
+  it('keeps normal unbundled modules after an MCP-only build', async () => {
+    const dir = packageWith({
+      'src/exports/index.ts': "export { cliValue } from '../services/shared';\n",
+      'src/services/shared.ts': "export const cliValue = 'cli';\nexport const mcpValue = 'mcp';\n",
+      'src/extensions/workspaces/sessions/(backend)/tool/example.mcp.ts':
+        "import { mcpValue } from '../../../../../services/shared';\nexport default mcpValue;\n",
+    });
+    const normal = doompiExtension({ packageDir: dir });
+    const mcp = doompiExtension({ packageDir: dir, target: 'mcp' });
+    expect(Array.isArray(normal)).toBe(false);
+    expect(Array.isArray(mcp)).toBe(false);
+    if (Array.isArray(normal) || Array.isArray(mcp)) throw new Error('expected node configs');
+
+    await build({ ...normal, cwd: dir, config: false, dts: false, logLevel: 'silent' });
+    await build({ ...mcp, cwd: dir, config: false, dts: false, logLevel: 'silent' });
+
+    expect(exists(dir, 'dist/extensions/mcp.mjs')).toBe(true);
+    await expect(import(pathToFileURL(path.join(dir, 'dist/index.mjs')).href)).resolves.toMatchObject({
+      cliValue: 'cli',
+    });
+  });
+
+  it('cleans renamed MCP modules and maps while preserving normal build outputs', () => {
+    const dir = packageWith({
+      'src/extensions/workspaces/sessions/(backend)/tool/renamed.mcp.ts': EMPTY,
+      'dist/extensions/mcp.mjs': EMPTY,
+      'dist/tool/deleted.mcp.mjs': EMPTY,
+      'dist/tool/deleted.mcp.mjs.map': EMPTY,
+      'dist/tool/deleted.mcp.d.mts': EMPTY,
+      'dist/tool/deleted.mcp.d.mts.map': EMPTY,
+      'dist/tool/deleted.mcp.cjs': EMPTY,
+      'dist/tool/deleted.mcp.d.cts': EMPTY,
+      'dist/tool/normal.server.mjs': EMPTY,
+      'dist/tool/mcp.mjs': EMPTY,
+      'dist/tool/deleted.mcp.json': EMPTY,
+      'dist/index.mjs': EMPTY,
+    });
+    const config = doompiExtension({ packageDir: dir, target: 'mcp' });
+    expect(Array.isArray(config)).toBe(false);
+    expect(read(dir, 'generated/mcp.ts')).toContain('renamed.mcp');
+    expect(fs.readdirSync(path.join(dir, 'dist/tool')).sort()).toEqual([
+      'deleted.mcp.json',
+      'mcp.mjs',
+      'normal.server.mjs',
+    ]);
+    expect(read(dir, 'dist/index.mjs')).toBe(EMPTY);
+  });
+
+  it('does not clean outputs or change metadata in check mode', () => {
+    const dir = packageWith({ 'dist/extensions/mcp.mjs': EMPTY });
+    const manifest = read(dir, 'package.json');
+    expect(doompiExtension({ packageDir: dir, target: 'mcp', check: true })).toMatchObject({ write: false });
+    expect(read(dir, 'dist/extensions/mcp.mjs')).toBe(EMPTY);
+    expect(read(dir, 'package.json')).toBe(manifest);
+  });
+
   it('generates ignored entries during CI builds unless check mode is explicit', () => {
     const dir = packageWith({
       'src/extensions/(backend)/tool/grep.cli.ts': EMPTY,

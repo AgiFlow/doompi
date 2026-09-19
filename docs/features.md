@@ -26,10 +26,12 @@ The catalog below is grouped by architectural role rather than npm location. See
 
 ### Fixed host packages
 
-The root package carries the fixed host foundation:
+The root package carries the fixed host foundation. These packages are installed with the host rather than selected through `default.packages`:
 
 - [`@agimon-ai/doompi-config`][pkg-doompi-config] validates `config.yaml` and publishes selection state.
 - [`@agimon-ai/doompi-domain`][pkg-doompi-domain], [`@agimon-ai/doompi-major-mode`][pkg-doompi-major-mode], and [`@agimon-ai/doompi-profile`][pkg-doompi-profile] own the three selection axes and their transitions.
+- [`@agimon-ai/doompi-minor-mode`][pkg-doompi-minor-mode] owns minor-mode definitions, actions, projections, and reload state.
+- [`@agimon-ai/doompi-session`][pkg-doompi-session] coordinates session-scoped background work and durable same-hub message delivery.
 - [`@agimon-ai/doompi-skill`][pkg-doompi-skill] builds the session skill catalog and deferred skill browser.
 - [`@agimon-ai/doompi-cache`][pkg-doompi-cache] applies provider prompt-cache policy and deterministic routing.
 - [`@agimon-ai/doompi-autostop`][pkg-doompi-autostop] shuts down an interactive automation session after the agent settles when `--auto-stop` is active.
@@ -37,6 +39,7 @@ The root package carries the fixed host foundation:
 - [`@agimon-ai/doompi-core`][pkg-doompi-core] defines the shared Cordis services, events, lifecycle host, and serialization contracts.
 - [`@agimon-ai/doompi-core/kernel`][pkg-doompi-core-kernel] holds the layer-gated contribution registry that recomposes a host surface without a reload.
 - [`@agimon-ai/doompi-ui`][pkg-doompi-ui] provides the shared TUI and Leader services.
+- [`@agimon-ai/doompi-web-security`][pkg-doompi-web-security] defines the sealed cockpit channel and signed bundle manifest shared by the hub, browser, and web plugins.
 - [`@agimon-ai/doompi-telemetry`][pkg-doompi-telemetry] is the library-level telemetry adapter. Export requires a configured or discovered endpoint, unless local file fallback is explicitly enabled.
 
 These packages are not selected through `default.packages`. Selectable packages stay outside the root package's private dependency closure.
@@ -76,9 +79,9 @@ behaviour, untouched.
 
 In the cockpit the same library is a `Prompt template` entry in the composer's `+` menu, served by a
 hub-scoped API over the same directory. The entry opens a dialog over the conversation: picking a
-prompt sends it to the focused session, and the dialog also creates, edits, renames and deletes
-entries.
-prompts stay in the terminal, since they live in the memory of the session that received them.
+prompt sends it to the focused session, and the dialog also creates, edits, renames, and deletes
+entries. Recent staged prompts stay in the terminal because they live only in the memory of the
+session that received them.
 
 ## Coordinated work
 
@@ -137,9 +140,10 @@ two catalog groups:
 - **How to author:** `doompi-author-extension`, `doompi-author-config`,
   `doompi-author-major-mode`, `doompi-author-domain`, `doompi-author-profile`,
   `doompi-author-hook`, `doompi-author-workflow`, and `doompi-author-skill`.
-- **How to use:** `doompi-use-help`, `doompi-use-voice`, `doompi-use-plan`, `doompi-use-goal`,
-  `doompi-use-loop`, `doompi-use-workflow`, `doompi-use-runner`, `doompi-use-mcp`, and
-  `doompi-use-skill`.
+- **How to use:** `doompi-use-author`, `doompi-use-cache`, `doompi-use-computer-use`,
+  `doompi-use-goal`, `doompi-use-help`, `doompi-use-loop`, `doompi-use-mcp`, `doompi-use-plan`,
+  `doompi-use-prompt`, `doompi-use-runner`, `doompi-use-skill`, `doompi-use-voice`, and
+  `doompi-use-workflow`.
 
 The exact set follows the packages active in that composition. Parent and detached-child sessions
 both include the Help runtime. A child receives only contributions from packages activated in that
@@ -183,9 +187,9 @@ Turn it on when the approach should be settled before the files move.
 ### Loop mode
 
 [`@agimon-ai/doompi-loop`][pkg-doompi-loop] is an in-session scheduler. It runs a prompt immediately
-and then repeats it on an interval; several loops can coexist. Use `SPC l s` to start one and
-`SPC l l` to list or stop them. It is for recurring checks and prompts that belong to the current
-session.
+and then repeats it on an interval; several loops can coexist. The default interval is 300 seconds,
+and accepted values range from 30 to 3,600 seconds. Use `SPC l s` to start one and `SPC l l` to list
+or stop them. Loop state ends with the session and does not restart when a transcript is resumed.
 
 ### Goal mode
 
@@ -197,10 +201,27 @@ you want to restart one.
 ### Workflow mode
 
 [`@agimon-ai/doompi-workflow`][pkg-doompi-workflow] runs GitHub Actions-style job graphs with
-dependencies, timeouts, artifacts, and a separate DoomPi session for each step. Use `SPC w l` to
-browse the repository's workflows and launch one with `r`, `SPC w r` to inspect this session's runs,
-`SPC w c` to recover a failed run, and `SPC w e` to give the agent workflow tools or take them back. It is for work that needs hard job boundaries and explicit
-handoffs rather than one long conversation.
+dependencies, timeouts, artifacts, and a separate DoomPi session for each interactive step. Use
+`SPC w l` to browse the repository's workflows and launch one with `r`, `SPC w r` to inspect this
+session's runs, `SPC w c` to recover a failed run, and `SPC w e` to give the agent workflow tools or
+take them back. Registry data defaults to `~/.workflow-mcp`, and the default concurrency limit is
+five runs. Host steps are not sandboxed. Use Workflow for hard job boundaries and explicit handoffs
+rather than one long conversation.
+
+### Author mode
+
+[`@agimon-ai/doompi-author`][pkg-doompi-author] gives an active session three bounded tools for focused
+document review in the cockpit. It can open a repository-relative file, inspect the current viewport
+capability catalog, and invoke one advertised capability. Document content is treated as data, not as
+agent instructions, and the tools stay unavailable until Author mode is active.
+
+### Computer Use mode
+
+[`@agimon-ai/doompi-computer-use`][pkg-doompi-computer-use] controls one authorized DoomPi Desktop
+window through semantic observations and actions. Its optional `computer_exec` tool runs only scripts
+from explicitly allowed paths, but those scripts are trusted Node.js code and are not sandboxed. Only
+one session can hold an active Desktop run, and browser clients cannot call its observation or action
+routes.
 
 ### Voice mode
 
@@ -233,10 +254,13 @@ available, and the same model continues to provide bounded command correction.
 [pkg-doompi-config]: https://www.npmjs.com/package/@agimon-ai/doompi-config
 [pkg-doompi-domain]: https://www.npmjs.com/package/@agimon-ai/doompi-domain
 [pkg-doompi-major-mode]: https://www.npmjs.com/package/@agimon-ai/doompi-major-mode
+[pkg-doompi-minor-mode]: https://www.npmjs.com/package/@agimon-ai/doompi-minor-mode
 [pkg-doompi-notification]: https://www.npmjs.com/package/@agimon-ai/doompi-notification
 [pkg-doompi-profile]: https://www.npmjs.com/package/@agimon-ai/doompi-profile
+[pkg-doompi-session]: https://www.npmjs.com/package/@agimon-ai/doompi-session
 [pkg-doompi-skill]: https://www.npmjs.com/package/@agimon-ai/doompi-skill
 [pkg-doompi-ui]: https://www.npmjs.com/package/@agimon-ai/doompi-ui
+[pkg-doompi-web-security]: https://www.npmjs.com/package/@agimon-ai/doompi-web-security
 [pkg-doompi-hashline]: https://www.npmjs.com/package/@agimon-ai/doompi-hashline
 [pkg-doompi-core-kernel]: https://www.npmjs.com/package/@agimon-ai/doompi-core
 [pkg-doompi-hook]: https://www.npmjs.com/package/@agimon-ai/doompi-hook
@@ -263,6 +287,8 @@ available, and the same model continues to provide bounded command correction.
 [pkg-doompi-mcp]: https://www.npmjs.com/package/@agimon-ai/doompi-mcp
 [pkg-doompi-user-feedback]: https://www.npmjs.com/package/@agimon-ai/doompi-user-feedback
 [pkg-log-sink-mcp]: https://www.npmjs.com/package/@agimon-ai/log-sink-mcp
+[pkg-doompi-author]: https://www.npmjs.com/package/@agimon-ai/doompi-author
+[pkg-doompi-computer-use]: https://www.npmjs.com/package/@agimon-ai/doompi-computer-use
 [pkg-doompi-plan]: https://www.npmjs.com/package/@agimon-ai/doompi-plan
 [pkg-doompi-loop]: https://www.npmjs.com/package/@agimon-ai/doompi-loop
 [pkg-doompi-goal]: https://www.npmjs.com/package/@agimon-ai/doompi-goal

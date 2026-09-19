@@ -423,6 +423,15 @@ export async function startHeadlessSession(options: HeadlessSessionOptions): Pro
         throw new Error('The cockpit test session has no external skills.');
       },
     },
+    mcpSurface: {
+      readSurface: () => ({ revision: 1, tools: [], skills: [] }),
+      invokeTool: async () => {
+        throw new Error('The cockpit test session has no remote MCP tools.');
+      },
+      readSkill: () => {
+        throw new Error('The cockpit test session has no remote MCP skills.');
+      },
+    },
     prepareFacets: (root) => {
       root.provide(DOOM_HEADLESS_HOST_SERVICE, headlessHost);
     },

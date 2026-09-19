@@ -5,7 +5,10 @@ import { QuestionnaireCoordinator } from '../../../../../services/questionnaireC
 
 const root = defineRoot((_context: DoomServerPluginContext) => {
   const coordinator = new QuestionnaireCoordinator();
-  return { value: { coordinator }, onDispose: () => coordinator.shutdown() };
+  return {
+    value: { coordinator },
+    onDispose: () => coordinator.shutdown(),
+  };
 });
 
 export type UserFeedbackServerScope = Awaited<ReturnType<typeof root>>['value'];

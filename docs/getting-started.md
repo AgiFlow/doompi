@@ -25,7 +25,7 @@ The root package contains the fixed host foundation. Features named in `.doom/mo
 - Node.js 22.19.0 or newer for the published package
 - Node.js 22.22.1 or newer when contributing from this workspace
 - macOS or Linux on arm64 or x64 for the bundled Runner backend
-- Pi 0.85.0 and Pi TUI 0.85.0 for packages that declare them as peer requirements
+- Pi 0.85.1 and Pi TUI 0.85.1 for packages that declare them as peer requirements
 
 DoomPi is alpha software. Configuration and package boundaries may change between alpha releases.
 
@@ -76,7 +76,7 @@ doompi sync    # publish synchronized state for the registered integration
 pi             # start DoomPi through regular Pi
 ```
 
-`doompi init` owns the personal configuration and Pi integration. `doompi sync` updates generated runtime state but does not rewrite that integration. After registration, use `doompi sync --check` and `doompi sync` instead of their `dpi` forms.
+`doompi init` owns the personal configuration and Pi integration. `doompi sync` updates generated runtime state without rewriting Pi user settings. It may refresh an upgradeable user dispatcher, and it removes duplicate repository registration while preserving unrelated project settings. After registration, use `doompi sync --check` and `doompi sync` instead of their `dpi` forms.
 
 ## Inspect a composition before launch
 

@@ -23,6 +23,7 @@ interface SessionState {
   activation?: VoiceOwnershipActivationRequest;
   handoff?: VoiceOwnershipHandoffRequest;
   catalog: VoiceOwnershipTarget[];
+  catalogRevision?: string;
 }
 
 function scope(sessionId: string): DoomHubSessionScope {
@@ -76,8 +77,11 @@ function ownershipHarness(initial: Record<string, Omit<SessionState, 'catalog'>>
         return new Response(null, { status: 404 });
       const command = JSON.parse(request.body) as VoiceOwnershipCommand;
       actions.push(`${session.sessionId}:${command.action}`);
-      if (command.action === 'catalog') state.catalog = command.targets ?? [];
-      else state.active = command.action === 'activate';
+      if (command.action === 'catalog') {
+        state.catalog = command.targets ?? [];
+        state.catalogRevision = command.catalogRevision;
+      } else if (command.action === 'activate') state.active = true;
+      else if (command.action === 'deactivate' || command.action === 'fence') state.active = false;
       return Response.json({
         version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
         commandId: command.commandId,
@@ -100,6 +104,7 @@ function ownershipHarness(initial: Record<string, Omit<SessionState, 'catalog'>>
         active: state.active,
       },
       targets: state.catalog,
+      ...(state.catalogRevision === undefined ? {} : { catalogRevision: state.catalogRevision }),
       ...(state.activation === undefined ? {} : { activation: state.activation }),
       ...(state.handoff === undefined ? {} : { handoff: state.handoff }),
     });
@@ -188,19 +193,22 @@ describe('voice media hub channels', () => {
     h.emit('source');
     h.emit('target');
     await vi.waitFor(() =>
-      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target', label: 'Target', order: 1 }]),
+      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target:1', label: 'Target', order: 1 }]),
     );
     h.actions.length = 0;
     h.states.get('source')!.handoff = {
       version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
       requestId: 'handoff-target',
-      handle: 'lease-target',
+      handle: 'lease-target:1',
+      catalogRevision: h.states.get('source')!.catalogRevision!,
     };
     h.emit('source');
     await vi.waitFor(() => expect(h.states.get('target')?.active).toBe(true));
     expect(h.actions.filter((action) => !action.endsWith(':catalog'))).toEqual([
+      'target:prepare',
       'source:deactivate',
       'target:activate',
+      'target:readiness',
     ]);
 
     source.sessionRemoved?.('target');
@@ -240,7 +248,7 @@ describe('voice media hub channels', () => {
     h.emit('source');
     h.emit('target');
     await vi.waitFor(() =>
-      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target', label: 'Target', order: 1 }]),
+      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target:1', label: 'Target', order: 1 }]),
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
     publishCatalogs.mockClear();
@@ -250,10 +258,10 @@ describe('voice media hub channels', () => {
     // An uncoalesced refresh publishes again synchronously here, because the first run has not stored its
     // signature yet.
     h.emit('target');
-    expect(publishCatalogs).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(publishCatalogs).toHaveBeenCalledTimes(1));
 
     await vi.waitFor(() =>
-      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target', label: 'Renamed', order: 1 }]),
+      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target:1', label: 'Renamed', order: 1 }]),
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(publishCatalogs).toHaveBeenCalledTimes(1);
@@ -283,7 +291,7 @@ describe('voice media hub channels', () => {
     h.emit('source');
     h.emit('target');
     await vi.waitFor(() =>
-      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target', label: 'Target', order: 1 }]),
+      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target:1', label: 'Target', order: 1 }]),
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -291,7 +299,7 @@ describe('voice media hub channels', () => {
     h.states.get('target')!.label = 'First';
     h.emit('target');
     await vi.waitFor(() =>
-      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target', label: 'First', order: 1 }]),
+      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target:1', label: 'First', order: 1 }]),
     );
     h.states.get('target')!.label = 'Second';
     h.emit('target');
@@ -299,7 +307,7 @@ describe('voice media hub channels', () => {
 
     // The change landed after the in-flight run had read its targets, so the trailing re-check must republish.
     await vi.waitFor(() =>
-      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target', label: 'Second', order: 1 }]),
+      expect(h.states.get('source')?.catalog).toEqual([{ handle: 'lease-target:1', label: 'Second', order: 1 }]),
     );
     source.close();
   });

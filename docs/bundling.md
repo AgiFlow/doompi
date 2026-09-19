@@ -2,16 +2,16 @@
 
 [Back to DoomPi](../README.md)
 
-DoomPi does two separate jobs before Pi opens its TUI:
+Before Pi opens its TUI, DoomPi does two jobs:
 
-1. **Composition** decides which extension factories belong in the session and in what order.
-2. **Bundling** turns that resolved plan into JavaScript Pi can load.
+1. **Composition** chooses the extension factories and puts them in order.
+2. **Bundling** turns that plan into JavaScript Pi can load.
 
-The composition is the contract. A bundle is one way to deliver it. If launcher bundling is unavailable, DoomPi can still give Pi the same ordered extension entries individually.
+The composition is the important part. A bundle is only one way to deliver it. If the launcher cannot build a bundle, DoomPi gives Pi the same extension entries individually and in the same order.
 
 ## From configuration to a composition
 
-DoomPi reads the home configuration first and the nearest repository configuration second. The active profile, major mode, domains, and minor modes supply runtime selections. `modes.yaml` supplies the default packages, named layers, and the layer order for each major mode.
+DoomPi reads home configuration first, then the nearest repository configuration. The active profile, major mode, domains, and minor modes supply the runtime selection. `modes.yaml` supplies default packages, named layers, and each major mode's layer order.
 
 The resolver converts those inputs into one canonical plan:
 
@@ -29,9 +29,9 @@ home and repository configuration
                +-- composition fingerprint
 ```
 
-The TUI factory list begins with the Cordis host and ends with its finalizer. Fixed host factories load first, followed by configured defaults and the selected layers in canonical order. When the same resolved extension appears more than once, DoomPi keeps every authored occurrence for diagnostics but activates the factory once, at its first position.
+The TUI factory list starts with the Cordis host and ends with its finalizer. Fixed host factories load first, followed by configured defaults and selected layers in canonical order. If the same resolved extension appears more than once, DoomPi keeps every authored occurrence for diagnostics but activates the factory only at its first position.
 
-The resolver also produces a SHA-256 fingerprint. It covers the parent and detached-child activation plans, so it changes when the executable composition changes. DoomPi uses that fingerprint to name bundles, detect stale synchronized state, and decide whether a selection can update live or needs a reload or relaunch.
+The resolver also creates a SHA-256 fingerprint over the parent and detached-child activation plans. It changes when the executable composition changes. DoomPi uses it to name bundles, detect stale synchronized state, and decide whether a selection can update live or needs a reload or relaunch.
 
 ## The launcher path
 
@@ -47,15 +47,16 @@ This path is useful for trying a composition immediately. It can compile as part
 
 ## The synchronized path
 
-`doompi sync` prepares runtime state before the next TUI starts. It provisions the defaults and every declared named layer, resolves the possible compositions, and writes their bundles into one immutable generation under `~/.pi/.doom/sync`.
+`doompi sync` prepares runtime state before the next TUI starts. It provisions the defaults and every declared named layer, resolves the possible compositions, and writes them into an immutable repository and worktree generation under `~/.pi/.doom/sync`.
 
 A generation contains more than TUI JavaScript:
 
 - resolved state and composition fingerprints
 - the bootstrap loaded by Pi
-- runtime bundles for recorded compositions
+- runtime bundles and compiler manifests for recorded compositions
 - package resources
-- web plugin artifacts and package API routes when available
+- `server.bundle.json` and built server facets
+- web plugin assets and exported package API contracts when available
 
 The generated bootstrap does not compile extensions during startup. It reads the validated registration for the current repository or worktree, selects the bundle recorded for the active fingerprint, validates it, and imports it. If no recorded aggregate bundle is available, it can use the canonical entries stored for that composition.
 
@@ -67,21 +68,24 @@ This design has three practical reasons:
 
 ## Publishing a generation
 
-Synchronization follows one transaction-like sequence:
+Synchronization uses one transaction-like sequence:
 
 1. Stage every artifact in a new generation directory.
 2. Validate paths, manifests, source fingerprints, repository identity, and required files.
 3. Atomically publish the registration that points readers at that generation.
-4. Retain one previous generation and attempt to clean older ones.
 
-Published generations are not edited in place. A cleanup failure is reported, but it does not invalidate the generation that was already published.
+Published generations are never edited in place. A failed build removes its
+unpublished generation. Old published generations stay on disk: a running host may
+still need them for a later import, and directory age does not prove that the host
+has finished. Synchronization does not automatically prune them.
 
-The registration is part of the boundary. It pins the repository identity, worktree, DoomPi package root, npm version provenance, API version, Pi entry, state hash, and generation paths. A missing, stale, foreign, traversing, or malformed registration is rejected rather than replaced with a guessed source checkout or another repository's state. Schema-1 registrations without API metadata retain exact npm-version validation until an explicit sync republishes them in the current schema.
-Runtime checks hash recorded bootstrap, bundle, server, contract, and compiler artifact bytes. A package release with the same supported API version can therefore reuse an intact generation even when its producer sources changed. `doompi sync --check` remains source-sensitive, and `doompi sync` is the explicit refresh path.
+The registration is part of the boundary. It pins the repository identity, worktree, DoomPi package root, npm version provenance, API version, Pi entry, state hash, and generation paths. Missing, stale, foreign, traversing, or malformed registrations fail closed. DoomPi does not replace one with a guessed source checkout or another repository's state. Schema-1 registrations without API metadata keep exact npm-version validation until an explicit sync republishes them in the current schema.
+
+Runtime checks hash the recorded bootstrap, bundle, server, contract, and compiler artifact bytes. A package release that supports the same API version can therefore reuse an intact generation even if its producer sources have changed. `doompi sync --check` remains source-sensitive. Run `doompi sync` when you want to refresh the generation.
 
 ## What happens when a selection changes
 
-DoomPi resolves the candidate selection before applying it:
+DoomPi resolves a candidate selection before it changes the running session:
 
 | Result                                           | TUI behavior                                          |
 | ------------------------------------------------ | ----------------------------------------------------- |
@@ -96,7 +100,7 @@ Domain and profile values can still change runtime data even when the extension 
 
 The runtime bundle above is Node.js code loaded by Pi. It is not the browser cockpit.
 
-DoomPi Web starts from the same synchronized package composition, but it has different outputs and constraints: React and CSS need browser compilation, server channels must remain on the host, and one hub may serve sessions from different repositories. The web package therefore builds and serves its own per-session plugin compositions while keeping a stable package-owned shell.
+DoomPi Web starts from the same synchronized package composition, but browser code has different constraints. React and CSS need browser compilation, server channels must stay on the host, and one hub may serve sessions from different repositories. The web package therefore builds and serves per-session plugin compositions inside a stable package-owned shell.
 
 See [DoomPi Web bundling](../packages/clients/doompi-web/docs/bundle.md) for that pipeline and the reasons behind its design.
 

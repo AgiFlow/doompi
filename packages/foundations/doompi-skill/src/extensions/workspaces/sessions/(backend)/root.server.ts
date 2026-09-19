@@ -7,5 +7,5 @@ export default defineRoot(async ({ agent, signal }: DoomServerPluginContext) => 
   const runtime: DoomServerSessionPlugin = agent
     ? await createSkillServer(agent, signal)
     : { commands: [], resources: [] };
-  return { value: runtime };
+  return { value: runtime, services: runtime.services };
 });

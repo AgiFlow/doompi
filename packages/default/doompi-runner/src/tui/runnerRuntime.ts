@@ -155,7 +155,10 @@ export function createRunnerRuntime(pi: ExtensionAPI): RunnerRuntime {
   };
   const publishBackgroundWork = (): void => {
     const activeSessionId = sessionId;
-    const representedIds = new Set([...runners.map((record) => record.id), ...terminalRunners.keys()]);
+    const representedIds = new Set([
+      ...runners.filter((record) => record.promoted).map((record) => record.id),
+      ...terminalRunners.keys(),
+    ]);
     const next = activeSessionId
       ? [
           ...runners

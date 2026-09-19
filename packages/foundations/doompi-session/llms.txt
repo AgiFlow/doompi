@@ -1,0 +1,3 @@
+# @agimon-ai/doompi-session
+
+Fixed DoomPi session coordination foundation. It provides shared host services and does not register an agent-facing tool by itself.

@@ -14,6 +14,8 @@ const API_CONTRACTS_DIST = './dist/api-contracts.mjs';
 
 const WEB_EXPORT = './extensions/web';
 const WEB_DIST = './dist/extensions/web.mjs';
+const MCP_DIST = './dist/extensions/mcp.mjs';
+const MCP_ENTRY = `./${GENERATED_DIR}/mcp.ts`;
 
 /**
  * Which scopes a server facet declares.
@@ -145,10 +147,28 @@ export function syncManifest(input: ManifestSync): Record<string, unknown> {
   return manifest;
 }
 
+/** Updates only the MCP-owned manifest block, leaving normal build metadata untouched. */
+export function syncMcpManifest(manifest: Record<string, unknown>, enabled: boolean): Record<string, unknown> {
+  const next = { ...manifest };
+  if (enabled) next.doompiMcp = { entry: MCP_ENTRY, dist: MCP_DIST, scopes: ['session'] };
+  else delete next.doompiMcp;
+  return next;
+}
+
 /** Writes the synced manifest when it differs, so a second build is a no-op. */
 export function writeManifest(input: ManifestSync & { readonly targets: readonly BuildTarget[] }): boolean {
   const manifestPath = path.join(input.packageDir, 'package.json');
   const next = `${JSON.stringify(syncManifest(input), null, 2)}\n`;
+  if (fs.readFileSync(manifestPath, 'utf8') === next) return false;
+  fs.writeFileSync(manifestPath, next);
+  return true;
+}
+
+/** Writes only MCP metadata after an isolated build. */
+export function writeMcpManifest(packageDir: string, enabled: boolean): boolean {
+  const manifestPath = path.join(packageDir, 'package.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as Record<string, unknown>;
+  const next = `${JSON.stringify(syncMcpManifest(manifest, enabled), null, 2)}\n`;
   if (fs.readFileSync(manifestPath, 'utf8') === next) return false;
   fs.writeFileSync(manifestPath, next);
   return true;

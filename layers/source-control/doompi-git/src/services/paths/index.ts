@@ -1,9 +1,13 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 import { REGISTRY_DIR_ENV, resolveRegistryDir } from '@agimon-ai/doompi-core/web';
 
-import { repositoryId, repositoryLabel } from '../repositoryIdentity';
+import { WORKTREE_RECORD_VERSION, type WorktreeRecord } from '../../types/worktreeRegistry';
+import { readJson, writeJsonAtomic } from '../atomicJson';
+import { repositoryId } from '../repositoryIdentity';
 
 const REGISTRY_DIR_FLAG = '--registry-dir';
 
@@ -26,10 +30,46 @@ export function worktreesRoot(homeDir: string = os.homedir()): string {
 }
 
 /** One registry file per repository, keyed by the shared git directory. */
-
 export function registryFile(repositoryRoot: string, homeDir: string = os.homedir()): string {
-  const key = `${repositoryLabel(repositoryRoot)}--${repositoryId(repositoryRoot)}`;
-  return path.join(doomGitRoot(homeDir), 'registry', key, 'worktrees.json');
+  const id = repositoryId(repositoryRoot);
+  const root = path.join(doomGitRoot(homeDir), 'registry');
+  const canonical = path.join(root, id, 'worktrees.json');
+  if (fs.existsSync(canonical)) return canonical;
+  let names: string[];
+  try {
+    names = fs.readdirSync(root);
+  } catch {
+    return canonical;
+  }
+  const legacyFiles = names
+    .filter((entry) => entry.endsWith(`--${id}`))
+    .sort()
+    .map((entry) => path.join(root, entry, 'worktrees.json'))
+    .filter((file) => fs.existsSync(file));
+  if (legacyFiles.length === 0) return canonical;
+  const entries = new Map<string, WorktreeRecord>();
+  for (const file of legacyFiles) {
+    const legacy = readJson<{ version?: unknown; entries?: unknown }>(file);
+    if (legacy?.version !== WORKTREE_RECORD_VERSION || !Array.isArray(legacy.entries)) continue;
+    for (const value of legacy.entries) {
+      if (
+        typeof value !== 'object' ||
+        value === null ||
+        !('id' in value) ||
+        typeof value.id !== 'string' ||
+        value.id === ''
+      )
+        continue;
+      const entry = value as WorktreeRecord;
+      const existing = entries.get(entry.id);
+      if (existing !== undefined && !isDeepStrictEqual(existing, entry)) {
+        throw new Error(`Conflicting legacy worktree registry entries for '${entry.id}'.`);
+      }
+      entries.set(entry.id, entry);
+    }
+  }
+  writeJsonAtomic(canonical, { version: WORKTREE_RECORD_VERSION, entries: [...entries.values()] });
+  return canonical;
 }
 
 /**

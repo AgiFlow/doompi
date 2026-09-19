@@ -14,24 +14,28 @@ Use `dpi` to evaluate the distribution, `doompi init` to make it part of regular
 
 ## Setup and synchronization
 
-| Command                | Effect                                                                                                    |
-| ---------------------- | --------------------------------------------------------------------------------------------------------- |
-| `dpi init`             | Creates missing `.doom` files in the current repository without changing Pi settings.                     |
-| `dpi init --force`     | Replaces the repository's four `.doom` files with current templates.                                      |
-| `dpi sync`             | Installs required packages and publishes synchronized state for an in-memory Pi settings overlay.         |
-| `dpi`                  | Runs pinned Pi with that in-memory overlay. DoomPi handles `--sandbox`; remaining arguments pass to Pi.   |
-| `doompi init`          | Creates missing personal `.doom` files and registers the DoomPi extension alias and theme in Pi settings. |
-| `doompi init --force`  | Replaces the four personal `.doom` files and refreshes the Pi integration resources.                      |
-| `doompi sync`          | Installs required packages into the current scope and publishes state without rewriting Pi user settings. |
-| `doompi sync --global` | Promotes the current workspace's required published packages into the global cache only.                  |
-| `doompi sync --check`  | Checks package resolution, drift, artifacts, alias, theme, and Pi settings without writing.               |
-| `doompi doctor`        | Runs the strict configuration check, then everything `sync --check` reports. Changes nothing.             |
+| Command                | Effect                                                                                                            |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `dpi init`             | Creates missing `.doom` files in the current repository without changing Pi settings.                             |
+| `dpi init --force`     | Replaces the repository's four `.doom` files with current templates.                                              |
+| `dpi sync`             | Installs required packages and publishes synchronized state for an in-memory Pi settings overlay.                 |
+| `dpi`                  | Runs pinned Pi with that in-memory overlay. DoomPi handles `--sandbox`; remaining arguments pass to Pi.           |
+| `doompi init`          | Creates missing personal `.doom` files and registers the DoomPi extension alias and theme in Pi settings.         |
+| `doompi init --force`  | Replaces the four personal `.doom` files and refreshes the Pi integration resources.                              |
+| `doompi sync`          | Installs required packages and publishes state without rewriting Pi user settings.                                |
+| `doompi sync --force`  | Publishes a new generation even when synchronized state is fresh.                                                 |
+| `doompi sync --global` | From a workspace, promotes required published packages into the global cache without publishing a global runtime. |
+| `doompi sync --check`  | Checks package resolution, drift, artifacts, alias, theme, and Pi settings without writing.                       |
+| `doompi doctor`        | Runs the strict configuration check, then everything `sync --check` reports. Changes nothing.                     |
 
-Every command accepts `-h`/`--help`, including the subcommands: `doompi sync --help` prints help rather than running a sync.
+Every `doompi` command accepts `-h`/`--help`, including the subcommands. For example, `doompi sync --help` prints help instead of running a sync.
 
-`doompi sync` reports unsupported keys in `.doom/config.yaml` and `.doom/modes.yaml` and then ignores them, so a config written against a different version cannot break a build. Invalid values for keys it does recognize still fail. `doompi doctor` is the strict check that reports those keys as problems.
+`doompi sync` reports unsupported keys in `.doom/config.yaml` and `.doom/modes.yaml`
+and ignores them. Those keys do not stop synchronization, but invalid values for
+recognized keys still fail. Use `doompi doctor` for a strict check that also reports
+unsupported keys as problems.
 
-Synchronized state is repository- and worktree-scoped under `~/.pi/.doom/sync`. Workspace package manifests live under `<workspace>/.pi/npm`; `--global` uses `~/.pi/.doom/.pi/npm` for promoted published packages. Publication is atomic and retains one superseded generation. See [Composition and runtime bundling](bundling.md) for the lifecycle.
+Synchronized state is repository- and worktree-scoped under `~/.pi/.doom/sync`. Workspace package manifests live under `<workspace>/.pi/npm`; `--global` uses `~/.pi/.doom/.pi/npm` for promoted published packages. Publication is atomic. DoomPi does not remove old or orphaned generated directories automatically. See [Composition and runtime bundling](bundling.md) for the lifecycle.
 
 ## Matrix and launch options
 
@@ -50,6 +54,7 @@ The matrix describes the session DoomPi should resolve before Pi starts.
 | `--add-dir <path>`          | Add an accessible directory. Repeat for more than one.                                 |
 | `--cwd <path>`              | Run Pi in the selected directory. `--cd` is also accepted.                             |
 | `--preset <name>`           | Select `default`, `kimi`, or `ollama` provider normalization.                          |
+| `--effort <level>`          | Pass the value to Pi as `--thinking <level>`.                                          |
 | `--automation`              | Add Pi print mode, JSON output, and project approval unless already supplied.          |
 | `--auto-stop`               | Exit an interactive session after the agent settles. Rejected in print and JSON modes. |
 | `--sandbox`                 | Run through the sandbox harness exported by a selected layer. `dpi` accepts it too.    |
@@ -69,6 +74,26 @@ Remaining arguments pass to Pi.
 | `--emit-mcp <dir>` | Write resolved MCP configuration to a directory, then exit. MCP must be enabled. |
 
 `--explain` is read-only with respect to DoomPi configuration, but it is not a no-execution boundary. Schema inspection can start each allowed stdio MCP server. Add `--no-mcp` when those commands must not run. See [Executable inputs](trust-and-data-boundaries.md#executable-inputs).
+
+## API contract export
+
+```bash
+doompi api-export --out <directory> [--major-mode <name>] [--strict]
+```
+
+Exports `openapi.json`, `asyncapi.json`, and `manifest.json` from synchronized global and workspace API generations. It does not install packages or start services. `--major-mode` defaults to the workspace default. `--strict` exits non-zero when the selected contract coverage is incomplete.
+
+## History conversion
+
+```bash
+doompi history-export <v4-source> <v3-destination> [options]
+doompi history-import <v3-source> <v4-destination> --confirm-offline
+doompi history-import <jsonl-source> <sqlite-destination> --format sqlite --confirm-offline
+```
+
+`history-export` writes a separate v3 JSONL file and a machine-readable loss report. Use `--report <path>` to move the report from `<destination>.loss.json`, and `--state <path>` to choose the resumable state file. Existing destination, report, and state files are never overwritten.
+
+Stop Pi before `history-import`, then pass `--confirm-offline`. The command preserves the source and writes a separate canonical copy. Use `--format sqlite` for server roots and native server children. Terminal sessions use JSONL. The confirmation flag cannot prove that an unmanaged Pi process has stopped, and stale ownership locks are not reclaimed automatically.
 
 ## Compatibility frontends
 
@@ -110,20 +135,19 @@ Use `doompi sync --check` in CI when the question is only whether synchronized s
 doompi-web [options]
 ```
 
-| Option                  | Effect                                           |
-| ----------------------- | ------------------------------------------------ |
-| `--dir <path>`          | Pin, sync, and watch one repository composition. |
-| `--registry-dir <path>` | Session registry. Defaults to `~/.doompi/run`.   |
-| `--spawn-command <cmd>` | Command used to launch sessions.                 |
-| `--port <number>`       | HTTP port. Defaults to `7433`.                   |
-| `--host <address>`      | Bind address. Defaults to `127.0.0.1`.           |
-| `--assets <path>`       | Override the built SPA directory.                |
-| `--state-dir <path>`    | Remote-access and cockpit state directory.       |
-| `--cloudflared <path>`  | Explicit `cloudflared` binary.                   |
-| `-h`, `--help`          | Print help.                                      |
-| `-v`, `--version`       | Print the installed package version.             |
+By default, the web process starts a local headless `doompi-server` on `127.0.0.1:7434`. It chooses an available backend port if `7434` is occupied.
 
-Every option accepts both `--port 7433` and `--port=7433`.
+| Option                     | Effect                                                           |
+| -------------------------- | ---------------------------------------------------------------- |
+| `--port <number>`          | HTTP port. Defaults to `7433`; `0` asks the OS for an open port. |
+| `--host <address>`         | Bind address. Defaults to `127.0.0.1`.                           |
+| `--assets <path>`          | Override the built SPA directory.                                |
+| `--headless-url <url>`     | Attach to an existing headless endpoint instead of starting one. |
+| `--headless-token <token>` | Credential for the existing headless endpoint.                   |
+| `-h`, `--help`             | Print help.                                                      |
+| `-v`, `--version`          | Print the installed package version.                             |
+
+Long options accept both `--port 7433` and `--port=7433` forms.
 
 ## Troubleshooting and direct use
 

@@ -8,9 +8,10 @@ DoomPi crosses several trust boundaries because it composes executable plugins, 
 configured code and commands
           |
           v
-host Pi process --------------------> model providers
+session runtime --------------------> model providers
+(Pi TUI or headless direct harness)
           |
-          +-- optional sandbox -----> brokered credentials and network
+          +-- optional container ---> filtered environment and network
           +-- Runner ---------------> native multiplexer and log tools
           +-- telemetry ------------> local sink or configured OTLP endpoint
 ```
@@ -33,64 +34,73 @@ changes. Use `--no-mcp` to inspect a selection without starting anything.
 
 ## Sandboxed launches
 
-`doompi --sandbox` moves a session's blast radius off the host. A layer that exports
-`./sandbox-harness` (the bundled one is `@agimon-ai/doompi-sandbox`) runs the entire agent,
-extensions, MCP servers, skills, and tools inside a disposable Docker or Podman container while
-the terminal stays attached.
+`doompi --sandbox` narrows a session's direct access to the host when it uses the built-in plan. A
+layer that exports `./sandbox-harness` (the bundled one is `@agimon-ai/doompi-sandbox`) runs the
+agent, extensions, MCP servers, skills, and tools inside a disposable container while the terminal
+stays attached. A workspace dev container or operator-supplied run flags can widen that boundary.
 
-What a sandboxed session can reach:
+What the built-in plan gives a sandboxed session:
 
-- The repository, bind-mounted read-write at its host path. The rest of the host filesystem is
-  invisible, including `~/.ssh`, keychains, host Pi sessions, and other repositories.
+- The repository, bind-mounted read-write at its host path. The default plan does not mount
+  `~/.ssh`, keychains, host Pi sessions, or other repositories. The container engine and
+  `DOOMPI_SANDBOX_RUN_FLAGS` can change that assumption.
 - An isolated home directory and an isolated `.pi` package store, both named volumes keyed to the
-  repository path, so Linux installs never touch the host's platform-specific packages.
-- An allowlisted environment: terminal and locale variables, proxy settings, and `DOOMPI_PRESET`.
-  Everything else a shell accumulates stays on the host.
-- The network, under the engine's default configuration. Network policy is not restricted yet.
+  repository path, so Linux installs do not write into the host's platform-specific package store.
+- An allowlisted environment: terminal and locale variables, proxy settings, `DOOMPI_PRESET`,
+  `ELICITATION_SESSION_ID`, and variables ending in `*_API_KEY`, `*_AUTH_TOKEN`, or `*_BASE_URL`.
+  When the broker is active it replaces or drops those credential-shaped values as described below.
+- The network, under the engine's default configuration. DoomPi adds no network policy.
 - Three host loopback ports, published so a browser can complete an OAuth login started inside the
   container: 1455, 1456 and 53692. They are bound to `127.0.0.1`, so they are not exposed beyond
   the host, and a port another process already holds is skipped rather than taken.
 
 The boundary is whatever the container engine provides, so the engine and its runtime are part of
-the trusted base. `docker`, `podman`, `nerdctl`, and `finch` are supported, and
-`DOOMPI_SANDBOX_RUN_FLAGS` passes options such as `--runtime=runsc` through to select a stronger
-isolation runtime. DoomPi does not verify which runtime actually ran.
+the trusted base. `docker`, `podman`, `nerdctl`, and `finch` are supported.
+`DOOMPI_SANDBOX_RUN_FLAGS` passes any accepted `--flag=value` through, including mount options, not
+just stronger runtimes such as `--runtime=runsc`. DoomPi validates argument shape and does not verify
+which runtime or mount policy actually ran.
 
 ### Workspace dev containers
 
 When a repository carries a dev container configuration, `--sandbox` runs the session in that
 container rather than the built-in image, and the configuration is honoured in full. It is
 author-controlled, so it can mount anything, including the docker socket, and this mode is
-therefore a convenience rather than a boundary. The environment allowlist and the credential broker
-still apply. `DOOMPI_SANDBOX_DEVCONTAINER=0` restores the built-in image.
+therefore a convenience rather than a boundary. The same environment projection and conditional
+broker selection still apply. `DOOMPI_SANDBOX_DEVCONTAINER=0` restores the built-in image.
 
 ### Provider credentials
 
-A sandboxed session holds no provider API key. The host starts a broker, grants the container one
-route to it, and gives the container a random per-session token in place of every credential. Pi
-inside the container is redirected at that route, presents the token, and the broker swaps it for
-the real key before forwarding upstream. A call that cannot prove possession of the token is
-refused, and a provider the session was not granted is unroutable.
+The broker starts only when the host environment contains a key for its curated provider list. When
+it starts, the container receives a random per-session token in place of each brokered key. Pi is
+redirected to the broker, presents that token, and the broker swaps it for the real key before
+forwarding upstream. Calls without the token are refused, and providers outside the granted list are
+unroutable through that broker.
 
-On Linux the broker listens on an owner-only unix socket, bind-mounted into the container. On a
-virtual machine backed engine, which is every macOS and Windows install, a container cannot connect
-to a mounted host socket at all: the connect fails with ENOTSUP even when the file is shared
-through. There the broker binds an ephemeral port on `127.0.0.1` and the container reaches it
-through the engine's host gateway. That port is not exposed beyond the host, but it is reachable by
-other local processes, and the session token is the only thing that makes it useful.
+With an active broker, the environment projection first drops every allowlisted `*_API_KEY`,
+`*_AUTH_TOKEN`, and `*_BASE_URL`, then adds token substitutes for the credentials the broker owns.
+That keeps unsupported provider credentials matching those patterns out of the container for that
+launch.
 
-Credentials for providers the broker does not carry are withheld from the container entirely
-rather than passed through, so the promise holds for every provider rather than the brokered ones
-only. Set `DOOMPI_SANDBOX_BROKER=0` to turn brokering off and hand credentials to the container
-directly, which is the pre-broker behavior.
+On Linux the broker listens on a Unix socket in an owner-only directory, bind-mounted into the
+container. With a virtual-machine-backed engine, including typical macOS and Windows installs, the
+broker instead binds an ephemeral port on `127.0.0.1`, and the container reaches it through the
+engine's host gateway. That port is not exposed beyond the host, but other local processes can reach
+it. The per-session token is the authorization check.
+
+If no curated provider key is present, no broker starts and the allowlisted credential-shaped
+environment variables pass through unchanged. Setting `DOOMPI_SANDBOX_BROKER=0` also disables the
+broker and passes those variables directly. Check which path the startup notice reports before
+assuming a sandbox has no provider keys.
 
 Known limits of this boundary today:
 
-- The broker terminates a curated provider list. A session that authenticates any other way, in
-  particular OAuth subscription logins held in `~/.pi`, has to log in inside the sandbox because
-  the host home directory is not mounted.
-- A `*_BASE_URL` override on the host is dropped rather than honored as the broker's upstream, so
-  a session pointed at a corporate gateway needs brokering turned off.
+- The broker terminates a curated provider list. A session that authenticates another way, in
+  particular through an OAuth subscription login held in host `~/.pi`, has to log in inside the
+  sandbox because the host home directory is not mounted. An unsupported environment credential is
+  withheld only when another credential caused the broker to start; otherwise the unbrokered
+  environment path applies.
+- With the broker active, a `*_BASE_URL` override on the host is dropped rather than honored as the
+  broker's upstream, so a session pointed at a corporate gateway needs brokering turned off.
 - The token authorizes any brokered provider for the life of the session; the broker does not cap
   spend or rate.
 - The container engine daemon is part of the trusted base; a user or process that can talk to

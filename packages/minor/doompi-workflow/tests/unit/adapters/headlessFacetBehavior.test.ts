@@ -1,3 +1,4 @@
+import { DOOM_BACKGROUND_WORK_SERVICE, type BackgroundWorkProvider } from '@agimon-ai/doompi-core/background-work';
 import {
   DOOM_HEADLESS_OWNER as TEST_OWNER,
   DOOM_HEADLESS_HOST_SERVICE as TEST_AGENT,
@@ -22,12 +23,19 @@ import { describe, expect, it, vi } from 'vitest';
 import { facet as workflowServerFacet } from '../../../generated/server';
 
 const embeddedFeature = vi.hoisted(() => {
+  const listeners = new Map<string, Set<() => void>>();
   const control = {
     start: vi.fn(async () => undefined),
     pause: vi.fn(async () => ({ ok: 'paused' })),
     resume: vi.fn(async () => ({ ok: 'resumed' })),
     stop: vi.fn(async () => ({ ok: 'stopped' })),
     dispose: vi.fn(),
+    on: vi.fn((event: string, listener: () => void) => {
+      const current = listeners.get(event) ?? new Set();
+      current.add(listener);
+      listeners.set(event, current);
+      return () => current.delete(listener);
+    }),
   };
   const statuses = { execute: vi.fn(async () => []) };
   let recordFilter: ((record: Record<string, unknown>) => boolean) | undefined;
@@ -53,22 +61,39 @@ const embeddedFeature = vi.hoisted(() => {
       execute: vi.fn(async () => ({ content: [{ type: 'text', text: 'workflow launched' }] })),
     },
   };
-  return { control, statuses, feature, getRecordFilter: () => recordFilter };
+  return {
+    control,
+    statuses,
+    feature,
+    getRecordFilter: () => recordFilter,
+    emit: (event: string) => {
+      for (const listener of listeners.get(event) ?? []) listener();
+    },
+  };
 });
+
+const workflowWatcher = vi.hoisted(() => ({
+  records: [
+    { piSessionId: 'workflow-headless-test', view: { runKey: 'run-1', workspace: '/tmp' } },
+    { piSessionId: 'other', view: { runKey: 'foreign', workspace: '/tmp' } },
+    { view: { runKey: 'unstamped', workspace: '/tmp' } },
+  ] as Array<{ piSessionId?: string; view: Record<string, unknown> }>,
+}));
 
 vi.mock('@agimon-ai/workflow-mcp', () => ({
   createEmbeddedWorkflowFeature: () => embeddedFeature.feature,
 }));
 vi.mock('../../../src/services/workflowWatcher', () => ({
-  readWorkflowRuns: () => [
-    { piSessionId: 'workflow-headless-test', view: { runKey: 'run-1', workspace: '/tmp' } },
-    { piSessionId: 'other', view: { runKey: 'foreign', workspace: '/tmp' } },
-    { view: { runKey: 'unstamped', workspace: '/tmp' } },
-  ],
+  readWorkflowRuns: () => workflowWatcher.records,
 }));
 vi.mock('zod', () => ({ z: { toJSONSchema: vi.fn(() => ({ type: 'object' })) } }));
 
 async function fixture() {
+  workflowWatcher.records = [
+    { piSessionId: 'workflow-headless-test', view: { runKey: 'run-1', workspace: '/tmp' } },
+    { piSessionId: 'other', view: { runKey: 'foreign', workspace: '/tmp' } },
+    { view: { runKey: 'unstamped', workspace: '/tmp' } },
+  ];
   let minorModes: string[] = [];
   const execution = {
     cwd: process.cwd(),
@@ -95,6 +120,13 @@ async function fixture() {
   const commands: DoomHeadlessCommand[] = [];
   const hooks: DoomHeadlessHook[] = [];
   const registration = { dispose: vi.fn() };
+  let backgroundProvider: BackgroundWorkProvider | undefined;
+  const backgroundUpdate = vi.fn();
+  const backgroundDispose = vi.fn();
+  const registerBackground = vi.fn((provider: BackgroundWorkProvider) => {
+    backgroundProvider = provider;
+    return { provider: provider.provider, generation: 'test', update: backgroundUpdate, dispose: backgroundDispose };
+  });
   const publish = vi.fn();
   const modeDispose = vi.fn();
   const registerOwner = vi.fn((mode: DoomHeadlessMinorMode) => {
@@ -139,8 +171,29 @@ async function fixture() {
   const context = new Context();
   context.provide(DOOM_SERVER_HOST_SERVICE, serverHost);
   context.provide(DOOM_HEADLESS_HOST_SERVICE, host);
+  context.provide(DOOM_BACKGROUND_WORK_SERVICE, {
+    generation: 'test',
+    register: registerBackground,
+    snapshot: () => ({ items: [], errors: [] }),
+  });
   const close = await mountFacet(workflowServerFacet, context, host, registerOwner);
-  return { execution, modes, activities, tools, resources, commands, hooks, publish, modeDispose, registration, close };
+  await vi.waitFor(() => expect(registerBackground).toHaveBeenCalledOnce());
+  return {
+    execution,
+    modes,
+    activities,
+    tools,
+    resources,
+    commands,
+    hooks,
+    publish,
+    modeDispose,
+    registration,
+    close,
+    backgroundProvider: () => backgroundProvider,
+    backgroundUpdate,
+    backgroundDispose,
+  };
 }
 
 function operation(execution: DoomHeadlessExecutionContext) {
@@ -272,6 +325,84 @@ describe('workflow headless facet', () => {
     expect(test.modeDispose).toHaveBeenCalledOnce();
     expect(test.registration.dispose).toHaveBeenCalled();
   });
+
+  it('reports only active owned workflow runs as background work', async () => {
+    const test = await fixture();
+    const startedAt = new Date().toISOString();
+    workflowWatcher.records = [
+      {
+        piSessionId: 'workflow-headless-test',
+        view: { runKey: 'owned', workspace: '/repo', stage: 'running', startedAt, jobs: [] },
+      },
+      { piSessionId: 'other', view: { runKey: 'foreign', workspace: '/repo', stage: 'running', startedAt, jobs: [] } },
+      { view: { runKey: 'unstamped', workspace: '/repo', stage: 'running', startedAt, jobs: [] } },
+      {
+        piSessionId: 'workflow-headless-test',
+        view: { runKey: 'stale', workspace: '/repo', stage: 'running', startedAt, stale: true, jobs: [] },
+      },
+      {
+        piSessionId: 'workflow-headless-test',
+        view: { runKey: 'done', workspace: '/repo', stage: 'completed', startedAt, finishedAt: startedAt, jobs: [] },
+      },
+    ];
+    const activity = test.activities[0];
+    if (!activity) throw new Error('Workflow activity was not registered');
+
+    const stop = await activity.start(test.execution);
+    expect(test.backgroundProvider()?.provider).toBe('workflow-mcp');
+    expect(test.backgroundProvider()?.listActiveWork()).toEqual([
+      { id: '/repo/owned', sessionId: 'workflow-headless-test' },
+    ]);
+
+    const disposalCount = embeddedFeature.control.dispose.mock.calls.length;
+    await stop();
+    await vi.waitFor(() => expect(test.backgroundProvider()?.listActiveWork()).toHaveLength(1));
+    expect(embeddedFeature.control.dispose).toHaveBeenCalledTimes(disposalCount);
+
+    workflowWatcher.records = [];
+    embeddedFeature.emit('runFinished');
+    await vi.waitFor(() => expect(test.backgroundProvider()?.listActiveWork()).toEqual([]));
+    expect(test.backgroundUpdate).toHaveBeenCalled();
+    await vi.waitFor(() => expect(embeddedFeature.control.dispose).toHaveBeenCalledTimes(disposalCount + 1));
+
+    await test.close?.();
+    expect(test.backgroundDispose).toHaveBeenCalled();
+  });
+
+  it('cleans up a failed workflow monitor before retrying', async () => {
+    const test = await fixture();
+    const activity = test.activities[0];
+    if (!activity) throw new Error('Workflow activity was not registered');
+    const disposalCount = embeddedFeature.control.dispose.mock.calls.length;
+    embeddedFeature.control.start.mockRejectedValueOnce(new Error('monitor failed'));
+
+    await expect(activity.start(test.execution)).rejects.toThrow('monitor failed');
+    expect(embeddedFeature.control.dispose).toHaveBeenCalledTimes(disposalCount + 1);
+
+    embeddedFeature.control.start.mockResolvedValueOnce(undefined);
+    const stop = await activity.start(test.execution);
+    await stop();
+    await test.close?.();
+  });
+
+  it('keeps the monitor when Workflow mode is reactivated during cleanup', async () => {
+    const test = await fixture();
+    const mode = test.modes[0];
+    const activity = test.activities[0];
+    if (!mode || !activity) throw new Error('Workflow mode and activity were not registered');
+    await mode.handleAction('activate', {}, operation(test.execution));
+    const stop = await activity.start(test.execution);
+    await mode.handleAction('deactivate', {}, operation(test.execution));
+    const disposalCount = embeddedFeature.control.dispose.mock.calls.length;
+
+    void stop();
+    await mode.handleAction('activate', {}, operation(test.execution));
+    await activity.start(test.execution);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(embeddedFeature.control.dispose).toHaveBeenCalledTimes(disposalCount);
+    await test.close?.();
+  });
 });
 
 async function mountFacet(
@@ -283,6 +414,7 @@ async function mountFacet(
   const root = new Context();
   root.provide(TEST_SERVER, existing.get(TEST_SERVER));
   root.provide(TEST_AGENT, host);
+  root.provide(DOOM_BACKGROUND_WORK_SERVICE, existing.get(DOOM_BACKGROUND_WORK_SERVICE)!);
   root.provide(TEST_CATALOG, { registerOwner } as never);
   const owner = root.extend({ [TEST_OWNER]: { packageName: '@fixture/mode' } });
   const release = await facet.apply(owner);

@@ -9,6 +9,7 @@ import { loadDomains } from '@agimon-ai/doompi-config/domains';
 import { filterHookDisabledLayers, resolveLayers } from '@agimon-ai/doompi-config/majorModes';
 import { loadMajorModesConfig, loadMajorModesConfigLenient } from '@agimon-ai/doompi-config/majorModes';
 import type { ConfigDiagnostic } from '@agimon-ai/doompi-config/types';
+import { DOOM_MCP_BUNDLE_FILE } from '@agimon-ai/doompi-core/mcp-facet';
 import {
   mergePiSettings,
   piAgentDirectory,
@@ -53,6 +54,7 @@ import {
   writeProjectPiSettings,
 } from '../../../builders/cli/projectSettings';
 import { syncServerBundle } from '../../../builders/server';
+import { syncMcpBundle } from '../../../builders/server/mcpBundle';
 import { syncWebBundle } from '../../../builders/web';
 import { HARNESS_STATE_POINTER, loadHarnessState } from '../../../composition/harnessState';
 import { ensureLayerPackages, missingLayerPackageSpecifiers } from '../../../composition/layerPackageInstaller';
@@ -61,8 +63,9 @@ import { resolveDoomConfigurationRoot } from '../../../composition/repository';
 import { readSyncDrift } from '../../../composition/syncDrift';
 import {
   computeInputsHash,
-  computeWebSourcesHash,
+  computeMcpSourcesHash,
   computeServerSourcesHash,
+  computeWebSourcesHash,
   readLocatedSyncState,
   readMcpServerNames,
   recordResolvedEntries,
@@ -679,18 +682,31 @@ async function stageSync(
         .createHash('sha256')
         .update(JSON.stringify([...new Set(compositions.map((composition) => composition.fingerprint))]))
         .digest('hex');
-      const server = await syncServerBundle({
-        repositoryRoot: location.root,
-        generation,
-        fingerprint,
-        compositions,
-        outputDirectory: apiDirectory,
-        cacheDirectory: path.join(directory, 'cache'),
-        sharedCacheDirectory: location.sharedCacheDirectory,
-      });
-      apiProgress(`${server.descriptor.entries.length} server facet(s) compiled`);
+      const [server, mcp] = await Promise.all([
+        syncServerBundle({
+          repositoryRoot: location.root,
+          generation,
+          fingerprint,
+          compositions,
+          outputDirectory: apiDirectory,
+          cacheDirectory: path.join(directory, 'cache'),
+          sharedCacheDirectory: location.sharedCacheDirectory,
+        }),
+        syncMcpBundle({
+          repositoryRoot: location.root,
+          generation,
+          fingerprint,
+          compositions,
+          outputDirectory: path.join(directory, 'mcp'),
+          cacheDirectory: path.join(directory, 'cache'),
+          sharedCacheDirectory: location.sharedCacheDirectory,
+        }),
+      ]);
+      apiProgress(
+        `${server.descriptor.entries.length} server facet(s), ${mcp.descriptor.entries.length} MCP plugin(s) compiled`,
+      );
       for (const gap of server.contractGaps) progress.line(API_LABEL, `API contract incomplete: ${gap}`);
-      return { server, fingerprint, apiDirectory };
+      return { server, mcp, fingerprint, apiDirectory };
     })();
     const [runtimeResult, webResult, serverResult] = await Promise.allSettled([runtimeBuild, webBuild, serverBuild]);
     if (runtimeResult.status === 'rejected') throw runtimeResult.reason;
@@ -698,8 +714,9 @@ async function stageSync(
     if (serverResult.status === 'rejected') throw serverResult.reason;
     const synced = runtimeResult.value;
     const web = webResult.value;
-    const { server, fingerprint, apiDirectory } = serverResult.value;
+    const { server, mcp, fingerprint, apiDirectory } = serverResult.value;
     const descriptorPath = path.join(apiDirectory, DOOM_SERVER_BUNDLE_FILE);
+    const mcpDescriptorPath = path.join(directory, 'mcp', DOOM_MCP_BUNDLE_FILE);
     const finalState: SyncState = {
       ...synced.state,
       serverBundle: {
@@ -707,6 +724,12 @@ async function stageSync(
         fingerprint,
         compilerManifests: server.compilerManifests,
         sourcesHash: computeServerSourcesHash(synced.state.resolved),
+      },
+      mcpBundle: {
+        descriptorPath: mcpDescriptorPath,
+        fingerprint,
+        compilerManifests: mcp.compilerManifests,
+        sourcesHash: computeMcpSourcesHash(synced.state.resolved),
       },
     };
     const statePath = await writeSyncState(
@@ -740,6 +763,7 @@ async function stageSync(
         webDirectory: web.status === 'bundled' ? web.assetsDir : null,
         apiDirectory,
         serverBundle: { path: descriptorPath, fingerprint, sha256: syncStateSha256(descriptorPath) },
+        mcpBundle: { path: mcpDescriptorPath, fingerprint, sha256: syncStateSha256(mcpDescriptorPath) },
         package: packageRegistrationFor(),
       },
       homeDirectory,

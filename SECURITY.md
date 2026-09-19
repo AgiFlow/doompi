@@ -1,13 +1,14 @@
 # Security policy
 
-DoomPi is alpha software. It runs code you configure: extensions, remote Git and npm plugins, hooks,
-MCP stdio commands, workflows, and shell commands. It also bundles native binaries and can launch
-other agent frontends. Treat a DoomPi configuration the way you would treat a shell script you are
-about to run.
+DoomPi is alpha software, and its configuration is not just data. Extensions,
+remote Git and npm plugins, hooks, MCP stdio commands, workflows, and shell
+commands all run code. DoomPi also ships native binaries and can launch other
+agent frontends. Read a configuration the way you would read a shell script
+before running it.
 
 ## Supported versions
 
-Only the latest published alpha receives fixes. Alpha versions are not patched retroactively.
+Security fixes go into the latest published alpha. Earlier alphas are not patched.
 
 | Version                | Supported |
 | ---------------------- | --------- |
@@ -16,17 +17,17 @@ Only the latest published alpha receives fixes. Alpha versions are not patched r
 
 ## Reporting a vulnerability
 
-Please do not open a public issue for a security problem.
+Keep security reports out of public issues.
 
-Use GitHub's private vulnerability reporting on this repository: open the **Security** tab and choose
-**Report a vulnerability**. That creates a private advisory only the maintainers can read.
+Open this repository's **Security** tab and choose **Report a vulnerability** to
+send a private report to the maintainers.
 
-Include what you have: affected version, platform, reproduction steps, and what an attacker gains.
-A proof of concept helps but is not required.
+Include the affected version, platform, steps to reproduce, and what an attacker
+could do. Send what you have. A proof of concept helps, but is not required.
 
-You should get an acknowledgement within 5 working days. Because this is a single-maintainer alpha
-project, please allow up to 90 days for a fix before public disclosure, and tell us if you plan to
-disclose sooner so we can coordinate.
+Expect an acknowledgement within 5 working days. This is a single-maintainer
+alpha project, so please allow up to 90 days for a fix before public disclosure.
+Tell us about any earlier disclosure plans so we can coordinate.
 
 ## Scope
 
@@ -39,17 +40,18 @@ In scope:
 
 Out of scope:
 
-- Code you configured DoomPi to run. Executing configured extensions, plugins, hooks, MCP servers,
-  and shell commands is the documented purpose of the tool, not a vulnerability. See
-  [Trust and data boundaries](docs/trust-and-data-boundaries.md).
+- Code you configured DoomPi to run. Running configured extensions, plugins, hooks,
+  MCP servers, and shell commands is the purpose of the tool, not a vulnerability.
+  See [Trust and data boundaries](docs/trust-and-data-boundaries.md).
 - Vulnerabilities in upstream projects. Report those to their maintainers: Pi
-  (`earendil-works/pi`), RMUX (`Helvesec/rmux`), RTK (`rtk-ai/rtk`).
-- Findings that require an attacker to already have write access to your repository, your
-  `~/.pi/` directory, or your shell.
+  (`earendil-works/pi`), RMUX (`Helvesec/rmux`), and RTK (`rtk-ai/rtk`).
+- Findings that require an attacker to already have write access to your repository,
+  your `~/.pi/` directory, or your shell.
 
 ## Bundled binaries
 
-The Runner ships prebuilt third-party binaries under
-`packages/utils/doompi-runner-{rmux,rtk}-*/vendor/`. Their provenance and capabilities are
-documented in [Trust and data boundaries](docs/trust-and-data-boundaries.md). Report issues in those
-binaries upstream, and let us know so we can pin a fixed version.
+Runner ships prebuilt third-party binaries under
+`packages/utils/doompi-runner-{rmux,rtk}-*/vendor/`. [Trust and data
+boundaries](docs/trust-and-data-boundaries.md) records where they come from and
+what they can do. Report binary vulnerabilities upstream, and let us know so we
+can pin a fixed version.

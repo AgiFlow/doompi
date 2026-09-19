@@ -5,6 +5,7 @@ import path from 'node:path';
 import { Context } from '@deepseek-ai/cordis';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
+import { Type } from 'typebox';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DoomHeadlessSession } from '../../../../../src/exports/headless';
@@ -26,7 +27,9 @@ const model: Model<Api> = {
 
 const cleanup: Array<() => Promise<void> | void> = [];
 
-async function fixture(): Promise<{
+async function fixture(mcpPlugins: Parameters<typeof createHeadlessSessionHost>[0]['mcpPlugins'] = []): Promise<{
+  host: Awaited<ReturnType<typeof createHeadlessSessionHost>>;
+  context: Context;
   session: DoomHeadlessSession;
   runtime: Awaited<ReturnType<typeof createHeadlessSessionHost>>['runtime'];
 }> {
@@ -54,6 +57,7 @@ async function fixture(): Promise<{
     agentArgs: [],
     environment: {},
     candidates: [],
+    mcpPlugins,
     piExtensions: false,
     selection: { majorMode: 'test', activeLayers: [], domains: [], state: {} },
   });
@@ -63,7 +67,7 @@ async function fixture(): Promise<{
     await context.fiber.dispose();
     fs.rmSync(root, { recursive: true, force: true });
   });
-  return { session: host.host!.context.session, runtime: host.runtime };
+  return { host, context, session: host.host!.context.session, runtime: host.runtime };
 }
 
 afterEach(async () => {
@@ -123,5 +127,157 @@ describe('headless session facet surface', () => {
     await expect(session.activity()).resolves.toEqual({ hasPendingMessages: false, isIdle: false });
     readState.mockResolvedValueOnce({ pendingMessageCount: 0, isStreaming: false, isCompacting: false });
     await expect(session.activity()).resolves.toEqual({ hasPendingMessages: false, isIdle: true });
+  });
+});
+
+describe('MCP execution boundary', () => {
+  async function remoteFixture(owner = { majorMode: 'test', layer: 'default' }) {
+    const execute = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'done' }] }));
+    const read = vi.fn(async () => '# skill');
+    const current = await fixture([
+      {
+        declaration: {
+          packageName: 'test',
+          entry: './mcp.mjs',
+          module: './mcp.mjs',
+          sha256: '0'.repeat(64),
+          owners: [owner],
+        },
+        plugin: {
+          name: 'test',
+          session: {
+            tools: [{ name: 'remote', description: 'Remote', parameters: Type.Object({}), execute }],
+            skills: [{ name: 'guide', description: 'Guide', read }],
+          },
+        },
+      },
+    ]);
+    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
+    await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
+    const snapshot = current.host.mcpSurface.readSurface();
+    return {
+      ...current,
+      execute,
+      read,
+      snapshot,
+      invocation: { revision: snapshot.revision, name: 'remote', arguments: {} },
+    };
+  }
+
+  it('keeps the remote surface empty without explicit declarations', async () => {
+    const current = await fixture();
+    vi.spyOn(current.runtime, 'resume').mockResolvedValue(false);
+    await current.host.activateFacets({ root: current.context, installedPackages: [], dispose: async () => {} });
+
+    const snapshot = current.host.mcpSurface.readSurface();
+    expect(snapshot.tools).toEqual([]);
+    expect(snapshot.skills).toEqual([]);
+    await expect(
+      current.host.mcpSurface.invokeTool({ revision: snapshot.revision, name: 'read', arguments: {} }),
+    ).rejects.toThrow();
+  });
+
+  it.each([
+    { majorMode: 'other', layer: 'default' },
+    { majorMode: 'test', layer: 'inactive' },
+  ])('excludes declarations owned by $majorMode/$layer', async (owner) => {
+    const current = await remoteFixture(owner);
+
+    expect(current.snapshot.tools).toEqual([]);
+    expect(current.snapshot.skills).toEqual([]);
+    expect(current.read).not.toHaveBeenCalled();
+    expect(current.execute).not.toHaveBeenCalled();
+  });
+
+  it('publishes only the explicitly declared remote tools and skills', async () => {
+    const current = await remoteFixture();
+
+    expect(current.snapshot.tools.map(({ name }) => name)).toEqual(['remote']);
+    expect(current.snapshot.skills.map(({ name }) => name)).toEqual(['guide']);
+    expect(current.read).not.toHaveBeenCalled();
+    expect(current.execute).not.toHaveBeenCalled();
+  });
+
+  it('reauthorizes after tool hooks and never executes on denial', async () => {
+    const current = await remoteFixture();
+    const order: string[] = [];
+    vi.spyOn(current.host.host!, 'dispatchHook').mockImplementation(async (name) => {
+      if (name === 'tool_call') order.push('hook');
+      return [];
+    });
+    await expect(
+      current.host.mcpSurface.invokeTool({
+        ...current.invocation,
+        authorize: () => {
+          order.push('authorize');
+          throw new Error('revoked');
+        },
+      }),
+    ).rejects.toThrow('revoked');
+    expect(order).toEqual(['hook', 'authorize']);
+    expect(current.execute).not.toHaveBeenCalled();
+  });
+
+  it('rejects cancellation during hooks before execution', async () => {
+    const current = await remoteFixture();
+    const controller = new AbortController();
+    vi.spyOn(current.host.host!, 'dispatchHook').mockImplementation(async (name) => {
+      if (name === 'tool_call') controller.abort();
+      return [];
+    });
+    await expect(
+      current.host.mcpSurface.invokeTool({ ...current.invocation, signal: controller.signal }),
+    ).rejects.toThrow();
+    expect(current.execute).not.toHaveBeenCalled();
+  });
+
+  it('rechecks live state after asynchronous authorization', async () => {
+    const current = await remoteFixture();
+    await expect(
+      current.host.mcpSurface.invokeTool({ ...current.invocation, authorize: () => current.host.dispose() }),
+    ).rejects.toThrow();
+    expect(current.execute).not.toHaveBeenCalled();
+  });
+
+  it('combines caller and MCP lifecycle cancellation for running tools', async () => {
+    for (const source of ['caller', 'lifecycle'] as const) {
+      const current = await remoteFixture();
+      const controller = new AbortController();
+      let received: AbortSignal | undefined;
+      current.execute.mockImplementationOnce(async (...args: unknown[]) => {
+        received = args[2] as AbortSignal;
+        if (source === 'caller') controller.abort();
+        else await current.host.dispose();
+        return { content: [{ type: 'text', text: 'done' }] };
+      });
+      const result = current.host.mcpSurface.invokeTool({ ...current.invocation, signal: controller.signal });
+      if (source === 'lifecycle') await expect(result).rejects.toThrow();
+      else await result;
+      expect(received).toBeDefined();
+      expect(received!.aborted).toBe(true);
+      if (source === 'lifecycle') expect(controller.signal.aborted).toBe(false);
+    }
+  });
+
+  it('rejects stale skill reads after a surface replacement', async () => {
+    const current = await remoteFixture();
+    current.read.mockImplementationOnce(async () => {
+      await current.host.host!.changeSelection({ axis: 'state', key: 'test', values: ['other'] });
+      return '# stale';
+    });
+    await expect(
+      current.host.mcpSurface.readSkill(current.snapshot.revision, current.snapshot.skills[0]!.uri),
+    ).rejects.toThrow('changed');
+  });
+
+  it('does not return a skill read after session disposal', async () => {
+    const current = await remoteFixture();
+    current.read.mockImplementationOnce(async () => {
+      await current.host.dispose();
+      return '# stale';
+    });
+    await expect(
+      current.host.mcpSurface.readSkill(current.snapshot.revision, current.snapshot.skills[0]!.uri),
+    ).rejects.toThrow('not ready');
   });
 });

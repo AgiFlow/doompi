@@ -1,6 +1,12 @@
 import type { DoomHubChannel, DoomHubChannelSource, DoomHubSessionScope } from '@agimon-ai/doompi-core/hub-channel';
+import { parseRemoteSessionReference } from '@agimon-ai/doompi-session';
 
 import { VoiceOwnershipCoordinator } from '../../services/voiceOwnershipCoordinator';
+import {
+  discoverPairedVoiceTargets,
+  registerVoicePeerOwnership,
+  sendPairedVoiceOwnershipCommand,
+} from '../../services/voicePeerRelay';
 import { VOICE_MEDIA_API_BASE_PATH, VOICE_MEDIA_WAKE_TYPE, type VoiceMediaWake } from '../../types/clientMedia';
 import {
   VOICE_OWNERSHIP_COMMAND_TIMEOUT_MS,
@@ -83,14 +89,19 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
       const scopes = new Map<string, DoomHubSessionScope>();
       const subscriptions = new Map<string, () => void>();
       const handledRequests = new Set<string>();
+      const localRegistrations = new Map<string, NonNullable<VoiceOwnershipSessionSnapshot['registration']>>();
+      const remoteSessions = new Set<string>();
       let catalogSignature = '';
       let catalogRun: Promise<void> | undefined;
+      let peerRefreshTimer: ReturnType<typeof setInterval> | undefined;
 
       const publishSelection = (payload: BrowserVoiceOwnershipPayload): void => {
         for (const scope of scopes.values()) host.publish(scope.sessionId, payload);
       };
 
       const sendCommand = async (sessionId: string, command: VoiceOwnershipCommand) => {
+        if (parseRemoteSessionReference(sessionId) !== undefined)
+          return sendPairedVoiceOwnershipCommand(sessionId, command);
         const scope = scopes.get(sessionId);
         if (scope === undefined) throw new Error(`Voice session ${sessionId} is unavailable.`);
         const response = await host.requestSessionApi(scope, {
@@ -110,6 +121,10 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
         now: () => Date.now(),
         createId: () => globalThis.crypto.randomUUID(),
       });
+      const unregisterPeerOwnership = registerVoicePeerOwnership({
+        discover: () => [...localRegistrations].map(([sessionId, registration]) => ({ sessionId, registration })),
+        command: (sessionId, command) => sendCommand(sessionId, command),
+      });
 
       const remember = (key: string): boolean => {
         if (handledRequests.has(key)) return false;
@@ -121,13 +136,25 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
         return true;
       };
 
+      const refreshRemoteTargets = async (): Promise<void> => {
+        const discovered = await discoverPairedVoiceTargets();
+        const next = new Set(discovered.map((target) => target.sessionId));
+        for (const sessionId of remoteSessions) if (!next.has(sessionId)) coordinator.remove(sessionId);
+        remoteSessions.clear();
+        for (const target of discovered) {
+          remoteSessions.add(target.sessionId);
+          coordinator.update(target.sessionId, target.registration);
+        }
+      };
+
       const publishCatalogsOnce = async (): Promise<void> => {
+        await refreshRemoteTargets();
         const nextSignature = [...scopes.keys()]
           .sort((left, right) => left.localeCompare(right))
           .map((sessionId) => `${sessionId}:${JSON.stringify(coordinator.catalog(sessionId))}`)
           .join('|');
         if (nextSignature === catalogSignature) return;
-        await coordinator.publishCatalogs();
+        await coordinator.publishCatalogs([...scopes.keys()]);
         catalogSignature = nextSignature;
       };
 
@@ -154,7 +181,7 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
           const key = `${sessionId}:handoff:${snapshot.handoff.requestId}`;
           if (!remember(key)) return;
           try {
-            if (!(await coordinator.handoff(sessionId, snapshot.handoff.handle)))
+            if (!(await coordinator.handoff(sessionId, snapshot.handoff.handle, snapshot.handoff.catalogRevision)))
               host.onNotice(`voice handoff requested by ${sessionId} was rejected`);
           } catch (error) {
             host.onNotice(
@@ -179,6 +206,7 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
       const applySnapshot = (sessionId: string, value: unknown): void => {
         const snapshot = parseVoiceOwnershipSessionSnapshot(value);
         if (snapshot?.registration === undefined) {
+          localRegistrations.delete(sessionId);
           coordinator.remove(sessionId);
           void refreshCatalogs().catch((error: unknown) =>
             host.onNotice(
@@ -187,6 +215,7 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
           );
           return;
         }
+        localRegistrations.set(sessionId, snapshot.registration);
         coordinator.update(sessionId, snapshot.registration);
         void processSnapshot(sessionId, snapshot);
         void refreshCatalogs().catch((error: unknown) =>
@@ -215,11 +244,22 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
               `voice ownership catalog update failed (${error instanceof Error ? error.message : String(error)})`,
             ),
           );
+          if (peerRefreshTimer === undefined) {
+            peerRefreshTimer = setInterval(() => {
+              void refreshCatalogs().catch((error: unknown) =>
+                host.onNotice(
+                  `voice ownership peer refresh failed (${error instanceof Error ? error.message : String(error)})`,
+                ),
+              );
+            }, 5_000);
+            peerRefreshTimer.unref?.();
+          }
         },
         sessionRemoved(sessionId) {
           subscriptions.get(sessionId)?.();
           subscriptions.delete(sessionId);
           scopes.delete(sessionId);
+          localRegistrations.delete(sessionId);
           coordinator.remove(sessionId);
           catalogSignature = '';
         },
@@ -227,7 +267,12 @@ export function createVoiceOwnershipChannel(): DoomHubChannel {
           for (const unsubscribe of subscriptions.values()) unsubscribe();
           subscriptions.clear();
           scopes.clear();
+          localRegistrations.clear();
+          remoteSessions.clear();
           handledRequests.clear();
+          if (peerRefreshTimer !== undefined) clearInterval(peerRefreshTimer);
+          peerRefreshTimer = undefined;
+          unregisterPeerOwnership();
         },
       };
       return source;

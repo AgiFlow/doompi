@@ -63,9 +63,9 @@ const RealtimeSnapshot = Type.Object({
   browser: O(Browser),
 });
 const Wake = Type.Object({ eventEpoch: S, sequence: N });
-const Version = { version: Type.Literal(2) };
+const Version = { version: Type.Literal(3) };
 const Targets = Type.Array(Type.Object({ handle: S, label: S, order: N }), { maxItems: 32 });
-const OwnershipAction = values(['catalog', 'activate', 'deactivate']);
+const OwnershipAction = values(['catalog', 'prepare', 'activate', 'deactivate', 'readiness', 'fence']);
 const Acknowledgement = Type.Object({
   ...Version,
   commandId: S,
@@ -74,12 +74,23 @@ const Acknowledgement = Type.Object({
   active: B,
   error: O(S),
 });
-const Command = Type.Object({ ...Version, commandId: S, action: OwnershipAction, targets: O(Targets) });
+const Command = Type.Object({
+  ...Version,
+  commandId: S,
+  action: OwnershipAction,
+  targets: O(Targets),
+  catalogRevision: O(S),
+  handoffId: O(S),
+  controllerId: O(S),
+  leaseId: O(S),
+  revision: O(N),
+});
 const Snapshot = Type.Object({
   registration: O(Type.Object({ ...Version, leaseId: S, revision: N, label: S, eligible: B, active: B })),
   targets: Targets,
+  catalogRevision: O(S),
   activation: O(Type.Object({ ...Version, requestId: S })),
-  handoff: O(Type.Object({ ...Version, requestId: S, handle: S })),
+  handoff: O(Type.Object({ ...Version, requestId: S, handle: S, catalogRevision: S })),
   acknowledgement: O(Acknowledgement),
 });
 const Errors = Object.fromEntries(
@@ -139,7 +150,7 @@ const pcm = (path: string, method: 'GET' | 'POST', query: string[]): DoomHttpCon
 };
 export const apiContracts = defineApiContract({
   version: 1,
-  protocols: { 'voice-media': '6', 'voice-ownership': '2' },
+  protocols: { 'voice-media': '6', 'voice-ownership': '3' },
   dynamic: ['Realtime event strings and SDP are provider-defined protocol documents passed through the media broker.'],
   http: [
     {
@@ -293,6 +304,51 @@ export const apiContracts = defineApiContract({
       ],
       body: { required: true, contentType: 'audio/webm', contentTypes: ['audio/webm', 'audio/mp4'], schema: S },
       responses: { ...Errors, '200': { description: 'Transcript.', schema: Type.Object({ transcript: S }) } },
+    },
+    {
+      id: 'voice.peer',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/peer',
+      method: 'POST',
+      authentication: 'none',
+      description: 'Accept an HMAC-authenticated bounded Voice media relay request from a configured peer.',
+      body: { required: true, contentType: 'application/json', schema: Type.Unknown() },
+      responses: jsonApiResponses(Type.Unknown()),
+    },
+    {
+      id: 'voice.peerOwnership',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/peer-ownership',
+      method: 'POST',
+      authentication: 'none',
+      description: 'Discover and stage Voice ownership through an HMAC-authenticated paired host.',
+      body: { required: true, contentType: 'application/json', schema: Type.Unknown() },
+      responses: jsonApiResponses(Type.Unknown()),
+    },
+    {
+      id: 'voice.relayBinding',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/relay-binding',
+      method: 'POST',
+      authentication: 'owner',
+      description: 'Issue an expiring controller-bound handle for a granted paired Voice session.',
+      body: { required: true, contentType: 'application/json', schema: Type.Object({ target: S, connectionId: S }) },
+      responses: jsonApiResponses(Type.Object({ binding: S, expiresAt: N })),
+    },
+    {
+      id: 'voice.relay',
+      scope: 'global',
+      basePath: 'voice',
+      path: '/relay',
+      method: 'POST',
+      authentication: 'owner',
+      description: 'Relay a browser Voice media operation through an expiring controller-bound handle.',
+      parameters: [{ name: 'binding', in: 'query', required: true, schema: S }],
+      body: { required: true, contentType: 'application/json', schema: Type.Unknown() },
+      responses: jsonApiResponses(Type.Unknown()),
     },
     {
       id: 'voice.readiness',

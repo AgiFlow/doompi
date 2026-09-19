@@ -8,7 +8,7 @@
  * to one HTTP framework; a Hono app satisfies it through `app.fetch`.
  */
 
-import type { DoomDirectEventBus, DoomHubSessionService } from './hubChannel';
+import type { DoomDirectEventBus, DoomHubSessionService, DoomSessionCommunicationEndpoint } from './hubChannel';
 import type { DoomMcpProjection } from './mcpProjection';
 /** The host-owned sync view a repository-scoped package API may inspect. */
 export interface DoomRepositorySyncView {
@@ -168,6 +168,8 @@ export interface DoomApiContext {
   oauthRedirect?(): DoomOAuthRedirect | undefined;
   /** Canonical in-process lifecycle for sessions created by this host. */
   sessionService?: DoomHubSessionService;
+  /** Host-bound, authenticated inter-session event endpoint for this session. */
+  sessionCommunication?: DoomSessionCommunicationEndpoint;
   /** Same-process events shared by session APIs and hub channels. */
   directEvents?: DoomDirectEventBus;
   /** Deliver a typed method to a channel on this exact hub mount, retaining the caller's connection identity. */

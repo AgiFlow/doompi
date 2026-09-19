@@ -69,15 +69,16 @@ describe('execute', () => {
     expect(content).toContain('session-9');
   });
 
-  it('passes an explicit baseRef and name through', async () => {
+  it('passes an explicit baseRef, name, and task through', async () => {
     const ops = operations();
-    await call(ops, { action: 'spawn_worktree', branch: 'wt/one', baseRef: 'v1', name: 'Auth' });
+    await call(ops, { action: 'spawn_worktree', branch: 'wt/one', baseRef: 'v1', name: 'Auth', task: 'Build it' });
     expect(ops.spawn).toHaveBeenCalledWith(
       expect.anything(),
       {
         branch: 'wt/one',
         baseRef: 'v1',
         name: 'Auth',
+        task: 'Build it',
       },
       expect.anything(),
     );

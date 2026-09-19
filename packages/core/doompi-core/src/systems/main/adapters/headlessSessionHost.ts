@@ -26,6 +26,7 @@ import type {
   DoomHeadlessSelection,
   DoomHeadlessTool,
 } from '../../../exports/headless';
+import type { DoomMcpSkill } from '../../../exports/mcpFacet';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
 import { createDirectHarnessRuntime } from '../../../server/directHarnessRuntime';
 import { buildContextDetail } from '../../../services/contextDetail';
@@ -733,6 +734,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   const listeners = new Set<(frame: SessionFrame) => void>();
   const initialSelection = restoreHeadlessSelection(entries, options.selection);
   let headlessHost: HeadlessHost | undefined;
+  let mcpServiceRoot: CordisContext | undefined;
+  let mcpLifecycle = new AbortController();
   let piHost: PiExtensionHost | undefined;
   let client: ReturnType<typeof createHeadlessClient> | undefined;
   let disposed = false;
@@ -885,6 +888,70 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   let surfaceRevision = 0;
   let toolSurfaceReady = false;
   let toolReapplyQueued = false;
+  let mcpSurfaceRevision = 0;
+  let mcpSurfaceReady = false;
+  let appliedMcpTools = new Map<string, AppliedSessionTool>();
+  let appliedMcpSkills = new Map<string, { descriptor: SessionSkillDescriptor; skill: DoomMcpSkill }>();
+
+  const prepareMcpSurface = async (): Promise<void> => {
+    if (!headlessHost?.status.ready) throw new Error('Headless capabilities are not installed.');
+    if (mcpServiceRoot === undefined) throw new Error('MCP session services are not installed.');
+    mcpSurfaceReady = false;
+    mcpLifecycle.abort();
+    mcpLifecycle = new AbortController();
+    const pluginContext = {
+      execution: headlessHost.context,
+      services: { get: <T>(name: string): T | undefined => mcpServiceRoot?.get(name) as T | undefined },
+      selection: {
+        read: () => headlessHost!.context.selection,
+        change: (change: Parameters<HeadlessHost['changeSelection']>[0]) => headlessHost!.changeSelection(change),
+      },
+      signal: mcpLifecycle.signal,
+    };
+    const nextTools = new Map<string, AppliedSessionTool>();
+    const nextSkills = new Map<string, { descriptor: SessionSkillDescriptor; skill: DoomMcpSkill }>();
+    for (const loaded of options.mcpPlugins ?? []) {
+      const selection = headlessHost.context.selection;
+      if (
+        !loaded.declaration.owners.some(
+          (owner) =>
+            owner.majorMode === selection.majorMode &&
+            (owner.layer === 'default' || selection.activeLayers.includes(owner.layer)),
+        )
+      )
+        continue;
+      const scope =
+        typeof loaded.plugin.session === 'function'
+          ? await loaded.plugin.session(pluginContext)
+          : loaded.plugin.session;
+      for (const tool of scope.tools ?? []) {
+        if (nextTools.has(tool.name)) throw new Error(`Duplicate MCP tool '${tool.name}'`);
+        nextTools.set(tool.name, {
+          descriptor: {
+            name: tool.name,
+            label: tool.label ?? tool.name,
+            description: tool.description,
+            parameters: tool.parameters,
+          },
+          execute: (toolCallId, parameters, signal, onUpdate) =>
+            tool.execute(toolCallId, parameters, signal, onUpdate, headlessHost!.context),
+        });
+      }
+      for (const skill of scope.skills ?? []) {
+        if ([...nextSkills.values()].some((candidate) => candidate.descriptor.name === skill.name))
+          throw new Error(`Duplicate MCP skill '${skill.name}'`);
+        const uri = `doompi://session/${encodeURIComponent(runtime.sessionId)}/mcp/skills/${encodeURIComponent(skill.name)}`;
+        nextSkills.set(uri, {
+          descriptor: { name: skill.name, description: skill.description, uri },
+          skill,
+        });
+      }
+    }
+    appliedMcpTools = nextTools;
+    appliedMcpSkills = nextSkills;
+    mcpSurfaceRevision += 1;
+    mcpSurfaceReady = true;
+  };
 
   const applyToolSurface = async (tools: readonly HeadlessTool[]): Promise<void> => {
     toolSurfaceReady = false;
@@ -956,6 +1023,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
   };
 
   const prepareFacets = (root: CordisContext): void => {
+    mcpServiceRoot = root;
     root.plugin((context) => {
       context.provide(DOOM_CHILD_SESSION_SERVICE, childSessionProvider.get());
       context.effect(() => () => childSessionProvider.close(), 'headless child session service lifetime');
@@ -1016,7 +1084,6 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         surfaceRevision += 1;
       },
       onApplied: async (selection) => {
-        if (headlessReady) await publishComposition(selection);
         options.publishSelectionStatus?.((source, text) => client!.client.setStatus(source, text), selection);
       },
       onError: (error) =>
@@ -1029,6 +1096,14 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       (selection) => options.contextGroups?.(root, selection) ?? [],
       readSystemPrompt,
     );
+    headlessHost.subscribeSelection(async (selection) => {
+      // `onApplied` runs before HeadlessHost publishes its ready snapshot. Recompose
+      // the remote surface here, after selection is coherent, rather than making a
+      // transient not-ready state fail the host selection.
+      if (!headlessReady) return;
+      await prepareMcpSurface();
+      await publishComposition(selection);
+    });
   };
 
   const activateFacets = async (installed: InstalledServerFacets): Promise<void> => {
@@ -1046,6 +1121,7 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     await headlessHost.select(initialSelection);
     headlessReady = headlessHost.status.ready;
     if (headlessReady) {
+      await prepareMcpSurface();
       await headlessHost.dispatchHook('session_start', {});
       await publishComposition();
       // A journal reopened while its lane still holds an in-flight operation is a
@@ -1065,6 +1141,8 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
       if (disposed) return;
       disposed = true;
       headlessReady = false;
+      mcpSurfaceReady = false;
+      mcpLifecycle.abort();
       const failures: unknown[] = [];
       try {
         if (headlessHost?.status.ready) await headlessHost.dispatchHook('session_shutdown', {});
@@ -1104,6 +1182,103 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     );
   };
 
+  const invokeSurfaceTool = async (
+    invocation: Parameters<SessionToolSurface['invokeTool']>[0],
+    readRevision: () => number,
+    readTools: () => Map<string, AppliedSessionTool>,
+    ready: () => boolean,
+    lifecycleSignal?: AbortSignal,
+  ): Promise<import('../../../exports/headless').DoomHeadlessToolResult> => {
+    if (disposed || !headlessReady || !ready() || !headlessHost?.status.ready)
+      throw new Error('Headless capability preparation is not ready.');
+    if (invocation.revision !== readRevision()) throw new Error('The session tool surface has changed');
+    if (!isJsonObject(invocation.arguments)) throw new Error('Tool arguments must be a JSON object');
+    const applied = readTools().get(invocation.name);
+    if (applied === undefined) throw new Error(`Tool '${invocation.name}' is not active`);
+    if (!Value.Check(applied.descriptor.parameters, invocation.arguments))
+      throw new Error(`Invalid arguments for tool '${invocation.name}'`);
+    const signals = [invocation.signal, lifecycleSignal].filter(
+      (signal): signal is AbortSignal => signal !== undefined,
+    );
+    const signal = signals.length === 0 ? undefined : AbortSignal.any(signals);
+    signal?.throwIfAborted();
+    return runtime.runExternalOperation(async () => {
+      const toolCallId = `external-${randomUUID()}`;
+      const before = await beforeTool(
+        { toolCallId, toolName: invocation.name, args: invocation.arguments as Record<string, JsonValue> },
+        BACKGROUND_CONTEXT,
+      );
+      if (before?.block !== undefined) return { content: [{ type: 'text', text: before.block.reason }], isError: true };
+      const args = before?.args ?? (invocation.arguments as Record<string, JsonValue>);
+      if (!Value.Check(applied.descriptor.parameters, args))
+        throw new Error(`A tool hook produced invalid arguments for '${invocation.name}'`);
+      await invocation.authorize?.();
+      signal?.throwIfAborted();
+      if (disposed || !headlessReady || !ready() || !headlessHost?.status.ready)
+        throw new Error('Headless capability preparation is not ready.');
+      if (invocation.revision !== readRevision() || readTools().get(invocation.name) !== applied)
+        throw new Error(`Tool '${invocation.name}' is no longer active`);
+      emitTo(listeners, {
+        type: 'tool_execution_start',
+        runId: EXTERNAL_OPERATION,
+        turnId: EXTERNAL_OPERATION,
+        toolCallId,
+        toolName: invocation.name,
+        args,
+      });
+      let result;
+      try {
+        result = await applied.execute(toolCallId, args, signal, (partial) => {
+          emitTo(listeners, {
+            type: 'tool_execution_update',
+            runId: EXTERNAL_OPERATION,
+            turnId: EXTERNAL_OPERATION,
+            toolCallId,
+            toolName: invocation.name,
+            partialResult: partial,
+          });
+          invocation.onUpdate?.(partial);
+        });
+      } catch (error) {
+        result = {
+          content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
+          isError: true,
+        };
+      }
+      const patch = await afterTool(
+        {
+          toolCallId,
+          toolName: invocation.name,
+          args,
+          content: result.content,
+          ...(isJsonValue(result.details) ? { details: result.details } : {}),
+          isError: result.isError === true,
+        },
+        BACKGROUND_CONTEXT,
+      );
+      const patched = {
+        content: patch?.content ?? result.content,
+        ...(patch?.details !== undefined
+          ? { details: patch.details }
+          : result.details === undefined
+            ? {}
+            : { details: result.details }),
+        isError: patch?.isError ?? result.isError ?? false,
+      };
+      emitTo(listeners, {
+        type: 'tool_execution_end',
+        runId: EXTERNAL_OPERATION,
+        turnId: EXTERNAL_OPERATION,
+        toolCallId,
+        toolName: invocation.name,
+        result: patched,
+        isError: patched.isError,
+        terminate: patch?.terminate ?? false,
+      });
+      return patched;
+    });
+  };
+
   const toolSurface: SessionToolSurface = {
     readSurface() {
       if (disposed || !headlessReady || !toolSurfaceReady || !headlessHost?.status.ready)
@@ -1114,89 +1289,13 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
         skills: [...appliedSkills.values()].map((skill) => skill.descriptor),
       };
     },
-    async invokeTool(invocation) {
-      if (disposed || !headlessReady || !toolSurfaceReady || !headlessHost?.status.ready)
-        throw new Error('Headless capability preparation is not ready.');
-      if (invocation.revision !== surfaceRevision) throw new Error('The session tool surface has changed');
-      if (!isJsonObject(invocation.arguments)) throw new Error('Tool arguments must be a JSON object');
-      const applied = appliedSessionTools.get(invocation.name);
-      if (applied === undefined) throw new Error(`Tool '${invocation.name}' is not active`);
-      if (!Value.Check(applied.descriptor.parameters, invocation.arguments))
-        throw new Error(`Invalid arguments for tool '${invocation.name}'`);
-      return runtime.runExternalOperation(async () => {
-        const toolCallId = `external-${randomUUID()}`;
-        const before = await beforeTool(
-          { toolCallId, toolName: invocation.name, args: invocation.arguments as Record<string, JsonValue> },
-          BACKGROUND_CONTEXT,
-        );
-        if (before?.block !== undefined) {
-          return { content: [{ type: 'text', text: before.block.reason }], isError: true };
-        }
-        const args = before?.args ?? (invocation.arguments as Record<string, JsonValue>);
-        if (!Value.Check(applied.descriptor.parameters, args))
-          throw new Error(`A tool hook produced invalid arguments for '${invocation.name}'`);
-        if (invocation.revision !== surfaceRevision || appliedSessionTools.get(invocation.name) !== applied)
-          throw new Error(`Tool '${invocation.name}' is no longer active`);
-        emitTo(listeners, {
-          type: 'tool_execution_start',
-          runId: EXTERNAL_OPERATION,
-          turnId: EXTERNAL_OPERATION,
-          toolCallId,
-          toolName: invocation.name,
-          args,
-        });
-        let result;
-        try {
-          result = await applied.execute(toolCallId, args, invocation.signal, (partial) => {
-            emitTo(listeners, {
-              type: 'tool_execution_update',
-              runId: EXTERNAL_OPERATION,
-              turnId: EXTERNAL_OPERATION,
-              toolCallId,
-              toolName: invocation.name,
-              partialResult: partial,
-            });
-            invocation.onUpdate?.(partial);
-          });
-        } catch (error) {
-          result = {
-            content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }],
-            isError: true,
-          };
-        }
-        const patch = await afterTool(
-          {
-            toolCallId,
-            toolName: invocation.name,
-            args,
-            content: result.content,
-            ...(isJsonValue(result.details) ? { details: result.details } : {}),
-            isError: result.isError === true,
-          },
-          BACKGROUND_CONTEXT,
-        );
-        const patched = {
-          content: patch?.content ?? result.content,
-          ...(patch?.details !== undefined
-            ? { details: patch.details }
-            : result.details === undefined
-              ? {}
-              : { details: result.details }),
-          isError: patch?.isError ?? result.isError ?? false,
-        };
-        emitTo(listeners, {
-          type: 'tool_execution_end',
-          runId: EXTERNAL_OPERATION,
-          turnId: EXTERNAL_OPERATION,
-          toolCallId,
-          toolName: invocation.name,
-          result: patched,
-          isError: patched.isError,
-          terminate: patch?.terminate ?? false,
-        });
-        return patched;
-      });
-    },
+    invokeTool: (invocation) =>
+      invokeSurfaceTool(
+        invocation,
+        () => surfaceRevision,
+        () => appliedSessionTools,
+        () => toolSurfaceReady,
+      ),
     readSkill(revision, uri) {
       if (disposed || !headlessReady || !toolSurfaceReady || !headlessHost?.status.ready)
         throw new Error('Headless capability preparation is not ready.');
@@ -1207,12 +1306,46 @@ export async function createHeadlessSessionHost(options: HeadlessSessionHostOpti
     },
   };
 
+  const mcpSurface: SessionToolSurface = {
+    readSurface() {
+      if (disposed || !headlessReady || !mcpSurfaceReady || !headlessHost?.status.ready)
+        throw new Error('MCP capability preparation is not ready.');
+      return {
+        revision: mcpSurfaceRevision,
+        tools: [...appliedMcpTools.values()].map((tool) => tool.descriptor),
+        skills: [...appliedMcpSkills.values()].map((skill) => skill.descriptor),
+      };
+    },
+    invokeTool: (invocation) =>
+      invokeSurfaceTool(
+        invocation,
+        () => mcpSurfaceRevision,
+        () => appliedMcpTools,
+        () => mcpSurfaceReady,
+        mcpLifecycle.signal,
+      ),
+    async readSkill(revision, uri) {
+      if (disposed || !headlessReady || !mcpSurfaceReady || !headlessHost?.status.ready)
+        throw new Error('MCP capability preparation is not ready.');
+      if (revision !== mcpSurfaceRevision) throw new Error('The session MCP surface has changed');
+      const skill = appliedMcpSkills.get(uri)?.skill;
+      if (skill === undefined) throw new Error('The session MCP skill is not active');
+      const text = await skill.read(headlessHost.context);
+      if (disposed || !headlessReady || !mcpSurfaceReady || !headlessHost?.status.ready)
+        throw new Error('MCP capability preparation is not ready.');
+      if (revision !== mcpSurfaceRevision || appliedMcpSkills.get(uri)?.skill !== skill)
+        throw new Error('The session MCP surface has changed');
+      return text;
+    },
+  };
+
   return {
     runtime,
     get host() {
       return headlessHost;
     },
     toolSurface,
+    mcpSurface,
     prepareFacets,
     activateFacets,
     canDispatch: () => !disposed && headlessReady && !promptPreparationFailed && headlessHost?.status.ready === true,

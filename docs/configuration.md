@@ -25,11 +25,11 @@ validated resolved configuration
 
 Personal configuration is read first; the nearest repository configuration is applied second. Repository values are not an unrestricted deep merge. Some records replace by name, some fields merge, and some values are personal-only. Those rules keep local policy explicit and prevent a repository from silently inheriting or replacing sensitive personal settings.
 
-Relative personal paths resolve from `~/.pi/.doom/`. Relative repository paths resolve from the repository root. Invalid values and unknown keys fail during configuration loading rather than being ignored. See [Composition and runtime bundling](bundling.md) for what happens after configuration resolves.
+Relative personal paths resolve from `~/.pi/.doom/`. Relative repository paths resolve from the repository root. Invalid values fail during configuration loading. Most commands also reject unknown keys. `doompi sync` reports and ignores unknown keys in `config.yaml` and `modes.yaml`; use `doompi doctor` for the strict check. See [Composition and runtime bundling](bundling.md) for what happens after configuration resolves.
 
 ## `config.yaml`: set runtime policy
 
-`config.yaml` accepts only `projectTrust`, `modes.planning`, `editor`, `voice`, and `selection`. Unknown keys and invalid values stop configuration loading.
+`config.yaml` accepts `projectTrust`, `modes`, `computerUse`, `editor`, `voice`, and `selection`.
 
 ```yaml
 projectTrust: ask
@@ -43,11 +43,23 @@ modes:
       model: openai/gpt-5.4-mini
       thinking: medium
     plansDirectory: .doom/plans
+  autocompact:
+    enabled: true
+    model: openai/gpt-5.4-mini
+    thinking: medium
+    thresholds:
+      pass1: 0.6
+      pass2: 0.75
+      pass3: 0.9
+
+computerUse:
+  enabled: true
 
 editor:
   command: code
 
 voice:
+  mode: legacy
   engine: auto
   language: en
 
@@ -57,9 +69,13 @@ selection:
   profile: reviewer
 ```
 
-`projectTrust` accepts `ask`, `always`, or `never`. It is repository policy: an absent repository value becomes `ask` instead of inheriting the personal value. `editor.command` is personal, so a repository editor value does not replace it. Planning fields and ordinary Voice fields merge, with repository values winning. `voice.autoCapture` is personal-only and is rejected in repository configuration.
+`projectTrust` accepts `ask`, `always`, or `never`. It is repository policy: an absent repository value becomes `ask` instead of inheriting the personal value. `editor` and `computerUse` are personal-only. Repository editor values are ignored, while repository `computerUse` is rejected. `voice.mode` and `voice.autoCapture` are also personal-only and rejected in repository configuration. Other Voice fields merge, with repository values winning.
 
-Planning `thinking` accepts `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. `plansDirectory` may be absolute, use `~`, or be relative to the repository. `selection` supplies default axis values; it does not define modes, domains, or profiles. When repository `selection` exists, include every personal axis that should remain selected because omitted axes are not inherited.
+Planning and autocompact `thinking` accept `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. `plansDirectory` may be absolute, use `~`, or be relative to the repository. Autocompact thresholds are ratios from `0.05` through `0.99`. Its optional `overrides` list matches models in file order and replaces a ratio with an absolute token count for any configured pass.
+
+Voice `mode` accepts `legacy` or `live`. `engine` accepts `auto`, `whisper-cpp`, `openai-whisper`, or `mlx-whisper`. Adapter settings may name a binary and a model `path` or `id`; `whisper-cpp` accepts only `path`. Autonomous capture requires a `provider/model-id` model and a `tts` block whose engine is `macos-say`.
+
+`selection` supplies default axis values; it does not define modes, domains, or profiles. Selection merges per axis, so an omitted repository axis still inherits its personal value. You can also declare starting values with `defaultMajorMode` in `modes.yaml`, `defaultDomains` in `domains.yaml`, and `profiles.defaultProfile` in `profiles.yaml`.
 
 ## `modes.yaml`: choose behavior
 
@@ -98,7 +114,6 @@ default:
     - '@agimon-ai/doompi-workflow'
     - '@agimon-ai/doompi-log'
     - '@agimon-ai/doompi-mcp'
-    - '@agimon-ai/doompi-prompt'
 
 layers:
   team:
@@ -122,7 +137,7 @@ majorMode:
     layers: [team, review]
 ```
 
-Order matters. DoomPi activates `default.packages` first, then each selected layer from left to right. Put settings under the package that consumes them. Home and repository `layers` and `majorMode` records merge by name, with the repository definition replacing a collision. If both sources declare `default`, the repository block replaces the complete personal default. A repository entry set to `null` removes the matching layer or major mode.
+Order matters. DoomPi activates `default.packages` first, then each selected layer from left to right. A named layer may also declare `extensions` and `hookGroups`. Package mappings accept `optional: true`; optional packages and local paths are never installed automatically. Put settings under the package that consumes them. Home and repository `layers` and `majorMode` records merge by name, with the repository definition replacing a collision. If both sources declare `default`, the repository block replaces the complete personal default. A repository entry set to `null` removes the matching layer or major mode.
 
 Configurations created before the hashline tools were split may contain only `doompi-edit`.
 Replace that entry with the ordered `doompi-read`, `doompi-grep`, and `doompi-edit` trio. Init
@@ -177,8 +192,9 @@ folder name when no manifest name exists, becomes the catalog ID. Local roots an
 resolve beside the declaring file. Git and npm entries are cached in
 `~/.pi/.doom/plugin-cache`; pin a Git SHA or exact package version when reproducibility
 matters. Domains may load an entire plugin or select only its skills, agents, hooks, and MCP
-configuration. The optional `mcp` mapping is an allowlist, not a request to start every server
-in the repository.
+configuration. Set `sharedSkills: false` on a domain to omit shared `.claude/skills` when every
+selected domain opts out. The optional `mcp` mapping is an allowlist, not a request to start every
+server in the repository.
 
 Select one or more domains with `--domains development,review`, use an alias such as
 `--domains work`, or switch them with `/domains`. `--no-domains` is useful when the right
@@ -199,6 +215,7 @@ profiles:
       env:
         BRAND: acme
         TONE: concise
+  defaultProfile: release-writer
 ```
 
 With that config, `personas/release-writer/profile.md` is enough to discover
@@ -211,8 +228,9 @@ Discovery never recurses. Persona paths must remain under `agents/` or a root de
 same file, and symlinks may not escape the persona boundary. Legacy profiles written directly
 under `profiles` still load, but new configuration should use `roots` and `entries`.
 
-Select a profile with `--profile release-writer` or switch it with `/profile`. Leaving the
-catalog empty is valid; no profile remains a first-class choice.
+Select a profile with `--profile release-writer` or switch it with `/profile`. Use
+`defaultProfile` to start with one catalog entry when no flag or inherited selection names a
+profile. Leaving the catalog empty is valid; no profile remains a first-class choice.
 
 ## Check the matrix before launch
 

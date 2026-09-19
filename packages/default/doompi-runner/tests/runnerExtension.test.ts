@@ -404,6 +404,16 @@ describe('runnerExtension refresh', () => {
       status: 'running',
     });
     expect(extensionMocks.backgroundUpdate).toHaveBeenCalled();
+
+    harness.registry.list.mockResolvedValueOnce([{ ...runningRecord, id: 'runner-new', promoted: false }]);
+    harness.registryListener();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(harness.backgroundItems()).toContainEqual({
+      id: 'runner-new',
+      sessionId: 'session-a',
+      status: 'running',
+    });
+
     await harness.handlers.get('session_shutdown')?.({}, harness.context);
   });
   it('retains terminal work and retries until Pi accepts the completion notification', async () => {

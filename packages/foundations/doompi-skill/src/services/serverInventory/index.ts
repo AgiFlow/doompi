@@ -1,7 +1,13 @@
+import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { listDomainNames, resolvePluginEntries, resolveSharedSkills } from '@agimon-ai/doompi-config/domains';
+import {
+  listDomainNames,
+  resolvePluginEntries,
+  resolveSharedSkills,
+  type PluginEntry,
+} from '@agimon-ai/doompi-config/domains';
 import { readHarnessState } from '@agimon-ai/doompi-config/harnessState';
 import type { DoomHeadlessExecutionContext } from '@agimon-ai/doompi-core/headless';
 import { materializePluginEntries } from '@agimon-ai/doompi-domain/plugins';
@@ -20,12 +26,35 @@ export interface ServerSkillInventory {
   /** Every skill any selection can reach, so an activated command can still expand. */
   readonly inventory: DeferredSkillSnapshot;
   readonly groups: readonly ServerSkillGroup[];
+  readonly mcpGroups: readonly ServerSkillGroup[];
   readonly catalog: string;
 }
 
 interface SkillSource {
   readonly domain?: string;
   readonly paths: readonly string[];
+  readonly mcpPaths: readonly string[];
+}
+
+const LOCAL_ONLY_MCP_PACKAGES = new Set([
+  '@agimon-ai/doompi-voice',
+  '@agimon-ai/doompi-git',
+  '@agimon-ai/doompi-workflow',
+  '@agimon-ai/doompi-user-feedback',
+  '@agimon-ai/doompi-loop',
+  '@agimon-ai/doompi-goal',
+]);
+
+async function isMcpSkillPlugin(entry: PluginEntry): Promise<boolean> {
+  if (entry.source?.type === 'npm') return !LOCAL_ONLY_MCP_PACKAGES.has(entry.source.package);
+  try {
+    const manifest = JSON.parse(await readFile(path.join(entry.directory, 'package.json'), 'utf8')) as {
+      name?: unknown;
+    };
+    return typeof manifest.name !== 'string' || !LOCAL_ONLY_MCP_PACKAGES.has(manifest.name);
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -79,13 +108,22 @@ export async function discoverServerSkills(
     signal.throwIfAborted();
     try {
       const plugins = await materializePluginEntries(resolvePluginEntries(execution.repoRoot, [domain], [], home));
+      const mcpPluginRoots = (
+        await Promise.all(
+          plugins.map(async (plugin) =>
+            (await isMcpSkillPlugin(plugin)) ? path.join(plugin.directory, 'skills') : undefined,
+          ),
+        )
+      ).filter((root): root is string => root !== undefined);
       const collected = await collectResources(execution.repoRoot, plugins, {
         agents: false,
         mcp: false,
         sharedSkills: false,
       });
       try {
-        if (collected.skillDirectories.length > 0) sources.push({ domain, paths: [...collected.skillDirectories] });
+        if (collected.skillDirectories.length > 0) {
+          sources.push({ domain, paths: [...collected.skillDirectories], mcpPaths: mcpPluginRoots });
+        }
       } finally {
         await collected.cleanup();
       }
@@ -104,12 +142,14 @@ export async function discoverServerSkills(
   if (shared.length > 0) {
     const sharedPaths = shared.map((skill) => skill.path);
     for (const domain of domains) {
-      if (resolveSharedSkills(execution.repoRoot, [domain], home)) sources.push({ domain, paths: sharedPaths });
+      if (resolveSharedSkills(execution.repoRoot, [domain], home)) {
+        sources.push({ domain, paths: sharedPaths, mcpPaths: sharedPaths });
+      }
     }
   }
 
   // Repository-local skills belong to the repository, not to a selection.
-  sources.push({ paths: [repoSkills] });
+  sources.push({ paths: [repoSkills], mcpPaths: [repoSkills] });
 
   signal.throwIfAborted();
   // One walk for every group. Pi drops a path it has already loaded, so the
@@ -124,6 +164,12 @@ export async function discoverServerSkills(
       skills: inventory.skills.filter((skill) => within(skill.filePath, source.paths)),
     }))
     .filter((group) => group.skills.length > 0);
+  const mcpGroups = sources
+    .map((source) => ({
+      ...(source.domain === undefined ? {} : { domain: source.domain }),
+      skills: inventory.skills.filter((skill) => within(skill.filePath, source.mcpPaths)),
+    }))
+    .filter((group) => group.skills.length > 0);
 
   // The catalog still describes the active selection rather than everything on
   // disk, because it is prompt text rather than a menu.
@@ -133,6 +179,7 @@ export async function discoverServerSkills(
   return {
     inventory: { skills: inventory.skills, diagnostics: [...inventory.diagnostics, ...diagnostics] },
     groups,
+    mcpGroups,
     catalog: formatSkillsForPrompt(activeSkills) || '(no discovered skills)',
   };
 }

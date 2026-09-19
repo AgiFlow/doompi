@@ -95,6 +95,13 @@ export interface SyncServerBundleState {
   sourcesHash: string;
 }
 
+export interface SyncMcpBundleState {
+  descriptorPath: string;
+  fingerprint: string;
+  compilerManifests: Record<string, string>;
+  sourcesHash: string;
+}
+
 export interface SyncState {
   version: number;
   root: string;
@@ -142,6 +149,8 @@ export interface SyncState {
   precompile?: SyncPrecompileState;
   /** Absent only in generations produced before the server descriptor cutover. */
   serverBundle?: SyncServerBundleState;
+  /** Explicit remote-only session capabilities staged with this generation. */
+  mcpBundle?: SyncMcpBundleState;
   baseline: SyncBaseline;
 }
 
@@ -315,6 +324,27 @@ export function computeServerSourcesHash(resolved: Record<string, string>): stri
     if (!isRecord(manifest) || !isRecord(manifest.doompiServer) || !isRecord(manifest.doompiServer.contracts)) continue;
     // Include missing declarations too: building or repairing a contract must invalidate an incomplete generation.
     for (const file of [manifest.doompiServer.contracts.entry, manifest.doompiServer.contracts.dist]) {
+      if (typeof file !== 'string' || !file.startsWith('./') || file.split('/').includes('..') || /[\\%?#]/u.test(file))
+        continue;
+      updateFileInputHash(hash, path.join(root, file));
+    }
+  }
+  for (const [name, entry] of Object.entries(resolved).sort(([left], [right]) => left.localeCompare(right))) {
+    updateFramedHash(hash, 'entry', JSON.stringify([name, entry]));
+  }
+  return hash.digest('hex');
+}
+
+/** Include MCP declarations and their attributed source files in sync freshness. */
+export function computeMcpSourcesHash(resolved: Record<string, string>): string {
+  const hash = crypto.createHash('sha256');
+  const roots = [...new Set(Object.values(resolved).flatMap((entry) => owningPackageRoot(entry) ?? []))].sort();
+  for (const root of roots) {
+    const manifestPath = path.join(root, PACKAGE_MANIFEST_FILE);
+    updateFileInputHash(hash, manifestPath);
+    const manifest: unknown = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    if (!isRecord(manifest) || !isRecord(manifest.doompiMcp)) continue;
+    for (const file of [manifest.doompiMcp.entry, manifest.doompiMcp.dist]) {
       if (typeof file !== 'string' || !file.startsWith('./') || file.split('/').includes('..') || /[\\%?#]/u.test(file))
         continue;
       updateFileInputHash(hash, path.join(root, file));
@@ -543,6 +573,32 @@ function parseSyncState(source: string, statePath: string, options: ParseSyncSta
       sourcesHash: value.sourcesHash,
     };
   }
+  let mcpBundle: SyncMcpBundleState | undefined;
+  if (parsed.mcpBundle !== undefined) {
+    const value = parsed.mcpBundle;
+    if (
+      !isRecord(value) ||
+      typeof value.descriptorPath !== 'string' ||
+      typeof value.fingerprint !== 'string' ||
+      !COMPOSITION_FINGERPRINT.test(value.fingerprint) ||
+      typeof value.sourcesHash !== 'string' ||
+      !COMPOSITION_FINGERPRINT.test(value.sourcesHash)
+    ) {
+      throw new Error(`Doom sync state at ${statePath} has an invalid MCP bundle record`);
+    }
+    const compilerManifests = stringRecord(value.compilerManifests, 'MCP compiler manifests', statePath);
+    if (
+      [value.descriptorPath, ...Object.values(compilerManifests)].some((entry) => !isInside(generatedDirectory, entry))
+    ) {
+      throw new Error(`Doom sync state at ${statePath} references MCP material outside ${generatedDirectory}`);
+    }
+    mcpBundle = {
+      descriptorPath: value.descriptorPath,
+      fingerprint: value.fingerprint,
+      compilerManifests,
+      sourcesHash: value.sourcesHash,
+    };
+  }
   const bootstrap = typeof parsed.bootstrap === 'string' ? parsed.bootstrap : undefined;
   const generatedPaths = [bootstrap, ...Object.values(compiled ?? {}), ...Object.values(bundles ?? {})].filter(
     (entry): entry is string => entry !== undefined,
@@ -577,6 +633,7 @@ function parseSyncState(source: string, statePath: string, options: ParseSyncSta
     bootstrap,
     precompile,
     ...(serverBundle ? { serverBundle } : {}),
+    ...(mcpBundle ? { mcpBundle } : {}),
     baseline: parsed.baseline as unknown as SyncBaseline,
   };
 }

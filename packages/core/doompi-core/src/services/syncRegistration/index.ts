@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { DOOM_SERVER_BUNDLE_FILE, parseDoomServerBundle } from '../../exports/serverFacet';
+import { DOOM_MCP_BUNDLE_FILE, parseDoomMcpBundle } from '../../schemas/mcpBundle';
 import { DOOM_PACKAGE_NAME } from '../doomPackage';
 import { isRecord, writeFileAtomic } from '../json';
 import {
@@ -38,6 +39,8 @@ export interface SyncServerBundleRegistration {
   fingerprint: string;
 }
 
+export type SyncMcpBundleRegistration = SyncServerBundleRegistration;
+
 export interface SyncRegistration {
   version: number;
   root: string;
@@ -50,6 +53,8 @@ export interface SyncRegistration {
   apiDirectory: string;
   /** Missing only for explicitly supported pre-cutover generations. */
   serverBundle?: SyncServerBundleRegistration;
+  /** Explicit MCP runtime admitted with this generation. */
+  mcpBundle?: SyncMcpBundleRegistration;
   package: SyncPackageRegistration;
 }
 
@@ -214,6 +219,33 @@ export function validateSyncRegistration(registration: SyncRegistration, locatio
   } else if (state.serverBundle !== undefined) {
     throw new Error(`Doom sync registration at ${recordPath} is missing its server bundle record`);
   }
+  if (registration.mcpBundle !== undefined) {
+    const bundle = registration.mcpBundle;
+    if (
+      !isInside(registration.generationRoot, bundle.path) ||
+      canonicalPath(bundle.path) !== canonicalPath(path.join(registration.generationRoot, 'mcp', DOOM_MCP_BUNDLE_FILE))
+    )
+      throw new Error(`Doom sync registration at ${recordPath} has an invalid MCP descriptor path`);
+    if (!SHA256.test(bundle.sha256) || sha256File(bundle.path) !== bundle.sha256)
+      throw new Error(`Doom sync registration at ${recordPath} has a mismatched MCP descriptor hash`);
+    const descriptor = parseDoomMcpBundle(JSON.parse(fs.readFileSync(bundle.path, 'utf8')));
+    const recorded = state.mcpBundle;
+    if (
+      descriptor.generation !== registration.generation ||
+      descriptor.fingerprint !== bundle.fingerprint ||
+      !isRecord(recorded) ||
+      recorded.fingerprint !== bundle.fingerprint ||
+      recorded.descriptorPath !== bundle.path
+    )
+      throw new Error(`Doom sync registration at ${recordPath} has mismatched MCP bundle identity`);
+    for (const entry of descriptor.entries) {
+      const modulePath = path.resolve(path.dirname(bundle.path), entry.module);
+      if (!isInside(registration.generationRoot, modulePath) || sha256File(modulePath) !== entry.sha256)
+        throw new Error(`Doom sync registration at ${recordPath} has a mismatched MCP artifact hash`);
+    }
+  } else if (state.mcpBundle !== undefined) {
+    throw new Error(`Doom sync registration at ${recordPath} is missing its MCP bundle record`);
+  }
   validatePackage(registration.package, recordPath, recordVersion);
   return registration;
 }
@@ -230,13 +262,14 @@ function parseRegistration(value: unknown, recordPath: string): SyncRegistration
     stateSha256: requiredString(value.stateSha256, 'state hash', recordPath),
     webDirectory: value.webDirectory === null ? null : requiredString(value.webDirectory, 'web directory', recordPath),
     apiDirectory: requiredString(value.apiDirectory, 'API directory', recordPath),
-    ...(value.serverBundle === undefined ? {} : { serverBundle: serverBundleFrom(value.serverBundle, recordPath) }),
+    ...(value.serverBundle === undefined ? {} : { serverBundle: bundleFrom(value.serverBundle, recordPath, 'server') }),
+    ...(value.mcpBundle === undefined ? {} : { mcpBundle: bundleFrom(value.mcpBundle, recordPath, 'MCP') }),
     package: packageFrom(value.package, recordPath),
   };
 }
 
-function serverBundleFrom(value: unknown, recordPath: string): SyncServerBundleRegistration {
-  if (!isRecord(value)) throw new Error(`Doom sync registration at ${recordPath} has an invalid server bundle record`);
+function bundleFrom(value: unknown, recordPath: string, kind: 'server' | 'MCP'): SyncServerBundleRegistration {
+  if (!isRecord(value)) throw new Error(`Doom sync registration at ${recordPath} has an invalid ${kind} bundle record`);
   return {
     path: requiredString(value.path, 'server descriptor path', recordPath),
     sha256: requiredString(value.sha256, 'server descriptor hash', recordPath),

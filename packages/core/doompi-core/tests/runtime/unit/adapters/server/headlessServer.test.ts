@@ -24,6 +24,7 @@ import {
 import { createHeadlessHub } from '../../../../../src/server/headlessHub';
 import { serveHeadlessServer, type HeadlessServer } from '../../../../../src/server/headlessServer';
 import type { HeadlessSessionHost } from '../../../../../src/systems/main/types/headlessSessionHost';
+import type { SessionToolInvocation } from '../../../../../src/types/server/sessionToolSurface';
 
 function host() {
   const listeners = new Set<(frame: Record<string, unknown>) => void>();
@@ -62,6 +63,17 @@ function host() {
           skills: [{ name: 'review', description: 'Review code', uri: 'doompi://session/session/skills/review' }],
         }),
         invokeTool: vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'done' }] })),
+        readSkill: vi.fn(() => '# Review'),
+      },
+      mcpSurface: {
+        readSurface: () => ({
+          revision: 1,
+          tools: [{ name: 'read', label: 'Read', description: 'Read a file', parameters: { type: 'object' } as never }],
+          skills: [{ name: 'review', description: 'Review code', uri: 'doompi://session/session/skills/review' }],
+        }),
+        invokeTool: vi.fn(async (_invocation: SessionToolInvocation) => ({
+          content: [{ type: 'text' as const, text: 'done' }],
+        })),
         readSkill: vi.fn(() => '# Review'),
       },
       prepareFacets: () => undefined,
@@ -273,6 +285,55 @@ describe('serveHeadlessServer', () => {
         })
       ).status,
     ).toBe(401);
+
+    // Real TCP requests through the headless server and per-request MCP SDK transports.
+    for (const cancellation of ['notification', 'disconnect'] as const) {
+      let start!: (signal: AbortSignal) => void;
+      const started = new Promise<AbortSignal>((resolve) => {
+        start = resolve;
+      });
+      let stop!: () => void;
+      const stopped = new Promise<void>((resolve) => {
+        stop = resolve;
+      });
+      first.host.mcpSurface.invokeTool.mockImplementationOnce(async (invocation) => {
+        const signal = invocation.signal!;
+        signal.addEventListener('abort', () => stop(), { once: true });
+        start(signal);
+        await stopped;
+        return { content: [{ type: 'text', text: 'cancelled' }] };
+      });
+      const controller = new AbortController();
+      const headers = {
+        authorization: `Bearer ${tokens.access_token}`,
+        accept: 'application/json, text/event-stream',
+        'content-type': 'application/json',
+      };
+      const pending = fetch(`${server.url}${root}`, {
+        method: 'POST',
+        headers,
+        signal: controller.signal,
+        body: JSON.stringify({ jsonrpc: '2.0', id: 42, method: 'tools/call', params: { name: 'read' } }),
+      }).then(
+        (response) => response.json(),
+        (error: unknown) => error,
+      );
+      const signal = await started;
+      expect(signal.aborted).toBe(false);
+      if (cancellation === 'notification') {
+        const cancelled = await fetch(`${server.url}${root}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 42 } }),
+        });
+        expect(cancelled.status).toBe(202);
+      } else {
+        controller.abort();
+      }
+      await vi.waitFor(() => expect(signal.aborted).toBe(true));
+      await stopped;
+      await pending;
+    }
 
     await hub.closeSession('one');
     hub.register({
@@ -753,7 +814,9 @@ describe('serveHeadlessServer', () => {
     );
     expect(requestApi).toHaveBeenCalledWith({ scope: 'global' }, 'test', expect.any(Request));
     const forwarded = requestApi.mock.calls.at(-1)?.[2];
-    expect(forwarded?.headers.get('x-doompi-api-caller-locality')).toBeNull();
+    expect(forwarded?.headers.get('x-doompi-api-caller-locality')).toBe('local');
+    expect(forwarded?.headers.get('x-doompi-api-caller-step-up')).toBe('not-required');
+    expect(forwarded?.headers.get('x-doompi-api-caller-device-id')).toBeNull();
     expect(forwarded?.headers.get('x-extra')).toBe('allowed');
     expect(recordEvent).toHaveBeenCalledWith(
       'doompi_server.plugin.response',

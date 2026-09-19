@@ -7,6 +7,7 @@ import type {
   DoomHubSessionCreateRequest,
   DoomHubSessionScope,
   DoomHubSessionService,
+  DoomSessionCommunicationEndpoint,
 } from '../exports/hubChannel';
 import type { DoomWebComposition } from '../exports/packageApi';
 import type { DoomApiContext, DoomApiMount } from '../exports/packageApi';
@@ -140,6 +141,15 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
   const directEventListeners = new Map<string, Set<(payload: unknown) => void>>();
   const directEventLatest = new Map<string, unknown>();
   const maxDirectEventLatest = 4096;
+  const communicationEndpoints = new Map<
+    string,
+    {
+      listeners: Map<string, Set<(sourceSessionId: string, payload: unknown) => void>>;
+      readyListeners: Set<(peerSessionId: string) => void>;
+      ready: boolean;
+      endpoint: DoomSessionCommunicationEndpoint;
+    }
+  >();
   let closed = false;
   const mounts = new Map<string, { host: DoomServerHost; installed: InstalledServerFacets }>();
   const workspaces = new Map<string, HeadlessWorkspace>();
@@ -156,6 +166,16 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     (mount.scope === 'workspace' ? session.workspaceId === mount.workspaceId : session.id === mount.sessionId);
   const canClose = (mount: DoomApiMount, session: HeadlessHubSession): boolean =>
     belongs(mount, session) || (mount.scope === 'session' && session.parentSessionId === mount.sessionId);
+  const canCommunicate = (sourceId: string, targetId: string): boolean => {
+    if (closed || sourceId === targetId) return false;
+    const source = sessions.get(sourceId);
+    const target = sessions.get(targetId);
+    return (
+      source !== undefined &&
+      target !== undefined &&
+      (source.parentSessionId === target.id || target.parentSessionId === source.id)
+    );
+  };
   const selectedChannels = (session: HeadlessHubSession): StartedChannel[] => {
     const selected = new Map<string, StartedChannel>();
     for (const started of channels.values()) {
@@ -222,6 +242,67 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     },
   };
 
+  const announceCommunicationReady = (sessionId: string): void => {
+    const current = communicationEndpoints.get(sessionId);
+    if (current?.ready !== true) return;
+    for (const [peerSessionId, peer] of communicationEndpoints) {
+      if (!peer.ready || !canCommunicate(sessionId, peerSessionId)) continue;
+      for (const listener of current.readyListeners) listener(peerSessionId);
+      for (const listener of peer.readyListeners) listener(sessionId);
+    }
+  };
+
+  const bindCommunication = (sessionId: string): DoomSessionCommunicationEndpoint => {
+    const existing = communicationEndpoints.get(sessionId);
+    if (existing !== undefined) return existing.endpoint;
+    const listeners = new Map<string, Set<(sourceSessionId: string, payload: unknown) => void>>();
+    const readyListeners = new Set<(peerSessionId: string) => void>();
+    let endpoint!: DoomSessionCommunicationEndpoint;
+    const record = {
+      listeners,
+      readyListeners,
+      ready: false,
+      get endpoint() {
+        return endpoint;
+      },
+    };
+    endpoint = {
+      sessionId,
+      publish(targetSessionId, type, payload) {
+        if (!canCommunicate(sessionId, targetSessionId)) return false;
+        const target = communicationEndpoints.get(targetSessionId);
+        if (target?.ready !== true) return false;
+        for (const listener of target.listeners.get(type) ?? []) listener(sessionId, payload);
+        return true;
+      },
+      subscribe(type, listener) {
+        const current = listeners.get(type) ?? new Set<(sourceSessionId: string, payload: unknown) => void>();
+        current.add(listener);
+        listeners.set(type, current);
+        return () => {
+          current.delete(listener);
+          if (current.size === 0) listeners.delete(type);
+        };
+      },
+      onPeerReady(listener) {
+        readyListeners.add(listener);
+        if (!record.ready) {
+          record.ready = true;
+          announceCommunicationReady(sessionId);
+        }
+        return () => readyListeners.delete(listener);
+      },
+      close() {
+        if (communicationEndpoints.get(sessionId)?.endpoint !== endpoint) return;
+        communicationEndpoints.delete(sessionId);
+        listeners.clear();
+        readyListeners.clear();
+      },
+    };
+    communicationEndpoints.set(sessionId, record);
+    return endpoint;
+  };
+
   const emit = (event: HeadlessHubEvent): void => {
     if (closed) return;
     for (const listener of listeners) listener(event);
@@ -276,6 +357,12 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       isLive: (id) => {
         const session = sessions.get(id);
         return session !== undefined && belongs(mount, session);
+      },
+      canCommunicate: (sourceId, targetId) => {
+        const source = sessions.get(sourceId);
+        return (
+          source !== undefined && belongs(mount, source) && sessionService.canCommunicate?.(sourceId, targetId) === true
+        );
       },
     },
     directEvents: {
@@ -369,6 +456,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     if (current === undefined) return;
     const cleanup = sessionCleanups.get(sessionId);
     if (cleanup !== undefined) subscriptions.delete(cleanup);
+    communicationEndpoints.get(sessionId)?.endpoint.close();
     sessions.delete(sessionId);
     sessionCleanups.delete(sessionId);
     presentationCleanups.get(sessionId)?.();
@@ -411,6 +499,7 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
       awaitingInput: session.awaitingInput ?? false,
     };
     sessions.set(session.id, current);
+    announceCommunicationReady(session.id);
     const stopPresentation = session.host.onPresentationFrame((frame) => {
       if (sessions.get(session.id)?.host !== session.host) return;
       const type = typeof frame.type === 'string' ? frame.type : '';
@@ -487,6 +576,8 @@ export function createHeadlessHub(options: HeadlessHubOptions): HeadlessHub {
     },
     close: closeSession,
     isLive: (sessionId) => !closed && sessions.has(sessionId),
+    canCommunicate,
+    bindCommunication,
   };
 
   const mountFacets = async (

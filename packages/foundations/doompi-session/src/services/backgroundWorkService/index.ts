@@ -1,6 +1,7 @@
 import {
   BackgroundProviderWorkItemSchema,
   DOOM_BACKGROUND_WORK_CHANGED_EVENT,
+  DOOM_BACKGROUND_WORK_SERVICE,
   type BackgroundWorkProvider,
   type BackgroundWorkProviderHandle,
   type DoomBackgroundWorkService,
@@ -15,7 +16,7 @@ interface ProviderRegistration {
   readonly provider: BackgroundWorkProvider;
 }
 
-/** Creates Team's generation-bound, pull-based background-work registry. */
+/** Creates the generation-bound, pull-based coordinator shared by session extensions. */
 export function createBackgroundWorkService(ctx: Context): DoomBackgroundWorkService {
   const registrations = new Map<string, ProviderRegistration>();
   const generation = `doom-background-work:${crypto.randomUUID()}`;
@@ -81,4 +82,9 @@ export function createBackgroundWorkService(ctx: Context): DoomBackgroundWorkSer
     },
   };
   return Object.freeze(service);
+}
+
+/** Installs one coordinator in the current session service context. */
+export function provideBackgroundWorkService(context: Context): void {
+  context.provide(DOOM_BACKGROUND_WORK_SERVICE, createBackgroundWorkService(context));
 }

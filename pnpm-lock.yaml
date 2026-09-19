@@ -121,6 +121,9 @@ importers:
       oxlint-tsgolint:
         specifier: 7.0.2001
         version: 7.0.2001
+      tailwindcss:
+        specifier: 4.3.3
+        version: 4.3.3
       tsdown:
         specifier: 0.23.0
         version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
@@ -326,6 +329,9 @@ importers:
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-core
+      '@agimon-ai/doompi-session':
+        specifier: workspace:*
+        version: link:../../../packages/foundations/doompi-session
       '@agimon-ai/doompi-web-components':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-web-components
@@ -451,6 +457,9 @@ importers:
       '@agimon-ai/doompi-core':
         specifier: workspace:*
         version: link:../../../packages/core/doompi-core
+      '@agimon-ai/doompi-session':
+        specifier: workspace:*
+        version: link:../../../packages/foundations/doompi-session
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../../packages/foundations/doompi-telemetry
@@ -545,6 +554,9 @@ importers:
       '@agimon-ai/doompi-profile':
         specifier: workspace:*
         version: link:../../foundations/doompi-profile
+      '@agimon-ai/doompi-session':
+        specifier: workspace:*
+        version: link:../../foundations/doompi-session
       '@agimon-ai/doompi-skill':
         specifier: workspace:*
         version: link:../../foundations/doompi-skill
@@ -2100,6 +2112,43 @@ importers:
         specifier: 5.0.0
         version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/foundations/doompi-session:
+    dependencies:
+      '@agimon-ai/doompi-core':
+        specifier: workspace:*
+        version: link:../../core/doompi-core
+      '@deepseek-ai/cordis':
+        specifier: 4.0.2
+        version: 4.0.2
+      typebox:
+        specifier: 1.3.30
+        version: 1.3.30
+    devDependencies:
+      '@agimon-ai/doompi-build':
+        specifier: workspace:*
+        version: link:../../core/doompi-build
+      '@agimon-ai/vibe-lint-plugin-doom-extension':
+        specifier: workspace:*
+        version: link:../../tooling/vibe-lint-plugin-doom-extension
+      '@earendil-works/pi-coding-agent':
+        specifier: 0.85.1
+        version: 0.85.1(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.6.2))(supports-color@7.2.0)(ws@8.21.3)(zod@4.6.2)
+      '@types/node':
+        specifier: 26.5.1
+        version: 26.5.1
+      '@vitest/coverage-v8':
+        specifier: 5.0.0
+        version: 5.0.0(vitest@5.0.0)
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(oxc-resolver@11.24.2)(typescript@7.0.2)
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 5.0.0
+        version: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@26.5.1)(@vitest/coverage-v8@5.0.0)(vite@8.2.2(@types/node@26.5.1)(esbuild@0.28.1)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/foundations/doompi-skill:
     dependencies:
       '@agimon-ai/doompi-config':
@@ -2621,6 +2670,9 @@ importers:
       '@agimon-ai/doompi-minor-mode':
         specifier: workspace:*
         version: link:../../foundations/doompi-minor-mode
+      '@agimon-ai/doompi-session':
+        specifier: workspace:*
+        version: link:../../foundations/doompi-session
       '@agimon-ai/doompi-telemetry':
         specifier: workspace:*
         version: link:../../foundations/doompi-telemetry

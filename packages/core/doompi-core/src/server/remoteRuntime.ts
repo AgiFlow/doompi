@@ -8,7 +8,12 @@ import { getCookie } from 'hono/cookie';
 import WebSocket, { WebSocketServer, type RawData } from 'ws';
 
 import { DEVICE_COOKIE, REMOTE_CHANNEL_ROUTE, REMOTE_HTTP_ROUTE, STEP_UP_HEADER } from '../constants/remote';
-import { parseDoomSocketPath } from '../schemas/packageApi';
+import {
+  DOOM_API_CALLER_DEVICE_ID_HEADER,
+  DOOM_API_CALLER_LOCALITY_HEADER,
+  DOOM_API_CALLER_STEP_UP_HEADER,
+  parseDoomSocketPath,
+} from '../schemas/packageApi';
 import { createRemoteAccess, type RemoteAccess } from '../services/remoteAccess';
 import { createRemoteAccessStore } from '../services/remoteAccessStore';
 import {
@@ -30,6 +35,9 @@ const TUNNEL_CONNECTION_LIMIT = 64;
 const TUNNEL_REQUESTS_PER_SOCKET = 100;
 const SEALED_HTTP_VERSION = 1;
 const SEALED_HTTP_METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']);
+/** HMAC-authenticated peer routes are the only non-device tunnel APIs. */
+const SESSION_PEER_INBOX_ROUTE = '/api/plugins/session-peer/inbox';
+const VOICE_PEER_ROUTES = new Set(['/api/plugins/voice/peer', '/api/plugins/voice/peer-ownership']);
 const FORBIDDEN_HEADERS = new Set([
   'authorization',
   'connection',
@@ -142,12 +150,13 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
     if (context.env.listener === 'local') return next();
     const path = context.req.path;
     const publicSessionMcp = isPublicSessionMcpRoute(context.req.method, path);
+    const publicSessionPeer = context.req.method === 'POST' && path === SESSION_PEER_INBOX_ROUTE;
+    const publicVoicePeer = context.req.method === 'POST' && VOICE_PEER_ROUTES.has(path);
     const verdict = originVerdict({
       listener: 'tunnel',
-      // Exact OAuth and MCP routes authenticate at the application layer. Treat
-      // an absent Origin like a server-to-server read while retaining Host and
-      // supplied-Origin validation.
-      method: publicSessionMcp ? 'GET' : context.req.method,
+      // Exact OAuth, MCP, and HMAC-authenticated peer routes authenticate at the
+      // application layer. Treat an absent Origin like a server-to-server read.
+      method: publicSessionMcp || publicSessionPeer || publicVoicePeer ? 'GET' : context.req.method,
       isUpgrade: false,
       origin: context.req.header('origin'),
       host: context.req.header('host'),
@@ -155,7 +164,8 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
       tunnel: remote.tunnelPolicy(),
     });
     if (verdict !== 'allow') return context.json({ error: `Tunnel request refused: ${verdict}.` }, 403);
-    if (isPublicPairingRoute(context.req.method, path) || publicSessionMcp) return next();
+    if (isPublicPairingRoute(context.req.method, path) || publicSessionMcp || publicSessionPeer || publicVoicePeer)
+      return next();
     const device = remote.authorize(getCookie(context, DEVICE_COOKIE, 'host'));
     if (device === undefined) return context.json({ error: 'This device is not paired.' }, 401);
     if (context.env.sealedDeviceId === device) return next();
@@ -404,6 +414,11 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
         stepUpDenied = true;
     }
     headers.delete(STEP_UP_HEADER);
+    // Caller stamps are assigned after the sealed request is opened. They never
+    // originate from browser-controlled sealed headers.
+    headers.set(DOOM_API_CALLER_LOCALITY_HEADER, 'remote');
+    headers.set(DOOM_API_CALLER_DEVICE_ID_HEADER, device);
+    headers.set(DOOM_API_CALLER_STEP_UP_HEADER, action && remote.stepUpRequired(action) ? 'verified' : 'not-required');
     let response: Response;
     if (stepUpDenied) {
       response = context.json({ error: 'This action needs a fresh passkey gesture.', action }, 401);
@@ -441,7 +456,12 @@ export function createRemoteRuntime(options: RemoteRuntimeOptions): RemoteRuntim
       : context.json({ error: `The sealed response failed: ${sealed.failure}.` }, 503);
   });
   app.on(['POST', 'DELETE'], '*', async (context) => {
-    if (!isPublicSessionMcpRoute(context.req.method, context.req.path)) return context.notFound();
+    if (
+      !isPublicSessionMcpRoute(context.req.method, context.req.path) &&
+      !(context.req.method === 'POST' && context.req.path === SESSION_PEER_INBOX_ROUTE) &&
+      !(context.req.method === 'POST' && VOICE_PEER_ROUTES.has(context.req.path))
+    )
+      return context.notFound();
     return options.forward(context.req.raw);
   });
   app.on(['GET', 'HEAD'], '*', async (context) => {

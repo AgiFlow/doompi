@@ -11,6 +11,8 @@ import type { Context } from '@deepseek-ai/cordis';
 import { AUTHOR_FACADE_TOOL_NAMES } from '../../../../constants/author';
 import { authorMinorMode } from '../../../../models/authorMode';
 import { createAuthorCatalog } from '../../../../services/authorCatalog';
+import { createAuthorTools } from '../../../../services/authorTools';
+import { mountMcpTools } from '../../../../services/mcpTools';
 import { OPEN_AUTHORING_FILE_TOOL_NAME } from '../../../../types/author';
 import { api, createAuthorSessionApi } from './api/author/_lib/authorApi';
 
@@ -44,13 +46,19 @@ export default defineRoot(({ agent }: DoomServerPluginContext) => {
     });
   };
 
+  const catalog = createAuthorCatalog(session?.catalog);
+  const assertAvailable = () => undefined;
   return {
     value: {
       api: session?.api ?? api,
-      catalog: createAuthorCatalog(session?.catalog),
-      assertAvailable: () => undefined,
+      catalog,
+      assertAvailable,
       service: undefined,
     },
-    services: [...(mode ? [serverMinorModes([mode])] : []), restriction],
+    services: [
+      ...(mode ? [serverMinorModes([mode])] : []),
+      restriction,
+      mountMcpTools(createAuthorTools(catalog, assertAvailable)),
+    ],
   };
 });

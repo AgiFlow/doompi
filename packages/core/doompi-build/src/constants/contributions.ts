@@ -45,6 +45,10 @@ export const SERVER_FIELDS: Readonly<Record<string, string>> = {
   resource: 'resources',
 };
 
+export const MCP_FIELDS: Readonly<Record<string, string>> = {
+  tool: 'tools',
+  skill: 'skills',
+};
 /** The terminal's own presentation surfaces, authored under `(frontend)` with a `.cli` suffix. */
 export const CLI_FRONTEND_FIELDS: Readonly<Record<string, string>> = {
   tool: MERGED_INTO_TOOL,

@@ -39,6 +39,24 @@ describe('resolveTarget', () => {
     expect(resolveTarget(graph, 'web').contributions.map((c) => c.entry.file)).toEqual(['b']);
   });
 
+  it('selects only explicit MCP declarations, without a platformless fallback', () => {
+    const graph = graphOf([
+      entry({ file: 'server', side: 'backend', surface: 'tool', name: 'grep', platform: 'server' }),
+      entry({ file: 'mcp-tool', side: 'backend', surface: 'tool', name: 'grep', platform: 'mcp' }),
+      entry({ file: 'mcp-skill', side: 'backend', surface: 'skill', name: 'guide', platform: 'mcp' }),
+      entry({ file: 'neutral', side: 'backend', surface: 'tool', name: 'read' }),
+    ]);
+    expect(resolveTarget(graph, 'mcp').contributions.map((contribution) => contribution.entry.file)).toEqual([
+      'mcp-tool',
+      'mcp-skill',
+    ]);
+    expect(fieldsFor(graph, 'mcp')).toEqual(['skills', 'tools']);
+    expect(resolveTarget(graph, 'server').contributions.map((contribution) => contribution.entry.file)).toEqual([
+      'server',
+      'neutral',
+    ]);
+  });
+
   it('maps one surface to a different field per host', () => {
     const tool = graphOf([entry({ file: 'a', side: 'backend', surface: 'tool' })]);
     expect(fieldsFor(tool, 'cli')).toEqual(['tools']);

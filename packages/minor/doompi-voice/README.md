@@ -22,7 +22,7 @@ Voice owns these authenticated server endpoints:
 | same                                    | `POST /control`  | Send `{action, target?}`                                 |
 
 Control actions are `status`, `manual`, `activate`, `deactivate`, `mute`, `unmute`, `interrupt`,
-and `transfer` (with a target catalog order). The typed session method `voice.control` uses the
+and `transfer` (with a target catalog order and its catalog revision). The typed session method `voice.control` uses the
 same operations as commands and minor-mode actions. Browser recording uploads continue to use
 `/api/sessions/:sessionId/plugin/voice-media/manual/transcribe`.
 
@@ -204,7 +204,7 @@ limited to 4,096 characters and returns `completed`, `interrupted`, `superseded`
 Once confirmed user speech begins, new narration waits in memory until that turn is synchronously delivered to Pi. Multiple waiting requests use the configured `autoCapture.model` to become one bounded spoken update, with one bounded deterministic utterance if compaction fails. Narration that was already playing is not stopped by this queue gate; the existing ranked barge-in policy remains responsible for interruption.
 Narration fails closed while Voice is starting or draining, during shutdown, reload, or
 deactivation, and when the request belongs to a stale session.
-Only the currently active TUI session receives Voice-owned tools.
+Only the currently active TUI session receives Voice-owned tools. Paired-host targets are discovered through authenticated Voice grants and appear in the same revision-bound transfer catalog. A handoff prepares the target, releases the source, activates the target, and waits for usable media readiness. It does not transfer agent context, transcripts, pending work, or buffered source audio.
 
 If no `narrate` attempt is made before a final response, the active Voice session can produce one
 bounded fallback utterance. Short final responses use deterministic text; longer ones may use

@@ -12,34 +12,40 @@ const VERIFIER = 'v'.repeat(43);
 
 function fixture(scope: 'restricted' | 'session' = 'restricted') {
   const authorization = createSessionMcpAuthorizationService();
-  const client = authorization.createClient({ name: 'MCP client', redirectUri: 'https://client.example/callback' });
-  const binding = {
-    clientId: client.clientId,
-    sessionId: 'alpha',
-    sessionGeneration: 7,
-    audience: AUDIENCE,
+  const mint = (generation = 7) => {
+    const client = authorization.createClient({ name: 'MCP client', redirectUri: 'https://client.example/callback' });
+    const binding = {
+      clientId: client.clientId,
+      sessionId: 'alpha',
+      sessionGeneration: generation,
+      audience: AUDIENCE,
+    };
+    authorization.createAuthorizationBinding(
+      scope === 'session'
+        ? { ...binding, scope: 'session' }
+        : { ...binding, tools: ['allowed_tool'], skills: ['allowed-skill'] },
+    );
+    const code = authorization.issueAuthorizationCode({
+      clientId: client.clientId,
+      redirectUri: client.redirectUri,
+      codeChallenge: createHash('sha256').update(VERIFIER).digest('base64url'),
+      codeChallengeMethod: 'S256',
+    });
+    const tokens = authorization.exchangeToken({
+      grantType: 'authorization_code',
+      clientId: client.clientId,
+      clientSecret: client.clientSecret,
+      code: code.code,
+      redirectUri: client.redirectUri,
+      codeVerifier: VERIFIER,
+    });
+    return { ...tokens, grantId: code.grant.id, client };
   };
-  authorization.createAuthorizationBinding(
-    scope === 'session'
-      ? { ...binding, scope: 'session' }
-      : { ...binding, tools: ['allowed_tool'], skills: ['allowed-skill'] },
-  );
-  const code = authorization.issueAuthorizationCode({
-    clientId: client.clientId,
-    redirectUri: client.redirectUri,
-    codeChallenge: createHash('sha256').update(VERIFIER).digest('base64url'),
-    codeChallengeMethod: 'S256',
-  });
-  const tokens = authorization.exchangeToken({
-    grantType: 'authorization_code',
-    clientId: client.clientId,
-    clientSecret: client.clientSecret,
-    code: code.code,
-    redirectUri: client.redirectUri,
-    codeVerifier: VERIFIER,
-  });
-  const invokeTool = vi.fn(async () => ({ content: [{ type: 'text' as const, text: 'called' }] }));
-  const readSkill = vi.fn(() => '# Allowed skill');
+  const tokens = mint();
+  const invokeTool = vi.fn(async (_invocation: Parameters<SessionToolSurface['invokeTool']>[0]) => ({
+    content: [{ type: 'text' as const, text: 'called' }],
+  }));
+  const readSkill = vi.fn(async () => '# Allowed skill');
   let revision = 12;
   let includeNewCapabilities = false;
   const toolSurface: SessionToolSurface = {
@@ -71,29 +77,49 @@ function fixture(scope: 'restricted' | 'session' = 'restricted') {
     authorization,
     resolveSession: async () => {
       resolveCount += 1;
-      if (resolveCount === revokeAtResolve) authorization.revokeGrant(code.grant.id);
+      if (resolveCount === revokeAtResolve) authorization.revokeGrant(tokens.grantId);
       return { generation, toolSurface };
     },
   });
-  const request = (method: string, params?: Record<string, unknown>, token = tokens.accessToken) =>
+  const request = (
+    method: string,
+    params?: Record<string, unknown>,
+    token = tokens.accessToken,
+    signal?: AbortSignal,
+    id: string | number | undefined = 1,
+  ) =>
     handler(
       new Request(AUDIENCE, {
         method: 'POST',
+        signal,
         headers: {
           accept: 'application/json, text/event-stream',
           authorization: `Bearer ${token}`,
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, ...(params === undefined ? {} : { params }) }),
+        body: JSON.stringify({ jsonrpc: '2.0', id, method, ...(params === undefined ? {} : { params }) }),
       }),
     );
   return {
     authorization,
+    mint,
+    notify: (requestId: string | number, token = tokens.accessToken) =>
+      handler(
+        new Request(AUDIENCE, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${token}`,
+            accept: 'application/json, text/event-stream',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId } }),
+        }),
+      ),
     handler,
     request,
     invokeTool,
     readSkill,
-    grantId: code.grant.id,
+    grantId: tokens.grantId,
     setGeneration: (value: number) => (generation = value),
     enableNewCapabilities: () => {
       includeNewCapabilities = true;
@@ -159,11 +185,88 @@ describe('session MCP Streamable HTTP handler', () => {
       name: 'allowed_tool',
       arguments: {},
       signal: expect.any(AbortSignal),
+      authorize: expect.any(Function),
     });
 
     const hidden = await request('tools/call', { name: 'hidden_tool', arguments: {} });
     await expect(hidden.json()).resolves.toMatchObject({ error: { code: -32602 } });
     expect(invokeTool).toHaveBeenCalledTimes(1);
+  });
+
+  it('supplies an execution-boundary authorization check that rejects revocation and replacement', async () => {
+    for (const change of ['revoke', 'generation'] as const) {
+      const current = fixture();
+      current.invokeTool.mockImplementationOnce(async (invocation) => {
+        if (change === 'revoke') current.authorization.revokeGrant(current.grantId);
+        else current.setGeneration(8);
+        await invocation.authorize!();
+        throw new Error('Execution must not be reached');
+      });
+      await expect((await current.request('tools/call', { name: 'allowed_tool' })).json()).resolves.toMatchObject({
+        error: { message: expect.stringContaining('The session grant is no longer active.') },
+      });
+    }
+  });
+
+  it('propagates HTTP request cancellation to the tool signal', async () => {
+    const current = fixture();
+    const controller = new AbortController();
+    let signal: AbortSignal | undefined;
+    current.invokeTool.mockImplementationOnce(async (invocation) => {
+      signal = invocation.signal;
+      controller.abort();
+      return { content: [{ type: 'text', text: 'cancelled' }] };
+    });
+    await current.request('tools/call', { name: 'allowed_tool' }, undefined, controller.signal);
+    expect(signal).toBeDefined();
+    expect(signal!.aborted).toBe(true);
+  });
+
+  it('isolates cancellation by client, generation, and typed request identity and releases completed identities', async () => {
+    const current = fixture();
+    const other = current.mint();
+    const signals: AbortSignal[] = [];
+    const releases: (() => void)[] = [];
+    current.invokeTool.mockImplementation(async (invocation) => {
+      signals.push(invocation.signal!);
+      await new Promise<void>((resolve) => {
+        releases.push(resolve);
+      });
+      return { content: [{ type: 'text', text: 'done' }] };
+    });
+    const first = current.request('tools/call', { name: 'allowed_tool' });
+    const second = current.request('tools/call', { name: 'allowed_tool' }, other.accessToken);
+    await vi.waitFor(() => expect(signals).toHaveLength(2));
+    expect((await current.notify(1, 'invalid')).status).toBe(401);
+    expect((await current.notify('1')).status).toBe(202);
+    expect(signals.every((signal) => !signal.aborted)).toBe(true);
+    await expect((await current.request('tools/call', { name: 'allowed_tool' })).json()).resolves.toMatchObject({
+      error: { code: -32600 },
+    });
+    expect((await current.notify(1)).status).toBe(202);
+    expect(signals[0].aborted).toBe(true);
+    expect(signals[1].aborted).toBe(false);
+    current.setGeneration(8);
+    expect((await current.notify(1, other.accessToken)).status).toBe(401);
+    const replacement = current.mint(8);
+    // Model the same authenticated client in a later generation independently of OAuth binding policy.
+    const authenticate = current.authorization.authenticateAccessToken.bind(current.authorization);
+    vi.spyOn(current.authorization, 'authenticateAccessToken').mockImplementation((token, audience) => {
+      const grant = authenticate(token, audience);
+      return grant !== undefined && token === replacement.accessToken
+        ? { ...grant, clientId: other.client.clientId }
+        : grant;
+    });
+    expect((await current.notify(1, replacement.accessToken)).status).toBe(202);
+    expect(signals[1].aborted).toBe(false);
+    releases.forEach((release) => release());
+    await Promise.all([first, second]);
+    current.setGeneration(7);
+    current.invokeTool.mockResolvedValue({ content: [{ type: 'text', text: 'reused' }] });
+    await expect((await current.request('tools/call', { name: 'allowed_tool' })).json()).resolves.toMatchObject({
+      result: { content: [{ text: 'reused' }] },
+    });
+    expect((await current.notify(1)).status).toBe(202);
   });
 
   it('session scope follows capabilities added to the live surface', async () => {
@@ -222,6 +325,19 @@ describe('session MCP Streamable HTTP handler', () => {
     });
     await expect(
       (await invoking.request('tools/call', { name: 'allowed_tool', arguments: {} })).json(),
+    ).resolves.toMatchObject({
+      error: { message: expect.stringContaining('The session grant is no longer active.') },
+    });
+  });
+
+  it('rechecks revocation after an asynchronous skill read', async () => {
+    const reading = fixture();
+    reading.readSkill.mockImplementationOnce(async () => {
+      reading.authorization.revokeGrant(reading.grantId);
+      return '# must not return';
+    });
+    await expect(
+      (await reading.request('resources/read', { uri: 'doompi://session/alpha/skills/allowed-skill' })).json(),
     ).resolves.toMatchObject({
       error: { message: expect.stringContaining('The session grant is no longer active.') },
     });

@@ -259,6 +259,15 @@ describe('Team standard runtime', () => {
     expect(host.toolDefinitions.get('subagent')?.renderResult).toBeTypeOf('function');
   });
 
+  it('installs the Session background coordinator when Team is activated standalone', async () => {
+    resetRuntimeState();
+    const host = fakePi();
+
+    await activateTeamForTest(host.pi);
+
+    expect(readDoomBackgroundWorkService(cordisFor(host.pi))).toBeDefined();
+  });
+
   it('registers exactly the two Doom Team model-facing tools', async () => {
     resetRuntimeState();
     const host = fakePi();
@@ -451,7 +460,7 @@ describe('Team standard runtime', () => {
     await host.fireAsync('session_start');
     await waitForTeamReadiness(host);
     const service = readDoomBackgroundWorkService(cordis);
-    if (!service) throw new Error('Expected Team to provide doom/background-work.');
+    if (!service) throw new Error('Expected Session to provide doom/background-work.');
 
     tracker.forSession(OTHER_SESSION_SCOPE.rootSessionId, OTHER_SESSION_SCOPE).track('other-run');
     tracker.forSession(TEST_SESSION_SCOPE.rootSessionId, TEST_SESSION_SCOPE).track('direct-run');

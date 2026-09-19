@@ -2,6 +2,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import {
   CallToolRequestSchema,
+  CancelledNotificationSchema,
   ErrorCode,
   ListResourcesRequestSchema,
   ListToolsRequestSchema,
@@ -88,6 +89,9 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
     throw new Error('Session MCP audience must be an absolute HTTPS URL without credentials, a query, or a fragment.');
   }
   const exactAudience = audience.href;
+  const operations = new Map<string, AbortController>();
+  const operationKey = (grant: SessionMcpAccessGrant, requestId: string | number): string =>
+    JSON.stringify([grant.clientId, grant.sessionId, grant.sessionGeneration, requestId]);
 
   return async (request) => {
     if (currentUrl(request) !== exactAudience) return jsonError(404, 'MCP resource not found.');
@@ -127,6 +131,12 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       { name: options.serverName ?? 'doompi-session', version: options.serverVersion ?? '1.0.0' },
       { capabilities: { tools: {}, resources: {} } },
     );
+    server.setNotificationHandler(CancelledNotificationSchema, async (notification) => {
+      const active = await authorizeOperation();
+      if (notification.params.requestId !== undefined) {
+        operations.get(operationKey(active.grant, notification.params.requestId))?.abort();
+      }
+    });
     server.setRequestHandler(ListToolsRequestSchema, async () => {
       const active = await authorizeOperation();
       const { tools } = grantedSurface(active.grant, active.target.toolSurface);
@@ -140,22 +150,41 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       };
     });
     server.setRequestHandler(CallToolRequestSchema, async (message, extra): Promise<CallToolResult> => {
-      const active = await authorizeOperation();
-      if (active.grant.scope === 'restricted' && !active.grant.tools.includes(message.params.name)) {
-        throw new McpError(ErrorCode.InvalidParams, `Tool '${message.params.name}' is not granted.`);
+      const key = operationKey(grant, extra.requestId);
+      if (operations.has(key)) {
+        throw new McpError(ErrorCode.InvalidRequest, 'A tool call with this request identity is already active.');
       }
-      const { snapshot, tools } = grantedSurface(active.grant, active.target.toolSurface);
-      if (!tools.some((tool) => tool.name === message.params.name)) {
-        throw new McpError(ErrorCode.InvalidParams, `Tool '${message.params.name}' is not active.`);
+      const controller = new AbortController();
+      operations.set(key, controller);
+      try {
+        const active = await authorizeOperation();
+        if (active.grant.scope === 'restricted' && !active.grant.tools.includes(message.params.name)) {
+          throw new McpError(ErrorCode.InvalidParams, `Tool '${message.params.name}' is not granted.`);
+        }
+        const { snapshot, tools } = grantedSurface(active.grant, active.target.toolSurface);
+        if (!tools.some((tool) => tool.name === message.params.name)) {
+          throw new McpError(ErrorCode.InvalidParams, `Tool '${message.params.name}' is not active.`);
+        }
+        const result = await active.target.toolSurface.invokeTool({
+          revision: snapshot.revision,
+          name: message.params.name,
+          arguments: message.params.arguments ?? {},
+          signal: AbortSignal.any([request.signal, extra.signal, controller.signal]),
+          authorize: async () => {
+            const current = await authorizeOperation();
+            if (current.target.toolSurface !== active.target.toolSurface) {
+              throw new McpError(ErrorCode.InvalidRequest, 'The session tool surface has changed.');
+            }
+            if (current.grant.scope === 'restricted' && !current.grant.tools.includes(message.params.name)) {
+              throw new McpError(ErrorCode.InvalidParams, `Tool '${message.params.name}' is not granted.`);
+            }
+          },
+        });
+        await authorizeOperation();
+        return { content: result.content, isError: result.isError ?? false };
+      } finally {
+        operations.delete(key);
       }
-      const result = await active.target.toolSurface.invokeTool({
-        revision: snapshot.revision,
-        name: message.params.name,
-        arguments: message.params.arguments ?? {},
-        signal: extra.signal,
-      });
-      await authorizeOperation();
-      return { content: result.content, isError: result.isError ?? false };
     });
     server.setRequestHandler(ListResourcesRequestSchema, async () => {
       const active = await authorizeOperation();
@@ -174,13 +203,15 @@ export function createSessionMcpHttpHandler(options: SessionMcpHttpHandlerOption
       const { snapshot, skills } = grantedSurface(active.grant, active.target.toolSurface);
       const skill = skills.find((candidate) => candidate.uri === message.params.uri);
       if (skill === undefined) throw new McpError(ErrorCode.InvalidParams, 'Skill resource is not granted or active.');
+      const text = await active.target.toolSurface.readSkill(snapshot.revision, skill.uri);
+      await authorizeOperation();
       return {
         contents: [
           {
             uri: skill.uri,
             name: skill.name,
             mimeType: 'text/markdown',
-            text: active.target.toolSurface.readSkill(snapshot.revision, skill.uri),
+            text,
           },
         ],
       };

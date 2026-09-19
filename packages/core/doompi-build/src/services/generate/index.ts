@@ -11,7 +11,7 @@ import {
 } from '../../constants/layout';
 import type { ExtensionGraph, ExtensionNotice } from '../../types/extensionGraph';
 import { renderApiClient } from '../renderClient';
-import { renderCliEntry, renderServerEntry, renderWebEntry } from '../renderEntry';
+import { renderCliEntry, renderMcpEntry, renderServerEntry, renderWebEntry } from '../renderEntry';
 import { resolveTarget } from '../resolveTarget';
 import type { BuildTarget } from '../resolveTarget/type';
 import { scanExtensions } from '../scan';
@@ -33,12 +33,12 @@ const RENDERERS: Readonly<Record<BuildTarget, typeof renderCliEntry>> = {
   cli: renderCliEntry,
   server: renderServerEntry,
   web: renderWebEntry,
+  mcp: renderMcpEntry,
 };
 
 /** The generated entry keeps its historical filename so no consumer has to change. */
 const ENTRY_FILENAME: Readonly<Record<BuildTarget, string>> = GENERATED_ENTRY_FILENAMES;
-
-const ENTRY_EXTENSION: Readonly<Record<BuildTarget, string>> = { cli: 'ts', server: 'ts', web: 'ts' };
+const ENTRY_EXTENSION: Readonly<Record<BuildTarget, string>> = { cli: 'ts', server: 'ts', web: 'ts', mcp: 'ts' };
 
 /**
  * Scans a package and renders every entry its tree calls for.
@@ -65,11 +65,12 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
     if (entry.platform === undefined || BUILD_TARGET_PLATFORMS.includes(entry.platform)) continue;
     notices.push({
       path: entry.file,
-      message: `'${entry.platform}' is a forward-looking platform with no build target; this file is not emitted for cli, server or web`,
+      message: `'${entry.platform}' is a forward-looking platform with no build target; this file is not emitted for cli, server, web or mcp`,
     });
   }
 
-  for (const target of ['cli', 'server', 'web'] as const) {
+  const requestedTargets = options.target === undefined ? (['cli', 'server', 'web'] as const) : [options.target];
+  for (const target of requestedTargets) {
     const resolution = resolveTarget(graph, target);
     notices.push(...resolution.notices);
     if (resolution.contributions.length === 0 && resolution.escapeHatches.length === 0 && resolution.roots.length === 0)
@@ -89,7 +90,7 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
   // from a page and it carries the sealed transport, so emitting one into a
   // node-only package asks that package to depend on a browser runtime it never
   // loads, to satisfy a file nothing imports.
-  const hasRouteTable = fs.existsSync(path.join(options.packageDir, API_ROUTES_MODULE));
+  const hasRouteTable = options.target === undefined && fs.existsSync(path.join(options.packageDir, API_ROUTES_MODULE));
   const hasBrowserHalf = targets.includes('web');
   const client =
     hasRouteTable && hasBrowserHalf
@@ -103,7 +104,10 @@ export function generateExtension(options: GenerateOptions): GenerateResult {
     });
   }
 
-  const managed = GENERATED_ENTRY_NAMES.map((name) => `${GENERATED_DIR}/${name}.ts`);
+  const managed =
+    options.target === undefined
+      ? GENERATED_ENTRY_NAMES.filter((name) => name !== 'mcp').map((name) => `${GENERATED_DIR}/${name}.ts`)
+      : [`${GENERATED_DIR}/${ENTRY_FILENAME[options.target]}.${ENTRY_EXTENSION[options.target]}`];
   const { changed } = writeGenerated(options.packageDir, files, options.check, managed);
   return { graph, packageName, pluginId, files, changed, notices, targets };
 }

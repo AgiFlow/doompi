@@ -338,4 +338,74 @@ describe('browser voice media push transport', () => {
     });
     expect(calls[0]?.[1]?.signal).toBe(controller.signal);
   });
+
+  it('keeps paired-host media on the declared home-host relay', async () => {
+    const relayed: Array<{ path: string; method: string; body: string }> = [];
+    let playbackPoll = 0;
+    vi.mocked(sealedTransport.fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (typeof init?.body !== 'string') throw new Error('Expected a JSON relay body.');
+      if (url.includes('/voice/relay-binding')) {
+        expect(JSON.parse(init.body)).toEqual({
+          target: 'peer/work-host/voice-session',
+          connectionId: 'connection',
+        });
+        return jsonResponse({ binding: 'opaque-binding', expiresAt: Date.now() + 300_000 });
+      }
+      expect(url).toContain('/voice/relay');
+      expect(url).toContain('binding=opaque-binding');
+      expect(url).not.toContain('work-host');
+      const envelope = JSON.parse(init.body) as { path: string; method: string; body: string };
+      relayed.push(envelope);
+      if (envelope.path.includes('/client/connect')) {
+        return jsonResponse({
+          status: 200,
+          headers: [['content-type', 'application/json']],
+          body: btoa(JSON.stringify({ version: 5, cursor: 0, eventEpoch: 'remote-epoch', heartbeatMs: 1_000 })),
+        });
+      }
+      if (envelope.path.includes('/client/playback-audio')) {
+        playbackPoll += 1;
+        if (playbackPoll > 2) throw new Error('Playback relay did not preserve the sealed state header.');
+        return jsonResponse(
+          playbackPoll === 1
+            ? {
+                status: 200,
+                headers: [['content-type', 'application/vnd.doompi.pcm-s16le']],
+                body: btoa('\u0001\u0002'),
+              }
+            : { status: 204, headers: [['x-doompi-playback-state', 'sealed']], body: '' },
+        );
+      }
+      if (envelope.path.includes('/realtime/negotiate')) {
+        return jsonResponse({
+          status: 200,
+          headers: [['content-type', 'application/json']],
+          body: btoa(JSON.stringify({ sdp: 'remote-answer' })),
+        });
+      }
+      return jsonResponse({ status: 204, headers: [], body: '' });
+    });
+
+    const transport = new BrowserVoiceMediaTransport('peer/work-host/voice-session');
+    await transport.connect('client', 'connection', capabilities);
+    await transport.sendAudio('client', 'connection', 'capture', new Uint8Array([3, 4]));
+    await expect(
+      transport.receivePlaybackAudio('client', 'connection', 'playback', new AbortController().signal),
+    ).resolves.toEqual(new Uint8Array([1, 2]));
+    await expect(
+      transport.realtimeNegotiate('client', 'connection', 'activation', 'offer', new AbortController().signal),
+    ).resolves.toBe('remote-answer');
+    await transport.disconnect('client', 'connection');
+
+    expect(relayed.map(({ path }) => path)).toEqual([
+      '/client/connect',
+      '/client/audio?clientId=client&connectionId=connection&captureId=capture',
+      '/client/playback-audio?clientId=client&connectionId=connection&playbackId=playback',
+      '/client/playback-audio?clientId=client&connectionId=connection&playbackId=playback',
+      '/client/realtime/negotiate',
+      '/client/disconnect',
+    ]);
+    expect(relayed.every(({ path }) => !path.startsWith('/host/') && !path.startsWith('/hub/'))).toBe(true);
+  });
 });

@@ -38,6 +38,16 @@ export interface VoiceReadinessView {
 /** What `POST /control` answers: the session's voice state after the action. */
 export type VoiceControlView = Omit<VoiceStatusView, 'media' | 'readiness'>;
 
+export interface VoiceRelayBindingResponse {
+  binding: string;
+  expiresAt: number;
+}
+
+export interface VoiceRelayResponse {
+  status: number;
+  headers: Array<[string, string]>;
+  body: string;
+}
 /**
  * The routes a browser calls, as data.
  *
@@ -68,6 +78,8 @@ export default defineApiRoutes({
   status: { method: 'GET', path: '/status', response: apiResponse<VoiceStatusView>() },
   control: { method: 'POST', path: '/control', response: apiResponse<VoiceControlView>() },
   readiness: { method: 'GET', path: '/readiness', response: apiResponse<VoiceReadinessView>() },
+  relayBinding: { method: 'POST', path: '/relay-binding', response: apiResponse<VoiceRelayBindingResponse>() },
+  relay: { method: 'POST', path: '/relay', query: ['binding'], response: apiResponse<VoiceRelayResponse>() },
 
   /* voice-media: the client half of the media protocol. */
   clientConnect: {

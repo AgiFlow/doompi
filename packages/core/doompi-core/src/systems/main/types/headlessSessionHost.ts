@@ -1,6 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 
 import type { DoomHeadlessSelection } from '../../../exports/headless';
+import type { LoadedMcpPlugin } from '../../../exports/mcpFacet';
 import type { DoomWebComposition } from '../../../exports/packageApi';
 import type { InstalledServerFacets } from '../../../exports/serverFacet';
 import type { DoomServerBundleEntry } from '../../../exports/serverFacet';
@@ -25,6 +26,8 @@ export interface HeadlessSessionHostOptions {
   selectionOverrides?: readonly ('majorMode' | 'domains' | 'profile')[];
   inheritedSelection?: () => Partial<DoomHeadlessSelection> | Promise<Partial<DoomHeadlessSelection>>;
   candidates: readonly DoomServerBundleEntry[];
+  /** Explicit remote-only plugins loaded from the admitted MCP bundle. */
+  mcpPlugins?: readonly LoadedMcpPlugin[];
   resolveSelection?: HeadlessHostOptions['resolveSelection'];
   publishSelectionStatus?: (
     setStatus: (source: string, text: string | undefined) => void,
@@ -43,6 +46,7 @@ export interface HeadlessSessionHost {
   readonly runtime: DirectHarnessRuntime;
   readonly host: HeadlessHost | undefined;
   readonly toolSurface: SessionToolSurface;
+  readonly mcpSurface: SessionToolSurface;
   readonly prepareFacets: (root: Context) => void;
   readonly activateFacets: (installed: InstalledServerFacets) => Promise<void>;
   readonly canDispatch: () => boolean;

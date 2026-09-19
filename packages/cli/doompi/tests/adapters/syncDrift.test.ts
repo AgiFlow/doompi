@@ -46,11 +46,12 @@ describe('sync drift', () => {
   it('names every artifact a session would have read', () => {
     const description = describeSyncDrift({
       fresh: false,
-      reasons: ['cockpit-bundle-missing', 'package-apis-missing'],
+      reasons: ['cockpit-bundle-missing', 'package-apis-missing', 'mcp-bundle-stale'],
     });
 
     expect(description).toContain('cockpit bundle is missing');
     expect(description).toContain('package API routes are missing');
+    expect(description).toContain('MCP bundle is missing or out of date');
   });
 
   it('treats staged artifacts as present', () => {

@@ -5,6 +5,7 @@ import {
   type DoomHeadlessToolResult,
 } from '@agimon-ai/doompi-core/headless';
 import { readPackageResource, type DoomServerPluginContext } from '@agimon-ai/doompi-core/server-facet';
+import { readDoomSessionDelivery } from '@agimon-ai/doompi-session';
 
 import { RunWorktreeToolSchema, type RunWorktreeToolParams } from '../../../../../schemas/runWorktreeTool';
 import { createWorktreeGit } from '../../../../../services/gitCli';
@@ -21,7 +22,7 @@ function progressResult(action: RunWorktreeToolParams['action'], label: string):
   return { content: [{ type: 'text', text: label }], details: { action } };
 }
 
-export function createGitSession({ host: serverHost }: DoomServerPluginContext) {
+export function createGitSession({ context, host: serverHost }: DoomServerPluginContext) {
   if (serverHost.context.directEvents === undefined)
     throw new Error('Git headless facet requires the session direct event bus.');
   if (serverHost.context.sessionId === undefined) throw new Error('Git headless facet requires a session identity.');
@@ -32,6 +33,7 @@ export function createGitSession({ host: serverHost }: DoomServerPluginContext) 
     git: createWorktreeGit(),
     sessionService: serverHost.context.sessionService,
     messageInbox,
+    sessionDelivery: () => readDoomSessionDelivery(context),
   });
   const resources: DoomHeadlessResource[] = [
     {

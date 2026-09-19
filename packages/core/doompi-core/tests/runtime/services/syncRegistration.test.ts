@@ -1,9 +1,11 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { DOOM_MCP_BUNDLE_FILE, DOOM_MCP_BUNDLE_VERSION } from '../../../src/schemas/mcpBundle';
 import { resolveSyncLocation, syncGenerationDirectory } from '../../../src/services/syncLocation';
 import {
   DOOMPI_API_VERSION,
@@ -43,6 +45,10 @@ function packageFixture(
   return { root: fs.realpathSync(packageRoot), manifestPath: path.join(packageRoot, 'package.json'), entry, version };
 }
 
+function sha256(file: string): string {
+  return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
 function registration(repoRoot: string, home: string, packageRoot: string): SyncRegistration {
   const location = resolveSyncLocation(repoRoot, home);
   const generation = 'generation-1';
@@ -66,6 +72,36 @@ function registration(repoRoot: string, home: string, packageRoot: string): Sync
     apiDirectory,
     package: { ...packageRecord, apiVersion: DOOMPI_API_VERSION },
   };
+}
+
+function addMcpBundle(value: SyncRegistration): string {
+  const directory = path.join(value.generationRoot, 'mcp');
+  const modulePath = path.join(directory, 'modules', 'plugin.mjs');
+  const descriptorPath = path.join(directory, DOOM_MCP_BUNDLE_FILE);
+  const fingerprint = 'a'.repeat(64);
+  fs.mkdirSync(path.dirname(modulePath), { recursive: true });
+  fs.writeFileSync(modulePath, 'export default { name: "plugin", session: { tools: [], skills: [] } };');
+  fs.writeFileSync(
+    descriptorPath,
+    JSON.stringify({
+      version: DOOM_MCP_BUNDLE_VERSION,
+      generation: value.generation,
+      fingerprint,
+      entries: [
+        {
+          packageName: '@test/plugin',
+          entry: './src/plugin.mcp.ts',
+          module: './modules/plugin.mjs',
+          sha256: sha256(modulePath),
+          owners: [{ majorMode: 'coding', layer: 'default' }],
+        },
+      ],
+    }),
+  );
+  fs.writeFileSync(value.statePath, JSON.stringify({ mcpBundle: { descriptorPath, fingerprint } }));
+  value.stateSha256 = syncStateSha256(value.statePath);
+  value.mcpBundle = { path: descriptorPath, fingerprint, sha256: sha256(descriptorPath) };
+  return modulePath;
 }
 
 afterEach(() => {
@@ -157,6 +193,18 @@ describe('sync registration', () => {
     fs.writeFileSync(expected.statePath, '{"state":false}\n');
 
     expect(() => readSyncRegistration(repoRoot, home)).toThrow('mismatched state hash');
+  });
+
+  it('fails admission when an MCP artifact changes after publication', () => {
+    const home = temporaryDirectory();
+    const packages = temporaryDirectory();
+    const repoRoot = temporaryDirectory();
+    const expected = registration(repoRoot, home, packages);
+    const modulePath = addMcpBundle(expected);
+    publishSyncRegistration(repoRoot, expected, home);
+    fs.appendFileSync(modulePath, '\n// tampered');
+
+    expect(() => readSyncRegistration(repoRoot, home)).toThrow('mismatched MCP artifact hash');
   });
 
   it('rejects package entries outside the recorded package', () => {

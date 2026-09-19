@@ -1,6 +1,6 @@
 # Session MCP
 
-DoomPi Web can expose one live DoomPi session as a remote MCP server. Remote Control supplies the public HTTPS origin, and the session MCP endpoint follows the session's active tools and skills.
+DoomPi Web can expose one live DoomPi session as a remote MCP server. Remote Control supplies the public HTTPS origin. The endpoint exposes only package capabilities explicitly authored as `tool/[name].mcp.ts` or `skill/[name].mcp.ts`, not the agent's session or Pi tools and resources.
 
 This is an inbound connection. It is separate from outbound MCP servers, remote pairing, and Remote Control.
 
@@ -17,7 +17,7 @@ This is an inbound connection. It is separate from outbound MCP servers, remote 
 
 The client name is generated from the trusted Remote Control domain. The callback must be the exact absolute HTTPS URL supplied by ChatGPT. It is not safe to derive one from the DoomPi domain.
 
-Access follows the session's current major mode, minor modes, domains, and profile, including later changes. Session tools run with the session process's permissions. Granting shell access can reach the filesystem, environment, network, and operating system privileges available to that session. OAuth is not a sandbox.
+Access follows the active major mode, minor modes, domains, and profile, including later changes. Session tools run with the session process's permissions. Granting shell access can reach the filesystem, environment, network, and operating system privileges available to that session. OAuth is not a sandbox. Third-party packages must ship their own explicit MCP declarations to expose capabilities remotely.
 
 ## OAuth policy
 

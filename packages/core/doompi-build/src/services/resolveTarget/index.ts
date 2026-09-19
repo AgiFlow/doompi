@@ -2,6 +2,7 @@ import {
   ACTION_FIELDS,
   CLI_FIELDS,
   CLI_FRONTEND_FIELDS,
+  MCP_FIELDS,
   MERGED_INTO_TOOL,
   NOT_A_CONTRIBUTION,
   SERVER_FIELDS,
@@ -26,6 +27,7 @@ const SCOPE_DEPTH: Readonly<Record<string, number>> = { global: 0, workspace: 1,
  */
 function drawsFrom(entry: ExtensionEntry, target: BuildTarget): boolean {
   if (target === 'web') return entry.side === 'frontend';
+  if (target === 'mcp') return entry.side === 'backend';
   if (entry.side === 'backend') return true;
   return target === 'cli' && entry.platform === 'cli';
 }
@@ -34,6 +36,7 @@ const FIELDS_OF: Readonly<Record<BuildTarget, Readonly<Record<ExtensionSide, Rea
   cli: { backend: CLI_FIELDS, frontend: CLI_FRONTEND_FIELDS },
   server: { backend: SERVER_FIELDS, frontend: {} },
   web: { backend: {}, frontend: WEB_FIELDS },
+  mcp: { backend: MCP_FIELDS, frontend: {} },
 };
 
 /** Everything but the platform: two files sharing this are the same contribution. */
@@ -124,8 +127,8 @@ export function resolveTarget(graph: ExtensionGraph, target: BuildTarget): Targe
 
   for (const entry of graph.entries) {
     if (!drawsFrom(entry, target)) continue;
-    if (entry.platform !== undefined && entry.platform !== target) continue;
-
+    if (target === 'mcp' ? entry.platform !== 'mcp' : entry.platform !== undefined && entry.platform !== target)
+      continue;
     if (entry.role === 'escape-hatch') {
       escapeHatches.push(entry);
       continue;

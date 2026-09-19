@@ -39,11 +39,23 @@ export interface DoomHubSessionCreateRequest {
   readonly signal?: AbortSignal;
 }
 
+/** Host-bound inter-session events. The source identity is attached by the hub, never by payload data. */
+export interface DoomSessionCommunicationEndpoint {
+  readonly sessionId: string;
+  publish(targetSessionId: string, type: string, payload: unknown): boolean;
+  subscribe(type: string, listener: (sourceSessionId: string, payload: unknown) => void): () => void;
+  onPeerReady(listener: (peerSessionId: string) => void): () => void;
+  close(): void;
+}
 /** Direct lifecycle owned by the canonical headless hub, never by a package transport. */
 export interface DoomHubSessionService {
   create(request: DoomHubSessionCreateRequest): Promise<DoomHubSessionScope>;
   close(sessionId: string): Promise<void>;
   isLive(sessionId: string): boolean;
+  /** True only when both live sessions have a direct parent-child relationship. */
+  canCommunicate?(sourceSessionId: string, targetSessionId: string): boolean;
+  /** Core host hook. Session API construction removes this method before exposing the service to extensions. */
+  bindCommunication?(sessionId: string): DoomSessionCommunicationEndpoint;
 }
 
 export interface DoomHubSessionApiRequest {

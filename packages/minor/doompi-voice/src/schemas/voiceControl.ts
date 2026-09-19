@@ -14,6 +14,7 @@ export const voiceControlMethod = defineDoomPluginMethod({
         ),
       ),
       target: Type.Optional(Type.Integer({ minimum: 1 })),
+      revision: Type.Optional(Type.String({ minLength: 1, maxLength: 128 })),
     },
     { additionalProperties: false },
   ),

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { DoomDirectEventBus } from '@agimon-ai/doompi-core/hub-channel';
+import type { DoomSessionDeliveryService } from '@agimon-ai/doompi-session';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HubUnavailableError } from '../../../../src/services/errors';
@@ -64,6 +65,18 @@ function fakeSessionService(
   return { create, close, isLive: (sessionId: string) => live.includes(sessionId) };
 }
 
+function fakeDelivery(overrides: Partial<DoomSessionDeliveryService> = {}): DoomSessionDeliveryService {
+  return {
+    recipientKey: 'parent-1',
+    deliver: vi.fn().mockResolvedValue({ deliveryId: 'delivery-1' }),
+    waitForAdmission: vi.fn().mockResolvedValue('admitted'),
+    inbox: vi.fn().mockReturnValue([]),
+    consume: vi.fn().mockReturnValue(true),
+    outbox: vi.fn().mockReturnValue(undefined),
+    close: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
 function operations(
   git: WorktreeGit,
   createSession = vi.fn().mockResolvedValue({ sessionId: 'session-9', cwd: '/worktree' }),
@@ -115,6 +128,89 @@ describe('spawn', () => {
     const { ops } = operations(git);
     await ops.spawn(CONTEXT, { branch: 'wt/one', baseRef: 'v1.0' });
     expect(git.addWorktree).toHaveBeenCalledWith(expect.objectContaining({ baseRef: 'v1.0' }));
+  });
+
+  it('durably delivers the task after the worktree session is recorded', async () => {
+    const delivery = fakeDelivery();
+    const ops = createWorktreeOperations({
+      git: fakeGit(),
+      sessionService: fakeSessionService(),
+      sessionDelivery: () => delivery,
+      homeDir: home,
+    });
+
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/task', task: 'Implement the parser' });
+
+    expect(delivery.deliver).toHaveBeenCalledWith({
+      recipientKey: record.sessionId,
+      kind: 'git.worktree.delegation',
+      prompt: 'Implement the parser',
+      metadata: {
+        worktreeId: record.id,
+        fromRole: 'parent',
+        text: 'Implement the parser',
+        sentAt: record.createdAt,
+      },
+    });
+    expect(await ops.list(CONTEXT)).toEqual([expect.objectContaining({ id: record.id })]);
+  });
+
+  it('keeps a registered worktree manageable when task persistence fails', async () => {
+    const git = fakeGit();
+    const delivery = fakeDelivery({ deliver: vi.fn().mockRejectedValue(new Error('disk full')) });
+    const ops = createWorktreeOperations({
+      git,
+      sessionService: fakeSessionService(),
+      sessionDelivery: () => delivery,
+      homeDir: home,
+    });
+
+    await expect(ops.spawn(CONTEXT, { branch: 'wt/task', task: 'Implement it' })).rejects.toMatchObject({
+      code: 'task_delivery_failed',
+      retryable: true,
+    });
+    expect(await ops.list(CONTEXT)).toHaveLength(1);
+    expect(git.removeWorktree).not.toHaveBeenCalled();
+  });
+
+  it('reports a task that was persisted but could not be admitted', async () => {
+    const delivery = fakeDelivery({ waitForAdmission: vi.fn().mockResolvedValue('recovery_required') });
+    const ops = createWorktreeOperations({
+      git: fakeGit(),
+      sessionService: fakeSessionService(),
+      sessionDelivery: () => delivery,
+      homeDir: home,
+    });
+
+    await expect(ops.spawn(CONTEXT, { branch: 'wt/task', task: 'Implement it' })).rejects.toMatchObject({
+      code: 'task_delivery_failed',
+      retryable: true,
+    });
+    expect(await ops.list(CONTEXT)).toHaveLength(1);
+  });
+
+  it('reports a task whose admission receipt times out', async () => {
+    const delivery = fakeDelivery({ waitForAdmission: vi.fn().mockResolvedValue(undefined) });
+    const ops = createWorktreeOperations({
+      git: fakeGit(),
+      sessionService: fakeSessionService(),
+      sessionDelivery: () => delivery,
+      homeDir: home,
+    });
+
+    await expect(ops.spawn(CONTEXT, { branch: 'wt/task', task: 'Implement it' })).rejects.toMatchObject({
+      code: 'task_delivery_failed',
+      retryable: true,
+    });
+  });
+  it('refuses a tasked spawn before creating git state when Session delivery is unavailable', async () => {
+    const git = fakeGit();
+    const { ops } = operations(git);
+
+    await expect(ops.spawn(CONTEXT, { branch: 'wt/task', task: 'Do it' })).rejects.toThrow(
+      /Session delivery service is unavailable/u,
+    );
+    expect(git.addWorktree).not.toHaveBeenCalled();
   });
 
   it('refuses a second worktree on one branch', async () => {
@@ -538,6 +634,87 @@ describe('direct worktree messages', () => {
     expect(() => createWorktreeMessageInbox(bus, '')).toThrow('session identity');
   });
 
+  it('routes messages and child reports through durable Session delivery', async () => {
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+    const consume = vi.fn().mockReturnValue(true);
+    const delivery = fakeDelivery({
+      consume,
+      inbox: vi.fn().mockReturnValue([
+        {
+          deliveryId: 'report-1',
+          senderKey: 'session-9',
+          recipientKey: 'parent-1',
+          kind: 'git.worktree.report',
+          prompt: 'Report from worktree',
+          delivery: 'prompt',
+          metadata: {
+            worktreeId: record.id,
+            fromRole: 'child',
+            text: 'done',
+            sentAt: '2026-01-01T00:00:00.000Z',
+          },
+          state: 'admitted',
+          consumed: false,
+        },
+        {
+          deliveryId: 'task-1',
+          senderKey: 'parent-1',
+          recipientKey: 'session-9',
+          kind: 'git.worktree.delegation',
+          prompt: 'recover task',
+          delivery: 'prompt',
+          metadata: { worktreeId: record.id, fromRole: 'parent', text: 'recover task' },
+          state: 'recovery_required',
+          consumed: false,
+        },
+      ]),
+    });
+    const durable = createWorktreeOperations({
+      git: fakeGit(),
+      sessionService: fakeSessionService(['parent-1', 'session-9']),
+      sessionDelivery: () => delivery,
+      homeDir: home,
+    });
+
+    await durable.send(CONTEXT, record.id, 'please finish');
+    expect(delivery.deliver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recipientKey: 'session-9',
+        kind: 'git.worktree.message',
+        metadata: expect.objectContaining({ worktreeId: record.id, fromRole: 'parent', text: 'please finish' }),
+      }),
+    );
+    await expect(durable.messages(CONTEXT, record.id)).resolves.toEqual([
+      expect.objectContaining({ fromSessionId: 'session-9', from: 'child', text: 'done' }),
+    ]);
+    expect(consume).toHaveBeenCalledWith('report-1');
+    await expect(durable.messages({ cwd: record.path, sessionId: 'session-9' }, record.id)).resolves.toEqual([
+      expect.objectContaining({
+        fromSessionId: 'parent-1',
+        from: 'parent',
+        text: '[Recovery required: prompt admission was not confirmed] recover task',
+      }),
+    ]);
+    expect(consume).toHaveBeenCalledWith('task-1');
+  });
+
+  it('reports durable messages whose prompt admission needs recovery', async () => {
+    const { ops } = operations(fakeGit());
+    const record = await ops.spawn(CONTEXT, { branch: 'wt/one' });
+    const delivery = fakeDelivery({ waitForAdmission: vi.fn().mockResolvedValue('recovery_required') });
+    const durable = createWorktreeOperations({
+      git: fakeGit(),
+      sessionService: fakeSessionService(['parent-1', 'session-9']),
+      sessionDelivery: () => delivery,
+      homeDir: home,
+    });
+
+    await expect(durable.send(CONTEXT, record.id, 'please finish')).rejects.toMatchObject({
+      code: 'message_delivery_failed',
+      retryable: true,
+    });
+  });
   it('delivers messages only to the worktree peer inbox', async () => {
     const bus = directEvents();
     const parentInbox = createWorktreeMessageInbox(bus, CONTEXT.sessionId)!;

@@ -73,6 +73,7 @@ describe('voice ownership protocol', () => {
         commandId: 'catalog-1',
         action: 'catalog',
         targets,
+        catalogRevision: 'catalog-1',
       }),
     ).toBeDefined();
     expect(
@@ -104,6 +105,7 @@ describe('voice ownership protocol', () => {
         version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
         requestId: 'request-2',
         handle: 'opaque-target',
+        catalogRevision: 'catalog-1',
       }),
     ).toBeDefined();
 
@@ -112,6 +114,13 @@ describe('voice ownership protocol', () => {
         type: 'browser-media-session',
         version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
         activeSessionId: 'session-a',
+      }),
+    ).toBeDefined();
+    expect(
+      parseBrowserVoiceOwnershipPayload({
+        type: 'browser-media-session',
+        version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+        activeSessionId: 'peer/work-host/voice-session',
       }),
     ).toBeDefined();
     expect(
@@ -320,6 +329,7 @@ describe('SessionVoiceOwnership', () => {
       commandId: 'catalog-1',
       action: 'catalog',
       targets: [{ handle: 'target-handle', label: 'Target', order: 1 }],
+      catalogRevision: 'catalog-1',
     };
     await expect(ownership.command(catalog)).resolves.toMatchObject({ ok: true, active: false });
     expect(ownership.snapshot().targets).toEqual(catalog.targets);
@@ -379,7 +389,7 @@ describe('SessionVoiceOwnership', () => {
     });
   });
 
-  it('acknowledges ownership while autonomous media capture is starting', async () => {
+  it('does not acknowledge ownership until autonomous media capture is active', async () => {
     let state: 'disabled' | 'starting' | 'active' = 'disabled';
     const ownership = new SessionVoiceOwnership();
     ownership.register({
@@ -399,10 +409,60 @@ describe('SessionVoiceOwnership', () => {
     });
 
     await expect(ownership.command(command('starting-activation', 'activate'))).resolves.toMatchObject({
-      ok: true,
-      active: true,
+      ok: false,
+      active: false,
+      error: 'Autonomous voice did not activate.',
     });
-    expect(ownership.registration()).toMatchObject({ active: true });
+    expect(ownership.registration()).toMatchObject({ active: false });
+  });
+
+  it('reserves prepared targets by controller and fences tentative activation', async () => {
+    let state: 'disabled' | 'starting' | 'active' = 'disabled';
+    const deactivateVoice = vi.fn(async () => {
+      state = 'disabled';
+    });
+    const ownership = new SessionVoiceOwnership();
+    const dispose = ownership.register({
+      label: 'Target',
+      eligible: true,
+      controller: {
+        get state() {
+          return state;
+        },
+        activateVoice: async () => {
+          state = 'starting';
+        },
+        deactivateVoice,
+      },
+    });
+    const registration = ownership.registration()!;
+    const staged = (
+      commandId: string,
+      action: VoiceOwnershipCommand['action'],
+      controllerId = 'controller-a',
+    ): VoiceOwnershipCommand => ({
+      version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
+      commandId,
+      action,
+      handoffId: 'handoff-a',
+      controllerId,
+      leaseId: registration.leaseId,
+      revision: registration.revision,
+    });
+
+    await expect(ownership.command(staged('prepare-a', 'prepare'))).resolves.toMatchObject({ ok: true });
+    await expect(ownership.command(staged('prepare-b', 'prepare', 'controller-b'))).resolves.toMatchObject({
+      ok: false,
+      error: 'Voice target is reserved by another controller.',
+    });
+    await expect(ownership.command(staged('activate-a', 'activate'))).resolves.toMatchObject({
+      ok: false,
+      active: false,
+    });
+    await expect(ownership.command(staged('fence-a', 'fence'))).resolves.toMatchObject({ ok: true, active: false });
+    expect(deactivateVoice).toHaveBeenCalledOnce();
+    expect(Object.keys(staged('shape-check', 'prepare'))).not.toContain('context');
+    dispose();
   });
 
   it('releases ownership while autonomous media capture is draining', async () => {
@@ -453,6 +513,7 @@ describe('SessionVoiceOwnership', () => {
         commandId: 'catalog-bridge',
         action: 'catalog',
         targets: [{ handle: 'target', label: 'Target', order: 1 }],
+        catalogRevision: 'catalog-bridge',
       },
       command('activate-bridge', 'activate'),
     ];
@@ -561,8 +622,9 @@ describe('SessionVoiceOwnership', () => {
       commandId: 'catalog-requests',
       action: 'catalog',
       targets: [{ handle: 'target', label: 'Target', order: 1 }],
+      catalogRevision: 'catalog-requests',
     });
-    const handoff = ownership.handoff(1)!;
+    const handoff = ownership.handoff(1, 'catalog-requests')!;
     ownership.clearHandoffRequest('different');
     expect(ownership.snapshot().handoff).toEqual(handoff);
     ownership.clearHandoffRequest(handoff.requestId);
@@ -579,6 +641,7 @@ describe('SessionVoiceOwnership', () => {
       version: VOICE_OWNERSHIP_PROTOCOL_VERSION,
       commandId: 'empty-catalog',
       action: 'catalog',
+      catalogRevision: 'catalog-empty',
     });
     expect(ownership.snapshot().targets).toEqual([]);
   });
@@ -657,8 +720,14 @@ describe('VoiceOwnershipCoordinator', () => {
         async send(sessionId, value) {
           deliveries.push(`${sessionId}:${value.action}`);
           if (value.action === 'catalog') return acknowledgement(value, states.get(sessionId) === true);
-          const nextActive = value.action === 'activate';
-          if (fail?.(sessionId, value)) return acknowledgement(value, states.get(sessionId) === true, false);
+          const current = states.get(sessionId) === true;
+          const nextActive =
+            value.action === 'activate'
+              ? true
+              : value.action === 'deactivate' || value.action === 'fence'
+                ? false
+                : current;
+          if (fail?.(sessionId, value)) return acknowledgement(value, current, false);
           states.set(sessionId, nextActive);
           return acknowledgement(value, nextActive);
         },
@@ -699,17 +768,54 @@ describe('VoiceOwnershipCoordinator', () => {
     h.update('source-private-id', 'source-lease', 'Source', true);
     h.update('target-private-id', 'target-lease', 'Target', false);
     const catalog = h.coordinator.catalog('source-private-id');
-    expect(catalog).toEqual([{ handle: 'target-lease', label: 'Target', order: 1 }]);
+    expect(catalog).toEqual([{ handle: 'target-lease:1', label: 'Target', order: 1 }]);
     expect(JSON.stringify(catalog)).not.toContain('target-private-id');
     h.deliveries.length = 0;
     h.selections.length = 0;
 
     await expect(h.coordinator.handoff('source-private-id', catalog[0]!.handle)).resolves.toBe(true);
 
-    expect(h.deliveries).toEqual(['source-private-id:deactivate', 'target-private-id:activate']);
+    expect(h.deliveries).toEqual([
+      'target-private-id:prepare',
+      'source-private-id:deactivate',
+      'target-private-id:activate',
+      'target-private-id:readiness',
+    ]);
     expect(h.selections).toEqual(['target-private-id']);
     expect(h.states.get('source-private-id')).toBe(false);
     expect(h.states.get('target-private-id')).toBe(true);
+  });
+
+  it('fences a prepared target replaced during handoff without releasing the source', async () => {
+    let resolvePrepare!: (value: VoiceOwnershipAcknowledgement) => void;
+    let prepareCommand: VoiceOwnershipCommand | undefined;
+    const deliveries: string[] = [];
+    const coordinator = new VoiceOwnershipCoordinator(
+      {
+        async send(sessionId, value) {
+          deliveries.push(`${sessionId}:${value.action}`);
+          if (value.action === 'prepare') {
+            prepareCommand = value;
+            return new Promise<VoiceOwnershipAcknowledgement>((resolve) => {
+              resolvePrepare = resolve;
+            });
+          }
+          return acknowledgement(value, false);
+        },
+      },
+      () => undefined,
+      { now: () => 0, createId: () => globalThis.crypto.randomUUID() },
+    );
+    coordinator.update('source', registration('source-lease', 'Source', true));
+    coordinator.update('target', registration('target-lease', 'Target', false));
+    const handoff = coordinator.handoff('source', 'target-lease:1');
+    await vi.waitFor(() => expect(prepareCommand).toBeDefined());
+    coordinator.update('target', { ...registration('replacement-lease', 'Replacement', false), revision: 2 });
+    resolvePrepare(acknowledgement(prepareCommand!, false));
+
+    await expect(handoff).resolves.toBe(false);
+    expect(deliveries).toEqual(['target:prepare', 'target:fence']);
+    expect(coordinator.payload().activeSessionId).toBe('source');
   });
 
   it('does not reactivate the source when target activation fails', async () => {
@@ -718,7 +824,7 @@ describe('VoiceOwnershipCoordinator', () => {
     h.update('target', 'target-lease', 'Target', false);
     h.selections.length = 0;
 
-    await expect(h.coordinator.handoff('source', 'target-lease')).resolves.toBe(false);
+    await expect(h.coordinator.handoff('source', 'target-lease:1')).resolves.toBe(false);
 
     expect(h.states.get('source')).toBe(false);
     expect(h.states.get('target')).toBe(false);
@@ -745,9 +851,12 @@ describe('VoiceOwnershipCoordinator', () => {
     h.update('source', 'source-lease', 'Same', false);
     h.update('target', 'target-lease', 'Same', false);
     h.update('another', 'another-lease', 'Same', false);
-    expect(h.coordinator.catalog('source').map((target) => target.handle)).toEqual(['another-lease', 'target-lease']);
+    expect(h.coordinator.catalog('source').map((target) => target.handle)).toEqual([
+      'another-lease:1',
+      'target-lease:1',
+    ]);
     expect(await h.coordinator.handoff('missing', 'target-lease')).toBe(false);
-    expect(await h.coordinator.handoff('source', 'target-lease')).toBe(false);
+    expect(await h.coordinator.handoff('source', 'target-lease:1')).toBe(false);
     expect(await h.coordinator.activate('missing')).toBe(false);
     h.coordinator.update('target', {
       ...registration('target-lease', 'Updated', false),
@@ -755,7 +864,7 @@ describe('VoiceOwnershipCoordinator', () => {
       eligible: false,
     });
     h.coordinator.update('target', registration('target-lease', 'Stale', false));
-    expect(h.coordinator.catalog('source').map((target) => target.handle)).toEqual(['another-lease']);
+    expect(h.coordinator.catalog('source').map((target) => target.handle)).toEqual(['another-lease:1']);
     expect(await h.coordinator.activate('target')).toBe(false);
 
     h.update('source', 'source-lease', 'Source', true);
@@ -779,8 +888,8 @@ describe('VoiceOwnershipCoordinator', () => {
     handoff.update('source', 'source-lease', 'Source', true);
     handoff.update('target', 'target-lease', 'Target', false);
     handoff.deliveries.length = 0;
-    await expect(handoff.coordinator.handoff('source', 'target-lease')).resolves.toBe(false);
-    expect(handoff.deliveries).toEqual(['source:deactivate']);
+    await expect(handoff.coordinator.handoff('source', 'target-lease:1')).resolves.toBe(false);
+    expect(handoff.deliveries).toEqual(['target:prepare', 'source:deactivate', 'target:fence']);
   });
 
   it('rejects malformed or failed deliveries and tolerates participant removal during a catalog', async () => {

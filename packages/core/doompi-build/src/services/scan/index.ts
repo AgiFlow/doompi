@@ -201,8 +201,15 @@ export function scanExtensions(options: ScanOptions): ExtensionGraph {
       return note(relative, 'a contribution needs a side group and a surface folder');
     }
 
-    const parsed = parseFilename(fileName, platformsFor(state.side, options));
+    const platforms = platformsFor(state.side, options);
+    const parsed = parseFilename(fileName, [...platforms, 'mcp']);
     if (parsed === undefined) return;
+    if (
+      parsed.platform === 'mcp' &&
+      (state.side !== 'backend' || state.scope !== 'session' || (state.surface !== 'tool' && state.surface !== 'skill'))
+    ) {
+      return note(relative, 'MCP declarations belong in a session backend tool/ or skill/ surface');
+    }
     const source = fs.readFileSync(path.join(options.packageDir, relative), 'utf8');
     const cardinality = routedCardinality(source);
 

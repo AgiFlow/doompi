@@ -8,6 +8,7 @@ import { defineMinorMode, type MinorModeOwner, type MinorModeState } from '@agim
 import { createEmbeddedWorkflowFeature } from '@agimon-ai/workflow-mcp';
 import { z } from 'zod';
 
+import { registerRunProvider, type RunProviderHandle } from '../../services/backgroundWork';
 import { createWorkflowCatalogReader, presentWorkflowCatalog } from '../../services/webWorkflowCatalog';
 import { defaultCatalogDeps } from '../../services/workflowCatalogDeps';
 import { parseWorkflowLaunchCommand } from '../../services/workflowLaunchCommand';
@@ -47,12 +48,18 @@ export function createWorkflowServerRuntime(
   if (serverHost.context.directEvents === undefined)
     throw new Error('Workflow headless facet requires the session direct event bus.');
   const directEvents = serverHost.context.directEvents;
+  let runProvider: RunProviderHandle | undefined;
   const catalogReader = createWorkflowCatalogReader(defaultCatalogDeps());
-  const publishLifecycle = async (executionContext: typeof host.context): Promise<void> => {
+  const publishLifecycle = async (executionContext: typeof host.context): Promise<boolean> => {
+    const records = readWorkflowRuns({ environment: executionContext.environment }).filter((run) =>
+      runBelongsToSession(run, executionContext.sessionId),
+    );
+    const activeItems = records
+      .filter((run) => run.view.stage === 'running' && run.view.stale !== true)
+      .map((run) => ({ id: `${run.view.workspace}/${run.view.runKey}`, sessionId: executionContext.sessionId }));
+    runProvider?.update(activeItems);
     const runs = presentWorkflowRuns(
-      readWorkflowRuns({ environment: executionContext.environment })
-        .filter((run) => runBelongsToSession(run, executionContext.sessionId))
-        .map((run) => run.view),
+      records.map((run) => run.view),
       Date.now(),
     );
     directEvents.publish(WORKFLOW_RUNS_TYPE, executionContext.sessionId, { runs });
@@ -69,9 +76,16 @@ export function createWorkflowServerRuntime(
         warning,
       });
     }
+    return activeItems.length > 0;
   };
   const feature = createEmbeddedWorkflowFeature();
   let control: ReturnType<typeof feature.createRunControl> | undefined;
+  let controlDisposers: (() => void)[] = [];
+  const disposeControl = (): void => {
+    for (const dispose of controlDisposers.splice(0)) dispose();
+    control?.dispose();
+    control = undefined;
+  };
   let modeOwner: MinorModeOwner | undefined;
   const modeSelected = (): boolean => (host.context.selection.state?.['minor-mode'] ?? []).includes(WORKFLOW_MODE_ID);
   const modeState = (): MinorModeState => {
@@ -134,7 +148,17 @@ export function createWorkflowServerRuntime(
     },
   }).createOwner(undefined);
   return {
-    services: [serverMinorModes([modeOwner])],
+    services: [
+      serverMinorModes([modeOwner]),
+      (context) => {
+        const provider = registerRunProvider(context);
+        runProvider = provider;
+        return () => {
+          provider.dispose();
+          if (runProvider === provider) runProvider = undefined;
+        };
+      },
+    ],
     toolRestrictions: [
       {
         when: { state: { 'minor-mode': WORKFLOW_MODE_ID } },
@@ -151,10 +175,7 @@ export function createWorkflowServerRuntime(
       {
         when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         event: 'session_shutdown',
-        handle: () => {
-          control?.dispose();
-          control = undefined;
-        },
+        handle: disposeControl,
       },
     ],
     resources: [
@@ -182,13 +203,45 @@ export function createWorkflowServerRuntime(
         when: { state: { 'minor-mode': WORKFLOW_MODE_ID }, attribution: { kind: 'minor', mode: WORKFLOW_MODE_ID } },
         name: SOURCE,
         async start(executionContext) {
-          control = feature.createRunControl({});
-          await control.start();
-          await publishLifecycle(executionContext);
-          return () => {
-            control?.dispose();
-            control = undefined;
+          const reportFailure = (error: unknown): void => {
+            process.emitWarning(`Could not publish headless workflow state: ${String(error)}`);
           };
+          const stopFor =
+            (ownedControl: NonNullable<typeof control>): (() => void) =>
+            () => {
+              void publishLifecycle(executionContext)
+                .then((active) => {
+                  if (!active && !modeSelected() && control === ownedControl) disposeControl();
+                })
+                .catch(reportFailure);
+            };
+          if (control !== undefined) {
+            const ownedControl = control;
+            await publishLifecycle(executionContext);
+            return stopFor(ownedControl);
+          }
+          control = feature.createRunControl({});
+          const ownedControl = control;
+          const refresh = (): void => {
+            void publishLifecycle(executionContext)
+              .then((active) => {
+                if (!active && !modeSelected() && control === ownedControl) disposeControl();
+              })
+              .catch(reportFailure);
+          };
+          controlDisposers = [
+            ownedControl.on('runStarted', refresh),
+            ownedControl.on('runUpdated', refresh),
+            ownedControl.on('runFinished', refresh),
+          ];
+          try {
+            await ownedControl.start();
+            await publishLifecycle(executionContext);
+            return stopFor(ownedControl);
+          } catch (error) {
+            if (control === ownedControl) disposeControl();
+            throw error;
+          }
         },
       },
     ],
@@ -306,8 +359,9 @@ export function createWorkflowServerRuntime(
       },
     ],
     onDispose() {
-      control?.dispose();
-      control = undefined;
+      disposeControl();
+      runProvider?.dispose();
+      runProvider = undefined;
     },
   };
 }

@@ -26,6 +26,8 @@ export interface SessionToolInvocation {
   readonly name: string;
   readonly arguments: Record<string, unknown>;
   readonly signal?: AbortSignal;
+  /** Revalidate transport authorization after hooks, immediately before execution. */
+  readonly authorize?: () => void | Promise<void>;
   readonly onUpdate?: (result: DoomHeadlessToolResult) => void;
 }
 
@@ -33,5 +35,5 @@ export interface SessionToolInvocation {
 export interface SessionToolSurface {
   readSurface(): SessionToolSurfaceSnapshot;
   invokeTool(invocation: SessionToolInvocation): Promise<DoomHeadlessToolResult>;
-  readSkill(revision: number, uri: string): string;
+  readSkill(revision: number, uri: string): string | Promise<string>;
 }

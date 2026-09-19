@@ -70,4 +70,4 @@ Maintained by [Agimon](https://agimon.ai/about).
 
 MIT
 
-Named Pi and server factories live in `src/extensions`. Controllers declare commands and APIs; services own worktree operations and filesystem persistence; tools return typed Pi declarations. Public services and types are exposed through flat `src/exports`. The server factory owns the worktree message inbox and closes it through `onDispose`.
+Named Pi and server factories live in `src/extensions`. Controllers declare commands and APIs; services own worktree operations and filesystem persistence; tools return typed Pi declarations. Public services and types are exposed through flat `src/exports`. In composed DoomPi sessions, the fixed Session foundation durably admits `spawn_worktree.task`, parent messages, and child reports while waking the recipient. The prior in-memory inbox remains only as a standalone compatibility fallback.

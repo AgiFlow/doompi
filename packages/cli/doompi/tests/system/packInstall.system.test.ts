@@ -1550,6 +1550,60 @@ describe('conventional Pi discovery', () => {
     }
   });
 
+  it('loads an admitted packed MCP module and its Markdown resource without implementation sources', async () => {
+    assertConsumerInstall();
+    const probe = path.join(consumer.root, 'packed-mcp-probe.mjs');
+    fs.writeFileSync(
+      probe,
+      [
+        "import assert from 'node:assert/strict';",
+        "import crypto from 'node:crypto';",
+        "import fs from 'node:fs';",
+        "import path from 'node:path';",
+        "import { DOOM_MCP_BUNDLE_FILE, DOOM_MCP_BUNDLE_VERSION, loadMcpBundle } from '@agimon-ai/doompi-core/mcp-facet';",
+        "const packageName = '@agimon-ai/doompi-model-guidance';",
+        "const directory = fs.realpathSync(path.join('node_modules', packageName));",
+        'assert.ok(directory.startsWith(fs.realpathSync(process.cwd()) + path.sep));',
+        "const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'));",
+        "for (const source of ['generated', 'src/extensions', 'src/services']) assert.equal(fs.existsSync(path.join(directory, source)), false, source);",
+        "const hash = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');",
+        "const fingerprint = 'a'.repeat(64);",
+        "const generation = 'packed-mcp-acceptance';",
+        'const descriptor = JSON.stringify({',
+        '  version: DOOM_MCP_BUNDLE_VERSION, generation, fingerprint,',
+        '  entries: [{ packageName, entry: manifest.doompiMcp.entry, module: manifest.doompiMcp.dist,',
+        '    sha256: hash(fs.readFileSync(path.join(directory, manifest.doompiMcp.dist))),',
+        "    owners: [{ majorMode: 'coding', layer: 'guidance' }] }],",
+        '});',
+        'const descriptorPath = path.join(directory, DOOM_MCP_BUNDLE_FILE);',
+        'fs.writeFileSync(descriptorPath, descriptor);',
+        'try {',
+        "  const options = { directory, generation, fingerprint, descriptorSha256: hash(descriptor), majorMode: 'coding', activeLayers: ['guidance'] };",
+        '  const excluded = await loadMcpBundle({ ...options, activeLayers: [] });',
+        '  assert.deepEqual(excluded.plugins, []);',
+        '  const loaded = await loadMcpBundle(options);',
+        '  assert.deepEqual(loaded.plugins.map(({ plugin }) => plugin.name), [packageName]);',
+        '  const plugin = loaded.plugins[0].plugin;',
+        "  const session = typeof plugin.session === 'function' ? await plugin.session({}) : plugin.session;",
+        "  const skill = session.skills.find(({ name }) => name === 'doompi-use-model-guidance');",
+        '  assert.ok(skill);',
+        "  const markdown = fs.readFileSync(path.join(directory, 'src/prompts/doompi-use-model-guidance/SKILL.md'), 'utf8');",
+        "  assert.ok(markdown.includes('doompi-use-model-guidance'));",
+        '  assert.equal(await skill.read({}), markdown);',
+        "  process.stdout.write('PACKED_MCP_MARKDOWN_OK\\n');",
+        '} finally { fs.rmSync(descriptorPath, { force: true }); }',
+        '',
+      ].join('\n'),
+    );
+    const result = await runCommand(process.execPath, [probe], consumer.root, {
+      ...cleanRuntimeEnvironment(path.join(consumer.root, 'mcp-agent')),
+      NODE_PATH: '',
+      NODE_OPTIONS: '',
+    });
+    expect(result.code, result.stderr || result.stdout).toBe(0);
+    expect(result.stdout).toContain('PACKED_MCP_MARKDOWN_OK');
+  });
+
   it('loads Vibe-Lint from npm without adding it to the owned package matrix', async () => {
     assertConsumerInstall();
     expect(PACKAGE_MATRIX.map(({ name }) => name)).not.toContain('@agimon-ai/vibe-lint');
@@ -1790,8 +1844,8 @@ describe('consumer ownership boundaries', () => {
 
   it('keeps the matrix explicit instead of silently dropping standard entries', () => {
     const names = PACKAGE_MATRIX.map((entry) => entry.name);
-    expect(PACKAGE_MATRIX).toHaveLength(49);
-    expect(standardPackageSet.size).toBe(35);
+    expect(PACKAGE_MATRIX).toHaveLength(50);
+    expect(standardPackageSet.size).toBe(36);
     expect(standardPackageSet).toContain('@agimon-ai/doompi-author');
     expect(standardPackageSet).toContain('@agimon-ai/doompi-computer-use');
     expect(standardPackageSet).toContain('@agimon-ai/doompi-help');

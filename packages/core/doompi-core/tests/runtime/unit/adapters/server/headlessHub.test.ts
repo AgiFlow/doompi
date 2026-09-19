@@ -23,6 +23,7 @@ function host() {
       runtime,
       host: undefined,
       toolSurface: {} as HeadlessSessionHost['toolSurface'],
+      mcpSurface: {} as HeadlessSessionHost['mcpSurface'],
       prepareFacets: () => undefined,
       activateFacets: async () => undefined,
       canDispatch: () => true,
@@ -223,9 +224,55 @@ describe('createHeadlessHub', () => {
       { scope: 'session', sessionId: 'parent' },
     );
 
+    expect(hub.sessionService.canCommunicate?.('parent', 'child')).toBe(true);
+    expect(hub.sessionService.canCommunicate?.('child', 'parent')).toBe(true);
+    expect(hub.sessionService.canCommunicate?.('parent', 'foreign')).toBe(false);
+    expect(channelHost!.sessionService!.canCommunicate?.('parent', 'child')).toBe(true);
+    expect(channelHost!.sessionService!.canCommunicate?.('child', 'parent')).toBe(false);
+
+    const parentCommunication = hub.sessionService.bindCommunication!('parent');
+    const childCommunication = hub.sessionService.bindCommunication!('child');
+    const foreignCommunication = hub.sessionService.bindCommunication!('foreign');
+    const received = vi.fn();
+    childCommunication.subscribe('authenticated', received);
+    parentCommunication.onPeerReady(() => undefined);
+    childCommunication.onPeerReady(() => undefined);
+    foreignCommunication.onPeerReady(() => undefined);
+
+    expect(parentCommunication.publish('child', 'authenticated', { value: 1 })).toBe(true);
+    expect(received).toHaveBeenCalledWith('parent', { value: 1 });
+    expect(foreignCommunication.publish('child', 'authenticated', { value: 2 })).toBe(false);
+    hub.directEvents.publish('authenticated', 'child', { sourceSessionId: 'parent', value: 3 });
+    expect(received).toHaveBeenCalledTimes(1);
+
     await expect(channelHost!.sessionService!.close('child')).resolves.toBeUndefined();
     expect(closeSession).toHaveBeenCalledWith('child');
     await expect(channelHost!.sessionService!.close('foreign')).rejects.toThrow('outside this mount');
+    await hub.close();
+  });
+
+  it('announces ready communication endpoints after their sessions register', async () => {
+    const hub = createHeadlessHub({ manager: { closeSession: vi.fn(async () => undefined) } as never });
+    const parentCommunication = hub.sessionService.bindCommunication!('parent');
+    const childCommunication = hub.sessionService.bindCommunication!('child');
+    const parentReady = vi.fn();
+    const childReady = vi.fn();
+    parentCommunication.onPeerReady(parentReady);
+    childCommunication.onPeerReady(childReady);
+
+    hub.register({ id: 'parent', name: 'Parent', cwd: '/repo', createdAt: 'now', host: host().host });
+    expect(parentReady).not.toHaveBeenCalled();
+    hub.register({
+      id: 'child',
+      name: 'Child',
+      cwd: '/repo/child',
+      createdAt: 'now',
+      parentSessionId: 'parent',
+      host: host().host,
+    });
+
+    expect(parentReady).toHaveBeenCalledWith('child');
+    expect(childReady).toHaveBeenCalledWith('parent');
     await hub.close();
   });
 

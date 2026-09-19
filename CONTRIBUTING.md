@@ -1,17 +1,18 @@
 # Contributing to DoomPi
 
-Thanks for helping improve DoomPi. The project is still alpha, so focused changes with clear tests
-are easier to review and safer to release.
+Thanks for helping improve DoomPi. It is still alpha, so keep changes focused and
+show how you checked them. Small changes are easier to review and safer to release.
 
-By participating in this project you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+By participating, you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-Found a security problem? Do not open a public issue. Follow [SECURITY.md](SECURITY.md) and use
-GitHub's private vulnerability reporting, which keeps the report visible only to the maintainers.
+Found a security problem? Keep it out of public issues. Follow
+[SECURITY.md](SECURITY.md) to send a private vulnerability report.
 
 ## Requirements
 
-- Node.js 22.22.1
-- pnpm 11.1.3
+Use Node.js 22.22.1 or newer, as required by the workspace `package.json`. To match
+CI exactly, use Node.js 22.22.1 and pnpm 12.3.4. Those CI versions live in the
+[workspace setup action](.github/actions/setup-monorepo/action.yml).
 
 ```bash
 pnpm install
@@ -21,12 +22,13 @@ Run commands in this guide from the repository root.
 
 ### Runner native payloads
 
-Runner ships prebuilt RMUX and RTK binaries. They are not stored in this repository: `pnpm install`
-runs `scripts/fetch-runner-binaries.mjs`, which downloads them from the upstream GitHub releases and
-verifies every file against a pinned SHA-256 before installing it under each platform package's
-`vendor/` directory.
+Runner ships prebuilt RMUX and RTK binaries, but the binaries are not checked into
+this repository. During `pnpm install`, `scripts/fetch-runner-binaries.mjs` downloads
+them from upstream GitHub releases, checks each file against its pinned SHA-256,
+and installs it under the platform package's `vendor/` directory.
 
-That is roughly 156 MB on a cold cache, downloaded once and reused from `.nx-cache/runner-binaries`.
+The first install downloads missing payloads. Later installs reuse the cache at
+`.nx-cache/runner-binaries`.
 
 ```bash
 pnpm runner:check    # verify what is installed against the pinned checksums
@@ -39,7 +41,7 @@ follows automatically.
 
 ## Choose the right package
 
-DoomPi is a monorepo with deliberate package boundaries:
+Each package has one job. Put a change where that job belongs:
 
 - The distribution host lives under `packages/cli/*`.
 - Shared contracts and libraries live under `packages/core/*`.
@@ -51,14 +53,15 @@ DoomPi is a monorepo with deliberate package boundaries:
 - Selectable extensions live under `layers/<layer>/*`.
 - Repository-owned development tools live under `packages/tooling/*`.
 
-Keep Doom-to-Doom dependencies as `workspace:*`. Use published npm versions for external
-foundation, MCP, and Vibe-Lint packages. Preserve package exports, Pi entries, resources, runtime
-ordering, and the Runner native payload manifest. The repository-owned
-`@agimon-ai/vibe-lint-plugin-doom-extension` package is the tooling exception and uses `workspace:*`.
+Keep Doom-to-Doom dependencies as `workspace:*`. Use published npm versions for
+external foundation, MCP, and Vibe-Lint packages. The repository-owned
+`@agimon-ai/vibe-lint-plugin-doom-{extension,web,core,cli}` packages also use
+`workspace:*`; their implementations live under `packages/tooling/`.
 
-Read [Architecture](docs/architecture.md) before changing package composition, extension lifecycle,
-session isolation, or public boundaries. Update the owning package README when public behavior or
-configuration changes.
+Preserve package exports, Pi entries, resources, runtime ordering, and the Runner
+native payload manifest. Read [Architecture](docs/architecture.md) before changing
+composition, extension lifecycles, session isolation, or public boundaries. When
+public behavior or configuration changes, update the owning package's README too.
 
 ## Make and verify a change
 
@@ -91,20 +94,24 @@ Run the additional checks that match the change:
 - `pnpm audit:workspace` for dependencies, package metadata, or workspace structure.
 - `pnpm test:system` for release-affecting changes that need packed-install and runtime coverage.
 
-On a pull request, CI runs formatting, the workspace audit, generated hook settings, builds, examples,
-lint, Vibe-Lint, type-checking, and unit tests on a GitHub-hosted runner.
+[CI](.github/workflows/ci.yml) runs on pull requests and pushes to `main`. The
+quality job checks Runner payloads, workspace boundaries, formatting, generated
+hook settings, builds, examples, lint, architecture rules, types, and unit tests.
+Browser and desktop end-to-end jobs exercise the cockpit separately.
 
-Pull requests from forks always run on a GitHub-hosted runner, never on the project's self-hosted
-machine. If this is your first contribution, a maintainer has to approve the workflow run before CI
-starts, so expect a delay before any results appear.
+Packed-install tests run in CI too, not just after merge. The CLI suites are split
+across six runners, with a separate Team suite. Tests within each runner stay
+serial because they launch real processes and share local resources. These tests
+check installed packages, compatibility, and startup behavior. Run
+`pnpm test:system` locally when your change affects packaging or startup.
 
-The serial packed-install system tests run after merge, on push to `main`. They pack and install all
-40 packages for real and assert startup latency percentiles, which are not meaningful on a shared
-runner. Run `pnpm test:system` locally when a change affects packaging or startup.
+Every job uses a disposable GitHub-hosted runner, including pull requests from
+forks. A first-time contributor's workflow may need maintainer approval before it
+starts.
 
 ## Commits and pull requests
 
-Commit messages follow Conventional Commits. Use an Nx project name as the scope, or `root` and
+Use Conventional Commits, with an Nx project name as the scope or `root` and
 `release` for repository-wide work. For example:
 
 ```text
@@ -112,8 +119,9 @@ feat(doompi-edit): reject stale hashline ranges
 docs(root): clarify contribution checks
 ```
 
-Keep each pull request focused. Explain the user-visible outcome, call out configuration or public
-contract changes, and list the checks you ran. Leave generated changelogs to the release tooling.
+Keep each pull request focused. Explain what changes for the user, call out any
+configuration or public contract changes, and list the checks you actually ran.
+Leave generated changelogs to the release tooling.
 
 ## License
 

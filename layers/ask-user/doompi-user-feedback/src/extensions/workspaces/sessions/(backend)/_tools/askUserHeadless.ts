@@ -17,7 +17,7 @@ function output(result: {
 }
 
 export function createAskUserHeadlessTool(
-  coordinator: QuestionnaireCoordinator,
+  coordinator?: QuestionnaireCoordinator,
 ): DoomHeadlessTool<typeof QuestionParamsSchema> {
   const tool: DoomHeadlessTool<typeof QuestionParamsSchema> = {
     name: ASK_USER_QUESTION_TOOL_NAME,
@@ -32,33 +32,41 @@ export function createAskUserHeadlessTool(
       if (!validation.ok) {
         return output(buildToolResult(validation.message, { answers: [], cancelled: true, error: validation.error }));
       }
-      const result = await coordinator.enqueue(async ({ signal: requestSignal, reportProgress }) => {
-        requestSignal.throwIfAborted();
-        const interaction: QuestionnaireInteraction = {
-          select: async (title, options, interactionSignal) => {
-            const response = await executionContext.client.request(
-              {
-                kind: 'select',
-                title,
-                options: options.map((label) => ({ label, value: label })),
-              },
-              interactionSignal,
-            );
-            return typeof response === 'string' ? response : undefined;
-          },
-          input: async (title, placeholder, interactionSignal) => {
-            const response = await executionContext.client.request(
-              { kind: 'input', title, message: placeholder },
-              interactionSignal,
-            );
-            return typeof response === 'string' ? response : undefined;
-          },
-        };
-        const questionnaire = await runQuestionnaire(interaction, params, requestSignal, reportProgress);
-        requestSignal.throwIfAborted();
-        return questionnaire;
-      }, signal);
-      return output(buildQuestionnaireResponse(result, params));
+      const activeCoordinator = coordinator ?? new QuestionnaireCoordinator();
+      try {
+        const result = await activeCoordinator.enqueue(async ({ signal: requestSignal, reportProgress }) => {
+          requestSignal.throwIfAborted();
+          const interaction: QuestionnaireInteraction = {
+            select: async (title, options, interactionSignal) => {
+              const response = await executionContext.client.request(
+                {
+                  kind: 'select',
+                  title,
+                  options: options.map((label) => ({ label, value: label })),
+                },
+                interactionSignal,
+              );
+              return typeof response === 'string' ? response : undefined;
+            },
+            input: async (title, placeholder, interactionSignal) => {
+              const response = await executionContext.client.request(
+                { kind: 'input', title, message: placeholder },
+                interactionSignal,
+              );
+              return typeof response === 'string' ? response : undefined;
+            },
+          };
+          const questionnaire = await runQuestionnaire(interaction, params, requestSignal, reportProgress);
+          requestSignal.throwIfAborted();
+          return questionnaire;
+        }, signal);
+        return output(buildQuestionnaireResponse(result, params));
+      } finally {
+        if (coordinator === undefined) {
+          activeCoordinator.shutdown();
+          await activeCoordinator.waitForIdle();
+        }
+      }
     },
   };
   return tool;
