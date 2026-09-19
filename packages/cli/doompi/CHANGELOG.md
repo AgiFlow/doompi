@@ -1,3 +1,33 @@
+## 0.0.1-alpha.80 (2026-09-19)
+
+### 🚀 Features
+
+- **doompi-mcp:** add remote session capabilities ([#138](https://github.com/AgiFlow/doompi/pull/138))
+- **web:** add workspace session rail ([#137](https://github.com/AgiFlow/doompi/pull/137))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-autostop to 0.0.1-alpha.54
+- Updated @agimon-ai/doompi-cache to 0.0.1-alpha.43
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.76
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.77
+- Updated @agimon-ai/doompi-major-mode to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-notification to 0.0.1-alpha.54
+- Updated @agimon-ai/doompi-profile to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-session to 0.0.1-alpha.1
+- Updated @agimon-ai/doompi-runner to 0.0.1-alpha.77
+- Updated @agimon-ai/doompi-skill to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.74
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.77
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.37
+- Updated @agimon-ai/doompi-minor-mode to 0.0.1-alpha.77
+- Updated @agimon-ai/vibe-lint-plugin-doom-cli to 0.0.1-alpha.9
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.79 (2026-09-18)
 
 ### 🩹 Fixes

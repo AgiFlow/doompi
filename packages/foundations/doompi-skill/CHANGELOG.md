@@ -1,3 +1,27 @@
+## 0.0.1-alpha.55 (2026-09-19)
+
+### 🚀 Features
+
+- **doompi-mcp:** add remote session capabilities ([#138](https://github.com/AgiFlow/doompi/pull/138))
+
+### 🩹 Fixes
+
+- **doompi-mcp:** clean retired MCP entries ([#140](https://github.com/AgiFlow/doompi/pull/140))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.6
+- Updated @agimon-ai/doompi-config to 0.0.1-alpha.76
+- Updated @agimon-ai/doompi-domain to 0.0.1-alpha.55
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.77
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.74
+- Updated @agimon-ai/doompi-ui to 0.0.1-alpha.77
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.72
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.54 (2026-09-18)
 
 ### 🧱 Updated Dependencies

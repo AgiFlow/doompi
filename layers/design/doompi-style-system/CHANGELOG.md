@@ -1,3 +1,20 @@
+## 0.0.1-alpha.78 (2026-09-19)
+
+### 🩹 Fixes
+
+- **author:** open files and support persistent visual reviews ([#136](https://github.com/AgiFlow/doompi/pull/136))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.6
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.77
+- Updated @agimon-ai/doompi-web-components to 0.0.1-alpha.35
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.37
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.77 (2026-09-18)
 
 ### 🧱 Updated Dependencies

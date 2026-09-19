@@ -1,3 +1,24 @@
+## 0.0.1-alpha.77 (2026-09-19)
+
+### 🚀 Features
+
+- **doompi-mcp:** add remote session capabilities ([#138](https://github.com/AgiFlow/doompi/pull/138))
+- **web:** add workspace session rail ([#137](https://github.com/AgiFlow/doompi/pull/137))
+
+### 🩹 Fixes
+
+- **author:** open files and support persistent visual reviews ([#136](https://github.com/AgiFlow/doompi/pull/136))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-telemetry to 0.0.1-alpha.74
+- Updated @agimon-ai/doompi-web-security to 0.0.1-alpha.37
+- Updated @agimon-ai/vibe-lint-plugin-doom-core to 0.0.1-alpha.8
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.76 (2026-09-18)
 
 ### 🧱 Updated Dependencies

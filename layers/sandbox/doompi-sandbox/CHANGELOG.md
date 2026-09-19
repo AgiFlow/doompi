@@ -1,3 +1,19 @@
+## 0.0.1-alpha.76 (2026-09-19)
+
+### 🚀 Features
+
+- **doompi-mcp:** add remote session capabilities ([#138](https://github.com/AgiFlow/doompi/pull/138))
+
+### 🧱 Updated Dependencies
+
+- Updated @agimon-ai/doompi-build to 0.0.1-alpha.6
+- Updated @agimon-ai/doompi-core to 0.0.1-alpha.77
+- Updated @agimon-ai/vibe-lint-plugin-doom-extension to 0.0.1-alpha.72
+
+### ❤️ Thank You
+
+- Vuong Ngo
+
 ## 0.0.1-alpha.75 (2026-09-18)
 
 ### 🧱 Updated Dependencies
