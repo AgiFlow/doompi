@@ -325,7 +325,15 @@ describe('global remote control', () => {
     await aborted;
   });
   it('enables a separate guarded listener and completes host-approved pairing', async () => {
-    const control = runtime();
+    const control = runtime(async (request) =>
+      new URL(request.url).pathname === '/api/plugins/voice/relay'
+        ? Response.json({
+            locality: request.headers.get('x-doompi-api-caller-locality'),
+            deviceId: request.headers.get('x-doompi-api-caller-device-id'),
+            stepUp: request.headers.get('x-doompi-api-caller-step-up'),
+          })
+        : Response.json({ ok: true }),
+    );
     const first = await local(control, '/api/remote');
     expect(first.status).toBe(200);
     expect(((await first.json()) as { state: { status: string } }).state.status).toBe('off');
@@ -420,9 +428,40 @@ describe('global remote control', () => {
     if (!opened.ok) throw new Error('Could not open the test response.');
     const inner = JSON.parse(Buffer.from(opened.plaintext).toString('utf8')) as { body: string; status: number };
     expect(inner.status).toBe(200);
+    expect(inner.status).toBe(200);
     expect(
       (JSON.parse(Buffer.from(inner.body, 'base64').toString('utf8')) as { state: { status: string } }).state.status,
     ).toBe('on');
+    const caller = channel.seal(
+      Buffer.from(
+        JSON.stringify({
+          v: 1,
+          method: 'POST',
+          target: '/api/plugins/voice/relay',
+          headers: [
+            ['x-doompi-api-caller-locality', 'local'],
+            ['x-doompi-api-caller-device-id', 'forged'],
+            ['x-doompi-api-caller-step-up', 'verified'],
+          ],
+          body: Buffer.from('{}').toString('base64'),
+        }),
+      ),
+    );
+    if (!caller.ok) throw new Error('Could not seal the caller test request.');
+    const callerGateway = await tunnel(publicPort, '/api/remote/request', 'POST', caller.envelope, cookie);
+    const openedCaller = channel.open(await callerGateway.json());
+    expect(openedCaller.ok).toBe(true);
+    if (!openedCaller.ok) throw new Error('Could not open the caller test response.');
+    const callerResponse = JSON.parse(Buffer.from(openedCaller.plaintext).toString('utf8')) as {
+      body: string;
+      status: number;
+    };
+    expect(callerResponse.status).toBe(200);
+    expect(JSON.parse(Buffer.from(callerResponse.body, 'base64').toString('utf8'))).toEqual({
+      locality: 'remote',
+      deviceId: expect.any(String),
+      stepUp: 'not-required',
+    });
     const management = channel.seal(
       Buffer.from(
         JSON.stringify({
