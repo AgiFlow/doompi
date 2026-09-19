@@ -253,7 +253,7 @@ describe('the Author web plugin', () => {
     expect(markup).toContain('● WORKING');
     expect(markup).toContain('Replacing selected introduction');
     expect(markup).toContain('Make the opening direct.');
-    expect(markup).toContain('0 of 1 regions applied');
+    expect(markup).toContain('0 of 1 annotations applied');
     expect(markup).not.toContain('Referenced context');
     expect(markup).not.toContain('&quot;private&quot;');
     expect(markup).toContain('EARLIER REQUESTS (1)');
