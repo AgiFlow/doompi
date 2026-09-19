@@ -359,7 +359,7 @@ test.describe('with the synced bundle, which carries the doompi-log metrics page
 
     await page.getByTestId('settings-open').click();
     await page.getByTestId('settings-section-metrics').click();
-    await expect(page).toHaveURL(/\/settings\/metrics$/);
+    await expect(page).toHaveURL(/\/settings\/metrics\?workspace=[^&]+$/);
 
     // The page is drawn by the package rather than rendered from declared
     // fields, so reaching it exercises the whole settings-panel contribution.

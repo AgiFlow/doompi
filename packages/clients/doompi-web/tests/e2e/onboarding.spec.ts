@@ -18,33 +18,38 @@ test('says there is no session and offers the one thing there is to do', async (
   // The top bar has no session name to show.
   await expect(page.getByTestId('session-title')).toBeHidden();
 
-  // The rail is still the rail, with its own way in.
-  await expect(page.getByTestId('new-session-empty')).toBeVisible();
+  // The fixture workspace remains visible even with no sessions.
+  const workspace = page.locator('[data-testid^="workspace-group-"]');
+  await expect(workspace).toBeVisible();
+  await expect(workspace.locator('[data-testid^="workspace-new-session-"]')).toBeVisible();
 });
 
-test('the panel and ctrl+t open the same dialog the rail opens', async ({ page, cockpit }) => {
+test('routes onboarding through workspace admission and workspace-scoped sessions', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
   await expect(page.getByTestId('welcome')).toBeVisible();
+  const workspace = page.locator('[data-testid^="workspace-group-"]');
+  await expect(workspace).toBeVisible();
 
   await page.getByTestId('welcome-new-session').click();
-  await expect(page.getByTestId('new-session-dialog')).toBeVisible();
+  await expect(page.getByTestId('add-workspace-dialog')).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('new-session-dialog')).toBeHidden();
+  await expect(page.getByTestId('add-workspace-dialog')).toBeHidden();
 
   await page.keyboard.press('Control+t');
   await expect(page.getByTestId('new-session-dialog')).toBeVisible();
   await page.keyboard.press('Escape');
 
-  await page.getByTestId('new-session-open').click();
+  await workspace.locator('[data-testid^="workspace-new-session-"]').click();
   await expect(page.getByTestId('new-session-dialog')).toBeVisible();
 });
 
 test('starting a session hands the column back to the conversation', async ({ page, cockpit }) => {
   await page.goto(cockpit.url);
-  await page.getByTestId('welcome-new-session').click();
-  // With no session there is nothing to prefill the directory from, and the
-  // registering stand-in needs a real directory that is not the hub's own.
-  await page.getByTestId('new-session-cwd').fill(process.cwd());
+  const workspace = page.locator('[data-testid^="workspace-group-"]');
+  await expect(workspace).toBeVisible();
+
+  await workspace.locator('[data-testid^="workspace-new-session-"]').click();
+  await expect(page.getByTestId('new-session-dialog')).toBeVisible();
   await page.getByTestId('new-session-create').click();
 
   await expect(page).toHaveURL(/\/session\/[0-9a-f-]{36}$/, { timeout: 15_000 });
